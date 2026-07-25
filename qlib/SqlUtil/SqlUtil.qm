@@ -121,6 +121,12 @@ module SqlUtil {
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
       bounded, driver-independent recovery of complete idempotent transaction
       bodies after database failover and datasource-pool timeout errors
+    - fixed @ref SqlUtil::AbstractColumn::equal() "AbstractColumn::equal()" to compare the column scale; a change
+      to the scale alone (for example \c numeric(15,0) to \c numeric(15,2)) compared equal, so table alignment
+      silently ignored the schema upgrade
+    - fixed @ref SqlUtil::AbstractColumn::getDescriptionHash() "AbstractColumn::getDescriptionHash()" to report the
+      column scale; without it, rebuilding a table from its own description hash truncated the scale of every
+      numeric column
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
@@ -8438,6 +8444,11 @@ column.setDdlName("order");
             if (size) {
                 rv.size = size;
             };
+            # the scale must be included, or a getDescriptionHash() -> alignTable() round trip silently drops the
+            # scale from every numeric column
+            if (scale) {
+                rv.scale = scale;
+            }
             if (qore_type) {
                 rv.qore_type = qore_type;
             }
@@ -8542,8 +8553,13 @@ string str = col.getRenameSql(t, "new_name");
         abstract string getRenameSql(AbstractTable t, string new_name);
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+        /** @note the scale is compared with a missing scale normalized to \c 0; drivers report no scale at all for
+            non-numeric columns, whereas numeric columns without an explicit scale use a scale of \c 0, and both
+            must compare equal
+        */
         bool equal(AbstractColumn c) {
             if (self.className() != c.className() || name != c.name || native_type != c.native_type || size != c.size
+                || (scale ?? 0) != (c.scale ?? 0)
                 || nullable != c.nullable || def_val != c.def_val || comment != c.comment) {
                 #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 return False;

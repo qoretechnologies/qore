@@ -74,14 +74,18 @@ module XdbcFirebirdSqlUtilBase {
     |!%Qore Type Name|!Firebird Type Used
     |\c int|\c bigint
     |\c float|<tt>double precision</tt>
-    |\c number|\c varchar
+    |\c number|\c numeric
     |\c string|\c varchar
     |\c date|<tt>timestamp</tt>
-    |\c binary|<tt>blob sub_type text</tt>
+    |\c binary|\c blob
     |\c bool|\c boolean
     |@ref SqlUtil::BLOB|\c blob
     |@ref SqlUtil::CHAR|\c char
     |@ref SqlUtil::CLOB|<tt>blob sub_type text</tt>
+
+    @note An unqualified \c NUMERIC or \c DECIMAL column is \c NUMERIC(9,0) in Firebird; numeric columns declared
+    without a size therefore use the widest int64-backed precision (\c 18) instead, and a scale must be given
+    explicitly to store decimal values
 
     @section xdbcfirebird_relnotes Release Notes
 
@@ -229,8 +233,9 @@ list<string> l = col.getModifySql(t, newcol);
                 l += sprintf("alter table %s alter %s set %snull", t.getSqlName(), ddl_name,
                     col.nullable ? "" : "not ");
             }
-            if (native_type != col.native_type || size != col.size || scale != col.scale) {
-                l += sprintf("alter table %s alter %s type %s", t.getSqlName(), ddl_name, getNativeTypeString());
+            if (native_type != col.native_type || size != col.size || (scale ?? 0) != (col.scale ?? 0)) {
+                # the target column's type must be used here; using the current column's type would emit a no-op
+                l += sprintf("alter table %s alter %s type %s", t.getSqlName(), ddl_name, col.getNativeTypeString());
             }
             if (def_val != col.def_val) {
                 l += sprintf("alter table %s alter %s %s", t.getSqlName(), ddl_name,
@@ -672,7 +677,9 @@ auto v = c.name;
             @since %XdbcFirebirdSqlUtilBase 1.4.3
         */
         bool requiresScale() {
-            return False;
+            # an unqualified NUMERIC or DECIMAL column is NUMERIC(9,0) in Firebird, which silently truncates
+            # decimal values, so an explicit scale is required to store them
+            return True;
         }
 
         #! Returns the maximum precision for numeric or decimal columns
@@ -681,7 +688,7 @@ auto v = c.name;
             @since %XdbcFirebirdSqlUtilBase 1.4.3
         */
         int getMaximumPrecision() {
-            return 0;
+            return 18;
         }
 
         private list<string> featuresImpl() {
@@ -856,7 +863,9 @@ auto v = c.name;
                     "qore": Type::Number,
                     "size": SZ_NUM,
                     "size_range": (1, 38),
-                    "scale_range": (0, 38)
+                    "scale_range": (0, 38),
+                    # as for NUMERIC, an unqualified DECIMAL defaults to DECIMAL(9,0) in Firebird
+                    "default_size": 18,
                 },
                 "double": {
                     "qore": Type::Float,
@@ -876,17 +885,15 @@ auto v = c.name;
                 "integer": {
                     "qore": Type::Int,
                 },
-                "numeric(18,18)": {
-                    "qore": Type::Number,
-                    "size": SZ_NUM,
-                    "size_range": (1, 18),
-                    "scale_range": (0, 18)
-                },
                 "numeric": {
                     "qore": Type::Number,
                     "size": SZ_NUM,
-                    "size_range": (1, 18),
-                    "scale_range": (0, 18)
+                    # precisions over 18 are supported from Firebird 4 on and are backed by INT128
+                    "size_range": (1, 38),
+                    "scale_range": (0, 38),
+                    # Firebird defaults an unqualified NUMERIC to NUMERIC(9,0); declare the widest int64-backed
+                    # precision instead so that unsized numeric columns are not silently limited to 9 digits
+                    "default_size": 18,
                 },
                 "real": {
                     "qore": Type::Float,
@@ -926,7 +933,7 @@ auto v = c.name;
             const QoreTypeMap = (
                 "integer": "bigint",
                 "float": "double precision",
-                "number": "numeric(18,18)",
+                "number": "numeric",
                 "string": "varchar",
                 "date": "timestamp",
                 "binary": "blob",
@@ -1435,6 +1442,7 @@ auto v = c.name;
             *hash<auto> qh = ds.select("select "
                 "   lower(rf.rdb$field_name) as \"name\", "
                 "   f.rdb$field_length as \"length\", "
+                "   f.rdb$field_precision as \"precision\", "
                 "   f.rdb$field_scale as \"scale\", "
                 "   f.rdb$field_type as \"type\", "
                 "   f.rdb$field_sub_type as \"subtype\", "
@@ -1487,6 +1495,15 @@ auto v = c.name;
                         break;
                     }
                     case 23: typename = "boolean"; remove row.length; break;
+                    # INT128-backed NUMERIC and DECIMAL (precision 19 - 38); supported from Firebird 4 on
+                    case 26: {
+                        switch (row.subtype) {
+                            case 0: typename = "int128"; remove row.length; break;
+                            case 1: typename = "numeric"; break;
+                            case 2: typename = "decimal"; break;
+                        }
+                        break;
+                    }
                     case 27: typename = "double"; remove row.length; break;
                     case 29: typename = "timestamp with time zone"; remove row.length; break;
                     case 35: typename = "timestamp"; remove row.length; break;
@@ -1505,6 +1522,12 @@ auto v = c.name;
                 if (!typename) {
                     throw "FIREBIRD-ERROR", sprintf("column %s.%s: unknown column type %d", getSqlName(), row.name,
                         row.type);
+                }
+                # "rdb$field_length" gives the storage size in bytes for NUMERIC and DECIMAL columns (2, 4, or 8
+                # for the smallint, integer, and bigint backing types), not the declared precision; the precision
+                # is only available in "rdb$field_precision"
+                if (typename == "numeric" || typename == "decimal") {
+                    row.length = row.precision;
                 }
                 if (row.scale < 0) {
                     row.scale = -row.scale;
@@ -1675,8 +1698,14 @@ where
         }
 
         private AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) {
-            return new XdbcFirebirdColumn(cname, opt.native_type, opt.qore_type, opt.size, nullable, opt.default_value,
-                opt.comment, 0);
+            # numeric types carry their size in "opt.precision"; "opt.size" is cleared for them, so passing
+            # "opt.size" here dropped both the precision and the scale from every numeric column
+            if (opt.precision) {
+                return new XdbcFirebirdColumn(cname, opt.native_type, opt.qore_type, opt.precision, nullable,
+                    opt.default_value, opt.comment, opt.scale);
+            }
+            return new XdbcFirebirdColumn(cname, opt.native_type, opt.qore_type, opt.size, nullable,
+                opt.default_value, opt.comment);
         }
 
         private AbstractPrimaryKey addPrimaryKeyImpl(string cname, hash<auto> ch, *hash<auto> opt) {

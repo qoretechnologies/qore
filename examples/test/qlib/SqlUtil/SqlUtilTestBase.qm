@@ -128,6 +128,8 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("implicit composite foreign key join", \implicitCompositeForeignKeyJoinTest());
         addTestCase("Temp Tables", \tempTableTest());
         addTestCase("wrong schema", \test2358SqlutilSchema());
+        addTestCase("numeric scale alignment", \numericScaleAlignmentTest());
+        addTestCase("numeric scale description hash", \numericScaleDescriptionHashTest());
         addTestCase("get DB size #3385", \testGetPhysicalSize());
     }
 
@@ -1869,6 +1871,15 @@ public class SqlTestBase inherits QUnit::Test {
 
     private abstract string getResultSetSql();
 
+    #! returns @ref True if the DB can increase the scale of an existing column with an \c "alter table" statement
+    /** Firebird accepts a reduced scale but rejects an increased one with \c "New scale specified for column ...
+        must be at most N", so driver tests for such backends override this to return @ref False.  Detecting the
+        change and generating the correct DDL is still verified everywhere; only applying it is skipped.
+    */
+    private bool supportsColumnScaleIncrease() {
+        return True;
+    }
+
     resultSetPlaceholderTest() {
         if (!table)
             testSkip("no DB connection");
@@ -2075,6 +2086,131 @@ public class SqlTestBase inherits QUnit::Test {
             }
         }
     } # test2358SqlutilSchema
+
+    #! a change to the scale alone must be detected and applied by table alignment
+    /** AbstractColumn::equal() ignored the scale, so a numeric(15,0) -> numeric(15,2) upgrade compared equal and
+        getAlignSql() silently returned nothing
+    */
+    numericScaleAlignmentTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        ds.commit();
+        Database db(ds);
+
+        string tname = "sqlutil_scale_t";
+        db.dropTableIfExists(tname);
+        ds.commit();
+        on_exit {
+            db.dropTableIfExists(tname);
+            ds.commit();
+        }
+
+        AbstractTable t = db.makeTable(tname, {
+            "columns": {
+                "id": c_number(14, 0, True),
+                "amt": c_number(15, 0),
+                "amt2": c_number(15, 2),
+            },
+        });
+        t.create();
+        ds.commit();
+
+        AbstractTable live = db.getTable(tname);
+        assertEq(0, live.describe().amt.scale ?? 0, "amt is created with a scale of 0");
+        assertEq(2, live.describe().amt2.scale ?? 0, "amt2 is created with a scale of 2");
+
+        # aligning with the schema used to create the table must be a no-op
+        assertEq((), db.getTable(tname).getAlignSql(db.makeTable(tname, {
+            "columns": {
+                "id": c_number(14, 0, True),
+                "amt": c_number(15, 0),
+                "amt2": c_number(15, 2),
+            },
+        })), "an unchanged numeric schema aligns to nothing");
+
+        # swap the scales in both directions; both changes must be detected
+        AbstractTable tmpl = db.makeTable(tname, {
+            "columns": {
+                "id": c_number(14, 0, True),
+                "amt": c_number(15, 2),
+                "amt2": c_number(15, 0),
+            },
+        });
+        # the exact statement count is driver-specific; both columns must be covered
+        list<auto> sql = db.getTable(tname).getAlignSql(tmpl);
+        string all_sql = ((foldl $1 + "\n" + $2, sql) ?? "").lwr();
+        assertRegex("amt\\b", all_sql, sprintf("a scale increase is detected: %y", sql));
+        assertRegex("amt2\\b", all_sql, sprintf("a scale decrease is detected: %y", sql));
+
+        # detecting the change and generating the correct DDL is verified above for every backend; only applying
+        # it requires a backend that accepts an increased scale on an existing column
+        if (!supportsColumnScaleIncrease()) {
+            testSkip(sprintf("%s cannot increase the scale of an existing column", ds.getDriverRealName()));
+        }
+
+        # apply the alignment and verify that the DB reports the new scales
+        map ds.execRaw($1), sql;
+        ds.commit();
+        AbstractTable after = db.getTable(tname);
+        assertEq(2, after.describe().amt.scale ?? 0, "amt scale increased to 2");
+        assertEq(0, after.describe().amt2.scale ?? 0, "amt2 scale decreased to 0");
+
+        # alignment must now be idempotent
+        assertEq((), db.getTable(tname).getAlignSql(tmpl), "a second alignment is a no-op");
+    }
+
+    #! the column description hash must carry the scale so that a description -> align round trip is a no-op
+    /** AbstractColumn::getDescriptionHash() omitted the scale, so rebuilding a table from its own description
+        hash (as DbTableDataProvider does when adding, updating, or deleting a field) truncated the scale of
+        every numeric column
+    */
+    numericScaleDescriptionHashTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        ds.commit();
+        Database db(ds);
+
+        string tname = "sqlutil_scale_desc_t";
+        db.dropTableIfExists(tname);
+        ds.commit();
+        on_exit {
+            db.dropTableIfExists(tname);
+            ds.commit();
+        }
+
+        AbstractTable t = db.makeTable(tname, {
+            "columns": {
+                "id": c_number(14, 0, True),
+                "amt": c_number(15, 2),
+                # a precision over 18 uses a wider backing type on some backends (INT128 on Firebird), which the
+                # column description has to report just as accurately as an ordinary numeric column
+                "amt_wide": c_number(38, 10),
+                "descr": c_varchar(50),
+            },
+        });
+        t.create();
+        ds.commit();
+
+        hash<auto> desc = db.getTable(tname).getDescriptionHash();
+        assertEq(2, desc.columns.amt.scale, sprintf("the description hash carries the scale: %y", desc.columns.amt));
+        assertEq(38, desc.columns.amt_wide.size,
+            sprintf("the description hash carries a high precision: %y", desc.columns.amt_wide));
+        assertEq(10, desc.columns.amt_wide.scale,
+            sprintf("the description hash carries the scale of a high-precision column: %y",
+                desc.columns.amt_wide));
+        assertNothing(desc.columns.descr.scale,
+            sprintf("no scale is reported for a non-numeric column: %y", desc.columns.descr));
+
+        # rebuilding the table from its own description hash must align to nothing
+        assertEq((), db.getTable(tname).getAlignSql(db.makeTable(tname, desc)),
+            "a round-tripped description hash aligns to nothing");
+    }
 
     testGetPhysicalSize() {
         if (!table) {
