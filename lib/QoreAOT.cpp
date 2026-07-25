@@ -9429,6 +9429,11 @@ static bool qore_aot_collect_int_expression_summaries(
             || (kind >= AOTIntExpressionNodeKind::StringStartsWith
                 && kind <= AOTIntExpressionNodeKind::StringContains);
     };
+    auto is_hash_projection = [](AOTIntExpressionNodeKind kind) {
+        return kind == AOTIntExpressionNodeKind::HashKeyInt
+            || kind == AOTIntExpressionNodeKind::HashKeyStringSize
+            || kind == AOTIntExpressionNodeKind::HashKeyStringLength;
+    };
     auto result_matches_return_kind = [&](const AOTIntExpressionInfo& expression,
             int result, BatchCalleeReturnKind return_kind) {
         if (result < 0
@@ -9444,7 +9449,7 @@ static bool qore_aot_collect_int_expression_summaries(
         return is_string_operation(kind)
             || kind == AOTIntExpressionNodeKind::Div
             || kind == AOTIntExpressionNodeKind::Mod
-            || kind == AOTIntExpressionNodeKind::HashKeyInt;
+            || is_hash_projection(kind);
     };
     auto append_node = [&](AOTIntExpressionInfo& expression,
             const AOTIntExpressionNodeInfo& node) -> int {
@@ -9453,7 +9458,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 || node.kind == AOTIntExpressionNodeKind::ListSize
                 || node.kind == AOTIntExpressionNodeKind::StringSize
                 || node.kind == AOTIntExpressionNodeKind::StringLength
-                || node.kind == AOTIntExpressionNodeKind::HashKeyInt
+                || is_hash_projection(node.kind)
                 || is_string_operation(node.kind)) {
             for (size_t i = 0; i < expression.nodes.size(); ++i) {
                 const auto& existing = expression.nodes[i];
@@ -9466,7 +9471,7 @@ static bool qore_aot_collect_int_expression_summaries(
                                     || node.kind == AOTIntExpressionNodeKind::StringSize
                                     || node.kind == AOTIntExpressionNodeKind::StringLength)
                                 && existing.param == node.param)
-                            || (node.kind == AOTIntExpressionNodeKind::HashKeyInt
+                            || (is_hash_projection(node.kind)
                                 && existing.param == node.param
                                 && existing.key == node.key)
                             || (is_string_operation(node.kind)
@@ -9502,13 +9507,14 @@ static bool qore_aot_collect_int_expression_summaries(
         node.param = param;
         return append_node(expression, node);
     };
-    auto append_hash_key_int = [&](AOTIntExpressionInfo& expression,
-            int8_t param, const std::string& key) {
+    auto append_hash_projection = [&](AOTIntExpressionInfo& expression,
+            AOTIntExpressionNodeKind kind, int8_t param,
+            const std::string& key) {
         if (param < 0 || key.empty()) {
             return -1;
         }
         AOTIntExpressionNodeInfo node;
-        node.kind = AOTIntExpressionNodeKind::HashKeyInt;
+        node.kind = kind;
         node.param = param;
         node.key = key;
         for (size_t i = 0; i < expression.nodes.size(); ++i) {
@@ -9516,15 +9522,20 @@ static bool qore_aot_collect_int_expression_summaries(
             if (!is_fallible_node(existing.kind)) {
                 continue;
             }
-            if (existing.kind != AOTIntExpressionNodeKind::HashKeyInt) {
+            if (!is_hash_projection(existing.kind)) {
                 return -1;
             }
-            if (existing.param == node.param
+            if (existing.kind == node.kind && existing.param == node.param
                     && existing.key == node.key) {
                 return static_cast<int>(i);
             }
         }
         return append_node(expression, node);
+    };
+    auto append_hash_key_int = [&](AOTIntExpressionInfo& expression,
+            int8_t param, const std::string& key) {
+        return append_hash_projection(expression,
+            AOTIntExpressionNodeKind::HashKeyInt, param, key);
     };
     auto append_string_operation = [&](AOTIntExpressionInfo& expression,
             AOTIntExpressionNodeKind kind, int8_t base_param,
@@ -9758,12 +9769,13 @@ static bool qore_aot_collect_int_expression_summaries(
                         && boxed_args[static_cast<size_t>(node.param)] >= 0
                     ? append_source(expression, node.kind,
                         boxed_args[static_cast<size_t>(node.param)]) : -1;
-            } else if (node.kind == AOTIntExpressionNodeKind::HashKeyInt) {
+            } else if (is_hash_projection(node.kind)) {
                 result = node.param >= 0
                         && static_cast<size_t>(node.param) < boxed_args.size()
                         && boxed_args[static_cast<size_t>(node.param)] >= 0
-                    ? append_hash_key_int(expression,
-                        boxed_args[static_cast<size_t>(node.param)], node.key) : -1;
+                    ? append_hash_projection(expression, node.kind,
+                        boxed_args[static_cast<size_t>(node.param)], node.key)
+                    : -1;
             } else if (is_string_operation(node.kind)) {
                 int offset = node.rhs == UINT8_MAX ? -1
                     : node.rhs < mapped.size() ? mapped[node.rhs] : -2;
@@ -9801,6 +9813,7 @@ static bool qore_aot_collect_int_expression_summaries(
         List,
         String,
         Hash,
+        HashString,
     };
     struct ExpressionParamInfo {
         int8_t index = -1;
@@ -9894,7 +9907,11 @@ static bool qore_aot_collect_int_expression_summaries(
             } else if (QoreTypeInfo::getBaseType(type) == NT_STRING) {
                 param_info.boxed_kind = BoxedSourceParamKind::String;
             } else if (QoreTypeInfo::getBaseType(type) == NT_HASH) {
-                param_info.boxed_kind = BoxedSourceParamKind::Hash;
+                param_info.boxed_kind =
+                    QoreTypeInfo::getUniqueReturnComplexHash(type)
+                            == stringTypeInfo
+                    ? BoxedSourceParamKind::HashString
+                    : BoxedSourceParamKind::Hash;
             } else {
                 state = VisitState::Failed;
                 return false;
@@ -9905,6 +9922,11 @@ static bool qore_aot_collect_int_expression_summaries(
         AOTIntExpressionInfo expression;
         std::unordered_map<uint32_t, int> values;
         std::unordered_map<uint32_t, ExpressionParamInfo> boxed_values;
+        struct HashStringValue {
+            int8_t param;
+            std::string key;
+        };
+        std::unordered_map<uint32_t, HashStringValue> hash_string_values;
         std::unordered_map<const LocalVar*, int> local_values;
         auto is_exact_int_local = [](const LocalVar* local) {
             return local && !local->closureUse()
@@ -10026,6 +10048,56 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
                 result = append_hash_key_int(expression,
                     base->second.index, access->key_name);
+            } else if (inst->opcode == QoreIROpcode::HashKeyAccessHash
+                    || inst->opcode
+                        == QoreIROpcode::HashKeyAccessHashGuarded) {
+                if (!allow_fallible_operations || !inst->result.isValid()
+                        || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto base = boxed_values.find(inst->operands[0].id);
+                const auto* access =
+                    static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+                if (base == boxed_values.end()
+                        || base->second.boxed_kind
+                            != BoxedSourceParamKind::HashString
+                        || access->key_name.empty()) {
+                    return false;
+                }
+                hash_string_values.emplace(inst->result.id,
+                    HashStringValue{
+                        base->second.index, access->key_name});
+                return true;
+            } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    && !inst->operands.empty()
+                    && hash_string_values.count(inst->operands[0].id)) {
+                if (inst->operands.size() != 1) {
+                    return false;
+                }
+                const auto* op =
+                    static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                if (!op->pseudo || op->has_ref_args || !op->qc
+                        || strcmp(op->qc->getName(), "<string>")) {
+                    return false;
+                }
+                QoreIRIntrinsic intrinsic = op->intrinsic;
+                if (intrinsic == QoreIRIntrinsic::None) {
+                    intrinsic = qore_ir_resolve_pseudo_intrinsic(
+                        op->method, op->qc, op->fallback_method_name);
+                }
+                AOTIntExpressionNodeKind kind;
+                if (intrinsic == QoreIRIntrinsic::Size
+                        || intrinsic == QoreIRIntrinsic::StringStrlen) {
+                    kind = AOTIntExpressionNodeKind::HashKeyStringSize;
+                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+                    kind = AOTIntExpressionNodeKind::HashKeyStringLength;
+                } else {
+                    return false;
+                }
+                const HashStringValue& hash_string =
+                    hash_string_values.at(inst->operands[0].id);
+                result = append_hash_projection(
+                    expression, kind, hash_string.param, hash_string.key);
             } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
                 if (inst->operands.empty() || inst->operands.size() > 3) {
                     return false;
@@ -13758,7 +13830,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             const auto& input = rec.int_expression_nodes[i];
             if (input.kind < static_cast<uint8_t>(AOTIntExpressionNodeKind::Param)
                     || input.kind > static_cast<uint8_t>(
-                        AOTIntExpressionNodeKind::HashKeyInt)) {
+                        AOTIntExpressionNodeKind::HashKeyStringLength)) {
                 return false;
             }
             AOTIntExpressionNodeInfo node;
@@ -13772,7 +13844,12 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             bool is_source = node.kind == AOTIntExpressionNodeKind::ListSize
                 || node.kind == AOTIntExpressionNodeKind::StringSize
                 || node.kind == AOTIntExpressionNodeKind::StringLength;
-            bool is_hash_source = node.kind == AOTIntExpressionNodeKind::HashKeyInt;
+            bool is_hash_source =
+                node.kind == AOTIntExpressionNodeKind::HashKeyInt
+                || node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringSize
+                || node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringLength;
             bool is_string_operation = node.kind >= AOTIntExpressionNodeKind::StringStartsWith
                 && node.kind <= AOTIntExpressionNodeKind::StringRFind;
             bool is_string_predicate = node.kind >= AOTIntExpressionNodeKind::StringStartsWith

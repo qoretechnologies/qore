@@ -295,7 +295,7 @@ if (!provider_index.regex(
     printf("invalid composed boxed return metadata:\n%s", provider_index);
     exit(2);
 }
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"31\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"32\"/)
         || provider_index
             =~ /\"qore_path\": \"(optionalIdentity|mutatingIdentity)\([^\n]*\"boxed_return_param\": 0/) {
     printf("invalid boxed return-parameter metadata:\n%s", provider_index);

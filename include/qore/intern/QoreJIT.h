@@ -153,6 +153,8 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     Shr = 27,
     Neg = 28,
     HashKeyInt = 29,
+    HashKeyStringSize = 30,
+    HashKeyStringLength = 31,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 64;

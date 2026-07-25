@@ -297,7 +297,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 31;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 32;
 
 //! Maximum serialized nodes in a bounded pure native-integer expression summary.
 constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 64;

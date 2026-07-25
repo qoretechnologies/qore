@@ -4855,24 +4855,44 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         return true;
     };
     for (const auto& node : info.int_expression.nodes) {
+        bool hash_projection =
+            node.kind == AOTIntExpressionNodeKind::HashKeyInt
+            || node.kind
+                == AOTIntExpressionNodeKind::HashKeyStringSize
+            || node.kind
+                == AOTIntExpressionNodeKind::HashKeyStringLength;
         bool source = node.kind == AOTIntExpressionNodeKind::ListSize
             || node.kind == AOTIntExpressionNodeKind::StringSize
             || node.kind == AOTIntExpressionNodeKind::StringLength
-            || node.kind == AOTIntExpressionNodeKind::HashKeyInt;
+            || hash_projection;
         bool string_operation = node.kind >= AOTIntExpressionNodeKind::StringStartsWith
             && node.kind <= AOTIntExpressionNodeKind::StringRFind;
         expression_may_throw = expression_may_throw || string_operation
             || node.kind == AOTIntExpressionNodeKind::Div
             || node.kind == AOTIntExpressionNodeKind::Mod
-            || node.kind == AOTIntExpressionNodeKind::HashKeyInt;
+            || hash_projection;
         if (source && !add_optional_source(node.param)) {
             return nullptr;
         }
-        if (node.kind == AOTIntExpressionNodeKind::HashKeyInt) {
+        if (hash_projection) {
             if (node.key.empty()) {
                 return nullptr;
             }
             have_hash_key_source = true;
+            if (node.kind
+                        != AOTIntExpressionNodeKind::HashKeyInt
+                    && std::getenv(
+                        "QORE_DISABLE_AOT_HASH_STRING_MEASURE_IMPORT")) {
+                return nullptr;
+            }
+            if (node.kind != AOTIntExpressionNodeKind::HashKeyInt
+                    && (getFastEntryParamKind(info,
+                            static_cast<unsigned>(node.param))
+                            != BatchCalleeParamKind::Boxed
+                        || native_args[static_cast<size_t>(node.param)]->getType()
+                            != i64_type)) {
+                return nullptr;
+            }
         }
         if (string_operation
                 && (!add_optional_source(node.param)
@@ -4998,6 +5018,102 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
             }
         }
     }
+    std::map<int8_t, std::vector<size_t>> string_hash_groups;
+    for (size_t i = 0; i < info.int_expression.nodes.size(); ++i) {
+        const auto& node = info.int_expression.nodes[i];
+        if (node.kind == AOTIntExpressionNodeKind::HashKeyStringSize
+                || node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringLength) {
+            string_hash_groups[node.param].push_back(i);
+        }
+    }
+    for (const auto& [param, nodes] : string_hash_groups) {
+        if (param < 0 || static_cast<size_t>(param) >= native_args.size()
+                || getFastEntryParamKind(info,
+                    static_cast<unsigned>(param))
+                    != BatchCalleeParamKind::Boxed
+                || native_args[static_cast<size_t>(param)]->getType()
+                    != i64_type) {
+            return nullptr;
+        }
+        llvm::Value* base = native_args[static_cast<size_t>(param)];
+        std::vector<llvm::Constant*> keys;
+        std::vector<llvm::Constant*> hashes64;
+        std::vector<llvm::Constant*> hashes32;
+        std::vector<llvm::Constant*> modes;
+        llvm::Type* byte_type = llvm::Type::getInt8Ty(ctx);
+        keys.reserve(nodes.size());
+        hashes64.reserve(nodes.size());
+        hashes32.reserve(nodes.size());
+        modes.reserve(nodes.size());
+        for (size_t node_index : nodes) {
+            const auto& node = info.int_expression.nodes[node_index];
+            keys.push_back(builder->CreateGlobalString(
+                node.key, "int_expression_hash_string_key"));
+            QoreIRPrecomputedStringHash hash =
+                qore_ir_precompute_string_hash(node.key);
+            hashes64.push_back(
+                llvm::ConstantInt::get(i64_type, hash.hash64));
+            hashes32.push_back(
+                llvm::ConstantInt::get(i32_type, hash.hash32));
+            modes.push_back(llvm::ConstantInt::get(byte_type,
+                node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringLength));
+        }
+        auto make_array = [&](llvm::Type* type,
+                const std::vector<llvm::Constant*>& values,
+                const char* name) {
+            llvm::ArrayType* array_type =
+                llvm::ArrayType::get(type, values.size());
+            llvm::Constant* initializer =
+                llvm::ConstantArray::get(array_type, values);
+            return new llvm::GlobalVariable(module, array_type, true,
+                llvm::GlobalValue::PrivateLinkage, initializer, name);
+        };
+        llvm::GlobalVariable* key_array =
+            make_array(ptr_type, keys,
+                "int_expression_hash_string_keys");
+        llvm::GlobalVariable* hash64_array =
+            make_array(i64_type, hashes64,
+                "int_expression_hash_string_hashes64");
+        llvm::GlobalVariable* hash32_array =
+            make_array(i32_type, hashes32,
+                "int_expression_hash_string_hashes32");
+        llvm::GlobalVariable* mode_array =
+            make_array(byte_type, modes,
+                "int_expression_hash_string_modes");
+
+        llvm::Function* llvm_func =
+            builder->GetInsertBlock()->getParent();
+        llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(),
+            llvm_func->getEntryBlock().begin());
+        llvm::Value* result_array = entry_builder.CreateAlloca(i64_type,
+            llvm::ConstantInt::get(i32_type, nodes.size()),
+            "int_expression_hash_string_values");
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_hash_keys_string_measure_prehashed",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type,
+                 ptr_type, i32_type}, false));
+        llvm::Value* success = builder->CreateCall(helper,
+            {base, key_array, hash64_array, hash32_array, mode_array,
+             result_array,
+             llvm::ConstantInt::get(i32_type, nodes.size())});
+        llvm::BasicBlock* assigned =
+            llvm::BasicBlock::Create(ctx,
+                "aot.int.hash.string.assigned", llvm_func);
+        builder->CreateCondBr(
+            builder->CreateICmpNE(success,
+                llvm::ConstantInt::get(i64_type, 0)),
+            assigned, fallback_bb);
+        builder->SetInsertPoint(assigned);
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            llvm::Value* value_ptr = builder->CreateGEP(i64_type,
+                result_array, llvm::ConstantInt::get(i32_type, i));
+            batched_hash_values.emplace(nodes[i],
+                builder->CreateLoad(i64_type, value_ptr));
+        }
+    }
 
     std::vector<llvm::Value*> values;
     values.reserve(info.int_expression.nodes.size());
@@ -5048,7 +5164,11 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     value = builder->CreateCall(to_int, {value});
                 }
             }
-        } else if (node.kind == AOTIntExpressionNodeKind::HashKeyInt) {
+        } else if (node.kind == AOTIntExpressionNodeKind::HashKeyInt
+                || node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringSize
+                || node.kind
+                    == AOTIntExpressionNodeKind::HashKeyStringLength) {
             if (node.param < 0
                     || static_cast<size_t>(node.param) >= native_args.size()
                     || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
@@ -5064,6 +5184,9 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 value = batched->second;
                 values.push_back(value);
                 continue;
+            }
+            if (node.kind != AOTIntExpressionNodeKind::HashKeyInt) {
+                return nullptr;
             }
             llvm::Value* key = builder->CreateGlobalString(node.key,
                 "int_expression_hash_key");

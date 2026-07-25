@@ -69,6 +69,16 @@ float sub nested_hash_float_expr(
     return hash_float_expr(row, adjustment) * 2.0 + 1.0;
 }
 
+int sub hash_string_measure(
+        hash<string, string> row, int adjustment) {
+    return row.first.length() + row.second.size() + adjustment;
+}
+
+int sub nested_hash_string_measure(
+        hash<string, string> row, int adjustment) {
+    return hash_string_measure(row, adjustment) * 2 + 1;
+}
+
 float sub divide_float_expr(float a, float b) {
     return a / b;
 }
@@ -484,6 +494,37 @@ string sub consumerCode() {
         hash_float_expr(float_missing, 2.0),
         hash_float_expr(float_removed, 3.0),
         float_unassigned_rejected, float_removed_lvalue_rejected);
+    hash<string, string> hash_string_present = {
+        \"first\": \"Dvo\u0159\u00e1k\", \"second\": \"ascii\"};
+    hash<string, string> hash_string_missing = {\"first\": \"Dvo\u0159\u00e1k\"};
+    hash<string, string> hash_string_removed = hash_string_present;
+    remove hash_string_removed.second;
+    hash<string, string> hash_string_unassigned;
+    bool hash_string_unassigned_rejected = False;
+    try {
+        hash_string_measure(hash_string_unassigned, 2);
+    } catch (hash<auto> ex) {
+        hash_string_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, string> hash_string_removed_lvalue =
+        hash_string_present;
+    remove hash_string_removed_lvalue;
+    bool hash_string_removed_lvalue_rejected = False;
+    try {
+        hash_string_measure(hash_string_removed_lvalue, 2);
+    } catch (hash<auto> ex) {
+        hash_string_removed_lvalue_rejected =
+            ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"hash-string-measure:%d:%d:%d:%d:%d:%d\\n\",
+        hash_string_measure(hash_string_present, 2),
+        nested_hash_string_measure(hash_string_present, 2),
+        hash_string_measure(hash_string_missing, 2),
+        hash_string_measure(hash_string_removed, 3),
+        hash_string_unassigned_rejected,
+        hash_string_removed_lvalue_rejected);
     hash<string, int> multi_present = {
         \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
     hash<string, int> multi_missing = {\"a\": 1, \"b\": 2, \"d\": 4};
@@ -558,7 +599,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"31\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"32\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
@@ -572,6 +613,10 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"31\"/)
         || !(provider_index =~ /\"qore_path\": \"hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"kind\": 10[^\n]*\"key\": \"a\"/)
+        || !(provider_index =~ /\"qore_path\": \"hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"second\"/)
+        || !(provider_index =~ /\"kind\": 31[^\n]*\"key\": \"first\"/)
         || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
@@ -650,9 +695,11 @@ string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
 if (enabled_undefined !~ /qore_rt_hash_key_access_int_prehashed/
         || enabled_undefined !~ /qore_rt_hash_keys_int_prehashed/
         || enabled_undefined !~ /qore_rt_hash_keys_float_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_string_measure_prehashed/
         || disabled_undefined =~ /qore_rt_hash_key_access_int_prehashed/
         || disabled_undefined =~ /qore_rt_hash_keys_int_prehashed/
-        || disabled_undefined =~ /qore_rt_hash_keys_float_prehashed/) {
+        || disabled_undefined =~ /qore_rt_hash_keys_float_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_string_measure_prehashed/) {
     printf("hash projection import mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
     exit(2);
