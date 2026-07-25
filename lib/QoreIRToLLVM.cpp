@@ -5834,6 +5834,8 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
     llvm::BasicBlock* fallback_bb = nullptr;
     llvm::BasicBlock* merge_bb = nullptr;
     llvm::Value* hash_results = nullptr;
+    bool borrow_hash_values =
+        !std::getenv("QORE_DISABLE_AOT_BORROWED_HASH_STRING_VALUES");
     if (!hash_nodes.empty()) {
         std::vector<llvm::Constant*> keys;
         std::vector<llvm::Constant*> hashes64;
@@ -5876,7 +5878,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
             llvm::ConstantInt::get(i32_type, hash_nodes.size()),
             "string_expression_hash_values");
         auto helper = module.getOrInsertFunction(
-            "qore_rt_hash_keys_string_prehashed",
+            borrow_hash_values
+                ? "qore_rt_hash_keys_string_borrowed_prehashed"
+                : "qore_rt_hash_keys_string_prehashed",
             llvm::FunctionType::get(i64_type,
                 {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type},
                 false));
@@ -5932,7 +5936,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                     hash_results,
                     llvm::ConstantInt::get(i32_type, hash_result_index++));
                 values[i] = builder->CreateLoad(i64_type, value_ptr);
-                owned_values.push_back(static_cast<uint8_t>(i));
+                if (!borrow_hash_values) {
+                    owned_values.push_back(static_cast<uint8_t>(i));
+                }
                 break;
             }
             case AOTStringExpressionNodeKind::Concat:

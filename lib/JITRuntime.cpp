@@ -300,6 +300,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_hash_keys_string_measure_prehashed) },
     { "qore_rt_hash_keys_string_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_keys_string_prehashed) },
+    { "qore_rt_hash_keys_string_borrowed_prehashed",
+        reinterpret_cast<void*>(
+            &qore_rt_hash_keys_string_borrowed_prehashed) },
     { "qore_rt_select_hash_key_positive_int",
         reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int) },
     { "qore_rt_select_hash_key_positive_int_prehashed",
@@ -5256,6 +5259,33 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_prehashed(
             return 0;
         }
         results[i] = toBits(value.hasNode() ? value.refSelf() : value);
+    }
+    return 1;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_borrowed_prehashed(
+        uint64_t hash_val, const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, uint64_t* results, uint32_t count) {
+    if (!keys || !hashes64 || !hashes32 || !results || !count) {
+        return 0;
+    }
+    ExceptionSink xsink;
+    ValueEvalOptimizedRefHolder vh(fromBits(hash_val), &xsink);
+    if (xsink || vh->getType() != NT_HASH) {
+        return 0;
+    }
+    const QoreHashNode* hash = vh->get<const QoreHashNode>();
+    const qore_hash_private* hash_priv = qore_hash_private::get(*hash);
+    for (uint32_t i = 0; i < count; ++i) {
+        bool exists = false;
+        QoreValue value = hash_priv->getKeyValueExistencePrehashedIntern(
+            keys[i], qore_rt_select_precomputed_hash(
+                hashes64[i], hashes32[i]), exists);
+        if (!exists
+                || (!value.isShortString() && value.getType() != NT_STRING)) {
+            return 0;
+        }
+        results[i] = toBits(value);
     }
     return 1;
 }

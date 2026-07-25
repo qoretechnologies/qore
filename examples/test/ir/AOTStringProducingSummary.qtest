@@ -285,11 +285,13 @@ string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
 string hash_disabled_dir = root + "/hash-disabled";
+string borrowed_disabled_dir = root + "/borrowed-disabled";
 mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
 mkdir(hash_disabled_dir);
+mkdir(borrowed_disabled_dir);
 
 string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
@@ -358,13 +360,20 @@ string hash_disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT=1"
         + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, hash_disabled_dir, consumer_path));
+string borrowed_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_BORROWED_HASH_STRING_VALUES=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, borrowed_disabled_dir, consumer_path));
 string enabled_qo = enabled_dir + "/consumer.qo";
 string disabled_qo = disabled_dir + "/consumer.qo";
 string hash_disabled_qo = hash_disabled_dir + "/consumer.qo";
+string borrowed_disabled_qo = borrowed_disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)
-        || !is_file(hash_disabled_qo)) {
-    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%s",
-        enabled_compile, disabled_compile, hash_disabled_compile);
+        || !is_file(hash_disabled_qo)
+        || !is_file(borrowed_disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_compile, disabled_compile, hash_disabled_compile,
+        borrowed_disabled_compile);
     exit(2);
 }
 if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
@@ -375,16 +384,23 @@ if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string hash_disabled_undefined =
     backquote(sprintf("nm -u %s 2>&1", hash_disabled_qo));
-if (enabled_undefined !~ /qore_rt_hash_keys_string_prehashed/
-        || hash_disabled_undefined =~ /qore_rt_hash_keys_string_prehashed/) {
-    printf("hash string expression import mismatch:\nenabled:\n%shash disabled:\n%s",
-        enabled_undefined, hash_disabled_undefined);
+string borrowed_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", borrowed_disabled_qo));
+if (enabled_undefined !~ /qore_rt_hash_keys_string_borrowed_prehashed/
+        || enabled_undefined =~ /qore_rt_hash_keys_string_prehashed/
+        || hash_disabled_undefined =~ /qore_rt_hash_keys_string_(borrowed_)?prehashed/
+        || borrowed_disabled_undefined !~ /qore_rt_hash_keys_string_prehashed/
+        || borrowed_disabled_undefined =~ /qore_rt_hash_keys_string_borrowed_prehashed/) {
+    printf("hash string expression import mismatch:\nenabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_undefined, hash_disabled_undefined,
+        borrowed_disabled_undefined);
     exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
 string disabled_exe = root + "/disabled-aot";
 string hash_disabled_exe = root + "/hash-disabled-aot";
+string borrowed_disabled_exe = root + "/borrowed-disabled-aot";
 string enabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
     libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
@@ -394,10 +410,16 @@ string disabled_link = backquote(sprintf(
 string hash_disabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
     libqore_dir, qcc_bin, hash_disabled_exe, provider_qo, hash_disabled_qo));
+string borrowed_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, borrowed_disabled_exe, provider_qo,
+    borrowed_disabled_qo));
 if (!is_file(enabled_exe) || !is_file(disabled_exe)
-        || !is_file(hash_disabled_exe)) {
-    printf("link failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%s",
-        enabled_link, disabled_link, hash_disabled_link);
+        || !is_file(hash_disabled_exe)
+        || !is_file(borrowed_disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_link, disabled_link, hash_disabled_link,
+        borrowed_disabled_link);
     exit(2);
 }
 
@@ -407,8 +429,11 @@ string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe));
 string hash_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, hash_disabled_exe));
-if (ast != enabled || ast != disabled || ast != hash_disabled) {
-    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%s",
-        ast, enabled, disabled, hash_disabled);
+string borrowed_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, borrowed_disabled_exe));
+if (ast != enabled || ast != disabled || ast != hash_disabled
+        || ast != borrowed_disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%sBorrowed disabled:\n%s",
+        ast, enabled, disabled, hash_disabled, borrowed_disabled);
     exit(2);
 }

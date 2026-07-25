@@ -951,6 +951,11 @@ int64_t qore_rt_hash_keys_string_prehashed(uint64_t hash_val,
         const char* const* keys, const uint64_t* hashes64,
         const uint32_t* hashes32, uint64_t* results, uint32_t count);
 
+//! Resolve known string keys from one hash evaluation and return borrowed values.
+int64_t qore_rt_hash_keys_string_borrowed_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, uint64_t* results, uint32_t count);
+
 //! Select list hash elements whose constant-key value converts to an integer > 0.
 uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val, const char* key,
         ExceptionSink* xsink);
