@@ -314,7 +314,7 @@ struct QoreAOTIntExpressionNodeRecord {
 };
 
 //! Maximum serialized nodes in a bounded pure native-float expression summary.
-constexpr size_t QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES = 16;
+constexpr size_t QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES = 64;
 
 //! Serialized node in a bounded pure native-float expression summary.
 struct QoreAOTFloatExpressionNodeRecord {

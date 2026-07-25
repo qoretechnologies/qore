@@ -10785,7 +10785,8 @@ static bool qore_aot_collect_float_expression_summaries(
         auto func_it = function_map.find(variant);
         const QoreIRFunction* func = func_it == function_map.end() ? nullptr : func_it->second;
         if (!func || func->blocks.size() != 1 || !func->blocks.front()
-                || func->blocks.front()->instructions.size() > 32
+                || func->blocks.front()->instructions.size()
+                    > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES + 8
                 || callee->second.return_kind != BatchCalleeReturnKind::NativeFloat
                 || callee->second.num_params > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES
                 || callee->second.param_kinds.size() != callee->second.num_params

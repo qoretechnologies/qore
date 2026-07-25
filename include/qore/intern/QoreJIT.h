@@ -187,7 +187,7 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     Neg = 7,
 };
 
-constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 16;
+constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 64;
 
 //! One topologically ordered node in a bounded pure native-float expression.
 struct AOTFloatExpressionNodeInfo {
