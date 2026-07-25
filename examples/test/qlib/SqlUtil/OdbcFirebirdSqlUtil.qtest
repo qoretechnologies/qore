@@ -136,6 +136,12 @@ class OdbcFirebirdTest inherits SqlTestBase {
         return "";
     }
 
+    #! Firebird rejects an increased scale on an existing column ("New scale specified for column ... must be at
+    #! most N"); the column has to be rebuilt instead
+    private bool supportsColumnScaleIncrease() {
+        return False;
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"odbcfirebird:user/pass@db\")", OptionColumn);

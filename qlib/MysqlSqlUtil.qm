@@ -101,6 +101,8 @@ module MysqlSqlUtil {
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
     - added temporary-table support (\c "create temporary table"); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+    - fixed numeric column comparison; an assignment was used in place of a comparison, so comparing two numeric
+      columns overwrote the \c unsigned attribute of the column being compared and returned the wrong result
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -476,7 +478,7 @@ string str = col.getRenameSql(t, "new_name");
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
         private bool equalImpl(AbstractColumn c) {
             MysqlNumericColumn nc = c;
-            return unsigned = nc.unsigned && auto_increment == nc.auto_increment && pk == nc.pk;
+            return unsigned == nc.unsigned && auto_increment == nc.auto_increment && pk == nc.pk;
         }
     }
 
