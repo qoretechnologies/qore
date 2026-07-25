@@ -84,6 +84,23 @@ float sub wide_float_expr(float value) {
         * 0.998046875 - 3.5)))));
 }
 
+float sub cfg_float_expr(bool outer, bool inner, float value) {
+    if (outer) {
+        if (inner) {
+            return value * 1.25 + 0.5;
+        }
+        return value * 0.875 - 0.25;
+    }
+    return value * 0.625 + 1.5;
+}
+
+float sub cfg_float_div(bool divide, float value, float divisor) {
+    if (divide) {
+        return value / divisor;
+    }
+    return value + 1.0;
+}
+
 int sub string_measure_expr(string value, int adjustment) {
     return value.size() * 3 + value.length() * 5 + adjustment;
 }
@@ -377,6 +394,12 @@ string sub consumerCode() {
         wide_float_expr(17.25),
         wide_float_expr(@nan@).nanp(),
         wide_float_expr(@inf@).infp());
+    printf(\"cfg-float-expr:%.17g:%.17g:%.17g:%d:%d\\n\",
+        cfg_float_expr(True, True, 8.0),
+        cfg_float_expr(True, False, 8.0),
+        cfg_float_expr(False, False, 8.0),
+        cfg_float_expr(True, True, @nan@).nanp(),
+        cfg_float_div(False, 1.0, 0.0) == 2.0);
     bool unassigned_local_rejected = False;
     try {
         maybe_unassigned_local(0);
@@ -453,7 +476,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"29\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"30\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
@@ -469,6 +492,8 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"29\"/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"multiple_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"wide_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"cfg_float_expr\(bool,bool,float\)\"[^\n]*\"float_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"kind\": 9/)
+        || !(provider_index =~ /\"qore_path\": \"cfg_float_div\(bool,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)

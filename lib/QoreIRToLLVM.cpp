@@ -5173,7 +5173,25 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 return nullptr;
             }
             value = native_args[static_cast<size_t>(node.param)];
-            if (value->getType() != double_type) {
+            if (value->getType() != double_type
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(node.param))
+                        != BatchCalleeParamKind::NativeFloat) {
+                return nullptr;
+            }
+        } else if (node.kind == AOTFloatExpressionNodeKind::BoolParam) {
+            if (node.param < 0
+                    || static_cast<size_t>(node.param) >= native_args.size()
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(node.param))
+                        != BatchCalleeParamKind::NativeBool) {
+                return nullptr;
+            }
+            value = native_args[static_cast<size_t>(node.param)];
+            if (value->getType() == i64_type) {
+                value = builder->CreateICmpNE(
+                    value, llvm::ConstantInt::get(i64_type, 0));
+            } else if (value->getType() != i1_type) {
                 return nullptr;
             }
         } else if (node.kind == AOTFloatExpressionNodeKind::Constant) {
@@ -5184,6 +5202,18 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 return nullptr;
             }
             value = builder->CreateFNeg(values[node.lhs]);
+        } else if (node.kind == AOTFloatExpressionNodeKind::Select) {
+            if (node.lhs >= values.size() || node.rhs >= values.size()
+                    || node.param < 0
+                    || static_cast<size_t>(node.param) >= values.size()
+                    || values[node.lhs]->getType() != i1_type
+                    || values[node.rhs]->getType() != double_type
+                    || values[static_cast<size_t>(node.param)]->getType()
+                        != double_type) {
+                return nullptr;
+            }
+            value = builder->CreateSelect(values[node.lhs],
+                values[node.rhs], values[static_cast<size_t>(node.param)]);
         } else {
             if (node.lhs >= values.size() || node.rhs >= values.size()) {
                 return nullptr;

@@ -185,6 +185,9 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     Mul = 5,
     Div = 6,
     Neg = 7,
+    BoolParam = 8,
+    //! Select a float value; lhs is the condition, rhs the true value, and param the false value.
+    Select = 9,
 };
 
 constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 64;
