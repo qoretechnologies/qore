@@ -1775,7 +1775,7 @@ static bool qore_ir_is_nonconsuming_scalar_use(const QoreIRFunction& func,
 
 static bool qore_ir_has_only_nonconsuming_scalar_uses(const QoreIRFunction& func,
         QoreIRValue result, const QoreIRScalarUses& uses, bool allow_ir_only_store,
-        size_t& check_count, bool& cancelled,
+        size_t& check_count, bool& cancelled, bool allow_phi = false,
         const std::unordered_set<size_t>* required_blocks = nullptr) {
     auto use_it = uses.find(result.id);
     if (use_it == uses.end() || use_it->second.empty()) {
@@ -1787,7 +1787,10 @@ static bool qore_ir_has_only_nonconsuming_scalar_uses(const QoreIRFunction& func
             return false;
         }
         if (!use.inst || (required_blocks && !required_blocks->count(use.block_id))
-                || !qore_ir_is_nonconsuming_scalar_use(func, *use.inst, allow_ir_only_store)) {
+                || (!qore_ir_is_nonconsuming_scalar_use(
+                        func, *use.inst, allow_ir_only_store)
+                    && (!allow_phi
+                        || use.inst->opcode != QoreIROpcode::Phi))) {
             return false;
         }
     }
@@ -4528,6 +4531,88 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
     };
     std::vector<AvailableState> block_outputs(func.blocks.size());
     std::vector<uint8_t> processed(func.blocks.size(), 0);
+    std::vector<size_t> immediate_dominators(
+        func.blocks.size(), std::numeric_limits<size_t>::max());
+    std::unordered_set<const LocalVar*> written_locals;
+    const bool cross_block =
+        std::getenv("QORE_DISABLE_IR_CROSS_BLOCK_CSE") == nullptr;
+    bool dominance_cse = cross_block
+        && std::getenv("QORE_DISABLE_IR_DOMINANCE_CSE") == nullptr;
+    if (dominance_cse) {
+        const char* outline = std::getenv("QORE_AOT_OUTLINE_FN");
+        bool outline_enabled =
+            !outline || !*outline || strcmp(outline, "0");
+        auto outline_threshold = [](const char* name, size_t fallback) {
+            const char* value = std::getenv(name);
+            if (!value || !*value) {
+                return fallback;
+            }
+            long long parsed = atoll(value);
+            return parsed > 0 ? static_cast<size_t>(parsed) : fallback;
+        };
+        size_t min_blocks =
+            outline_threshold("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
+        size_t min_instructions =
+            outline_threshold("QORE_AOT_OUTLINE_FN_MIN_INSTS", 3000);
+        bool outline_candidate =
+            outline_enabled && func.blocks.size() >= min_blocks;
+        if (outline_enabled && !outline_candidate) {
+            size_t instructions = 0;
+            for (const auto& block : func.blocks) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR dominance CSE outline interaction analysis")) {
+                    return {};
+                }
+                instructions += block->instructions.size();
+            }
+            outline_candidate = instructions >= min_instructions;
+        }
+        dominance_cse = !outline_candidate;
+    }
+    if (dominance_cse) {
+        for (size_t block_id = 1; block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dominance CSE analysis")) {
+                return {};
+            }
+            if (!cfg.reachable[block_id]) {
+                continue;
+            }
+            size_t immediate = std::numeric_limits<size_t>::max();
+            for (size_t candidate = 0; candidate < func.blocks.size();
+                    ++candidate) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR dominance CSE analysis")) {
+                    return {};
+                }
+                if (candidate == block_id
+                        || !cfg.dominates(candidate, block_id)) {
+                    continue;
+                }
+                if (immediate == std::numeric_limits<size_t>::max()
+                        || cfg.dominates(immediate, candidate)) {
+                    immediate = candidate;
+                }
+            }
+            immediate_dominators[block_id] = immediate;
+        }
+        for (const auto& block : func.blocks) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dominance CSE mutation analysis")) {
+                return {};
+            }
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR dominance CSE mutation analysis")) {
+                    return {};
+                }
+                const LocalVar* written = qore_ir_get_written_local(inst.get());
+                if (written) {
+                    written_locals.insert(written);
+                }
+            }
+        }
+    }
     std::vector<uint8_t> discovered(func.blocks.size(), 0);
     std::vector<size_t> order;
     if (!func.blocks.empty()) {
@@ -4563,7 +4648,6 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         }
     }
 
-    const bool cross_block = std::getenv("QORE_DISABLE_IR_CROSS_BLOCK_CSE") == nullptr;
     for (size_t block_id : order) {
         if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
             return {};
@@ -4581,6 +4665,17 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 } else {
                     available = block_outputs[predecessor].expressions;
                     available_loads = block_outputs[predecessor].loads;
+                }
+            }
+        } else if (dominance_cse && cfg.reachable[block_id]) {
+            size_t dominator = immediate_dominators[block_id];
+            if (dominator < block_outputs.size() && processed[dominator]) {
+                available = block_outputs[dominator].expressions;
+                for (const auto& [local, value] :
+                        block_outputs[dominator].loads) {
+                    if (!written_locals.count(local)) {
+                        available_loads.emplace(local, value);
+                    }
                 }
             }
         }
@@ -4612,8 +4707,9 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
 
             if (qore_ir_is_forwardable_scalar_load(func, inst)
-                    && qore_ir_has_only_nonconsuming_scalar_uses(func, inst.result, uses, true,
-                        check_count, cancelled)) {
+                    && qore_ir_has_only_nonconsuming_scalar_uses(
+                        func, inst.result, uses, true, check_count, cancelled,
+                        true)) {
                 const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
                 auto [load_it, inserted] = available_loads.emplace(load.local, inst.result);
                 if (!inserted) {
@@ -4631,8 +4727,9 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 && (qore_ir_is_native_scalar_constant(inst.opcode)
                     || qore_ir_is_native_scalar_pure_opcode(inst.opcode));
             if (!candidate
-                    || !qore_ir_has_only_nonconsuming_scalar_uses(func, inst.result, uses, true,
-                        check_count, cancelled)) {
+                    || !qore_ir_has_only_nonconsuming_scalar_uses(
+                        func, inst.result, uses, true, check_count, cancelled,
+                        true)) {
                 if (cancelled) {
                     return {};
                 }
@@ -7786,7 +7883,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                 }
                 if (inst->result.isValid()
                         && qore_ir_has_only_nonconsuming_scalar_uses(func, inst->result, uses, false,
-                            check_count, cancelled, &loop_blocks)) {
+                            check_count, cancelled, false, &loop_blocks)) {
                     safe_repeated_values.insert(inst->result.id);
                 }
                 if (cancelled) {
