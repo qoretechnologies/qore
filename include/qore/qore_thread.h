@@ -454,12 +454,27 @@ DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operati
 
 //! Requests cooperative cancellation of a specific thread
 /** The target thread will receive a \c THREAD-CANCELLED exception at the next cancellation
-    point. Only threads in the same program context can be cancelled.
+    point.
+
+    @par Scope
+    A request issued from an unrestricted %Program — one with no sandbox manager governing it or
+    any enclosing caller %Program — or from host code with no %Program context is unscoped and
+    always applies; such a caller can already terminate the process outright.
+
+    A request issued from a sandboxed %Program is scoped to that %Program: it is only honored if
+    the target thread is executing in it or in a call that originated in it. This allows a
+    %Program to cancel threads running its own code wherever they currently are — including
+    inside child Programs it called into — while preventing it from reaching threads that never
+    entered it.
+
+    The scope is evaluated by the target thread at its next cancellation point, so a return
+    value of 0 means the request was delivered, not that it was necessarily honored; an
+    out-of-scope request is dropped by the target.
 
     @param tid the Qore thread ID to cancel
     @param reason optional reason string (will be included in the exception message)
 
-    @return 0 on success, -1 if the thread was not found, not active, or in a different program
+    @return 0 if the request was delivered, -1 if the thread was not found or not active
 
     @since %Qore 2.2
 */

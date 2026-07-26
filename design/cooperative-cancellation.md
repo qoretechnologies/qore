@@ -7,7 +7,7 @@ Qore provides cooperative cancellation at two levels:
 | Level | Scope | Requested by | Exception |
 |-------|-------|-------------|-----------|
 | **Program interrupt** | All threads in a program | Sandbox controller via `SandboxManager::requestInterrupt()` | `PROGRAM-INTERRUPTED` |
-| **Thread cancellation** | One specific thread | Any thread (same program) via `cancel_thread(tid)` | `THREAD-CANCELLED` |
+| **Thread cancellation** | One specific thread | Any thread in scope (see [Program Scope](#program-scope-who-can-cancel-whom)) via `cancel_thread(tid)` | `THREAD-CANCELLED` |
 
 Both levels are checked at the same **cancellation points** through a single C++ function. This document covers the architecture, the C++ and Qore APIs, and the implementation guide for binary modules.
 
@@ -47,8 +47,8 @@ exported as a deprecated binary-compatibility wrapper that delegates to
 ### Thread Cancellation Control
 
 ```cpp
-// Request cancellation of a specific thread (same program only).
-// Returns 0 on success, -1 if thread not found/not active/wrong program.
+// Request cancellation of a specific thread; see "Program Scope" below.
+// Returns 0 if the request was delivered, -1 if the thread was not found or not active.
 DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
 
 // Clear the cancellation flag for the current thread.
@@ -494,17 +494,12 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
 ### `qore_cancel_thread()` Implementation
 
 ```cpp
-int QoreThreadList::cancelThread(int tid, const char* reason) {
+int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm_id) {
     AutoLocker al(lck);
     if (tid <= 0 || tid >= MAX_QORE_THREADS) {
         return -1;
     }
     if (!entry[tid].active()) {
-        return -1;
-    }
-    // Security: same-program only
-    ThreadData* td = entry[tid].thread_data;
-    if (td && td->current_pgm != getProgram()) {
         return -1;
     }
     if (reason) {
@@ -513,6 +508,8 @@ int QoreThreadList::cancelThread(int tid, const char* reason) {
         }
         entry[tid].cancel_reason = new QoreStringNode(reason);
     }
+    // publish the scope before the flag; the target reads it only after observing the flag
+    entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
     // seq_cst pairs with seq_cst on the waiter side (see Broadcast-on-Cancel)
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
     QoreCondition* cond = entry[tid].waiting_on.load(std::memory_order_seq_cst);
@@ -622,13 +619,53 @@ the existing cleanup path handles everything — no special cleanup path is need
 - `xsink.handleExceptions()` — logs unhandled exception
 - `thread_list.deleteDataRelease()` — releases TID slot (clears cancel flag)
 
-### Security: Who Can Cancel Whom?
-
-`qore_cancel_thread()` verifies `td->current_pgm == getProgram()`. This prevents:
-- Sandboxed code from cancelling host threads
-- One program's threads from cancelling another program's threads
+### Program Scope: Who Can Cancel Whom?
 
 Self-cancellation (cancelling the current thread) is an error — use `throw "THREAD-CANCELLED"` directly.
+
+Otherwise a request carries a **scope**, computed on the requesting thread by
+`get_cancel_scope_pgm_id()`:
+
+| Requesting context | Scope | Effect |
+|---|---|---|
+| host (C++) code with no `Program` context | `0` (unscoped) | applies to any thread |
+| an unrestricted `Program` — no `SandboxManager` on it or any enclosing caller `Program` | `0` (unscoped) | applies to any thread |
+| a sandboxed `Program` | that program's ID | applies only to threads executing in it or under a call that originated in it |
+
+The scope is evaluated by the **target** thread at its next cancellation point
+(`check_cancel_in_scope()`), against its current `Program` and its chain of enclosing caller
+`Program`s (`ThreadData::current_pgm_ctx` → `ProgramThreadCountContextHelper::getOldProgram()`),
+using the same resolution order as `qore_find_thread_sandbox_manager_ref()`.
+
+Two consequences of evaluating on the target:
+
+- **It is safe.** The chain consists of stack-allocated `ProgramThreadCountContextHelper`
+  objects in the target's own frames; walking it from the requesting thread would be a
+  use-after-free hazard.
+- **Delivery is not the same as effect.** `cancel_thread()` returning `True` means the request
+  was delivered; an out-of-scope request is dropped by the target when it observes it
+  (`dropCancelRequest()`), which keeps the steady-state cost of a cancellation point at a single
+  atomic load. The drop is conditional on the scope being unchanged, so a request that arrives
+  while the target is evaluating an older one is never lost.
+
+Rationale for the scope rule:
+
+- An unrestricted `Program` can already terminate the process outright, so scoping its
+  cancellation requests protects nothing while breaking the legitimate case — a host cancelling
+  a thread that is running the host's own request inside a `Program` the host called into.
+- A sandboxed `Program` gains nothing it did not already have: it can cancel threads that entered
+  it (which the previous same-program rule also allowed), but cannot reach threads that never did.
+- The primary control against untrusted code remains the `THREAD_CONTROL` functional domain:
+  a `Program` created with `PO_NO_THREAD_CONTROL` cannot call `cancel_thread()` at all.
+
+**Superseded rule (Qore 2.2).** `cancelThread()` originally required
+`td->current_pgm == getProgram()` — the target had to be executing in the requesting `Program` at
+the instant of the call. Because `current_pgm` tracks the innermost frame and changes on every
+cross-`Program` call, the outcome depended on where the target happened to be at that moment: the
+same thread was cancellable or not depending on timing, and a denial was indistinguishable from
+"no such thread" (both returned `-1`/`False`). It also blocked the one direction that is
+unambiguously legitimate, while a `Program`-wide `SandboxManager::requestInterrupt()` — which
+stops *every* thread in the target program — remained unrestricted.
 
 ## Performance
 
@@ -698,9 +735,15 @@ int tid = background sub() {
 sleep(100ms);
 cancel_thread(tid);
 
-# Same-program security
-Program pgm(PO_NEW_STYLE);
-# pgm should NOT be able to cancel threads in the parent program
+# Program scope
+Program child(PO_NEW_STYLE);
+# a thread blocked inside child IS cancellable from the parent
+
+SandboxManager sm();
+Program sandboxed(PO_NEW_STYLE);
+sandboxed.setSandboxManager(sm);
+# sandboxed CAN cancel a thread that called into it, wherever that thread is now;
+# sandboxed CANNOT cancel a thread that never entered it — the request is dropped
 
 # Both program interrupt and thread cancel active simultaneously
 # Thread cancel is detected first (more specific)
@@ -767,7 +810,8 @@ do_io_operation();  # Works normally, no overhead
 ### Phase 4: Tests
 - Thread cancellation tests (loop, sleep, queue, counter, I/O)
 - `clear_thread_cancel()` continuation test
-- Same-program security test
+- Program scope tests (child program, nested child program, sandboxed requester in and out of scope,
+  dropped request followed by an in-scope request, `thread_cancelled()` ignoring an out-of-scope request)
 - Program interrupt + thread cancel interaction test
 - ThreadPool task cancellation test
 - Per-module cancellation tests
@@ -794,4 +838,4 @@ do_io_operation();  # Works normally, no overhead
 
 - **Qore 2.0**: Initial implementation of program interrupt infrastructure
 - **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free; modules audited and updated for interruptible I/O and sandboxing
-- **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable
+- **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable; replaced the same-program restriction on `cancel_thread()` with the target-evaluated program scope rule (see [Program Scope](#program-scope-who-can-cancel-whom)), making a thread blocked inside a child program cancellable by the program that called into it

@@ -739,6 +739,7 @@ void ThreadEntry::cleanup() {
 
     // clear per-thread cancellation state
     cancel_requested.store(false, std::memory_order_relaxed);
+    cancel_scope_pgm_id.store(0, std::memory_order_relaxed);
     if (cancel_reason) {
         cancel_reason->deref();
         cancel_reason = nullptr;
@@ -3932,17 +3933,12 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
 
 // --- Thread Cancellation API ---
 
-int QoreThreadList::cancelThread(int tid, const char* reason) {
+int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm_id) {
     AutoLocker al(lck);
     if (tid <= 0 || tid >= MAX_QORE_THREADS) {
         return -1;
     }
     if (!entry[tid].active()) {
-        return -1;
-    }
-    // security: only allow cancellation within the same program context
-    ThreadData* td = entry[tid].thread_data;
-    if (td && td->current_pgm != getProgram()) {
         return -1;
     }
     if (reason) {
@@ -3951,6 +3947,9 @@ int QoreThreadList::cancelThread(int tid, const char* reason) {
         }
         entry[tid].cancel_reason = new QoreStringNode(reason);
     }
+    // publish the scope before the request flag; the target only reads the scope after observing
+    // the flag, so this release store pairs with the acquire load in getCancelScopeProgramId()
+    entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
@@ -3983,21 +3982,96 @@ void QoreThreadList::wakeAllWaiters() {
 }
 
 void QoreThreadList::clearCancel(int tid) {
+    // the lock serializes cancel_reason handling against a concurrent cancelThread() call, which
+    // would otherwise be able to replace (and deref) the string between our read and our deref
+    AutoLocker al(lck);
     if (tid >= 0 && tid < MAX_QORE_THREADS) {
-        entry[tid].cancel_requested.store(false, std::memory_order_release);
-        if (entry[tid].cancel_reason) {
-            entry[tid].cancel_reason->deref();
-            entry[tid].cancel_reason = nullptr;
-        }
+        clearCancelIntern(tid);
     }
 }
 
+void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
+    AutoLocker al(lck);
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return;
+    }
+    if (entry[tid].cancel_scope_pgm_id.load(std::memory_order_acquire) != scope_pgm_id) {
+        // a different request was delivered after we evaluated the scope; leave it pending
+        return;
+    }
+    clearCancelIntern(tid);
+}
+
+//! Returns the scope to apply to a cancellation request issued by the current thread
+/** Returns 0 for an unscoped request: the caller has no Program context (i.e. it is host code
+    embedding the library), or it runs in an unrestricted Program — one with no sandbox manager
+    governing it or any of its enclosing caller Programs.  An unrestricted Program can already
+    terminate the process outright, so scoping its cancellation requests would protect nothing.
+
+    Otherwise the current Program's ID is returned, and the request is only honored if the target
+    thread is executing in that Program or in a call that originated in it (see
+    check_cancel_in_scope()).  This is what prevents sandboxed code from reaching threads that
+    never entered it, while still allowing it to cancel threads running its own code.
+*/
+static unsigned get_cancel_scope_pgm_id() {
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        return 0;
+    }
+    QoreSandboxManagerHelper smh;
+    if (!smh) {
+        return 0;
+    }
+    return pgm->getProgramId();
+}
+
+//! Evaluates a pending cancellation request for the current thread against its Program context
+/** Must be called by the target thread itself: the Program-context chain consists of
+    stack-allocated ProgramThreadCountContextHelper objects in this thread's own frames.
+
+    An out-of-scope request is dropped, so that the steady-state cost of a cancellation check
+    point remains a single atomic load.
+
+    @return true if the request applies to this thread, false if there was no request in scope
+*/
+static bool check_cancel_in_scope(int tid) {
+    unsigned scope = thread_list.getCancelScopeProgramId(tid);
+    if (!scope) {
+        return true;
+    }
+    ThreadData* td = thread_data.get();
+    if (td) {
+        // 1) the current program context
+        if (td->current_pgm && td->current_pgm->getProgramId() == scope) {
+            return true;
+        }
+        // 2) enclosing caller programs via the program-context (call) stack, innermost first; a
+        // thread executing a call that originated in the requesting Program is in scope wherever
+        // it currently is
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+            const QoreProgram* pgm = ch->getOldProgram();
+            if (pgm && pgm->getProgramId() == scope) {
+                return true;
+            }
+        }
+        // 3) call program context fallback; matches qore_find_thread_sandbox_manager_ref()
+        if (td->call_program_context && td->call_program_context->getProgramId() == scope) {
+            return true;
+        }
+    }
+    thread_list.dropCancelRequest(tid, scope);
+    return false;
+}
+
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
-    // check thread-level cancellation first (cheap: one atomic load)
+    // check thread-level cancellation first (cheap: one atomic load); the scope of a pending
+    // request is only evaluated in the rare case that a request is actually pending
     int tid = q_gettid();
-    if (thread_list.isCancelRequested(tid)) {
+    if (thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid)) {
         if (xsink) {
-            QoreStringNode* reason = thread_list.getCancelReason(tid);
+            // hold a reference while formatting; a concurrent cancelThread() call would otherwise
+            // be able to replace and free the string between the read and its use
+            ReferenceHolder<QoreStringNode> reason(thread_list.getCancelReasonRef(tid), nullptr);
             if (reason) {
                 xsink->raiseException("THREAD-CANCELLED",
                     new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
@@ -4029,7 +4103,7 @@ bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
 }
 
 int qore_cancel_thread(int tid, const char* reason) {
-    return thread_list.cancelThread(tid, reason);
+    return thread_list.cancelThread(tid, reason, get_cancel_scope_pgm_id());
 }
 
 void qore_clear_thread_cancel() {
@@ -4037,5 +4111,6 @@ void qore_clear_thread_cancel() {
 }
 
 bool qore_is_thread_cancel_requested() {
-    return thread_list.isCancelRequested(q_gettid());
+    int tid = q_gettid();
+    return thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid);
 }
