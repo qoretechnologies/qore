@@ -20,6 +20,12 @@
 - `cmake --build build --target docs` builds documentation (requires doxygen).
 - `./run_tests.sh` runs Qore tests from `examples/test/` (expects a built `qore`/`libqore`).
 - `./run_tests.sh -d <subdir>` runs a subset of tests, e.g. `./run_tests.sh -d http`.
+- **After editing any `qlib/` `.qm`/`.qc` source, rebuild that module's qmod target**
+  (`cmake --build build --target <Module>-qmod`) before testing. Each `qlib/<Module>.qmod` is a
+  symlink to the AOT-compiled `build/qlib-qmod/` output and is preferred over the `.qm`/`.qc`
+  sources, so source edits are silently ignored until the qmod is rebuilt — even with `qlib`
+  prepended to the module path. Symptom: the edited code simply never runs (no error). The same
+  applies to `build-debug/` when testing the debug build.
 
 ## Coding Style & Naming Conventions
 - C++ code uses 4-space indentation and braces on the same line; follow nearby file style.
