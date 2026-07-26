@@ -11528,7 +11528,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             printd(2, "AOT deser: class '%s' already exists in namespace, using existing\n", name);
             // Class already exists - use the existing one and delete the new one
             QoreClass* existing = ns_list[ns_idx]->classList.find(name);
-            qore_class_private::get(*qc)->deref(true, true);
+            // release the class pointer (handle) reference in case the class is a wrapper
+            qore_class_private::derefClass(*qc, true, true);
             qc = existing;
             class_already_existed = true;
             preexisting_classes.insert(i);
