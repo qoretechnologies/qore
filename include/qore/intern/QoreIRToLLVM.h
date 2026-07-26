@@ -824,6 +824,7 @@ private:
         llvm::PHINode* node;
         const QoreIRPhiInstruction* inst;
         const QoreIRBasicBlock* ir_block;
+        QoreIRPhiValueKind value_kind;
     };
     std::vector<PendingPhi> pending_phis;
 

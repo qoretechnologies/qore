@@ -10733,7 +10733,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // PHI fixup pass: add incoming values now that all blocks are lowered
-    for (auto& [phi_node, phi_inst, phi_ir_block] : pending_phis) {
+    for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind] : pending_phis) {
         llvm::BasicBlock* phi_bb = phi_node->getParent();
         if (getenv("QORE_LLVM_DEBUG")) {
             fprintf(stderr, "PHI-FIXUP-START: PHI in block=%s predecessors=[",
@@ -10816,7 +10816,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             } else {
                 builder->SetInsertPoint(bb);
             }
-            switch (phi_inst->value_kind) {
+            switch (phi_value_kind) {
                 case QoreIRPhiValueKind::NativeInt:
                     if (val->getType()->isPointerTy()) {
                         val = builder->CreatePtrToInt(val, i64_type);
@@ -13330,20 +13330,56 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Phi nodes ===
         case QoreIROpcode::Phi: {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
+            QoreIRPhiValueKind phi_value_kind = phi->value_kind;
+            BatchCalleeReturnKind native_phi_kind =
+                BatchCalleeReturnKind::Boxed;
+            if (aot_mode
+                    && phi_value_kind == QoreIRPhiValueKind::QoreValue
+                    && !phi->incoming.empty()
+                    && !std::getenv("QORE_DISABLE_AOT_NATIVE_CALL_PHI")) {
+                bool consistent_native_kind = true;
+                for (const auto& incoming : phi->incoming) {
+                    auto kind = native_call_result_kinds.find(
+                        incoming.value.id);
+                    if (kind == native_call_result_kinds.end()
+                            || kind->second == BatchCalleeReturnKind::Boxed) {
+                        consistent_native_kind = false;
+                        break;
+                    }
+                    if (native_phi_kind == BatchCalleeReturnKind::Boxed) {
+                        native_phi_kind = kind->second;
+                    } else if (native_phi_kind != kind->second) {
+                        consistent_native_kind = false;
+                        break;
+                    }
+                }
+                if (consistent_native_kind) {
+                    phi_value_kind =
+                        native_phi_kind == BatchCalleeReturnKind::NativeFloat
+                            ? QoreIRPhiValueKind::NativeFloat
+                            : native_phi_kind
+                                    == BatchCalleeReturnKind::NativeBool
+                                ? QoreIRPhiValueKind::NativeBool
+                                : QoreIRPhiValueKind::NativeInt;
+                    native_call_result_kinds.emplace(inst->result.id,
+                        native_phi_kind);
+                }
+            }
             llvm::Type* phi_type =
-                phi->value_kind == QoreIRPhiValueKind::NativeFloat
+                phi_value_kind == QoreIRPhiValueKind::NativeFloat
                     ? double_type
-                    : phi->value_kind == QoreIRPhiValueKind::NativeBool
+                    : phi_value_kind == QoreIRPhiValueKind::NativeBool
                         ? i1_type : i64_type;
             llvm::PHINode* phi_node = builder->CreatePHI(phi_type, phi->incoming.size());
             values[inst->result.id] = phi_node;
-            if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {
+            if (phi_value_kind == QoreIRPhiValueKind::QoreValue) {
                 // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass).
                 nanboxed_values.insert(inst->result.id);
             }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
-            pending_phis.push_back({phi_node, phi, current_lowering_block_});
+            pending_phis.push_back({
+                phi_node, phi, current_lowering_block_, phi_value_kind});
             return true;
         }
 

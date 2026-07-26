@@ -31,12 +31,24 @@ int sub mapIntHelper(int value) {
     return value + 1;
 }
 
+int sub mapIntAlternateHelper(int value) {
+    return value + 2;
+}
+
 float sub mapFloatHelper(float value) {
     return value + 0.5;
 }
 
+float sub mapFloatAlternateHelper(float value) {
+    return value + 1.5;
+}
+
 bool sub mapBoolHelper(int value) {
     return (value & 1) == 0;
+}
+
+bool sub mapBoolAlternateHelper(int value) {
+    return (value & 2) == 0;
 }
 
 bool sub selectIntHelper(int value) {
@@ -114,6 +126,16 @@ int sub intMapHelperKernel(list<int> data, int rounds) {
     return checksum;
 }
 
+int sub intMapHelperPhiKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map ($1 & 1)
+            ? mapIntHelper($1) : mapIntAlternateHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
 float sub floatMapKernel(list<float> data, int rounds) {
     float checksum = 0.0;
     for (int i = 0; i < rounds; ++i) {
@@ -132,10 +154,30 @@ float sub floatMapHelperKernel(list<float> data, int rounds) {
     return checksum;
 }
 
+float sub floatMapHelperPhiKernel(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> mapped = (map ($# & 1)
+            ? mapFloatHelper($1) : mapFloatAlternateHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
 int sub boolMapHelperKernel(list<int> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
         list<bool> mapped = (map mapBoolHelper($1), data);
+        checksum += mapped.size() + (mapped[0] ? 1 : 0);
+    }
+    return checksum;
+}
+
+int sub boolMapHelperPhiKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> mapped = (map ($# & 1)
+            ? mapBoolHelper($1) : mapBoolAlternateHelper($1), data);
         checksum += mapped.size() + (mapped[0] ? 1 : 0);
     }
     return checksum;
@@ -212,14 +254,23 @@ int sub main() {
         case "int-map-helper":
             printf("%d\n", intMapHelperKernel(makeData(), rounds));
             break;
+        case "int-map-helper-phi":
+            printf("%d\n", intMapHelperPhiKernel(makeData(), rounds));
+            break;
         case "float-map":
             printf("%g\n", floatMapKernel(makeFloatData(), rounds));
             break;
         case "float-map-helper":
             printf("%g\n", floatMapHelperKernel(makeFloatData(), rounds));
             break;
+        case "float-map-helper-phi":
+            printf("%g\n", floatMapHelperPhiKernel(makeFloatData(), rounds));
+            break;
         case "bool-map-helper":
             printf("%d\n", boolMapHelperKernel(makeData(), rounds));
+            break;
+        case "bool-map-helper-phi":
+            printf("%d\n", boolMapHelperPhiKernel(makeData(), rounds));
             break;
         case "string-map":
             printf("%d\n", stringMapKernel(makeStringData(), rounds));
