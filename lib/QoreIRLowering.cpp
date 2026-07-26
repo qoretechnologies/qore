@@ -14898,6 +14898,44 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     }
 }
 
+QoreIRValue QoreIRLowering::insertFoldImplicitArgvSetup(QoreIRBasicBlock* body,
+        size_t position, QoreIRValue accumulator, QoreIRValue element,
+        const QoreProgramLocation* loc) {
+    QoreIRFunction* func = builder.getFunction();
+
+    auto argv = std::make_unique<QoreIRInstruction>(
+        QoreIROpcode::CreateEmptyList);
+    argv->loc = loc;
+    argv->result = func->createValue();
+    QoreIRValue argv_value = argv->result;
+    body->instructions.insert(
+        body->instructions.begin() + position++, std::move(argv));
+
+    auto append_accumulator = std::make_unique<QoreIRInstruction>(
+        QoreIROpcode::ListAppend);
+    append_accumulator->loc = loc;
+    append_accumulator->operands = {argv_value, accumulator};
+    body->instructions.insert(body->instructions.begin() + position++,
+        std::move(append_accumulator));
+
+    auto append_element = std::make_unique<QoreIRInstruction>(
+        QoreIROpcode::ListAppend);
+    append_element->loc = loc;
+    append_element->operands = {argv_value, element};
+    body->instructions.insert(body->instructions.begin() + position++,
+        std::move(append_element));
+
+    auto set_argv = std::make_unique<QoreIRInstruction>(
+        QoreIROpcode::SetImplicitArgv);
+    set_argv->loc = loc;
+    set_argv->operands.push_back(argv_value);
+    set_argv->result = func->createValue();
+    QoreIRValue old_argv = set_argv->result;
+    body->instructions.insert(
+        body->instructions.begin() + position, std::move(set_argv));
+    return old_argv;
+}
+
 QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr,
         std::string& error) {
     if (!ensureBuilderContext(error)) {
@@ -14999,12 +15037,6 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
             element_val = builder.createListGetFloat(input_list, index_val, foldl->loc)->result;
         }
 
-        // Push implicit args to thread-local stack (needed for AST-delegated sub-expressions)
-        QoreIRValue argv_list_typed = builder.createEmptyList(foldl->loc)->result;
-        builder.createListAppend(argv_list_typed, accum_val, foldl->loc);
-        builder.createListAppend(argv_list_typed, element_val, foldl->loc);
-        QoreIRValue old_argv_typed = builder.createSetImplicitArgv(argv_list_typed, foldl->loc)->result;
-
         // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -15013,14 +15045,20 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         virtual_implicit.active = true;
 
         // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
+        int saved_ast_count = ast_delegate_count;
         QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
 
-        // Restore virtual context and thread-local stack
+        // Restore virtual context and install runtime args only when delegated
+        // AST evaluation can observe them.
         virtual_implicit = saved;
-        builder.createPopImplicitArg(old_argv_typed, foldl->loc);
 
         if (!fold_result.isValid()) {
             return QoreIRValue();
+        }
+        if (ast_delegate_count > saved_ast_count) {
+            QoreIRValue old_argv = insertFoldImplicitArgvSetup(
+                body_block, 1, accum_val, element_val, foldl->loc);
+            builder.createPopImplicitArg(old_argv, foldl->loc);
         }
 
         // Increment index
@@ -15099,12 +15137,6 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
 
-    // Push implicit args to thread-local stack (needed for AST-delegated sub-expressions)
-    QoreIRValue argv_list_iter = builder.createEmptyList(foldl->loc)->result;
-    builder.createListAppend(argv_list_iter, accum_val, foldl->loc);
-    builder.createListAppend(argv_list_iter, element_val, foldl->loc);
-    QoreIRValue old_argv_iter = builder.createSetImplicitArgv(argv_list_iter, foldl->loc)->result;
-
     // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
     virtual_implicit.arg0 = accum_val;
@@ -15113,14 +15145,20 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     virtual_implicit.active = true;
 
     // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
+    int saved_ast_count = ast_delegate_count;
     QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
 
-    // Restore virtual context and thread-local stack
+    // Restore virtual context and install runtime args only when delegated AST
+    // evaluation can observe them.
     virtual_implicit = saved;
-    builder.createPopImplicitArg(old_argv_iter, foldl->loc);
 
     if (!fold_result.isValid()) {
         return QoreIRValue();
+    }
+    if (ast_delegate_count > saved_ast_count) {
+        QoreIRValue old_argv = insertFoldImplicitArgvSetup(
+            body_block, 0, accum_val, element_val, foldl->loc);
+        builder.createPopImplicitArg(old_argv, foldl->loc);
     }
 
     // Record body exit block
@@ -15219,12 +15257,6 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     // Body block: set up context with both $1 (accumulator) and $2 (element)
     builder.setBlock(body_block);
 
-    // Push implicit args to thread-local stack (needed for AST-delegated sub-expressions)
-    QoreIRValue argv_list_foldr = builder.createEmptyList(foldr->loc)->result;
-    builder.createListAppend(argv_list_foldr, accum_val, foldr->loc);
-    builder.createListAppend(argv_list_foldr, element_val, foldr->loc);
-    QoreIRValue old_argv_foldr = builder.createSetImplicitArgv(argv_list_foldr, foldr->loc)->result;
-
     // Set virtual implicit context: $1 = accumulator, $2 = element (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
     virtual_implicit.arg0 = accum_val;
@@ -15233,14 +15265,20 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     virtual_implicit.active = true;
 
     // Lower the fold expression - $1 and $2 resolved via virtual context (IR) or thread-local stack (AST)
+    int saved_ast_count = ast_delegate_count;
     QoreIRValue fold_result = lowerExpression(foldr->getLeft(), error);
 
-    // Restore virtual context and thread-local stack
+    // Restore virtual context and install runtime args only when delegated AST
+    // evaluation can observe them.
     virtual_implicit = saved;
-    builder.createPopImplicitArg(old_argv_foldr, foldr->loc);
 
     if (!fold_result.isValid()) {
         return QoreIRValue();
+    }
+    if (ast_delegate_count > saved_ast_count) {
+        QoreIRValue old_argv = insertFoldImplicitArgvSetup(
+            body_block, 0, accum_val, element_val, foldr->loc);
+        builder.createPopImplicitArg(old_argv, foldr->loc);
     }
 
     // Record body exit block

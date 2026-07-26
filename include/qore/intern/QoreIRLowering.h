@@ -260,6 +260,9 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         std::string& error);
+    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
+    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
+        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator

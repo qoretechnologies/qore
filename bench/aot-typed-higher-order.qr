@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeData() {
+    list<int> data = ();
+    for (int i = 0; i < 1024; ++i) {
+        push data, i & 15;
+    }
+    return data;
+}
+
+int sub foldlKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + ($2 & 7), data);
+    }
+    return checksum;
+}
+
+int sub foldrKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldr $1 + ($2 & 7), data);
+    }
+    return checksum;
+}
+
+int sub foreachKernel(int rounds) {
+    list<int> data = (
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11, 12, 13, 14, 15,
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11, 12, 13, 14, 15,
+    );
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach int value in (data) {
+            checksum += value;
+        }
+    }
+    return checksum;
+}
+
+int sub main() {
+    string kernel = ARGV.size() ? ARGV[0] : "foldl";
+    int rounds = ARGV.size() > 1 ? ARGV[1].toInt()
+        : kernel == "foreach" ? 1000000 : 2000;
+    switch (kernel) {
+        case "foldl":
+            printf("%d\n", foldlKernel(makeData(), rounds));
+            break;
+        case "foldr":
+            printf("%d\n", foldrKernel(makeData(), rounds));
+            break;
+        case "foreach":
+            printf("%d\n", foreachKernel(rounds));
+            break;
+        default:
+            throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+    }
+    return 0;
+}
+
+main();

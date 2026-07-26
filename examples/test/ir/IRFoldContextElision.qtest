@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+list<int> values = (1, 2, 3, 4);
+int native_foldl = (foldl \$1 + (\$2 & 7), values);
+int delegated_foldl = (foldl string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
+int native_foldr = (foldr \$1 + (\$2 & 7), values);
+int delegated_foldr = (foldr string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
+printf(\"%d:%d:%d:%d\\n\", native_foldl, delegated_foldl,
+    native_foldr, delegated_foldr);
+";
+
+string root = "/tmp/qore-ir-fold-context-elision-" + string(getpid());
+string src = root + ".qr";
+string exe = root + "-aot";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected = "10:10:10:10\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string ir_dump = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+    libqore_dir, qore_bin, src));
+Regex set_argv("set\\.implicit\\.argv");
+if (set_argv.count(ir_dump) != 2) {
+    printf("expected runtime context only for the two delegated folds:\n%s",
+        ir_dump);
+    exit(2);
+}
+
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-debug-info -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, src));
+if (!is_file(exe)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, exe));
+if (aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}
+
+unlink(src);
+unlink(exe);
