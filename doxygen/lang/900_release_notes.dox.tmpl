@@ -1011,6 +1011,15 @@ cargo install tree-sitter-cli@0.26.5
       - cancelling an already-cancelled thread updates the reason string
       - cancelling a thread that has already exited returns @ref False
       - attempting to cancel the current thread raises \c THREAD-CANCEL-ERROR
+      - requests from an unrestricted @ref Qore::Program "Program" — one with no
+        @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller \c Program —
+        apply to any thread, including threads blocked inside child Programs; requests from a
+        sandboxed \c Program apply only to threads executing in it or in a call that originated in it,
+        so sandboxed code can cancel threads running its own code but cannot reach threads that never
+        entered it
+      - the scope is evaluated by the target thread at its next check point, so a @ref True return from
+        @ref Qore::cancel_thread() "cancel_thread()" means the request was delivered; an out-of-scope
+        request is dropped by the target and has no effect
     - <b>Modern threading primitives</b>
       - new @ref Qore::Thread::Future "Future" / @ref Qore::Thread::Promise "Promise" classes for cross-thread
         result delivery: @ref Qore::Thread::Promise "Promise" is the producer side (set a value or error),

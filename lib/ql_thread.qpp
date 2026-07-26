@@ -1012,6 +1012,22 @@ bool active_exception() [dom=PROCESS] {
     no blocking calls) will not be interrupted, but such code is inherently finite and
     will complete on its own.
 
+    @par Which Threads Can Be Cancelled
+    A request issued from an unrestricted @ref Qore::Program "Program" — one with no
+    @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller
+    \c Program — applies to any thread. Such a program can already terminate the entire
+    process, so restricting it protects nothing.
+
+    A request issued from a sandboxed \c Program is scoped to that program: it is only honored
+    if the target thread is executing in that program, or in a call that originated in it.
+    Sandboxed code can therefore cancel threads that are running its own code — wherever they
+    currently are, including inside child programs it called into — but cannot reach threads
+    that never entered it.
+
+    The scope is evaluated by the target thread at its next cancellation check point, so a
+    return value of @ref True means the request was delivered, not that it was necessarily
+    honored; an out-of-scope request is dropped by the target thread and has no effect.
+
     @return @ref True if the cancellation request was delivered, @ref False if the thread
     was not found or not active
 
@@ -1031,6 +1047,15 @@ bool active_exception() [dom=PROCESS] {
     # Wait up to 30 seconds, then cancel
     if (!done.waitForZero(30000)) {
         cancel_thread(tid, "processing timeout after 30s");
+    }
+    @endcode
+
+    @par Example: Unwedge a thread blocked in a child Program
+    @code{.py}
+    # a request handler that called into user code in a child Program and blocked there;
+    # the handler thread is cancelled even though it is not currently executing in this program
+    if (!handlers_done.waitForZero(grace_period)) {
+        map cancel_thread($1, "shutdown drain timeout"), stuck_handler_tids;
     }
     @endcode
 
@@ -1061,6 +1086,9 @@ bool cancel_thread(int thread_id, *string reason) [flags=NAMED_ARGS;dom=THREAD_C
     clear_thread_cancel() or the thread exits. After catching a \c THREAD-CANCELLED
     exception, the flag is still set, so any subsequent cancellation check point
     will throw again unless clear_thread_cancel() is called first.
+
+    @note Returns @ref False for a pending request that is out of scope for this thread (see
+    cancel_thread()); such a request is dropped when observed and never takes effect
 
     @return @ref True if cancellation has been requested, @ref False otherwise
 

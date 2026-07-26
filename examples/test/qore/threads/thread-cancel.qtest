@@ -56,6 +56,16 @@ public class ThreadCancelTest inherits QUnit::Test {
         addTestCase("program interrupt still works", \testProgramInterrupt());
         addTestCase("cancel_thread cross-program security", \testCrossProgramSecurity());
 
+        # Program scope rules for cancel_thread()
+        addTestCase("cancel thread in child program", \testCancelThreadInChildProgram());
+        addTestCase("cancel thread in nested child program", \testCancelThreadInNestedChildProgram());
+        addTestCase("sandboxed program cancels its own callers", \testSandboxedProgramCanCancelItsOwnCallers());
+        addTestCase("sandboxed program cannot cancel unrelated thread",
+            \testSandboxedProgramCannotCancelUnrelatedThread());
+        addTestCase("cancel after dropped out-of-scope request", \testCancelAfterDroppedRequest());
+        addTestCase("thread_cancelled ignores out-of-scope request",
+            \testThreadCancelledIgnoresOutOfScopeRequest());
+
         # Pipe stream cancel test
         addTestCase("cancel pipe read", \testCancelPipeRead());
 
@@ -510,6 +520,312 @@ sub loop_forever() {
 
         assertTrue(got_interrupt, "program interrupt should work on child program threads");
         sm.clearInterrupt();
+    }
+
+    #------------------------------------------------------------------
+    # Program scope tests
+    #
+    # A request from an unrestricted program (no SandboxManager) is unscoped and applies to any
+    # thread; a request from a sandboxed program only applies to threads executing in it or in a
+    # call that originated in it.
+    #------------------------------------------------------------------
+
+    #! returns a program that blocks in a Condition wait when "block_forever" is called
+    /** the release Counter is used instead of a reference so that the rescue path in
+        waitForBlocker() does not depend on writes propagating across program boundaries
+    */
+    private Program getBlockerProgram(string label) {
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.parse("
+%modern
+
+sub block_forever(Counter ready, Mutex m, Condition c, Counter release) {
+    AutoLock al(m);
+    ready.dec();
+    while (release.getCount()) {
+        c.wait(m);
+    }
+}
+", label);
+        return p;
+    }
+
+    #! blocks the current thread until the release Counter is decremented
+    private blockUntilReleased(Counter ready, Mutex m, Condition c, Counter release) {
+        AutoLock al(m);
+        ready.dec();
+        while (release.getCount()) {
+            c.wait(m);
+        }
+    }
+
+    #! waits for a blocker thread to exit, releasing it if it is still blocked
+    /** without the release, a regression in the scope rule would hang the test run instead of
+        failing it, since the blocker only exits when cancelled or released
+
+        @return 0 if the thread exited on its own (i.e. it was cancelled), -1 if it had to be
+        released
+    */
+    private int waitForBlocker(Counter done, Mutex m, Condition c, Counter release) {
+        int rc = done.waitForZero(20s);
+        if (rc) {
+            releaseBlocker(m, c, release);
+            done.waitForZero(20s);
+        }
+        return rc;
+    }
+
+    #! releases a blocked thread; the release is decremented under the mutex to avoid a lost wakeup
+    private releaseBlocker(Mutex m, Condition c, Counter release) {
+        AutoLock al(m);
+        if (release.getCount()) {
+            release.dec();
+        }
+        c.broadcast();
+    }
+
+    testCancelThreadInChildProgram() {
+        # the target blocks inside a child program; the request is issued from the parent, which
+        # is not the program the target is executing in
+        Program child = getBlockerProgram("child_program_cancel_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            try {
+                child.callFunction("block_forever", ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool delivered = cancel_thread(child_tid, "child program cancel");
+        int rc = waitForBlocker(done, m, c, release);
+        assertTrue(delivered, "the request must be delivered");
+        assertEq(0, rc, "the cancelled thread must exit");
+        assertEq("THREAD-CANCELLED", ex_info.err, "a thread blocked in a child program must be cancellable");
+        assertRegex("child program cancel", ex_info.desc);
+    }
+
+    testCancelThreadInNestedChildProgram() {
+        # two program boundaries between the requesting program and where the target is blocked
+        Program grandchild = getBlockerProgram("nested_grandchild_cancel_test");
+
+        Program child(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        child.parse("
+%modern
+
+sub call_blocker(Program p, Counter ready, Mutex m, Condition c, Counter release) {
+    p.callFunction(\"block_forever\", ready, m, c, release);
+}
+", "nested_child_cancel_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            try {
+                child.callFunction("call_blocker", grandchild, ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool delivered = cancel_thread(child_tid);
+        int rc = waitForBlocker(done, m, c, release);
+        assertTrue(delivered, "the request must be delivered");
+        assertEq(0, rc, "the cancelled thread must exit");
+        assertEq("THREAD-CANCELLED", ex_info.err, "nesting must not make a thread uncancellable");
+    }
+
+    testSandboxedProgramCanCancelItsOwnCallers() {
+        # a sandboxed program cancels a thread that entered it and then blocked one program deeper;
+        # the requesting program is not where the target is executing, but it is on the target's
+        # chain of enclosing caller programs
+        Program grandchild = getBlockerProgram("sandboxed_grandchild_cancel_test");
+
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("
+%modern
+
+sub call_blocker(Program p, Counter ready, Mutex m, Condition c, Counter release) {
+    p.callFunction(\"block_forever\", ready, m, c, release);
+}
+
+bool sub do_cancel(int tid) {
+    return cancel_thread(tid, \"sandboxed scope cancel\");
+}
+", "sandboxed_program_cancel_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            try {
+                sandboxed.callFunction("call_blocker", grandchild, ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool delivered = sandboxed.callFunction("do_cancel", child_tid);
+        int rc = waitForBlocker(done, m, c, release);
+        assertTrue(delivered, "the request must be delivered");
+        assertEq(0, rc, "the cancelled thread must exit");
+        assertEq("THREAD-CANCELLED", ex_info.err,
+            "a sandboxed program must be able to cancel a thread running its own code");
+        assertRegex("sandboxed scope cancel", ex_info.desc);
+    }
+
+    testSandboxedProgramCannotCancelUnrelatedThread() {
+        # the target never entered the requesting program, so the request must be dropped
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("
+%modern
+
+bool sub do_cancel(int tid) {
+    return cancel_thread(tid, \"out of scope\");
+}
+", "unrelated_program_cancel_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            try {
+                blockUntilReleased(ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        # delivery succeeds; the scope is evaluated by the target, which drops the request
+        bool delivered = sandboxed.callFunction("do_cancel", child_tid);
+
+        # the target must still be running normal code: release it and check that it returned
+        # without an exception.  An honored request would have thrown at the wait's check point
+        # before or immediately after this release.
+        releaseBlocker(m, c, release);
+        int rc = done.waitForZero(20s);
+        assertTrue(delivered, "the request is delivered");
+        assertEq(0, rc, "the thread must exit normally");
+        assertNothing(ex_info, "an out-of-scope request must not cancel the thread");
+    }
+
+    testCancelAfterDroppedRequest() {
+        # a dropped out-of-scope request must not leave stale state that swallows a later,
+        # legitimate request
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("
+%modern
+
+bool sub do_cancel(int tid) {
+    return cancel_thread(tid, \"out of scope\");
+}
+", "dropped_request_cancel_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            try {
+                blockUntilReleased(ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool dropped_delivered = sandboxed.callFunction("do_cancel", child_tid);
+        bool delivered = cancel_thread(child_tid, "in scope");
+        int rc = waitForBlocker(done, m, c, release);
+        assertTrue(dropped_delivered, "the out-of-scope request is delivered");
+        assertTrue(delivered, "the in-scope request is delivered");
+        assertEq(0, rc, "the cancelled thread must exit");
+        assertEq("THREAD-CANCELLED", ex_info.err, "the in-scope request must still be honored");
+        assertRegex("in scope", ex_info.desc);
+    }
+
+    testThreadCancelledIgnoresOutOfScopeRequest() {
+        # thread_cancelled() must not report a request that will never be honored
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("
+%modern
+
+bool sub do_cancel(int tid) {
+    return cancel_thread(tid, \"out of scope\");
+}
+", "thread_cancelled_scope_test");
+
+        Counter ready(1);
+        Counter cancelled(1);
+        Counter done(1);
+        bool reported_cancelled = True;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            cancelled.waitForZero();
+            reported_cancelled = thread_cancelled();
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool delivered = sandboxed.callFunction("do_cancel", child_tid);
+        cancelled.dec();
+        int rc = done.waitForZero(20s);
+        assertTrue(delivered, "the request is delivered");
+        assertEq(0, rc, "the thread must exit");
+        assertFalse(reported_cancelled, "thread_cancelled() must ignore an out-of-scope request");
     }
 
     #------------------------------------------------------------------

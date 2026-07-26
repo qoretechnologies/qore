@@ -104,6 +104,17 @@ public:
     //! optional cancellation reason string
     QoreStringNode* cancel_reason = nullptr;
 
+    //! program ID scoping a pending cancellation request, or 0 if the request is unscoped
+    /** Set by cancelThread() from the requesting thread's Program context; a scoped request is
+        only honored if the target thread is executing in that Program or in a call that
+        originated in it (see qore_check_cancel()).
+
+        The scope is evaluated by the target thread itself, because the target's Program-context
+        chain is made of stack-allocated ProgramThreadCountContextHelper objects in the target's
+        own frames and therefore cannot be walked safely from another thread.
+    */
+    std::atomic<unsigned> cancel_scope_pgm_id{0};
+
     //! the condition the thread is currently blocked on, or nullptr if not blocked
     /** Set by QoreCondition::waitWithInterrupt() before sleeping and cleared after waking,
         so that cancelThread() / SandboxManager::requestInterrupt() can wake the thread directly
@@ -309,9 +320,28 @@ public:
     */
     DLLLOCAL void wakeAllWaiters();
 
-    //! Get the cancel reason for the given thread (caller must hold lck or be the owning thread)
-    DLLLOCAL QoreStringNode* getCancelReason(int tid) const {
-        return (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_reason : nullptr;
+    //! Get a reference to the cancel reason for the given thread, or nullptr if there is none
+    /** The reference is acquired under the lock, so the string cannot be replaced and freed by a
+        concurrent cancelThread() call while the caller is using it; the caller owns the reference
+        returned.
+    */
+    DLLLOCAL QoreStringNode* getCancelReasonRef(int tid) {
+        AutoLocker al(lck);
+        QoreStringNode* rv = (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_reason : nullptr;
+        return rv ? rv->stringRefSelf() : nullptr;
+    }
+
+    //! Get the program ID scoping the pending cancellation request for the given thread
+    /** @return the program ID that the target must be executing in (or under) for the request to
+        be honored, or 0 if the request is unscoped
+
+        Acquire pairs with the release store in cancelThread(), which publishes the scope before
+        the request flag; a thread that has observed the flag therefore observes the scope.
+    */
+    DLLLOCAL unsigned getCancelScopeProgramId(int tid) const {
+        return (tid >= 0 && tid < MAX_QORE_THREADS)
+            ? entry[tid].cancel_scope_pgm_id.load(std::memory_order_acquire)
+            : 0;
     }
 
     //! Mark a thread entry so that pthread_detach() is not called on exit
@@ -324,12 +354,39 @@ public:
     }
 
     //! Request cancellation of a thread; acquires lock internally
-    DLLLOCAL int cancelThread(int tid, const char* reason);
+    /** @param tid the thread to cancel
+        @param reason optional reason string included in the \c THREAD-CANCELLED exception
+        @param scope_pgm_id the program ID scoping the request, or 0 for an unscoped request
 
-    //! Clear cancellation for the given thread
+        @return 0 if the request was delivered, -1 if the thread is not active
+    */
+    DLLLOCAL int cancelThread(int tid, const char* reason, unsigned scope_pgm_id);
+
+    //! Clear cancellation for the given thread; acquires lock internally
     DLLLOCAL void clearCancel(int tid);
 
+    //! Drop a cancellation request that the target found to be out of scope; acquires lock internally
+    /** The request is only cleared if its scope is unchanged, so that a request delivered after the
+        scope was evaluated is left pending for the next cancellation check point instead of being
+        silently lost.  A new request with the same scope would be evaluated identically, so
+        clearing it is harmless.
+
+        @param tid the thread whose request should be dropped
+        @param scope_pgm_id the scope that was evaluated and found not to apply
+    */
+    DLLLOCAL void dropCancelRequest(int tid, unsigned scope_pgm_id);
+
 protected:
+    //! Clears all cancellation state for the given thread; lck must be held
+    DLLLOCAL void clearCancelIntern(int tid) {
+        entry[tid].cancel_requested.store(false, std::memory_order_release);
+        entry[tid].cancel_scope_pgm_id.store(0, std::memory_order_release);
+        if (entry[tid].cancel_reason) {
+            entry[tid].cancel_reason->deref();
+            entry[tid].cancel_reason = nullptr;
+        }
+    }
+
     // lock for reading the thread list
     mutable QoreThreadLock lck;
     unsigned num_threads = 0;
