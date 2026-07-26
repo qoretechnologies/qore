@@ -11334,6 +11334,17 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             functions.emplace_back(variant, func.get());
         }
     }
+    std::unordered_map<const AbstractQoreFunctionVariant*,
+        const QoreIRFunction*> function_map;
+    function_map.reserve(functions.size());
+    for (const auto& [variant, func] : functions) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT batch function map construction")) {
+            return false;
+        }
+        function_map.emplace(variant, func);
+    }
     std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary> summaries;
     if (!qore_ir_compute_function_effect_summaries(functions, summaries)) {
         return false;
@@ -11343,6 +11354,49 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         std::getenv("QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY");
     const bool disable_precise_effect_domains =
         std::getenv("QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS");
+    auto get_declared_return_type = [](
+            const AbstractQoreFunctionVariant* variant,
+            const QoreIRFunction* func) -> const QoreTypeInfo* {
+        const AbstractFunctionSignature* sig = variant
+            ? const_cast<AbstractQoreFunctionVariant*>(variant)
+                ->getSignature()
+            : nullptr;
+        const QoreTypeInfo* type = sig ? sig->getReturnTypeInfo() : nullptr;
+        return func && type ? func->specializeType(type) : type;
+    };
+    auto get_declared_boxed_return_kind =
+        [&](const AbstractQoreFunctionVariant* variant,
+                const QoreIRFunction* func) {
+            const QoreTypeInfo* type =
+                get_declared_return_type(variant, func);
+            if (!QoreTypeInfo::hasType(type)
+                    || QoreTypeInfo::parseAcceptsReturns(
+                        type, NT_NOTHING)) {
+                return BatchCalleeBoxedReturnKind::Unknown;
+            }
+            if (QoreTypeInfo::isType(type, NT_STRING)) {
+                return BatchCalleeBoxedReturnKind::String;
+            }
+            if (QoreTypeInfo::isType(type, NT_LIST)) {
+                return BatchCalleeBoxedReturnKind::List;
+            }
+            if (QoreTypeInfo::isType(type, NT_HASH)) {
+                return BatchCalleeBoxedReturnKind::Hash;
+            }
+            if (QoreTypeInfo::isType(type, NT_BINARY)) {
+                return BatchCalleeBoxedReturnKind::Binary;
+            }
+            if (QoreTypeInfo::isType(type, NT_DATE)) {
+                return BatchCalleeBoxedReturnKind::Date;
+            }
+            if (QoreTypeInfo::isType(type, NT_OBJECT)) {
+                return BatchCalleeBoxedReturnKind::Object;
+            }
+            if (QoreTypeInfo::isType(type, NT_NUMBER)) {
+                return BatchCalleeBoxedReturnKind::Number;
+            }
+            return BatchCalleeBoxedReturnKind::Unknown;
+        };
     for (const auto& [variant, summary] : summaries) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT batch function effect propagation")) {
@@ -11364,10 +11418,19 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 disable_precise_effect_domains
                 ? std::vector<const void*>()
                 : summary.modified_runtime_locals;
+            auto function = function_map.find(variant);
+            const QoreIRFunction* func = function == function_map.end()
+                ? nullptr : function->second;
+            // Boxed fast entries retain the runtime NOTHING return guard.
+            // Native scalar return ABIs still require body proof.
+            bool declared_never_returns_nothing =
+                get_declared_boxed_return_kind(variant, func)
+                != BatchCalleeBoxedReturnKind::Unknown;
             callee_it->second.never_returns_nothing =
-                summary.never_returns_nothing;
+                summary.never_returns_nothing
+                || declared_never_returns_nothing;
             callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
-                variant, summary.never_returns_nothing);
+                variant, callee_it->second.never_returns_nothing, func);
             if (!disable_noescape_params) {
                 callee_it->second.param_noescape = summary.param_noescape;
             }
@@ -11388,6 +11451,13 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                         || !callee->second.never_returns_nothing
                         || callee->second.return_kind
                             != BatchCalleeReturnKind::Boxed) {
+                    continue;
+                }
+                BatchCalleeBoxedReturnKind declared_kind =
+                    get_declared_boxed_return_kind(variant, func.get());
+                if (declared_kind
+                        != BatchCalleeBoxedReturnKind::Unknown) {
+                    callee->second.boxed_return_kind = declared_kind;
                     continue;
                 }
                 BatchCalleeBoxedReturnKind kind =

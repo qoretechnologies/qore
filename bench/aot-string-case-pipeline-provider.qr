@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub concatSlice(string left, string right, int start, int length) {
+    return (left + right).substr(start, length);
+}

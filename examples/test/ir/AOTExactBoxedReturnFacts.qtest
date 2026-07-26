@@ -34,6 +34,18 @@ string provider_source = "%modern
     }
     return value;
 }
+
+string sub declaredString(string value, int start) {
+    return value.substr(start);
+}
+
+string sub declaredMaybeString(bool assign) {
+    string value;
+    if (assign) {
+        value = \"VALUE\";
+    }
+    return value;
+}
 ";
 
 string consumer_source = "%modern
@@ -61,11 +73,26 @@ string sub maybeStringOps(bool assign) {
         removedString(assign).length());
 }
 
+bool sub declaredStringOps(string value) {
+    return declaredString(value, 1).lwr().contains(\"vor\");
+}
+
+string sub declaredMaybeStringOps(bool assign) {
+    try {
+        return declaredMaybeString(assign).lwr();
+    } catch (hash<auto> ex) {
+        return ex.err;
+    }
+}
+
 int sub main() {
     *string rounds_arg = ENV.QORE_EXACT_BOXED_ROUNDS;
     int rounds = rounds_arg ? rounds_arg.toInt() : 1000;
-    printf(\"%s\\n%s\\n%s\\n%d\\n\", exactStringOps(False),
-        exactStringOps(True), maybeStringOps(True), stringKernel(rounds));
+    printf(\"%s\\n%s\\n%s\\n%y\\n%s:%s\\n%d\\n\", exactStringOps(False),
+        exactStringOps(True), maybeStringOps(True),
+        declaredStringOps(\"DVORAK\"),
+        declaredMaybeStringOps(True),
+        declaredMaybeStringOps(False), stringKernel(rounds));
     return 0;
 }
 ";
@@ -97,7 +124,7 @@ combined_file.close();
 
 string expected = "6:6:False:False:0:bcd\n"
     + "8:6:True:True:-1:vo\u0159\n"
-    + "8:8\n13000\n";
+    + "8:8\nTrue\nvalue:RUNTIME-TYPE-ERROR\n13000\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -120,6 +147,8 @@ string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, provider_qo));
 if (!(provider_index =~ /\"qore_path\": \"exactString\(bool\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"boxed_return_kind\": 1/)
+        || !(provider_index =~ /\"qore_path\": \"declaredString\(string,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"fast_entry_flags\": [^\n]*\"boxed_return_kind\": 1/)
+        || !(provider_index =~ /\"qore_path\": \"declaredMaybeString\(bool\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"fast_entry_flags\": [^\n]*\"boxed_return_kind\": 1/)
         || !(provider_index =~ /\"qore_path\": \"maybeString\(bool\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"boxed_return_kind\": 0/)
         || provider_index =~ /\"qore_path\": \"removedString\(bool\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"boxed_return_kind\": [1-9]/) {
     printf("unexpected exact boxed-return metadata:\n%s", provider_index);
@@ -143,9 +172,11 @@ string disabled_compile = compileConsumer(disabled_dir,
     "QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS=1");
 if (!(enabled_compile =~ /IR-OPT-AOT-EFFECTS: exactStringOps[^:]*:.*exact-boxed-call-facts=6.*boxed-specializations=6/)
         || !(enabled_compile =~ /IR-OPT-AOT-EFFECTS: stringKernel[^:]*:.*exact-boxed-call-facts=2.*boxed-specializations=2/)
+        || !(enabled_compile =~ /IR-OPT-AOT-EFFECTS: declaredStringOps[^:]*:.*exact-boxed-call-facts=1.*string-transform-consumers=1/)
         || enabled_compile =~ /IR-OPT-AOT-EFFECTS: maybeStringOps[^:]*:.*exact-boxed-call-facts=[1-9]/
         || disabled_compile =~ /exact-boxed-call-facts=[1-9]/
-        || disabled_compile =~ /boxed-specializations=[1-9]/) {
+        || disabled_compile =~ /boxed-specializations=[1-9]/
+        || disabled_compile =~ /string-transform-consumers=[1-9]/) {
     printf("unexpected exact boxed-return specialization stats:\nprovider:\n%senabled:\n%sdisabled:\n%s",
         provider_compile, enabled_compile, disabled_compile);
     exit(2);

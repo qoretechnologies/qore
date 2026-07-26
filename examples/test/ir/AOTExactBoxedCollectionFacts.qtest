@@ -122,7 +122,7 @@ string disabled_compile = compileConsumer(disabled_dir,
 # list.size() is already a dedicated ListSize opcode; the other seven calls are pseudo-methods.
 if (!(enabled_compile =~ /IR-OPT-AOT-EFFECTS: exactCollectionOps[^:]*:.*exact-boxed-call-facts=8.*collection-specializations=7/)
         || !(enabled_compile =~ /IR-OPT-AOT-EFFECTS: collectionKernel[^:]*:.*exact-boxed-call-facts=8.*collection-specializations=7/)
-        || enabled_compile =~ /IR-OPT-AOT-EFFECTS: main[^:]*:.*exact-boxed-call-facts=[1-9]/
+        || !(enabled_compile =~ /IR-OPT-AOT-EFFECTS: main[^:]*:.*exact-boxed-call-facts=1/)
         || disabled_compile =~ /collection-specializations=[1-9]/) {
     printf("unexpected exact collection specialization stats (qcc: %s):\nenabled:\n%sdisabled:\n%s",
         qcc_bin, enabled_compile, disabled_compile);
