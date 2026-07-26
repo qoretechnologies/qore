@@ -1457,6 +1457,41 @@ string sql = t.getSqlFromList(list);
         return getPhysicalSizeImpl();
     }
 
+    #! Get the physical size of a database schema in bytes.
+    /** The result includes physical table, partition, materialized-view, index,
+        TOAST/overflow, and sequence storage according to the driver-specific
+        implementation. Logical objects without physical storage, such as
+        ordinary views, are not included.
+
+        @param schema the database schema to measure
+
+        @return the schema size in bytes, or \c -1 when the driver does not
+            implement schema-level physical measurement
+
+        @throw SCHEMA-NOT-FOUND @p schema is empty, or, when the driver implements
+            schema-level physical measurement, @p schema does not exist; drivers
+            without an implementation return \c -1 without checking whether the
+            schema exists
+
+        @note Each physical object is counted once. In particular, driver
+            implementations must not add index or overflow storage separately
+            when it is already included in a table total.
+
+        @par Example
+        @code
+        Database db(datasource);
+        int tenant_bytes = db.getSchemaPhysicalSize("tenant_42");
+        @endcode
+
+        @since %SqlUtil 3.2.0
+    */
+    int getSchemaPhysicalSize(string schema) {
+        if (!schema) {
+            throw "SCHEMA-NOT-FOUND", "the schema name cannot be empty";
+        }
+        return getSchemaPhysicalSizeImpl(schema);
+    }
+
     #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
     /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
@@ -1652,6 +1687,17 @@ string sql = t.getSqlFromList(list);
     #! tries to execute a command so that if an error occurs the current transaction status is not lost
     private auto tryExecRawImpl(string sql) {
         return ds.execRaw(sql);
+    }
+
+    #! returns the physical size of the given schema; reimplement in drivers with equivalent catalog metadata
+    /** the default implementation returns \c -1
+
+        @param schema the database schema to measure
+
+        @since %SqlUtil 3.2.0
+    */
+    private int getSchemaPhysicalSizeImpl(string schema) {
+        return GET_PHYSICAL_DB_SIZE_NOVAL;
     }
 
     private abstract string getCreateSqlImpl(list l);

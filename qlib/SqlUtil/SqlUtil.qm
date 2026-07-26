@@ -121,6 +121,11 @@ module SqlUtil {
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
       bounded, driver-independent recovery of complete idempotent transaction
       bodies after database failover and datasource-pool timeout errors
+    - added @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize()
+      "AbstractDatabase::getSchemaPhysicalSize()" for portable schema-level
+      physical storage measurement; PostgreSQL includes tables, partitions,
+      materialized views, indexes, TOAST storage, and sequences without
+      double counting
     - fixed @ref SqlUtil::AbstractColumn::equal() "AbstractColumn::equal()" to compare the column scale; a change
       to the scale alone (for example \c numeric(15,0) to \c numeric(15,2)) compared equal, so table alignment
       silently ignored the schema upgrade

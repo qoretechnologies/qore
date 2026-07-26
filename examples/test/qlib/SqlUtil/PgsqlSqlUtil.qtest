@@ -352,6 +352,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
             addTestCase("drop PK constraint without backing index", \dropPkConstraintNoBackingIndexTest());
+            addTestCase("schema physical size", \schemaPhysicalSizeTest());
         }
 
         set_return_value(main());
@@ -361,6 +362,101 @@ class PgsqlTest inherits SqlTestBase {
         on_error printf("alignment: %y\n", map {AbstractDatabase::ActionMap{$1.key}: $1.value},
             schema_info.change_map.pairIterator());
         assertTrue(schema_info.created);
+    }
+
+    #! Schema physical measurement counts every PostgreSQL storage family once
+    private schemaPhysicalSizeTest() {
+        AbstractDatasource ds = getDatasource();
+        Database db(ds);
+        const string SizeSchema = "sqlutil_schema_size_test";
+        const string OtherSchema = "sqlutil_schema_size_other";
+        const string EmptySchema = "sqlutil_schema_size_empty";
+
+        code cleanup = sub () {
+            on_error ds.rollback();
+            ds.exec(sprintf("drop schema if exists %s cascade", SizeSchema));
+            ds.exec(sprintf("drop schema if exists %s cascade", OtherSchema));
+            ds.exec(sprintf("drop schema if exists %s cascade", EmptySchema));
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        on_error ds.rollback();
+        ds.exec(sprintf("create schema %s", SizeSchema));
+        ds.exec(sprintf("create schema %s", OtherSchema));
+        ds.exec(sprintf("create schema %s", EmptySchema));
+        ds.exec(sprintf("create table %s.payloads (id bigint primary key, tag text not null, payload text)",
+            SizeSchema));
+        ds.exec(sprintf("create index payloads_tag_idx on %s.payloads (tag)", SizeSchema));
+        # The correlated digest stream is deliberately incompressible enough to force external TOAST storage.
+        ds.exec(sprintf("insert into %s.payloads "
+            "select g, 'tag-' || mod(g, 17), (select string_agg(md5((g * 1000 + x)::text), '') "
+            "from generate_series(1, 400) x) from generate_series(1, 128) g", SizeSchema));
+        ds.exec(sprintf("create table %s.events (id bigint, event_day date, payload text) "
+            "partition by range (event_day)", SizeSchema));
+        ds.exec(sprintf("create table %s.events_2026_01 partition of %s.events "
+            "for values from ('2026-01-01') to ('2026-02-01')", SizeSchema, SizeSchema));
+        ds.exec(sprintf("create table %s.events_2026_02 partition of %s.events "
+            "for values from ('2026-02-01') to ('2026-03-01')", SizeSchema, SizeSchema));
+        ds.exec(sprintf("create index events_payload_idx on %s.events (payload)", SizeSchema));
+        ds.exec(sprintf("insert into %s.events values "
+            "(1, '2026-01-15', 'one'), (2, '2026-02-15', 'two')", SizeSchema));
+        ds.exec(sprintf("create materialized view %s.tag_counts as "
+            "select tag, count(*) as count from %s.payloads group by tag", SizeSchema, SizeSchema));
+        ds.exec(sprintf("create unique index tag_counts_idx on %s.tag_counts (tag)", SizeSchema));
+        ds.exec(sprintf("create sequence %s.standalone_seq", SizeSchema));
+        ds.exec(sprintf("create view %s.payload_view as select id, tag from %s.payloads", SizeSchema, SizeSchema));
+
+        # Cross-schema data must not leak into the requested namespace total.
+        ds.exec(sprintf("create table %s.other_payloads as select * from %s.payloads", OtherSchema, SizeSchema));
+        ds.commit();
+
+        # independent decomposition of the physical storage rooted in a single namespace
+        code<int(string)> decompose = int sub (string schema) {
+            return ds.selectRow("select "
+                "coalesce((select sum(pg_catalog.pg_table_size(c.oid) + pg_catalog.pg_indexes_size(c.oid)) "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where n.nspname = %v and c.relkind in ('r', 'm')), 0) "
+                "+ coalesce((select sum(pg_catalog.pg_relation_size(c.oid)) "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where n.nspname = %v and c.relkind = 'S'), 0) as size_bytes",
+                schema, schema).size_bytes;
+        };
+
+        int measured = db.getSchemaPhysicalSize(SizeSchema);
+        assertEq(decompose(SizeSchema), measured,
+            "schema size equals independent table/index/TOAST/sequence decomposition");
+        assertGt(0, measured, "populated schema reports allocated bytes");
+        assertEq(0, db.getSchemaPhysicalSize(EmptySchema), "empty schema reports zero bytes");
+
+        # Isolation: the other schema holds a copy of the payload data, so a measurement that ignored the
+        # requested namespace would return more than this schema's own decomposition.  Each schema must
+        # report exactly its own storage; ordering between the two totals is deliberately not asserted, as
+        # it is not required to prove isolation.
+        int other_measured = db.getSchemaPhysicalSize(OtherSchema);
+        assertGt(0, other_measured, "cross-schema fixture data has physical storage of its own");
+        assertEq(decompose(OtherSchema), other_measured,
+            "measurement is isolated to the requested schema");
+
+        hash<auto> storage = ds.selectRow("select "
+            "pg_catalog.pg_total_relation_size(%v::regclass) as table_bytes, "
+            "pg_catalog.pg_indexes_size(%v::regclass) as index_bytes, "
+            "pg_catalog.pg_total_relation_size(c.reltoastrelid) as toast_bytes "
+            "from pg_catalog.pg_class c where c.oid = %v::regclass",
+            SizeSchema + ".payloads", SizeSchema + ".payloads", SizeSchema + ".payloads");
+        assertGt(0, storage.index_bytes, "secondary and primary indexes have physical storage");
+        assertGt(0, storage.toast_bytes, "fixture has physical TOAST storage");
+        assertGt(storage.index_bytes + storage.toast_bytes, storage.table_bytes,
+            "table total includes index and TOAST storage without adding either twice");
+
+        assertThrows("SCHEMA-NOT-FOUND", "PostgreSQL schema \"sqlutil_schema_size_missing\" does not exist",
+            sub () {
+                db.getSchemaPhysicalSize("sqlutil_schema_size_missing");
+            });
+        assertThrows("SCHEMA-NOT-FOUND", "the schema name cannot be empty", sub () {
+            db.getSchemaPhysicalSize("");
+        });
     }
 
     #! a primary key must only be backed by a unique index
