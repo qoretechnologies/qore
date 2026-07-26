@@ -34,6 +34,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         return "typed-nothing:missing:missing:missing:missing:missing\n"
             "typed-empty:list:list:list:hash:hash\n"
             "typed-bool-map:TFTF:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR\n"
+            "typed-helper-map:9:7.5:TFTF:RUNTIME-TYPE-ERROR:MAP-HELPER-ERROR\n"
             "qorus-options:missing\n";
     }
 
@@ -50,6 +51,33 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         result += values[i] === NOTHING ? \"N\" : values[i] ? \"T\" : \"F\";
     }
     return result;
+}
+
+%sint sub mapInt(int value) {
+    return value + 1;
+}
+
+%sfloat sub mapFloat(float value) {
+    return value + 0.5;
+}
+
+%sbool sub mapBool(int value) {
+    return (value & 1) == 0;
+}
+
+%s*int sub mapMaybeNothing(int value) {
+    int result;
+    if (value) {
+        result = value;
+    }
+    return result;
+}
+
+%sint sub mapThrow(int value) {
+    if (value == 2) {
+        throw \"MAP-HELPER-ERROR\", \"expected\";
+    }
+    return value;
 }
 
 %sstring sub verify() {
@@ -85,19 +113,40 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         missing_bool_error = ex.err;
     }
 
+    list<int> helper_source = (1, 2, 3);
+    list<int> helper_int_map = (map mapInt($1), helper_source);
+    list<float> helper_float_map = (map mapFloat($1), (1.0, 2.0, 3.0));
+    list<bool> helper_bool_map = (map mapBool($1), (0, 1, 2, 3));
+    string helper_nothing_error = \"none\";
+    try {
+        list<int> helper_nothing_map = (map mapMaybeNothing($1), (0, 1));
+    } catch (hash<ExceptionInfo> ex) {
+        helper_nothing_error = ex.err;
+    }
+    string helper_throw_error = \"none\";
+    try {
+        list<int> helper_throw_map = (map mapThrow($1), helper_source);
+    } catch (hash<ExceptionInfo> ex) {
+        helper_throw_error = ex.err;
+    }
+
     hash<auto> opts;
     auto workflow_options = map (\"name\": $1) + opts.$1, keys opts;
 
     return sprintf(\"typed-nothing:%%s:%%s:%%s:%%s:%%s\\n\"
         \"typed-empty:%%s:%%s:%%s:%%s:%%s\\n\"
         \"typed-bool-map:%%s:%%s:%%s\\n\"
+        \"typed-helper-map:%%d:%%g:%%s:%%s:%%s\\n\"
         \"qorus-options:%%s\\n\",
         kind(m), kind(s), kind(ms), kind(hm), kind(hms),
         kind(em), kind(es), kind(ems), kind(ehm), kind(ehms),
         boolList(bool_map), sparse_bool_error, missing_bool_error,
+        helper_int_map[0] + helper_int_map[1] + helper_int_map[2],
+        helper_float_map[0] + helper_float_map[1] + helper_float_map[2],
+        boolList(helper_bool_map), helper_nothing_error, helper_throw_error,
         kind(workflow_options));
 }
-", access, access, access);
+", access, access, access, access, access, access, access, access);
     }
 
     private string collectionNothingCode() {

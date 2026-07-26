@@ -9212,6 +9212,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_cross_block_reuses = 0;
     typed_list_data_ptrs.clear();
     fixed_typed_list_outputs.clear();
+    native_call_result_kinds.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
     reusable_hashdecl_literal_values.clear();
@@ -18080,6 +18081,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            } else {
+                native_call_result_kinds.emplace(
+                    inst->result.id, call_return_kind);
             }
             if (aot_approach_b_callee
                     && aot_approach_b_callee->never_returns_nothing) {
@@ -21802,6 +21806,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     get_output_data(), idx_int);
                 builder->CreateStore(val_boxed, entry);
             };
+            auto native_call_kind = native_call_result_kinds.find(
+                inst->operands[2].id);
+            if (typed_specialization
+                    && !std::getenv(
+                        "QORE_DISABLE_AOT_NATIVE_CALL_TYPED_LIST_OUTPUT")
+                    && native_call_kind != native_call_result_kinds.end()) {
+                if (exact_int_element
+                        && native_call_kind->second
+                            == BatchCalleeReturnKind::NativeInt
+                        && val->getType() == i64_type) {
+                    emit_int_store(val);
+                    return true;
+                }
+                if (exact_float_element
+                        && native_call_kind->second
+                            == BatchCalleeReturnKind::NativeFloat
+                        && val->getType() == double_type) {
+                    emit_float_store(val);
+                    return true;
+                }
+                if (exact_bool_element
+                        && native_call_kind->second
+                            == BatchCalleeReturnKind::NativeBool
+                        && val->getType() == i1_type
+                        && fixed_typed_list_outputs.count(
+                            inst->operands[0].id)) {
+                    emit_fixed_boxed_store(boxBool(val));
+                    return true;
+                }
+            }
             if (assigned_native && typed_specialization && exact_int_element
                     && facts->representation == QoreIRValueRepresentation::NativeInt
                     && !nanboxed_values.count(inst->operands[2].id)) {

@@ -307,9 +307,10 @@ private:
     size_t aot_hash_string_extraction_overlap_reuses = 0;
     size_t aot_hash_string_extraction_cross_block_reuses = 0;
 
-    // Typed-map backing pointers materialized in loop preheaders.
+    // Typed collection state proven or materialized while lowering the current function.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
     std::unordered_set<uint32_t> fixed_typed_list_outputs;
+    std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
     std::unordered_set<uint32_t> direct_typed_list_read_sources;
     std::unordered_set<uint32_t> elided_typed_foreach_refself_values;
     std::unordered_set<uint32_t> reusable_hashdecl_literal_values;
