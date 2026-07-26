@@ -165,7 +165,12 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     }
 #endif
 
-    qore_class_private::get(*oc)->ref();
+    // reference the class pointer (handle) and not just the class's private data; "theclass" may be a
+    // wrapper for a class imported into a child Program, and such wrappers are reclaimed as soon as the last
+    // pointer reference is released.  A private-data-only reference would keep the class definition alive but
+    // allow the wrapper to be deleted, leaving "theclass" dangling for objects that outlive the Program that
+    // created them (ex: system objects, which hold no weak Program reference)
+    qore_class_private::refClass(*const_cast<QoreClass*>(oc));
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
@@ -196,7 +201,8 @@ qore_object_private::~qore_object_private() {
     if (QoreStringNode* h = unique_hash.load(std::memory_order_relaxed)) {
         h->deref();
     }
-    qore_class_private::get(*const_cast<QoreClass*>(theclass))->deref(false, false);
+    // release the class pointer (handle) reference acquired in the constructor
+    qore_class_private::derefClass(*const_cast<QoreClass*>(theclass), false, false);
     // release weak reference
     if (pgm) {
         pgm->depDeref();

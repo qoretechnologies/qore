@@ -12,26 +12,37 @@ class ProgramMemoryImportedBaseClass {
 }
 
 class ProgramMemoryImportedClass inherits ProgramMemoryImportedBaseClass {
+    int get() {
+        return 1;
+    }
+}
+
+class ProgramMemoryImportedArgClass {
+    private {
+        int i;
+    }
+
+    constructor(int i) {
+        self.i = i;
+    }
+
+    int get() {
+        return i;
+    }
 }
 
 class ProgramMemoryTest inherits QUnit::Test {
     constructor() : QUnit::Test("ProgramMemoryTest", "1.0", \ARGV) {
         addTestCase("child Program class handles are reclaimed", \classHandleReclamationTest());
+        addTestCase("objects outliving their Program release class handles",
+            \objectClassHandleReclamationTest());
+        addTestCase("imported classes can be used as base classes with constructor arguments",
+            \importedBaseClassConstructorArgTest());
+        set_return_value(main());
     }
 
     classHandleReclamationTest() {
-        bool tracking = True;
-        try {
-            call_function("start_alloc_tracking");
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
-                tracking = False;
-            } else {
-                rethrow;
-            }
-        }
-
-        if (!tracking) {
+        if (!hasAllocTracking()) {
             testSkip("allocation-tracking build required for leak-byte assertion");
         }
 
@@ -42,12 +53,81 @@ class ProgramMemoryTest inherits QUnit::Test {
         }
 
         hash<auto> result = call_function("stop_alloc_tracking");
+        assertEq(0, getLiveBytes(result), "child Program teardown must release all tracked allocations");
+    }
+
+    #! Objects hold a reference to their class pointer and not only to the class's private data
+    /** A class imported into a child Program is addressed through a wrapper owned by that Program's
+        class list; the wrapper is reclaimed as soon as the last pointer reference is released.
+        Objects of the class must therefore reference the wrapper, otherwise an object that outlives
+        the Program that created it is left with a dangling class pointer, and destroying it
+        dereferences freed memory.
+
+        This test also verifies that the wrapper is still reclaimed once the object is destroyed
+        (i.e. that the object's pointer reference is released again). */
+    objectClassHandleReclamationTest() {
+        if (!hasAllocTracking()) {
+            testSkip("allocation-tracking build required for leak-byte assertion");
+        }
+
+        for (int i = 0; i < 100; ++i) {
+            auto o;
+            {
+                Program pgm();
+                pgm.importClass("ProgramMemoryImportedClass");
+                pgm.parse("%new-style\nour ProgramMemoryImportedClass obj = "
+                    "new ProgramMemoryImportedClass();", "test");
+                pgm.run();
+                # the object is created in the child Program, so its class is the child's wrapper
+                o = pgm.getGlobalVariable("obj");
+                assertEq(1, o.get());
+                # the child Program is destroyed while the object is still referenced here
+                delete pgm;
+            }
+            # the object (and its class pointer reference) is released here
+            delete o;
+        }
+
+        hash<auto> result = call_function("stop_alloc_tracking");
+        assertEq(0, getLiveBytes(result), "objects outliving their Program must release all tracked "
+            "allocations");
+    }
+
+    #! An imported class must be usable as a base class with base class constructor arguments
+    /** Base class nodes store the canonical (primary) class pointer, while base class constructor
+        argument lists are resolved to the importing Program's wrapper for the same class; matching
+        the two must therefore be done on the class's private data and not on the pointer */
+    importedBaseClassConstructorArgTest() {
+        Program pgm();
+        pgm.importClass("ProgramMemoryImportedArgClass");
+        pgm.parse("%new-style
+class Child inherits ProgramMemoryImportedArgClass {
+    constructor() : ProgramMemoryImportedArgClass(42) {
+    }
+}
+int sub get() { return (new Child()).get(); }", "test");
+        assertEq(42, pgm.callFunction("get"));
+    }
+
+    private bool hasAllocTracking() {
+        try {
+            call_function("start_alloc_tracking");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return False;
+            }
+            rethrow;
+        }
+        return True;
+    }
+
+    private static int getLiveBytes(hash<auto> result) {
         int live_bytes = 0;
         foreach string key in (keys result) {
             if (key != "_objects") {
                 live_bytes += result{key}.leak_bytes;
             }
         }
-        assertEq(0, live_bytes, "child Program teardown must release all tracked allocations");
+        return live_bytes;
     }
 }

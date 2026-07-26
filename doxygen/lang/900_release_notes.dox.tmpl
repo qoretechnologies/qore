@@ -2658,6 +2658,11 @@ foreach string module_name in (registry.getProcessModules()) {
     - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
       (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
 
+    - fixed a crash caused by objects and class hierarchies referring to reclaimed class handles for classes
+      imported into a @ref Qore::Program "Program"; objects now hold a reference to the class handle of their
+      class, so objects that outlive the @ref Qore::Program "Program" that created them (such as objects held in
+      class constants by binary modules) no longer refer to freed memory when destroyed
+
     - @ref dataproviderintro "DataProvider" module
       - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly

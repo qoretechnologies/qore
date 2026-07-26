@@ -40,7 +40,7 @@
 %enable-debug
 
 module HttpServer {
-    version = "1.6";
+    version = "1.7";
     desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -177,6 +177,13 @@ log("started listener on %s", lh.desc);
     @endcode
 
     @section http_relnotes HttpServer Module Release Notes
+
+    @subsection http1_7 HttpServer 1.7
+    - @ref HttpServer::HttpServer::waitStop() "waitStop()" accepts an optional timeout and returns whether all
+      listeners stopped, so a server shutdown can be bounded instead of blocking indefinitely on a request
+      handler that never returns; the no-argument call is unchanged
+    - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
+      can report what is still in flight after a bounded wait times out
 
     @subsection http1_6 HttpServer 1.6
     - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
@@ -1565,8 +1572,38 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! waits for all listeners to be stopped; call after calling HttpServer::stopNoWait()
-    waitStop() {
-        c.wait();
+    /** A listener is only counted as stopped once every connection thread on it has returned, so
+        this method waits for all in-flight requests to complete.  A request handler that blocks
+        indefinitely therefore blocks this call indefinitely as well; pass a timeout to bound the
+        wait and regain control in that case.
+
+        @param timeout_ms the maximum time to wait; 0 (the default) waits indefinitely
+
+        @return 0 if all listeners stopped, -1 if the timeout expired while listeners were still
+        running; use getRunningListenerCount() to report what is still in flight
+
+        @note the return value is new in HttpServer 1.7; the no-argument call is unchanged
+
+        @see
+        - getRunningListenerCount()
+        - stopNoWait()
+    */
+    int waitStop(timeout timeout_ms = 0) {
+        return c.wait(timeout_ms);
+    }
+
+    #! returns the number of listeners that have not stopped yet
+    /** A listener stops only after all of its connection threads have returned, so a non-zero
+        value after waitStop() times out means requests are still in flight.
+
+        @return the number of listeners still running
+
+        @since HttpServer 1.7
+
+        @see waitStop()
+    */
+    int getRunningListenerCount() {
+        return c.getCount();
     }
 
     #! called when a listener has been registered with the async I/O controller and is accepting connections
