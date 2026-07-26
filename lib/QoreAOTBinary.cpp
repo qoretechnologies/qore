@@ -6994,6 +6994,20 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         rec.aggregate_return_shape_condition_param));
     writer.writeU8(rec.aggregate_return_shape_true_size);
     writer.writeU8(rec.aggregate_return_shape_false_size);
+    assert(rec.aggregate_return_value_selects.size() <= 100);
+    writer.writeU32(static_cast<uint32_t>(
+        rec.aggregate_return_value_selects.size()));
+    for (const auto& select : rec.aggregate_return_value_selects) {
+        writer.writeU8(select.value_index);
+        writer.writeU8(static_cast<uint8_t>(select.condition_param));
+        for (const auto* value :
+                {&select.true_value, &select.false_value}) {
+            writer.writeU8(value->kind);
+            writer.writeU8(static_cast<uint8_t>(value->param));
+            writer.writeI64(value->int_value);
+            writer.writeF64(value->float_value);
+        }
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7100,6 +7114,8 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
         info.aggregate_return_shape_true_size;
     rec.aggregate_return_shape_false_size =
         info.aggregate_return_shape_false_size;
+    rec.aggregate_return_value_selects =
+        info.aggregate_return_value_selects;
     rec.boxed_return_param = info.boxed_return_param;
     rec.boxed_return_kind = info.boxed_return_kind;
     rec.composed_int_source_kind = info.composed_int_source_kind;
@@ -8602,6 +8618,41 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         QoreAOTBinaryReader::readU8(ptr);
     rec.aggregate_return_shape_false_size =
         QoreAOTBinaryReader::readU8(ptr);
+    if (version < 35) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX conditional aggregate expression"
+            " count";
+        return false;
+    }
+    uint32_t select_count = QoreAOTBinaryReader::readU32(ptr);
+    constexpr size_t select_record_size =
+        2 + 2 * (2 + sizeof(int64_t) + sizeof(double));
+    if (select_count > 100
+            || static_cast<size_t>(select_count)
+                > static_cast<size_t>(end - ptr)
+                    / select_record_size) {
+        error = "invalid SYMBOL_INDEX conditional aggregate expression"
+            " count";
+        return false;
+    }
+    rec.aggregate_return_value_selects.reserve(select_count);
+    for (uint32_t i = 0; i < select_count; ++i) {
+        QoreAOTAggregateReturnSelectRecord select;
+        select.value_index = QoreAOTBinaryReader::readU8(ptr);
+        select.condition_param =
+            static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+        for (auto* value :
+                {&select.true_value, &select.false_value}) {
+            value->kind = QoreAOTBinaryReader::readU8(ptr);
+            value->param =
+                static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+            value->int_value = QoreAOTBinaryReader::readI64(ptr);
+            value->float_value = QoreAOTBinaryReader::readF64(ptr);
+        }
+        rec.aggregate_return_value_selects.push_back(select);
+    }
     return true;
 }
 

@@ -2213,6 +2213,9 @@ public:
         NativeIntConstantSelect,
         BoxedIntConstantSelect,
         BoxedBoolConstantSelect,
+        NativeIntExpressionSelect,
+        NativeFloatExpressionSelect,
+        BoxedExpressionSelect,
     };
 
     struct AOTAggregateProjectionDescriptor {

@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeConditionalValues(bool alternate, int value) {
+    if (alternate) {
+        return (value + 1,);
+    }
+    return (value + 2,);
+}
+
+int sub projectionKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += makeConditionalValues((i % 2) == 0, i)[0];
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", projectionKernel(rounds));

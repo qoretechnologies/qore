@@ -5122,10 +5122,28 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     printf("], \"aggregate_return_shape_condition_param\": %d"
         ", \"aggregate_return_shape_true_size\": %u"
         ", \"aggregate_return_shape_false_size\": %u"
-        ", \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+        ", \"aggregate_return_value_selects\": [",
         rec.aggregate_return_shape_condition_param,
         rec.aggregate_return_shape_true_size,
-        rec.aggregate_return_shape_false_size,
+        rec.aggregate_return_shape_false_size);
+    for (size_t i = 0;
+            i < rec.aggregate_return_value_selects.size(); ++i) {
+        const auto& select = rec.aggregate_return_value_selects[i];
+        printf("%s{\"value_index\": %u, \"condition_param\": %d"
+            ", \"true_kind\": %u, \"true_param\": %d"
+            ", \"true_int\": " QLLD ", \"true_float\": %.17g"
+            ", \"false_kind\": %u, \"false_param\": %d"
+            ", \"false_int\": " QLLD ", \"false_float\": %.17g}",
+            i ? ", " : "", select.value_index,
+            select.condition_param, select.true_value.kind,
+            select.true_value.param,
+            static_cast<long long>(select.true_value.int_value),
+            select.true_value.float_value, select.false_value.kind,
+            select.false_value.param,
+            static_cast<long long>(select.false_value.int_value),
+            select.false_value.float_value);
+    }
+    printf("], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
         rec.boxed_return_param, rec.boxed_return_kind);
     printf(", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
         ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
@@ -5793,10 +5811,35 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         fprintf(f, "], \"aggregate_return_shape_condition_param\": %d"
             ", \"aggregate_return_shape_true_size\": %u"
             ", \"aggregate_return_shape_false_size\": %u"
-            ", \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+            ", \"aggregate_return_value_selects\": [",
             rec.aggregate_return_shape_condition_param,
             rec.aggregate_return_shape_true_size,
-            rec.aggregate_return_shape_false_size,
+            rec.aggregate_return_shape_false_size);
+        for (size_t j = 0;
+                j < rec.aggregate_return_value_selects.size(); ++j) {
+            const auto& select =
+                rec.aggregate_return_value_selects[j];
+            fprintf(f,
+                "%s{\"value_index\": %u, \"condition_param\": %d"
+                ", \"true_kind\": %u, \"true_param\": %d"
+                ", \"true_int\": " QLLD ", \"true_float\": %.17g"
+                ", \"false_kind\": %u, \"false_param\": %d"
+                ", \"false_int\": " QLLD
+                ", \"false_float\": %.17g}",
+                j ? ", " : "", select.value_index,
+                select.condition_param, select.true_value.kind,
+                select.true_value.param,
+                static_cast<long long>(
+                    select.true_value.int_value),
+                select.true_value.float_value,
+                select.false_value.kind,
+                select.false_value.param,
+                static_cast<long long>(
+                    select.false_value.int_value),
+                select.false_value.float_value);
+        }
+        fprintf(f,
+            "], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
             rec.boxed_return_param, rec.boxed_return_kind);
         fprintf(f, ", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
             ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD

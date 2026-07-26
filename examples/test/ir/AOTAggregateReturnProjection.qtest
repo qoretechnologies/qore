@@ -226,6 +226,30 @@ list<float> sub makeConditionalDifferentZero(bool negative) {
     return (0.0,);
 }
 
+list<int> sub makeConditionalDifferentIntExpressions(
+        bool alternate, int left, int right) {
+    if (alternate) {
+        return (left * 3, left + right, 11);
+    }
+    return (left * 5, left - right, 13);
+}
+
+list<float> sub makeConditionalDifferentFloatExpression(
+        bool alternate, float value) {
+    if (alternate) {
+        return (value + 0.25,);
+    }
+    return (value + 0.5,);
+}
+
+list<bool> sub makeConditionalDifferentBoolExpressions(
+        bool alternate, int left, int right) {
+    if (alternate) {
+        return (left < right, True);
+    }
+    return (left > right, False);
+}
+
 list<int> sub makeVariableShape(bool long_value, int value) {
     if (long_value) {
         return (value, value + 1, value + 2);
@@ -737,6 +761,27 @@ bool sub conditionalDifferentZeroProjection(bool negative) {
     return sprintf(\"%.1f\",
         makeConditionalDifferentZero(negative)[0])
         == (negative ? \"-0.0\" : \"0.0\");
+}
+
+bool sub conditionalDifferentIntExpressionsProjection(bool alternate) {
+    return makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[0] == (alternate ? 15 : 25)
+        && makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[1] == (alternate ? 7 : 3)
+        && makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[2] == (alternate ? 11 : 13);
+}
+
+bool sub conditionalDifferentFloatExpressionProjection(bool alternate) {
+    return makeConditionalDifferentFloatExpression(
+        alternate, 1.25)[0] == (alternate ? 1.5 : 1.75);
+}
+
+bool sub conditionalDifferentBoolExpressionsProjection(bool alternate) {
+    return makeConditionalDifferentBoolExpressions(
+            alternate, 2, 3)[0] == alternate
+        && makeConditionalDifferentBoolExpressions(
+            alternate, 2, 3)[1] == alternate;
 }
 
 int sub variableShapeProjection(bool long_value) {
@@ -1262,6 +1307,13 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     conditionalDifferentComputedProjection(True),
     conditionalDifferentZeroProjection(False),
     conditionalDifferentZeroProjection(True));
+printf(\"%y:%y:%y:%y:%y:%y\\n\",
+    conditionalDifferentIntExpressionsProjection(False),
+    conditionalDifferentIntExpressionsProjection(True),
+    conditionalDifferentFloatExpressionProjection(False),
+    conditionalDifferentFloatExpressionProjection(True),
+    conditionalDifferentBoolExpressionsProjection(False),
+    conditionalDifferentBoolExpressionsProjection(True));
 printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedListIndex(9, 0) == 9,
     guardedListIndex(9, -1) == 9,
@@ -1339,6 +1391,7 @@ string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + "
 string exe = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid());
 string disabled = exe + "-disabled";
 string shape_disabled = exe + "-shape-disabled";
+string expression_disabled = exe + "-expression-disabled";
 string qo_dir = exe + "-qo";
 File source();
 source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
@@ -1362,6 +1415,8 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
 string shape_disabled_compile = compile(shape_disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_SHAPE=1");
+string expression_disabled_compile = compile(expression_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_EXPRESSIONS=1");
 foreach string function in (("freshHashProjection", "sideEffectProjection",
         "freshListSize", "freshListProjection", "freshFloatProjection",
         "duplicateKeyProjection", "constantHashProjection",
@@ -1442,7 +1497,15 @@ foreach hash<string, auto> test in ((
         {"function": "conditionalComputedBoolProjection", "count": 2},
         {"function": "conditionalComputedOverflowProjection", "count": 3},
         {"function": "conditionalComputedSideEffectOrder", "count": 1},
-        {"function": "conditionalAutoComputedProjection", "count": 1})) {
+        {"function": "conditionalAutoComputedProjection", "count": 1},
+        {"function": "conditionalDifferentComputedProjection", "count": 1},
+        {"function": "conditionalDifferentZeroProjection", "count": 1},
+        {"function": "conditionalDifferentIntExpressionsProjection",
+            "count": 3},
+        {"function": "conditionalDifferentFloatExpressionProjection",
+            "count": 1},
+        {"function": "conditionalDifferentBoolExpressionsProjection",
+            "count": 2})) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=%d",
             test.function, test.count))) {
@@ -1577,7 +1640,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection|conditionalDifferentComputedProjection|conditionalDifferentZeroProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1586,6 +1649,20 @@ if (enabled_compile
 if (shape_disabled_compile
         =~ /IR-OPT-AOT-EFFECTS: (variableShapeProjection|variableEmptyProjection|variableValProjection|variableElementsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
     printf("disabled conditional aggregate shape projection:\n%s",
+        shape_disabled_compile);
+    exit(2);
+}
+if (expression_disabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (conditionalDifferentComputedProjection|conditionalDifferentZeroProjection|conditionalDifferentIntExpressionsProjection|conditionalDifferentFloatExpressionProjection|conditionalDifferentBoolExpressionsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("disabled conditional aggregate expression projection:\n%s",
+        expression_disabled_compile);
+    exit(2);
+}
+if (shape_disabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentComputedProjection[^:]*:.*aggregate-projections=1/
+        || shape_disabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentZeroProjection[^:]*:.*aggregate-projections=1/) {
+    printf("shape-only kill switch disabled conditional expression projection:\n%s",
         shape_disabled_compile);
     exit(2);
 }
@@ -1637,6 +1714,7 @@ string conditional_computed_values_line;
 string conditional_computed_floats_line;
 string conditional_compared_values_line;
 string variable_shape_line;
+string conditional_different_computed_line;
 string computed_row_line;
 string computed_values_line;
 string computed_floats_line;
@@ -1705,6 +1783,9 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeVariableShape(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         variable_shape_line = line;
+    } else if (line.find("makeConditionalDifferentComputed(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_different_computed_line = line;
     } else if (line.find("makeComputedRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         computed_row_line = line;
@@ -1794,6 +1875,18 @@ if (variable_shape_line.find("\"aggregate_return_kind\": 1") == -1
         variable_shape_line);
     exit(2);
 }
+if (conditional_different_computed_line.find(
+            "\"aggregate_return_value_params\": [-1]") == -1
+        || conditional_different_computed_line.find(
+            "\"aggregate_return_value_kinds\": [4]") == -1
+        || conditional_different_computed_line.find(
+            "\"aggregate_return_value_selects\": [{\"value_index\": 0, \"condition_param\": 0, \"true_kind\": 5, \"true_param\": 1, \"true_int\": 1") == -1
+        || conditional_different_computed_line.find(
+            "\"false_kind\": 5, \"false_param\": 1, \"false_int\": 2") == -1) {
+    printf("missing serialized conditional aggregate expression metadata:\n%s",
+        conditional_different_computed_line);
+    exit(2);
+}
 if (conditional_computed_values_line.find(
             "\"aggregate_return_value_kinds\": [7, 7, 5, 11, 10, 1]") == -1
         || conditional_computed_values_line.find(
@@ -1854,6 +1947,7 @@ if (computed_row_line.find(
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\nTrue:True:True:True:True\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
@@ -1872,7 +1966,8 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-foreach string path in ((exe, disabled, shape_disabled)) {
+foreach string path in ((exe, disabled, shape_disabled,
+        expression_disabled)) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
     if (actual != expected) {
@@ -1886,3 +1981,4 @@ unlink(src);
 unlink(exe);
 unlink(disabled);
 unlink(shape_disabled);
+unlink(expression_disabled);

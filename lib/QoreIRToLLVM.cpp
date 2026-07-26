@@ -16919,6 +16919,242 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             ? boxBool(selected) : boxInt(selected);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     }
+                } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntExpressionSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatExpressionSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedExpressionSelect) {
+                    int16_t condition_operand =
+                        direct_inst->aot_aggregate_projection_operand;
+                    const auto& descriptors = direct_inst->
+                        aot_aggregate_projection_guarded_descriptors;
+                    if (condition_operand < 0
+                            || static_cast<size_t>(condition_operand)
+                                >= raw_args.size()
+                            || raw_args[static_cast<size_t>(
+                                condition_operand)]->getType() != i1_type
+                            || descriptors.size() != 2) {
+                        error = "internal error: fused AOT aggregate"
+                            " expression select is invalid";
+                        return false;
+                    }
+                    auto emit_descriptor = [&](const QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionDescriptor& descriptor)
+                            -> llvm::Value* {
+                        using Kind = QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind;
+                        bool boxed = descriptor.kind == Kind::BoxedInt
+                            || descriptor.kind == Kind::BoxedFloat
+                            || descriptor.kind == Kind::BoxedBool
+                            || descriptor.kind
+                                == Kind::BoxedIntConstant
+                            || descriptor.kind
+                                == Kind::BoxedFloatConstant
+                            || descriptor.kind
+                                == Kind::BoxedBoolConstant
+                            || descriptor.kind
+                                == Kind::BoxedIntAddConstant
+                            || descriptor.kind
+                                == Kind::BoxedFloatAddConstant
+                            || descriptor.kind
+                                == Kind::BoxedIntBinary
+                            || descriptor.kind
+                                == Kind::BoxedIntMulConstant
+                            || descriptor.kind
+                                == Kind::BoxedBoolIntCompare;
+                        llvm::Value* value = nullptr;
+                        if (descriptor.kind == Kind::NativeIntConstant
+                                || descriptor.kind
+                                    == Kind::BoxedIntConstant) {
+                            value = llvm::ConstantInt::get(
+                                i64_type, descriptor.int_constant);
+                        } else if (descriptor.kind
+                                    == Kind::NativeFloatConstant
+                                || descriptor.kind
+                                    == Kind::BoxedFloatConstant) {
+                            value = llvm::ConstantFP::get(
+                                double_type, descriptor.float_constant);
+                        } else if (descriptor.kind
+                                == Kind::BoxedBoolConstant) {
+                            value = llvm::ConstantInt::get(
+                                i1_type,
+                                descriptor.int_constant != 0);
+                        } else {
+                            if (descriptor.operand < 0
+                                    || static_cast<size_t>(
+                                        descriptor.operand)
+                                        >= raw_args.size()) {
+                                error = "internal error: fused AOT"
+                                    " aggregate expression operand is"
+                                    " out of range";
+                                return nullptr;
+                            }
+                            value = raw_args[static_cast<size_t>(
+                                descriptor.operand)];
+                        }
+                        bool int_binary =
+                            descriptor.kind == Kind::NativeIntBinary
+                            || descriptor.kind == Kind::BoxedIntBinary
+                            || descriptor.kind
+                                == Kind::BoxedBoolIntCompare;
+                        bool int_compare = descriptor.kind
+                            == Kind::BoxedBoolIntCompare;
+                        if (int_binary) {
+                            uint64_t packed = static_cast<uint64_t>(
+                                descriptor.int_constant);
+                            size_t rhs = static_cast<uint8_t>(packed);
+                            uint8_t operation =
+                                static_cast<uint8_t>(packed >> 8);
+                            if (packed > UINT16_MAX
+                                    || rhs >= raw_args.size()
+                                    || value->getType() != i64_type
+                                    || raw_args[rhs]->getType()
+                                        != i64_type
+                                    || operation
+                                        > (int_compare ? 5 : 2)) {
+                                error = "internal error: fused AOT"
+                                    " aggregate expression binary"
+                                    " descriptor is invalid";
+                                return nullptr;
+                            }
+                            llvm::Value* rhs_value = raw_args[rhs];
+                            if (int_compare) {
+                                switch (operation) {
+                                    case 0:
+                                        value = builder->CreateICmpEQ(
+                                            value, rhs_value);
+                                        break;
+                                    case 1:
+                                        value = builder->CreateICmpNE(
+                                            value, rhs_value);
+                                        break;
+                                    case 2:
+                                        value = builder->CreateICmpSLT(
+                                            value, rhs_value);
+                                        break;
+                                    case 3:
+                                        value = builder->CreateICmpSLE(
+                                            value, rhs_value);
+                                        break;
+                                    case 4:
+                                        value = builder->CreateICmpSGT(
+                                            value, rhs_value);
+                                        break;
+                                    case 5:
+                                        value = builder->CreateICmpSGE(
+                                            value, rhs_value);
+                                        break;
+                                    default:
+                                        assert(false);
+                                }
+                            } else if (operation == 0) {
+                                value = builder->CreateAdd(
+                                    value, rhs_value);
+                            } else if (operation == 1) {
+                                value = builder->CreateSub(
+                                    value, rhs_value);
+                            } else {
+                                value = builder->CreateMul(
+                                    value, rhs_value);
+                            }
+                        } else if (descriptor.kind
+                                    == Kind::NativeIntMulConstant
+                                || descriptor.kind
+                                    == Kind::BoxedIntMulConstant) {
+                            if (value->getType() != i64_type) {
+                                error = "internal error: fused AOT"
+                                    " aggregate expression integer"
+                                    " multiply has the wrong type";
+                                return nullptr;
+                            }
+                            value = builder->CreateMul(value,
+                                llvm::ConstantInt::get(i64_type,
+                                    descriptor.int_constant));
+                        } else if (descriptor.kind
+                                    == Kind::NativeIntAddConstant
+                                || descriptor.kind
+                                    == Kind::BoxedIntAddConstant) {
+                            if (value->getType() != i64_type) {
+                                error = "internal error: fused AOT"
+                                    " aggregate expression integer add"
+                                    " has the wrong type";
+                                return nullptr;
+                            }
+                            value = builder->CreateAdd(value,
+                                llvm::ConstantInt::get(i64_type,
+                                    descriptor.int_constant));
+                        } else if (descriptor.kind
+                                    == Kind::NativeFloatAddConstant
+                                || descriptor.kind
+                                    == Kind::BoxedFloatAddConstant) {
+                            if (value->getType() != double_type) {
+                                error = "internal error: fused AOT"
+                                    " aggregate expression float add"
+                                    " has the wrong type";
+                                return nullptr;
+                            }
+                            value = builder->CreateFAdd(value,
+                                llvm::ConstantFP::get(double_type,
+                                    descriptor.float_constant));
+                        }
+                        if (!boxed) {
+                            return value;
+                        }
+                        if (value->getType() == i1_type) {
+                            return boxBool(value);
+                        }
+                        if (value->getType() == double_type) {
+                            return boxFloat(value);
+                        }
+                        if (value->getType() == i64_type) {
+                            return boxInt(value);
+                        }
+                        error = "internal error: fused AOT aggregate"
+                            " expression cannot be boxed";
+                        return nullptr;
+                    };
+                    llvm::Value* true_value =
+                        emit_descriptor(descriptors[0]);
+                    llvm::Value* false_value =
+                        emit_descriptor(descriptors[1]);
+                    llvm::Type* expected_type = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatExpressionSelect
+                        ? double_type : i64_type;
+                    if (!true_value || !false_value
+                            || true_value->getType()
+                                != false_value->getType()
+                            || true_value->getType() != expected_type) {
+                        if (error.empty()) {
+                            error = "internal error: fused AOT aggregate"
+                                " expression branches have incompatible"
+                                " types";
+                        }
+                        return false;
+                    }
+                    call_result = builder->CreateSelect(
+                        raw_args[static_cast<size_t>(
+                            condition_operand)],
+                        true_value, false_value);
+                    call_return_kind = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntExpressionSelect
+                        ? BatchCalleeReturnKind::NativeInt
+                        : projection
+                                == QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        NativeFloatExpressionSelect
+                            ? BatchCalleeReturnKind::NativeFloat
+                            : BatchCalleeReturnKind::Boxed;
                 } else {
                     int16_t operand =
                         direct_inst->aot_aggregate_projection_operand;

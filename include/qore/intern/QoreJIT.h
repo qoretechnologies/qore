@@ -325,6 +325,21 @@ enum class AOTAggregateReturnValueKind : uint8_t {
     BoolIntParamCompare = 12,
 };
 
+struct AOTAggregateReturnValueInfo {
+    AOTAggregateReturnValueKind kind =
+        AOTAggregateReturnValueKind::Unknown;
+    int8_t param = -1;
+    int64_t int_value = 0;
+    double float_value = 0.0;
+};
+
+struct AOTAggregateReturnSelectInfo {
+    uint8_t value_index = 0;
+    int8_t condition_param = -1;
+    AOTAggregateReturnValueInfo true_value;
+    AOTAggregateReturnValueInfo false_value;
+};
+
 //! Fresh fixed aggregate whose values are native parameters, scalar constants,
 //! bounded parameter expressions, or unknown when only the side-effect-free
 //! aggregate shape is summarized.
@@ -338,6 +353,7 @@ struct AOTAggregateReturnInfo {
     int8_t shape_condition_param = -1;
     uint8_t shape_true_size = 0;
     uint8_t shape_false_size = 0;
+    std::vector<AOTAggregateReturnSelectInfo> value_selects;
 
     explicit operator bool() const {
         return kind != AOTAggregateReturnKind::None;
