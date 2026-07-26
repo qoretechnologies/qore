@@ -1630,6 +1630,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSSLPrivateKey.cpp
     lib/QoreSocketObject.cpp
     lib/QoreCondition.cpp
+    lib/QoreJson.cpp
     lib/QoreQueue.cpp
     lib/QoreQueueHelper.cpp
     lib/QoreRegex.cpp
@@ -1973,6 +1974,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreJson.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueueHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
@@ -2559,6 +2561,19 @@ if (ADDRESS_SANITIZER)
     target_compile_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
     target_link_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
+
+# JSON C++ API smoke test.  Unlike the IR smoke targets above this deliberately links
+# only libqore and includes only installed public headers -- it verifies the
+# include/qore/QoreJson.h contract exactly as a builtin binary module (ex: avro) consumes
+# it, with no json module loaded and no Qore-language code involved.
+add_executable(qore-json-cpp-api-smoke EXCLUDE_FROM_ALL
+    examples/test/json/json_cpp_api.cpp)
+add_dependencies(qore-json-cpp-api-smoke libqore)
+target_include_directories(qore-json-cpp-api-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-json-cpp-api-smoke PRIVATE libqore)
 
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
