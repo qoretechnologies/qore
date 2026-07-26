@@ -127,6 +127,16 @@ struct QoreModuleInfo {
     //! list of binary modules that this binary module depends on
     strvec_t dependencies;
 
+    //! list of optional child modules declared by this module with the %try-child-module parse directive
+    /** Child modules are loaded after this module has been completely loaded, initialized, and published; a
+        child module that is not installed is ignored, while a child module that is installed but cannot be
+        loaded raises an exception.  Unlike \a dependencies, child modules are not required by this module and
+        are not loaded before its initialization function runs.
+
+        @since %Qore 3.0
+    */
+    strvec_t child_modules;
+
     //! extra information to appear in the module info hash
     QoreHashNode* info = nullptr;
 

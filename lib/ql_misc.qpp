@@ -1690,6 +1690,15 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
     - \c api_minor: the minor number of the %Qore module API version the module support
     - \c url: the module's URL
     - \c license: the module's license
+    - \c child-modules: (only present if the module declares child modules with
+      @ref try-child-module "%try-child-module") a hash keyed by child module name in declaration order,
+      where each value is a hash with the following keys:
+      - \c spec: the declaration as given, including any version constraint
+      - \c status: one of \c "attached", \c "absent", \c "failed", \c "skipped", or \c "pending";
+        see @ref user_module_children "Child Modules"
+      - \c err: (only with \c "failed") the exception error string
+      - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
+        child module was not attached
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -1713,6 +1722,15 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
     - \c api_minor: the minor number of the %Qore module API version the module support
     - \c url: the module's URL
     - \c license: the module's license
+    - \c child-modules: (only present if the module declares child modules with
+      @ref try-child-module "%try-child-module") a hash keyed by child module name in declaration order,
+      where each value is a hash with the following keys:
+      - \c spec: the declaration as given, including any version constraint
+      - \c status: one of \c "attached", \c "absent", \c "failed", \c "skipped", or \c "pending";
+        see @ref user_module_children "Child Modules"
+      - \c err: (only with \c "failed") the exception error string
+      - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
+        child module was not attached
 
     @par Example:
     @code{.py}
@@ -1741,6 +1759,15 @@ list<hash<auto>> get_module_list() {
     - \c api_minor: the minor number of the %Qore module API version the module support
     - \c url: the module's URL
     - \c license: the module's license
+    - \c child-modules: (only present if the module declares child modules with
+      @ref try-child-module "%try-child-module") a hash keyed by child module name in declaration order,
+      where each value is a hash with the following keys:
+      - \c spec: the declaration as given, including any version constraint
+      - \c status: one of \c "attached", \c "absent", \c "failed", \c "skipped", or \c "pending";
+        see @ref user_module_children "Child Modules"
+      - \c err: (only with \c "failed") the exception error string
+      - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
+        child module was not attached
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -1764,6 +1791,15 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
     - \c api_minor: the minor number of the %Qore module API version the module support
     - \c url: the module's URL
     - \c license: the module's license
+    - \c child-modules: (only present if the module declares child modules with
+      @ref try-child-module "%try-child-module") a hash keyed by child module name in declaration order,
+      where each value is a hash with the following keys:
+      - \c spec: the declaration as given, including any version constraint
+      - \c status: one of \c "attached", \c "absent", \c "failed", \c "skipped", or \c "pending";
+        see @ref user_module_children "Child Modules"
+      - \c err: (only with \c "failed") the exception error string
+      - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
+        child module was not attached
 
     @par Example:
     @code{.py}

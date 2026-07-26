@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmOrder1.qm - first child module of TcmOrderBase; declares a child module of its own
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmOrderBase
+%try-child-module TcmOrder1Child
+
+module TcmOrder1 {
+    version = "1.0";
+    desc = "first test child module for child module ordering";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmOrderBase::add("order1");
+    };
+}

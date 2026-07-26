@@ -6891,6 +6891,40 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
                 continue;
             }
 
+            // Check for the %try-child-module directive; declared child modules are optional extensions
+            // loaded after this module is published, so they must NOT become module dependencies (which are
+            // mandatory and are loaded before the module's init function runs).  The declarations are
+            // emitted in the module description function instead; see
+            // design/parse-directive-try-child-module.md
+            if (p + 17 <= end && strncmp(p, "%try-child-module", 17) == 0) {
+                p += 17;
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
+                const char* child_start = p;
+                while (p < end && *p != '\n' && *p != '\r') {
+                    ++p;
+                }
+                if (p > child_start) {
+                    std::string child(child_start, p - child_start);
+                    // trim trailing whitespace
+                    while (!child.empty() && (child.back() == ' ' || child.back() == '\t')) {
+                        child.pop_back();
+                    }
+                    if (!child.empty()) {
+                        info.child_modules.push_back(child);
+                    }
+                }
+                // Skip to end of line
+                while (p < end && *p != '\n') {
+                    ++p;
+                }
+                if (p < end) {
+                    ++p;
+                }
+                continue;
+            }
+
             // Check for %try-module directive and warn if module not available
             if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
                 p += 11;
@@ -7122,6 +7156,23 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::GlobalValue::PrivateLinkage, deps_array, "qore_aot_desc_deps");
     }
 
+    // Create the child module array (array of const char* pointers); child modules declared with
+    // %try-child-module are delivered separately from dependencies so that artifacts compiled before this
+    // was supported keep working unchanged
+    int num_children = static_cast<int>(mod_info.child_modules.size());
+    llvm::GlobalVariable* children_array_gv = nullptr;
+    if (num_children > 0) {
+        std::vector<llvm::Constant*> child_ptrs;
+        for (const auto& child : mod_info.child_modules) {
+            auto* child_gv = createPrivateString("qore_aot_desc_child_" + child, child);
+            child_ptrs.push_back(child_gv);
+        }
+        auto* children_array = llvm::ConstantArray::get(
+            llvm::ArrayType::get(ptr_type, num_children), child_ptrs);
+        children_array_gv = new llvm::GlobalVariable(module, children_array->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, children_array, "qore_aot_desc_children");
+    }
+
     // Declare qore_aot_fill_module_desc
     auto* fill_fn_type = llvm::FunctionType::get(void_type, {
         ptr_type,   // QoreModuleInfo*
@@ -7181,6 +7232,27 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
         deps_ptr,
         builder.getInt32(num_deps)
     });
+
+    // Deliver any child module declarations with a separate call, so that .qmod artifacts compiled before
+    // child modules were supported (which never make this call) continue to load unchanged
+    if (children_array_gv) {
+        auto* fill_children_fn_type = llvm::FunctionType::get(void_type, {
+            ptr_type,   // QoreModuleInfo*
+            ptr_type,   // children
+            i32_type    // num_children
+        }, false);
+        auto fill_children_fn = module.getOrInsertFunction("qore_aot_fill_module_children",
+            fill_children_fn_type);
+        llvm::Value* children_ptr = builder.CreateInBoundsGEP(
+            llvm::ArrayType::get(ptr_type, num_children), children_array_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+        builder.CreateCall(fill_children_fn, {
+            mod_info_arg,
+            children_ptr,
+            builder.getInt32(num_children)
+        });
+    }
+
     builder.CreateRetVoid();
 }
 

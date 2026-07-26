@@ -265,6 +265,9 @@
     - new @ref prepend-module-path "%prepend-module-path" and
       @ref append-module-path "%append-module-path" directives for per-program module search paths,
       including paths persisted in AOT binaries
+    - new @ref try-child-module "%try-child-module" directive letting a base module declare optional
+      @ref user_module_children "child modules" that extend it, loaded automatically once the base module
+      is fully published
     - \c qpp \c --metadata flag emits structured \c .meta.json files for builtin classes,
       methods, functions, constants, hashdecls, and enums
     - tree-sitter-based parser backend in the @ref astparserintro "astparser" module
@@ -748,6 +751,25 @@ int echoed = child.echo(value);
     See @ref prepend-module-path "%prepend-module-path",
     @ref append-module-path "%append-module-path", and
     @ref no-module-path-directives "%no-module-path-directives".
+    @endparblock
+
+    @par Child Modules for Extensible Base Modules
+    @parblock
+    The new @ref try-child-module "%try-child-module" parse directive lets a
+    @ref user_modules "user module" declare optional child modules that extend
+    it.  Declared children are loaded by the module loader after the declaring
+    module has been fully loaded, initialized, and published, so the child's
+    references to the parent resolve normally &mdash; which is not possible when
+    loading an extension from the parent's own \c init closure.
+
+    A child that is not installed is silently ignored; a child that is installed
+    but cannot be loaded raises the child's own error, so a broken extension can
+    no longer be confused with a missing one.  Attachment status for every
+    declared child is reported by get_module_hash() under the
+    \c "child-modules" key.
+
+    See @ref try-child-module "%try-child-module" and
+    @ref user_module_children "Child Modules" for details.
     @endparblock
 
     @par Native IR Lowering for context Statement

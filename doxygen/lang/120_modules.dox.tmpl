@@ -1329,6 +1329,81 @@ public namespace MyNamespace {
     case).  User module @ref Qore::Program "Program" objects have a functional domain attribute set on the
     @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.
 
+    @subsection user_module_children Child Modules
+
+    A user module can declare optional <b>child modules</b> that extend it with the
+    @ref try-child-module "%try-child-module" parse directive.  A child module is a separate module that depends on
+    the declaring module (normally with <tt>%requires(reexport)</tt>) and registers itself with it when loaded; the
+    declaration lets the module loader activate such an extension automatically instead of requiring every solution
+    that uses the base module to know the extension's name and load it explicitly.
+
+    @code{.py}
+# in the base module
+%modern
+%try-child-module MyBaseExtension
+
+module MyBase {
+    version = "1.0";
+    desc = "base module";
+    author = "Foobar Industries, inc";
+    license = "MIT";
+}
+
+public class MyBase {
+    public {
+        static hash<string, code> children;
+    }
+
+    static registerChild(string name, code generator) {
+        children{name} = generator;
+    }
+}
+    @endcode
+
+    @code{.py}
+# in the extension module
+%modern
+%requires(reexport) MyBase
+
+module MyBaseExtension {
+    version = "1.0";
+    desc = "extension for MyBase";
+    author = "Foobar Industries, inc";
+    license = "MIT";
+    init = sub () {
+        MyBase::registerChild("ext", sub (string name) { ... });
+    };
+}
+    @endcode
+
+    The dependency direction is unchanged: the extension depends on the base module, which is what allows a
+    proprietary module to extend an open one.  Only the activation is declarative.
+
+    Child modules are attached <b>after</b> the declaring module has been completely loaded, initialized, and
+    published, so the child's references to the parent resolve normally.  This is why the extension cannot simply be
+    loaded from the parent's \c init closure: while that closure runs, the module's own feature is still registered as
+    being loaded, so the parent's classes are not yet visible to any module loaded from it.
+
+    A child module's namespace is <b>not</b> imported into any @ref Qore::Program "Program" object; only its
+    initialization code runs.  Code that needs the child's classes must load the child explicitly.
+
+    Attachment status can be queried with get_module_hash(), which reports each declared child module under the
+    \c "child-modules" key of the declaring module's entry:
+    @code{.py}
+printf("%N\n", get_module_hash().MyBase."child-modules");
+# {MyBaseExtension: {spec: "MyBaseExtension", status: "attached"}}
+    @endcode
+
+    The following statuses are reported:
+    |!Status|!Description
+    |\c "attached"|the child module was loaded
+    |\c "absent"|the child module is not installed; this is not an error
+    |\c "failed"|the child module is installed but could not be loaded; the error is reported in the \c "err" and \c "desc" keys and is raised on every load of the parent module
+    |\c "skipped"|the child module was not loaded because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
+    |\c "pending"|the attachment has not been attempted yet
+
+    @since %Qore 3.0
+
     @subsection User Module Example
 
     Here is an example declaring user module \c "foo" version \c "1.0":

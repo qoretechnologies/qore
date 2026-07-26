@@ -190,6 +190,8 @@ module.exports = grammar({
         seq('%requires', $.module_spec),
         seq('%requires', '(', 'reexport', ')', $.module_spec),
         seq('%try-module', $.module_spec),
+        seq('%try-reexport-module', $.module_spec),
+        seq('%try-child-module', $.module_spec),
         '%endtry',
         // Define directive for conditional compilation
         seq('%define', $.identifier),
@@ -223,6 +225,7 @@ module.exports = grammar({
         '%modern',
         seq('%append-include-path', $.string),
         seq('%append-module-path', $.string),
+        seq('%prepend-module-path', $.string),
         seq('%include', $.string),
       ),
       optional($.newline),

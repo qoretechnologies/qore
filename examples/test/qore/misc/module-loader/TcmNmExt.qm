@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmNmExt.qm - child module that must not be attached under PO_NO_MODULES
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmNmBase
+
+module TcmNmExt {
+    version = "1.0";
+    desc = "test child module for PO_NO_MODULES handling";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmNmBase::add("ext");
+    };
+}

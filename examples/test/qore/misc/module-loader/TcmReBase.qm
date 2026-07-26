@@ -1,0 +1,31 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmReBase.qm - base module whose child module is loaded explicitly first
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmReExt
+
+module TcmReBase {
+    version = "1.0";
+    desc = "test base module for child-first loading";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmReBase::trace += "base";
+    };
+}
+
+#! base module recording module initialization
+public class TcmReBase {
+    public {
+        #! trace of module initialization in the order in which it occurred
+        static list<string> trace;
+    }
+
+    #! adds an entry to the trace
+    static add(string entry) {
+        trace += entry;
+    }
+}

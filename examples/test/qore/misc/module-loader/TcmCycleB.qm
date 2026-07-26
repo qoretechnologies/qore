@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmCycleB.qm - module declaring TcmCycleA as a child module in turn
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmCycleA
+%try-child-module TcmCycleA
+
+module TcmCycleB {
+    version = "1.0";
+    desc = "test module for mutual child module declarations";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmCycleA::trace += "b";
+    };
+}

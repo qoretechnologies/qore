@@ -417,6 +417,8 @@ struct QoreAOTModuleInfo {
     std::string url;            //!< URL (optional)
     std::string license;        //!< license string (optional, default "MIT")
     std::vector<std::string> dependencies;  //!< list of required modules (from %requires directives)
+    //! list of optional child modules (from %try-child-module directives)
+    std::vector<std::string> child_modules;
 };
 
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_init()
