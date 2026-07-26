@@ -9176,6 +9176,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         QoreIRPhiInstruction* phi = nullptr;
         std::unique_ptr<QoreIRPhiInstruction> scalar_phi;
         std::vector<QoreIRInstruction*> eliminated;
+        std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
         std::vector<Projection> projected_calls;
     };
     std::vector<Projection> projections;
@@ -9876,9 +9877,97 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
             QoreIRInstruction* consumer = const_cast<QoreIRInstruction*>(
                 phi_uses->second.front().inst);
+            struct PhiProjectionUse {
+                QoreIRValue base;
+                QoreIRInstruction* consumer = nullptr;
+            };
+            std::vector<PhiProjectionUse> phi_projection_uses;
+            std::vector<QoreIRInstruction*> phi_local_eliminated;
+            QoreIRValue projection_base = phi->result;
+            const LocalVar* phi_local = nullptr;
+            if (consumer->opcode == QoreIROpcode::StoreLocal) {
+                auto* store = static_cast<QoreIRLocalInstruction*>(consumer);
+                LocalVar* local = store->local;
+                auto store_position = instruction_positions.find(store);
+                auto local_ops = local_operations.find(local);
+                if (!local || store->weak || store->is_ref
+                        || !store->initial_assignment
+                        || store->operands.size() != 1
+                        || store->operands.front().id != phi->result.id
+                        || local->closureUse()
+                        || QoreTypeInfo::isReference(local->getTypeInfo())
+                        || !func.ir_only_locals.count(
+                            reinterpret_cast<const void*>(local))
+                        || local_write_counts[local] != 1
+                        || store_position == instruction_positions.end()
+                        || local_ops == local_operations.end()) {
+                    continue;
+                }
+                bool valid_local = true;
+                phi_local_eliminated.push_back(store);
+                for (const LocalOperation& operation : local_ops->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR aggregate phi local-use analysis")) {
+                        return 0;
+                    }
+                    QoreIRLocalInstruction* local_inst =
+                        operation.instruction;
+                    if (local_inst == store
+                            || local_inst->opcode
+                                == QoreIROpcode::InstantiateLocal
+                            || local_inst->opcode
+                                == QoreIROpcode::UninstantiateLocal) {
+                        continue;
+                    }
+                    bool dominated = operation.block_id
+                                == store_position->second.first
+                        ? operation.offset > store_position->second.second
+                        : cfg.dominates(store_position->second.first,
+                            operation.block_id);
+                    if (local_inst->opcode != QoreIROpcode::LoadLocal
+                            || !dominated
+                            || !local_inst->result.isValid()) {
+                        valid_local = false;
+                        break;
+                    }
+                    auto load_uses = uses.find(local_inst->result.id);
+                    if (load_uses == uses.end()
+                            || load_uses->second.empty()) {
+                        phi_local_eliminated.push_back(local_inst);
+                        continue;
+                    }
+                    for (const QoreIRScalarUse& use : load_uses->second) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR aggregate phi local projection analysis")) {
+                            return 0;
+                        }
+                        if (!use.inst) {
+                            valid_local = false;
+                            break;
+                        }
+                        phi_projection_uses.push_back({
+                            local_inst->result,
+                            const_cast<QoreIRInstruction*>(use.inst),
+                        });
+                    }
+                    if (!valid_local) {
+                        break;
+                    }
+                    phi_local_eliminated.push_back(local_inst);
+                }
+                if (!valid_local || phi_projection_uses.empty()) {
+                    continue;
+                }
+                projection_base = phi_projection_uses.front().base;
+                consumer = phi_projection_uses.front().consumer;
+                phi_local = local;
+            } else {
+                phi_projection_uses.push_back({projection_base, consumer});
+            }
             auto scalar_phi = std::make_unique<QoreIRPhiInstruction>();
             VirtualizedPhi candidate;
             candidate.phi = phi;
+            candidate.eliminated = std::move(phi_local_eliminated);
             bool valid = true;
             bool direct_native = true;
             bool have_phi_kind = false;
@@ -9909,13 +9998,25 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     valid = false;
                     break;
                 }
+                if (phi_local) {
+                    bool has_ref_args = true;
+                    const AbstractQoreFunctionVariant* callee =
+                        qore_ir_get_resolved_effect_callee(
+                            call, has_ref_args, &closure_values);
+                    if (!callee || has_ref_args
+                            || callee->getReturnTypeInfo()
+                                != phi_local->getTypeInfo()) {
+                        valid = false;
+                        break;
+                    }
+                }
                 auto call_uses = uses.find(call->result.id);
                 Projection projection;
                 if (call->exception_target
                         || call_uses == uses.end()
                         || call_uses->second.size() != 1
                         || call_uses->second.front().inst != phi
-                        || !analyze_projection(call, phi->result, consumer,
+                        || !analyze_projection(call, projection_base, consumer,
                             projection, true)) {
                     valid = false;
                     break;
@@ -9959,6 +10060,37 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 }
                 final_consumer = projection.consumer;
                 final_result = projection.result;
+                if (phi_projection_uses.size() > 1
+                        && incoming_projections.empty()) {
+                    if (!projection.guarded_index.isValid()) {
+                        valid = false;
+                        break;
+                    }
+                    for (size_t use_index = 1;
+                            use_index < phi_projection_uses.size();
+                            ++use_index) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR repeated aggregate phi projection analysis")) {
+                            return 0;
+                        }
+                        const PhiProjectionUse& use =
+                            phi_projection_uses[use_index];
+                        Projection repeated;
+                        if (!analyze_projection(call, use.base,
+                                    use.consumer, repeated, true)
+                                || !same_guarded_projection(
+                                    projection, repeated)) {
+                            valid = false;
+                            break;
+                        }
+                        candidate.eliminated.push_back(repeated.consumer);
+                        candidate.replacements.emplace_back(
+                            repeated.result.id, projection.result);
+                    }
+                    if (!valid) {
+                        break;
+                    }
+                }
                 bool unguarded_projection =
                     !projection.guarded_index.isValid()
                     && projection.guarded_descriptors.empty();
@@ -10432,6 +10564,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         eliminated.insert(candidate.eliminated.begin(),
             candidate.eliminated.end());
+        replacements.insert(candidate.replacements.begin(),
+            candidate.replacements.end());
         if (candidate.scalar_phi->value_kind
                 == QoreIRPhiValueKind::NativeInt) {
             QoreIRValueFacts facts;
