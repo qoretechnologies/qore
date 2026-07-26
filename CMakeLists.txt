@@ -2994,18 +2994,17 @@ set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
 # and then sorted alphabetically inside the groups
 
 # metadata extraction for qlib modules (uses build-tree qore + astparser)
-# QM metadata extraction requires the json binary module (via QoreApiMetadata).
-# On a fresh build json will not be installed yet; re-run cmake after
-# installing the json module to enable QM metadata extraction.
-#
-# The installed json module must also match the module API version of the
-# qore being built here, otherwise the build-tree qore would fail to load
-# it at build time and qore-extract-qm-metadata would break.
+# QM metadata extraction needs the json binary module (via QoreApiMetadata), which is built
+# from this tree -- see modules/json.  It is listed in QORE_QM_METADATA_MODULE_DIRS below so
+# the build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
+# before any metadata scan runs.  Metadata extraction is therefore unconditional; it no longer
+# depends on a compatible qore+json pair already being installed on the build host.
 set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/astparser
+    ${CMAKE_BINARY_DIR}/modules/json
     ${CMAKE_BINARY_DIR}/modules/reflection
     ${CMAKE_BINARY_DIR}/modules/logger_bin
     ${CMAKE_BINARY_DIR}/modules/linenoise
@@ -3045,62 +3044,23 @@ set(QORE_QM_METADATA_ENV
     "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser json reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
 endforeach()
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 
-# extract the source's module API version from include/qore/ModuleManager.h
-file(STRINGS "${CMAKE_SOURCE_DIR}/include/qore/ModuleManager.h" _mm_lines
-    REGEX "^#define[ \t]+QORE_MODULE_API_(MAJOR|MINOR)[ \t]+[0-9]+")
-set(_src_api_major "")
-set(_src_api_minor "")
-foreach(_line ${_mm_lines})
-    if(_line MATCHES "QORE_MODULE_API_MAJOR[ \t]+([0-9]+)")
-        set(_src_api_major ${CMAKE_MATCH_1})
-    elseif(_line MATCHES "QORE_MODULE_API_MINOR[ \t]+([0-9]+)")
-        set(_src_api_minor ${CMAKE_MATCH_1})
-    endif()
-endforeach()
-unset(_mm_lines)
+# QM metadata extraction is unconditional: json is built from this tree and is guaranteed to
+# exist before any metadata scan runs (QORE_QM_METADATA_DEPENDS above).  This replaces a probe
+# that ran an *installed* qore against an *installed* json and compared its module API against
+# this source tree, silently disabling metadata for the whole build on any mismatch -- a
+# bootstrap cycle that made a from-scratch build unable to produce metadata at all.
+set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
 
+# An installed qore is still used below to probe *external* binary modules whose availability
+# changes qlib AOT output; that probe degrades gracefully when qore is not installed yet.
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
-if(_qore_exe)
-    # Query installed json's api_major.api_minor via installed qore.  If the
-    # load fails (json missing or itself ABI-incompatible with installed qore)
-    # the exit code is non-zero and OUTPUT is empty.
-    execute_process(
-        COMMAND ${_qore_exe} -l json -ne
-            "printf(\"%d.%d\", get_module_hash().json.api_major, get_module_hash().json.api_minor);"
-        RESULT_VARIABLE _qore_json_rc
-        OUTPUT_VARIABLE _installed_json_api
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    if(NOT _qore_json_rc EQUAL 0)
-        message(STATUS "json module not available; QM metadata extraction disabled"
-            " (re-run cmake after installing json)")
-    elseif(NOT "${_src_api_major}" STREQUAL "" AND NOT "${_src_api_minor}" STREQUAL ""
-            AND NOT "${_installed_json_api}" STREQUAL "${_src_api_major}.${_src_api_minor}")
-        message(STATUS "installed json module API ${_installed_json_api} does not"
-            " match source module API ${_src_api_major}.${_src_api_minor};"
-            " QM metadata extraction disabled (rebuild + reinstall the json module"
-            " against this qore source tree, then re-run cmake)")
-    else()
-        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
-        message(STATUS "json module available (API ${_installed_json_api});"
-            " QM metadata extraction enabled")
-    endif()
-    unset(_qore_json_rc)
-    unset(_installed_json_api)
-else()
-    message(STATUS "qore not installed; QM metadata extraction disabled"
-        " (re-run cmake after installing qore and json)")
-endif()
-unset(_src_api_major)
-unset(_src_api_minor)
 
 # Probe external binary modules whose availability at AOT-compile time
 # changes qlib qmod output (via %try-module / %ifdef No<Name> branches in
@@ -3113,7 +3073,7 @@ unset(_src_api_minor)
 # `configure_file ... COPYONLY` only touches the destination when the
 # content changes -- so qmods don't rebuild on every cmake run, only
 # when the probe set actually changes.
-set(_qore_aot_probe_modules json yaml xml uuid msgpack process imagemagick sysconf oracle)
+set(_qore_aot_probe_modules yaml xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
 if(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
