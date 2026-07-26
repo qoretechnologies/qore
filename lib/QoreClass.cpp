@@ -3727,13 +3727,13 @@ BCSMList::BCSMList(const BCSMList& old) {
     reserve(old.size());
     for (auto& i : old) {
         push_back(i);
-        i.first->priv->ref();
+        qore_class_private::refClass(*i.first);
     }
 }
 
 BCSMList::~BCSMList() {
     for (auto& i : *this) {
-        i.first->priv->deref(false, false);
+        qore_class_private::derefClass(*i.first, false, false);
     }
 }
 
@@ -3793,7 +3793,7 @@ void BCSMList::align(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         }
         assert(i.first->getID() != thisclass->getID());
     }
-    qc->priv->ref();
+    qore_class_private::refClass(*qc);
 
     // append to the end of the vector
     push_back(std::make_pair(qc, is_virtual));
@@ -3845,7 +3845,7 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         }
         ++i;
     }
-    qc->priv->ref();
+    qore_class_private::refClass(*qc);
 
     // append to the end of the list
     push_back(std::make_pair(qc, is_virtual));
@@ -3890,7 +3890,10 @@ const QoreClass* BCSMList::getClass(qore_classid_t cid) const {
 void BCSMList::resolveCopy() {
     for (class_list_t::iterator i = begin(), e = end(); i != e; ++i) {
         assert(i->first->priv->new_copy);
-        i->first = i->first->priv->new_copy;
+        QoreClass* old = i->first;
+        i->first = old->priv->new_copy;
+        qore_class_private::refClass(*i->first);
+        qore_class_private::derefClass(*old, false, false);
     }
 }
 
@@ -3903,9 +3906,9 @@ QoreClass::QoreClass(const QoreClass& old) : priv(old.priv) {
 
     priv->pgmRef();
 
-    // ensure atomicity when writing to qcset
+    // ensure atomicity when writing to qcrefs
     AutoLocker al(priv->gate.asl_lock);
-    priv->qcset.insert(this);
+    priv->qcrefs[this] = 1;
 }
 
 QoreClass::QoreClass(std::string&& nme, std::string&& ns_path, int64 dom)
@@ -3939,11 +3942,11 @@ QoreClass::~QoreClass() {
     // dereference the private data if still present
     if (priv) {
         {
-            // ensure atomicity when writing to qcset
+            // ensure atomicity when writing to qcrefs
             AutoLocker al(priv->gate.asl_lock);
-            qc_set_t::iterator i = priv->qcset.find(this);
-            if (i != priv->qcset.end()) {
-                priv->qcset.erase(i);
+            qc_ref_map_t::iterator i = priv->qcrefs.find(this);
+            if (i != priv->qcrefs.end()) {
+                priv->qcrefs.erase(i);
             }
         }
 
