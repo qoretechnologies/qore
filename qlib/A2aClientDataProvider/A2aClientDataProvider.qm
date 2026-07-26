@@ -1,0 +1,308 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore A2aClientDataProvider module definition
+
+/*  A2aClientDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires(reexport) ConnectionProvider
+%requires(reexport) A2aClient
+
+%modern
+
+module A2aClientDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for A2A agents";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \Priv::priv_init();
+}
+
+/** @mainpage A2aClientDataProvider Module
+
+    @tableofcontents
+
+    @section a2aclientdataproviderintro Introduction to the A2aClientDataProvider Module
+
+    The %A2aClientDataProvider module provides a data provider API for
+    A2A (Agent-to-Agent) agents, enabling integration with AI agents via the
+    A2A protocol.
+
+    The following classes are provided by this module:
+    - Core providers:
+      - @ref A2aClientDataProvider::A2aClientDataProvider "A2aClientDataProvider"
+      - @ref A2aClientDataProvider::A2aClientDataProviderBase "A2aClientDataProviderBase"
+      - @ref A2aClientDataProvider::A2aClientDataProviderFactory "A2aClientDataProviderFactory"
+    - Functional providers:
+      - @ref A2aClientDataProvider::A2aAgentCardGetDataProvider "A2aAgentCardGetDataProvider"
+      - @ref A2aClientDataProvider::A2aAgentCardGetExtendedDataProvider "A2aAgentCardGetExtendedDataProvider"
+      - @ref A2aClientDataProvider::A2aMessageSendDataProvider "A2aMessageSendDataProvider"
+      - @ref A2aClientDataProvider::A2aTaskGetDataProvider "A2aTaskGetDataProvider"
+      - @ref A2aClientDataProvider::A2aTaskCancelDataProvider "A2aTaskCancelDataProvider"
+    - Event provider:
+      - @ref A2aClientDataProvider::A2aEventDataProvider "A2aEventDataProvider"
+    - Data types:
+      - @ref A2aClientDataProvider::A2aMessageSendRequestDataType "A2aMessageSendRequestDataType"
+      - @ref A2aClientDataProvider::A2aTaskGetRequestDataType "A2aTaskGetRequestDataType"
+      - @ref A2aClientDataProvider::A2aTaskCancelRequestDataType "A2aTaskCancelRequestDataType"
+      - @ref A2aClientDataProvider::A2aAgentCardResultDataType "A2aAgentCardResultDataType"
+      - @ref A2aClientDataProvider::A2aTaskResultDataType "A2aTaskResultDataType"
+
+    @section a2aclientdataprovider_relnotes Release Notes
+
+    @subsection a2aclientdataprovider_v1_0 A2aClientDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the A2aClientDataProvider module
+public namespace A2aClientDataProvider {
+    #! Application name
+    public const AppName = "A2A";
+
+    #! A2A logo (official A2A protocol logo, white for dark mode)
+    public const A2aLogo = File::readTextFile(get_script_dir() + "/a2a-logo.svg");
+}
+
+# private namespace for the module
+namespace Priv {
+    sub priv_init() {
+        # Register the data provider factory
+        DataProvider::registerFactory(new A2aClientDataProviderFactory());
+
+        # Register the app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": A2aClientDataProvider::AppName,
+            "display_name": "A2A Agent",
+            "short_desc": "Agent-to-Agent protocol",
+            "desc": "Connect to A2A agents for agent-to-agent collaboration",
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::ApiIntegration,),
+            "scheme": "a2a",
+            "logo": A2aClientDataProvider::A2aLogo,
+            "logo_file_name": "a2a-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # Register actions — all DPAT_API actions MUST have options and output_type
+
+        # Agent card actions (no request options, output only)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/agent-card/get",
+            "action": "get-agent-card",
+            "display_name": "Get Agent Card",
+            "short_desc": "Get the agent's card",
+            "desc": "Retrieve the A2A agent's card with its capabilities and skills",
+            "action_code": DPAT_API,
+            "output_type": A2aClientDataProvider::A2aAgentCardResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/agent-card/get-extended",
+            "action": "get-extended-agent-card",
+            "display_name": "Get Extended Agent Card",
+            "short_desc": "Get authenticated extended agent card",
+            "desc": "Get the authenticated extended agent card with additional details",
+            "action_code": DPAT_API,
+            "output_type": A2aClientDataProvider::A2aAgentCardResultDataType,
+        });
+
+        # Message actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/messages/send",
+            "action": "send-message",
+            "display_name": "Send Message",
+            "short_desc": "Send a message to the agent",
+            "desc": "Send a message to the A2A agent and get back a task",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aMessageSendRequestDataType::Fields{"role", "parts"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                A2aMessageSendRequestDataType::Fields - ("role", "parts"),
+            ),
+            "output_type": A2aClientDataProvider::A2aTaskResultDataType,
+        });
+
+        # Task actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/tasks/get",
+            "action": "get-task",
+            "display_name": "Get Task",
+            "short_desc": "Get task status by ID",
+            "desc": "Retrieve the current status of an A2A task by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aTaskGetRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+            "output_type": A2aClientDataProvider::A2aTaskResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/tasks/cancel",
+            "action": "cancel-task",
+            "display_name": "Cancel Task",
+            "short_desc": "Cancel a running task",
+            "desc": "Cancel a running A2A task by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aTaskCancelRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+            "output_type": A2aClientDataProvider::A2aTaskResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/tasks/list",
+            "action": "list-tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List tasks with optional filtering",
+            "desc": "List A2A tasks, optionally filtered by context ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aTaskListRequestDataType::Fields,
+            ),
+            "output_type": A2aClientDataProvider::A2aTaskListResultDataType,
+        });
+
+        # Push notification actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/push-notifications/set",
+            "action": "set-push-notification-config",
+            "display_name": "Set Push Notification Config",
+            "short_desc": "Set push notification config for a task",
+            "desc": "Set the push notification configuration for an A2A task",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aPushNotificationSetRequestDataType::Fields{"id", "url"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                A2aPushNotificationSetRequestDataType::Fields - ("id", "url"),
+            ),
+            "output_type": A2aClientDataProvider::A2aPushNotificationResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/push-notifications/get",
+            "action": "get-push-notification-config",
+            "display_name": "Get Push Notification Config",
+            "short_desc": "Get push notification config for a task",
+            "desc": "Get the push notification configuration for an A2A task",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aPushNotificationTaskRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+            "output_type": A2aClientDataProvider::A2aPushNotificationResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/push-notifications/list",
+            "action": "list-push-notification-configs",
+            "display_name": "List Push Notification Configs",
+            "short_desc": "List push notification configs for a task",
+            "desc": "List all push notification configurations for an A2A task",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aPushNotificationTaskRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+            "output_type": A2aClientDataProvider::A2aPushNotificationResultDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/push-notifications/delete",
+            "action": "delete-push-notification-config",
+            "display_name": "Delete Push Notification Config",
+            "short_desc": "Delete push notification config for a task",
+            "desc": "Delete push notification configuration for an A2A task",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                A2aPushNotificationDeleteRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+            "output_type": A2aClientDataProvider::A2aPushNotificationResultDataType,
+        });
+
+        # Event-driven actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/events",
+            "action": "task-status-update",
+            "display_name": "Task Status Update",
+            "short_desc": "An A2A task status has changed",
+            "desc": "Receive a notification when an A2A task status changes",
+            "action_code": DPAT_EVENT,
+            "action_val": A2aClientDataProvider::EVENT_A2A_TASK_STATUS_UPDATE,
+            "output_type": A2aClientDataProvider::A2aEventDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/events",
+            "action": "task-artifact-update",
+            "display_name": "Task Artifact Update",
+            "short_desc": "An A2A task artifact has been updated",
+            "desc": "Receive a notification when an A2A task artifact is added or modified",
+            "action_code": DPAT_EVENT,
+            "action_val": A2aClientDataProvider::EVENT_A2A_TASK_ARTIFACT_UPDATE,
+            "output_type": A2aClientDataProvider::A2aEventDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": A2aClientDataProvider::AppName,
+            "path": "/events",
+            "action": "task-message-update",
+            "display_name": "Task Message Update",
+            "short_desc": "An A2A task has a new message",
+            "desc": "Receive a notification when a new message is added to an A2A task",
+            "action_code": DPAT_EVENT,
+            "action_val": A2aClientDataProvider::EVENT_A2A_TASK_MESSAGE_UPDATE,
+            "output_type": A2aClientDataProvider::A2aEventDataType,
+        });
+    }
+}

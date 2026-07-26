@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%try-module NdjsonDataProvider
+%define NoNdjsonDataProvider
+%endtry
+
+%exec-class NdjsonTest
+
+class NdjsonTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const BasicNdjson = '{"name": "Alice", "age": 30}
+{"name": "Bob", "age": 25}
+{"name": "Charlie", "age": 35}';
+
+        const ExpectedRecords = (
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25},
+            {"name": "Charlie", "age": 35},
+        );
+
+        const NdjsonWithEmptyLines = '{"id": 1}
+
+{"id": 2}
+
+{"id": 3}';
+
+        const NdjsonCrlf = "{\"id\": 1}\r\n{\"id\": 2}\r\n{\"id\": 3}";
+
+        const NdjsonWithInvalidLine = '{"valid": true}
+{invalid json}
+{"also_valid": true}';
+
+        const NdjsonMixedTypes = '{"type": "object"}
+"string value"
+42
+true
+null
+[1, 2, 3]';
+    }
+
+    constructor() : Test("NdjsonTest", "1.0", \ARGV) {
+%ifndef NoNdjsonDataProvider
+        addTestCase("NdjsonIterator basic", \testNdjsonIteratorBasic());
+        addTestCase("NdjsonIterator empty lines", \testNdjsonIteratorEmptyLines());
+        addTestCase("NdjsonIterator CRLF", \testNdjsonIteratorCrlf());
+        addTestCase("NdjsonIterator invalid JSON recovery", \testNdjsonIteratorInvalidJson());
+        addTestCase("NdjsonIterator mixed types", \testNdjsonIteratorMixedTypes());
+        addTestCase("NdjsonIterator line too long", \testNdjsonIteratorLineTooLong());
+        addTestCase("NdjsonIterator reset", \testNdjsonIteratorReset());
+        addTestCase("InputStreamNdjsonIterator", \testInputStreamNdjsonIterator());
+        addTestCase("InputStreamNdjsonIterator empty lines", \testInputStreamNdjsonIteratorEmptyLines());
+        addTestCase("NdjsonWriter basic", \testNdjsonWriterBasic());
+        addTestCase("NdjsonWriter CRLF", \testNdjsonWriterCrlf());
+        addTestCase("NdjsonStringWriter", \testNdjsonStringWriter());
+        addTestCase("NdjsonReadDataProvider", \testNdjsonReadDataProvider());
+        addTestCase("NdjsonReadDataProvider from string", \testNdjsonReadDataProviderFromString());
+        addTestCase("NdjsonDataProviderFactory", \testNdjsonDataProviderFactory());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef NoNdjsonDataProvider
+    testNdjsonIteratorBasic() {
+        NdjsonDataProvider::NdjsonIterator iter(BasicNdjson);
+        list<auto> results = ();
+
+        while (iter.next()) {
+            push results, iter.getValue();
+            assertTrue(iter.valid());
+        }
+
+        assertFalse(iter.valid());
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+        assertEq(ExpectedRecords[1], results[1]);
+        assertEq(ExpectedRecords[2], results[2]);
+    }
+
+    testNdjsonIteratorEmptyLines() {
+        # With skip_empty_lines = True (default)
+        NdjsonDataProvider::NdjsonIterator iter1(NdjsonWithEmptyLines);
+        list<auto> results1 = ();
+        while (iter1.next()) {
+            results1 += iter1.getValue();
+        }
+        assertEq(3, results1.size());
+        assertEq({"id": 1}, results1[0]);
+        assertEq({"id": 2}, results1[1]);
+        assertEq({"id": 3}, results1[2]);
+
+        # With skip_empty_lines = False
+        NdjsonDataProvider::NdjsonIterator iter2(NdjsonWithEmptyLines, <NdjsonDataProvider::NdjsonIteratorOptions>{
+            "skip_empty_lines": False,
+        });
+        list<auto> results2 = ();
+        while (iter2.next()) {
+            results2 += iter2.getValue();
+        }
+        assertEq(5, results2.size());
+        assertEq({"id": 1}, results2[0]);
+        assertEq(NOTHING, results2[1]);  # Empty line becomes null
+        assertEq({"id": 2}, results2[2]);
+        assertEq(NOTHING, results2[3]);  # Empty line becomes null
+        assertEq({"id": 3}, results2[4]);
+    }
+
+    testNdjsonIteratorCrlf() {
+        NdjsonDataProvider::NdjsonIterator iter(NdjsonCrlf);
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq({"id": 1}, results[0]);
+        assertEq({"id": 2}, results[1]);
+        assertEq({"id": 3}, results[2]);
+    }
+
+    testNdjsonIteratorInvalidJson() {
+        # Without skip_invalid_json - should throw
+        NdjsonDataProvider::NdjsonIterator iter1(NdjsonWithInvalidLine);
+        assertTrue(iter1.next());  # First line is valid
+        assertThrows("NDJSON-PARSE-ERROR", \iter1.next());
+
+        # With skip_invalid_json = True
+        NdjsonDataProvider::NdjsonIterator iter2(NdjsonWithInvalidLine, <NdjsonDataProvider::NdjsonIteratorOptions>{
+            "skip_invalid_json": True,
+        });
+        list<auto> results = ();
+        while (iter2.next()) {
+            results += iter2.getValue();
+        }
+        assertEq(2, results.size());
+        assertEq({"valid": True}, results[0]);
+        assertEq({"also_valid": True}, results[1]);
+    }
+
+    testNdjsonIteratorMixedTypes() {
+        NdjsonDataProvider::NdjsonIterator iter(NdjsonMixedTypes);
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(6, results.size());
+        assertEq({"type": "object"}, results[0]);
+        assertEq("string value", results[1]);
+        assertEq(42, results[2]);
+        assertEq(True, results[3]);
+        assertEq(NOTHING, results[4]);
+        assertEq((1, 2, 3), results[5]);
+    }
+
+    testNdjsonIteratorLineTooLong() {
+        string long_line = '{"data": "' + strmul("x", 100) + '"}';
+        assertThrows("NDJSON-LINE-TOO-LONG",
+            sub() {
+                new NdjsonDataProvider::NdjsonIterator(long_line, <NdjsonDataProvider::NdjsonIteratorOptions>{
+                    "max_line_length": 50,
+                });
+            }
+        );
+    }
+
+    testNdjsonIteratorReset() {
+        NdjsonDataProvider::NdjsonIterator iter(BasicNdjson);
+
+        # Read all records
+        int count1 = 0;
+        while (iter.next()) {
+            count1++;
+        }
+        assertEq(3, count1);
+
+        # Reset and read again
+        iter.reset();
+        int count2 = 0;
+        while (iter.next()) {
+            count2++;
+        }
+        assertEq(3, count2);
+    }
+
+    testInputStreamNdjsonIterator() {
+        StringInputStream sis(BasicNdjson);
+        NdjsonDataProvider::InputStreamNdjsonIterator iter(sis);
+
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+            assertGt(0, iter.getLineNumber());
+        }
+
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+        assertEq(ExpectedRecords[1], results[1]);
+        assertEq(ExpectedRecords[2], results[2]);
+    }
+
+    testInputStreamNdjsonIteratorEmptyLines() {
+        StringInputStream sis(NdjsonWithEmptyLines);
+        NdjsonDataProvider::InputStreamNdjsonIterator iter(sis);
+
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+
+        assertEq(3, results.size());
+    }
+
+    testNdjsonWriterBasic() {
+        StringOutputStream sos();
+        NdjsonDataProvider::NdjsonWriter writer(sos);
+
+        writer.write({"name": "Alice", "age": 30});
+        writer.write({"name": "Bob", "age": 25});
+
+        string result = sos.getData();
+        assertRegex('"name"', result);
+        assertRegex('"Alice"', result);
+        assertRegex('"Bob"', result);
+        assertRegex('\n', result);
+        assertEq(2, writer.getRecordsWritten());
+
+        # Verify the output can be parsed back
+        list<string> lines = result.split("\n");
+        # Last element might be empty after split
+        if (lines.last().empty()) {
+            pop lines;
+        }
+        assertEq(2, lines.size());
+        assertEq({"name": "Alice", "age": 30}, parse_json(lines[0]));
+        assertEq({"name": "Bob", "age": 25}, parse_json(lines[1]));
+    }
+
+    testNdjsonWriterCrlf() {
+        StringOutputStream sos();
+        NdjsonDataProvider::NdjsonWriter writer(sos, <NdjsonDataProvider::NdjsonWriterOptions>{
+            "use_crlf": True,
+        });
+
+        writer.write({"id": 1});
+        writer.write({"id": 2});
+
+        string result = sos.getData();
+        assertRegex('\r\n', result);
+    }
+
+    testNdjsonStringWriter() {
+        NdjsonDataProvider::NdjsonStringWriter writer();
+
+        writer.write({"id": 1});
+        writer.write({"id": 2});
+
+        string result = writer.getString();
+        assertRegex('"id"', result);
+        assertEq(2, writer.getRecordsWritten());
+    }
+
+    testNdjsonReadDataProvider() {
+        # Test with data option
+        NdjsonDataProvider::NdjsonReadDataProvider provider({
+            "data": BasicNdjson,
+        });
+
+        assertEq("ndjson", provider.getName());
+
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+
+        assertEq(3, results.size());
+    }
+
+    testNdjsonReadDataProviderFromString() {
+        # Verify error when no input source
+        assertThrows("NDJSON-ERROR", sub() {
+            new NdjsonDataProvider::NdjsonReadDataProvider({});
+        });
+
+        # Test with string data
+        NdjsonDataProvider::NdjsonReadDataProvider provider(<NdjsonDataProvider::NdjsonReadDataProviderOptions>{
+            "data": BasicNdjson,
+        });
+
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+
+        assertEq(3, results.size());
+    }
+
+    testNdjsonDataProviderFactory() {
+        NdjsonDataProvider::NdjsonDataProviderFactory factory();
+
+        hash<auto> info = factory.getInfo();
+        assertEq("ndjson", info.name);
+
+        # Create provider through factory
+        auto provider = factory.create({
+            "data": BasicNdjson,
+        });
+
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+
+        assertEq(3, results.size());
+    }
+%endif
+}

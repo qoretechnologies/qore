@@ -1,0 +1,150 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file McpClient.qm @brief MCP Client module for connecting to MCP servers
+
+/*  McpClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+%modern
+
+module McpClient {
+    version = "1.0";
+    desc = "McpClient module for connecting to MCP servers as a client";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("mcp", McpConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("mcps", McpConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage McpClient Module
+
+    @tableofcontents
+
+    @section mcpclientintro Introduction to the McpClient Module
+
+    The %McpClient module provides a client implementation for the Model Context Protocol (MCP),
+    allowing Qore applications to connect to MCP servers and interact with tools, resources,
+    and prompts.
+
+    The module supports all MCP protocol versions:
+    - 2024-11-05 (initial version)
+    - 2025-03-26 (March 2025)
+    - 2025-06-18 (June 2025 - Enterprise readiness)
+    - 2025-11-25 (November 2025 - Tasks, Extensions)
+
+    @subsection McpClient_features Features
+
+    - Full MCP protocol support with automatic version negotiation
+    - Async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
+      protocol negotiation (HTTP/3 → HTTP/2 → HTTP/1.1) and connection pooling
+    - Streamable HTTP transport with legacy HTTP fallback
+    - SSE notification listener for server push events
+    - Tools: list and call server tools
+    - Resources: list and read server resources
+    - Prompts: list and get server prompts with arguments
+    - Completion: autocompletion for prompts and resources
+    - Logging: receive server log messages
+    - Event callbacks for server notifications
+    - Session management with Mcp-Session-Id header
+
+    @subsection McpClient_usage Basic Usage
+
+    @code{.py}
+    %requires McpClient
+
+    # Create client — the URL may include a sub-path
+    McpClient client("https://server:8080/mcp");
+
+    # Initialize connection
+    hash<auto> server_info = client.initialize({
+        "name": "MyApp",
+        "version": "1.0",
+    });
+
+    # List and call tools
+    list<auto> tools = client.listTools();
+    hash<auto> result = client.callTool("echo", {"message": "Hello"});
+
+    # List and read resources
+    list<auto> resources = client.listResources();
+    hash<auto> content = client.readResource("file:///config.json");
+
+    # List and get prompts
+    list<auto> prompts = client.listPrompts();
+    hash<auto> messages = client.getPrompt("greeting", {"name": "Alice"});
+
+    # Close connection
+    client.close();
+    @endcode
+
+    @par SSE Notification Listener Example
+    @code{.py}
+    McpClient client("https://server:8080/mcp");
+    client.initialize({"name": "MyApp", "version": "1.0"});
+
+    # Register callbacks for server notifications
+    client.setCallback("onToolsChanged", sub () { printf("Tools changed!\n"); });
+    client.setCallback("onLogMessage", sub (string level, auto data, *string logger) {
+        printf("[%s] %s: %s\n", level, logger ?? "server", data);
+    });
+
+    # Start the SSE listener for server push events
+    client.startSseListener();
+
+    # ... do work ...
+
+    client.stopSseListener();
+    client.close();
+    @endcode
+
+    @section McpClient_relnotes McpClient Release Notes
+
+    @subsection McpClient_1_0 McpClient v1.0
+    - initial release with full MCP protocol support
+    - async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
+      protocol negotiation and connection pooling
+    - streamable HTTP transport with legacy HTTP fallback
+    - SSE notification listener via @ref HttpClientStreamingIo::SseStreamReader
+    - tools, resources, prompts, completion support
+    - event callbacks for notifications
+*/
+
+#! the %McpClient namespace holds all public definitions in the %McpClient module
+public namespace McpClient {
+#! Client name
+public const McpClientName = "QoreMcpClient";
+
+#! Client version
+public const McpClientVersion = "1.0";
+}

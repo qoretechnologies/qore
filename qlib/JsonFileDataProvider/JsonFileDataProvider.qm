@@ -1,0 +1,237 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JsonFileDataProvider module definition
+
+/*  JsonFileDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires(reexport) FileLocationHandler
+%requires json
+%requires Util
+
+%modern
+
+module JsonFileDataProvider {
+    version = "1.0";
+    desc = "user module providing standard JSON file read/write support and data provider integration";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \Priv::priv_init();
+}
+
+/** @mainpage JsonFileDataProvider Module
+
+    @tableofcontents
+
+    @section jsonfiledataproviderintro Introduction to the JsonFileDataProvider Module
+
+    The %JsonFileDataProvider module provides support for reading and writing standard JSON files
+    using the data provider API. This module handles standard JSON files containing either an array
+    of objects or a single object, distinct from the NdjsonDataProvider module which handles
+    JSON Lines (NDJSON) format.
+
+    Features:
+    - Read JSON files containing arrays of objects, iterating each element as a record
+    - Read JSON files containing a single object as a single record
+    - Write records to a JSON file as an array of objects
+    - Configurable pretty-print output
+    - Support for file paths, streams, and inline data
+    - UTF-8 encoding support
+
+    The following classes are provided by this module:
+    - @ref JsonFileDataProvider::JsonFileReadDataProvider "JsonFileReadDataProvider" - data provider for reading JSON files
+    - @ref JsonFileDataProvider::JsonFileReadDataProviderFactory "JsonFileReadDataProviderFactory" - factory for creating JSON file read data providers
+    - @ref JsonFileDataProvider::JsonFileWriteDataProvider "JsonFileWriteDataProvider" - data provider for writing JSON files
+    - @ref JsonFileDataProvider::JsonFileWriteDataProviderFactory "JsonFileWriteDataProviderFactory" - factory for creating JSON file write data providers
+
+    @section jsonfiledataproviderexamples Examples
+
+    @subsection jsonfiledataproviderreadexample Reading JSON
+
+    @code{.py}
+    JsonFileReadDataProvider provider({"path": "data.json"});
+    AbstractDataProviderRecordIterator i = provider.searchRecords();
+    map printf("Record: %y\n", $1), i;
+    @endcode
+
+    @subsection jsonfiledataproviderwriteexample Writing JSON
+
+    @code{.py}
+    JsonFileWriteDataProvider provider({"path": "output.json"});
+    provider.createRecord({"name": "Alice", "age": 30});
+    provider.createRecord({"name": "Bob", "age": 25});
+    provider.commit();
+    @endcode
+
+    @section jsonfiledataprovider_relnotes Release Notes
+
+    @subsection jsonfiledataprovider_v1_0 JsonFileDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the JsonFileDataProvider module
+public namespace JsonFileDataProvider {
+    #! Application name
+    public const AppName = "JsonFile";
+
+    #! Default encoding for JSON file data
+    public const DefaultEncoding = "UTF-8";
+
+    #! JSON file logo
+    public const JsonFileLogo = File::readTextFile(get_script_dir() + "/json-file-logo.svg");
+}
+
+# private namespace for the module
+namespace Priv {
+    sub priv_init() {
+        # Register the data provider factories
+        DataProvider::registerFactory(new JsonFileReadDataProviderFactory());
+        DataProvider::registerFactory(new JsonFileWriteDataProviderFactory());
+
+        # Register the app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": JsonFileDataProvider::AppName,
+            "display_name": "JSON Files",
+            "short_desc": "Read and write standard JSON files",
+            "desc": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files "
+                "containing an array of objects (iterated as individual records) or a single object "
+                "(returned as one record). Provides configurable pretty-print output for writing.",
+            "logo": JsonFileDataProvider::JsonFileLogo,
+            "logo_file_name": "json-file-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Documents, DataProvider::AppGroup::DataTransformation,),
+        });
+
+        # Register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JsonFileDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "jsonread",
+            "display_name": "Read JSON File",
+            "short_desc": "Read standard JSON file data from a file location",
+            "desc": "Read standard JSON file data from a specific file location.\n\n"
+                "The JSON file may contain:\n"
+                "- An **array of objects**: each element is iterated as a separate record\n"
+                "- A **single object**: returned as one record\n"
+                "- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n"
+                "### Key Options\n"
+                "- `path`: the file location to read from (required)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_FIND,
+            "cls": "JsonFileDataProvider::JsonFileReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JsonFileDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "subtype": "jsonread",
+            "display_name": "Read JSON Inline Data",
+            "short_desc": "Read standard JSON inline data",
+            "desc": "Read standard JSON inline data provided directly as a string.\n\n"
+                "The JSON data may contain:\n"
+                "- An **array of objects**: each element is iterated as a separate record\n"
+                "- A **single object**: returned as one record\n"
+                "- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n"
+                "### Key Options\n"
+                "- `data`: the JSON string to parse (required)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_FIND,
+            "cls": "JsonFileDataProvider::JsonFileReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JsonFileDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "subtype": "jsonwrite",
+            "display_name": "Write JSON File",
+            "short_desc": "Write standard JSON file data to a file location",
+            "desc": "Write records as a standard JSON array to a specific file location.\n\n"
+                "Records are accumulated and written as a JSON array when `commit()` is called or the "
+                "provider is destroyed.\n\n"
+                "### Key Options\n"
+                "- `path`: the output file location (required)\n"
+                "- `pretty_print`: format JSON output with indentation (default: `True`)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_CREATE,
+            "cls": "JsonFileDataProvider::JsonFileWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileWriteDataProvider::ConstructorOptions - ("path", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JsonFileDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "subtype": "jsonwrite",
+            "display_name": "Write JSON Data",
+            "short_desc": "Write standard JSON data to an output stream",
+            "desc": "Write records as a standard JSON array to an output stream or retrieve the result "
+                "as binary data.\n\n"
+                "Records are accumulated and written as a JSON array when `commit()` is called or the "
+                "provider is destroyed.\n\n"
+                "### Key Options\n"
+                "- `stream`: the output stream to write to\n"
+                "- `pretty_print`: format JSON output with indentation (default: `True`)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_CREATE,
+            "cls": "JsonFileDataProvider::JsonFileWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JsonFileWriteDataProvider::ConstructorOptions - ("path",), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    }
+}

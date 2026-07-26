@@ -1,0 +1,827 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires JsonLd
+%requires OneRecordClient
+%requires OneRecordServerHandler
+%exec-class OneRecordTest
+
+class OneRecordTest inherits QUnit::Test {
+    private {
+        Logger::Logger logger;
+        OneRecordServerHandler::InMemoryOneRecordStorage storage;
+        OneRecordServerHandler::PermissiveOneRecordAuthorizer authorizer;
+        OneRecordServerHandler::OneRecordServerHandler handler;
+        HttpServer::HttpServer http;
+        int port;
+        string base_url;
+        OneRecordClient::OneRecordClient client;
+    }
+
+    constructor() : Test("OneRecord test", "1.0") {
+        addTestCase("types test", \typesTest());
+        addTestCase("storage test", \storageTest());
+        addTestCase("server info test", \serverInfoTest());
+        addTestCase("create logistics object test", \createLogisticsObjectTest());
+        addTestCase("get logistics object test", \getLogisticsObjectTest());
+        addTestCase("head logistics object test", \headLogisticsObjectTest());
+        addTestCase("change request lifecycle test", \changeRequestLifecycleTest());
+        addTestCase("change request rejection test", \changeRequestRejectionTest());
+        addTestCase("change request revocation test", \changeRequestRevocationTest());
+        addTestCase("revision conflict test", \revisionConflictTest());
+        addTestCase("logistics events test", \logisticsEventsTest());
+        addTestCase("audit trail test", \auditTrailTest());
+        addTestCase("subscriptions test", \subscriptionsTest());
+        addTestCase("error responses test", \errorResponsesTest());
+        addTestCase("connection provider test", \connectionProviderTest());
+        addTestCase("access delegation test", \accessDelegationTest());
+        addTestCase("delete operation test", \deleteOperationTest());
+        addTestCase("verification request test", \verificationRequestTest());
+        addTestCase("head action request test", \headActionRequestTest());
+        addTestCase("notification receive test", \notificationReceiveTest());
+        addTestCase("multiple operations test", \multipleOperationsTest());
+        addTestCase("round trip data test", \roundTripDataTest());
+        addTestCase("negative validation test", \negativeValidationTest());
+        addTestCase("method not allowed test", \methodNotAllowedTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger::Logger("test", LoggerLevel::getLevelInfo());
+        storage = new InMemoryOneRecordStorage();
+        authorizer = new PermissiveOneRecordAuthorizer();
+        handler = new OneRecordServerHandler(logger, "http://localhost", storage, authorizer);
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer::HttpServer(http_opts);
+        http.setHandler("1r", "", MimeTypeOneRecord, handler);
+        http.setDefaultHandler("1r", handler);
+        hash<auto> listener_info = http.addListener(<HttpListenerOptionInfo>{"service": 0});
+        port = listener_info.port;
+        base_url = sprintf("http://localhost:%d", port);
+
+        # Update handler base URL to include port
+        handler.setBaseUrl(base_url);
+
+        client = new OneRecordClient(base_url);
+    }
+
+    globalTearDown() {
+        client.close();
+        handler.stopNotificationWorkers();
+        http.stop();
+        delete http;
+    }
+
+    # ========================================================================
+    # Types Tests
+    # ========================================================================
+
+    typesTest() {
+        # Verify constants
+        assertEq("https://onerecord.iata.org/ns/cargo#", CARGO_NS);
+        assertEq("https://onerecord.iata.org/ns/api#", API_NS);
+        assertEq("application/ld+json", MimeTypeOneRecord);
+        assertEq("2.2.0", OneRecordApiVersion);
+
+        # Verify enums
+        assertEq("REQUEST_PENDING", OneRecordRequestStatus::Pending);
+        assertEq("REQUEST_ACCEPTED", OneRecordRequestStatus::Accepted);
+        assertEq("REQUEST_REJECTED", OneRecordRequestStatus::Rejected);
+        assertEq("REQUEST_REVOKED", OneRecordRequestStatus::Revoked);
+        assertEq("ADD", OneRecordPatchOp::Add);
+        assertEq("DELETE", OneRecordPatchOp::Delete);
+
+        # Verify hashdecl construction
+        hash<OneRecordOperation> op = <OneRecordOperation>{
+            "op": OneRecordPatchOp::Add,
+            "s": "https://example.com/lo/1",
+            "p": CARGO_NS + "grossWeight",
+            "o": (<OneRecordOperationObject>{
+                "hasDatatype": XSD_NS + "string",
+                "hasValue": "25",
+            },),
+        };
+        assertEq("ADD", op.op);
+        assertEq(1, op.o.size());
+
+        # Verify error helper
+        hash<auto> err = makeOneRecordError("Not Found", 404, "object not found",
+            "https://example.com/lo/1");
+        assertEq(API_TYPE_ERROR, err."@type");
+        assertEq("Not Found", err{API_PROP_HAS_TITLE});
+        assertEq(1, err{API_PROP_HAS_ERROR_DETAIL}.size());
+    }
+
+    # ========================================================================
+    # Storage Tests
+    # ========================================================================
+
+    storageTest() {
+        InMemoryOneRecordStorage test_storage();
+
+        # Create object
+        string id = test_storage.createLogisticsObject(
+            {"@type": CARGO_NS + "Piece", "test": "value"},
+            CARGO_NS + "Piece",
+            "https://example.com/user1"
+        );
+        assertTrue(id.val(), "object ID is non-empty");
+
+        # Read it back
+        *hash<OneRecordLogisticsObject> obj = test_storage.getLogisticsObject(id);
+        assertTrue(exists obj, "object exists");
+        assertEq(CARGO_NS + "Piece", obj.type);
+        assertEq(1, obj.revision);
+        assertEq("value", obj.data.test);
+
+        # Check existence
+        assertTrue(test_storage.logisticsObjectExists(id));
+        assertFalse(test_storage.logisticsObjectExists("nonexistent"));
+
+        # Apply change
+        list<hash<OneRecordOperation>> ops = (<OneRecordOperation>{
+            "op": OneRecordPatchOp::Add,
+            "s": id,
+            "p": CARGO_NS + "goodsDescription",
+            "o": (<OneRecordOperationObject>{
+                "hasDatatype": XSD_NS + "string",
+                "hasValue": "Electronics",
+            },),
+        },);
+        hash<OneRecordLogisticsObject> updated = test_storage.applyChange(id, ops, 1);
+        assertEq(2, updated.revision);
+        assertTrue(exists updated.data{CARGO_NS + "goodsDescription"});
+
+        # Revision conflict
+        assertThrows("ONE-RECORD-CONFLICT", sub () {
+            test_storage.applyChange(id, ops, 1);
+        });
+
+        # Action request lifecycle
+        hash<OneRecordActionRequest> ar = <OneRecordActionRequest>{
+            "type": OneRecordActionRequestType::Change,
+            "status": OneRecordRequestStatus::Pending,
+            "requestedBy": "https://example.com/user2",
+            "requestedAt": now_us(),
+        };
+        string ar_id = test_storage.createActionRequest(ar);
+        *hash<OneRecordActionRequest> fetched_ar = test_storage.getActionRequest(ar_id);
+        assertTrue(exists fetched_ar);
+        assertEq(OneRecordRequestStatus::Pending, fetched_ar.status);
+
+        # Accept
+        test_storage.updateActionRequestStatus(ar_id, OneRecordRequestStatus::Accepted,
+            "https://example.com/holder");
+        fetched_ar = test_storage.getActionRequest(ar_id);
+        assertEq(OneRecordRequestStatus::Accepted, fetched_ar.status);
+
+        # Invalid transition (accepted -> pending)
+        assertThrows("ONE-RECORD-CONFLICT", sub () {
+            test_storage.updateActionRequestStatus(ar_id, OneRecordRequestStatus::Pending,
+                "https://example.com/holder");
+        });
+
+        # Events
+        string event_id = test_storage.createLogisticsEvent(id,
+            {"@type": "cargo:LogisticsEvent", "event": "loaded"},
+            "LogisticsEvent", "https://example.com/user1");
+        list<hash<OneRecordLogisticsEvent>> event_list = test_storage.listLogisticsEvents(id);
+        assertEq(1, event_list.size());
+        *hash<OneRecordLogisticsEvent> event = test_storage.getLogisticsEvent(id, event_id);
+        assertTrue(exists event);
+        assertEq("loaded", event.data.event);
+
+        # Audit trail
+        test_storage.addAuditTrailEntry(id, <OneRecordAuditTrailEntry>{
+            "timestamp": now_us(),
+            "action": "CREATE",
+            "actor": "https://example.com/user1",
+            "revision": 1,
+        });
+        list<hash<OneRecordAuditTrailEntry>> trail = test_storage.getAuditTrail(id);
+        assertEq(1, trail.size());
+        assertEq("CREATE", trail[0].action);
+
+        # Subscriptions
+        test_storage.createSubscription(<OneRecordSubscription>{
+            "topicType": OneRecordTopicType::LogisticsObjectIdentifier,
+            "topic": "https://example.com/lo/test",
+            "eventTypes": (OneRecordSubscriptionEventType::ObjectCreated,),
+            "callbackUrl": "https://example.com/notifications",
+        });
+        list<hash<OneRecordSubscription>> subs = test_storage.listSubscriptions();
+        assertEq(1, subs.size());
+    }
+
+    # ========================================================================
+    # Server Integration Tests
+    # ========================================================================
+
+    serverInfoTest() {
+        hash<auto> result = client.getServerInfo();
+        assertEq(200, result.headers.status_code);
+        assertTrue(exists result.body);
+        assertEq("api:ServerInformation", result.body."@type");
+        assertTrue(exists result.body."api:hasSupportedApiVersion");
+    }
+
+    createLogisticsObjectTest() {
+        hash<auto> piece_data = {
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "grossWeight": {
+                "@type": CARGO_NS + "Value",
+                CARGO_NS + "numericalValue": 25.0,
+                CARGO_NS + "unit": "KGM",
+            },
+        };
+
+        hash<auto> result = client.createLogisticsObject(piece_data);
+        assertEq(201, result.headers.status_code);
+        assertTrue(exists result.headers.location, "Location header present");
+        assertTrue(result.headers.location =~ /\/logistics-objects\//, "Location contains path");
+        assertEq(CARGO_NS + "Piece", result.headers.type);
+        assertEq("1", result.headers.revision);
+    }
+
+    getLogisticsObjectTest() {
+        # Create an object first
+        hash<auto> piece_data = {
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "coload": False,
+        };
+        hash<auto> create_result = client.createLogisticsObject(piece_data);
+        string location = create_result.headers.location;
+        # Extract ID from location
+        string id = (location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Get it
+        hash<auto> result = client.getLogisticsObject(id);
+        assertEq(200, result.headers.status_code);
+        assertTrue(exists result.body);
+        assertEq(CARGO_NS + "Piece", result.headers.type);
+        assertEq("1", result.headers.revision);
+        assertTrue(result.body."@id" =~ /\/logistics-objects\//, "has @id");
+    }
+
+    headLogisticsObjectTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Shipment",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # HEAD request
+        hash<auto> result = client.getLogisticsObjectMetadata(id);
+        assertEq(200, result.headers.status_code);
+        assertEq(CARGO_NS + "Shipment", result.headers.type);
+        assertEq("1", result.headers.revision);
+        assertTrue(!exists result.body, "HEAD has no body");
+    }
+
+    changeRequestLifecycleTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "goodsDescription": "Test goods",
+        });
+        string location = create_result.headers.location;
+        string id = (location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit change request
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": location,
+                "p": CARGO_NS + "specialHandlingCodes",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "VAL",
+                },),
+            },
+        ), 1, "Add special handling code");
+        assertTrue(ar_uri =~ /\/action-requests\//, "got action request URI");
+
+        # Get action request
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        hash<auto> ar = client.getActionRequest(ar_id);
+        assertEq(200, ar.headers.status_code);
+
+        # Accept the change
+        hash<auto> accept_result = client.acceptActionRequest(ar_id);
+        assertEq(204, accept_result.headers.status_code);
+
+        # Verify object was updated
+        hash<auto> updated = client.getLogisticsObject(id);
+        assertEq("2", updated.headers.revision, "revision incremented");
+        assertTrue(exists updated.body{CARGO_NS + "specialHandlingCodes"},
+            "new property added");
+    }
+
+    changeRequestRejectionTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit change
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "test",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "should-not-appear",
+                },),
+            },
+        ), 1);
+
+        # Reject
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        hash<auto> reject_result = client.rejectActionRequest(ar_id);
+        assertEq(204, reject_result.headers.status_code);
+
+        # Verify object was NOT updated
+        hash<auto> obj = client.getLogisticsObject(id);
+        assertEq("1", obj.headers.revision, "revision unchanged after rejection");
+        assertFalse(exists obj.body{CARGO_NS + "test"}, "property not added");
+    }
+
+    changeRequestRevocationTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit change
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "test",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "revoked",
+                },),
+            },
+        ), 1);
+
+        # Revoke
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        client.revokeActionRequest(ar_id);
+
+        # Verify action request is revoked
+        hash<auto> ar = client.getActionRequest(ar_id);
+        assertEq("api:REQUEST_REVOKED", ar.body."api:hasRequestStatus"."@id", "status is revoked");
+    }
+
+    revisionConflictTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit and accept a change to get to revision 2
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "first",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "first-change",
+                },),
+            },
+        ), 1);
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        client.acceptActionRequest(ar_id);
+
+        # Now try to submit a change based on revision 1 (stale)
+        string ar_uri2 = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "second",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "stale-change",
+                },),
+            },
+        ), 1);  # Wrong revision!
+
+        # Accept should fail with conflict
+        string ar_id2 = (ar_uri2 =~ x/\/action-requests\/(.+)$/)[0];
+        assertThrows("ONE-RECORD-HTTP-ERROR", sub () {
+            client.acceptActionRequest(ar_id2);
+        });
+    }
+
+    logisticsEventsTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Create an event
+        hash<auto> event_data = {
+            "@type": CARGO_NS + "LogisticsEvent",
+            CARGO_NS + "eventCode": "DEP",
+            CARGO_NS + "eventName": "Departed",
+        };
+        hash<auto> event_result = client.createLogisticsEvent(id, event_data);
+        assertEq(201, event_result.headers.status_code);
+        assertTrue(exists event_result.headers.location, "event Location header");
+
+        # List events
+        hash<auto> list_result = client.listLogisticsEvents(id);
+        assertEq(200, list_result.headers.status_code);
+        assertEq(1, list_result.body."api:hasTotalItems");
+
+        # Get specific event
+        string event_uri = event_result.headers.location;
+        string event_id = (event_uri =~ x/\/logistics-events\/(.+)$/)[0];
+        hash<auto> get_result = client.getLogisticsEvent(id, event_id);
+        assertEq(200, get_result.headers.status_code);
+        assertEq("DEP", get_result.body{CARGO_NS + "eventCode"});
+    }
+
+    auditTrailTest() {
+        # Create an object (generates audit entry)
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Get audit trail
+        hash<auto> result = client.getAuditTrail(id);
+        assertEq(200, result.headers.status_code);
+        assertEq("api:AuditTrail", result.body."@type");
+        assertTrue(result.body."api:hasLatestRevision" > 0, "has latest revision");
+        assertTrue(result.body."api:hasActionRequest".size() > 0, "has audit entries");
+    }
+
+    subscriptionsTest() {
+        # Create a subscription
+        hash<auto> sub_data = {
+            "@context": OneRecordContext,
+            "@type": "api:Subscription",
+            "api:hasTopicType": {"@id": OneRecordTopicType::LogisticsObjectIdentifier},
+            "api:hasTopic": base_url + "/logistics-objects/test-sub",
+            "api:includeSubscriptionEventType": (
+                {"@id": OneRecordSubscriptionEventType::ObjectCreated},
+            ),
+            "api:hasCallbackUrl": "http://localhost:9999/notifications",
+            "api:sendLogisticsObjectBody": False,
+        };
+
+        hash<auto> result = client.createSubscription(sub_data);
+        assertEq(201, result.headers.status_code);
+        assertTrue(exists result.headers.location, "subscription Location");
+
+        # List subscriptions
+        hash<auto> list_result = client.listSubscriptions();
+        assertEq(200, list_result.headers.status_code);
+        assertTrue(list_result.body."api:hasTotalItems" > 0, "has subscriptions");
+    }
+
+    errorResponsesTest() {
+        # 404: non-existent object
+        assertThrows("ONE-RECORD-HTTP-ERROR", "404", sub () {
+            client.getLogisticsObject("nonexistent-id-12345");
+        });
+
+        # 400: missing body
+        assertThrows("ONE-RECORD-HTTP-ERROR", "400", sub () {
+            # Send POST with empty body via raw HTTP
+            Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+            hash<auto> info;
+            hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+            raw.send("", "POST", "/logistics-objects", raw_hdrs, False, \info);
+            int sc = info."response-headers".status_code;
+            if (sc >= 400) {
+                throw "ONE-RECORD-HTTP-ERROR", sprintf("HTTP %d", sc),
+                    {"status_code": sc};
+            }
+        });
+
+        # 404: non-existent action request
+        assertThrows("ONE-RECORD-HTTP-ERROR", "404", sub () {
+            client.getActionRequest("nonexistent-ar-12345");
+        });
+    }
+
+    connectionProviderTest() {
+        # Verify URL scheme registration
+        # The schemes are registered in module init, just verify they exist
+        hash<auto> scheme_info = OneRecordConnection::ConnectionScheme;
+        assertTrue(exists scheme_info.schemes."1r", "1r scheme registered");
+        assertTrue(exists scheme_info.schemes."1rs", "1rs scheme registered");
+        assertEq("ONE Record Connection", scheme_info.display_name);
+    }
+
+    accessDelegationTest() {
+        hash<auto> deleg_data = {
+            "@context": OneRecordContext,
+            "@type": "api:AccessDelegation",
+            "api:hasLogisticsObject": ({"@id": base_url + "/logistics-objects/test"},),
+            "api:hasPermission": ({"@id": "api:GET_LOGISTICS_OBJECT"},),
+            "api:isRequestedFor": {"@id": "https://example.com/partner"},
+        };
+
+        hash<auto> result = client.createAccessDelegation(deleg_data);
+        assertEq(201, result.headers.status_code);
+        assertTrue(exists result.headers.location, "delegation Location");
+
+        # Verify action request was created with delegation data
+        string ar_id = (result.headers.location =~ x/\/action-requests\/(.+)$/)[0];
+        hash<auto> ar = client.getActionRequest(ar_id);
+        assertEq(200, ar.headers.status_code);
+    }
+
+    # ========================================================================
+    # Additional Tests (from audit)
+    # ========================================================================
+
+    deleteOperationTest() {
+        # Create object with a property
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "goodsDescription": {
+                "@value": "Fragile electronics",
+                "@type": XSD_NS + "string",
+            },
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Verify property exists
+        hash<auto> obj = client.getLogisticsObject(id);
+        assertTrue(exists obj.body{CARGO_NS + "goodsDescription"}, "property exists before delete");
+
+        # Submit DELETE change request
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Delete,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "goodsDescription",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "Fragile electronics",
+                },),
+            },
+        ), 1);
+
+        # Accept the change
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        client.acceptActionRequest(ar_id);
+
+        # Verify property was removed
+        hash<auto> updated = client.getLogisticsObject(id);
+        assertEq("2", updated.headers.revision, "revision incremented after delete");
+        assertFalse(exists updated.body{CARGO_NS + "goodsDescription"},
+            "property removed after delete");
+    }
+
+    verificationRequestTest() {
+        # Create an object
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit verification request via raw HTTP (POST to /logistics-objects/{id})
+        Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+        hash<auto> verification_body = {
+            "@context": OneRecordContext,
+            "@type": "api:Verification",
+            "api:hasError": ({
+                "@type": "api:Error",
+                "api:hasTitle": "Weight mismatch",
+            },),
+        };
+        hash<auto> info;
+        hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+        raw.send(make_json(verification_body), "POST",
+            "/logistics-objects/" + id, raw_hdrs, False, \info);
+        assertEq(201, info."response-headers".status_code,
+            "verification request returns 201");
+        assertTrue(exists info."response-headers".location,
+            "verification request has Location");
+    }
+
+    headActionRequestTest() {
+        # Create an object and a change request
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "test",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "value",
+                },),
+            },
+        ), 1);
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+
+        # HEAD the action request
+        Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+        hash<auto> info;
+        hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+        raw.send("", "HEAD", "/action-requests/" + ar_id, raw_hdrs, False, \info);
+        assertEq(200, info."response-headers".status_code, "HEAD action-request returns 200");
+    }
+
+    notificationReceiveTest() {
+        # Set up a notification handler to capture received notifications
+        *hash<auto> received_notification;
+        handler.setNotificationHandler(sub (hash<auto> notification) {
+            received_notification = notification;
+        });
+
+        # Send a notification to the server's /notifications endpoint
+        Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+        hash<auto> notification = {
+            "@context": OneRecordContext,
+            "@type": "api:Notification",
+            "api:hasEventType": {"@id": "api:LOGISTICS_OBJECT_CREATED"},
+            "api:hasTopic": base_url + "/logistics-objects/test-obj",
+        };
+        hash<auto> info;
+        hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+        raw.send(make_json(notification), "POST", "/notifications", raw_hdrs, False, \info);
+        assertEq(204, info."response-headers".status_code, "notification returns 204");
+        assertTrue(exists received_notification, "notification handler was called");
+        assertEq("api:Notification", received_notification."@type", "notification type correct");
+    }
+
+    multipleOperationsTest() {
+        # Create object with two properties
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "goodsDescription": {
+                "@value": "Old description",
+                "@type": XSD_NS + "string",
+            },
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Submit change with DELETE + ADD (should delete first, then add)
+        string ar_uri = client.submitChangeRequest(id, (
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Delete,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "goodsDescription",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "Old description",
+                },),
+            },
+            <OneRecordOperation>{
+                "op": OneRecordPatchOp::Add,
+                "s": base_url + "/logistics-objects/" + id,
+                "p": CARGO_NS + "goodsDescription",
+                "o": (<OneRecordOperationObject>{
+                    "hasDatatype": XSD_NS + "string",
+                    "hasValue": "New description",
+                },),
+            },
+        ), 1);
+
+        string ar_id = (ar_uri =~ x/\/action-requests\/(.+)$/)[0];
+        client.acceptActionRequest(ar_id);
+
+        # Verify the new value replaced the old
+        hash<auto> updated = client.getLogisticsObject(id);
+        assertEq("2", updated.headers.revision);
+        # The value should be the new description (DELETE ran first, then ADD)
+        auto desc = updated.body{CARGO_NS + "goodsDescription"};
+        assertTrue(exists desc, "property exists after delete+add");
+        # Check the value
+        *string desc_val;
+        if (desc.typeCode() == NT_HASH) {
+            desc_val = desc."@value";
+        } else {
+            desc_val = string(desc);
+        }
+        assertEq("New description", desc_val, "DELETE+ADD ordering correct");
+    }
+
+    roundTripDataTest() {
+        # Create object with complex nested data
+        hash<auto> piece_data = {
+            "@type": CARGO_NS + "Piece",
+            CARGO_NS + "grossWeight": {
+                "@type": CARGO_NS + "Value",
+                CARGO_NS + "numericalValue": 25.5,
+                CARGO_NS + "unit": "KGM",
+            },
+            CARGO_NS + "goodsDescription": {
+                "@value": "Sensitive electronics",
+                "@type": XSD_NS + "string",
+            },
+            CARGO_NS + "coload": False,
+        };
+
+        hash<auto> create_result = client.createLogisticsObject(piece_data);
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # Retrieve and verify all fields
+        hash<auto> result = client.getLogisticsObject(id);
+        assertEq(200, result.headers.status_code);
+        assertTrue(exists result.body."@context", "response has @context");
+        assertTrue(exists result.body."@id", "response has @id");
+        assertEq(CARGO_NS + "Piece", result.body."@type", "type preserved");
+
+        # Check nested weight
+        hash<auto> weight = result.body{CARGO_NS + "grossWeight"};
+        assertTrue(exists weight, "grossWeight preserved");
+        assertEq("KGM", weight{CARGO_NS + "unit"}, "weight unit preserved");
+
+        # Check string value
+        auto desc = result.body{CARGO_NS + "goodsDescription"};
+        assertTrue(exists desc, "goodsDescription preserved");
+
+        # Check boolean
+        assertTrue(result.body.hasKey(CARGO_NS + "coload"), "coload key preserved");
+    }
+
+    negativeValidationTest() {
+        # Missing @type
+        assertThrows("ONE-RECORD-HTTP-ERROR", "400", sub () {
+            client.createLogisticsObject({"someKey": "someValue"});
+        });
+
+        # Invalid JSON body
+        assertThrows("ONE-RECORD-HTTP-ERROR", "400", sub () {
+            Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+            hash<auto> info;
+            hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+            raw.send("not valid json{{{", "POST", "/logistics-objects",
+                raw_hdrs, False, \info);
+            int sc = info."response-headers".status_code;
+            if (sc >= 400) {
+                throw "ONE-RECORD-HTTP-ERROR", sprintf("HTTP %d", sc),
+                    {"status_code": sc};
+            }
+        });
+
+        # Non-existent event parent
+        assertThrows("ONE-RECORD-HTTP-ERROR", "404", sub () {
+            client.createLogisticsEvent("nonexistent-object-xyz", {
+                "@type": CARGO_NS + "LogisticsEvent",
+            });
+        });
+
+        # Non-existent audit trail
+        assertThrows("ONE-RECORD-HTTP-ERROR", "404", sub () {
+            client.getAuditTrail("nonexistent-object-xyz");
+        });
+
+        # Non-existent logistics object
+        assertThrows("ONE-RECORD-HTTP-ERROR", "404", sub () {
+            client.getLogisticsObject("nonexistent-object-xyz");
+        });
+    }
+
+    methodNotAllowedTest() {
+        # Create an object first
+        hash<auto> create_result = client.createLogisticsObject({
+            "@type": CARGO_NS + "Piece",
+        });
+        string id = (create_result.headers.location =~ x/\/logistics-objects\/(.+)$/)[0];
+
+        # PUT on /logistics-objects/{id} should be 405
+        Qore::HTTPClient raw({"url": base_url, "error_passthru": True});
+        hash<auto> info;
+        hash<auto> raw_hdrs = {"Content-Type": MimeTypeOneRecord};
+        raw.send("{}", "PUT", "/logistics-objects/" + id, raw_hdrs, False, \info);
+        assertEq(405, info."response-headers".status_code, "PUT returns 405");
+
+        # DELETE on /logistics-objects/{id} should be 405
+        raw.send("", "DELETE", "/logistics-objects/" + id, raw_hdrs, False, \info);
+        assertEq(405, info."response-headers".status_code, "DELETE on LO returns 405");
+    }
+}

@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FhirR4ArtifactGenerator.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../tools"
+%requires json
+%try-module QoreCrypto
+%define NoQoreCrypto
+%endtry
+%try-module zip
+%define NoZip
+%endtry
+
+%requires QUnit
+%requires Util
+
+%ifdef NoQoreCrypto
+%define SkipFhirR4ArtifactGenerator
+%endif
+%ifdef NoZip
+%define SkipFhirR4ArtifactGenerator
+%endif
+
+%ifdef SkipFhirR4ArtifactGenerator
+
+%exec-class FhirR4ArtifactGeneratorSkipTest
+
+class FhirR4ArtifactGeneratorSkipTest inherits QUnit::Test {
+    constructor() : QUnit::Test("FhirR4ArtifactGenerator dependency skip test", "1.0") {
+        addTestCase("dependency availability test", \dependencyAvailabilityTest());
+        set_return_value(main());
+    }
+
+    dependencyAvailabilityTest() {
+        testSkip("QoreCrypto and zip modules are required for FHIR R4 artifact generator tests");
+    }
+}
+
+%else
+
+%requires FhirR4ArtifactGenerator
+%exec-class FhirR4ArtifactGeneratorTest
+
+class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("FhirR4ArtifactGenerator test", "1.0") {
+        addTestCase("generate resource catalog test", \generateResourceCatalogTest());
+        addTestCase("checksum mismatch test", \checksumMismatchTest());
+        addTestCase("unsupported version test", \unsupportedVersionTest());
+        addTestCase("invalid resource type test", \invalidResourceTypeTest());
+        addTestCase("missing entry test", \missingEntryTest());
+        addTestCase("missing Bundle entry list test", \missingBundleEntryListTest());
+
+        set_return_value(main());
+    }
+
+    private generateResourceCatalogTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        string out_dir = tmp_dir + "/FhirRestDataProvider";
+        createDefinitionsZip(zip_path, ("Patient", "Observation", "Bundle"));
+
+        string sha1 = digest("sha1", File::readBinaryFile(zip_path)).toHex();
+        hash<FhirR4ArtifactGenerator::FhirR4GenerationResult> result =
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": out_dir,
+                "source_url": "fixture://definitions.json.zip",
+                "expected_sha1": sha1,
+            });
+
+        assertEq("4.0.1", result.fhir_version);
+        assertEq(sha1, result.source_sha1);
+        assertEq(("Bundle", "Observation", "Patient"), result.resources);
+        assertEq(("Bundle", "Observation", "Patient"), result.generated_resources);
+        assertEq(4, result.generated_files.size());
+
+        string catalog_path = out_dir + "/FhirR4ResourceTypes.qc";
+        string data_types_path = out_dir + "/FhirR4ResourceDataTypes.qc";
+        string metadata_path = out_dir + "/fhir/r4/resource-metadata.json";
+        string manifest_path = out_dir + "/fhir/r4/manifest.json";
+        assertTrue(is_file(catalog_path), "catalog file exists");
+        assertTrue(is_file(data_types_path), "data types file exists");
+        assertTrue(is_file(metadata_path), "metadata file exists");
+        assertTrue(is_file(manifest_path), "manifest file exists");
+
+        string catalog = File::readTextFile(catalog_path);
+        assertTrue(catalog =~ /public enum FhirR4ResourceType : string/, "catalog contains enum");
+        assertTrue(catalog =~ /Patient = "Patient"/, "catalog contains Patient enum value");
+        assertTrue(catalog =~ /assertFhirR4ResourceBodyType/, "catalog contains body validator");
+        assertTrue(catalog =~ /assertFhirR4ResourceRequestType/, "catalog contains request validator");
+
+        string data_types = File::readTextFile(data_types_path);
+        assertTrue(data_types =~ /FhirR4GeneratedResourceDataType/, "data types contain generated base type");
+        assertTrue(data_types =~ /FhirR4PatientDataType/, "data types contain Patient type");
+        assertTrue(data_types =~ /deceasedBoolean/, "data types contain choice field");
+        assertTrue(data_types =~ /<AllowedValueInfo>\{/, "data types contain typed allowed values");
+        assertTrue(data_types =~ /FhirR4GeneratedResourcePathNameMap/, "data types contain path-name map");
+        assertTrue(data_types =~ /assertFhirR4TypedResourceBody/, "data types contain typed body validator");
+
+        hash<auto> metadata = parse_json(File::readTextFile(metadata_path));
+        assertEq(("Bundle", "Observation", "Patient"), sort(keys metadata));
+        assertEq("Patient", metadata.Patient.resource_type);
+        assertTrue(exists metadata.Patient.fields[0].allowed_values, "resourceType field has allowed value metadata");
+
+        hash<auto> manifest = parse_json(File::readTextFile(manifest_path));
+        assertEq("fhir-r4-resource-catalog", manifest.artifact);
+        assertEq("fixture://definitions.json.zip", manifest.source_url);
+        assertEq(3, manifest.resource_count);
+        assertEq(3, manifest.generated_resource_count);
+        assertEq(("Bundle", "Observation", "Patient"), manifest.resources);
+        assertEq(("Bundle", "Observation", "Patient"), manifest.generated_resources);
+        assertEq(result.generated_files, manifest.generated_files);
+    }
+
+    private checksumMismatchTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        createDefinitionsZip(zip_path, ("Patient",));
+
+        assertThrows("FHIR-R4-GENERATOR-CHECKSUM-ERROR", sub () {
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": tmp_dir + "/out",
+                "expected_sha1": "0000000000000000000000000000000000000000",
+            });
+        });
+    }
+
+    private unsupportedVersionTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        createDefinitionsZip(zip_path, ("Patient",), "4.3.0");
+
+        assertThrows("FHIR-R4-GENERATOR-ERROR", sub () {
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": tmp_dir + "/out",
+            });
+        });
+    }
+
+    private invalidResourceTypeTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        createDefinitionsZip(zip_path, ("1Bad",));
+
+        assertThrows("FHIR-R4-GENERATOR-ERROR", sub () {
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": tmp_dir + "/out",
+            });
+        });
+    }
+
+    private missingEntryTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        Zip::ZipFile zip = new Zip::ZipFile(zip_path, "w");
+        zip.addText("version.info", getVersionInfo());
+        zip.close();
+
+        assertThrows("FHIR-R4-GENERATOR-ERROR", sub () {
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": tmp_dir + "/out",
+            });
+        });
+    }
+
+    private missingBundleEntryListTest() {
+        string tmp_dir = tmp_location();
+        string zip_path = tmp_dir + "/definitions.json.zip";
+        Zip::ZipFile zip = new Zip::ZipFile(zip_path, "w");
+        zip.addText("version.info", getVersionInfo());
+        zip.addText("profiles-resources.json", make_json({
+            "resourceType": "Bundle",
+            "id": "resources",
+            "type": "collection",
+        }));
+        zip.close();
+
+        assertThrows("FHIR-R4-GENERATOR-ERROR", sub () {
+            FhirR4ArtifactGenerator::FhirR4ArtifactGenerator::generate(<FhirR4ArtifactGenerator::FhirR4GenerationOptions>{
+                "source_path": zip_path,
+                "output_dir": tmp_dir + "/out",
+            });
+        });
+    }
+
+    private createDefinitionsZip(string zip_path, list<string> resource_types, string fhir_version = "4.0.1") {
+        Zip::ZipFile zip = new Zip::ZipFile(zip_path, "w");
+        zip.addText("version.info", getVersionInfo(fhir_version));
+        zip.addText("profiles-resources.json", make_json(getProfilesResourcesBundle(resource_types)));
+        zip.close();
+    }
+
+    private string getVersionInfo(string fhir_version = "4.0.1") {
+        return sprintf("\n[FHIR]\nFhirVersion=%s-test\nversion=%s\nbuildId=test\ndate=20260526000000\n",
+            fhir_version, fhir_version);
+    }
+
+    private hash<auto> getProfilesResourcesBundle(list<string> resource_types) {
+        list<hash<auto>> entries = (getStructureDefinitionEntry("DomainResource", True),);
+        foreach string resource_type in (resource_types) {
+            push entries, getStructureDefinitionEntry(resource_type);
+        }
+
+        return {
+            "resourceType": "Bundle",
+            "id": "resources",
+            "type": "collection",
+            "entry": entries,
+        };
+    }
+
+    private hash<auto> getStructureDefinitionEntry(string resource_type, bool is_abstract = False) {
+        return {
+            "fullUrl": "http://hl7.org/fhir/StructureDefinition/" + resource_type,
+            "resource": {
+                "resourceType": "StructureDefinition",
+                "kind": "resource",
+                "derivation": "specialization",
+                "type": resource_type,
+                "name": resource_type,
+                "url": "http://hl7.org/fhir/StructureDefinition/" + resource_type,
+                "version": "4.0.1",
+                "status": "active",
+                "abstract": is_abstract,
+                "snapshot": {
+                    "element": getStructureDefinitionElements(resource_type),
+                },
+            },
+        };
+    }
+
+    private list<hash<auto>> getStructureDefinitionElements(string resource_type) {
+        return ({
+            "id": resource_type,
+            "path": resource_type,
+            "short": resource_type,
+            "definition": resource_type + " resource",
+            "min": 0,
+            "max": "*",
+            "isModifier": False,
+            "isSummary": False,
+        }, {
+            "id": resource_type + ".id",
+            "path": resource_type + ".id",
+            "short": "Logical id",
+            "definition": "Logical id of the resource",
+            "min": 0,
+            "max": "1",
+            "type": ({"code": "http://hl7.org/fhirpath/System.String"},),
+            "isModifier": False,
+            "isSummary": True,
+        }, {
+            "id": resource_type + ".status",
+            "path": resource_type + ".status",
+            "short": "Resource status",
+            "definition": "Status code for the fixture resource",
+            "min": 1,
+            "max": "1",
+            "type": ({"code": "code"},),
+            "isModifier": True,
+            "isSummary": True,
+            "binding": {
+                "strength": "required",
+                "description": "Fixture status codes",
+                "valueSet": "fixture://status",
+            },
+        }, {
+            "id": resource_type + ".name",
+            "path": resource_type + ".name",
+            "short": "Resource name",
+            "definition": "Name for the fixture resource",
+            "min": 0,
+            "max": "*",
+            "type": ({"code": "HumanName"},),
+            "isModifier": False,
+            "isSummary": True,
+        }, {
+            "id": resource_type + ".deceased[x]",
+            "path": resource_type + ".deceased[x]",
+            "short": "Choice field",
+            "definition": "Choice field fixture",
+            "min": 0,
+            "max": "1",
+            "type": ({"code": "boolean"}, {"code": "dateTime"}),
+            "isModifier": True,
+            "isSummary": True,
+        });
+    }
+}
+
+%endif

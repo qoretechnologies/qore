@@ -1,0 +1,331 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Logger
+%requires JsonLd
+%exec-class JsonLdCompactionTest
+
+class JsonLdCompactionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdCompaction test", "1.0") {
+        addTestCase("compact simple node test", \compactSimpleNodeTest());
+        addTestCase("compact type test", \compactTypeTest());
+        addTestCase("compact multiple types test", \compactMultipleTypesTest());
+        addTestCase("compact value object test", \compactValueObjectTest());
+        addTestCase("compact language test", \compactLanguageTest());
+        addTestCase("compact list test", \compactListTest());
+        addTestCase("compact reverse test", \compactReverseTest());
+        addTestCase("compact array test", \compactArrayTest());
+        addTestCase("compact null test", \compactNullTest());
+        addTestCase("compact graph test", \compactGraphTest());
+        addTestCase("compact index container test", \compactIndexContainerTest());
+        addTestCase("compact language container test", \compactLanguageContainerTest());
+        addTestCase("compact set container test", \compactSetContainerTest());
+        addTestCase("round trip expand-compact test", \roundTripTest());
+        addTestCase("compact id value test", \compactIdValueTest());
+        addTestCase("compact prefix IRI test", \compactPrefixIriTest());
+        set_return_value(main());
+    }
+
+    private hash<auto> doCompact(auto expanded, hash<auto> ctx_def) {
+        hash<JsonLdOptions> opts();
+        JsonLdContext ctx_processor();
+        JsonLdCompaction compactor(ctx_processor, opts);
+
+        hash<JsonLdActiveContext> active_ctx = ctx_processor.processContext(
+            JsonLdContext::newActiveContext(), ctx_def);
+
+        auto result = compactor.compact(active_ctx, NOTHING, expanded);
+        if (result.typeCode() != NT_HASH) {
+            return {"@graph": result};
+        }
+        return result;
+    }
+
+    private compactSimpleNodeTest() {
+        auto expanded = ({
+            "@id": "http://example.com/person/1",
+            "@type": ("http://schema.org/Person",),
+            "http://schema.org/name": ({"@value": "Jane Doe"},),
+        },);
+
+        hash<auto> ctx_def = {
+            "@vocab": "http://schema.org/",
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertEq("http://example.com/person/1", result."@id");
+        assertEq("Person", result."@type");
+        assertEq("Jane Doe", result."name");
+    }
+
+    private compactTypeTest() {
+        auto expanded = ({
+            "@type": ("http://schema.org/Person",),
+            "http://schema.org/name": ({"@value": "Jane"},),
+        },);
+
+        hash<auto> ctx_def = {
+            "schema": "http://schema.org/",
+            "Person": "schema:Person",
+            "name": "schema:name",
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertEq("Person", result."@type");
+        assertEq("Jane", result."name");
+    }
+
+    private compactMultipleTypesTest() {
+        auto expanded = ({
+            "@type": ("http://schema.org/Person", "http://schema.org/Thing"),
+        },);
+
+        hash<auto> ctx_def = {"@vocab": "http://schema.org/"};
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertEq(NT_LIST, result."@type".typeCode());
+        assertEq(2, result."@type".size());
+    }
+
+    private compactValueObjectTest() {
+        auto expanded = ({
+            "http://schema.org/name": ({
+                "@value": "Jane",
+                "@type": "http://www.w3.org/2001/XMLSchema#string",
+            },),
+        },);
+
+        hash<auto> ctx_def = {
+            "name": {"@id": "http://schema.org/name", "@type": XSD_STRING},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # Type mapping matches, so should compact to plain value
+        assertEq("Jane", result."name");
+    }
+
+    private compactLanguageTest() {
+        auto expanded = ({
+            "http://schema.org/name": ({
+                "@value": "Jane",
+                "@language": "en",
+            },),
+        },);
+
+        hash<auto> ctx_def = {
+            "@language": "en",
+            "name": "http://schema.org/name",
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # Language matches context default, so should compact
+        assertEq("Jane", result."name");
+    }
+
+    private compactListTest() {
+        auto expanded = ({
+            "http://schema.org/children": ({
+                "@list": (
+                    {"@value": "Alice"},
+                    {"@value": "Bob"},
+                ),
+            },),
+        },);
+
+        hash<auto> ctx_def = {
+            "children": {"@id": "http://schema.org/children", "@container": "@list"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # @list container means the array is returned directly
+        assertEq(NT_LIST, result."children".typeCode());
+        assertEq(2, result."children".size());
+    }
+
+    private compactReverseTest() {
+        auto expanded = ({
+            "@reverse": {
+                "http://schema.org/children": ({
+                    "@id": "http://example.com/parent",
+                },),
+            },
+        },);
+
+        hash<auto> ctx_def = {
+            "schema": "http://schema.org/",
+            "parent": {"@reverse": "schema:children"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # Reverse property should be compacted
+        assertTrue(exists result."parent" || exists result."schema:children");
+    }
+
+    private compactArrayTest() {
+        auto expanded = (
+            {
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+            {
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "John"},),
+            },
+        );
+
+        hash<auto> ctx_def = {"@vocab": "http://schema.org/"};
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # Multiple items result in @graph
+        assertTrue(exists result."@graph");
+        assertEq(2, result."@graph".size());
+    }
+
+    private compactNullTest() {
+        hash<JsonLdOptions> opts();
+        JsonLdContext ctx_processor();
+        JsonLdCompaction compactor(ctx_processor, opts);
+        hash<JsonLdActiveContext> active_ctx = JsonLdContext::newActiveContext();
+
+        assertNothing(compactor.compact(active_ctx, NOTHING, NOTHING));
+    }
+
+    private compactGraphTest() {
+        auto expanded = ({
+            "@graph": (
+                {
+                    "@id": "http://example.com/1",
+                    "http://schema.org/name": ({"@value": "Jane"},),
+                },
+            ),
+        },);
+
+        hash<auto> ctx_def = {"@vocab": "http://schema.org/"};
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertTrue(exists result."@graph");
+    }
+
+    private compactIndexContainerTest() {
+        auto expanded = ({
+            "http://schema.org/address": (
+                {
+                    "@index": "home",
+                    "http://schema.org/streetAddress": ({"@value": "123 Main St"},),
+                },
+                {
+                    "@index": "work",
+                    "http://schema.org/streetAddress": ({"@value": "456 Office Blvd"},),
+                },
+            ),
+        },);
+
+        hash<auto> ctx_def = {
+            "@vocab": "http://schema.org/",
+            "address": {"@id": "http://schema.org/address", "@container": "@index"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertTrue(exists result."address");
+        assertEq(NT_HASH, result."address".typeCode());
+        assertTrue(exists result."address"."home");
+        assertTrue(exists result."address"."work");
+    }
+
+    private compactLanguageContainerTest() {
+        auto expanded = ({
+            "http://schema.org/name": (
+                {"@value": "Jane", "@language": "en"},
+                {"@value": "Jana", "@language": "de"},
+            ),
+        },);
+
+        hash<auto> ctx_def = {
+            "name": {"@id": "http://schema.org/name", "@container": "@language"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertTrue(exists result."name");
+        assertEq(NT_HASH, result."name".typeCode());
+        assertEq("Jane", result."name"."en");
+        assertEq("Jana", result."name"."de");
+    }
+
+    private compactSetContainerTest() {
+        auto expanded = ({
+            "http://schema.org/knows": (
+                {"@id": "http://example.com/1"},
+            ),
+        },);
+
+        hash<auto> ctx_def = {
+            "knows": {"@id": "http://schema.org/knows", "@container": "@set"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertTrue(exists result."knows");
+        # @set container preserves array
+        assertEq(NT_LIST, result."knows".typeCode());
+    }
+
+    private roundTripTest() {
+        # Start with a compact document
+        hash<auto> original = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+            },
+            "@id": "http://example.com/person/1",
+            "@type": "Person",
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+        };
+
+        # Expand
+        hash<JsonLdOptions> opts();
+        JsonLdContext ctx_processor();
+        JsonLdExpansion expander(ctx_processor, opts);
+        hash<JsonLdActiveContext> active_ctx = JsonLdContext::newActiveContext();
+
+        auto expanded = expander.expand(active_ctx, NOTHING, original);
+
+        # Compact back
+        hash<auto> ctx_def = {"@vocab": "http://schema.org/"};
+        hash<auto> result = doCompact(expanded, ctx_def);
+
+        assertEq("http://example.com/person/1", result."@id");
+        assertEq("Person", result."@type");
+        assertEq("Jane Doe", result."name");
+        assertEq("jane@example.com", result."email");
+    }
+
+    private compactIdValueTest() {
+        auto expanded = ({
+            "http://schema.org/url": ({"@id": "http://example.com"},),
+        },);
+
+        hash<auto> ctx_def = {
+            "homepage": {"@id": "http://schema.org/url", "@type": "@id"},
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        # @id type should compact to plain string
+        assertEq("http://example.com", result."homepage");
+    }
+
+    private compactPrefixIriTest() {
+        auto expanded = ({
+            "http://schema.org/name": ({"@value": "Jane"},),
+            "http://schema.org/email": ({"@value": "jane@ex.com"},),
+        },);
+
+        hash<auto> ctx_def = {
+            "schema": "http://schema.org/",
+        };
+
+        hash<auto> result = doCompact(expanded, ctx_def);
+        assertEq("Jane", result."schema:name");
+        assertEq("jane@ex.com", result."schema:email");
+    }
+}

@@ -1,0 +1,143 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore NdjsonDataProvider module definition
+
+/*  NdjsonDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires json
+
+%modern
+
+module NdjsonDataProvider {
+    version = "1.0";
+    desc = "user module providing NDJSON (Newline Delimited JSON) support and data provider integration";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \Priv::priv_init();
+}
+
+/** @mainpage NdjsonDataProvider Module
+
+    @tableofcontents
+
+    @section ndjsondataproviderintro Introduction to the NdjsonDataProvider Module
+
+    The %NdjsonDataProvider module provides support for reading and writing NDJSON (Newline Delimited JSON)
+    formatted data, also known as JSON Lines. This format is useful for streaming JSON data where each line
+    contains a valid JSON value.
+
+    Features:
+    - Memory-efficient streaming - processes one line at a time
+    - Configurable empty line handling
+    - Configurable error recovery for invalid JSON
+    - Support for both LF and CRLF line endings
+    - Maximum line length protection
+    - UTF-8 encoding support
+
+    The following classes are provided by this module:
+    - @ref NdjsonDataProvider::NdjsonIterator "NdjsonIterator" - iterator for reading NDJSON from strings
+    - @ref NdjsonDataProvider::InputStreamNdjsonIterator "InputStreamNdjsonIterator" - iterator for reading NDJSON from streams
+    - @ref NdjsonDataProvider::NdjsonWriter "NdjsonWriter" - writer for creating NDJSON output
+    - @ref NdjsonDataProvider::NdjsonReadDataProvider "NdjsonReadDataProvider" - data provider for reading NDJSON files
+    - @ref NdjsonDataProvider::NdjsonDataProviderFactory "NdjsonDataProviderFactory" - factory for creating NDJSON data providers
+
+    @section ndjsondataproviderexamples Examples
+
+    @subsection ndjsondataproviderreadexample Reading NDJSON
+
+    @code{.py}
+    # Read from string
+    string ndjson = '{"name": "Alice", "age": 30}
+{"name": "Bob", "age": 25}
+{"name": "Charlie", "age": 35}';
+
+    NdjsonIterator iter(ndjson);
+    while (iter.next()) {
+        hash<auto> record = iter.getValue();
+        printf("Name: %s, Age: %d\n", record.name, record.age);
+    }
+
+    # Read from file stream
+    FileInputStream fis("data.ndjson");
+    InputStreamNdjsonIterator stream_iter(fis);
+    map printf("Record: %y\n", $1), stream_iter;
+    @endcode
+
+    @subsection ndjsondataproviderwriteexample Writing NDJSON
+
+    @code{.py}
+    StringOutputStream sos();
+    NdjsonWriter writer(sos);
+    writer.write({"name": "Alice", "age": 30});
+    writer.write({"name": "Bob", "age": 25});
+    string result = sos.getData();
+    @endcode
+
+    @section ndjsondataprovider_relnotes Release Notes
+
+    @subsection ndjsondataprovider_v1_0 NdjsonDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the NdjsonDataProvider module
+public namespace NdjsonDataProvider {
+    #! Default maximum line length (10 MB)
+    public const DefaultMaxLineLength = 10 * 1024 * 1024;
+
+    #! Default encoding for NDJSON data
+    public const DefaultEncoding = "UTF-8";
+
+    #! NDJSON iterator options
+    public hashdecl NdjsonIteratorOptions {
+        #! Skip empty lines (default: True)
+        bool skip_empty_lines = True;
+
+        #! Skip invalid JSON lines instead of throwing an exception (default: False)
+        bool skip_invalid_json = False;
+
+        #! Maximum line length in bytes (default: 10 MB)
+        int max_line_length = DefaultMaxLineLength;
+
+        #! Encoding for the input data (default: UTF-8)
+        string encoding = DefaultEncoding;
+    }
+
+    #! NDJSON writer options
+    public hashdecl NdjsonWriterOptions {
+        #! Encoding for the output data (default: UTF-8)
+        string encoding = DefaultEncoding;
+
+        #! Use CRLF line endings instead of LF (default: False)
+        bool use_crlf = False;
+    }
+}
+
+# private namespace for the module
+namespace Priv {
+    sub priv_init() {
+        # Register the data provider factory
+        DataProvider::registerFactory(new NdjsonDataProviderFactory());
+    }
+}

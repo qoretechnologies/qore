@@ -1,0 +1,417 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Logger
+%requires JsonLd
+%exec-class JsonLdProcessorTest
+
+class JsonLdProcessorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdProcessor test", "1.0") {
+        addTestCase("expand basic test", \expandBasicTest());
+        addTestCase("expand with vocab test", \expandWithVocabTest());
+        addTestCase("expand with prefix test", \expandWithPrefixTest());
+        addTestCase("compact basic test", \compactBasicTest());
+        addTestCase("compact with prefix test", \compactWithPrefixTest());
+        addTestCase("flatten basic test", \flattenBasicTest());
+        addTestCase("flatten with context test", \flattenWithContextTest());
+        addTestCase("frame basic test", \frameBasicTest());
+        addTestCase("toRdf basic test", \toRdfBasicTest());
+        addTestCase("fromRdf basic test", \fromRdfBasicTest());
+        addTestCase("expand compact round trip test", \expandCompactRoundTripTest());
+        addTestCase("toRdf nquads round trip test", \toRdfNquadsRoundTripTest());
+        addTestCase("expand context option test", \expandContextOptionTest());
+        addTestCase("processor cache test", \processorCacheTest());
+        addTestCase("schema.org example test", \schemaOrgExampleTest());
+        addTestCase("compact arrays test", \compactArraysTest());
+        addTestCase("expand json string test", \expandJsonStringTest());
+        addTestCase("multiple operations test", \multipleOperationsTest());
+        addTestCase("invalid json string test", \invalidJsonStringTest());
+        addTestCase("invalid typed value test", \invalidTypedValueTest());
+        set_return_value(main());
+    }
+
+    private expandBasicTest() {
+        JsonLdProcessor proc();
+        list<auto> result = proc.expand({
+            "@context": {"name": "http://schema.org/name"},
+            "name": "Jane Doe",
+        });
+
+        assertEq(1, result.size());
+        assertTrue(exists result[0]."http://schema.org/name");
+        assertEq("Jane Doe", result[0]."http://schema.org/name"[0]."@value");
+    }
+
+    private expandWithVocabTest() {
+        JsonLdProcessor proc();
+        list<auto> result = proc.expand({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "Jane",
+            "email": "jane@example.com",
+        });
+
+        assertEq(1, result.size());
+        assertEq(("http://schema.org/Person",), result[0]."@type");
+        assertTrue(exists result[0]."http://schema.org/name");
+        assertTrue(exists result[0]."http://schema.org/email");
+    }
+
+    private expandWithPrefixTest() {
+        JsonLdProcessor proc();
+        list<auto> result = proc.expand({
+            "@context": {
+                "schema": "http://schema.org/",
+                "foaf": "http://xmlns.com/foaf/0.1/",
+            },
+            "@type": "schema:Person",
+            "schema:name": "Jane",
+            "foaf:nick": "jdoe",
+        });
+
+        assertEq(1, result.size());
+        assertEq(("http://schema.org/Person",), result[0]."@type");
+        assertTrue(exists result[0]."http://schema.org/name");
+        assertTrue(exists result[0]."http://xmlns.com/foaf/0.1/nick");
+    }
+
+    private compactBasicTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane Doe",
+        };
+
+        hash<auto> result = proc.compact(input, {"@vocab": "http://schema.org/"});
+
+        assertEq("http://example.com/1", result."@id");
+        assertEq("Person", result."@type");
+        assertEq("Jane Doe", result."name");
+        assertTrue(exists result."@context");
+    }
+
+    private compactWithPrefixTest() {
+        JsonLdProcessor proc();
+
+        auto expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+        );
+
+        hash<auto> ctx_val = {"schema": "http://schema.org/"};
+        hash<auto> result = proc.compact(expanded, ctx_val);
+
+        assertEq("schema:Person", result."@type");
+        assertEq("Jane", result."schema:name");
+    }
+
+    private flattenBasicTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "knows": {"@id": "http://schema.org/knows", "@type": "@id"},
+            },
+            "@id": "http://example.com/jane",
+            "@type": "Person",
+            "name": "Jane",
+            "knows": {
+                "@id": "http://example.com/john",
+                "@type": "Person",
+                "name": "John",
+            },
+        };
+
+        # Without context, flatten returns a list of nodes
+        auto result = proc.flatten(input);
+        assertEq(NT_LIST, result.typeCode());
+        assertEq(2, result.size());
+    }
+
+    private flattenWithContextTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        hash<auto> result = proc.flatten(input, {"@vocab": "http://schema.org/"});
+        assertTrue(exists result."@context");
+        assertTrue(exists result."@graph");
+    }
+
+    private frameBasicTest() {
+        JsonLdProcessor proc();
+
+        auto input = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Organization",),
+                "http://schema.org/name": ({"@value": "Acme"},),
+            },
+        );
+
+        hash<auto> frame_doc = {
+            "@type": ("http://schema.org/Person",),
+        };
+
+        hash<auto> result = proc.frame(input, frame_doc);
+        assertTrue(exists result."@graph");
+        assertEq(1, result."@graph".size());
+    }
+
+    private toRdfBasicTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        hash<RdfDataset> dataset = proc.toRdf(input);
+        assertTrue(dataset.defaultGraph.size() > 0);
+
+        bool found_type = False;
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            if (quad.predicate.value == RDF_TYPE) {
+                found_type = True;
+                assertEq("http://schema.org/Person", quad.object.value);
+            }
+        }
+        assertTrue(found_type);
+    }
+
+    private fromRdfBasicTest() {
+        JsonLdProcessor proc();
+
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": RDF_TYPE},
+            "object": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/Person"},
+        };
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/name"},
+            "object": <RdfTerm>{"termType": "literal", "value": "Jane", "datatype": XSD_STRING},
+        };
+
+        list<auto> result = proc.fromRdf(dataset);
+        assertEq(1, result.size());
+        assertEq("http://example.com/1", result[0]."@id");
+    }
+
+    private expandCompactRoundTripTest() {
+        JsonLdProcessor proc();
+
+        hash<auto> original = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/person/1",
+            "@type": "Person",
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+        };
+
+        # Expand
+        list<auto> expanded = proc.expand(original);
+
+        # Compact back
+        hash<auto> compacted = proc.compact(expanded, {"@vocab": "http://schema.org/"});
+
+        assertEq("http://example.com/person/1", compacted."@id");
+        assertEq("Person", compacted."@type");
+        assertEq("Jane Doe", compacted."name");
+        assertEq("jane@example.com", compacted."email");
+    }
+
+    private toRdfNquadsRoundTripTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        hash<RdfDataset> dataset = proc.toRdf(input);
+        string nquads = JsonLdRdf::toNQuads(dataset);
+
+        assertTrue(nquads.length() > 0);
+        assertTrue(nquads.find("http://example.com/1") >= 0);
+        assertTrue(nquads.find("http://schema.org/Person") >= 0);
+        assertTrue(nquads.find("Jane") >= 0);
+
+        # Parse back
+        hash<RdfDataset> parsed = JsonLdRdf::fromNQuads(nquads);
+        assertEq(dataset.defaultGraph.size(), parsed.defaultGraph.size());
+    }
+
+    private expandContextOptionTest() {
+        JsonLdProcessor proc();
+
+        # Use expandContext option
+        hash<JsonLdOptions> opts = <JsonLdOptions>{
+            "expandContext": {"@vocab": "http://schema.org/"},
+        };
+
+        list<auto> result = proc.expand({
+            "@type": "Person",
+            "name": "Jane",
+        }, opts);
+
+        assertEq(1, result.size());
+        assertEq(("http://schema.org/Person",), result[0]."@type");
+    }
+
+    private processorCacheTest() {
+        JsonLdContextCache cache(3600, 100);
+        JsonLdProcessor proc(cache);
+
+        hash<auto> stats = proc.getContextCache().getStats();
+        assertEq(0, stats.size);
+    }
+
+    private schemaOrgExampleTest() {
+        JsonLdProcessor proc();
+
+        # Schema.org-style document
+        auto input = {
+            "@context": {
+                "schema": "http://schema.org/",
+                "name": "schema:name",
+                "description": "schema:description",
+                "Person": "schema:Person",
+                "Organization": "schema:Organization",
+                "worksFor": {"@id": "schema:worksFor", "@type": "@id"},
+            },
+            "@id": "http://example.com/jane",
+            "@type": "Person",
+            "name": "Jane Doe",
+            "description": "A software engineer",
+            "worksFor": "http://example.com/acme",
+        };
+
+        list<auto> expanded = proc.expand(input);
+        assertEq(1, expanded.size());
+        assertEq("http://example.com/jane", expanded[0]."@id");
+        assertEq(("http://schema.org/Person",), expanded[0]."@type");
+        assertEq("Jane Doe", expanded[0]."http://schema.org/name"[0]."@value");
+
+        # worksFor should expand as @id
+        assertTrue(exists expanded[0]."http://schema.org/worksFor");
+        assertEq("http://example.com/acme",
+            expanded[0]."http://schema.org/worksFor"[0]."@id");
+    }
+
+    private compactArraysTest() {
+        JsonLdProcessor proc();
+
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "name": "Jane",
+        };
+
+        # With compactArrays=True (default), single-item arrays become scalars
+        hash<auto> r1 = proc.compact(input, {"@vocab": "http://schema.org/"});
+        assertEq("Jane", r1."name");
+
+        # With compactArrays=False, arrays are preserved
+        hash<JsonLdOptions> opts = <JsonLdOptions>{"compactArrays": False};
+        hash<auto> r2 = proc.compact(input, {"@vocab": "http://schema.org/"}, opts);
+        # When compactArrays=False, the single node stays in a list wrapped in @graph
+        assertTrue(exists r2."@graph");
+        hash<auto> node2 = r2."@graph"[0];
+        assertEq(NT_LIST, node2."name".typeCode());
+    }
+
+    private expandJsonStringTest() {
+        JsonLdProcessor proc();
+
+        # Expand from JSON string
+        string json_str = make_json({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "Jane",
+        });
+
+        list<auto> result = proc.expand(json_str);
+        assertEq(1, result.size());
+        assertEq(("http://schema.org/Person",), result[0]."@type");
+    }
+
+    private multipleOperationsTest() {
+        # Test that a single processor can handle multiple operations
+        JsonLdProcessor proc();
+
+        auto doc1 = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        auto doc2 = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Organization",
+            "name": "Acme",
+        };
+
+        list<auto> r1 = proc.expand(doc1);
+        list<auto> r2 = proc.expand(doc2);
+
+        assertEq(("http://schema.org/Person",), r1[0]."@type");
+        assertEq(("http://schema.org/Organization",), r2[0]."@type");
+    }
+
+    private invalidJsonStringTest() {
+        JsonLdProcessor proc();
+
+        # Invalid JSON string should throw JSON-LD-ERROR, not a raw parse error
+        try {
+            proc.expand("this is not valid json{{{");
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+            hash<JsonLdErrorInfo> info = ex.arg;
+            assertEq(JSONLD_ERR_LOADING_DOCUMENT_FAILED, info.code);
+        }
+    }
+
+    private invalidTypedValueTest() {
+        JsonLdProcessor proc();
+
+        # Value object with @type and non-scalar @value should throw
+        try {
+            proc.expand({
+                "@context": {"@vocab": "http://schema.org/"},
+                "name": {"@value": (1, 2, 3), "@type": XSD_INTEGER},
+            });
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+}

@@ -1,0 +1,237 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OneRecordClient.qm @brief IATA ONE Record client module
+
+/*  OneRecordClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires Logger
+%requires JsonLd
+%requires HttpClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+%modern
+
+module OneRecordClient {
+    version = "1.0";
+    desc = "IATA ONE Record client module for air cargo data sharing via REST/JSON-LD";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("1r", OneRecordConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("1rs", OneRecordConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage OneRecordClient Module
+
+    @tableofcontents
+
+    @section onerecordclientintro Introduction to the OneRecordClient Module
+
+    The %OneRecordClient module provides a client implementation for the IATA ONE Record
+    standard (API v2.2.0, Cargo Ontology v3.2.0), enabling Qore applications to interact
+    with ONE Record servers for air cargo data sharing via REST APIs with JSON-LD payloads.
+
+    ONE Record creates a single unified record view of a shipment, enabling decentralized
+    data sharing among airlines, forwarders, ground handlers, and shippers using linked data
+    principles.
+
+    @subsection onerecordclientfeatures Features
+
+    - Server information discovery
+    - Logistics object CRUD (create, read, HEAD metadata)
+    - Change request workflow (submit, accept, reject, revoke)
+    - Logistics events (create, list, get)
+    - Audit trail retrieval
+    - Subscription management
+    - Access delegation requests
+    - OAuth 2.0 / OpenID Connect authentication
+    - JSON-LD expansion/compaction via the JsonLd module
+    - Connection provider integration with \c 1r:// and \c 1rs:// URL schemes
+
+    @subsection onerecordclientusage Basic Usage
+
+    @code
+    %requires OneRecordClient
+
+    # Create client
+    OneRecordClient client("https://1r.example.com");
+
+    # Get server info
+    hash<auto> info = client.getServerInfo();
+
+    # Create a logistics object (Piece)
+    hash<auto> piece = client.createLogisticsObject({
+        "\\@context": {"cargo": "https://onerecord.iata.org/ns/cargo#"},
+        "\\@type": "cargo:Piece",
+        "cargo:grossWeight": {
+            "\\@type": "cargo:Value",
+            "cargo:numericalValue": 25.0,
+            "cargo:unit": "KGM",
+        },
+    });
+
+    # Get it back
+    hash<auto> retrieved = client.getLogisticsObject(piece.id);
+    @endcode
+
+    @subsection onerecordclientshipment Shipment Tracking Example
+
+    This example shows how a freight forwarder creates a shipment with pieces and tracks
+    cargo milestones — a core ONE Record use case.
+
+    @code
+    %requires OneRecordClient
+
+    OneRecordClient client("https://1r.airline.com", <OneRecordClientOptions>{
+        "bearerToken": ENV.ONE_RECORD_TOKEN,
+    });
+
+    # Create a shipment
+    hash<auto> shipment = client.createLogisticsObject({
+        "\\@type": "https://onerecord.iata.org/ns/cargo#Shipment",
+        "https://onerecord.iata.org/ns/cargo#totalGrossWeight": {
+            "\\@type": "https://onerecord.iata.org/ns/cargo#Value",
+            "https://onerecord.iata.org/ns/cargo#numericalValue": 1500.0,
+            "https://onerecord.iata.org/ns/cargo#unit": "KGM",
+        },
+    });
+    string shipment_id = (shipment.headers.location =~ x/logistics-objects\/(.+)$/)[0];
+
+    # Create individual pieces belonging to the shipment
+    hash<auto> piece = client.createLogisticsObject({
+        "\\@type": "https://onerecord.iata.org/ns/cargo#Piece",
+        "https://onerecord.iata.org/ns/cargo#grossWeight": {
+            "\\@type": "https://onerecord.iata.org/ns/cargo#Value",
+            "https://onerecord.iata.org/ns/cargo#numericalValue": 25.0,
+            "https://onerecord.iata.org/ns/cargo#unit": "KGM",
+        },
+        "https://onerecord.iata.org/ns/cargo#ofShipment": {
+            "\\@id": shipment.headers.location,
+        },
+    });
+    string piece_id = (piece.headers.location =~ x/logistics-objects\/(.+)$/)[0];
+
+    # Log a cargo milestone event: piece departed origin
+    client.createLogisticsEvent(piece_id, {
+        "\\@type": "https://onerecord.iata.org/ns/cargo#LogisticsEvent",
+        "https://onerecord.iata.org/ns/cargo#eventCode": "DEP",
+        "https://onerecord.iata.org/ns/cargo#eventName": "Departed",
+        "https://onerecord.iata.org/ns/cargo#eventDate": now_us().format("YYYY-MM-DD"),
+    });
+
+    # List all events for the piece
+    hash<auto> events = client.listLogisticsEvents(piece_id);
+    printf("Piece %s has %d events\\n", piece_id, events.body."api:hasTotalItems");
+    @endcode
+
+    @subsection onerecordclientchange Change Request Workflow
+
+    ONE Record uses a collaborative change model. The data holder controls the object;
+    other parties submit change requests that must be approved.
+
+    @code
+    %requires OneRecordClient
+
+    OneRecordClient client("https://1r.airline.com");
+
+    # A ground handler wants to update a piece's actual weight after weighing
+    string piece_id = "piece-abc-123";
+
+    # Step 1: Submit a change request
+    string ar_uri = client.submitChangeRequest(piece_id, (
+        <OneRecordOperation>{
+            "op": "DELETE",
+            "s": "https://1r.airline.com/logistics-objects/" + piece_id,
+            "p": CARGO_NS + "grossWeight",
+            "o": (<OneRecordOperationObject>{
+                "hasDatatype": XSD_NS + "string",
+                "hasValue": "25.0",
+            },),
+        },
+        <OneRecordOperation>{
+            "op": "ADD",
+            "s": "https://1r.airline.com/logistics-objects/" + piece_id,
+            "p": CARGO_NS + "grossWeight",
+            "o": (<OneRecordOperationObject>{
+                "hasDatatype": XSD_NS + "string",
+                "hasValue": "25.7",
+            },),
+        },
+    ), 1, "Actual weight after ground handling measurement");
+
+    # Step 2: The airline (data holder) reviews and accepts
+    string ar_id = (ar_uri =~ x/action-requests\/(.+)$/)[0];
+    hash<auto> ar = client.getActionRequest(ar_id);
+    printf("Change request status: %s\\n", ar.body."api:hasRequestStatus"."\\@id");
+
+    # Airline accepts the change
+    client.acceptActionRequest(ar_id);
+
+    # Step 3: Verify the piece was updated
+    hash<auto> updated = client.getLogisticsObject(piece_id);
+    printf("New revision: %s\\n", updated.headers.revision);
+    @endcode
+
+    @subsection onerecordclientoauth OAuth 2.0 Authentication
+
+    @code
+    %requires OneRecordClient
+
+    # Authenticate via OAuth 2.0 Client Credentials Grant
+    OneRecordClient client("https://1r.airline.com", <OneRecordClientOptions>{
+        "tokenEndpoint": "https://auth.airline.com/oauth/token",
+        "clientId": ENV.ONE_RECORD_CLIENT_ID,
+        "clientSecret": ENV.ONE_RECORD_CLIENT_SECRET,
+    });
+
+    # Token is automatically obtained and refreshed
+    hash<auto> info = client.getServerInfo();
+    @endcode
+
+    @section onerecordclientrelnotes OneRecordClient Release Notes
+
+    @subsection onerecordclientv1_0 OneRecordClient v1.0
+    - initial release with IATA ONE Record API v2.2.0 support
+    - async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
+      protocol negotiation (HTTP/3 → HTTP/2 → HTTP/1.1) and connection pooling
+    - logistics object CRUD with JSON-LD
+    - change request lifecycle management
+    - logistics events, audit trail, subscriptions
+    - access delegations and verification requests
+    - OAuth 2.0 token management with automatic refresh
+    - ConnectionProvider integration with 1r:// and 1rs:// schemes
+*/
+
+#! the %OneRecordClient namespace holds all public definitions in the %OneRecordClient module
+public namespace OneRecordClient {
+#! Client name
+public const OneRecordClientName = "QoreOneRecordClient";
+
+#! Client version
+public const OneRecordClientVersion = "1.0";
+}

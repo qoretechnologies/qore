@@ -3455,6 +3455,25 @@ qore_user_module("qlib/UnbounceDataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "unleashed-logo.svg")
 qore_user_module("qlib/KatanaDataProvider" "katana-logo.svg")
 
+# modules migrated from module-json (issue #5366); build order is derived from each module's
+# own %requires directives by qore_finalize_user_module_dependencies() below
+qore_user_module("qlib/A2aClient")
+qore_user_module("qlib/A2aClientDataProvider" "a2a-logo.svg")
+qore_user_module("qlib/A2aServerHandler")
+qore_user_module("qlib/FhirRestClient")
+qore_user_module("qlib/FhirRestDataProvider" "fhir-logo.svg")
+qore_user_module("qlib/JsonFileDataProvider" "json-file-logo.svg")
+qore_user_module("qlib/JsonLd")
+qore_user_module("qlib/JsonRpcClientIo")
+qore_user_module("qlib/JsonRpcConnection.qm")
+qore_user_module("qlib/JsonRpcHandler.qm")
+qore_user_module("qlib/McpClient")
+qore_user_module("qlib/McpClientDataProvider")
+qore_user_module("qlib/McpServerHandler")
+qore_user_module("qlib/NdjsonDataProvider")
+qore_user_module("qlib/OneRecordClient")
+qore_user_module("qlib/OneRecordServerHandler")
+
 qore_finalize_user_module_dependencies()
 
 get_property(QORE_QM_METADATA_TARGETS GLOBAL PROPERTY QORE_QM_METADATA_TARGETS)

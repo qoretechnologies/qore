@@ -1,0 +1,932 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%requires McpClient
+%exec-class McpClientTest
+
+# Test input type for tools
+class TestInput inherits HashDataType {
+    public {
+        const Fields = {
+            "message": {
+                "display_name": "Message",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The message",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+class NumberInput inherits HashDataType {
+    public {
+        const Fields = {
+            "a": {
+                "display_name": "A",
+                "type": AbstractDataProviderTypeMap."number",
+                "desc": "First number",
+            },
+            "b": {
+                "display_name": "B",
+                "type": AbstractDataProviderTypeMap."number",
+                "desc": "Second number",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+const TestInputType = new TestInput();
+const NumberInputType = new NumberInput();
+
+# Test MCP server handler with tools, resources, and prompts
+class TestMcpServerHandler inherits McpServerHandler {
+    public {
+        #! reaches zero once the cancellable tool has begun executing
+        Qore::Thread::Counter cancel_started(1);
+        #! reaches zero once the cancellable tool has observed cancellation
+        Qore::Thread::Counter cancel_observed(1);
+        #! set True if the cancellable tool observed cooperative cancellation
+        bool cancel_tool_was_cancelled = False;
+        #! reaches zero once the task-cancel tool has begun executing
+        Qore::Thread::Counter task_cancel_started(1);
+        #! reaches zero once the task-cancel tool has observed cancellation
+        Qore::Thread::Counter task_cancel_observed(1);
+        #! set True if the task-cancel tool observed cooperative cancellation
+        bool task_cancel_tool_was_cancelled = False;
+    }
+
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("echo", "Echoes the input message", TestInputType, \echoTool());
+        registerTool("add", "Adds two numbers", NumberInputType, \addTool());
+        registerTool("slow", "Completes after a short delay", NOTHING,
+            \slowTool(), NOTHING, {
+                "execution": {
+                    "taskSupport": "optional",
+                },
+            }, NOTHING);
+        registerTool("cancel_slow", "Long-running cooperatively-cancellable tool", NOTHING,
+            \cancelSlowTool(), NOTHING, {
+                "execution": {
+                    "taskSupport": "required",
+                },
+            }, NOTHING);
+        registerTool("task_cancel_slow", "Long-running tasks/cancel test tool", NOTHING,
+            \taskCancelSlowTool(), NOTHING, {
+                "execution": {
+                    "taskSupport": "required",
+                },
+            }, NOTHING);
+
+        registerResource("file:///test.txt", "test-file", "A test file resource", "text/plain", \readTestFile());
+        registerResource("file:///config.json", "config", "Configuration file", "application/json", \readConfigFile());
+
+        registerPrompt("greeting", "A greeting prompt", (
+            {"name": "name", "description": "Name to greet", "required": True},
+        ), \greetingHandler());
+    }
+
+    private string echoTool(hash<auto> args) {
+        return args.message;
+    }
+
+    private string addTool(hash<auto> args) {
+        number result = args.a + args.b;
+        return string(result);
+    }
+
+    private hash<auto> slowTool(*hash<auto> args) {
+        int delay_ms = args.delay_ms ?? 100;
+        usleep(delay_ms * 1000);
+        return {
+            "status": "completed",
+            "delay_ms": delay_ms,
+        };
+    }
+
+    # Long-running tool that cooperatively polls isCallCancelled() (the
+    # documented cancellation mechanism) and stops promptly when its session
+    # is torn down.  Bounded so the test fails fast if cancellation never
+    # arrives instead of hanging.
+    private hash<auto> cancelSlowTool(*hash<auto> args) {
+        cancel_started.dec();
+        int i;
+        for (i = 0; i < 400; ++i) {
+            if (McpServerHandler::isCallCancelled()) {
+                cancel_tool_was_cancelled = True;
+                cancel_observed.dec();
+                return {
+                    "status": "cancelled",
+                    "iterations": i,
+                };
+            }
+            usleep(25ms);
+        }
+        return {
+            "status": "completed",
+            "iterations": i,
+        };
+    }
+
+    private hash<auto> taskCancelSlowTool(*hash<auto> args) {
+        task_cancel_started.dec();
+        int i;
+        for (i = 0; i < 400; ++i) {
+            if (McpServerHandler::isCallCancelled()) {
+                task_cancel_tool_was_cancelled = True;
+                task_cancel_observed.dec();
+                return {
+                    "status": "cancelled",
+                    "iterations": i,
+                };
+            }
+            usleep(25ms);
+        }
+        return {
+            "status": "completed",
+            "iterations": i,
+        };
+    }
+
+    string readTestFile(hash<auto> cx, string uri) {
+        return "Hello, this is test content!";
+    }
+
+    hash<auto> readConfigFile(hash<auto> cx, string uri) {
+        return {"key": "value", "number": 42};
+    }
+
+    list<hash<auto>> greetingHandler(hash<auto> cx, *hash<auto> arguments) {
+        string name = arguments.name ?? "World";
+        return ({
+            "role": "user",
+            "content": {
+                "type": "text",
+                "text": sprintf("Hello, %s!", name),
+            },
+        },);
+    }
+}
+
+class McpClientTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        TestMcpServerHandler mcp_server;
+        HttpServer http;
+        int port;
+        string base_url;
+    }
+
+    constructor() : QUnit::Test("McpClient test", "1.0") {
+        addTestCase("initialization test", \initializationTest());
+        addTestCase("tools test", \toolsTest());
+        addTestCase("resources test", \resourcesTest());
+        addTestCase("prompts test", \promptsTest());
+        addTestCase("ping test", \pingTest());
+        addTestCase("error handling test", \errorHandlingTest());
+        addTestCase("connection provider test", \connectionProviderTest());
+        addTestCase("protocol version test", \protocolVersionTest());
+        addTestCase("protocol version comprehensive test", \protocolVersionComprehensiveTest());
+        addTestCase("server info test", \serverInfoTest());
+        addTestCase("session id test", \sessionIdTest());
+        addTestCase("log level test", \logLevelTest());
+        addTestCase("tool edge cases test", \toolEdgeCasesTest());
+        addTestCase("client close test", \clientCloseTest());
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("callback test", \callbackTest());
+        addTestCase("SSE listener test", \sseListenerTest());
+        addTestCase("initialization negative test", \initializationNegativeTest());
+        addTestCase("streamable request test", \streamableRequestTest());
+        addTestCase("standard task tool call test", \standardTaskToolCallTest());
+        addTestCase("task survives SSE listener reconnect test", \taskSurvivesSseListenerReconnectTest());
+        addTestCase("tasks/cancel propagates to tool call test",
+            \taskCancelPropagatesToToolCallTest());
+        addTestCase("task cancelled on session delete test", \taskCancelledOnSessionDeleteTest());
+        addTestCase("legacy transport test", \legacyTransportTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        mcp_server = new TestMcpServerHandler(logger);
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http.setHandler("mcp-handler", "", MimeTypeJson, mcp_server);
+        http.setDefaultHandler("mcp-handler", mcp_server);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        base_url = sprintf("http://localhost:%d", port);
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    initializationTest() {
+        McpClient::McpClient client(base_url);
+
+        assertFalse(client.isInitialized(), "Client should not be initialized initially");
+
+        hash<auto> result = client.initialize(<McpClientInfo>{
+            "name": "TestClient",
+            "version": "1.0",
+        });
+
+        assertTrue(client.isInitialized(), "Client should be initialized after initialize()");
+        assertEq("QoreMcpServer", result.serverInfo.name, "Server name should match");
+        assertTrue(exists result.protocolVersion, "Should have protocol version");
+        assertTrue(exists result.capabilities, "Should have capabilities");
+
+        # Verify server capabilities
+        assertTrue(exists result.capabilities.tools, "Should have tools capability");
+        assertTrue(exists result.capabilities.resources, "Should have resources capability");
+        assertTrue(exists result.capabilities.prompts, "Should have prompts capability");
+
+        # Test double initialization throws error
+        assertThrows("MCP-INIT-ERROR", sub () {
+            client.initialize(<McpClientInfo>{
+                "name": "TestClient",
+                "version": "1.0",
+            });
+        });
+
+        client.close();
+    }
+
+    toolsTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # List tools
+        list<auto> tools = client.listTools();
+        assertTrue(tools.size() >= 2, "Should have at least 2 tools");
+
+        # Find the echo tool
+        *hash<auto> echo_tool;
+        foreach hash<auto> tool in (tools) {
+            if (tool.name == "echo") {
+                echo_tool = tool;
+                break;
+            }
+        }
+        assertTrue(exists echo_tool, "Should have echo tool");
+        assertEq("Echoes the input message", echo_tool.description, "Echo tool description");
+
+        # Call the echo tool
+        hash<auto> result = client.callTool("echo", {"message": "Hello, World!"});
+        assertTrue(exists result.content, "Tool result should have content");
+        assertEq(1, result.content.size(), "Should have 1 content item");
+        assertEq("text", result.content[0].type, "Content type should be text");
+        assertEq("Hello, World!", result.content[0].text, "Echo should return the message");
+
+        # Call the add tool
+        result = client.callTool("add", {"a": 5, "b": 3});
+        assertEq("8", result.content[0].text, "Add should return sum");
+
+        client.close();
+    }
+
+    resourcesTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # List resources
+        list<auto> resources = client.listResources();
+        assertTrue(resources.size() >= 2, "Should have at least 2 resources");
+
+        # Find the test file resource
+        *hash<auto> test_resource;
+        foreach hash<auto> resource in (resources) {
+            if (resource.uri == "file:///test.txt") {
+                test_resource = resource;
+                break;
+            }
+        }
+        assertTrue(exists test_resource, "Should have test.txt resource");
+        assertEq("test-file", test_resource.name, "Resource name");
+        assertEq("text/plain", test_resource.mimeType, "Resource MIME type");
+
+        # Read the resource
+        hash<auto> content = client.readResource("file:///test.txt");
+        assertTrue(exists content.contents, "Should have contents");
+        assertEq(1, content.contents.size(), "Should have 1 content item");
+        assertEq("Hello, this is test content!", content.contents[0].text, "Resource content");
+
+        # Read the JSON resource
+        content = client.readResource("file:///config.json");
+        assertEq("application/json", content.contents[0].mimeType, "JSON MIME type");
+        hash<auto> parsed = parse_json(content.contents[0].text);
+        assertEq("value", parsed.key, "JSON key value");
+        assertEq(42, parsed.number, "JSON number value");
+
+        client.close();
+    }
+
+    promptsTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # List prompts
+        list<auto> prompts = client.listPrompts();
+        assertTrue(prompts.size() >= 1, "Should have at least 1 prompt");
+
+        # Find the greeting prompt
+        *hash<auto> greeting_prompt;
+        foreach hash<auto> prompt in (prompts) {
+            if (prompt.name == "greeting") {
+                greeting_prompt = prompt;
+                break;
+            }
+        }
+        assertTrue(exists greeting_prompt, "Should have greeting prompt");
+        assertEq("A greeting prompt", greeting_prompt.description, "Prompt description");
+        assertTrue(exists greeting_prompt.arguments, "Should have arguments");
+
+        # Get the prompt
+        hash<auto> result = client.getPrompt("greeting", {"name": "Alice"});
+        assertTrue(exists result.messages, "Should have messages");
+        assertEq(1, result.messages.size(), "Should have 1 message");
+        assertEq("user", result.messages[0].role, "Message role");
+        assertEq("Hello, Alice!", result.messages[0].content.text, "Greeting message");
+
+        client.close();
+    }
+
+    pingTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        bool result = client.ping();
+        assertTrue(result, "Ping should succeed");
+
+        client.close();
+    }
+
+    errorHandlingTest() {
+        McpClient::McpClient client(base_url);
+
+        # Test calling methods before initialization
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client.listTools();
+        });
+
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client.ping();
+        });
+
+        # Initialize
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Test calling non-existent tool
+        assertThrows("MCP-ERROR", sub () {
+            client.callTool("nonexistent", {});
+        });
+
+        # Test reading non-existent resource
+        assertThrows("MCP-ERROR", sub () {
+            client.readResource("file:///nonexistent.txt");
+        });
+
+        # Test getting non-existent prompt
+        assertThrows("MCP-ERROR", sub () {
+            client.getPrompt("nonexistent", {});
+        });
+
+        # Test invalid log level
+        assertThrows("MCP-INVALID-LOG-LEVEL", sub () {
+            client.setLogLevel("invalid");
+        });
+
+        client.close();
+    }
+
+    connectionProviderTest() {
+        # Test creating connection via ConnectionProvider
+        string mcp_url = regex_subst(base_url, "^http:", "mcp:");
+
+        McpConnection conn("test-mcp", "Test MCP connection", mcp_url, {}, {
+            "client_name": "TestConnectionClient",
+            "client_version": "2.0",
+        });
+
+        assertEq("mcp", conn.getType(), "Connection type should be mcp");
+
+        # Get client (should auto-initialize)
+        McpClient::McpClient client = conn.get(True);
+        assertTrue(client.isInitialized(), "Client from connection should be initialized");
+
+        # Test tools are available
+        list<auto> tools = client.listTools();
+        assertTrue(tools.size() > 0, "Should have tools from connection");
+
+        client.close();
+    }
+
+    protocolVersionTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        *string version = client.getProtocolVersion();
+        assertTrue(exists version, "Should have protocol version");
+
+        # Check it's a valid version
+        assertTrue(McpClient::AllMcpVersions{version}, sprintf("Protocol version %s should be valid", version));
+
+        client.close();
+    }
+
+    serverInfoTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Test server info
+        *hash<auto> info = client.getServerInfo();
+        assertTrue(exists info, "Should have server info");
+        assertEq("QoreMcpServer", info.name, "Server name should match");
+
+        # Test server capabilities
+        *hash<auto> caps = client.getServerCapabilities();
+        assertTrue(exists caps, "Should have capabilities");
+        assertTrue(exists caps.tools, "Should have tools capability");
+        assertTrue(exists caps.resources, "Should have resources capability");
+        assertTrue(exists caps.prompts, "Should have prompts capability");
+
+        client.close();
+    }
+
+    sessionIdTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Get session ID after initialization - verify the method works
+        # Session ID may or may not be set depending on server implementation
+        client.getSessionId();
+        assertTrue(True, "getSessionId should work");
+
+        # Test setting session ID
+        client.setSessionId("test-session-123");
+        assertEq("test-session-123", client.getSessionId(), "Session ID should be set");
+
+        client.close();
+    }
+
+    logLevelTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Test valid log levels
+        client.setLogLevel("debug");
+        client.setLogLevel("info");
+        client.setLogLevel("warning");
+        client.setLogLevel("error");
+        assertTrue(True, "Valid log levels should work");
+
+        # Test invalid log level
+        assertThrows("MCP-INVALID-LOG-LEVEL", sub () {
+            client.setLogLevel("invalid-level");
+        });
+
+        client.close();
+    }
+
+    toolEdgeCasesTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Test calling tool with no arguments
+        hash<auto> result = client.callTool("echo", {"message": ""});
+        assertEq("", result.content[0].text, "Empty message should work");
+
+        # Test calling tool with special characters
+        result = client.callTool("echo", {"message": "Hello\nWorld\t!"});
+        assertEq("Hello\nWorld\t!", result.content[0].text, "Special characters should work");
+
+        # Test calling add with zero
+        result = client.callTool("add", {"a": 0, "b": 0});
+        assertEq("0", result.content[0].text, "Zero values should work");
+
+        # Test calling add with negative numbers
+        result = client.callTool("add", {"a": -5, "b": 3});
+        assertEq("-2", result.content[0].text, "Negative numbers should work");
+
+        # Test calling add with decimals
+        result = client.callTool("add", {"a": 1.5, "b": 2.5});
+        assertEq("4", result.content[0].text, "Decimal numbers should work");
+
+        client.close();
+    }
+
+    clientCloseTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        assertTrue(client.isInitialized(), "Should be initialized");
+
+        client.close();
+
+        assertFalse(client.isInitialized(), "Should not be initialized after close");
+        assertFalse(exists client.getServerInfo(), "Server info should be cleared");
+        assertFalse(exists client.getServerCapabilities(), "Capabilities should be cleared");
+        assertFalse(exists client.getProtocolVersion(), "Protocol version should be cleared");
+
+        # Re-initialization should work
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        assertTrue(client.isInitialized(), "Should be initialized after re-init");
+
+        client.close();
+    }
+
+    connectionSchemeTest() {
+        # Test MCP connection scheme info
+        hash<auto> scheme_info = McpConnection::ConnectionScheme;
+
+        # Verify scheme info structure
+        assertTrue(exists scheme_info.display_name, "should have display_name");
+        assertTrue(exists scheme_info.short_desc, "should have short_desc");
+        assertTrue(exists scheme_info.desc, "should have desc");
+        assertTrue(exists scheme_info.cls, "should have cls");
+        assertTrue(exists scheme_info.options, "should have options");
+        assertTrue(exists scheme_info.schemes, "should have schemes");
+
+        # Verify schemes
+        assertTrue(scheme_info.schemes.mcp, "should support mcp");
+        assertTrue(scheme_info.schemes.mcps, "should support mcps");
+
+        # Verify base scheme map
+        assertEq("mcps", scheme_info.base_scheme_map.https);
+        assertEq("mcp", scheme_info.base_scheme_map.http);
+    }
+
+    callbackTest() {
+        McpClient::McpClient client(base_url);
+
+        # Set callback before initialization
+        bool callback_called = False;
+        client.setCallback("onToolsChanged", sub () {
+            callback_called = True;
+        });
+
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Remove callback
+        client.removeCallback("onToolsChanged");
+        assertTrue(True, "Callback removal should work");
+
+        # Set multiple callbacks
+        client.setCallback("onResourcesChanged", sub () {});
+        client.setCallback("onPromptsChanged", sub () {});
+        client.setCallback("onLogMessage", sub (string level, auto data, *string logger) {});
+        assertTrue(True, "Multiple callbacks should work");
+
+        client.close();
+    }
+
+    protocolVersionComprehensiveTest() {
+        # Test that client can negotiate with servers at each protocol level
+
+        # Test with 2024-11-05 protocol version
+        McpClient::McpClient client1(base_url);
+        client1.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        *string version1 = client1.getProtocolVersion();
+        assertTrue(McpClient::AllMcpVersions{version1}, sprintf("Version %s should be valid", version1));
+        client1.close();
+
+        # Test with 2025-03-26 protocol version
+        McpClient::McpClient client2(base_url);
+        client2.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        *string version2 = client2.getProtocolVersion();
+        assertTrue(McpClient::AllMcpVersions{version2}, sprintf("Version %s should be valid", version2));
+        client2.close();
+
+        # Verify all known versions are in the constants
+        assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2024_11_05}, "2024-11-05 should be known");
+        assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_03_26}, "2025-03-26 should be known");
+        assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_06_18}, "2025-06-18 should be known");
+        assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_11_25}, "2025-11-25 should be known");
+
+        # Verify latest version constant
+        assertEq(McpClient::McpVersion::V2025_11_25, McpClient::MCP_Version_Latest, "Latest should be 2025-11-25");
+
+        # Test that client handles version negotiation correctly
+        McpClient::McpClient client3(base_url);
+        client3.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        # Server should negotiate to a supported version
+        assertTrue(exists client3.getProtocolVersion(), "Should have negotiated version");
+        assertTrue(exists client3.getServerCapabilities(), "Should have capabilities");
+        client3.close();
+    }
+
+    sseListenerTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Test SSE listener state before starting
+        assertFalse(client.isSseListenerRunning(), "SSE should not be running initially");
+
+        # Start SSE listener (will connect to server)
+        # Note: This may fail if server doesn't support SSE, which is okay for this test
+        bool started = False;
+        try {
+            client.startSseListener();
+            started = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # SSE may not be available - that's okay
+            assertTrue(True, "SSE listener start attempted");
+        }
+
+        if (started) {
+            # Give it a moment to connect
+            sleep(100ms);
+
+            # Check if running (may or may not be depending on server)
+            # Either state is acceptable for this test
+            client.isSseListenerRunning();
+            assertTrue(True, "SSE listener state checked");
+
+            # Stop SSE listener
+            client.stopSseListener();
+            assertFalse(client.isSseListenerRunning(), "SSE should be stopped");
+
+            # Stopping again should be safe (no-op)
+            client.stopSseListener();
+            assertTrue(True, "Double stop should be safe");
+        }
+
+        client.close();
+    }
+
+    standardTaskToolCallTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TaskClient", "version": "1.0"});
+        on_exit client.close();
+
+        list<auto> tools = client.listTools();
+        *hash<auto> slow_tool;
+        foreach hash<auto> tool in (tools) {
+            if (tool.name == "slow") {
+                slow_tool = tool;
+                break;
+            }
+        }
+        assertTrue(exists slow_tool, "slow tool is advertised");
+        assertEq("optional", slow_tool.execution.taskSupport,
+            "tools/list advertises execution.taskSupport");
+
+        string operation_id = "task-op-" + get_random_string(8);
+        hash<auto> created = client.callToolAsTask("slow", {
+            "delay_ms": 100,
+        }, {
+            "ttl": 60000,
+        }, {
+            "progressToken": "task-progress-" + get_random_string(8),
+            "clientOperationId": operation_id,
+        });
+        string task_id = created.task.taskId;
+        assertTrue(task_id.val(), "standard params.task call returns task id");
+        assertEq(operation_id, created.task.clientOperationId,
+            "CreateTaskResult echoes the client operation id");
+
+        hash<auto> duplicate = client.callToolAsTask("slow", {
+            "delay_ms": 1,
+        }, {
+            "ttl": 60000,
+        }, {
+            "clientOperationId": operation_id,
+        });
+        assertEq(task_id, duplicate.task.taskId,
+            "same clientOperationId returns the existing task");
+
+        hash<auto> status = client.getTask(task_id);
+        assertEq(task_id, status.taskId, "tasks/get returns the task");
+
+        hash<auto> result = client.getTaskResult(task_id, 5000);
+        assertEq("text", result.content[0].type,
+            "tasks/result returns the original tool-call result shape");
+        hash<auto> body = parse_json(result.content[0].text);
+        assertEq("completed", body.status, "task result body status");
+        assertEq(100, body.delay_ms, "deduped task kept original arguments");
+    }
+
+    taskSurvivesSseListenerReconnectTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TaskReconnectClient", "version": "1.0"});
+        on_exit client.close();
+
+        client.startSseListener();
+        assertTrue(client.isSseListenerRunning(), "SSE listener started");
+
+        hash<auto> created = client.callToolAsTask("slow", {
+            "delay_ms": 250,
+        }, {
+            "ttl": 60000,
+        }, {
+            "clientOperationId": "sse-task-op-" + get_random_string(8),
+        });
+        string task_id = created.task.taskId;
+        assertTrue(task_id.val(), "task created while SSE listener is active");
+
+        client.stopSseListener();
+        assertFalse(client.isSseListenerRunning(), "SSE listener stopped");
+
+        hash<auto> result = client.getTaskResult(task_id, 5000);
+        hash<auto> body = parse_json(result.content[0].text);
+        assertEq("completed", body.status,
+            "task completes after notification stream disconnects");
+        assertEq(250, body.delay_ms,
+            "task result keeps original arguments after listener disconnect");
+    }
+
+    taskCancelPropagatesToToolCallTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "TaskCancelClient", "version": "1.0"});
+        on_exit client.close();
+
+        hash<auto> created = client.callToolAsTask("task_cancel_slow", NOTHING, {
+            "ttl": 60000,
+        }, {
+            "clientOperationId": "task-cancel-op-" + get_random_string(8),
+        });
+        string task_id = created.task.taskId;
+        assertTrue(task_id.val(), "cancellable task created");
+
+        assertEq(0, mcp_server.task_cancel_started.waitForZero(5000),
+            "tasks/cancel test tool started executing");
+        assertFalse(mcp_server.task_cancel_tool_was_cancelled,
+            "tool not yet cancelled before tasks/cancel");
+
+        hash<auto> cancelled = client.cancelTask(task_id,
+            "unit test tasks/cancel");
+        assertEq("cancelled", cancelled.status,
+            "tasks/cancel marks the task cancelled");
+
+        assertEq(0, mcp_server.task_cancel_observed.waitForZero(5000),
+            "tool observed cancellation after tasks/cancel");
+        assertTrue(mcp_server.task_cancel_tool_was_cancelled,
+            "tasks/cancel reached the running tool call");
+
+        hash<auto> status = client.getTask(task_id);
+        assertEq("cancelled", status.status,
+            "late tool return does not overwrite cancelled task status");
+    }
+
+    taskCancelledOnSessionDeleteTest() {
+        McpClient::McpClient client(base_url);
+        client.initialize(<McpClientInfo>{"name": "CancelClient", "version": "1.0"});
+        on_exit client.close();
+
+        hash<auto> created = client.callToolAsTask("cancel_slow", NOTHING, {
+            "ttl": 60000,
+        }, {
+            "clientOperationId": "cancel-op-" + get_random_string(8),
+        });
+        string task_id = created.task.taskId;
+        assertTrue(task_id.val(), "cancellable task created");
+
+        string sid = client.getSessionId();
+        assertTrue(sid.val(), "client has a session id");
+
+        # Deterministically wait until the tool is actually executing
+        assertEq(0, mcp_server.cancel_started.waitForZero(5000),
+            "cancellable tool started executing");
+        assertFalse(mcp_server.cancel_tool_was_cancelled,
+            "tool not yet cancelled before session delete");
+
+        # Explicitly delete the session via HTTP DELETE; this must cancel the
+        # in-progress tool execution.
+        HTTPClient hc({"url": base_url});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        hc.send("", "DELETE", "/", {McpSessionHeader: sid}, False, \info);
+        assertEq(200, info."response-headers".status_code,
+            "session DELETE returned 200");
+
+        # Deterministically wait for the tool to observe cooperative cancellation
+        assertEq(0, mcp_server.cancel_observed.waitForZero(5000),
+            "tool observed cancellation after session delete");
+        assertTrue(mcp_server.cancel_tool_was_cancelled,
+            "session DELETE cancelled in-progress tool execution");
+    }
+
+    initializationNegativeTest() {
+        # Test calling methods before initialization
+        McpClient::McpClient client2(base_url);
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client2.listTools();
+        });
+
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client2.ping();
+        });
+
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client2.listResources();
+        });
+
+        assertThrows("MCP-NOT-INITIALIZED", sub () {
+            client2.listPrompts();
+        });
+
+        # Test isInitialized before init
+        assertFalse(client2.isInitialized(), "Should not be initialized");
+
+        # Test double initialization (should throw error - already initialized)
+        McpClient::McpClient client3(base_url);
+        client3.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        assertTrue(client3.isInitialized(), "Should be initialized");
+
+        # Re-initialize should throw error
+        assertThrows("MCP-INIT-ERROR", sub () {
+            client3.initialize(<McpClientInfo>{"name": "TestClient2", "version": "2.0"});
+        });
+
+        # Should still be initialized with original settings
+        assertTrue(client3.isInitialized(), "Should still be initialized");
+
+        client3.close();
+
+        # Test with invalid port (connection should fail)
+        # Port 99999 is invalid, so this should fail at constructor or initialize
+        bool invalid_url_handled = False;
+        try {
+            McpClient::McpClient client4("http://localhost:99999");
+            client4.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        } catch (hash<ExceptionInfo> ex) {
+            # Either URL parse error, socket error, or HTTP error is acceptable
+            invalid_url_handled = True;
+        }
+        assertTrue(invalid_url_handled, "Invalid URL should be rejected");
+
+        # Test with unreachable host (connection should fail during initialize)
+        McpClient::McpClient client4b("http://localhost:59999");
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", sub () {
+            client4b.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+        });
+
+        # Test initialization with empty name (server may or may not accept)
+        McpClient::McpClient client5(base_url);
+        client5.initialize(<McpClientInfo>{"name": "", "version": "1.0"});
+        # If we get here, server accepted empty name - that's okay
+        assertTrue(True, "Empty name initialization handled");
+        client5.close();
+    }
+
+    streamableRequestTest() {
+        McpClient::McpClient client(base_url, {
+            "enable_streamable": True,
+            "allow_legacy_fallback": False,
+        });
+
+        client.initialize(<McpClientInfo>{
+            "name": "StreamableClient",
+            "version": "1.0",
+        });
+
+        list<auto> tools = client.listTools();
+        assertTrue(tools.size() >= 2, "Streamable client should return tool list");
+
+        client.close();
+    }
+
+    legacyTransportTest() {
+        McpClient::McpClient client(base_url, {
+            "enable_streamable": False,
+        });
+
+        client.initialize(<McpClientInfo>{
+            "name": "LegacyClient",
+            "version": "1.0",
+        });
+
+        list<auto> tools = client.listTools();
+        assertTrue(tools.size() >= 2, "Legacy client should return tool list");
+
+        client.close();
+    }
+}

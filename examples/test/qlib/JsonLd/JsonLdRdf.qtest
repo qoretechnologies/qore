@@ -1,0 +1,433 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Logger
+%requires JsonLd
+%exec-class JsonLdRdfTest
+
+class JsonLdRdfTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdRdf test", "1.0") {
+        addTestCase("toRdf simple test", \toRdfSimpleTest());
+        addTestCase("toRdf types test", \toRdfTypesTest());
+        addTestCase("toRdf literals test", \toRdfLiteralsTest());
+        addTestCase("toRdf language test", \toRdfLanguageTest());
+        addTestCase("toRdf blank nodes test", \toRdfBlankNodesTest());
+        addTestCase("toRdf list test", \toRdfListTest());
+        addTestCase("fromRdf simple test", \fromRdfSimpleTest());
+        addTestCase("fromRdf native types test", \fromRdfNativeTypesTest());
+        addTestCase("nquads serialize test", \nquadsSerializeTest());
+        addTestCase("nquads parse test", \nquadsParseTest());
+        addTestCase("nquads round trip test", \nquadsRoundTripTest());
+        addTestCase("nquads escape test", \nquadsEscapeTest());
+        addTestCase("toRdf fromRdf round trip test", \toRdfFromRdfRoundTripTest());
+        addTestCase("nquads parse error test", \nquadsParseErrorTest());
+        addTestCase("fromRdf invalid native types test", \fromRdfInvalidNativeTypesTest());
+        addTestCase("toRdf named graph test", \toRdfNamedGraphTest());
+        set_return_value(main());
+    }
+
+    private list<auto> doExpand(auto input) {
+        hash<JsonLdOptions> opts();
+        JsonLdContext ctx_processor();
+        JsonLdExpansion expander(ctx_processor, opts);
+        hash<JsonLdActiveContext> active_ctx = JsonLdContext::newActiveContext();
+        auto result = expander.expand(active_ctx, NOTHING, input);
+        if (!exists result) {
+            return ();
+        }
+        return result.typeCode() == NT_LIST ? result : (result,);
+    }
+
+    private toRdfSimpleTest() {
+        list<auto> expanded = doExpand({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane",
+        });
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        assertTrue(dataset.defaultGraph.size() > 0);
+
+        # Should have rdf:type triple and name triple
+        bool found_type = False;
+        bool found_name = False;
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            if (quad.predicate.value == RDF_TYPE && quad.object.value == "http://schema.org/Person") {
+                found_type = True;
+            }
+            if (quad.predicate.value == "http://schema.org/name") {
+                found_name = True;
+                assertEq("Jane", quad.object.value);
+            }
+        }
+        assertTrue(found_type);
+        assertTrue(found_name);
+    }
+
+    private toRdfTypesTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person", "http://schema.org/Thing"),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        int type_count = 0;
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            if (quad.predicate.value == RDF_TYPE) {
+                ++type_count;
+            }
+        }
+        assertEq(2, type_count);
+    }
+
+    private toRdfLiteralsTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "http://example.com/str": ({"@value": "hello"},),
+                "http://example.com/int": ({"@value": 42},),
+                "http://example.com/bool": ({"@value": True},),
+                "http://example.com/float": ({"@value": 3.14},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        hash<string, hash<RdfTerm>> objects = {};
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            objects{quad.predicate.value} = quad.object;
+        }
+
+        assertEq(XSD_STRING, objects."http://example.com/str".datatype);
+        assertEq("hello", objects."http://example.com/str".value);
+        assertEq(XSD_INTEGER, objects."http://example.com/int".datatype);
+        assertEq("42", objects."http://example.com/int".value);
+        assertEq(XSD_BOOLEAN, objects."http://example.com/bool".datatype);
+        assertEq("true", objects."http://example.com/bool".value);
+        assertEq(XSD_DOUBLE, objects."http://example.com/float".datatype);
+    }
+
+    private toRdfLanguageTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "http://schema.org/name": (
+                    {"@value": "Jane", "@language": "en"},
+                    {"@value": "Jana", "@language": "de"},
+                ),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        assertEq(2, dataset.defaultGraph.size());
+        bool found_en = False;
+        bool found_de = False;
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            if (quad.object.language == "en") {
+                found_en = True;
+                assertEq("Jane", quad.object.value);
+            }
+            if (quad.object.language == "de") {
+                found_de = True;
+                assertEq("Jana", quad.object.value);
+            }
+        }
+        assertTrue(found_en);
+        assertTrue(found_de);
+    }
+
+    private toRdfBlankNodesTest() {
+        list<auto> expanded = (
+            {
+                "@id": "_:b0",
+                "http://schema.org/name": ({"@value": "Anonymous"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        assertTrue(dataset.defaultGraph.size() > 0);
+        assertEq(RdfTermType::BlankNode, dataset.defaultGraph[0].subject.termType);
+    }
+
+    private toRdfListTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "http://example.com/items": ({
+                    "@list": (
+                        {"@value": "a"},
+                        {"@value": "b"},
+                        {"@value": "c"},
+                    ),
+                },),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        # Should have the items predicate pointing to a blank node list
+        # Plus rdf:first/rdf:rest triples for the list
+        assertTrue(dataset.defaultGraph.size() >= 7);  # 1 + 3*2
+
+        bool found_first = False;
+        foreach hash<RdfQuad> quad in (dataset.defaultGraph) {
+            if (quad.predicate.value == RDF_FIRST) {
+                found_first = True;
+                break;
+            }
+        }
+        assertTrue(found_first);
+    }
+
+    private fromRdfSimpleTest() {
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": RDF_TYPE},
+            "object": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/Person"},
+        };
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/name"},
+            "object": <RdfTerm>{"termType": "literal", "value": "Jane", "datatype": XSD_STRING},
+        };
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        list<auto> result = rdf.fromRdf(dataset);
+
+        assertEq(1, result.size());
+        assertEq("http://example.com/1", result[0]."@id");
+        assertTrue(exists result[0]."@type");
+        assertTrue(inlist("http://schema.org/Person", result[0]."@type"));
+        assertTrue(exists result[0]."http://schema.org/name");
+    }
+
+    private fromRdfNativeTypesTest() {
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/count"},
+            "object": <RdfTerm>{"termType": "literal", "value": "42", "datatype": XSD_INTEGER},
+        };
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/active"},
+            "object": <RdfTerm>{"termType": "literal", "value": "true", "datatype": XSD_BOOLEAN},
+        };
+
+        hash<JsonLdOptions> opts = <JsonLdOptions>{"useNativeTypes": True};
+        JsonLdRdf rdf(opts);
+        list<auto> result = rdf.fromRdf(dataset);
+
+        hash<auto> node = result[0];
+        # Integer should be native
+        assertEq(42, node."http://example.com/count"[0]."@value");
+        # Boolean should be native
+        assertEq(True, node."http://example.com/active"[0]."@value");
+    }
+
+    private nquadsSerializeTest() {
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/s"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/p"},
+            "object": <RdfTerm>{"termType": "literal", "value": "hello", "datatype": XSD_STRING},
+        };
+
+        string nquads = JsonLdRdf::toNQuads(dataset);
+        assertTrue(nquads.find("<http://example.com/s>") >= 0);
+        assertTrue(nquads.find("<http://example.com/p>") >= 0);
+        assertTrue(nquads.find("\"hello\"") >= 0);
+        assertTrue(nquads.find(" .") >= 0);
+    }
+
+    private nquadsParseTest() {
+        string nquads = "<http://example.com/s> <http://example.com/p> \"hello\" .\n";
+        nquads += "<http://example.com/s> <http://example.com/p2> \"42\"^^<" + XSD_INTEGER + "> .\n";
+        nquads += "<http://example.com/s> <http://example.com/p3> \"bonjour\"@fr .\n";
+
+        hash<RdfDataset> dataset = JsonLdRdf::fromNQuads(nquads);
+
+        assertEq(3, dataset.defaultGraph.size());
+
+        # Build a lookup by predicate to avoid order-dependent assertions
+        hash<string, hash<RdfQuad>> by_pred;
+        foreach hash<RdfQuad> q in (dataset.defaultGraph) {
+            by_pred{q.predicate.value} = q;
+        }
+
+        # Quad with predicate p: plain literal
+        hash<RdfQuad> q1 = by_pred{"http://example.com/p"};
+        assertEq("http://example.com/s", q1.subject.value);
+        assertEq("hello", q1.object.value);
+
+        # Quad with predicate p2: typed integer literal
+        hash<RdfQuad> q2 = by_pred{"http://example.com/p2"};
+        assertEq(XSD_INTEGER, q2.object.datatype);
+
+        # Quad with predicate p3: language-tagged literal
+        hash<RdfQuad> q3 = by_pred{"http://example.com/p3"};
+        assertEq("fr", q3.object.language);
+        assertEq("bonjour", q3.object.value);
+    }
+
+    private nquadsRoundTripTest() {
+        hash<RdfDataset> original();
+        push original.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/s"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": RDF_TYPE},
+            "object": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/Person"},
+        };
+        push original.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/s"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://schema.org/name"},
+            "object": <RdfTerm>{"termType": "literal", "value": "Jane", "datatype": XSD_STRING},
+        };
+
+        string nquads = JsonLdRdf::toNQuads(original);
+        hash<RdfDataset> parsed = JsonLdRdf::fromNQuads(nquads);
+
+        assertEq(original.defaultGraph.size(), parsed.defaultGraph.size());
+    }
+
+    private nquadsEscapeTest() {
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/s"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/p"},
+            "object": <RdfTerm>{
+                "termType": "literal",
+                "value": "line1\nline2\t\"quoted\"\\\b\f\u0000\u000f",
+                "datatype": XSD_STRING,
+            },
+        };
+
+        string nquads = JsonLdRdf::toNQuads(dataset);
+        assertTrue(nquads.find("\\n") >= 0);
+        assertTrue(nquads.find("\\t") >= 0);
+        assertTrue(nquads.find("\\\"") >= 0);
+        assertTrue(nquads.find("\\\\") >= 0);
+        assertTrue(nquads.find("\\b") >= 0);
+        assertTrue(nquads.find("\\f") >= 0);
+        assertTrue(nquads.find("\\u0000") >= 0);
+        assertTrue(nquads.find("\\u000F") >= 0);
+
+        # Parse it back
+        hash<RdfDataset> parsed = JsonLdRdf::fromNQuads(nquads);
+        assertEq("line1\nline2\t\"quoted\"\\\b\f\u0000\u000f",
+            parsed.defaultGraph[0].object.value);
+    }
+
+    private toRdfFromRdfRoundTripTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+                "http://schema.org/email": ({"@value": "jane@example.com"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+        list<auto> result = rdf.fromRdf(dataset);
+
+        assertEq(1, result.size());
+        assertEq("http://example.com/1", result[0]."@id");
+        assertTrue(exists result[0]."@type");
+        assertTrue(exists result[0]."http://schema.org/name");
+        assertTrue(exists result[0]."http://schema.org/email");
+    }
+
+    private nquadsParseErrorTest() {
+        # Invalid N-Quads line (too few terms)
+        try {
+            JsonLdRdf::fromNQuads("<http://example.com/s> .\n");
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+            # Error message should contain line number
+            assertTrue(ex.desc.find("1") >= 0);
+        }
+
+        # Empty lines and comments should be ignored (no error)
+        hash<RdfDataset> ds = JsonLdRdf::fromNQuads("# comment\n\n");
+        assertEq(0, ds.defaultGraph.size());
+    }
+
+    private fromRdfInvalidNativeTypesTest() {
+        # When useNativeTypes is true and value is not a valid number,
+        # should fall back to string representation
+        hash<RdfDataset> dataset();
+        push dataset.defaultGraph, <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/1"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/val"},
+            "object": <RdfTerm>{
+                "termType": "literal",
+                "value": "not_a_number",
+                "datatype": XSD_INTEGER,
+            },
+        };
+
+        hash<JsonLdOptions> opts = <JsonLdOptions>{"useNativeTypes": True};
+        JsonLdRdf rdf(opts);
+        list<auto> result = rdf.fromRdf(dataset);
+
+        # Should not throw; should fall back to string with datatype
+        assertEq(1, result.size());
+        assertTrue(exists result[0]."http://example.com/val");
+        hash<auto> val_obj = result[0]."http://example.com/val"[0];
+        assertEq("not_a_number", val_obj."@value");
+        assertEq(XSD_INTEGER, val_obj."@type");
+    }
+
+    private toRdfNamedGraphTest() {
+        # Test with a document containing @graph (named graph)
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/graph1",
+                "@graph": (
+                    {
+                        "@id": "http://example.com/1",
+                        "@type": ("http://schema.org/Person",),
+                        "http://schema.org/name": ({"@value": "Jane"},),
+                    },
+                ),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdRdf rdf(opts);
+        hash<RdfDataset> dataset = rdf.toRdf(expanded);
+
+        # Named graph should be populated
+        assertTrue(dataset.namedGraphs.size() > 0 || dataset.defaultGraph.size() > 0);
+    }
+}

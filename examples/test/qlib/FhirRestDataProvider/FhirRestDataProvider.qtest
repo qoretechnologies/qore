@@ -1,0 +1,742 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FhirRestDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires FhirRestClient
+%requires FhirRestDataProvider
+%exec-class FhirRestDataProviderTest
+
+const TestFhirMimeTypeJson = "application/fhir+json";
+
+class TestFhirProviderHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> parsed = parse_uri_query(hdr.path);
+        string path = parsed.method;
+        path =~ s/^fhir\///;
+
+        hash<auto> request = {
+            "method": hdr.method,
+            "path": path,
+            "params": parsed.params,
+            "content_type": hdr."content-type" ?? hdr."Content-Type",
+            "if_match": hdr."if-match" ?? hdr."If-Match",
+            "if_none_exist": hdr."if-none-exist" ?? hdr."If-None-Exist",
+        };
+        if (exists body) {
+            request.body = parse_json(body);
+        }
+
+        if (hdr.method == "GET" && path == "metadata") {
+            return fhirResponse(200, {
+                "resourceType": "CapabilityStatement",
+                "status": "active",
+                "kind": "instance",
+                "fhirVersion": "4.0.1",
+                "format": (TestFhirMimeTypeJson,),
+                "rest": ({
+                    "mode": "server",
+                    "resource": ({"type": "Patient"}, {"type": "Observation"}),
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == ".well-known/smart-configuration") {
+            return fhirResponse(200, {
+                "authorization_endpoint": "https://auth.example.org/authorize",
+                "token_endpoint": "https://auth.example.org/token",
+                "capabilities": ("launch-ehr", "client-public"),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient/pat-1") {
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "pat-1",
+                "active": True,
+            }, {"ETag": "W/\"1\""});
+        }
+
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "2") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": 2,
+                "query": parsed.params,
+                "entry": ({
+                    "resource": {
+                        "resourceType": "Patient",
+                        "id": "pat-2",
+                    },
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": 1,
+                "query": parsed.params,
+                "link": ({"relation": "next", "url": "Patient?page=2"},),
+                "entry": ({
+                    "resource": {
+                        "resourceType": "Patient",
+                        "id": "pat-1",
+                    },
+                },),
+            });
+        }
+
+        if (hdr.method == "POST" && path == "Patient") {
+            return fhirResponse(201, {
+                "resourceType": "Patient",
+                "id": "created",
+                "requestBodyType": request.body.resourceType,
+                "ifNoneExist": request.if_none_exist,
+            }, {"ETag": "W/\"2\""});
+        }
+
+        if (hdr.method == "POST" && (path == "" || path == "fhir")) {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": request.body.type + "-response",
+                "requestBodyType": request.body.resourceType,
+                "requestContentType": request.content_type,
+                "entryCount": request.body.entry.size(),
+                "firstMethod": request.body.entry[0].request.method,
+            });
+        }
+
+        if (hdr.method == "PUT" && path == "Patient/pat-1") {
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "pat-1",
+                "requestBodyType": request.body.resourceType,
+                "ifMatch": request.if_match,
+            }, {"ETag": "W/\"3\""});
+        }
+
+        if (hdr.method == "PUT" && path == "Patient") {
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "conditional",
+                "queryIdentifier": parsed.params.identifier,
+                "requestBodyType": request.body.resourceType,
+            }, {"ETag": "W/\"4\""});
+        }
+
+        if (hdr.method == "PATCH" && path == "Patient/pat-1") {
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "pat-1",
+                "requestContentType": request.content_type,
+                "patchOperation": request.body[0].op,
+                "ifMatch": request.if_match,
+            }, {"ETag": "W/\"5\""});
+        }
+
+        if (hdr.method == "DELETE" && path == "Patient/pat-1") {
+            return fhirResponse(200, {
+                "resourceType": "OperationOutcome",
+                "ifMatch": request.if_match,
+                "issue": ({
+                    "severity": "information",
+                    "code": "deleted",
+                    "diagnostics": "Patient deleted",
+                },),
+            });
+        }
+
+        if (hdr.method == "POST" && path == "Patient/$validate") {
+            return fhirResponse(200, {
+                "resourceType": "OperationOutcome",
+                "issue": ({
+                    "severity": "information",
+                    "code": "informational",
+                    "diagnostics": "Validation succeeded",
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "CodeSystem/example/$validate-code") {
+            return fhirResponse(200, {
+                "resourceType": "Parameters",
+                "parameter": ({
+                    "name": "result",
+                    "valueBoolean": True,
+                }, {
+                    "name": "code",
+                    "valueCode": parsed.params.code,
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "CodeSystem/example/$lookup") {
+            return fhirResponse(200, {
+                "resourceType": "Parameters",
+                "parameter": ({
+                    "name": "name",
+                    "valueString": "Example CodeSystem",
+                }, {
+                    "name": "display",
+                    "valueString": parsed.params.code + " display",
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "ConceptMap/example/$translate") {
+            return fhirResponse(200, {
+                "resourceType": "Parameters",
+                "parameter": ({
+                    "name": "result",
+                    "valueBoolean": True,
+                }, {
+                    "name": "match",
+                    "part": ({
+                        "name": "code",
+                        "valueCode": parsed.params.code + "-target",
+                    },),
+                },),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "ValueSet/example/$expand") {
+            return fhirResponse(200, {
+                "resourceType": "ValueSet",
+                "expansion": {
+                    "parameter": ({
+                        "name": "filter",
+                        "valueString": parsed.params.filter,
+                    },),
+                    "contains": ({
+                        "system": "http://example.org/system",
+                        "code": "smith",
+                    },),
+                },
+            });
+        }
+
+        return fhirResponse(404, {
+            "resourceType": "OperationOutcome",
+            "issue": ({
+                "severity": "error",
+                "code": "not-found",
+                "diagnostics": sprintf("No route for %s %s", hdr.method, path),
+            },),
+        });
+    }
+
+    private hash<auto> fhirResponse(int code, hash<auto> body, hash<auto> headers = {}) {
+        return makeResponse(code, make_json(body), {"Content-Type": TestFhirMimeTypeJson} + headers);
+    }
+}
+
+class FhirRestDataProviderTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        TestFhirProviderHandler handler();
+        HttpServer http;
+        int port;
+        string base_url;
+    }
+
+    constructor() : QUnit::Test("FhirRestDataProvider test", "1.0") {
+        addTestCase("factory and action catalog test", \factoryAndActionCatalogTest());
+        addTestCase("metadata actions test", \metadataActionsTest());
+        addTestCase("resource actions test", \resourceActionsTest());
+        addTestCase("generated resource actions test", \generatedResourceActionsTest());
+        addTestCase("resource type validation test", \resourceTypeValidationTest());
+        addTestCase("generated resource data types test", \generatedResourceDataTypesTest());
+        addTestCase("terminology actions test", \terminologyActionsTest());
+        addTestCase("negative constructor test", \negativeConstructorTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        http.setHandler("fhir", "", NOTHING, handler);
+        http.setDefaultHandler("fhir", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        base_url = sprintf("http://localhost:%d/fhir", port);
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    factoryAndActionCatalogTest() {
+        FhirRestDataProvider::FhirRestDataProviderFactory factory();
+        hash<auto> info = factory.getInfo();
+        assertEq(FhirRestDataProvider::FactoryName, info.name);
+        assertTrue(info.children_can_support_apis);
+
+        AbstractDataProviderFactory catalog_factory = DataProvider::getFactoryEx(
+            FhirRestDataProvider::FactoryName);
+        assertEq(FhirRestDataProvider::FactoryName, catalog_factory.getInfo().name);
+
+        *hash<auto> app = DataProviderActionCatalog::getApp(FhirRestDataProvider::AppName);
+        assertTrue(exists app);
+        assertEq("FHIR R4", app.display_name);
+        assertEq("fhir", app.scheme);
+        assertTrue(app.legal =~ /HL7/, "legal notice names HL7");
+        assertTrue(app.legal =~ /endorsement/, "legal notice disclaims endorsement");
+        assertEq(146, FhirRestDataProvider::FhirR4ResourceTypeList.size());
+        assertTrue(FhirRestDataProvider::isFhirR4ResourceType("Patient"));
+        assertEq("Patient", FhirRestDataProvider::getFhirR4GeneratedResourceTypeForPathName("patient"));
+        assertNothing(FhirRestDataProvider::getFhirR4GeneratedResourceTypeForPathName("account"));
+        assertFalse(FhirRestDataProvider::isFhirR4ResourceType("DomainResource"));
+        assertEq(("Bundle", "Observation", "Patient"), FhirRestDataProvider::FhirR4GeneratedResourceTypeList);
+        assertEq("Patient", FhirRestDataProvider::FhirR4GeneratedResourceMetadata.Patient.resource_type);
+
+        *list<hash<auto>> actions = DataProviderActionCatalog::getActions(FhirRestDataProvider::AppName);
+        assertTrue(exists actions);
+        list<string> action_names = sort(map $1.action, actions);
+        assertTrue(inlist("get-capability-statement", action_names));
+        assertTrue(inlist("read-resource", action_names));
+        assertTrue(inlist("search-resources", action_names));
+        assertTrue(inlist("search-all-resources", action_names));
+        assertTrue(inlist("create-resource", action_names));
+        assertTrue(inlist("submit-bundle", action_names));
+        assertTrue(inlist("update-resource", action_names));
+        assertTrue(inlist("conditional-update-resource", action_names));
+        assertTrue(inlist("patch-resource", action_names));
+        assertTrue(inlist("delete-resource", action_names));
+        assertTrue(inlist("validate-resource", action_names));
+        assertTrue(inlist("validate-code", action_names));
+        assertTrue(inlist("lookup-code", action_names));
+        assertTrue(inlist("translate-code", action_names));
+        assertTrue(inlist("expand-value-set", action_names));
+
+        foreach string resource_type in (FhirRestDataProvider::FhirR4GeneratedResourceTypeList) {
+            string path_name = resource_type.lwr();
+            foreach string operation in (("read", "search", "search-all", "create", "update",
+                    "conditional-update", "patch", "delete", "validate")) {
+                assertTrue(inlist(operation + "-" + path_name, action_names),
+                    sprintf("generated action registered: %s-%s", operation, path_name));
+            }
+        }
+
+        hash<auto> read_patient = DataProviderActionCatalog::getAppActionEx(
+            FhirRestDataProvider::AppName, "read-patient");
+        assertEq("/resources/patient/read", read_patient.path);
+        assertEq("Patient", read_patient.output_type.getName());
+        assertFalse(exists read_patient.options.resource_type);
+        assertTrue(exists read_patient.options.id);
+
+        hash<auto> create_patient = DataProviderActionCatalog::getAppActionEx(
+            FhirRestDataProvider::AppName, "create-patient");
+        assertEq("/resources/patient/create", create_patient.path);
+        assertFalse(exists create_patient.options.resource_type);
+        assertEq("Patient", create_patient.options.resource.type.getName());
+        assertTrue(create_patient.options.resource.required);
+    }
+
+    metadataActionsTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        AbstractDataProvider metadata = provider.getChildProviderEx("metadata");
+
+        hash<auto> capability = metadata.getChildProviderEx("capability-statement").doRequest(NOTHING);
+        assertEq("CapabilityStatement", capability.resourceType);
+        assertEq("4.0.1", capability.fhirVersion);
+
+        hash<auto> smart = metadata.getChildProviderEx("smart-configuration").doRequest(NOTHING);
+        assertEq("https://auth.example.org/authorize", smart.authorization_endpoint);
+        assertEq("https://auth.example.org/token", smart.token_endpoint);
+    }
+
+    resourceActionsTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        AbstractDataProvider resources = provider.getChildProviderEx("resources");
+        list<string> child_names = sort(resources.getChildProviderNames());
+        assertTrue(child_names.contains("patient"));
+        assertTrue(child_names.contains("observation"));
+        assertFalse(child_names.contains("bundle"));
+
+        hash<auto> patient = resources.getChildProviderEx("read").doRequest({
+            "resource_type": "Patient",
+            "id": "pat-1",
+        });
+        assertEq("Patient", patient.resourceType);
+        assertEq("pat-1", patient.id);
+
+        hash<auto> bundle = resources.getChildProviderEx("search").doRequest({
+            "resource_type": "Patient",
+            "id": "pat-1",
+            "include": ("Patient:general-practitioner", "Patient:organization"),
+            "params": {
+                "name": "Smith",
+            },
+        });
+        assertEq("Bundle", bundle.resourceType);
+        assertEq(2, bundle.query."_include".size());
+        assertEq("pat-1", bundle.query."_id");
+
+        hash<auto> all = resources.getChildProviderEx("search-all").doRequest({
+            "resource_type": "Patient",
+            "params": {
+                "name": "Smith",
+            },
+        });
+        assertEq("Bundle", all.resourceType);
+        assertEq(2, all.entry.size());
+        assertEq("pat-2", all.entry[1].resource.id);
+
+        hash<auto> created = resources.getChildProviderEx("create").doRequest({
+            "resource_type": "Patient",
+            "resource": {
+                "resourceType": "Patient",
+                "name": ({"family": "Jones"},),
+            },
+            "if_none_exist": "identifier=http://example.org/mrn|123",
+        });
+        assertEq(201, created.status_code);
+        assertEq("Patient", created.body.requestBodyType);
+        assertEq("identifier=http://example.org/mrn|123", created.body.ifNoneExist);
+        assertEq("W/\"2\"", created.headers.etag);
+
+        hash<auto> submitted = resources.getChildProviderEx("submit-bundle").doRequest({
+            "bundle": FhirRestClient::FhirRestClientBase::makeBundle((
+                FhirRestClient::FhirRestClientBase::makeConditionalCreateBundleEntry("Patient", {
+                    "resourceType": "Patient",
+                    "name": ({"family": "Jones"},),
+                }, "identifier=http://example.org/mrn|123"),
+            ), "transaction"),
+        });
+        assertEq(200, submitted.status_code);
+        assertEq("Bundle", submitted.body.resourceType);
+        assertEq("transaction-response", submitted.body.type);
+        assertEq(TestFhirMimeTypeJson, submitted.body.requestContentType);
+        assertEq(1, submitted.body.entryCount);
+        assertEq("POST", submitted.body.firstMethod);
+
+        hash<auto> updated = resources.getChildProviderEx("update").doRequest({
+            "resource_type": "Patient",
+            "id": "pat-1",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "pat-1",
+            },
+            "etag": "W/\"1\"",
+        });
+        assertEq(200, updated.status_code);
+        assertEq("W/\"1\"", updated.body.ifMatch);
+
+        hash<auto> conditional = resources.getChildProviderEx("conditional-update").doRequest({
+            "resource_type": "Patient",
+            "search_params": {
+                "identifier": "http://example.org/mrn|123",
+            },
+            "resource": {
+                "resourceType": "Patient",
+                "id": "conditional",
+            },
+        });
+        assertEq(200, conditional.status_code);
+        assertEq("Patient", conditional.body.requestBodyType);
+        assertEq("http%3A%2F%2Fexample.org%2Fmrn%7C123", conditional.body.queryIdentifier);
+
+        hash<auto> patched = resources.getChildProviderEx("patch").doRequest({
+            "resource_type": "Patient",
+            "id": "pat-1",
+            "patch": ({
+                "op": "replace",
+                "path": "/active",
+                "value": False,
+            },),
+            "etag": "W/\"3\"",
+        });
+        assertEq(200, patched.status_code);
+        assertEq("replace", patched.body.patchOperation);
+        assertEq("W/\"3\"", patched.body.ifMatch);
+
+        hash<auto> deleted = resources.getChildProviderEx("delete").doRequest({
+            "resource_type": "Patient",
+            "id": "pat-1",
+            "etag": "W/\"3\"",
+        });
+        assertEq(200, deleted.status_code);
+        assertEq("OperationOutcome", deleted.body.resourceType);
+        assertEq("W/\"3\"", deleted.body.ifMatch);
+
+        hash<auto> outcome = resources.getChildProviderEx("validate").doRequest({
+            "resource": {
+                "resourceType": "Patient",
+                "id": "pat-1",
+            },
+            "resource_type": "Patient",
+        });
+        assertEq("OperationOutcome", outcome.resourceType);
+        assertEq("information", outcome.issue[0].severity);
+    }
+
+    generatedResourceActionsTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        AbstractDataProvider patient = provider.getChildProviderEx("resources").getChildProviderEx("patient");
+
+        hash<auto> read_patient = patient.getChildProviderEx("read").doRequest({
+            "id": "pat-1",
+        });
+        assertEq("Patient", read_patient.resourceType);
+        assertEq("pat-1", read_patient.id);
+
+        hash<auto> bundle = patient.getChildProviderEx("search").doRequest({
+            "params": {
+                "name": "Smith",
+            },
+        });
+        assertEq("Bundle", bundle.resourceType);
+        assertEq("Smith", bundle.query.name);
+
+        hash<auto> all = patient.getChildProviderEx("search-all").doRequest({
+            "params": {
+                "name": "Smith",
+            },
+        });
+        assertEq(2, all.entry.size());
+
+        hash<auto> created = patient.getChildProviderEx("create").doRequest({
+            "resource": {
+                "resourceType": "Patient",
+                "name": ({"family": "Jones"},),
+            },
+        });
+        assertEq(201, created.status_code);
+        assertEq("Patient", created.body.requestBodyType);
+
+        hash<auto> updated = patient.getChildProviderEx("update").doRequest({
+            "id": "pat-1",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "pat-1",
+                "active": True,
+            },
+            "etag": "W/\"1\"",
+        });
+        assertEq(200, updated.status_code);
+        assertEq("W/\"1\"", updated.body.ifMatch);
+
+        hash<auto> conditional = patient.getChildProviderEx("conditional-update").doRequest({
+            "search_params": {
+                "identifier": "http://example.org/mrn|123",
+            },
+            "resource": {
+                "resourceType": "Patient",
+                "id": "conditional",
+            },
+        });
+        assertEq(200, conditional.status_code);
+        assertEq("Patient", conditional.body.requestBodyType);
+
+        hash<auto> patched = patient.getChildProviderEx("patch").doRequest({
+            "id": "pat-1",
+            "patch": ({
+                "op": "replace",
+                "path": "/active",
+                "value": False,
+            },),
+            "etag": "W/\"3\"",
+        });
+        assertEq(200, patched.status_code);
+        assertEq("replace", patched.body.patchOperation);
+
+        hash<auto> deleted = patient.getChildProviderEx("delete").doRequest({
+            "id": "pat-1",
+        });
+        assertEq(200, deleted.status_code);
+        assertEq("OperationOutcome", deleted.body.resourceType);
+
+        hash<auto> outcome = patient.getChildProviderEx("validate").doRequest({
+            "resource": {
+                "resourceType": "Patient",
+                "id": "pat-1",
+            },
+        });
+        assertEq("OperationOutcome", outcome.resourceType);
+
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            patient.getChildProviderEx("create").doRequest({
+                "resource": {
+                    "resourceType": "Observation",
+                },
+            });
+        });
+
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            patient.getChildProviderEx("create").doRequest({
+                "resource": {
+                    "resourceType": "Patient",
+                    "active": "yes",
+                },
+            });
+        });
+    }
+
+    resourceTypeValidationTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        AbstractDataProvider resources = provider.getChildProviderEx("resources");
+
+        assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
+            resources.getChildProviderEx("read").doRequest({
+                "resource_type": "NoSuchResource",
+                "id": "example",
+            });
+        });
+
+        assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
+            resources.getChildProviderEx("create").doRequest({
+                "resource_type": "Patient",
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "obs-1",
+                },
+            });
+        });
+
+        assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
+            resources.getChildProviderEx("create").doRequest({
+                "resource_type": "Patient",
+                "resource": {
+                    "id": "patient-1",
+                },
+            });
+        });
+
+        assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
+            resources.getChildProviderEx("validate").doRequest({
+                "resource": {
+                    "id": "missing-type",
+                },
+            });
+        });
+
+        assertThrows("FHIR-CAPABILITY-RESOURCE-ERROR", sub () {
+            resources.getChildProviderEx("read").doRequest({
+                "resource_type": "Bundle",
+                "id": "bundle-1",
+            });
+        });
+    }
+
+    generatedResourceDataTypesTest() {
+        FhirRestDataProvider::FhirR4GeneratedResourceDataType patient_type =
+            FhirRestDataProvider::getFhirR4GeneratedResourceDataType("Patient");
+        assertEq("Patient", patient_type.getName());
+        hash<auto> patient = patient_type.acceptsValue({
+            "resourceType": "Patient",
+            "id": "patient-1",
+            "active": True,
+            "name": ({"family": "Jones"},),
+        });
+        assertEq("Patient", patient.resourceType);
+        assertEq(True, patient.active);
+
+        FhirRestDataProvider::FhirR4GeneratedResourceDataType observation_type =
+            FhirRestDataProvider::getFhirR4GeneratedResourceDataType("Observation");
+        hash<auto> observation = observation_type.acceptsValue({
+            "resourceType": "Observation",
+            "status": "final",
+            "code": {"text": "Heart rate"},
+        });
+        assertEq("final", observation.status);
+
+        FhirRestDataProvider::FhirR4GeneratedResourceDataType bundle_type =
+            FhirRestDataProvider::getFhirR4GeneratedResourceDataType("Bundle");
+        hash<auto> bundle = bundle_type.acceptsValue({
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": ({
+                "resource": patient,
+            },),
+        });
+        assertEq("searchset", bundle.type);
+
+        assertNothing(FhirRestDataProvider::getFhirR4GeneratedResourceDataType("Account"));
+        assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
+            FhirRestDataProvider::getFhirR4GeneratedResourceDataType("NoSuchResource");
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            patient_type.acceptsValue({
+                "resourceType": "Observation",
+            });
+        });
+    }
+
+    terminologyActionsTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        AbstractDataProvider terminology = provider.getChildProviderEx("terminology");
+
+        hash<auto> result = terminology.getChildProviderEx("validate-code").doRequest({
+            "path": "CodeSystem/example",
+            "params": {"code": "abc"},
+        });
+        assertEq("Parameters", result.resourceType);
+        assertTrue(result.parameter[0].valueBoolean);
+        assertEq("abc", result.parameter[1].valueCode);
+
+        hash<auto> lookup = terminology.getChildProviderEx("lookup-code").doRequest({
+            "path": "CodeSystem/example",
+            "params": {"system": "http://example.org/system", "code": "abc"},
+        });
+        assertEq("Parameters", lookup.resourceType);
+        assertEq("Example CodeSystem", lookup.parameter[0].valueString);
+        assertEq("abc display", lookup.parameter[1].valueString);
+
+        hash<auto> translation = terminology.getChildProviderEx("translate-code").doRequest({
+            "path": "ConceptMap/example",
+            "params": {"system": "http://example.org/local", "code": "abc"},
+        });
+        assertEq("Parameters", translation.resourceType);
+        assertTrue(translation.parameter[0].valueBoolean);
+        assertEq("abc-target", translation.parameter[1].part[0].valueCode);
+
+        hash<auto> expansion = terminology.getChildProviderEx("expand-value-set").doRequest({
+            "path": "ValueSet/example",
+            "params": {"filter": "smi"},
+        });
+        assertEq("ValueSet", expansion.resourceType);
+        assertEq("smi", expansion.expansion.parameter[0].valueString);
+    }
+
+    negativeConstructorTest() {
+        assertThrows("FHIR-DATA-PROVIDER-ERROR", sub () {
+            new FhirRestDataProvider::FhirRestDataProvider({});
+        });
+    }
+}

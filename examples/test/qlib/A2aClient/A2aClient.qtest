@@ -1,0 +1,555 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires A2aClient
+%requires A2aServerHandler
+%exec-class A2aClientTest
+
+class TestA2aServerHandler inherits A2aServerHandler {
+    constructor(LoggerInterface logger) : A2aServerHandler(logger, {
+        "name": "TestAgent",
+        "description": "A test A2A agent for unit testing",
+        "url": "http://localhost",
+        "version": "1.0",
+        "capabilities": <A2aAgentCapabilities>{
+            "streaming": True,
+            "pushNotifications": True,
+        },
+        "defaultInputModes": ("text/plain",),
+        "defaultOutputModes": ("text/plain",),
+        "skills": (<A2aAgentSkill>{
+            "id": "echo",
+            "name": "Echo",
+            "description": "Echoes messages back",
+            "tags": ("test",),
+        }, <A2aAgentSkill>{
+            "id": "translate",
+            "name": "Translate",
+            "description": "Translates text",
+            "inputModes": ("text/plain",),
+            "outputModes": ("text/plain",),
+        },),
+    }) {
+        setMessageHandler(\handleMessage());
+    }
+
+    private auto handleMessage(hash<auto> task_info, hash<auto> msg) {
+        # Simple echo: return the message text as the agent's response
+        string response_text = "Echo: ";
+        foreach hash<auto> part in (msg.parts) {
+            if (part.type == "text") {
+                response_text += part.text;
+            }
+        }
+        return {
+            "role": "agent",
+            "parts": ({"type": "text", "text": response_text},),
+        };
+    }
+}
+
+class A2aClientTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        TestA2aServerHandler a2a_server;
+        HttpServer http;
+        int port;
+        string base_url;
+    }
+
+    constructor() : QUnit::Test("A2aClient test", "1.0") {
+        addTestCase("agent card test", \agentCardTest());
+        addTestCase("send message test", \sendMessageTest());
+        addTestCase("task lifecycle test", \taskLifecycleTest());
+        addTestCase("task state transitions test", \taskStateTransitionsTest());
+        addTestCase("connection provider test", \connectionProviderTest());
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("error handling test", \errorHandlingTest());
+        addTestCase("push notification config test", \pushNotificationConfigTest());
+        addTestCase("multiple messages test", \multipleMessagesTest());
+        addTestCase("callback test", \callbackTest());
+        addTestCase("close and reuse test", \closeAndReuseTest());
+        addTestCase("agent card caching test", \agentCardCachingTest());
+        addTestCase("message with metadata test", \messageWithMetadataTest());
+        addTestCase("v1.0 protocol version detection test", \v10VersionDetectionTest());
+        addTestCase("v1.0 explicit version test", \v10ExplicitVersionTest());
+        addTestCase("v1.0 method name translation test", \v10MethodNameTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        a2a_server = new TestA2aServerHandler(logger);
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http.setHandler("a2a-handler", "", MimeTypeJson, a2a_server);
+        http.setDefaultHandler("a2a-handler", a2a_server);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        base_url = sprintf("http://localhost:%d", port);
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    agentCardTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Get agent card
+        hash<auto> card = client.getAgentCard();
+
+        assertEq("TestAgent", card.name, "Agent name should match");
+        assertEq("A test A2A agent for unit testing", card.description, "Agent description should match");
+        assertEq("1.0", card.version, "Agent version should match");
+        assertTrue(exists card.capabilities, "Should have capabilities");
+        assertTrue(card.capabilities.streaming, "Should support streaming");
+        assertTrue(card.capabilities.pushNotifications, "Should support push notifications");
+
+        # Verify skills
+        assertTrue(exists card.skills, "Should have skills");
+        assertEq(2, card.skills.size(), "Should have 2 skills");
+
+        *hash<auto> echo_skill;
+        foreach hash<auto> skill in (card.skills) {
+            if (skill.id == "echo") {
+                echo_skill = skill;
+                break;
+            }
+        }
+        assertTrue(exists echo_skill, "Should have echo skill");
+        assertEq("Echo", echo_skill.name, "Echo skill name");
+        assertEq("Echoes messages back", echo_skill.description, "Echo skill description");
+
+        client.close();
+    }
+
+    sendMessageTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Send a message
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Hello, agent!"},),
+        });
+
+        assertTrue(exists task.id, "Task should have an ID");
+        assertTrue(exists task.status, "Task should have a status");
+        # Task could be completed or active depending on handler timing
+        assertTrue(task.status.state == A2aTaskState::Completed
+            || task.status.state == A2aTaskState::Active,
+            sprintf("Task state should be completed or active, got: %y", task.status.state));
+
+        # If completed, check the response in history
+        if (task.status.state == A2aTaskState::Completed && task.history) {
+            # Find agent response in history
+            bool found_response = False;
+            foreach hash<auto> msg in (task.history) {
+                if (msg.role == "agent") {
+                    assertEq("Echo: Hello, agent!", msg.parts[0].text, "Agent response should echo");
+                    found_response = True;
+                    break;
+                }
+            }
+            assertTrue(found_response, "Should have agent response in history");
+        }
+
+        client.close();
+    }
+
+    taskLifecycleTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Send a message to create a task
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Test task lifecycle"},),
+        });
+
+        assertTrue(exists task.id, "Task should have an ID");
+        string task_id = task.id;
+
+        # Get the task
+        hash<auto> retrieved_task = client.getTask(task_id);
+        assertEq(task_id, retrieved_task.id, "Retrieved task ID should match");
+        assertTrue(exists retrieved_task.status, "Retrieved task should have status");
+
+        client.close();
+    }
+
+    taskStateTransitionsTest() {
+        # Test valid state transitions on the server side
+        hash<A2aTaskInfo> task = a2a_server.createTask("test-context", {"key": "value"});
+        assertTrue(exists task.id, "Created task should have ID");
+
+        # pending -> active
+        hash<auto> result = a2a_server.updateTaskState(task.id, A2aTaskState::Active);
+        assertEq(A2aTaskState::Active, result.status.state, "Should transition to active");
+
+        # active -> input-required
+        result = a2a_server.updateTaskState(task.id, A2aTaskState::InputRequired);
+        assertEq(A2aTaskState::InputRequired, result.status.state, "Should transition to input-required");
+
+        # input-required -> active
+        result = a2a_server.updateTaskState(task.id, A2aTaskState::Active);
+        assertEq(A2aTaskState::Active, result.status.state, "Should transition back to active");
+
+        # active -> completed
+        result = a2a_server.updateTaskState(task.id, A2aTaskState::Completed, {
+            "role": "agent",
+            "parts": ({"type": "text", "text": "Done!"},),
+        });
+        assertEq(A2aTaskState::Completed, result.status.state, "Should transition to completed");
+
+        # Test invalid transition from terminal state
+        assertThrows("A2A-CONFLICT", sub () {
+            a2a_server.updateTaskState(task.id, A2aTaskState::Active);
+        });
+
+        # Test canceled transition
+        hash<A2aTaskInfo> task2 = a2a_server.createTask();
+        a2a_server.updateTaskState(task2.id, A2aTaskState::Active);
+        result = a2a_server.updateTaskState(task2.id, A2aTaskState::Canceled);
+        assertEq(A2aTaskState::Canceled, result.status.state, "Should transition to canceled");
+
+        # Test rejected transition
+        hash<A2aTaskInfo> task3 = a2a_server.createTask();
+        result = a2a_server.updateTaskState(task3.id, A2aTaskState::Rejected);
+        assertEq(A2aTaskState::Rejected, result.status.state, "Should transition to rejected");
+
+        # Test failed transition
+        hash<A2aTaskInfo> task4 = a2a_server.createTask();
+        a2a_server.updateTaskState(task4.id, A2aTaskState::Active);
+        result = a2a_server.updateTaskState(task4.id, A2aTaskState::Failed);
+        assertEq(A2aTaskState::Failed, result.status.state, "Should transition to failed");
+
+        # Test auth-required transition
+        hash<A2aTaskInfo> task5 = a2a_server.createTask();
+        a2a_server.updateTaskState(task5.id, A2aTaskState::Active);
+        result = a2a_server.updateTaskState(task5.id, A2aTaskState::AuthRequired);
+        assertEq(A2aTaskState::AuthRequired, result.status.state, "Should transition to auth-required");
+
+        # auth-required -> active
+        result = a2a_server.updateTaskState(task5.id, A2aTaskState::Active);
+        assertEq(A2aTaskState::Active, result.status.state, "Should transition from auth-required to active");
+    }
+
+    connectionProviderTest() {
+        # Test creating connection via ConnectionProvider
+        string a2a_url = regex_subst(base_url, "^http:", "a2a:");
+
+        A2aConnection conn("test-a2a", "Test A2A connection", a2a_url);
+
+        assertEq("a2a", conn.getType(), "Connection type should be a2a");
+
+        # Get client (should auto-fetch agent card)
+        A2aClient::A2aClient client = conn.get(True);
+
+        # Verify agent card was fetched
+        *hash<auto> card = client.getCachedAgentCard();
+        assertTrue(exists card, "Should have cached agent card from connection");
+        assertEq("TestAgent", card.name, "Agent name from connection should match");
+
+        client.close();
+    }
+
+    connectionSchemeTest() {
+        # Test A2A connection scheme info
+        hash<auto> scheme_info = A2aConnection::ConnectionScheme;
+
+        assertTrue(exists scheme_info.display_name, "should have display_name");
+        assertTrue(exists scheme_info.short_desc, "should have short_desc");
+        assertTrue(exists scheme_info.desc, "should have desc");
+        assertTrue(exists scheme_info.cls, "should have cls");
+        assertTrue(exists scheme_info.options, "should have options");
+        assertTrue(exists scheme_info.schemes, "should have schemes");
+
+        # Verify schemes
+        assertTrue(scheme_info.schemes.a2a, "should support a2a");
+        assertTrue(scheme_info.schemes.a2as, "should support a2as");
+
+        # Verify base scheme map
+        assertEq("a2as", scheme_info.base_scheme_map.https);
+        assertEq("a2a", scheme_info.base_scheme_map.http);
+    }
+
+    errorHandlingTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Test getting non-existent task
+        assertThrows("A2A-ERROR", sub () {
+            client.getTask("nonexistent-task-id");
+        });
+
+        # Test canceling non-existent task
+        assertThrows("A2A-ERROR", sub () {
+            client.cancelTask("nonexistent-task-id");
+        });
+
+        # Test with unreachable host
+        A2aClient::A2aClient bad_client("http://localhost:59999");
+        assertThrows("A2A-AGENT-CARD-ERROR", sub () {
+            bad_client.getAgentCard();
+        });
+
+        client.close();
+    }
+
+    pushNotificationConfigTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create a task first
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Push notification test"},),
+        });
+        string task_id = task.id;
+
+        # Set push notification config
+        hash<auto> result = client.setPushNotificationConfig(task_id, {
+            "url": "http://localhost:9999/webhook",
+            "token": "test-token-123",
+        });
+        assertEq(task_id, result.id, "Push config set should return task ID");
+        assertTrue(exists result.pushNotificationConfigId, "Push config set should return config ID");
+        auto config_id = result.pushNotificationConfigId;
+
+        # Get push notification config
+        result = client.getPushNotificationConfig(task_id);
+        assertEq(task_id, result.id, "Push config get should return task ID");
+
+        # List push notification configs
+        result = client.listPushNotificationConfigs(task_id);
+        assertEq(task_id, result.id, "Push config list should return task ID");
+        assertTrue(exists result.pushNotificationConfigs, "Should have push configs list");
+
+        # Delete push notification config using the returned config ID
+        result = client.deletePushNotificationConfig(task_id, config_id);
+        assertEq(task_id, result.id, "Push config delete should return task ID");
+
+        client.close();
+    }
+
+    multipleMessagesTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Send multiple messages
+        list<string> task_ids = ();
+        for (int i = 0; i < 5; i++) {
+            hash<auto> task = client.sendMessage({
+                "role": "user",
+                "parts": ({"type": "text", "text": sprintf("Message %d", i)},),
+            });
+            assertTrue(exists task.id, sprintf("Task %d should have ID", i));
+            task_ids += task.id;
+        }
+
+        # Verify all tasks exist and have unique IDs
+        assertEq(5, task_ids.size(), "Should have 5 task IDs");
+        hash<string, bool> unique_ids;
+        foreach string id in (task_ids) {
+            assertFalse(unique_ids{id} ?? False, sprintf("Task ID %y should be unique", id));
+            unique_ids{id} = True;
+        }
+
+        # Retrieve each task
+        foreach string id in (task_ids) {
+            hash<auto> task = client.getTask(id);
+            assertEq(id, task.id, "Task ID should match");
+        }
+
+        client.close();
+    }
+
+    callbackTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Set callbacks
+        bool status_callback_called = False;
+        client.setCallback("onTaskStatusUpdate", sub (hash<auto> event) {
+            status_callback_called = True;
+        });
+
+        # Remove callback
+        client.removeCallback("onTaskStatusUpdate");
+        assertTrue(True, "Callback removal should work");
+
+        # Set multiple callbacks
+        client.setCallback("onTaskArtifactUpdate", sub (hash<auto> event) {});
+        client.setCallback("onTaskMessageUpdate", sub (hash<auto> event) {});
+        assertTrue(True, "Multiple callbacks should work");
+
+        client.close();
+    }
+
+    closeAndReuseTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Get agent card
+        hash<auto> card = client.getAgentCard();
+        assertTrue(exists card.name, "Should have agent card");
+
+        # Close
+        client.close();
+
+        # Agent card cache should be cleared
+        *hash<auto> cached = client.getCachedAgentCard();
+        assertFalse(exists cached, "Cached agent card should be cleared after close");
+
+        # Re-fetch agent card (should work after close)
+        card = client.getAgentCard();
+        assertTrue(exists card.name, "Should have agent card after re-fetch");
+
+        client.close();
+    }
+
+    agentCardCachingTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Initially no cached card
+        *hash<auto> cached = client.getCachedAgentCard();
+        assertFalse(exists cached, "Should not have cached card initially");
+
+        # Fetch agent card
+        hash<auto> card = client.getAgentCard();
+        assertTrue(exists card.name, "Should have fetched card");
+
+        # Now should be cached
+        cached = client.getCachedAgentCard();
+        assertTrue(exists cached, "Should have cached card now");
+        assertEq(card.name, cached.name, "Cached card should match fetched card");
+
+        client.close();
+    }
+
+    messageWithMetadataTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Send message with context ID and metadata
+        hash<auto> task = client.sendMessage(
+            {
+                "role": "user",
+                "parts": ({"type": "text", "text": "Message with context"},),
+                "messageId": "msg-001",
+            },
+            {
+                "contextId": "ctx-123",
+                "metadata": {"priority": "high", "source": "test"},
+            },
+        );
+
+        assertTrue(exists task.id, "Task should have ID");
+
+        client.close();
+    }
+
+    # ================================================================
+    # A2A v1.0 client dual-version tests
+    # ================================================================
+
+    v10VersionDetectionTest() {
+        # Default version should be v0.3 before any card fetch
+        A2aClient::A2aClient client(base_url);
+        assertEq("0.3", client.getProtocolVersion(), "Default version should be 0.3");
+
+        # Our server serves both v0.3 and v1.0 agent card paths.
+        # The client tries v1.0 path first, so it should detect v1.0.
+        hash<auto> card = client.getAgentCard();
+        assertEq("1.0", client.getProtocolVersion(),
+            "Version should be 1.0 after v1.0 card path succeeds");
+        # Card should be translated to v0.3 internal format
+        assertTrue(card.hasKey("url"), "Card should have top-level url (translated from v1.0)");
+        assertFalse(card.hasKey("supportedInterfaces"),
+            "Internal card should not have supportedInterfaces");
+
+        # Sending a message should work transparently
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Auto-detected v1.0"},),
+        });
+        assertTrue(exists task.id, "Task should have ID");
+        # Response should be in v0.3 internal format
+        assertEq("completed", task.status.state, "State should be v0.3 format");
+
+        client.close();
+    }
+
+    v10ExplicitVersionTest() {
+        # Set version explicitly and verify it affects requests
+        A2aClient::A2aClient client(base_url);
+        client.setProtocolVersion("1.0");
+        assertEq("1.0", client.getProtocolVersion(), "Explicit version should be 1.0");
+
+        # Send a message — client should translate to v1.0 wire format and back
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "v1.0 client test"},),
+        });
+
+        # Response should be in v0.3 internal format (translated back from v1.0)
+        assertTrue(exists task.id, "Task should have ID");
+        assertEq("completed", task.status.state,
+            "State should be v0.3 format (translated from TASK_STATE_COMPLETED)");
+
+        # Verify tasks/get also works
+        hash<auto> fetched = client.getTask(task.id);
+        assertEq(task.id, fetched.id, "Task IDs should match");
+        assertEq("completed", fetched.status.state, "Fetched state should be v0.3 format");
+
+        # History should have v0.3-style roles
+        if (fetched.history) {
+            foreach hash<auto> msg in (fetched.history) {
+                assertFalse(msg.role =~ /^ROLE_/,
+                    sprintf("History role %y should be v0.3 format", msg.role));
+            }
+        }
+
+        client.close();
+    }
+
+    v10MethodNameTest() {
+        # Verify the client sends v1.0 method names when protocol version is 1.0
+        # by checking we can do a full round-trip with explicit v1.0 setting
+        A2aClient::A2aClient client(base_url);
+        client.setProtocolVersion("1.0");
+
+        # List tasks
+        hash<auto> result = client.listTasks();
+        assertTrue(result.hasKey("tasks"), "Should have tasks key");
+
+        # Cancel a non-existent task should throw
+        bool got_error = False;
+        try {
+            client.cancelTask("nonexistent-task-xyz");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "A2A-ERROR") {
+                got_error = True;
+            } else {
+                rethrow;
+            }
+        }
+        assertTrue(got_error, "Should get error for non-existent task");
+
+        client.close();
+    }
+}

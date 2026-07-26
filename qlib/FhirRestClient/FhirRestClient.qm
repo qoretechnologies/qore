@@ -1,0 +1,283 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FhirRestClient.qm @brief FHIR REST client module
+
+/*  FhirRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Util
+
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module FhirRestClient {
+    version = "1.0";
+    desc = "FHIR REST client module for JSON-based FHIR servers";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("fhir", FhirRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("fhirs", FhirRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage FhirRestClient Module
+
+    @tableofcontents
+
+    @section fhirrestclientintro FhirRestClient Module Introduction
+
+    The %FhirRestClient module provides a JSON REST client for HL7 FHIR servers.
+    The implementation targets FHIR R4-compatible servers and provides the
+    connection and request helpers used by the companion DataProvider module.
+
+    The module uses @ref RestClient::RestClient "RestClient" for HTTP behavior,
+    OAuth2 options, request serialization, and connection-provider integration.
+    FHIR payloads are sent and accepted as \c application/fhir+json.
+
+    The main classes are:
+    - @ref FhirRestClient::FhirRestClient "FhirRestClient": REST client helpers
+      for FHIR metadata, SMART discovery, CapabilityStatement resource discovery,
+      SMART-to-OAuth2 option mapping, SMART Backend Services JWT client assertions,
+      CRUD, transaction/batch Bundle writes, conditional update, patch,
+      paginated search, terminology operations, common FHIR resource builders, validation,
+      and OperationOutcome error mapping
+    - @ref FhirRestClient::FhirRestConnection "FhirRestConnection": connection
+      object for \c fhir:// and \c fhirs:// URLs
+
+    @section fhirrestclientexamples FhirRestClient Examples
+
+    @subsection fhirrestclientexampledirect Direct Client Use
+
+    @code{.py}
+%requires FhirRestClient
+
+FhirRestClient::FhirRestClient client({
+    "url": "https://fhir.example.org/r4",
+    "token": ENV.FHIR_TOKEN,
+});
+
+hash<auto> capability = client.getCapabilityStatement();
+printf("FHIR version: %s\n", capability.fhirVersion);
+
+hash<auto> oauth2_options = client.getSmartOAuth2ClientOptions({
+    "oauth2_grant_type": "client_credentials",
+    "oauth2_client_id": ENV.FHIR_CLIENT_ID,
+    "oauth2_client_secret": ENV.FHIR_CLIENT_SECRET,
+    "oauth2_scope": "system/Patient.read",
+});
+
+hash<auto> patient = client.readResource("Patient", "example");
+printf("Patient: %y\n", patient);
+    @endcode
+
+    @subsection fhirrestclientexamplesmartbackend SMART Backend Services Authentication
+
+    SMART Backend Services client assertions can be generated directly or
+    mapped to @ref RestClientIo::RestClientIo OAuth2 options. The returned
+    options use a client assertion provider so each token request can receive a
+    fresh JWT assertion.
+
+    @code{.py}
+hash<auto> backend_oauth2_options = client.getSmartBackendOAuth2ClientOptions({
+    "client_id": ENV.FHIR_CLIENT_ID,
+    "private_key": ENV.FHIR_PRIVATE_KEY_PEM,
+    "key_id": ENV.FHIR_KEY_ID,
+    "scopes": ("system/Patient.read", "system/Observation.write"),
+});
+
+string assertion = FhirRestClient::FhirRestClient::makeSmartBackendClientAssertion({
+    "client_id": ENV.FHIR_CLIENT_ID,
+    "private_key": ENV.FHIR_PRIVATE_KEY_PEM,
+    "token_endpoint": client.getSmartConfiguration().token_endpoint,
+    "key_id": ENV.FHIR_KEY_ID,
+});
+    @endcode
+
+    @subsection fhirrestclientexamplesearch Search with Repeated Parameters
+
+    List-valued search parameters are emitted as repeated query parameters. This
+    is useful for parameters such as \c _include and \c _revinclude.
+
+    @code{.py}
+hash<auto> bundle = client.searchResources("Patient", {
+    "family": "Smith",
+    "_include": ("Patient:general-practitioner", "Patient:organization"),
+});
+
+foreach hash<auto> entry in (bundle.entry) {
+    printf("Patient entry: %y\n", entry.resource);
+}
+
+string next = FhirRestClient::FhirRestClientBase::getBundleLinkUrl(bundle, "next");
+if (next) {
+    printf("Next page: %s\n", next);
+}
+
+hash<auto> all_pages = client.searchAllResources("Patient", {
+    "family": "Smith",
+}, 25);
+printf("Fetched %d patient entries\n", all_pages.entry.size());
+    @endcode
+
+    @subsection fhirrestclientexamplewrite Create and Update Resources
+
+    Create and update helpers return the full REST response so callers can read
+    status codes and FHIR versioning headers such as \c ETag.
+
+    @code{.py}
+hash<RestClient::RestResponseInfo> created = client.createResource("Patient", {
+    "resourceType": "Patient",
+    "name": ({"family": "Jones", "given": ("Ann",)},),
+}, "identifier=http://hospital.example/mrn|12345");
+
+printf("Created %s with ETag %s\n", created.body.id, created.headers.etag);
+
+hash<RestClient::RestResponseInfo> updated = client.updateResource("Patient", created.body.id, {
+    "resourceType": "Patient",
+    "id": created.body.id,
+    "active": True,
+}, created.headers.etag);
+
+printf("Update status: %d\n", updated.status_code);
+
+hash<RestClient::RestResponseInfo> conditional = client.conditionalUpdateResource("Patient", {
+    "identifier": "http://hospital.example/mrn|12345",
+}, created.body + {"active": True});
+
+hash<RestClient::RestResponseInfo> patched = client.patchResource("Patient", created.body.id, ({
+    "op": "replace",
+    "path": "/active",
+    "value": False,
+},), "application/json-patch+json", updated.headers.etag);
+    @endcode
+
+    @subsection fhirrestclientexamplebundle Transaction Bundle Write
+
+    Transaction and batch \c Bundle resources are submitted to the FHIR service
+    base. Helper methods build common write entries with the correct
+    \c Bundle.entry.request metadata.
+
+    @code{.py}
+hash<auto> patient_entry = FhirRestClient::FhirRestClientBase::makeConditionalCreateBundleEntry(
+    "Patient", {
+        "resourceType": "Patient",
+        "name": ({"family": "Jones", "given": ("Ann",)},),
+    }, "identifier=http://hospital.example/mrn|12345");
+
+hash<auto> transaction = FhirRestClient::FhirRestClientBase::makeBundle((patient_entry,), "transaction");
+hash<RestClient::RestResponseInfo> transaction_response = client.submitBundle(transaction);
+printf("Transaction status: %d\n", transaction_response.status_code);
+    @endcode
+
+    @subsection fhirrestclientexampleobservation Observation Builder
+
+    The module includes small FHIR JSON builders for common coded resources and
+    elements. UCUM helpers normalize common unit aliases but do not embed a
+    licensed terminology corpus.
+
+    @code{.py}
+hash<auto> observation = FhirRestClient::fhir_make_observation({
+    "status": "final",
+    "code_system": FhirRestClient::FhirSystemLoinc,
+    "code_code": "8867-4",
+    "code_display": "Heart rate",
+    "subject": "Patient/example",
+    "effectiveDateTime": "2026-05-30T10:15:00Z",
+    "value": 72,
+    "unit_code": "/min",
+});
+
+hash<auto> provenance = FhirRestClient::fhir_make_provenance({
+    "target": "Observation/example",
+    "recorded": "2026-05-30T10:15:01Z",
+    "agent": ({"who": FhirRestClient::fhir_make_reference("Device/gateway")},),
+});
+    @endcode
+
+    @subsection fhirrestclientexampleconnection Connection Provider Use
+
+    The module registers \c fhir and \c fhirs connection schemes. These schemes
+    map to HTTP and HTTPS while applying FHIR JSON defaults.
+
+    @code{.py}
+FhirRestClient::FhirRestConnection conn("ehr-r4", "EHR R4 endpoint",
+    "fhirs://fhir.example.org/r4", {
+        "monitor": False,
+    }, {
+        "token": ENV.FHIR_TOKEN,
+    });
+
+FhirRestClient::FhirRestClient connected_client = conn.get();
+printf("FHIR version: %s\n", connected_client.getFhirVersion());
+    @endcode
+
+    @subsection fhirrestclientexampleerrors OperationOutcome Errors
+
+    Helper methods map FHIR \c OperationOutcome error responses to
+    \c FHIR-OPERATION-OUTCOME exceptions. The exception argument includes the
+    parsed \c outcome resource, HTTP \c status_code, and response \c headers.
+
+    @code{.py}
+try {
+    client.readResource("Patient", "missing-id");
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "FHIR-OPERATION-OUTCOME") {
+        printf("FHIR error %d: %s\n", ex.arg.status_code, ex.desc);
+        printf("Outcome: %y\n", ex.arg.outcome);
+    } else {
+        rethrow;
+    }
+}
+    @endcode
+
+    @section fhirrestclientrelnotes Release Notes
+
+    @subsection fhirrestclientv1_0 FhirRestClient v1.0
+    - initial FHIR JSON REST client and \c fhir / \c fhirs connection schemes
+    - \c CapabilityStatement and SMART configuration discovery helpers
+    - SMART OAuth2 endpoint mapping to \c RestClient OAuth2 options
+    - SMART Backend Services JWT client assertion generation and mapping to
+      \c RestClientIo OAuth2 options
+    - CapabilityStatement resource type discovery and content-type FHIR version helpers
+    - basic read, create, transaction/batch Bundle submit, update, conditional update, patch, delete, search,
+      paginated search, and validation helpers
+    - terminology \c $validate-code, \c $lookup, \c $translate, and \c $expand helpers
+    - FHIR JSON builders for Coding, CodeableConcept, Reference, UCUM Quantity,
+      Observation, AuditEvent, and Provenance
+    - OperationOutcome summary and exception mapping for helper methods
+*/
+
+#! the %FhirRestClient namespace holds all public definitions in the %FhirRestClient module
+public namespace FhirRestClient {
+#! Module client name
+public const FhirRestClientName = "QoreFhirRestClient";
+
+#! Module client version
+public const FhirRestClientVersion = "1.0";
+}

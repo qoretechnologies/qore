@@ -1,0 +1,5 @@
+# Python dependencies for MCP integration tests
+# Install with: pip install -r requirements.txt
+
+mcp>=1.0.0
+httpx>=0.25.0

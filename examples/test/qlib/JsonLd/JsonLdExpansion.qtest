@@ -1,0 +1,546 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Logger
+%requires JsonLd
+%exec-class JsonLdExpansionTest
+
+class JsonLdExpansionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdExpansion test", "1.0") {
+        addTestCase("IRI expansion basic test", \iriExpansionBasicTest());
+        addTestCase("IRI expansion compact IRI test", \iriExpansionCompactIriTest());
+        addTestCase("IRI expansion vocab test", \iriExpansionVocabTest());
+        addTestCase("IRI expansion base test", \iriExpansionBaseTest());
+        addTestCase("IRI expansion keyword test", \iriExpansionKeywordTest());
+        addTestCase("IRI compaction basic test", \iriCompactionBasicTest());
+        addTestCase("IRI compaction prefix test", \iriCompactionPrefixTest());
+        addTestCase("value expansion test", \valueExpansionTest());
+        addTestCase("value expansion type id test", \valueExpansionTypeIdTest());
+        addTestCase("value expansion type vocab test", \valueExpansionTypeVocabTest());
+        addTestCase("value expansion language test", \valueExpansionLanguageTest());
+        addTestCase("value compaction test", \valueCompactionTest());
+        addTestCase("expand simple document test", \expandSimpleDocumentTest());
+        addTestCase("expand with context test", \expandWithContextTest());
+        addTestCase("expand nested properties test", \expandNestedPropertiesTest());
+        addTestCase("expand type test", \expandTypeTest());
+        addTestCase("expand id test", \expandIdTest());
+        addTestCase("expand graph test", \expandGraphTest());
+        addTestCase("expand list test", \expandListTest());
+        addTestCase("expand language map test", \expandLanguageMapTest());
+        addTestCase("expand reverse test", \expandReverseTest());
+        addTestCase("expand set container test", \expandSetContainerTest());
+        addTestCase("expand value object test", \expandValueObjectTest());
+        addTestCase("expand null values test", \expandNullValuesTest());
+        addTestCase("expand array test", \expandArrayTest());
+        addTestCase("expand scalar no property test", \expandScalarNoPropertyTest());
+        addTestCase("expand index map test", \expandIndexMapTest());
+        addTestCase("expand scoped context test", \expandScopedContextTest());
+        addTestCase("expand multiple types test", \expandMultipleTypesTest());
+        addTestCase("expand blank node test", \expandBlankNodeTest());
+        set_return_value(main());
+    }
+
+    private hash<JsonLdActiveContext> makeCtx(*string base) {
+        return JsonLdContext::newActiveContext(base);
+    }
+
+    private hash<JsonLdActiveContext> makeCtxWithTerms(hash<auto> ctx_def, *string base) {
+        JsonLdContext processor();
+        return processor.processContext(makeCtx(base), ctx_def);
+    }
+
+    private list<auto> doExpand(auto input, *hash<JsonLdOptions> opts) {
+        hash<JsonLdOptions> options = opts ?? <JsonLdOptions>{};
+        JsonLdContext ctx_processor();
+        JsonLdExpansion expander(ctx_processor, options);
+
+        hash<JsonLdActiveContext> active_ctx = makeCtx(options.base);
+        auto result = expander.expand(active_ctx, NOTHING, input, options.base);
+        if (!exists result) {
+            return ();
+        }
+        if (result.typeCode() != NT_LIST) {
+            # W3C 4.3.1 step 19: unwrap simple graph objects at top level
+            if (result.typeCode() == NT_HASH && isGraphObject(result)
+                    && result.size() == 1) {
+                auto graph = result."@graph";
+                if (!exists graph) {
+                    return ();
+                }
+                if (graph.typeCode() != NT_LIST) {
+                    return (graph,);
+                }
+                return graph;
+            }
+            return (result,);
+        }
+        return result;
+    }
+
+    private iriExpansionBasicTest() {
+        hash<JsonLdActiveContext> ctx = makeCtx();
+
+        # Absolute IRI stays as-is
+        assertEq("http://schema.org/name",
+            JsonLdIri::expandIri(ctx, "http://schema.org/name"));
+
+        # Blank node stays as-is
+        assertEq("_:b0", JsonLdIri::expandIri(ctx, "_:b0"));
+    }
+
+    private iriExpansionCompactIriTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "schema": "http://schema.org/",
+        });
+
+        assertEq("http://schema.org/name",
+            JsonLdIri::expandIri(ctx, "schema:name", True));
+        assertEq("http://schema.org/Person",
+            JsonLdIri::expandIri(ctx, "schema:Person", True));
+    }
+
+    private iriExpansionVocabTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "@vocab": "http://schema.org/",
+        });
+
+        # With vocab=True, should expand using vocabulary
+        assertEq("http://schema.org/name",
+            JsonLdIri::expandIri(ctx, "name", True));
+
+        # With vocab=False, should not expand
+        assertEq("name",
+            JsonLdIri::expandIri(ctx, "name", False));
+    }
+
+    private iriExpansionBaseTest() {
+        hash<JsonLdActiveContext> ctx = makeCtx("http://example.com/doc");
+
+        # Document relative
+        assertEq("http://example.com/resource",
+            JsonLdIri::expandIri(ctx, "resource", False, True));
+    }
+
+    private iriExpansionKeywordTest() {
+        hash<JsonLdActiveContext> ctx = makeCtx();
+
+        assertEq("@id", JsonLdIri::expandIri(ctx, "@id"));
+        assertEq("@type", JsonLdIri::expandIri(ctx, "@type"));
+        assertEq("@value", JsonLdIri::expandIri(ctx, "@value"));
+
+        # Unknown keyword-like returns null
+        assertNothing(JsonLdIri::expandIri(ctx, "@foo"));
+    }
+
+    private iriCompactionBasicTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "name": "http://schema.org/name",
+        });
+
+        assertEq("name",
+            JsonLdIri::compactIri(ctx, "http://schema.org/name", NOTHING, True));
+    }
+
+    private iriCompactionPrefixTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "schema": "http://schema.org/",
+        });
+
+        assertEq("schema:name",
+            JsonLdIri::compactIri(ctx, "http://schema.org/name"));
+        assertEq("schema:Person",
+            JsonLdIri::compactIri(ctx, "http://schema.org/Person"));
+    }
+
+    private valueExpansionTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "name": "http://schema.org/name",
+        });
+
+        hash<auto> result = JsonLdValue::expandValue(ctx, "name", "Jane Doe");
+        assertEq("Jane Doe", result."@value");
+        # No type mapping, so no @type
+        assertFalse(exists result."@type");
+    }
+
+    private valueExpansionTypeIdTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "homepage": {"@id": "http://schema.org/url", "@type": "@id"},
+        });
+
+        hash<auto> result = JsonLdValue::expandValue(ctx, "homepage", "http://example.com");
+        assertEq("http://example.com", result."@id");
+    }
+
+    private valueExpansionTypeVocabTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "@vocab": "http://schema.org/",
+            "type": {"@id": "http://schema.org/additionalType", "@type": "@vocab"},
+        });
+
+        hash<auto> result = JsonLdValue::expandValue(ctx, "type", "Person");
+        assertEq("http://schema.org/Person", result."@id");
+    }
+
+    private valueExpansionLanguageTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "@language": "en",
+            "name": "http://schema.org/name",
+        });
+
+        hash<auto> result = JsonLdValue::expandValue(ctx, "name", "Jane");
+        assertEq("Jane", result."@value");
+        assertEq("en", result."@language");
+
+        # Term with explicit language override
+        hash<JsonLdActiveContext> ctx2 = makeCtxWithTerms({
+            "@language": "en",
+            "name_de": {"@id": "http://schema.org/name", "@language": "de"},
+        });
+        hash<auto> result2 = JsonLdValue::expandValue(ctx2, "name_de", "Jana");
+        assertEq("de", result2."@language");
+    }
+
+    private valueCompactionTest() {
+        hash<JsonLdActiveContext> ctx = makeCtxWithTerms({
+            "homepage": {"@id": "http://schema.org/url", "@type": "@id"},
+        });
+
+        # @id type should compact to plain string
+        auto result = JsonLdValue::compactValue(ctx, "homepage",
+            {"@id": "http://example.com"});
+        assertEq("http://example.com", result);
+
+        # Value with matching type should compact to plain value
+        hash<JsonLdActiveContext> ctx2 = makeCtxWithTerms({
+            "count": {"@id": "http://example.com/count", "@type": XSD_INTEGER},
+        });
+        auto result2 = JsonLdValue::compactValue(ctx2, "count",
+            {"@value": 42, "@type": XSD_INTEGER});
+        assertEq(42, result2);
+    }
+
+    private expandSimpleDocumentTest() {
+        auto input = {
+            "@context": {
+                "name": "http://schema.org/name",
+                "Person": "http://schema.org/Person",
+            },
+            "@type": "Person",
+            "name": "Jane Doe",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq(1, result.size());
+
+        hash<auto> node = result[0];
+        assertTrue(exists node."@type");
+        assertEq(("http://schema.org/Person",), node."@type");
+        assertTrue(exists node."http://schema.org/name");
+        assertEq(1, node."http://schema.org/name".size());
+        assertEq("Jane Doe", node."http://schema.org/name"[0]."@value");
+    }
+
+    private expandWithContextTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+            },
+            "@type": "Person",
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq(1, result.size());
+
+        hash<auto> node = result[0];
+        assertEq(("http://schema.org/Person",), node."@type");
+        assertTrue(exists node."http://schema.org/name");
+        assertTrue(exists node."http://schema.org/email");
+    }
+
+    private expandNestedPropertiesTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "schema": "http://schema.org/",
+            },
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq(1, result.size());
+        hash<auto> node = result[0];
+        assertEq("Jane", node."http://schema.org/name"[0]."@value");
+    }
+
+    private expandTypeTest() {
+        # Single type
+        auto input1 = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+        };
+        list<auto> r1 = doExpand(input1);
+        assertEq(("http://schema.org/Person",), r1[0]."@type");
+
+        # Multiple types
+        auto input2 = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": ("Person", "Thing"),
+        };
+        list<auto> r2 = doExpand(input2);
+        assertTrue(inlist("http://schema.org/Person", r2[0]."@type"));
+        assertTrue(inlist("http://schema.org/Thing", r2[0]."@type"));
+    }
+
+    private expandIdTest() {
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/person/1",
+            "@type": "Person",
+            "name": "Jane",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq("http://example.com/person/1", result[0]."@id");
+    }
+
+    private expandGraphTest() {
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@graph": (
+                {
+                    "@id": "http://example.com/1",
+                    "@type": "Person",
+                    "name": "Jane",
+                },
+                {
+                    "@id": "http://example.com/2",
+                    "@type": "Person",
+                    "name": "John",
+                },
+            ),
+        };
+
+        list<auto> result = doExpand(input);
+        # @graph at top-level: simple graph object unwraps, returning the graph contents
+        assertEq(2, result.size());
+        assertTrue(exists result[0]."@id");
+        assertTrue(exists result[1]."@id");
+    }
+
+    private expandListTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "children": {"@id": "http://schema.org/children", "@container": "@list"},
+            },
+            "@type": "Person",
+            "children": ("Alice", "Bob"),
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        assertTrue(exists node."http://schema.org/children");
+        auto children = node."http://schema.org/children"[0];
+        assertTrue(isListObject(children));
+        assertEq(2, children."@list".size());
+    }
+
+    private expandLanguageMapTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "name": {"@id": "http://schema.org/name", "@container": "@language"},
+            },
+            "name": {
+                "en": "Jane",
+                "de": "Jana",
+                "fr": "Jeanne",
+            },
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        assertTrue(exists node."http://schema.org/name");
+        list<auto> names = node."http://schema.org/name";
+        assertEq(3, names.size());
+
+        # Check that each has @value and @language
+        bool found_en = False;
+        bool found_de = False;
+        foreach hash<auto> name in (names) {
+            assertTrue(exists name."@value");
+            assertTrue(exists name."@language");
+            if (name."@language" == "en" && name."@value" == "Jane") {
+                found_en = True;
+            }
+            if (name."@language" == "de" && name."@value" == "Jana") {
+                found_de = True;
+            }
+        }
+        assertTrue(found_en);
+        assertTrue(found_de);
+    }
+
+    private expandReverseTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "parent": {"@reverse": "http://schema.org/children"},
+            },
+            "@type": "Person",
+            "parent": {"@id": "http://example.com/parent"},
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        assertTrue(exists node."@reverse");
+        assertTrue(exists node."@reverse"."http://schema.org/children");
+    }
+
+    private expandSetContainerTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "knows": {"@id": "http://schema.org/knows", "@container": "@set"},
+            },
+            "knows": {"@id": "http://example.com/1"},
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        assertTrue(exists node."http://schema.org/knows");
+        # @set means the value is always an array
+        assertEq(NT_LIST, node."http://schema.org/knows".typeCode());
+    }
+
+    private expandValueObjectTest() {
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "name": {"@value": "Jane", "@language": "en"},
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        list<auto> names = node."http://schema.org/name";
+        assertEq(1, names.size());
+        assertEq("Jane", names[0]."@value");
+        assertEq("en", names[0]."@language");
+    }
+
+    private expandNullValuesTest() {
+        # null element returns empty
+        list<auto> result = doExpand(NOTHING);
+        assertEq((), result);
+    }
+
+    private expandArrayTest() {
+        auto input = ({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "Jane",
+        }, {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "John",
+        });
+
+        list<auto> result = doExpand(input);
+        assertEq(2, result.size());
+    }
+
+    private expandScalarNoPropertyTest() {
+        # Scalar at top level with no active property -> dropped
+        list<auto> result = doExpand("hello");
+        assertEq((), result);
+
+        list<auto> result2 = doExpand(42);
+        assertEq((), result2);
+    }
+
+    private expandIndexMapTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "address": {"@id": "http://schema.org/address", "@container": "@index"},
+            },
+            "address": {
+                "home": {"streetAddress": "123 Main St"},
+                "work": {"streetAddress": "456 Office Blvd"},
+            },
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        assertTrue(exists node."http://schema.org/address");
+        list<auto> addresses = node."http://schema.org/address";
+        assertEq(2, addresses.size());
+
+        # Each should have @index
+        bool found_home = False;
+        bool found_work = False;
+        foreach hash<auto> addr in (addresses) {
+            if (addr."@index" == "home") {
+                found_home = True;
+            }
+            if (addr."@index" == "work") {
+                found_work = True;
+            }
+        }
+        assertTrue(found_home);
+        assertTrue(found_work);
+    }
+
+    private expandScopedContextTest() {
+        auto input = {
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "Person": {
+                    "@id": "http://schema.org/Person",
+                    "@context": {
+                        "knows": {"@id": "http://schema.org/knows", "@type": "@id"},
+                    },
+                },
+            },
+            "@type": "Person",
+            "name": "Jane",
+            "knows": "http://example.com/john",
+        };
+
+        list<auto> result = doExpand(input);
+        hash<auto> node = result[0];
+        # "knows" should be expanded as @id due to scoped context
+        assertTrue(exists node."http://schema.org/knows");
+    }
+
+    private expandMultipleTypesTest() {
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": ("Person", "Thing", "CreativeWork"),
+            "name": "Jane",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq(3, result[0]."@type".size());
+    }
+
+    private expandBlankNodeTest() {
+        auto input = {
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "_:b0",
+            "@type": "Person",
+            "name": "Anonymous",
+        };
+
+        list<auto> result = doExpand(input);
+        assertEq("_:b0", result[0]."@id");
+    }
+}

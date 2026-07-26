@@ -1,0 +1,153 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file A2aClient.qm @brief A2A Client module for connecting to A2A agents
+
+/*  A2aClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires ServerSentEventClient
+%requires HttpStreamClient
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+%modern
+
+module A2aClient {
+    version = "1.0";
+    desc = "A2aClient module for connecting to A2A agents";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("a2a", A2aConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("a2as", A2aConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage A2aClient Module
+
+    @tableofcontents
+
+    @section a2aclientintro Introduction to the A2aClient Module
+
+    The %A2aClient module provides a client implementation for the Agent-to-Agent (A2A)
+    protocol (under the Linux Foundation), allowing Qore applications to connect
+    to A2A agents and interact with them via JSON-RPC 2.0 over HTTP(S) with SSE streaming.
+
+    The client supports both A2A v0.3 and v1.0 protocols with automatic version detection.
+
+    A2A complements MCP (which focuses on tool/resource integration) by enabling agent-to-agent
+    collaboration.
+
+    @subsection A2aClient_features Features
+
+    - Dual-version support: A2A v0.3 and v1.0 with automatic protocol detection
+    - Agent Card discovery via \c /.well-known/a2a-agent-card (v1.0) and
+      \c /.well-known/agent-card.json (v0.3 fallback)
+    - Authenticated extended Agent Card retrieval
+    - Message sending with task lifecycle management
+    - SSE streaming for real-time task updates
+    - Push notification configuration
+    - Task management (get, cancel, resubscribe)
+    - Connection provider integration with \c a2a:// and \c a2as:// URL schemes
+    - Transparent v0.3/v1.0 wire format translation
+
+    @subsection A2aClient_usage Basic Usage
+
+    @code{.py}
+    %requires A2aClient
+
+    # Create client — the URL may include a sub-path (e.g., /api/v1/a2a)
+    A2aClient client("https://server:8011/api/v1/a2a");
+
+    # Get agent card (auto-detects v0.3 vs v1.0)
+    hash<auto> card = client.getAgentCard();
+    printf("Agent: %s - %s\n", card.name, card.description);
+
+    # Send a message (synchronous)
+    hash<auto> task = client.sendMessage({
+        "role": "user",
+        "parts": ({"type": "text", "text": "Hello, agent!"},),
+    });
+    printf("Task state: %s\n", task.status.state);
+
+    # Close connection
+    client.close();
+    @endcode
+
+    @par SSE Streaming Example
+    @code{.py}
+    A2aClient client("https://server:8011/api/v1/a2a");
+
+    # Stream a message with real-time token delivery
+    client.sendMessageStream(
+        {"role": "user", "parts": ({"type": "text", "text": "Explain quantum computing"},)},
+        sub (string event_type, hash<auto> event_data) {
+            if (event_type == "TaskArtifactUpdateEvent") {
+                printf("Token: %s", event_data.params.artifact.parts[0].text);
+            } else if (event_type == "TaskStatusUpdateEvent") {
+                printf("\nTask %s: %s\n", event_data.params.id, event_data.params.status.state);
+            }
+        },
+    );
+
+    # Retrieve the completed task after streaming
+    hash<auto> task = client.getTask(task_id);
+    @endcode
+
+    @par Protocol Selection
+    @code{.py}
+    # Force HTTP/1.1 (disables HTTP/2 multiplexing)
+    A2aClient client("https://server/a2a", {"http_version": "1.1"});
+
+    # Default: auto-selects best protocol (HTTP/3 → HTTP/2 → HTTP/1.1)
+    A2aClient client("https://server/a2a");
+    @endcode
+
+    @section A2aClient_relnotes A2aClient Release Notes
+
+    @subsection A2aClient_1_0 A2aClient v1.0
+    - initial release with A2A v0.3 and v1.0 dual-version protocol support
+    - automatic protocol version detection from agent card format
+    - Agent Card discovery at both v1.0 and v0.3 paths
+    - all 11 JSON-RPC methods in both v0.3 and v1.0 naming
+    - transparent wire format translation (states, roles, parts, events)
+    - async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
+      protocol negotiation (HTTP/3 → HTTP/2 → HTTP/1.1) and connection pooling
+    - SSE streaming for real-time updates via @ref HttpClientStreamingIo::SseStreamReader
+    - ConnectionProvider integration with a2a:// and a2as:// schemes
+*/
+
+#! the %A2aClient namespace holds all public definitions in the %A2aClient module
+public namespace A2aClient {
+#! Client name
+public const A2aClientName = "QoreA2aClient";
+
+#! Client version
+public const A2aClientVersion = "1.0";
+}

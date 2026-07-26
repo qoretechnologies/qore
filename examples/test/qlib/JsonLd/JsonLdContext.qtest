@@ -1,0 +1,713 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires JsonLd
+%exec-class JsonLdContextTest
+
+class TestContextHandler inherits AbstractHttpRequestHandler {
+    private {
+        hash<string, hash<auto>> contexts;
+    }
+
+    constructor() {
+        contexts = {
+            "/context/person.jsonld": {
+                "body": make_json({
+                    "@context": {
+                        "name": "http://schema.org/name",
+                        "Person": "http://schema.org/Person",
+                        "knows": {"@id": "http://schema.org/knows", "@type": "@id"},
+                    },
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/base.jsonld": {
+                "body": make_json({
+                    "@context": {
+                        "schema": "http://schema.org/",
+                        "name": "schema:name",
+                    },
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/extended.jsonld": {
+                "body": make_json({
+                    "@context": {
+                        "foaf": "http://xmlns.com/foaf/0.1/",
+                        "friendOf": {"@id": "foaf:knows", "@type": "@id"},
+                    },
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/protected.jsonld": {
+                "body": make_json({
+                    "@context": {
+                        "@protected": True,
+                        "name": "http://schema.org/name",
+                        "id": "@id",
+                    },
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/cycle-a.jsonld": {
+                "body": make_json({
+                    "@context": "cycle-b.jsonld",
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/cycle-b.jsonld": {
+                "body": make_json({
+                    "@context": "cycle-a.jsonld",
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+            "/context/import-target.jsonld": {
+                "body": make_json({
+                    "@context": {
+                        "name": "http://schema.org/name",
+                        "description": "http://schema.org/description",
+                    },
+                }),
+                "content_type": MimeTypeJsonLd,
+            },
+        };
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = "/" + hdr.path;
+        *hash<auto> ctx_data = contexts{path};
+        if (!exists ctx_data) {
+            return {
+                "code": 404,
+                "body": sprintf("Not found: %y", path),
+            };
+        }
+        return {
+            "code": 200,
+            "hdr": {"Content-Type": ctx_data.content_type},
+            "body": ctx_data.body,
+        };
+    }
+}
+
+class JsonLdContextTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        HttpServer http;
+        int port;
+        string base_url;
+        HttpJsonLdDocumentLoader httpLoader;
+        JsonLdContextCache cache;
+    }
+
+    constructor() : QUnit::Test("JsonLdContext test", "1.0") {
+        addTestCase("new active context test", \newActiveContextTest());
+        addTestCase("inline context test", \inlineContextTest());
+        addTestCase("vocab mapping test", \vocabMappingTest());
+        addTestCase("base IRI test", \baseIriTest());
+        addTestCase("language and direction test", \languageDirectionTest());
+        addTestCase("term definition simple test", \termDefinitionSimpleTest());
+        addTestCase("term definition expanded test", \termDefinitionExpandedTest());
+        addTestCase("compact IRI term test", \compactIriTermTest());
+        addTestCase("type mapping test", \typeMappingTest());
+        addTestCase("container mapping test", \containerMappingTest());
+        addTestCase("reverse property test", \reversePropertyTest());
+        addTestCase("null context test", \nullContextTest());
+        addTestCase("remote context test", \remoteContextTest());
+        addTestCase("context cache test", \contextCacheTest());
+        addTestCase("cache TTL test", \cacheTtlTest());
+        addTestCase("cache LRU eviction test", \cacheLruEvictionTest());
+        addTestCase("protected term test", \protectedTermTest());
+        addTestCase("nested property test", \nestedPropertyTest());
+        addTestCase("prefix test", \prefixTest());
+        addTestCase("scoped context test", \scopedContextTest());
+        addTestCase("propagate test", \propagateTest());
+        addTestCase("invalid context errors test", \invalidContextErrorsTest());
+        addTestCase("multiple contexts test", \multipleContextsTest());
+        addTestCase("file document loader test", \fileDocumentLoaderTest());
+        addTestCase("caching document loader test", \cachingDocumentLoaderTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        TestContextHandler handler();
+        http.setHandler("context-handler", "", NOTHING, handler);
+        http.setDefaultHandler("context-handler", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        base_url = "http://localhost:" + string(port);
+        httpLoader = new HttpJsonLdDocumentLoader();
+        cache = new JsonLdContextCache();
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    private newActiveContextTest() {
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext("http://example.com/");
+        assertEq("http://example.com/", ctx.baseIri);
+        assertEq("http://example.com/", ctx.originalBaseIri);
+        assertEq({}, ctx.termDefinitions);
+        assertNothing(ctx.vocabularyMapping);
+        assertNothing(ctx.defaultLanguage);
+        assertNothing(ctx.defaultBaseDirection);
+    }
+
+    private inlineContextTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext("http://example.com/");
+
+        hash<auto> local_ctx = {
+            "name": "http://schema.org/name",
+            "Person": "http://schema.org/Person",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+
+        assertTrue(exists result.termDefinitions."name");
+        assertEq("http://schema.org/name", result.termDefinitions."name".iriMapping);
+
+        assertTrue(exists result.termDefinitions."Person");
+        assertEq("http://schema.org/Person", result.termDefinitions."Person".iriMapping);
+    }
+
+    private vocabMappingTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext("http://example.com/");
+
+        hash<auto> local_ctx = {
+            "@vocab": "http://schema.org/",
+            "name": "http://schema.org/name",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("http://schema.org/", result.vocabularyMapping);
+
+        # Test null @vocab clears mapping
+        hash<auto> null_vocab = {
+            "@vocab": NOTHING,
+        };
+        result = processor.processContext(result, null_vocab);
+        assertNothing(result.vocabularyMapping);
+    }
+
+    private baseIriTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext("http://example.com/doc");
+
+        # Set absolute base
+        hash<auto> local_ctx = {
+            "@base": "http://other.com/",
+        };
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("http://other.com/", result.baseIri);
+
+        # Set relative base
+        hash<auto> rel_ctx = {
+            "@base": "sub/",
+        };
+        result = processor.processContext(result, rel_ctx);
+        assertEq("http://other.com/sub/", result.baseIri);
+
+        # Null base
+        hash<auto> null_ctx = {
+            "@base": NOTHING,
+        };
+        result = processor.processContext(result, null_ctx);
+        assertNothing(result.baseIri);
+    }
+
+    private languageDirectionTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "@language": "en",
+            "@direction": "ltr",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("en", result.defaultLanguage);
+        assertEq("ltr", result.defaultBaseDirection);
+
+        # Null clears
+        hash<auto> null_ctx = {
+            "@language": NOTHING,
+            "@direction": NOTHING,
+        };
+        result = processor.processContext(result, null_ctx);
+        assertNothing(result.defaultLanguage);
+        assertNothing(result.defaultBaseDirection);
+
+        # Invalid direction
+        try {
+            processor.processContext(ctx, {"@direction": "invalid"});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+
+    private termDefinitionSimpleTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "name": "http://schema.org/name",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(exists result.termDefinitions."name");
+        assertEq("http://schema.org/name", result.termDefinitions."name".iriMapping);
+        assertFalse(result.termDefinitions."name".reverse);
+    }
+
+    private termDefinitionExpandedTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "knows": {
+                "@id": "http://schema.org/knows",
+                "@type": "@id",
+            },
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(exists result.termDefinitions."knows");
+        assertEq("http://schema.org/knows", result.termDefinitions."knows".iriMapping);
+        assertEq("@id", result.termDefinitions."knows".typeMapping);
+    }
+
+    private compactIriTermTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "schema": "http://schema.org/",
+            "name": "schema:name",
+            "Person": "schema:Person",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("http://schema.org/", result.termDefinitions."schema".iriMapping);
+        assertEq("http://schema.org/name", result.termDefinitions."name".iriMapping);
+        assertEq("http://schema.org/Person", result.termDefinitions."Person".iriMapping);
+    }
+
+    private typeMappingTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        # @id type mapping
+        hash<auto> local_ctx = {
+            "homepage": {"@id": "http://schema.org/url", "@type": "@id"},
+        };
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("@id", result.termDefinitions."homepage".typeMapping);
+
+        # @vocab type mapping
+        local_ctx = {
+            "type": {"@id": "http://schema.org/additionalType", "@type": "@vocab"},
+        };
+        result = processor.processContext(ctx, local_ctx);
+        assertEq("@vocab", result.termDefinitions."type".typeMapping);
+
+        # @json type mapping
+        local_ctx = {
+            "data": {"@id": "http://example.com/data", "@type": "@json"},
+        };
+        result = processor.processContext(ctx, local_ctx);
+        assertEq("@json", result.termDefinitions."data".typeMapping);
+    }
+
+    private containerMappingTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        # @set container
+        hash<auto> local_ctx = {
+            "knows": {"@id": "http://schema.org/knows", "@container": "@set"},
+        };
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq(("@set",), result.termDefinitions."knows".containerMapping);
+
+        # @list container
+        local_ctx = {
+            "items": {"@id": "http://example.com/items", "@container": "@list"},
+        };
+        result = processor.processContext(ctx, local_ctx);
+        assertEq(("@list",), result.termDefinitions."items".containerMapping);
+
+        # @language container
+        local_ctx = {
+            "label": {"@id": "http://example.com/label", "@container": "@language"},
+        };
+        result = processor.processContext(ctx, local_ctx);
+        assertEq(("@language",), result.termDefinitions."label".containerMapping);
+
+        # Invalid container
+        try {
+            processor.processContext(ctx, {"bad": {"@id": "http://example.com/bad", "@container": "@invalid"}});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+
+    private reversePropertyTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "parent": {"@reverse": "http://schema.org/children"},
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(result.termDefinitions."parent".reverse);
+        assertEq("http://schema.org/children", result.termDefinitions."parent".iriMapping);
+
+        # Cannot have both @id and @reverse
+        try {
+            processor.processContext(ctx, {
+                "bad": {"@id": "http://a.com/a", "@reverse": "http://b.com/b"},
+            });
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+
+    private nullContextTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext("http://example.com/");
+
+        # Add some definitions
+        hash<auto> local_ctx = {
+            "@vocab": "http://schema.org/",
+            "name": "http://schema.org/name",
+        };
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(exists result.termDefinitions."name");
+        assertEq("http://schema.org/", result.vocabularyMapping);
+
+        # Null context resets
+        result = processor.processContext(result, NOTHING);
+        assertEq({}, result.termDefinitions);
+        assertNothing(result.vocabularyMapping);
+    }
+
+    private remoteContextTest() {
+        JsonLdContext processor(httpLoader, cache);
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext(base_url + "/doc");
+
+        # Load remote context
+        hash<JsonLdActiveContext> result = processor.processContext(ctx,
+            base_url + "/context/person.jsonld", base_url);
+
+        assertTrue(exists result.termDefinitions."name");
+        assertEq("http://schema.org/name", result.termDefinitions."name".iriMapping);
+        assertTrue(exists result.termDefinitions."Person");
+        assertEq("http://schema.org/Person", result.termDefinitions."Person".iriMapping);
+        assertTrue(exists result.termDefinitions."knows");
+        assertEq("http://schema.org/knows", result.termDefinitions."knows".iriMapping);
+        assertEq("@id", result.termDefinitions."knows".typeMapping);
+    }
+
+    private contextCacheTest() {
+        JsonLdContextCache c(3600, 10);
+        assertFalse(c.has("http://example.com/ctx"));
+
+        c.set("http://example.com/ctx", {"name": "http://schema.org/name"});
+        assertTrue(c.has("http://example.com/ctx"));
+
+        auto val = c.get("http://example.com/ctx");
+        assertEq({"name": "http://schema.org/name"}, val);
+
+        hash<auto> stats = c.getStats();
+        assertEq(1, stats.hits);
+        assertEq(0, stats.misses);
+        assertEq(1, stats.size);
+
+        c.clear();
+        assertFalse(c.has("http://example.com/ctx"));
+        hash<auto> stats2 = c.getStats();
+        assertEq(0, stats2.size);
+    }
+
+    private cacheTtlTest() {
+        # 1-second TTL
+        JsonLdContextCache c(1, 100);
+        c.set("http://example.com/ctx", {"a": 1});
+        assertTrue(c.has("http://example.com/ctx"));
+
+        # Entry should still be valid
+        auto val = c.get("http://example.com/ctx");
+        assertEq({"a": 1}, val);
+    }
+
+    private cacheLruEvictionTest() {
+        # Max 3 entries
+        JsonLdContextCache c(3600, 3);
+        c.set("http://a.com", "a");
+        c.set("http://b.com", "b");
+        c.set("http://c.com", "c");
+
+        # Access a and b (c is LRU)
+        c.get("http://a.com");
+        c.get("http://b.com");
+
+        # Add d, should evict c (LRU)
+        c.set("http://d.com", "d");
+
+        assertTrue(c.has("http://a.com"));
+        assertTrue(c.has("http://b.com"));
+        assertTrue(c.has("http://d.com"));
+        assertFalse(c.has("http://c.com"));
+    }
+
+    private protectedTermTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        # Create protected terms
+        hash<auto> local_ctx = {
+            "@protected": True,
+            "name": "http://schema.org/name",
+        };
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(result.termDefinitions."name".protected_);
+
+        # Attempting to redefine protected term should fail
+        try {
+            processor.processContext(result, {"name": "http://other.com/name"});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+
+        # Same definition should be allowed
+        hash<JsonLdActiveContext> result2 = processor.processContext(result, {
+            "name": "http://schema.org/name",
+        });
+        assertEq("http://schema.org/name", result2.termDefinitions."name".iriMapping);
+    }
+
+    private nestedPropertyTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "address": {"@id": "http://schema.org/address", "@nest": "@nest"},
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("@nest", result.termDefinitions."address".nestValue);
+    }
+
+    private prefixTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "schema": "http://schema.org/",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertEq("http://schema.org/", result.termDefinitions."schema".iriMapping);
+
+        # Explicit @prefix
+        hash<auto> prefix_ctx = {
+            "ex": {"@id": "http://example.com/", "@prefix": True},
+        };
+        result = processor.processContext(ctx, prefix_ctx);
+        assertTrue(result.termDefinitions."ex".prefix);
+    }
+
+    private scopedContextTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "@vocab": "http://schema.org/",
+            "Person": {
+                "@id": "http://schema.org/Person",
+                "@context": {
+                    "knows": {"@id": "http://schema.org/knows", "@type": "@id"},
+                },
+            },
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx);
+        assertTrue(exists result.termDefinitions."Person");
+        assertEq("http://schema.org/Person", result.termDefinitions."Person".iriMapping);
+        # Scoped context stored but not applied until expansion
+        assertTrue(exists result.termDefinitions."Person".localContext);
+    }
+
+    private propagateTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        hash<auto> local_ctx = {
+            "@propagate": False,
+            "@vocab": "http://schema.org/",
+        };
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, local_ctx, NOTHING, NOTHING, False, False);
+        assertEq("http://schema.org/", result.vocabularyMapping);
+    }
+
+    private invalidContextErrorsTest() {
+        JsonLdContext processor();
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext();
+
+        # Invalid context type
+        try {
+            processor.processContext(ctx, 42);
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+
+        # Invalid @version
+        try {
+            processor.processContext(ctx, {"@version": 2.0});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+
+        # Keyword redefinition
+        try {
+            processor.processContext(ctx, {"@context": "http://example.com/"});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+
+        # Invalid @language type
+        try {
+            processor.processContext(ctx, {"@language": 42});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+
+        # Invalid term definition type
+        try {
+            processor.processContext(ctx, {"term": 42});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+
+    private multipleContextsTest() {
+        JsonLdContext processor(httpLoader, cache);
+        hash<JsonLdActiveContext> ctx = JsonLdContext::newActiveContext(base_url + "/doc");
+
+        # Multiple contexts as array
+        list<auto> contexts = (
+            base_url + "/context/base.jsonld",
+            {"homepage": {"@id": "http://schema.org/url", "@type": "@id"}},
+        );
+
+        hash<JsonLdActiveContext> result = processor.processContext(ctx, contexts, base_url);
+
+        assertTrue(exists result.termDefinitions."schema");
+        assertTrue(exists result.termDefinitions."name");
+        assertTrue(exists result.termDefinitions."homepage");
+        assertEq("@id", result.termDefinitions."homepage".typeMapping);
+    }
+
+    private fileDocumentLoaderTest() {
+        # Create a temporary JSON-LD context file
+        string tmp_dir = tmp_location();
+        string file_path = tmp_dir + "/test-context.jsonld";
+        {
+            File f();
+            f.open(file_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(make_json({
+                "@context": {
+                    "name": "http://schema.org/name",
+                    "age": "http://schema.org/age",
+                },
+            }));
+        }
+
+        on_exit {
+            unlink(file_path);
+        }
+
+        FileJsonLdDocumentLoader loader();
+        hash<JsonLdRemoteDocument> doc = loader.loadDocument(file_path);
+        assertEq(file_path, doc.documentUrl);
+        assertEq(MimeTypeJsonLd, doc.contentType);
+        assertTrue(doc.document.typeCode() == NT_HASH);
+        assertTrue(exists ((doc.document))."@context");
+
+        # Test with file:// URL
+        hash<JsonLdRemoteDocument> doc2 = loader.loadDocument("file://" + file_path);
+        assertTrue(exists ((doc2.document))."@context");
+
+        # Test non-existent file
+        try {
+            loader.loadDocument("/nonexistent/file.jsonld");
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+        }
+    }
+
+    private cachingDocumentLoaderTest() {
+        FileJsonLdDocumentLoader file_loader();
+        JsonLdContextCache c(3600, 100);
+        CachingJsonLdDocumentLoader caching_loader(file_loader, c);
+
+        # Create a temporary file
+        string tmp_dir = tmp_location();
+        string file_path = tmp_dir + "/cache-test.jsonld";
+        {
+            File f();
+            f.open(file_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(make_json({
+                "@context": {"test": "http://example.com/test"},
+            }));
+        }
+
+        on_exit {
+            unlink(file_path);
+        }
+
+        # First load - cache miss
+        hash<JsonLdRemoteDocument> doc1 = caching_loader.loadDocument(file_path);
+        assertTrue(exists ((doc1.document))."@context");
+
+        # Second load - cache hit
+        hash<JsonLdRemoteDocument> doc2 = caching_loader.loadDocument(file_path);
+        assertEq(doc1.documentUrl, doc2.documentUrl);
+
+        # Cache should have the entry
+        assertTrue(c.has(file_path));
+    }
+}

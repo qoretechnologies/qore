@@ -1,0 +1,1497 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires A2aClient
+%requires A2aServerHandler
+%requires HttpStreamClient
+
+%exec-class A2aServerHandlerTest
+
+class A2aServerHandlerTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        A2aServerHandler handler;
+        HttpServer http;
+        int port;
+        string base_url;
+    }
+
+    constructor() : QUnit::Test("A2aServerHandler test", "1.0") {
+        addTestCase("agent card serving test", \agentCardServingTest());
+        addTestCase("agent card update test", \agentCardUpdateTest());
+        addTestCase("extended agent card test", \extendedAgentCardTest());
+        addTestCase("skill registration test", \skillRegistrationTest());
+        addTestCase("message handler test", \messageHandlerTest());
+        addTestCase("task creation test", \taskCreationTest());
+        addTestCase("task state machine test", \taskStateMachineTest());
+        addTestCase("task state invalid transitions test", \taskStateInvalidTransitionsTest());
+        addTestCase("task terminal state test", \taskTerminalStateTest());
+        addTestCase("task artifact test", \taskArtifactTest());
+        addTestCase("task not found test", \taskNotFoundTest());
+        addTestCase("json-rpc message/send test", \jsonRpcMessageSendTest());
+        addTestCase("json-rpc tasks/get test", \jsonRpcTasksGetTest());
+        addTestCase("json-rpc tasks/cancel test", \jsonRpcTasksCancelTest());
+        addTestCase("json-rpc push notification config test", \jsonRpcPushNotificationConfigTest());
+        addTestCase("json-rpc error codes test", \jsonRpcErrorCodesTest());
+        addTestCase("session management test", \sessionManagementTest());
+        addTestCase("concurrent tasks test", \concurrentTasksTest());
+        addTestCase("message handler error test", \messageHandlerErrorTest());
+        addTestCase("http method handling test", \httpMethodHandlingTest());
+        addTestCase("task with context and metadata test", \taskWithContextAndMetadataTest());
+        addTestCase("context history multi-turn test", \contextHistoryMultiTurnTest());
+        addTestCase("context history isolation test", \contextHistoryIsolationTest());
+        addTestCase("context history max enforcement test", \contextHistoryMaxEnforcementTest());
+        addTestCase("context history clear and get test", \contextHistoryClearAndGetTest());
+        addTestCase("stream handler basic test", \streamHandlerBasicTest());
+        addTestCase("stream handler error test", \streamHandlerErrorTest());
+        addTestCase("stream handler fallback test", \streamHandlerFallbackTest());
+        addTestCase("stream handler with context test", \streamHandlerWithContextTest());
+        addTestCase("v1.0 agent card path test", \v10AgentCardPathTest());
+        addTestCase("v1.0 method dispatch test", \v10MethodDispatchTest());
+        addTestCase("v1.0 response format test", \v10ResponseFormatTest());
+        addTestCase("v1.0 send message params test", \v10SendMessageParamsTest());
+        addTestCase("v1.0 version detection test", \v10VersionDetectionTest());
+        addTestCase("non-root path SSE streaming test", \nonRootPathSseStreamTest());
+
+        set_return_value(main());
+    }
+
+    #! Parse SSE events from a text/event-stream response body
+    private static list<hash<auto>> parseSseEvents(string body) {
+        list<hash<auto>> events = ();
+        list<string> blocks = body.split("\n\n");
+        foreach string block in (blocks) {
+            if (!block.val()) {
+                continue;
+            }
+            *string data_line;
+            *string event_type;
+            foreach string line in (block.split("\n")) {
+                if (line =~ /^data: (.*)/) {
+                    data_line = (line =~ x/^data: (.*)/)[0];
+                } else if (line =~ /^event: (.*)/) {
+                    event_type = (line =~ x/^event: (.*)/)[0];
+                }
+            }
+            if (data_line) {
+                events += {
+                    "event": event_type ?? "message",
+                    "data": parse_json(data_line),
+                };
+            }
+        }
+        return events;
+    }
+
+    private static hash<auto> echoHandler(hash<auto> task_info, hash<auto> msg) {
+        string text = "";
+        foreach hash<auto> part in (msg.parts) {
+            if (part.type == "text") {
+                text += part.text;
+            }
+        }
+        return {
+            "role": "agent",
+            "parts": ({"type": "text", "text": "Echo: " + text},),
+        };
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        handler = new A2aServerHandler(logger, {
+            "name": "TestAgent",
+            "description": "Test A2A agent",
+            "url": "http://localhost",
+            "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{
+                "streaming": True,
+                "pushNotifications": True,
+                "extendedAgentCard": True,
+            },
+            "defaultInputModes": ("text/plain", "application/json"),
+            "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{
+                "id": "echo",
+                "name": "Echo",
+                "description": "Echoes messages back",
+                "tags": ("test", "echo"),
+            },),
+        });
+
+        handler.setMessageHandler(\echoHandler());
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http.setHandler("a2a-handler", "", MimeTypeJson, handler);
+        http.setDefaultHandler("a2a-handler", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        base_url = sprintf("http://localhost:%d", port);
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    agentCardServingTest() {
+        # Fetch agent card via HTTP GET
+        HTTPClient client({"url": base_url});
+        hash<auto> info;
+        string resp = client.get("/.well-known/agent-card.json", NOTHING, \info);
+        hash<auto> response_info = info."response-headers";
+        assertEq(200, response_info.status_code, "Agent card should return 200");
+
+        hash<auto> card = parse_json(resp);
+        assertEq("TestAgent", card.name, "Agent name should match");
+        assertEq("Test A2A agent", card.description, "Agent description should match");
+        assertEq("1.0", card.version, "Agent version should match");
+        assertTrue(card.capabilities.streaming, "Should have streaming capability");
+        assertTrue(card.capabilities.pushNotifications, "Should have push notifications capability");
+        assertEq(1, card.skills.size(), "Should have 1 skill");
+        assertEq("echo", card.skills[0].id, "Skill ID should be echo");
+    }
+
+    agentCardUpdateTest() {
+        # Update agent card
+        hash<auto> original_card = handler.getAgentCard();
+        assertEq("TestAgent", original_card.name, "Original name should match");
+
+        handler.setAgentCard(original_card + {"version": "2.0"});
+        hash<auto> updated_card = handler.getAgentCard();
+        assertEq("2.0", updated_card.version, "Version should be updated");
+
+        # Restore original
+        handler.setAgentCard(original_card);
+        hash<auto> restored_card = handler.getAgentCard();
+        assertEq("1.0", restored_card.version, "Version should be restored");
+    }
+
+    extendedAgentCardTest() {
+        # Set extended agent card
+        hash<auto> extended = handler.getAgentCard() + {
+            "securitySchemes": {
+                "bearer": {
+                    "type": "http",
+                    "scheme": "bearer",
+                },
+            },
+        };
+        handler.setExtendedAgentCard(extended);
+
+        # Fetch via JSON-RPC
+        A2aClient::A2aClient client(base_url);
+        hash<auto> result = client.getAuthenticatedExtendedCard();
+        assertTrue(exists result.securitySchemes, "Extended card should have security schemes");
+        assertTrue(exists result.securitySchemes.bearer, "Should have bearer scheme");
+
+        client.close();
+    }
+
+    skillRegistrationTest() {
+        hash<auto> original_card = handler.getAgentCard();
+        int original_skill_count = original_card.skills.size();
+
+        # Register a new skill
+        handler.registerSkill(<A2aAgentSkill>{
+            "id": "translate",
+            "name": "Translate",
+            "description": "Translates text between languages",
+            "inputModes": ("text/plain",),
+            "outputModes": ("text/plain",),
+            "tags": ("translation", "nlp"),
+        });
+
+        hash<auto> card = handler.getAgentCard();
+        assertEq(original_skill_count + 1, card.skills.size(), "Should have one more skill");
+
+        # Verify skill in card via HTTP
+        A2aClient::A2aClient client(base_url);
+        hash<auto> fetched_card = client.getAgentCard();
+        bool found_translate = False;
+        foreach hash<auto> skill in (fetched_card.skills) {
+            if (skill.id == "translate") {
+                found_translate = True;
+                assertEq("Translate", skill.name, "Skill name should match");
+                assertEq("Translates text between languages", skill.description, "Skill desc should match");
+                break;
+            }
+        }
+        assertTrue(found_translate, "Should find translate skill in fetched card");
+
+        # Unregister skill
+        assertTrue(handler.unregisterSkill("translate"), "Should unregister translate skill");
+        assertFalse(handler.unregisterSkill("translate"), "Should return False for non-existent skill");
+
+        card = handler.getAgentCard();
+        assertEq(original_skill_count, card.skills.size(), "Should be back to original skill count");
+
+        client.close();
+    }
+
+    messageHandlerTest() {
+        A2aClient::A2aClient client(base_url);
+
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Hello, World!"},),
+        });
+
+        assertTrue(exists task.id, "Task should have an ID");
+        assertEq(A2aTaskState::Completed, task.status.state, "Task should be completed");
+
+        # Check response in history
+        assertTrue(exists task.history, "Task should have history");
+        bool found_response = False;
+        foreach hash<auto> msg in (task.history) {
+            if (msg.role == "agent") {
+                assertEq("Echo: Hello, World!", msg.parts[0].text, "Agent should echo the message");
+                found_response = True;
+                break;
+            }
+        }
+        assertTrue(found_response, "Should have agent response");
+
+        client.close();
+    }
+
+    taskCreationTest() {
+        # Test direct task creation on the server
+        hash<A2aTaskInfo> task = handler.createTask("ctx-1", {"priority": "high"});
+
+        assertTrue(exists task.id, "Task should have ID");
+        assertEq("ctx-1", task.contextId, "Context ID should match");
+        assertEq(A2aTaskState::Pending, task.state, "Initial state should be pending");
+        assertTrue(exists task.createdAt, "Should have creation time");
+        assertTrue(exists task.lastUpdatedAt, "Should have last update time");
+        assertEq("high", task.metadata.priority, "Metadata should match");
+    }
+
+    taskStateMachineTest() {
+        # Test all valid state transitions
+
+        # pending -> active -> completed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Active);
+            assertEq(A2aTaskState::Active, result.status.state);
+            result = handler.updateTaskState(task.id, A2aTaskState::Completed);
+            assertEq(A2aTaskState::Completed, result.status.state);
+        }
+
+        # pending -> active -> failed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Failed);
+            assertEq(A2aTaskState::Failed, result.status.state);
+        }
+
+        # pending -> active -> input-required -> active -> completed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::InputRequired);
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Completed);
+            assertEq(A2aTaskState::Completed, result.status.state);
+        }
+
+        # pending -> active -> auth-required -> active -> completed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::AuthRequired);
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Completed);
+            assertEq(A2aTaskState::Completed, result.status.state);
+        }
+
+        # pending -> canceled
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Canceled);
+            assertEq(A2aTaskState::Canceled, result.status.state);
+        }
+
+        # pending -> rejected
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Rejected);
+            assertEq(A2aTaskState::Rejected, result.status.state);
+        }
+
+        # active -> canceled
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Canceled);
+            assertEq(A2aTaskState::Canceled, result.status.state);
+        }
+
+        # input-required -> failed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::InputRequired);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Failed);
+            assertEq(A2aTaskState::Failed, result.status.state);
+        }
+
+        # input-required -> completed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::InputRequired);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Completed);
+            assertEq(A2aTaskState::Completed, result.status.state);
+        }
+
+        # auth-required -> failed
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::AuthRequired);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Failed);
+            assertEq(A2aTaskState::Failed, result.status.state);
+        }
+
+        # auth-required -> canceled
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::AuthRequired);
+            hash<auto> result = handler.updateTaskState(task.id, A2aTaskState::Canceled);
+            assertEq(A2aTaskState::Canceled, result.status.state);
+        }
+    }
+
+    taskStateInvalidTransitionsTest() {
+        # Test invalid state transitions
+
+        # pending -> completed (invalid: must go through active)
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Completed);
+            });
+        }
+
+        # pending -> failed (invalid)
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Failed);
+            });
+        }
+
+        # pending -> input-required (invalid)
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::InputRequired);
+            });
+        }
+
+        # pending -> auth-required (invalid)
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::AuthRequired);
+            });
+        }
+
+        # active -> rejected (invalid: rejected is only from pending)
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Rejected);
+            });
+        }
+    }
+
+    taskTerminalStateTest() {
+        # Completed tasks cannot transition
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::Completed);
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Active);
+            });
+        }
+
+        # Failed tasks cannot transition
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Active);
+            handler.updateTaskState(task.id, A2aTaskState::Failed);
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Active);
+            });
+        }
+
+        # Canceled tasks cannot transition
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Canceled);
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Active);
+            });
+        }
+
+        # Rejected tasks cannot transition
+        {
+            hash<A2aTaskInfo> task = handler.createTask();
+            handler.updateTaskState(task.id, A2aTaskState::Rejected);
+            assertThrows("A2A-CONFLICT", sub () {
+                handler.updateTaskState(task.id, A2aTaskState::Active);
+            });
+        }
+    }
+
+    taskArtifactTest() {
+        hash<A2aTaskInfo> task = handler.createTask();
+        handler.updateTaskState(task.id, A2aTaskState::Active);
+
+        # Add artifact
+        handler.addArtifact(task.id, {
+            "artifactId": "art-1",
+            "name": "result.json",
+            "description": "Result data",
+            "parts": ({"type": "data", "data": {"key": "value"}},),
+        });
+
+        # Fetch task via client and verify artifact
+        A2aClient::A2aClient client(base_url);
+        hash<auto> fetched = client.getTask(task.id);
+        assertTrue(exists fetched.artifacts, "Task should have artifacts");
+        assertEq(1, fetched.artifacts.size(), "Should have 1 artifact");
+        assertEq("art-1", fetched.artifacts[0].artifactId, "Artifact ID should match");
+        assertEq("result.json", fetched.artifacts[0].name, "Artifact name should match");
+
+        # Add another artifact
+        handler.addArtifact(task.id, {
+            "artifactId": "art-2",
+            "name": "log.txt",
+            "parts": ({"type": "text", "text": "Processing complete"},),
+        });
+
+        fetched = client.getTask(task.id);
+        assertEq(2, fetched.artifacts.size(), "Should have 2 artifacts");
+
+        # Test artifact on non-existent task
+        assertThrows("A2A-TASK-ERROR", sub () {
+            handler.addArtifact("nonexistent-task", {"parts": ()});
+        });
+
+        client.close();
+    }
+
+    taskNotFoundTest() {
+        # Test operations on non-existent tasks
+        assertThrows("A2A-TASK-ERROR", sub () {
+            handler.updateTaskState("nonexistent", A2aTaskState::Active);
+        });
+
+        assertThrows("A2A-TASK-ERROR", sub () {
+            handler.addArtifact("nonexistent", {"parts": ()});
+        });
+    }
+
+    jsonRpcMessageSendTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Send message with text part
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Test message"},),
+        });
+        assertTrue(exists task.id, "Task should have ID");
+        assertEq(A2aTaskState::Completed, task.status.state, "Task should be completed");
+
+        # Send message with multiple parts
+        task = client.sendMessage({
+            "role": "user",
+            "parts": (
+                {"type": "text", "text": "Part 1"},
+                {"type": "text", "text": "Part 2"},
+            ),
+        });
+        assertTrue(exists task.id, "Multi-part task should have ID");
+
+        # Send message with data part
+        task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "data", "data": {"key": "value"}},),
+        });
+        assertTrue(exists task.id, "Data part task should have ID");
+
+        client.close();
+    }
+
+    jsonRpcTasksGetTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create a task via message
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Get task test"},),
+        });
+        string task_id = task.id;
+
+        # Get task
+        hash<auto> fetched = client.getTask(task_id);
+        assertEq(task_id, fetched.id, "Fetched task ID should match");
+        assertTrue(exists fetched.status, "Should have status");
+        assertTrue(exists fetched.status.state, "Should have state");
+        assertTrue(exists fetched.status.timestamp, "Should have timestamp");
+
+        # Get non-existent task should throw
+        assertThrows("A2A-ERROR", sub () {
+            client.getTask("nonexistent-task-id");
+        });
+
+        client.close();
+    }
+
+    jsonRpcTasksCancelTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create a task directly on server and keep it active
+        hash<A2aTaskInfo> server_task = handler.createTask();
+        handler.updateTaskState(server_task.id, A2aTaskState::Active);
+
+        # Cancel via client
+        hash<auto> result = client.cancelTask(server_task.id);
+        assertEq(A2aTaskState::Canceled, result.status.state, "Task should be canceled");
+
+        # Cancel non-existent task
+        assertThrows("A2A-ERROR", sub () {
+            client.cancelTask("nonexistent");
+        });
+
+        # Cancel already-canceled task
+        assertThrows("A2A-ERROR", sub () {
+            client.cancelTask(server_task.id);
+        });
+
+        client.close();
+    }
+
+    jsonRpcPushNotificationConfigTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create a task
+        hash<A2aTaskInfo> task = handler.createTask();
+
+        # Set push notification config
+        hash<auto> result = client.setPushNotificationConfig(task.id, {
+            "url": "http://example.com/webhook",
+            "token": "secret-token",
+        });
+        assertEq(task.id, result.id, "Set result should have task ID");
+        assertTrue(exists result.pushNotificationConfigId, "Set result should have config ID");
+        auto config_id_1 = result.pushNotificationConfigId;
+
+        # List push configs
+        result = client.listPushNotificationConfigs(task.id);
+        assertEq(task.id, result.id, "List result should have task ID");
+        assertTrue(exists result.pushNotificationConfigs, "Should have configs list");
+        assertEq(1, result.pushNotificationConfigs.size(), "Should have 1 config");
+        assertEq("http://example.com/webhook", result.pushNotificationConfigs[0].url, "URL should match");
+
+        # Get push config
+        result = client.getPushNotificationConfig(task.id);
+        assertEq(task.id, result.id, "Get result should have task ID");
+
+        # Add another config
+        hash<auto> set_result2 = client.setPushNotificationConfig(task.id, {
+            "url": "http://example.com/webhook2",
+        });
+        auto config_id_2 = set_result2.pushNotificationConfigId;
+        result = client.listPushNotificationConfigs(task.id);
+        assertEq(2, result.pushNotificationConfigs.size(), "Should have 2 configs");
+
+        # Delete first config by its ID
+        result = client.deletePushNotificationConfig(task.id, config_id_1);
+        assertEq(task.id, result.id, "Delete result should have task ID");
+
+        # After deleting first config, should have 1 remaining
+        result = client.listPushNotificationConfigs(task.id);
+        assertEq(1, result.pushNotificationConfigs.size(), "Should have 1 config after deleting first");
+        assertEq("http://example.com/webhook2", result.pushNotificationConfigs[0].url,
+            "Remaining config should be the second one");
+
+        # Delete second config
+        result = client.deletePushNotificationConfig(task.id, config_id_2);
+        assertEq(task.id, result.id, "Delete result should have task ID");
+
+        # After deleting both, should have 0 configs
+        result = client.listPushNotificationConfigs(task.id);
+        assertEq(0, result.pushNotificationConfigs.size(), "Should have 0 configs after delete");
+
+        # Push config on non-existent task
+        assertThrows("A2A-ERROR", sub () {
+            client.setPushNotificationConfig("nonexistent", {"url": "http://example.com"});
+        });
+
+        client.close();
+    }
+
+    jsonRpcErrorCodesTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # A2A_ERR_NOT_FOUND (-32002) for non-existent task
+        bool caught = False;
+        try {
+            client.getTask("nonexistent");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("A2A-ERROR", ex.err, "Should be A2A-ERROR");
+            # The error arg should contain the error code
+            assertTrue(exists ex.arg, "Should have error arg");
+        }
+        assertTrue(caught, "Should catch not-found error");
+
+        # A2A_ERR_CONFLICT for invalid state transition
+        hash<A2aTaskInfo> task = handler.createTask();
+        handler.updateTaskState(task.id, A2aTaskState::Active);
+        handler.updateTaskState(task.id, A2aTaskState::Completed);
+
+        caught = False;
+        try {
+            client.cancelTask(task.id);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("A2A-ERROR", ex.err, "Should be A2A-ERROR for conflict");
+        }
+        assertTrue(caught, "Should catch conflict error");
+
+        client.close();
+    }
+
+    sessionManagementTest() {
+        A2aClient::A2aClient client(base_url);
+        client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Session test"},),
+        });
+
+        # Task count should have increased
+        assertTrue(handler.getTaskCount() > 0, "Should have active tasks");
+
+        client.close();
+    }
+
+    concurrentTasksTest() {
+        # Create multiple tasks and verify they have unique IDs
+        list<string> task_ids = ();
+        for (int i = 0; i < 10; i++) {
+            hash<A2aTaskInfo> task = handler.createTask(sprintf("ctx-%d", i));
+            task_ids += task.id;
+        }
+
+        # Verify all IDs are unique
+        hash<string, bool> seen;
+        foreach string id in (task_ids) {
+            assertFalse(seen{id} ?? False, sprintf("Task ID %y should be unique", id));
+            seen{id} = True;
+        }
+        assertEq(10, seen.size(), "Should have 10 unique task IDs");
+
+        # Transition all to different states
+        handler.updateTaskState(task_ids[0], A2aTaskState::Active);
+        handler.updateTaskState(task_ids[0], A2aTaskState::Completed);
+
+        handler.updateTaskState(task_ids[1], A2aTaskState::Active);
+        handler.updateTaskState(task_ids[1], A2aTaskState::Failed);
+
+        handler.updateTaskState(task_ids[2], A2aTaskState::Canceled);
+
+        handler.updateTaskState(task_ids[3], A2aTaskState::Rejected);
+
+        handler.updateTaskState(task_ids[4], A2aTaskState::Active);
+        handler.updateTaskState(task_ids[4], A2aTaskState::InputRequired);
+
+        handler.updateTaskState(task_ids[5], A2aTaskState::Active);
+        handler.updateTaskState(task_ids[5], A2aTaskState::AuthRequired);
+
+        # Verify via client
+        A2aClient::A2aClient client(base_url);
+
+        hash<auto> t0 = client.getTask(task_ids[0]);
+        assertEq(A2aTaskState::Completed, t0.status.state);
+
+        hash<auto> t1 = client.getTask(task_ids[1]);
+        assertEq(A2aTaskState::Failed, t1.status.state);
+
+        hash<auto> t2 = client.getTask(task_ids[2]);
+        assertEq(A2aTaskState::Canceled, t2.status.state);
+
+        hash<auto> t3 = client.getTask(task_ids[3]);
+        assertEq(A2aTaskState::Rejected, t3.status.state);
+
+        hash<auto> t4 = client.getTask(task_ids[4]);
+        assertEq(A2aTaskState::InputRequired, t4.status.state);
+
+        hash<auto> t5 = client.getTask(task_ids[5]);
+        assertEq(A2aTaskState::AuthRequired, t5.status.state);
+
+        # Remaining tasks should still be pending
+        hash<auto> t6 = client.getTask(task_ids[6]);
+        assertEq(A2aTaskState::Pending, t6.status.state);
+
+        client.close();
+    }
+
+    messageHandlerErrorTest() {
+        # Set a message handler that throws
+        handler.setMessageHandler(sub (hash<auto> task_info, hash<auto> msg) {
+            throw "HANDLER-ERROR", "Intentional error for testing";
+        });
+
+        A2aClient::A2aClient client(base_url);
+
+        hash<auto> task = client.sendMessage({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Trigger error"},),
+        });
+
+        assertTrue(exists task.id, "Task should have ID even with handler error");
+        assertEq(A2aTaskState::Failed, task.status.state, "Task should be failed");
+
+        # Restore original handler
+        handler.setMessageHandler(\echoHandler());
+
+        client.close();
+    }
+
+    httpMethodHandlingTest() {
+        HTTPClient client({"url": base_url});
+        hash<auto> info;
+
+        # PUT should return 405
+        try {
+            client.send("", "PUT", "/.well-known/agent-card.json", NOTHING, NOTHING, \info);
+            hash<auto> ri = info."response-headers";
+            assertEq(405, ri.status_code, "PUT should return 405");
+        } catch (hash<ExceptionInfo> ex) {
+            # HTTP client may throw for non-2xx responses
+            assertTrue(ex.desc =~ /405/, "PUT exception should indicate 405");
+        }
+
+        # DELETE should return 405
+        try {
+            client.send("", "DELETE", "/", NOTHING, NOTHING, \info);
+            hash<auto> ri = info."response-headers";
+            assertEq(405, ri.status_code, "DELETE should return 405");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.desc =~ /405/, "DELETE exception should indicate 405");
+        }
+
+        # GET agent card should work
+        client.get("/.well-known/agent-card.json", NOTHING, \info);
+        hash<auto> response_info = info."response-headers";
+        assertEq(200, response_info.status_code, "GET agent card should return 200");
+    }
+
+    taskWithContextAndMetadataTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create task with context
+        hash<auto> task = client.sendMessage(
+            {
+                "role": "user",
+                "parts": ({"type": "text", "text": "Context test"},),
+            },
+            {
+                "contextId": "conversation-42",
+            },
+        );
+
+        assertTrue(exists task.id, "Task should have ID");
+
+        # Retrieve and verify context
+        hash<auto> fetched = client.getTask(task.id);
+        # contextId is set during creation via the message handler
+        assertTrue(exists fetched.id, "Should be able to retrieve task");
+
+        client.close();
+    }
+
+    contextHistoryMultiTurnTest() {
+        # Clear any prior state
+        handler.clearContextHistory();
+
+        A2aClient::A2aClient client(base_url);
+        string ctx_id = "multi-turn-test";
+
+        # Turn 1: send first message
+        hash<auto> task1 = client.sendMessage(
+            {
+                "role": "user",
+                "parts": ({"type": "text", "text": "Hello"},),
+            },
+            {"contextId": ctx_id},
+        );
+        assertEq(A2aTaskState::Completed, task1.status.state, "Turn 1 should complete");
+
+        # After turn 1: context should have 2 messages (user + agent)
+        list<hash<auto>> history1 = handler.getContextHistory(ctx_id);
+        assertEq(2, history1.size(), "After turn 1: should have 2 messages in context");
+        assertEq("user", history1[0].role, "First message should be user");
+        assertEq("agent", history1[1].role, "Second message should be agent");
+
+        # Turn 2: send second message
+        hash<auto> task2 = client.sendMessage(
+            {
+                "role": "user",
+                "parts": ({"type": "text", "text": "How are you?"},),
+            },
+            {"contextId": ctx_id},
+        );
+        assertEq(A2aTaskState::Completed, task2.status.state, "Turn 2 should complete");
+
+        # After turn 2: context should have 4 messages
+        list<hash<auto>> history2 = handler.getContextHistory(ctx_id);
+        assertEq(4, history2.size(), "After turn 2: should have 4 messages in context");
+
+        # Turn 3: send third message
+        hash<auto> task3 = client.sendMessage(
+            {
+                "role": "user",
+                "parts": ({"type": "text", "text": "Goodbye"},),
+            },
+            {"contextId": ctx_id},
+        );
+        assertEq(A2aTaskState::Completed, task3.status.state, "Turn 3 should complete");
+
+        # After turn 3: context should have 6 messages
+        list<hash<auto>> history3 = handler.getContextHistory(ctx_id);
+        assertEq(6, history3.size(), "After turn 3: should have 6 messages in context");
+
+        # Verify the handler received history on subsequent turns by checking task2's history
+        # contains the handler_message with prior context
+        # The task history itself should have user+agent for this turn
+        assertEq(2, task2.history.size(), "Task 2 history should have 2 messages (user+agent for this task)");
+        assertEq(2, task3.history.size(), "Task 3 history should have 2 messages (user+agent for this task)");
+
+        client.close();
+        handler.clearContextHistory();
+    }
+
+    contextHistoryIsolationTest() {
+        handler.clearContextHistory();
+
+        A2aClient::A2aClient client(base_url);
+        string ctx_a = "isolation-ctx-a";
+        string ctx_b = "isolation-ctx-b";
+
+        # Send message to context A
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Message A1"},)},
+            {"contextId": ctx_a},
+        );
+
+        # Send message to context B
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Message B1"},)},
+            {"contextId": ctx_b},
+        );
+
+        # Send another message to context A
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Message A2"},)},
+            {"contextId": ctx_a},
+        );
+
+        # Verify isolation
+        list<hash<auto>> history_a = handler.getContextHistory(ctx_a);
+        list<hash<auto>> history_b = handler.getContextHistory(ctx_b);
+
+        assertEq(4, history_a.size(), "Context A should have 4 messages (2 turns)");
+        assertEq(2, history_b.size(), "Context B should have 2 messages (1 turn)");
+
+        # Verify content isolation
+        assertEq("Message A1", history_a[0].parts[0].text, "Context A first user message");
+        assertEq("Message B1", history_b[0].parts[0].text, "Context B first user message");
+
+        client.close();
+        handler.clearContextHistory();
+    }
+
+    contextHistoryMaxEnforcementTest() {
+        handler.clearContextHistory();
+
+        # Set a small limit: 4 messages max
+        handler.setMaxContextMessages(4);
+        on_exit handler.setMaxContextMessages(100);
+
+        A2aClient::A2aClient client(base_url);
+        string ctx_id = "max-test";
+
+        # Turn 1: generates 2 messages (user + agent) -> total 2
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Turn 1"},)},
+            {"contextId": ctx_id},
+        );
+        list<hash<auto>> h1 = handler.getContextHistory(ctx_id);
+        assertEq(2, h1.size(), "After turn 1: 2 messages");
+
+        # Turn 2: generates 2 more messages -> total 4 (at limit)
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Turn 2"},)},
+            {"contextId": ctx_id},
+        );
+        list<hash<auto>> h2 = handler.getContextHistory(ctx_id);
+        assertEq(4, h2.size(), "After turn 2: 4 messages (at limit)");
+
+        # Turn 3: generates 2 more -> should trim oldest 2, keeping 4
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Turn 3"},)},
+            {"contextId": ctx_id},
+        );
+        list<hash<auto>> h3 = handler.getContextHistory(ctx_id);
+        assertEq(4, h3.size(), "After turn 3: still 4 messages (oldest trimmed)");
+
+        # Oldest messages should be from turn 2, not turn 1
+        assertEq("Turn 2", h3[0].parts[0].text, "Oldest message should be turn 2 user message");
+        assertEq("agent", h3[1].role, "Second message should be turn 2 agent response");
+        assertEq("Turn 3", h3[2].parts[0].text, "Third message should be turn 3 user message");
+
+        # Verify invalid limit is rejected
+        assertThrows("A2A-INVALID-ARGUMENT", sub () {
+            handler.setMaxContextMessages(0);
+        });
+        assertThrows("A2A-INVALID-ARGUMENT", sub () {
+            handler.setMaxContextMessages(-1);
+        });
+
+        client.close();
+        handler.clearContextHistory();
+    }
+
+    contextHistoryClearAndGetTest() {
+        handler.clearContextHistory();
+
+        A2aClient::A2aClient client(base_url);
+
+        # Get history for non-existent context returns empty list
+        list<hash<auto>> empty = handler.getContextHistory("nonexistent");
+        assertEq(0, empty.size(), "Non-existent context should return empty list");
+
+        # Create some context
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Ctx1 msg"},)},
+            {"contextId": "clear-test-1"},
+        );
+        client.sendMessage(
+            {"role": "user", "parts": ({"type": "text", "text": "Ctx2 msg"},)},
+            {"contextId": "clear-test-2"},
+        );
+
+        # Verify both exist
+        assertEq(2, handler.getContextHistory("clear-test-1").size(), "Context 1 should have messages");
+        assertEq(2, handler.getContextHistory("clear-test-2").size(), "Context 2 should have messages");
+
+        # Clear specific context
+        handler.clearContextHistory("clear-test-1");
+        assertEq(0, handler.getContextHistory("clear-test-1").size(), "Context 1 should be cleared");
+        assertEq(2, handler.getContextHistory("clear-test-2").size(), "Context 2 should still exist");
+
+        # Clear all contexts
+        handler.clearContextHistory();
+        assertEq(0, handler.getContextHistory("clear-test-2").size(), "Context 2 should be cleared too");
+
+        client.close();
+    }
+
+    streamHandlerBasicTest() {
+        # Register a stream handler that yields 3 tokens
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                string text = "";
+                foreach hash<auto> part in (msg.parts) {
+                    if (part.type == "text") {
+                        text += part.text;
+                    }
+                }
+                # Yield 3 token chunks
+                token_callback({"parts": ({"type": "text", "text": "Token1"},)});
+                token_callback({"parts": ({"type": "text", "text": " Token2"},)});
+                token_callback({"parts": ({"type": "text", "text": " Token3"},)});
+            });
+        on_exit handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(base_url);
+
+        # Use A2aClient.sendMessageStream() to test SSE streaming
+        list<hash<auto>> events = ();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "Stream test"},)},
+            sub (string event_type, hash<auto> event_data) {
+                events += {"event": event_type, "data": event_data};
+            },
+        );
+        assertTrue(events.size() >= 2, "Should have at least message + status events");
+
+        # Find the task ID from a status event
+        *string task_id;
+        foreach hash<auto> evt in (events) {
+            if (evt.event == "TaskStatusUpdateEvent" && evt.data.params.id) {
+                task_id = evt.data.params.id;
+            }
+        }
+        assertTrue(task_id.val(), "Should have task ID from status event");
+
+        # Verify task is completed
+        hash<auto> task = client.getTask(task_id);
+        assertEq(A2aTaskState::Completed, task.status.state, "Task should complete");
+
+        # Verify assembled response in history
+        assertTrue(task.history.size() >= 2, "Should have user + agent messages");
+        hash<auto> agent_msg = task.history[task.history.size() - 1];
+        assertEq("agent", agent_msg.role, "Last message should be agent");
+        assertEq(3, agent_msg.parts.size(), "Should have 3 assembled parts");
+        assertEq("Token1", agent_msg.parts[0].text, "First token");
+        assertEq(" Token2", agent_msg.parts[1].text, "Second token");
+        assertEq(" Token3", agent_msg.parts[2].text, "Third token");
+
+        client.close();
+    }
+
+    streamHandlerErrorTest() {
+        # Register a stream handler that throws an error
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                # Send one token before failing
+                token_callback({"parts": ({"type": "text", "text": "partial"},)});
+                throw "STREAM-ERROR", "Intentional stream error";
+            });
+        on_exit handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(base_url);
+
+        # Use A2aClient.sendMessageStream() to test error handling
+        list<hash<auto>> events = ();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "Error test"},)},
+            sub (string event_type, hash<auto> event_data) {
+                events += {"event": event_type, "data": event_data};
+            },
+        );
+
+        bool has_failed = False;
+        foreach hash<auto> evt in (events) {
+            if (evt.event == "TaskStatusUpdateEvent" && evt.data.params.state == "failed") {
+                has_failed = True;
+            }
+        }
+        assertTrue(has_failed, "Task should fail on handler error");
+
+        client.close();
+    }
+
+    streamHandlerFallbackTest() {
+        # With no stream handler registered, message/stream should fall back to messageSend
+        # Ensure stream handler is not set (restore echo handler for sync)
+        handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(base_url);
+
+        hash<auto> rpc_request = {
+            "jsonrpc": "2.0",
+            "method": "message/stream",
+            "id": 1,
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Fallback test"},),
+                },
+            },
+        };
+
+        HTTPClient http_client({"url": base_url});
+        hash<auto> info;
+        string resp = http_client.post("", make_json(rpc_request),
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeSse}, \info);
+
+        # Should return SSE with completed status (sync fallback)
+        list<hash<auto>> events = parseSseEvents(resp);
+        assertTrue(events.size() >= 1, "Should have at least status event");
+        bool completed = False;
+        *string task_id;
+        foreach hash<auto> evt in (events) {
+            if (evt.event == "TaskStatusUpdateEvent" && evt.data.params.state == "completed") {
+                completed = True;
+                task_id = evt.data.params.id;
+            }
+        }
+        assertTrue(completed, "Should complete synchronously without stream handler");
+        # Verify task has history
+        hash<auto> task = client.getTask(task_id);
+        assertTrue(task.history.size() >= 2, "Should have history");
+
+        client.close();
+    }
+
+    streamHandlerWithContextTest() {
+        handler.clearContextHistory();
+        string ctx_id = "stream-ctx-test";
+
+        # Register stream handler
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                token_callback({"parts": ({"type": "text", "text": "Stream reply"},)});
+            });
+        on_exit {
+            handler.setStreamMessageHandler(NOTHING);
+            handler.clearContextHistory();
+        }
+
+        A2aClient::A2aClient client(base_url);
+
+        # Use A2aClient.sendMessageStream() with contextId
+        list<hash<auto>> events = ();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "Stream context msg 1"},)},
+            sub (string event_type, hash<auto> event_data) {
+                events += {"event": event_type, "data": event_data};
+            },
+            {"contextId": ctx_id},
+        );
+        bool completed = False;
+        foreach hash<auto> evt in (events) {
+            if (evt.event == "TaskStatusUpdateEvent" && evt.data.params.state == "completed") {
+                completed = True;
+            }
+        }
+        assertEq(True, completed, "Stream with context should complete");
+
+        # Verify context history was accumulated
+        list<hash<auto>> ctx_history = handler.getContextHistory(ctx_id);
+        assertEq(2, ctx_history.size(), "Context should have 2 messages after streaming turn");
+        assertEq("user", ctx_history[0].role, "First should be user");
+        assertEq("agent", ctx_history[1].role, "Second should be agent");
+
+        client.close();
+    }
+
+    # ================================================================
+    # A2A v1.0 dual-version server tests
+    # ================================================================
+
+    v10AgentCardPathTest() {
+        # v0.3 path should still work
+        Qore::HTTPClient http_client({"url": base_url});
+        hash<auto> resp = http_client.send("", "GET", "/.well-known/agent-card.json",
+            {"Accept": MimeTypeJson});
+        assertEq(200, resp.status_code, "v0.3 agent card path should return 200");
+        hash<auto> v03_card = parse_json(resp.body);
+        assertEq("TestAgent", v03_card.name, "v0.3 card should have name");
+        assertTrue(v03_card.hasKey("url"), "v0.3 card should have top-level url");
+
+        # v1.0 path should work and return v1.0 format
+        resp = http_client.send("", "GET", "/.well-known/a2a-agent-card",
+            {"Accept": MimeTypeJson});
+        assertEq(200, resp.status_code, "v1.0 agent card path should return 200");
+        hash<auto> v10_card = parse_json(resp.body);
+        assertEq("TestAgent", v10_card.name, "v1.0 card should have name");
+        assertTrue(v10_card.hasKey("supportedInterfaces"), "v1.0 card should have supportedInterfaces");
+        assertFalse(v10_card.hasKey("url"), "v1.0 card should not have top-level url");
+        assertTrue(v10_card.supportedInterfaces.size() > 0, "Should have at least one interface");
+        assertEq("JSONRPC", v10_card.supportedInterfaces[0].protocolBinding);
+    }
+
+    v10MethodDispatchTest() {
+        Qore::HTTPClient http_client({"url": base_url});
+
+        # Send a v1.0 SendMessage request
+        hash<auto> request = {
+            "jsonrpc": "2.0",
+            "id": "v10-test-1",
+            "method": "SendMessage",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Hello v1.0"},),
+                    "messageId": "msg-v10-1",
+                },
+            },
+        };
+        hash<auto> resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        assertEq(200, resp.status_code, "SendMessage should return 200");
+        hash<auto> body = parse_json(resp.body);
+        assertTrue(body.hasKey("result"), "Should have result");
+        assertTrue(body.result.hasKey("id"), "Result should have task id");
+        assertTrue(body.result.hasKey("status"), "Result should have status");
+
+        # v1.0 response should use v1.0 state values
+        assertEq("TASK_STATE_COMPLETED", body.result.status.state,
+            "v1.0 response should use TASK_STATE_* values");
+
+        # Verify v1.0 GetTask also works
+        string task_id = body.result.id;
+        request = {
+            "jsonrpc": "2.0",
+            "id": "v10-test-2",
+            "method": "GetTask",
+            "params": {"id": task_id},
+        };
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        assertEq(200, resp.status_code, "GetTask should return 200");
+        body = parse_json(resp.body);
+        assertEq(task_id, body.result.id, "Task ID should match");
+        assertEq("TASK_STATE_COMPLETED", body.result.status.state, "GetTask should return v1.0 state");
+
+        # Verify v1.0 ListTasks works
+        request = {
+            "jsonrpc": "2.0",
+            "id": "v10-test-3",
+            "method": "ListTasks",
+            "params": {},
+        };
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        assertEq(200, resp.status_code, "ListTasks should return 200");
+        body = parse_json(resp.body);
+        assertTrue(body.result.hasKey("tasks"), "Should have tasks list");
+
+        # Verify v1.0 CancelTask returns proper error for completed task
+        request = {
+            "jsonrpc": "2.0",
+            "id": "v10-test-4",
+            "method": "CancelTask",
+            "params": {"id": task_id},
+        };
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        body = parse_json(resp.body);
+        assertTrue(body.hasKey("error"), "CancelTask on completed task should return error");
+    }
+
+    v10ResponseFormatTest() {
+        Qore::HTTPClient http_client({"url": base_url});
+
+        # Send v1.0 request and verify response has v1.0 enum values
+        hash<auto> request = {
+            "jsonrpc": "2.0",
+            "id": "v10-fmt-1",
+            "method": "SendMessage",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Format test"},),
+                    "messageId": "msg-fmt-1",
+                },
+            },
+        };
+        hash<auto> resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        hash<auto> body = parse_json(resp.body);
+        hash<auto> task = body.result;
+
+        # Status state should be v1.0 format
+        assertTrue(task.status.state =~ /^TASK_STATE_/, "State should use TASK_STATE_ prefix");
+
+        # History messages should have v1.0 role values
+        if (task.history) {
+            foreach hash<auto> msg in (task.history) {
+                assertTrue(msg.role =~ /^ROLE_/, sprintf("Role %y should use ROLE_ prefix", msg.role));
+            }
+        }
+
+        # Status message should have v1.0 role
+        if (task.status.message) {
+            assertTrue(task.status.message.role =~ /^ROLE_/,
+                "Status message role should use ROLE_ prefix");
+        }
+
+        # Now send same request via v0.3 method and verify v0.3 format
+        request.method = "message/send";
+        request.id = "v03-fmt-1";
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        body = parse_json(resp.body);
+        task = body.result;
+
+        # v0.3 state should NOT have TASK_STATE_ prefix
+        assertFalse(task.status.state =~ /^TASK_STATE_/,
+            sprintf("v0.3 state %y should not have TASK_STATE_ prefix", task.status.state));
+        assertEq("completed", task.status.state, "v0.3 state should be lowercase");
+    }
+
+    v10SendMessageParamsTest() {
+        Qore::HTTPClient http_client({"url": base_url});
+
+        # v1.0 format: contextId inside message, with configuration
+        hash<auto> request = {
+            "jsonrpc": "2.0",
+            "id": "v10-params-1",
+            "method": "SendMessage",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Context test"},),
+                    "messageId": "msg-params-1",
+                    "contextId": "ctx-v10-1",
+                },
+                "configuration": {
+                    "acceptedOutputModes": ("text/plain",),
+                    "historyLength": 5,
+                },
+            },
+        };
+        hash<auto> resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        hash<auto> body = parse_json(resp.body);
+        assertTrue(body.hasKey("result"), "Should have result");
+        assertEq("ctx-v10-1", body.result.contextId, "contextId should be preserved from message");
+    }
+
+    v10VersionDetectionTest() {
+        Qore::HTTPClient http_client({"url": base_url});
+
+        # v1.0 detected from method name (no header)
+        hash<auto> request = {
+            "jsonrpc": "2.0",
+            "id": "detect-1",
+            "method": "SendMessage",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Detect from method"},),
+                    "messageId": "msg-detect-1",
+                },
+            },
+        };
+        hash<auto> resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        hash<auto> body = parse_json(resp.body);
+        assertEq("TASK_STATE_COMPLETED", body.result.status.state,
+            "Should detect v1.0 from method name and return v1.0 state");
+
+        # v1.0 detected from A2A-Version header (with v0.3 method name)
+        request = {
+            "jsonrpc": "2.0",
+            "id": "detect-2",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "Detect from header"},),
+                    "messageId": "msg-detect-2",
+                },
+            },
+        };
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson, "A2A-Version": "1.0"});
+        body = parse_json(resp.body);
+        assertEq("TASK_STATE_COMPLETED", body.result.status.state,
+            "Should detect v1.0 from A2A-Version header");
+
+        # v0.3 with no header should return v0.3 format
+        request = {
+            "jsonrpc": "2.0",
+            "id": "detect-3",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": ({"type": "text", "text": "v0.3 request"},),
+                },
+            },
+        };
+        resp = http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+        body = parse_json(resp.body);
+        assertEq("completed", body.result.status.state,
+            "v0.3 request should return v0.3 state");
+    }
+
+    # ================================================================
+    # Non-root path tests (catches URL path handling bugs)
+    # ================================================================
+
+    nonRootPathSseStreamTest() {
+        # Test that A2aClient correctly uses the URL path for all requests,
+        # not just "/". This is critical when the A2A handler is at a sub-path
+        # like /api/v1/a2a (common in real deployments like Qorus).
+
+        # Use a URL with a non-root path against the existing server
+        # The server handler is registered at root, so both "/" and "/api/v1/a2a"
+        # reach it — we test that the client SENDS the correct path.
+        string sub_url = sprintf("http://localhost:%d/api/v1/a2a", port);
+
+        # Register a stream handler
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                token_callback({"parts": ({"type": "text", "text": "Token1"},)});
+                token_callback({"parts": ({"type": "text", "text": " Token2"},)});
+            });
+        on_exit handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(sub_url);
+        on_exit client.close();
+
+        # Verify the url_path is correctly extracted
+        # (the internal url_path member should be "/api/v1/a2a")
+        hash<auto> card = client.getAgentCard();
+        assertTrue(card.name.val(), "Should get agent card");
+
+        # SSE streaming
+        list<hash<auto>> events = ();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "Sub-path test"},)},
+            sub (string event_type, hash<auto> event_data) {
+                events += {"event": event_type, "data": event_data};
+            },
+        );
+        assertTrue(events.size() >= 2, "Should have events from SSE stream");
+
+        # Get task ID
+        *string task_id;
+        foreach hash<auto> evt in (events) {
+            if (evt.data.id.val()) {
+                task_id = evt.data.id;
+                break;
+            }
+            if (evt.data.params.id.val()) {
+                task_id = evt.data.params.id;
+                break;
+            }
+        }
+        assertTrue(task_id.val(), "Should have task ID from SSE");
+
+        # getTask() after SSE streaming — the request must go to /api/v1/a2a, not "/"
+        hash<auto> task = client.getTask(task_id);
+        assertEq(A2aTaskState::Completed, task.status.state,
+            "getTask after SSE streaming on sub-path should work");
+
+        # Verify non-streaming JSON-RPC also uses the correct path
+        hash<auto> task2 = client.getTask(task_id);
+        assertEq(A2aTaskState::Completed, task2.status.state,
+            "Second getTask should also work");
+    }
+}
