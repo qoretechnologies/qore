@@ -634,12 +634,18 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::LtFloat:
             return QoreValue(left.getAsFloat() < right.getAsFloat());
         case QoreIROpcode::LtString: {
-            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
-                return QoreValue(false);
+            if (left.getType() == NT_STRING
+                    && right.getType() == NT_STRING) {
+                QoreStringNodeValueHelper lstr(left);
+                QoreStringNodeValueHelper rstr(right);
+                if (lstr->getEncoding() == rstr->getEncoding()) {
+                    return QoreValue(lstr->compare(*rstr) < 0);
+                }
             }
-            QoreStringNodeValueHelper lstr(left);
-            QoreStringNodeValueHelper rstr(right);
-            return QoreValue(lstr && rstr && (lstr->compare(*rstr) < 0));
+            QoreStringValueHelper lstr(left);
+            QoreStringValueHelper rstr(
+                right, lstr->getEncoding(), xsink);
+            return QoreValue(!*xsink && lstr->compare(*rstr) < 0);
         }
         case QoreIROpcode::LtAny:
             if (qore_buffer_binary_op_applies(left, right)) {
@@ -651,12 +657,18 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::LeFloat:
             return QoreValue(left.getAsFloat() <= right.getAsFloat());
         case QoreIROpcode::LeString: {
-            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
-                return QoreValue(false);
+            if (left.getType() == NT_STRING
+                    && right.getType() == NT_STRING) {
+                QoreStringNodeValueHelper lstr(left);
+                QoreStringNodeValueHelper rstr(right);
+                if (lstr->getEncoding() == rstr->getEncoding()) {
+                    return QoreValue(lstr->compare(*rstr) <= 0);
+                }
             }
-            QoreStringNodeValueHelper lstr(left);
-            QoreStringNodeValueHelper rstr(right);
-            return QoreValue(lstr && rstr && (lstr->compare(*rstr) <= 0));
+            QoreStringValueHelper lstr(left);
+            QoreStringValueHelper rstr(
+                right, lstr->getEncoding(), xsink);
+            return QoreValue(!*xsink && lstr->compare(*rstr) <= 0);
         }
         case QoreIROpcode::LeAny:
             if (qore_buffer_binary_op_applies(left, right)) {
@@ -668,12 +680,18 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::GtFloat:
             return QoreValue(left.getAsFloat() > right.getAsFloat());
         case QoreIROpcode::GtString: {
-            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
-                return QoreValue(false);
+            if (left.getType() == NT_STRING
+                    && right.getType() == NT_STRING) {
+                QoreStringNodeValueHelper lstr(left);
+                QoreStringNodeValueHelper rstr(right);
+                if (lstr->getEncoding() == rstr->getEncoding()) {
+                    return QoreValue(lstr->compare(*rstr) > 0);
+                }
             }
-            QoreStringNodeValueHelper lstr(left);
-            QoreStringNodeValueHelper rstr(right);
-            return QoreValue(lstr && rstr && (lstr->compare(*rstr) > 0));
+            QoreStringValueHelper lstr(left);
+            QoreStringValueHelper rstr(
+                right, lstr->getEncoding(), xsink);
+            return QoreValue(!*xsink && lstr->compare(*rstr) > 0);
         }
         case QoreIROpcode::GtAny:
             if (qore_buffer_binary_op_applies(left, right)) {
@@ -685,12 +703,18 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::GeFloat:
             return QoreValue(left.getAsFloat() >= right.getAsFloat());
         case QoreIROpcode::GeString: {
-            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
-                return QoreValue(false);
+            if (left.getType() == NT_STRING
+                    && right.getType() == NT_STRING) {
+                QoreStringNodeValueHelper lstr(left);
+                QoreStringNodeValueHelper rstr(right);
+                if (lstr->getEncoding() == rstr->getEncoding()) {
+                    return QoreValue(lstr->compare(*rstr) >= 0);
+                }
             }
-            QoreStringNodeValueHelper lstr(left);
-            QoreStringNodeValueHelper rstr(right);
-            return QoreValue(lstr && rstr && (lstr->compare(*rstr) >= 0));
+            QoreStringValueHelper lstr(left);
+            QoreStringValueHelper rstr(
+                right, lstr->getEncoding(), xsink);
+            return QoreValue(!*xsink && lstr->compare(*rstr) >= 0);
         }
         case QoreIROpcode::GeAny:
             if (qore_buffer_binary_op_applies(left, right)) {
@@ -715,12 +739,23 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(l < r ? -1 : (l > r ? 1 : 0));
         }
         case QoreIROpcode::CmpString: {
-            int64_t result = 0;
-            if (left.getType() == NT_STRING && right.getType() == NT_STRING) {
+            if (left.getType() == NT_STRING
+                    && right.getType() == NT_STRING) {
                 QoreStringNodeValueHelper lstr(left);
                 QoreStringNodeValueHelper rstr(right);
+                if (lstr->getEncoding() == rstr->getEncoding()) {
+                    int cmp = lstr->compare(*rstr);
+                    return QoreValue(
+                        cmp < 0 ? -1 : (cmp > 0 ? 1 : 0));
+                }
+            }
+            QoreStringValueHelper lstr(left);
+            QoreStringValueHelper rstr(
+                right, lstr->getEncoding(), xsink);
+            int64_t result = 0;
+            if (!*xsink) {
                 int cmp = lstr->compare(*rstr);
-                result = cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);  // normalize to -1/0/1
+                result = cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);
             }
             return QoreValue(result);
         }

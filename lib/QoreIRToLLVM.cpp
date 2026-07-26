@@ -13972,41 +13972,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
 
                 const char* helper_name = nullptr;
-                bool helper_takes_xsink = false;
                 switch (inv->invoke_opcode) {
                     case QoreIROpcode::EqString:
                         helper_name = "qore_rt_string_eq_typed";
-                        helper_takes_xsink = true;
                         break;
                     case QoreIROpcode::NeString:
                         helper_name = "qore_rt_string_ne_typed";
-                        helper_takes_xsink = true;
                         break;
                     case QoreIROpcode::LtString:
-                        helper_name = "qore_rt_string_lt_typed";
+                        helper_name = "qore_rt_string_lt_typed_soft";
                         break;
                     case QoreIROpcode::LeString:
-                        helper_name = "qore_rt_string_le_typed";
+                        helper_name = "qore_rt_string_le_typed_soft";
                         break;
                     case QoreIROpcode::GtString:
-                        helper_name = "qore_rt_string_gt_typed";
+                        helper_name = "qore_rt_string_gt_typed_soft";
                         break;
                     case QoreIROpcode::GeString:
-                        helper_name = "qore_rt_string_ge_typed";
+                        helper_name = "qore_rt_string_ge_typed_soft";
                         break;
                     default:
                         break;
                 }
-                if (helper_takes_xsink) {
-                    auto helper = module.getOrInsertFunction(helper_name,
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
-                } else {
-                    auto helper = module.getOrInsertFunction(helper_name,
-                            llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-                    result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-                }
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                    {lhs_boxed, rhs_boxed, xsink_arg});
                 // String comparisons do not modify locals.
 
             } else if (inv->invoke_opcode == QoreIROpcode::ListAssignAny
@@ -20063,11 +20055,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_lt_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_ORDERING_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_lt_typed_soft_native"
+                    : "qore_rt_string_lt_typed_soft",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(
+                helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::LeString: {
@@ -20076,11 +20083,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_le_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_ORDERING_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_le_typed_soft_native"
+                    : "qore_rt_string_le_typed_soft",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(
+                helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::GtString: {
@@ -20089,11 +20111,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_gt_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_ORDERING_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_gt_typed_soft_native"
+                    : "qore_rt_string_gt_typed_soft",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(
+                helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::GeString: {
@@ -20102,11 +20139,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_ge_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_ORDERING_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_ge_typed_soft_native"
+                    : "qore_rt_string_ge_typed_soft",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(
+                helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::LtAny: {
@@ -20260,11 +20312,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_cmp_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_string_cmp_typed_soft",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(
+                helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::CmpAny: {

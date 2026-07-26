@@ -8185,6 +8185,45 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_ge_typed(uint64_t left, uint64_t ri
     return toBits(QoreValue(result));
 }
 
+static QORE_ALWAYS_INLINE int qore_rt_string_compare_typed_soft_impl(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    if (lv.getType() == NT_STRING && rv.getType() == NT_STRING) {
+        QoreStringNodeValueHelper ls(lv);
+        QoreStringNodeValueHelper rs(rv);
+        if (ls->getEncoding() == rs->getEncoding()) {
+            return ls->compare(*rs);
+        }
+    }
+    QoreStringValueHelper ls(lv);
+    QoreStringValueHelper rs(rv, ls->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    return ls->compare(*rs);
+}
+
+#define QORE_STRING_ORDER_SOFT_HELPERS(name, op) \
+extern "C" DLLEXPORT int64_t qore_rt_string_##name##_typed_soft_native( \
+        uint64_t left, uint64_t right, ExceptionSink* xsink) { \
+    int cmp = qore_rt_string_compare_typed_soft_impl( \
+        left, right, xsink); \
+    return !(xsink && *xsink) && cmp op 0 ? 1 : 0; \
+} \
+extern "C" DLLEXPORT uint64_t qore_rt_string_##name##_typed_soft( \
+        uint64_t left, uint64_t right, ExceptionSink* xsink) { \
+    return toBits(QoreValue(qore_rt_string_##name##_typed_soft_native( \
+        left, right, xsink) != 0)); \
+}
+
+QORE_STRING_ORDER_SOFT_HELPERS(lt, <)
+QORE_STRING_ORDER_SOFT_HELPERS(le, <=)
+QORE_STRING_ORDER_SOFT_HELPERS(gt, >)
+QORE_STRING_ORDER_SOFT_HELPERS(ge, >=)
+
+#undef QORE_STRING_ORDER_SOFT_HELPERS
+
 // Typed string comparison (spaceship) - both operands are known to be strings at compile time
 // Returns -1, 0, or 1 as an integer
 extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed(uint64_t left, uint64_t right) {
@@ -8197,6 +8236,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed(uint64_t left, uint64_t r
         QoreStringNodeValueHelper rs(rv);
         result = fast_string_compare(*ls, *rs);
     }
+    return toBits(QoreValue(result));
+}
+
+//! Encoding-aware typed string comparison.
+extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed_soft(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    int result = qore_rt_string_compare_typed_soft_impl(
+        left, right, xsink);
     return toBits(QoreValue(result));
 }
 

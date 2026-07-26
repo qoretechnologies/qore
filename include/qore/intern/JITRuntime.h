@@ -485,6 +485,26 @@ int64_t qore_rt_string_eq_typed_native(uint64_t left, uint64_t right,
 int64_t qore_rt_string_ne_typed_native(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
 
+//! Encoding-aware typed string ordering with boxed and native boolean results.
+uint64_t qore_rt_string_lt_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_le_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_gt_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_ge_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_lt_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_le_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_gt_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+
 //! Compare an assigned string after case conversion without retaining the result.
 int64_t qore_rt_string_case_equal_native_noguard(uint64_t value,
     uint64_t other, int32_t upper, int32_t transform_left,
