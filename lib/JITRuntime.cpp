@@ -8132,6 +8132,42 @@ extern "C" DLLEXPORT int64_t qore_rt_string_case_equal_native_noguard(
     return xsink && *xsink ? 0 : result ? 1 : 0;
 }
 
+//! Order an assigned string after case conversion without retaining the transformed value.
+extern "C" DLLEXPORT int64_t qore_rt_string_case_compare_native_noguard(
+        uint64_t value, uint64_t other, int32_t upper,
+        int32_t transform_left, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    QoreStringValueHelper str(v);
+    QoreString transformed(str->getEncoding());
+    int rc = upper
+        ? do_toupper(transformed, *str, xsink)
+        : do_tolower(transformed, *str, xsink);
+    if (rc || (xsink && *xsink)) {
+        return 0;
+    }
+
+    QoreValue other_value = fromBits(other);
+    if (transform_left) {
+        QoreStringValueHelper other_string(
+            other_value, transformed.getEncoding(), xsink);
+        if (xsink && *xsink) {
+            return 0;
+        }
+        return transformed.compare(*other_string);
+    }
+
+    QoreStringNodeValueHelper other_string(other_value);
+    if (other_string->getEncoding() == transformed.getEncoding()) {
+        return other_string->compare(&transformed);
+    }
+    TempString converted(
+        transformed.convertEncoding(other_string->getEncoding(), xsink));
+    if ((xsink && *xsink) || !converted) {
+        return 0;
+    }
+    return other_string->compare(*converted);
+}
+
 // Typed string less than - both operands are known to be strings at compile time
 extern "C" DLLEXPORT uint64_t qore_rt_string_lt_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);

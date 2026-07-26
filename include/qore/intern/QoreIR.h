@@ -957,6 +957,10 @@ public:
         None,
         Eq,
         Ne,
+        Lt,
+        Le,
+        Gt,
+        Ge,
     };
 
     explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {

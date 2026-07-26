@@ -509,6 +509,10 @@ uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
 int64_t qore_rt_string_case_equal_native_noguard(uint64_t value,
     uint64_t other, int32_t upper, int32_t transform_left,
     ExceptionSink* xsink);
+//! Order an assigned string after case conversion without retaining the result.
+int64_t qore_rt_string_case_compare_native_noguard(uint64_t value,
+    uint64_t other, int32_t upper, int32_t transform_left,
+    ExceptionSink* xsink);
 
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.

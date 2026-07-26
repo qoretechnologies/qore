@@ -13035,11 +13035,20 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                     || claimed.count(consumer)) {
                 continue;
             }
-            bool equality = consumer->opcode == QoreIROpcode::EqAny
+            bool comparison_candidate =
+                consumer->opcode == QoreIROpcode::EqAny
                 || consumer->opcode == QoreIROpcode::NeAny
+                || consumer->opcode == QoreIROpcode::LtAny
+                || consumer->opcode == QoreIROpcode::LeAny
+                || consumer->opcode == QoreIROpcode::GtAny
+                || consumer->opcode == QoreIROpcode::GeAny
                 || consumer->opcode == QoreIROpcode::EqString
-                || consumer->opcode == QoreIROpcode::NeString;
-            if (equality) {
+                || consumer->opcode == QoreIROpcode::NeString
+                || consumer->opcode == QoreIROpcode::LtString
+                || consumer->opcode == QoreIROpcode::LeString
+                || consumer->opcode == QoreIROpcode::GtString
+                || consumer->opcode == QoreIROpcode::GeString;
+            if (comparison_candidate) {
                 if (consumer->operands.size() != 2
                         || !side_effect_free_interval(
                             producer, consumer)) {
@@ -13065,13 +13074,42 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                     continue;
                 }
                 auto comparison =
-                    consumer->opcode == QoreIROpcode::EqAny
-                            || consumer->opcode
-                                == QoreIROpcode::EqString
-                        ? QoreIRInstruction::
-                            AOTStringCaseComparisonKind::Eq
-                        : QoreIRInstruction::
+                    QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None;
+                switch (consumer->opcode) {
+                    case QoreIROpcode::EqAny:
+                    case QoreIROpcode::EqString:
+                        comparison = QoreIRInstruction::
+                            AOTStringCaseComparisonKind::Eq;
+                        break;
+                    case QoreIROpcode::NeAny:
+                    case QoreIROpcode::NeString:
+                        comparison = QoreIRInstruction::
                             AOTStringCaseComparisonKind::Ne;
+                        break;
+                    case QoreIROpcode::LtAny:
+                    case QoreIROpcode::LtString:
+                        comparison = QoreIRInstruction::
+                            AOTStringCaseComparisonKind::Lt;
+                        break;
+                    case QoreIROpcode::LeAny:
+                    case QoreIROpcode::LeString:
+                        comparison = QoreIRInstruction::
+                            AOTStringCaseComparisonKind::Le;
+                        break;
+                    case QoreIROpcode::GtAny:
+                    case QoreIROpcode::GtString:
+                        comparison = QoreIRInstruction::
+                            AOTStringCaseComparisonKind::Gt;
+                        break;
+                    case QoreIROpcode::GeAny:
+                    case QoreIROpcode::GeString:
+                        comparison = QoreIRInstruction::
+                            AOTStringCaseComparisonKind::Ge;
+                        break;
+                    default:
+                        break;
+                }
                 claimed.insert(consumer);
                 fusions.push_back({producer, consumer, consumer->result,
                     QoreIRDotEvalMethodDirectInstruction::

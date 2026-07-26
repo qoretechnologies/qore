@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub transformOrdering(string value, string lower_value,
+        string upper_value, int rounds) {
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (value.lwr() > upper_value) {
+            ++result;
+        }
+        if (upper_value < value.lwr()) {
+            ++result;
+        }
+        if (value.upr() <= lower_value) {
+            ++result;
+        }
+        if (lower_value >= value.upr()) {
+            ++result;
+        }
+    }
+    return result;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    string value = "Prefix ABCDEFGHIJKLMNOPQRSTUVWXYZ "
+        + "abcdefghijklmnopqrstuvwxyz Needle";
+    printf("%d\n",
+        transformOrdering(value, value.lwr(), value.upr(), rounds));
+    return 0;
+}
+
+main();

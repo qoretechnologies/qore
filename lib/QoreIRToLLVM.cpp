@@ -10890,24 +10890,42 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             boxValue(base, inst->operands[transform_operand].id);
         llvm::Value* other_boxed =
             boxValue(other, inst->operands[1 - transform_operand].id);
-        auto helper = module.getOrInsertFunction(
-            "qore_rt_string_case_equal_native_noguard",
+        bool equality = inst->aot_string_case_comparison
+                == QoreIRInstruction::
+                    AOTStringCaseComparisonKind::Eq
+            || inst->aot_string_case_comparison
+                == QoreIRInstruction::
+                    AOTStringCaseComparisonKind::Ne;
+        auto helper = module.getOrInsertFunction(equality
+                ? "qore_rt_string_case_equal_native_noguard"
+                : "qore_rt_string_case_compare_native_noguard",
             llvm::FunctionType::get(i64_type,
                 {i64_type, i64_type, i32_type, i32_type, ptr_type},
                 false));
-        llvm::Value* equal = builder->CreateCall(helper,
+        llvm::Value* scalar = builder->CreateCall(helper,
             {base_boxed, other_boxed,
              llvm::ConstantInt::get(i32_type,
                 inst->aot_string_case_comparison_upper ? 1 : 0),
              llvm::ConstantInt::get(i32_type,
                 transform_operand == 0 ? 1 : 0),
              xsink_arg});
-        llvm::Value* result = builder->CreateICmpNE(equal,
-            llvm::ConstantInt::get(i64_type, 0));
-        return inst->aot_string_case_comparison
-                == QoreIRInstruction::
-                    AOTStringCaseComparisonKind::Ne
-            ? builder->CreateNot(result) : result;
+        llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+        switch (inst->aot_string_case_comparison) {
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Eq:
+                return builder->CreateICmpNE(scalar, zero);
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Ne:
+                return builder->CreateICmpEQ(scalar, zero);
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Lt:
+                return builder->CreateICmpSLT(scalar, zero);
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Le:
+                return builder->CreateICmpSLE(scalar, zero);
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Gt:
+                return builder->CreateICmpSGT(scalar, zero);
+            case QoreIRInstruction::AOTStringCaseComparisonKind::Ge:
+                return builder->CreateICmpSGE(scalar, zero);
+            default:
+                return nullptr;
+        }
     };
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
@@ -20050,6 +20068,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::LtString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20078,6 +20108,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::LeString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20106,6 +20148,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::GtString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20134,6 +20188,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::GeString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20162,6 +20228,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::LtAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20180,6 +20258,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::LeAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20198,6 +20288,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::GtAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -20216,6 +20318,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::GeAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }

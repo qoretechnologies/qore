@@ -88,6 +88,36 @@ int sub transformEqualityKinds(string value, string lower_value,
     return result;
 }
 
+int sub transformOrderingKinds(string value, string lower_value,
+        string upper_value) {
+    int result = 0;
+    if (value.lwr() > upper_value) {
+        result += 1;
+    }
+    if (upper_value < value.lwr()) {
+        result += 2;
+    }
+    if (value.upr() <= lower_value) {
+        result += 4;
+    }
+    if (lower_value >= value.upr()) {
+        result += 8;
+    }
+    if (value.upr() < lower_value) {
+        result += 16;
+    }
+    if (lower_value > value.upr()) {
+        result += 32;
+    }
+    if (value.lwr() >= upper_value) {
+        result += 64;
+    }
+    if (upper_value <= value.lwr()) {
+        result += 128;
+    }
+    return result;
+}
+
 bool sub upperEqualRight(string value, string expected) {
     return expected == value.upr();
 }
@@ -120,6 +150,15 @@ string sub sideEffectEqualityValue() {
 
 bool sub sideEffectEquality(string value) {
     return value.lwr() == sideEffectEqualityValue();
+}
+
+string sub sideEffectOrderingValue() {
+    printf(\"ordering-side-effect\\n\");
+    return \"needle\";
+}
+
+bool sub sideEffectOrdering(string value) {
+    return value.lwr() < sideEffectOrderingValue();
 }
 
 int sub main() {
@@ -160,7 +199,12 @@ int sub main() {
     printf(\"equality-latin1:%d:%d\\n\",
         transformEqualityKinds(latin1, \"caf\\u00e9 \\u00df\", \"CAF\\u00c9 SS\"),
         upperEqualRight(latin1, \"CAF\\u00c9 SS\"));
+    printf(\"ordering:%d:%d:%d\\n\",
+        transformOrderingKinds(\"AbC\", \"abc\", \"ABC\"),
+        transformOrderingKinds(utf8, utf8.lwr(), utf8.upr()),
+        transformOrderingKinds(latin1, latin1.lwr(), latin1.upr()));
     printf(\"side-effect-equality:%d\\n\", sideEffectEquality(\"Needle\"));
+    printf(\"side-effect-ordering:%d\\n\", sideEffectOrdering(\"Needle\"));
     string directional_error;
     try {
         transformEqualityKinds(convert_encoding(\"A\", \"ISO-8859-1\"),
@@ -170,6 +214,22 @@ int sub main() {
     }
     printf(\"equality-direction:%s:%d\\n\", directional_error,
         upperEqualRight(convert_encoding(\"A\", \"ISO-8859-1\"), \"\\u6f22\"));
+    string ordering_left_error;
+    try {
+        bool ignored = convert_encoding(\"A\", \"ISO-8859-1\").lwr()
+            < \"\\u6f22\";
+    } catch (hash<auto> ex) {
+        ordering_left_error = ex.err;
+    }
+    string ordering_right_error;
+    try {
+        bool ignored = convert_encoding(\"A\", \"ISO-8859-1\")
+            < \"\\u6f22\".lwr();
+    } catch (hash<auto> ex) {
+        ordering_right_error = ex.err;
+    }
+    printf(\"ordering-direction:%s:%s\\n\",
+        ordering_left_error, ordering_right_error);
     string latin1_error;
     try {
         upperSize(convert_encoding(\"\\u00b5\", \"ISO-8859-1\"));
@@ -211,10 +271,25 @@ int sub main() {
     } catch (hash<auto> ex) {
         unassigned_equality_error = ex.err;
     }
-    printf(\"guards:%s:%s:%s:%s:%s\\n\",
+    string unassigned_ordering_error;
+    try {
+        bool ignored = unassigned.lwr() < \"value\";
+    } catch (hash<auto> ex) {
+        unassigned_ordering_error = ex.err;
+    }
+    string removed_ordering = \"value\";
+    remove removed_ordering;
+    string removed_ordering_error;
+    try {
+        bool ignored = removed_ordering.upr() < \"VALUE\";
+    } catch (hash<auto> ex) {
+        removed_ordering_error = ex.err;
+    }
+    printf(\"guards:%s:%s:%s:%s:%s:%s:%s\\n\",
         unassigned_error, removed_error,
         unassigned_search_error, removed_search_error,
-        unassigned_equality_error);
+        unassigned_equality_error, unassigned_ordering_error,
+        removed_ordering_error);
     string unassigned_other;
     string removed_other = \"value\";
     remove removed_other;
@@ -223,6 +298,11 @@ int sub main() {
         unassigned_other != \"value\".upr(),
         \"VALUE\".lwr() == removed_other,
         removed_other != \"value\".upr());
+    printf(\"ordering-unassigned-other:%d:%d:%d:%d\\n\",
+        \"VALUE\".lwr() < unassigned_other,
+        unassigned_other > \"value\".upr(),
+        \"VALUE\".lwr() < removed_other,
+        removed_other > \"value\".upr());
     return 0;
 }
 
@@ -273,6 +353,11 @@ if (enabled_compile !~ /transformEqualityKinds.*string-transform-consumers=4/) {
         enabled_compile);
     exit(2);
 }
+if (enabled_compile !~ /transformOrderingKinds.*string-transform-consumers=8/) {
+    printf("string transform-ordering fusion mismatch:\n%s",
+        enabled_compile);
+    exit(2);
+}
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
@@ -284,6 +369,8 @@ if (enabled_undefined !~ /qore_rt_pseudo_string_case_measure_native_noguard/
         || disabled_undefined =~ /qore_rt_pseudo_string_case_consume_native_noguard/
         || enabled_undefined !~ /qore_rt_string_case_equal_native_noguard/
         || disabled_undefined =~ /qore_rt_string_case_equal_native_noguard/
+        || enabled_undefined !~ /qore_rt_string_case_compare_native_noguard/
+        || disabled_undefined =~ /qore_rt_string_case_compare_native_noguard/
         || enabled_undefined !~ /qore_rt_string_eq_typed_native/
         || enabled_undefined !~ /qore_rt_string_ne_typed_native/
         || native_disabled_undefined =~ /qore_rt_string_eq_typed_native/
