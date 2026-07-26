@@ -9212,6 +9212,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_cross_block_reuses = 0;
     typed_list_data_ptrs.clear();
     fixed_typed_list_outputs.clear();
+    reserve_typed_list_outputs.clear();
     native_call_result_kinds.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -21522,6 +21523,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 if (fixed_typed_output) {
                     fixed_typed_list_outputs.insert(inst->result.id);
+                } else if (inst->list_reserve_only) {
+                    reserve_typed_list_outputs.insert(inst->result.id);
                 }
                 if (qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST")) {
@@ -21801,11 +21804,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
                 builder->CreateCall(helper, {list_boxed, idx_int, val_float});
             };
-            auto emit_fixed_boxed_store = [&](llvm::Value* val_boxed) {
+            auto emit_direct_boxed_store = [&](llvm::Value* val_boxed) {
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                     get_output_data(), idx_int);
                 builder->CreateStore(val_boxed, entry);
             };
+            bool has_typed_output_data =
+                typed_list_data_ptrs.count(inst->operands[0].id);
             auto native_call_kind = native_call_result_kinds.find(
                 inst->operands[2].id);
             if (typed_specialization
@@ -21832,7 +21837,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && val->getType() == i1_type
                         && fixed_typed_list_outputs.count(
                             inst->operands[0].id)) {
-                    emit_fixed_boxed_store(boxBool(val));
+                    emit_direct_boxed_store(boxBool(val));
                     return true;
                 }
             }
@@ -21854,8 +21859,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !std::getenv("QORE_DISABLE_AOT_TYPED_BOOL_LIST_OUTPUT")
                     && facts->representation == QoreIRValueRepresentation::NativeBool
                     && val->getType() == i1_type
-                    && fixed_typed_list_outputs.count(inst->operands[0].id)) {
-                emit_fixed_boxed_store(boxBool(val));
+                    && (fixed_typed_list_outputs.count(inst->operands[0].id)
+                        || has_typed_output_data)) {
+                emit_direct_boxed_store(boxBool(val));
+                return true;
+            }
+            if (typed_specialization && exact_bool_element
+                    && !std::getenv("QORE_DISABLE_AOT_TYPED_BOOL_SELECT_OUTPUT")
+                    && reserve_typed_list_outputs.count(inst->operands[0].id)
+                    && nanboxed_values.count(inst->operands[2].id)
+                    && val->getType() == i64_type) {
+                llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
+                llvm::Value* is_nothing = builder->CreateICmpEQ(val_boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                    "typed_bool_select_is_nothing");
+                llvm::BasicBlock* checked_block = llvm::BasicBlock::Create(ctx,
+                    "typed_bool_select_checked_store", llvm_func);
+                llvm::BasicBlock* direct_block = llvm::BasicBlock::Create(ctx,
+                    "typed_bool_select_direct_store", llvm_func);
+                llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx,
+                    "typed_bool_select_store_cont", llvm_func);
+                auto* weights = llvm::MDBuilder(ctx).createBranchWeights(1, 999);
+                builder->CreateCondBr(is_nothing, checked_block, direct_block,
+                    weights);
+
+                builder->SetInsertPoint(checked_block);
+                emit_checked_store(val_boxed);
+                if (!builder->GetInsertBlock()->getTerminator()) {
+                    builder->CreateBr(cont_block);
+                }
+
+                builder->SetInsertPoint(direct_block);
+                emit_direct_boxed_store(val_boxed);
+                builder->CreateBr(cont_block);
+                builder->SetInsertPoint(cont_block);
                 return true;
             }
             bool exact_value_type = facts && facts->type_info

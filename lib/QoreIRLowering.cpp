@@ -14566,14 +14566,17 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     bool use_direct_index = (elem_type != nullptr);
     bool elem_is_int = false;
     bool elem_is_float = false;
+    bool elem_is_bool = false;
     if (elem_type) {
         if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
             elem_is_int = true;
         } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
             elem_is_float = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_BOOLEAN) == QTI_IDENT) {
+            elem_is_bool = true;
         }
     }
-    bool use_typed_scalar_construction = (elem_is_int || elem_is_float)
+    bool use_typed_scalar_construction = (elem_is_int || elem_is_float || elem_is_bool)
         && std::getenv("QORE_DISABLE_IR_TYPED_SELECT_CONSTRUCTION") == nullptr;
 
     // Evaluate the input list (left operand of select)
@@ -14707,8 +14710,14 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         if (use_typed_scalar_construction) {
             if (elem_is_int) {
                 builder.createListSetInt(result_list, output_index, element_val, select->loc);
-            } else {
+            } else if (elem_is_float) {
                 builder.createListSetFloat(result_list, output_index, element_val, select->loc);
+            } else {
+                auto* set_inst = builder.createListSetValue(result_list, output_index,
+                    element_val, select->loc, elem_type);
+                if (!exception_stack.empty()) {
+                    set_inst->exception_target = exception_stack.back();
+                }
             }
             QoreIRValue one = builder.createConstInt(1, select->loc)->result;
             selected_output_index = builder.createBinaryOp(QoreIROpcode::AddInt,
