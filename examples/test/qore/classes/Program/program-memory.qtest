@@ -31,14 +31,14 @@ class ProgramMemoryTest inherits QUnit::Test {
             }
         }
 
+        if (!tracking) {
+            testSkip("allocation-tracking build required for leak-byte assertion");
+        }
+
         for (int i = 0; i < 1000; ++i) {
             Program pgm();
             pgm.importClass("ProgramMemoryImportedClass");
             delete pgm;
-        }
-
-        if (!tracking) {
-            testSkip("allocation-tracking build required for leak-byte assertion");
         }
 
         hash<auto> result = call_function("stop_alloc_tracking");
