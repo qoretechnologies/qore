@@ -1,0 +1,5 @@
+%modern
+
+int sub aggregateListFirst(list<int> values) {
+    return values.first();
+}

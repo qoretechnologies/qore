@@ -872,11 +872,53 @@ static bool qore_ir_is_read_only_string_use(const QoreIRInstruction& inst,
     return false;
 }
 
+static bool qore_ir_is_read_only_collection_pseudo_use(
+        const QoreIRInstruction& inst, QoreIRValue value) {
+    if (inst.operands.empty() || inst.operands[0].id != value.id) {
+        return false;
+    }
+    bool pseudo = false;
+    bool has_ref_args = true;
+    const QoreClass* qc = nullptr;
+    QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
+    if (inst.opcode == QoreIROpcode::DotEvalMethodDirect) {
+        const auto& direct =
+            static_cast<const QoreIRDotEvalMethodDirectInstruction&>(inst);
+        pseudo = direct.pseudo;
+        has_ref_args = direct.has_ref_args;
+        qc = direct.qc;
+        intrinsic = direct.intrinsic;
+    } else if (inst.opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+        const auto& invoke =
+            static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction&>(inst);
+        pseudo = invoke.pseudo;
+        has_ref_args = invoke.has_ref_args;
+        qc = invoke.qc;
+        intrinsic = invoke.intrinsic;
+    }
+    if (!pseudo || has_ref_args || !qc || !qc->getName()) {
+        return false;
+    }
+    bool list = !strcmp(qc->getName(), "<list>");
+    bool binary = !strcmp(qc->getName(), "<binary>");
+    if (!list && !binary) {
+        return false;
+    }
+    if (intrinsic == QoreIRIntrinsic::Size
+            || intrinsic == QoreIRIntrinsic::Empty
+            || intrinsic == QoreIRIntrinsic::Val) {
+        return true;
+    }
+    return list && (intrinsic == QoreIRIntrinsic::ListFirst
+        || intrinsic == QoreIRIntrinsic::ListLast);
+}
+
 static bool qore_ir_is_read_only_aggregate_use(const QoreIRInstruction& inst,
         QoreIRValue value) {
     return qore_ir_is_read_only_list_use(inst, value)
         || qore_ir_is_read_only_hash_use(inst, value)
-        || qore_ir_is_read_only_string_use(inst, value);
+        || qore_ir_is_read_only_string_use(inst, value)
+        || qore_ir_is_read_only_collection_pseudo_use(inst, value);
 }
 
 bool qore_ir_compute_function_effect_summaries(

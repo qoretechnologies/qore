@@ -39,6 +39,15 @@ int sub readListSize(list<int> value) {
     return value.size();
 }
 
+int sub readListPseudos(list<int> value) {
+    return value.first() + value.last() + value.size()
+        + (value.empty() ? 100 : 0) + (value.val() ? 1 : 0);
+}
+
+auto sub readHashPseudo(hash<auto> value) {
+    return value.size();
+}
+
 int sub freshListSize() {
     return readListSize((1, 2, 3, 4));
 }
@@ -84,8 +93,9 @@ string sub removedString() {
     return \"missing\";
 }
 
-printf(\"%s:%s:%s:%d\\n\", aliasing(), unassignedHash(), removedString(),
-    freshListSize());
+printf(\"%s:%s:%s:%d:%d:%s\\n\", aliasing(), unassignedHash(), removedString(),
+    freshListSize(), readListPseudos((4, 3, 2, 1)),
+    readHashPseudo({\"size\": string sub () { return \"callref-size\"; }}));
 ";
 
 string src = "/tmp/qore-aot-aggregate-noescape-" + string(getpid()) + ".qr";
@@ -142,7 +152,7 @@ string dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1
     libqore_dir, qcc_bin, qo));
 string disabled_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, disabled_qo));
-foreach string function in (("readHash", "readString")) {
+foreach string function in (("readHash", "readString", "readListPseudos")) {
     string marker = function + "(";
     string line;
     foreach string candidate in (dump.split("\n")) {
@@ -152,7 +162,7 @@ foreach string function in (("readHash", "readString")) {
             break;
         }
     }
-    string expected_params = function == "readHash" ? "[1]" : "[1, 1]";
+    string expected_params = function == "readString" ? "[1, 1]" : "[1]";
     if (!line || line.find("fast_param_noescape\": " + expected_params) == -1) {
         printf("missing aggregate noescape metadata for %s:\n%s", function, dump);
         exit(2);
@@ -175,8 +185,21 @@ if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
     printf("noescape metadata present in disabled control:\n%s", disabled_dump);
     exit(2);
 }
+string hash_pseudo_line;
+foreach string candidate in (dump.split("\n")) {
+    if (candidate.find("readHashPseudo(") != -1
+            && candidate.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        hash_pseudo_line = candidate;
+        break;
+    }
+}
+if (!hash_pseudo_line
+        || hash_pseudo_line.find("\"fast_param_noescape\": [0]") == -1) {
+    printf("unsafe hash pseudo noescape metadata:\n%s", dump);
+    exit(2);
+}
 
-string expected = "62:1:abcdefabc:1:1:rejected:rejected:4\n";
+string expected = "62:1:abcdefabc:1:1:rejected:rejected:4:10:callref-size\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
         libqore_dir, qore_bin, mode, src));
