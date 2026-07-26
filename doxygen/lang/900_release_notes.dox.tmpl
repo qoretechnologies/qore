@@ -1679,6 +1679,12 @@ foreach string module_name in (registry.getProcessModules()) {
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
+    - @ref ftppollerintro "FtpPoller" module
+      - FTP errors during polling are logged with the new \c "log_error" callback (falling back to \c "log_info" if
+        not set) instead of being reported only as informational messages
+      - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be
+        configured (previously hardcoded to 1 minute)
+
     - @ref geminirestclientintro "GeminiRestClient" module
       - request/response body shapers extracted into the standalone
         @ref geminibodyshapeintro "GeminiBodyShape" module so the upcoming
