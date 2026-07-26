@@ -1,0 +1,647 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief JSON Stream Writer implementation
+*/
+/*
+    Qore Programming Language - JSON Module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "qore-json-module.h"
+#include "QC_JsonStreamWriter.h"
+#include "ql_json.h"
+
+#include <cmath>
+
+/** @cond INTERNAL */
+JsonStreamWriter::JsonStreamWriter(OutputStream* os, int format, ExceptionSink* xsink)
+    : os(os), format(format), iteration(0) {
+}
+
+JsonStreamWriter::~JsonStreamWriter() {
+}
+
+bool JsonStreamWriter::checkSandboxLimits(ExceptionSink* xsink) {
+    if (!smh) {
+        return true;
+    }
+
+    // Check depth limit
+    if (depth() > JSON_MAX_NESTING_DEPTH) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR",
+            "maximum nesting depth (%d) exceeded",
+            JSON_MAX_NESTING_DEPTH);
+        return false;
+    }
+
+    // Check for interrupt periodically
+    if ((++iteration % JSON_INTERRUPT_CHECK_INTERVAL) == 0) {
+        if (qore_check_cancel(xsink, "writing JSON stream")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool JsonStreamWriter::ensureKeyAllowed(ExceptionSink* xsink) {
+    if (stack.empty() || stack.back().type != CT_OBJECT) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "key() can only be called inside an object");
+        return false;
+    }
+    if (stack.back().expectValue) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "key() called while expecting a value for the previous key");
+        return false;
+    }
+    return true;
+}
+
+bool JsonStreamWriter::ensureValueAllowed(ExceptionSink* xsink) {
+    if (!stack.empty() && stack.back().type == CT_OBJECT && !stack.back().expectValue) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "value() called without key() in object");
+        return false;
+    }
+    return true;
+}
+
+void JsonStreamWriter::markValueWritten() {
+    if (!stack.empty()) {
+        stack.back().needComma = true;
+        stack.back().expectValue = false;
+    }
+}
+
+int JsonStreamWriter::writeRaw(const char* str, size_t len, ExceptionSink* xsink) {
+    buffer.concat(str, len);
+    return 0;
+}
+
+int JsonStreamWriter::writeRaw(const char* str, ExceptionSink* xsink) {
+    buffer.concat(str);
+    return 0;
+}
+
+int JsonStreamWriter::writeRaw(const QoreString& str, ExceptionSink* xsink) {
+    buffer.concat(str.c_str(), str.size());
+    return 0;
+}
+
+int JsonStreamWriter::flush(ExceptionSink* xsink) {
+    if (buffer.empty()) {
+        return 0;
+    }
+    os->writeHelper(&buffer, xsink);
+    buffer.clear();
+    if (*xsink) {
+        return -1;
+    }
+    return 0;
+}
+
+int JsonStreamWriter::writeCommaIfNeeded(ExceptionSink* xsink) {
+    if (!stack.empty() && stack.back().needComma) {
+        if (writeRaw(",", xsink)) return -1;
+        stack.back().needComma = false;
+    }
+    return 0;
+}
+
+int JsonStreamWriter::writeNewlineIndent(ExceptionSink* xsink) {
+    if (!(format & JGF_ADD_FORMATTING)) {
+        return 0;
+    }
+    if (writeRaw("\n", xsink)) return -1;
+    for (int i = 0; i < depth(); ++i) {
+        if (writeRaw("  ", xsink)) return -1;
+    }
+    return 0;
+}
+
+int JsonStreamWriter::writeJsonString(const QoreStringNode* str, ExceptionSink* xsink) {
+    if (writeRaw("\"", xsink)) return -1;
+
+    const char* p = str->c_str();
+    size_t len = str->size();
+
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = p[i];
+        switch (c) {
+            case '"':
+                if (writeRaw("\\\"", xsink)) return -1;
+                break;
+            case '\\':
+                if (writeRaw("\\\\", xsink)) return -1;
+                break;
+            case '\b':
+                if (writeRaw("\\b", xsink)) return -1;
+                break;
+            case '\f':
+                if (writeRaw("\\f", xsink)) return -1;
+                break;
+            case '\n':
+                if (writeRaw("\\n", xsink)) return -1;
+                break;
+            case '\r':
+                if (writeRaw("\\r", xsink)) return -1;
+                break;
+            case '\t':
+                if (writeRaw("\\t", xsink)) return -1;
+                break;
+            default:
+                if (c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    if (writeRaw(buf, xsink)) return -1;
+                } else {
+                    if (writeRaw((const char*)&c, 1, xsink)) return -1;
+                }
+                break;
+        }
+    }
+
+    if (writeRaw("\"", xsink)) return -1;
+    return 0;
+}
+
+int JsonStreamWriter::startObject(ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    // If we're in an array, we need newline before the object
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    if (writeRaw("{", xsink)) return -1;
+
+    stack.push_back(ContainerState(CT_OBJECT));
+
+    // Check depth limit after push (so depth reflects the new level)
+    if (!checkSandboxLimits(xsink)) return -1;
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::endObject(ExceptionSink* xsink) {
+    if (stack.empty() || stack.back().type != CT_OBJECT) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "endObject() called without matching startObject()");
+        return -1;
+    }
+    if (stack.back().expectValue) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "endObject() called while expecting a value");
+        return -1;
+    }
+
+    bool hadElements = stack.back().needComma;
+    stack.pop_back();
+
+    if (hadElements) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+    if (writeRaw("}", xsink)) return -1;
+
+    // Mark that next sibling needs comma
+    if (!stack.empty()) {
+        stack.back().needComma = true;
+        stack.back().expectValue = false;
+    }
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::startArray(ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    // If we're in an array, we need newline before nested array
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    if (writeRaw("[", xsink)) return -1;
+
+    stack.push_back(ContainerState(CT_ARRAY));
+
+    // Check depth limit after push (so depth reflects the new level)
+    if (!checkSandboxLimits(xsink)) return -1;
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::endArray(ExceptionSink* xsink) {
+    if (stack.empty() || stack.back().type != CT_ARRAY) {
+        xsink->raiseException("JSON-STREAM-WRITER-ERROR", "endArray() called without matching startArray()");
+        return -1;
+    }
+
+    bool hadElements = stack.back().needComma;
+    stack.pop_back();
+
+    if (hadElements) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+    if (writeRaw("]", xsink)) return -1;
+
+    // Mark that next sibling needs comma
+    if (!stack.empty()) {
+        stack.back().needComma = true;
+        stack.back().expectValue = false;
+    }
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::key(const QoreStringNode* k, ExceptionSink* xsink) {
+    if (!ensureKeyAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+
+    if (writeCommaIfNeeded(xsink)) return -1;
+    if (writeNewlineIndent(xsink)) return -1;
+
+    if (writeJsonString(k, xsink)) return -1;
+
+    if (format & JGF_ADD_FORMATTING) {
+        if (writeRaw(": ", xsink)) return -1;
+    } else {
+        if (writeRaw(":", xsink)) return -1;
+    }
+
+    stack.back().expectValue = true;
+    return flush(xsink);
+}
+
+int JsonStreamWriter::stringValue(const QoreStringNode* str, ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    // In array, add newline before value
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    if (writeJsonString(str, xsink)) return -1;
+
+    markValueWritten();
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::numberValue(int64 n, ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%lld", (long long)n);
+    if (writeRaw(buf, xsink)) return -1;
+
+    markValueWritten();
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::numberValue(double n, ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    // Handle special values
+    if (std::isnan(n) || std::isinf(n)) {
+        if (writeRaw("null", xsink)) return -1;
+    } else {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%.17g", n);
+        if (writeRaw(buf, xsink)) return -1;
+    }
+
+    markValueWritten();
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::boolValue(bool b, ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    if (writeRaw(b ? "true" : "false", xsink)) return -1;
+
+    markValueWritten();
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::nullValue(ExceptionSink* xsink) {
+    if (!ensureValueAllowed(xsink)) return -1;
+    if (!checkSandboxLimits(xsink)) return -1;
+    if (writeCommaIfNeeded(xsink)) return -1;
+
+    if (!stack.empty() && stack.back().type == CT_ARRAY) {
+        if (writeNewlineIndent(xsink)) return -1;
+    }
+
+    if (writeRaw("null", xsink)) return -1;
+
+    markValueWritten();
+
+    return flush(xsink);
+}
+
+int JsonStreamWriter::value(QoreValue v, ExceptionSink* xsink) {
+    // Note: ensureValueAllowed is checked here; sandbox limits are checked by
+    // the individual value methods (nullValue, boolValue, etc.) or startArray/startObject
+    if (!ensureValueAllowed(xsink)) return -1;
+
+    switch (v.getType()) {
+        case NT_NOTHING:
+        case NT_NULL:
+            return nullValue(xsink);
+
+        case NT_BOOLEAN:
+            return boolValue(v.getAsBool(), xsink);
+
+        case NT_INT:
+            return numberValue(v.getAsBigInt(), xsink);
+
+        case NT_FLOAT:
+            return numberValue(v.getAsFloat(), xsink);
+
+        case NT_STRING:
+        {
+            QoreStringNodeValueHelper str(v);
+            return stringValue(*str, xsink);
+        }
+
+        case NT_LIST: {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            if (startArray(xsink)) return -1;
+            ConstListIterator li(l);
+            while (li.next()) {
+                if (value(li.getValue(), xsink)) return -1;
+            }
+            return endArray(xsink);
+        }
+
+        case NT_HASH: {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            if (startObject(xsink)) return -1;
+            ConstHashIterator hi(h);
+            while (hi.next()) {
+                SimpleRefHolder<QoreStringNode> k(new QoreStringNode(hi.getKey()));
+                if (key(*k, xsink)) return -1;
+                if (value(hi.get(), xsink)) return -1;
+            }
+            return endObject(xsink);
+        }
+
+        case NT_NUMBER: {
+            if (!checkSandboxLimits(xsink)) return -1;
+            const QoreNumberNode* num = v.get<const QoreNumberNode>();
+            QoreString str;
+            num->toString(str, QORE_NF_SCIENTIFIC);
+            if (writeCommaIfNeeded(xsink)) return -1;
+            if (!stack.empty() && stack.back().type == CT_ARRAY) {
+                if (writeNewlineIndent(xsink)) return -1;
+            }
+            if (writeRaw(str, xsink)) return -1;
+            markValueWritten();
+            return flush(xsink);
+        }
+
+        default: {
+            // Convert other types to string
+            QoreStringValueHelper sv(v);
+            SimpleRefHolder<QoreStringNode> str(new QoreStringNode(sv->c_str()));
+            return stringValue(*str, xsink);
+        }
+    }
+}
+
+/** @endcond */
+
+//! Streaming JSON writer for efficient output to streams
+/** This class provides streaming JSON output to an OutputStream, allowing
+    efficient writing of large JSON documents without building the entire
+    structure in memory first.
+
+    @par Example: Writing a simple object
+    @code{.py}
+    StringOutputStream sos();
+    JsonStreamWriter writer(sos);
+    writer.startObject();
+    writer.key("name");
+    writer.stringValue("Alice");
+    writer.key("age");
+    writer.numberValue(30);
+    writer.endObject();
+    # sos.getData() now contains: {"name":"Alice","age":30}
+    @endcode
+
+    @par Example: Writing nested structures
+    @code{.py}
+    FileOutputStream fos("/path/to/output.json");
+    JsonStreamWriter writer(fos, JGF_ADD_FORMATTING);
+    writer.startObject();
+    writer.key("users");
+    writer.startArray();
+    for (int i = 0; i < 1000000; i++) {
+        writer.value({"id": i, "name": sprintf("user%d", i)});
+    }
+    writer.endArray();
+    writer.endObject();
+    @endcode
+
+    @since json 1.11
+*/
+qclass JsonStreamWriter [arg=JsonStreamWriter* writer; ns=Qore::Json];
+
+//! Creates a new JsonStreamWriter
+/** @param os the output stream to write to
+    @param format optional formatting flags (default: @ref JGF_NONE)
+           - @ref JGF_NONE: compact output without whitespace
+           - @ref JGF_ADD_FORMATTING: pretty-printed output with indentation
+*/
+JsonStreamWriter::constructor(Qore::OutputStream[OutputStream] os, int format = JGF_NONE) {
+    self->setPrivate(CID_JSONSTREAMWRITER, new JsonStreamWriter(*os, format, xsink));
+    // Store reference to output stream in the object to prevent GC
+    self->setValue("os", obj_os->refSelf(), xsink);
+}
+
+//! Writes the start of a JSON object '{'
+/** @par Example:
+    @code{.py}
+    writer.startObject();
+    @endcode
+
+    @throw JSON-STREAM-WRITER-ERROR if maximum nesting depth exceeded (in sandbox)
+*/
+nothing JsonStreamWriter::startObject() {
+    writer->startObject(xsink);
+}
+
+//! Writes the end of a JSON object '}'
+/** @par Example:
+    @code{.py}
+    writer.endObject();
+    @endcode
+
+    @throw JSON-STREAM-WRITER-ERROR if no matching startObject() was called
+*/
+nothing JsonStreamWriter::endObject() {
+    writer->endObject(xsink);
+}
+
+//! Writes the start of a JSON array '['
+/** @par Example:
+    @code{.py}
+    writer.startArray();
+    @endcode
+
+    @throw JSON-STREAM-WRITER-ERROR if maximum nesting depth exceeded (in sandbox)
+*/
+nothing JsonStreamWriter::startArray() {
+    writer->startArray(xsink);
+}
+
+//! Writes the end of a JSON array ']'
+/** @par Example:
+    @code{.py}
+    writer.endArray();
+    @endcode
+
+    @throw JSON-STREAM-WRITER-ERROR if no matching startArray() was called
+*/
+nothing JsonStreamWriter::endArray() {
+    writer->endArray(xsink);
+}
+
+//! Writes an object key
+/** Must be called inside an object (after startObject() and before endObject()).
+
+    @par Example:
+    @code{.py}
+    writer.key("name");
+    writer.stringValue("Alice");
+    @endcode
+
+    @param k the key name
+
+    @throw JSON-STREAM-WRITER-ERROR if not inside an object
+*/
+nothing JsonStreamWriter::key(string k) {
+    writer->key(k, xsink);
+}
+
+//! Writes a string value
+/** @par Example:
+    @code{.py}
+    writer.stringValue("hello world");
+    @endcode
+
+    @param str the string value to write
+*/
+nothing JsonStreamWriter::stringValue(string str) {
+    writer->stringValue(str, xsink);
+}
+
+//! Writes an integer value
+/** @par Example:
+    @code{.py}
+    writer.numberValue(42);
+    @endcode
+
+    @param n the integer value to write
+*/
+nothing JsonStreamWriter::numberValue(int n) {
+    writer->numberValue(n, xsink);
+}
+
+//! Writes a floating-point value
+/** @par Example:
+    @code{.py}
+    writer.numberValue(3.14159);
+    @endcode
+
+    @param n the float value to write
+
+    @note NaN and Infinity are written as null per JSON spec
+*/
+nothing JsonStreamWriter::numberValue(float n) {
+    writer->numberValue(n, xsink);
+}
+
+//! Writes a boolean value
+/** @par Example:
+    @code{.py}
+    writer.boolValue(True);
+    @endcode
+
+    @param b the boolean value to write
+*/
+nothing JsonStreamWriter::boolValue(bool b) {
+    writer->boolValue(b, xsink);
+}
+
+//! Writes a null value
+/** @par Example:
+    @code{.py}
+    writer.nullValue();
+    @endcode
+*/
+nothing JsonStreamWriter::nullValue() {
+    writer->nullValue(xsink);
+}
+
+//! Writes any Qore value as JSON
+/** This method handles any Qore value and writes the appropriate JSON representation:
+    - hashes become JSON objects
+    - lists become JSON arrays
+    - strings, integers, floats, booleans, and NOTHING/NULL are written as their JSON equivalents
+
+    @par Example:
+    @code{.py}
+    writer.value({"name": "Alice", "scores": [95, 87, 92]});
+    @endcode
+
+    @param v the value to write
+*/
+nothing JsonStreamWriter::value(auto v) {
+    writer->value(v, xsink);
+}
+
+//! Flushes any buffered data to the output stream
+/** @par Example:
+    @code{.py}
+    writer.flush();
+    @endcode
+*/
+nothing JsonStreamWriter::flush() {
+    writer->flush(xsink);
+}

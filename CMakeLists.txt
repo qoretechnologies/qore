@@ -1092,6 +1092,7 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     set(_SAVE_NG2_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
     set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
     set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_NG2_ENABLE_DOC ${ENABLE_DOC})
     set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
     set(_QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED)
     set(_QORE_NGHTTP2_DISABLED_FIND_PACKAGES Jansson Libevent Jemalloc)
@@ -1108,6 +1109,11 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
     set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    # nghttp2's doc/CMakeLists.txt declares sphinx targets named after the output format,
+    # one of which is `json` -- which collides with our builtin json module target (CMake
+    # target names are global).  We do not build nghttp2's docs, so turn the subdirectory
+    # off entirely rather than patching its sources.
+    set(ENABLE_DOC OFF CACHE BOOL "" FORCE)
     # Static lib linked into libqore.so needs -fPIC
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
@@ -1142,6 +1148,11 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
         set(ENABLE_LIB_ONLY ${_SAVE_NG2_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
     else()
         unset(ENABLE_LIB_ONLY CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_ENABLE_DOC)
+        set(ENABLE_DOC ${_SAVE_NG2_ENABLE_DOC} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_DOC CACHE)
     endif()
     if (DEFINED _SAVE_NG2_PIC)
         set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_NG2_PIC} CACHE BOOL "" FORCE)
@@ -2893,6 +2904,8 @@ add_subdirectory(modules/logger_bin)
 add_subdirectory(modules/linenoise)
 # i18n module
 add_subdirectory(modules/i18n)
+# json module
+add_subdirectory(modules/json)
 # krb5 module
 add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)

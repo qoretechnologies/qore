@@ -46,27 +46,56 @@ override in qore-test-base exists precisely because of that pain.
 guard, so on a modern Ubuntu box it silently picks up system headers of a different major version.
 That is a latent bug, not a feature to preserve; the `find_path` block is dropped.
 
-**Port cost: zero.** All three jsoncons-dependent translation units
-(`JsonSchemaImpl.cpp`, `QC_JsonSchema.qpp`, `ql_cbor.qpp`) compile clean against v1.8.1 with no
-source changes — verified with `g++ -fsyntax-only -std=c++20`. Every API name in use
-(`make_json_schema`, `schema_error`, `validation_message`, `walk_result`, `ser_error`,
-`basic_json_visitor`, `json_type`, `string_view`) still exists in 1.8.1.
+**Port cost: compiles clean, but not behaviour-identical.** All three jsoncons-dependent
+translation units (`JsonSchemaImpl.cpp`, `QC_JsonSchema.qpp`, `ql_cbor.qpp`) compile against
+v1.8.1 with no source changes, and every API name in use (`make_json_schema`, `schema_error`,
+`validation_message`, `walk_result`, `ser_error`, `basic_json_visitor`, `json_type`,
+`string_view`) still exists. **A clean compile was not sufficient**: `Cbor.qtest` crashed with
+`free(): invalid pointer` under 1.8.1 while passing under 0.176.0.
+
+Root cause: jsoncons does not guarantee that returning `false` from a `visit_begin_*()`
+callback ends the parse immediately. Under 0.176.0 it did; under 1.8.1 the CBOR parser still
+delivers the matching `visit_end_*()` callback. `CborToQoreVisitor::visit_end_object()` then ran
+`stack.back().releaseHash()` on an empty container stack. The only thing guarding that invariant
+was an `assert()`, which is compiled out of release builds — so it read a garbage pointer and
+freed it.
+
+That was a latent bug in the module, not a jsoncons defect: the code depended on undefined
+behaviour being benign and was one library-behaviour change away from heap corruption. Fixed by
+giving the visitor explicit `aborted` state, checked at the top of every callback, and by
+enforcing the empty-stack and `has_key` invariants in release builds instead of via `assert()`.
+`addValue()` now returns a status and takes ownership of the value on every path.
+
+Lesson for any future dependency bump here: compile success proves nothing about visitor
+contracts. Run the suites.
 
 Note for later: v1.8.1 ships `jsoncons_ext/toon/`, which overlaps the module's hand-written
 `ql_toon.qpp`. Out of scope here; worth its own issue.
 
-### 3. Module version stays 1.12.0
+### 3. The module versions with Qore
 
-`qlib` carries `%try-module json >= 1.5` and `>= 1.11` guards. Keeping the builtin at module-json's
-1.12.0 leaves those satisfiable through the transition; Phase 5 then drops the constraints entirely.
+No builtin module sets its own `VERSION`; they all inherit the top-level Qore version, so `json`
+reports 3.0.0 rather than module-json's 1.12.0. This satisfies the existing
+`%try-module json >= 1.5` / `>= 1.11` guards in `qlib` for free during the transition, and Phase 5
+drops the version constraints entirely. module-json 1.12.0 remains the last standalone release.
 
-### 4. Tests split by kind, not all into `examples/test/qlib/`
+### 4. Tests split by kind, and go where the runner will find them
 
-Builtin binary modules in this tree put their tests in `modules/<name>/test/` (protobuf, dataframe,
-tokenizer, astparser, i18n, krb5). The 9 binary suites go there; only the 23 user-module suites go
-to `examples/test/qlib/<Module>/`. All of them convert from module-json's `%requires ../qlib/JsonLd`
-idiom to the Qore convention: `%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"` + plain
-`%requires`.
+`run_tests.sh` only scans `examples/test`, so suites under `modules/<name>/test/` (protobuf,
+dataframe, tokenizer, astparser, i18n, krb5) are **not** part of the standard run. For a module
+that is now mandatory that is not acceptable, so the binary suites go to
+`examples/test/modules/json/`, following the convention `sshutil` already uses
+(`examples/test/modules/sshutil/`). The 23 user-module suites go to
+`examples/test/qlib/<Module>/`.
+
+`JsonRpcClient.qtest` depends on the `JsonRpcClientIo` and `JsonRpcConnection` user modules, so it
+moves with them in Phase 4 rather than with the binary module.
+
+The C++ API smoke test lives separately at `examples/test/json/json_cpp_api.cpp`: it exercises
+libqore's public JSON API, not the module, and is a C++ target rather than a `.qtest`.
+
+All Qore suites convert from module-json's `%requires ../qlib/JsonLd` idiom to the Qore
+convention: `%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"` + plain `%requires`.
 
 ## Obstacles found during survey
 
@@ -77,10 +106,10 @@ nghttp2's FetchContent doc subdir defines `add_custom_target(json)` — confirme
 `QORE_BINARY_MODULE_INTERN2` derives the `.qmod` filename from the target name
 (`cmake/QoreMacros.cmake:371`), so renaming our target is not an option.
 
-Fix: patch nghttp2's `doc/` out during FetchContent, extending the existing
-`cmake/PatchFetchContentCheckTarget.cmake` (which already neuters nghttp2's `check` target for the
-same class of reason). `ENABLE_LIB_ONLY=ON` is already set, so the doc subdir has no business
-being configured.
+Fix: nghttp2 gates that subdirectory on `ENABLE_DOC`, so no source patching is needed — Qore now
+forces `ENABLE_DOC OFF` (saved and restored symmetrically) alongside the `BUILD_TESTING` /
+`ENABLE_LIB_ONLY` overrides it already applies before `FetchContent_MakeAvailable`. We do not
+build nghttp2's docs, so the subdirectory has no business being configured at all.
 
 Related: `QORE_FINALIZE_USER_MODULE_DEPENDENCIES` (`cmake/QoreMacros.cmake:1236-1241`) carries a
 `/_deps/` `SOURCE_DIR` guard written specifically for this collision. Once the builtin target

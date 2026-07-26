@@ -1,0 +1,533 @@
+/** @mainpage Qore JSON Module
+
+    @tableofcontents
+
+    @section jsonintro Introduction
+
+    The json module allows for easy serialization and deserialization between <a href="http://www.json.org/">JSON</a>
+    strings and %Qore data structures.  The module also provides functions for @ref JSONRPC support as well as a
+    @ref Qore::Json::JsonRpcClient "JsonRpcClient" class for easier integration with JavaScript clients.
+
+    Overview of the functionality provided by this module:
+    - classes:
+      - @ref Qore::Json::JsonRpcClient "JsonRpcClient"
+    - functions:
+      - @ref Qore::Json::make_json() "make_json()"
+      - @ref Qore::Json::parse_json() "parse_json()"
+      - @ref Qore::Json::make_cbor() "make_cbor()"
+      - @ref Qore::Json::parse_cbor() "parse_cbor()"
+      - @ref Qore::Json::make_toon() "make_toon()"
+      - @ref Qore::Json::parse_toon() "parse_toon()"
+      - @ref Qore::Json::json_pointer_get() "json_pointer_get()"
+      - @ref Qore::Json::json_pointer_exists() "json_pointer_exists()"
+      - @ref Qore::Json::json_pointer_escape() "json_pointer_escape()"
+      - @ref Qore::Json::jwt_encode() "jwt_encode()"
+      - @ref Qore::Json::jwt_decode() "jwt_decode()"
+      - @ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
+      - @ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
+      - @ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
+    - user modules:
+      - <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a>
+      - <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a>
+      - <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
+      - <a href="../../McpClient/html/index.html">McpClient</a>
+      - <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a>
+      - <a href="../../A2aClient/html/index.html">A2aClient</a>
+      - <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a>
+      - <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a>
+      - <a href="../../FhirRestClient/html/index.html">FhirRestClient</a>
+      - <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a>
+      - <a href="../../NdjsonDataProvider/html/index.html">NdjsonDataProvider</a>
+      - <a href="../../JsonFileDataProvider/html/index.html">JsonFileDataProvider</a>
+      - <a href="../../JsonLd/html/index.html">JsonLd</a>
+      - <a href="../../OneRecordClient/html/index.html">OneRecordClient</a>
+      - <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a>
+      - <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a>
+
+    This module is released under a choice of two licenses:
+    - <a href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPL 2.1</a>
+    - MIT (see COPYING.MIT in the source distribution for more information)
+    .
+    The module is tagged as such in the module's header (meaning it can be loaded unconditionally regardless of how
+    the %Qore library was initialized).
+
+    To use the module in a %Qore script, use the \c %%requires directive as follows:
+    @code{.py}
+%requires json
+    @endcode
+
+    Also included with the binary json module:
+    - <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> user module
+    - <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> user module
+    - <a href="../../McpServerHandler/html/index.html">McpServerHandler</a> user module
+    - <a href="../../McpClient/html/index.html">McpClient</a> user module
+    - <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a> user module
+    - <a href="../../A2aClient/html/index.html">A2aClient</a> user module
+    - <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a> user module
+    - <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a> user module
+    - <a href="../../FhirRestClient/html/index.html">FhirRestClient</a> user module
+    - <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a> user module
+    - <a href="../../NdjsonDataProvider/html/index.html">NdjsonDataProvider</a> user module
+    - <a href="../../JsonFileDataProvider/html/index.html">JsonFileDataProvider</a> user module
+    - <a href="../../JsonLd/html/index.html">JsonLd</a> user module
+    - <a href="../../OneRecordClient/html/index.html">OneRecordClient</a> user module
+    - <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a> user module
+    - <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> user module
+
+    @note JSON functionality was included in the main %Qore shared library until version 0.8.1, at which time the code
+    was removed to make this module.
+
+    @section jsonserialization Automatic JSON Serialization and Deserialization
+
+    <b>JSON Serialization</b>
+    |!%Qore Type|!JSON-RPC Type|!Description
+    |\c string|\c string|direct conversion to UTF-8 string
+    |\c int|\c number|direct conversion
+    |\c float|\c number|direct conversion
+    |\c bool|\c boolean|direct conversion
+    |\c date|\c string|date/time values are serialized to strings like: \
+        \c "2010-12-22 16:35:36.372996 Wed +01:00 (CET)"; intervals are serialized to ISO-8601 duration strings \
+        (ex: \c "PT2M1S")
+    |\c binary|\c string|binary values are serialized as base64 encoded strings
+    |\c list|\c array|direct conversion
+    |\c hash|\c struct|direct conversion
+    |\c NOTHING or \c NULL|\c null|direct conversion
+    |all others|n/a|All other types will cause an \c JSON-RPC-SERIALIZATION-ERROR to be raised.
+
+    <b>JSON Deserialization</b>
+    |!JSON-RPC Type|!%Qore Type|!Description
+    |\c string|\c string|direct conversion
+    |\c number|\c int or \c float|if the JSON number is an integer, it is converted as an \c int, otherwise as a \
+        \c float
+    |\c boolean|\c bool|direct conversion
+    |\c array|\c list|direct conversion
+    |\c struct|\c hash|direct conversion
+    |\c null|\c NOTHING|direct conversion
+
+    This following functions provide automatic JSON serialization and deserialization:
+
+    <b>Functions For JSON Serialization and Deserialization</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_json() "make_json()"|Serializes qore data into a JSON string with optional verbose whitespace formatting for easier \
+        human readability
+    |@ref Qore::Json::parse_json() "parse_json()"|Parses a JSON string and returns the corresponding %Qore data structure
+
+    <b>Deprecated JSON Functions</b>
+    |!Deprecated Function Name|!New Function Name
+    |\c makeFormattedJSONString()|@ref Qore::Json::make_json() "make_json()"
+    |\c makeJSONString()|@ref Qore::Json::make_json() "make_json()"
+    |\c parseJSON()|@ref Qore::Json::parse_json() "parse_json()"
+
+    @section toonserialization TOON Serialization and Deserialization
+
+    <a href="https://github.com/toon-format/spec">TOON</a> (Token-Oriented Object Notation) is a line-oriented,
+    indentation-based text encoding of the JSON data model.  It is deterministic and minimally quoted, and is
+    particularly compact for arrays of uniform objects, which it encodes in a tabular form (the field names are
+    declared once in a header rather than repeated on every row).  TOON is commonly used to encode structured data
+    for LLM prompt context.
+
+    TOON is a regular, fully supported feature of the json module (this implementation targets the TOON Core Profile
+    of TOON specification version 3.0).  Key folding and path expansion are not enabled; dotted keys (ex:
+    \c user.name) are treated as single literal keys, which is the specification default.
+
+    <b>TOON Serialization (@ref Qore::Json::make_toon() "make_toon()")</b>
+
+    Values outside the strict JSON data model are normalized exactly as @ref Qore::Json::make_json() "make_json()"
+    does, so that \c parse_toon(make_toon(x)) matches \c parse_json(make_json(x)):
+
+    |!%Qore Type|!TOON Representation|!Description
+    |\c string|string|quoted only when required by the TOON specification (§7.2)
+    |\c int|number|canonical decimal
+    |\c float|number|canonical decimal (no exponent, no trailing zeros); \c \@nan\@ / \c \@inf\@ are serialized as \
+        \c null
+    |\c number|number|canonical decimal; non-ordinary values (\c \@nan\@, \c \@inf\@) are serialized as \c null
+    |\c bool|boolean|direct conversion
+    |\c date|string|absolute dates as ISO-8601 datetime strings; relative dates (durations) as ISO-8601 duration \
+        strings
+    |\c binary|string|base64-encoded string
+    |\c list|array|inline primitive arrays, tabular arrays of uniform objects, or expanded list form
+    |\c hash|object|indentation-based key nesting
+    |\c NOTHING or \c NULL|null|direct conversion
+    |all others|n/a|All other types cause a \c TOON-SERIALIZATION-ERROR to be raised (as with \
+        @ref Qore::Json::make_json() "make_json()"); a string containing a control character that standard TOON \
+        cannot represent is likewise rejected
+
+    @ref Qore::Json::make_toon() "make_toon()" accepts an optional \c options hash:
+    - \c indent: (int, default \c 2) number of spaces per indentation level
+    - \c tabular_arrays: (bool, default \c True) when \c True, lists of uniform objects (same key set, all
+      primitive values) are serialized in TOON tabular form
+    - \c sort_keys: (bool, default \c False) when \c True, object keys and tabular field names are sorted
+      lexically for deterministic output; otherwise insertion order is preserved
+
+    <b>TOON Deserialization (@ref Qore::Json::parse_toon() "parse_toon()")</b>
+
+    |!TOON Type|!%Qore Type|!Description
+    |string|\c string|direct conversion
+    |number|\c int or \c float|integer tokens become \c int, tokens with a fractional or exponent part become \
+        \c float (consistent with @ref Qore::Json::parse_json() "parse_json()")
+    |boolean|\c bool|direct conversion
+    |array|\c list|inline, tabular, and expanded forms are all supported
+    |object|\c hash|duplicate keys follow last-value-wins semantics (consistent with \
+        @ref Qore::Json::parse_json() "parse_json()")
+    |null|\c NOTHING|direct conversion
+
+    @ref Qore::Json::parse_toon() "parse_toon()" accepts an optional \c options hash:
+    - \c strict: (bool, default \c True) when \c True, enforce TOON strict-mode validation: declared array/row
+      counts must match, tabular row widths must match the field count, indentation must be an exact multiple of
+      the indent width, and blank lines are not allowed inside arrays/tabular blocks
+    - \c indent: (int, default \c 2) number of spaces per indentation level used to compute nesting depth
+
+    Tabs are never permitted in indentation.  Syntax errors raise \c TOON-PARSE-ERROR with the line (and column
+    where available).
+
+    TOON is always UTF-8 (TOON specification §1.2, §18.2): @ref Qore::Json::make_toon() "make_toon()" always
+    produces a UTF-8 string, and @ref Qore::Json::parse_toon() "parse_toon()" transcodes non-UTF-8 input to UTF-8
+    before parsing and returns UTF-8-encoded strings.
+
+    <b>Functions For TOON Serialization and Deserialization</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_toon() "make_toon()"|Serializes %Qore data into a TOON string
+    |@ref Qore::Json::parse_toon() "parse_toon()"|Parses a TOON string and returns the corresponding %Qore data \
+        structure
+
+    @par Example
+    @code{.py}
+hash<auto> data = {
+    "users": ({
+        "id": 1,
+        "name": "Alice",
+        "role": "admin",
+    }, {
+        "id": 2,
+        "name": "Bob",
+        "role": "user",
+    }),
+};
+
+string toon = make_toon(data);
+# toon =
+#   users[2]{id,name,role}:
+#     1,Alice,admin
+#     2,Bob,user
+
+hash<auto> parsed = parse_toon(toon);
+    @endcode
+
+    @section JSONRPC JSON-RPC
+
+    JSON-RPC is a lightweight but powerful JSON over HTTP web service protocol.
+    The json module includes builtin support for several versions of the JSON-RPC protocol; the default protocol
+    version used is \c "2.0" unless explicitly changed in the client constructor.
+
+    For new code, use the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module, which
+    provides async I/O via \c HttpClientIo::HttpClientConnectionManager with automatic HTTP protocol negotiation
+    (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.
+
+    The native @ref Qore::Json::JsonRpcClient "JsonRpcClient" class is still available for backwards compatibility
+    but uses synchronous blocking I/O limited to HTTP/1.x.
+
+    <b>Classes Providing JSON-RPC Functionality</b>
+    |!Class|!Description
+    |<a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a>|Preferred: async I/O JSON-RPC client with HTTP/3, HTTP/2, HTTP/1.1 support
+    |@ref Qore::Json::JsonRpcClient "JsonRpcClient"|Legacy: synchronous JSON-RPC client (HTTP/1.x only)
+
+    <b>Functions Providing JSON-RPC Functionality</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"|a generic JSON-RPC error response string from the parameters passed with optional \
+        verbose whitespace formatting for easier human readability
+    |@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"|Creates a JSON-RPC request string from the parameters passed with optional verbose \
+        whitespace formatting for easier human readability
+    |@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"|Creates a JSON-RPC response string from the parameters passed with optional \
+        verbose whitespace formatting for easier human readability
+
+    <b>Deprecated JSON-RPC Functions</b>
+    |!Deprecated Function Name|!New Function Name
+    |\c makeFormattedJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in \
+        json 1.7
+    |\c makeFormattedJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
+    |\c makeFormattedJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
+    |\c makeFormattedJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
+    |\c makeJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
+    |\c makeJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
+    |\c makeJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
+    |\c makeJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
+    |\c make_jsonrpc11_error()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
+
+    @section codetags Function and Method Tags
+
+    @subsection NOOP NOOP
+
+    Code with this flag makes no calculations, but rather returns a constant value. This flag is given to function and
+    method variants that return a default value depending on the type of argument(s).  When variants with this flag
+    are resolved at parse time, a \c "call-with-type-errors" warning is raised (assuming this warning is enabled),
+    unless \c PO_REQUIRE_TYPES or \c PO_STRICT_ARGS is set.  If \c PO_REQUIRE_TYPES or \c PO_STRICT_ARGS is set, then
+    these variants are inaccessible at parse time; resolving to a variant with this flag set at parse time causes an
+    exception to be thrown.
+
+    These variants are included for backwards-compatibility with qore prior to version 0.8.0 for functions that would
+    ignore type errors in arguments.
+
+    This tag is equal to @ref RUNTIME_NOOP, except no runtime effect is caused by resolving a function or method
+    tagged with \c NOOP at runtime; this tag only affects parse time resolution.
+
+    @subsection RUNTIME_NOOP RUNTIME_NOOP
+
+    Code with this flag makes no calculations, but rather returns a constant value.  This flag is given to function
+    and method variants that return a default value depending on the type of argument(s).  When variants with this
+    flag are resolved at parse time, a \c "call-with-type-errors" warning is raised (assuming this warning is
+    enabled), unless \c PO_REQUIRE_TYPES or \c PO_STRICT_ARGS is set.  If \c PO_REQUIRE_TYPES or \c PO_STRICT_ARGS is
+    set, then these variants are inaccessible; resolving to a variant with this flag set at parse time or run time
+    causes an exception to be thrown.
+
+    These variants are included for backwards-compatibility with qore prior to version 0.8.0 for functions that would
+    ignore type errors in arguments.
+
+    This tag is equal to @ref NOOP, except that \c RUNTIME_NOOP is also enforced at runtime.
+
+    @subsection RET_VALUE_ONLY RET_VALUE_ONLY
+
+    This flag indicates that the function or method has no side effects; it only returns a value, for example.
+
+    This tag is identical to @ref CONSTANT except that functions or methods tagged with \c RET_VALUE_ONLY could throw
+    exceptions.
+
+    @subsection CONSTANT CONSTANT
+
+    This flag indicates that the function or method has no side effects and does not throw any exceptions.
+
+    This tag is identical to @ref RET_VALUE_ONLY except that functions or methods tagged with \c CONSTANT do not throw
+    exceptions.
+
+    @subsection DEPRECATED DEPRECATED
+
+    Code with this flag is deprecated and may be removed in a future version of this module; if a variant with this
+    flag is resolved at parse time, a \c "deprecated" warning is raised (assuming this warning is enabled).
+
+    @section jsonreleasenotes Release Notes
+
+    @subsection json_v1_12 json Module Version 1.12
+    - added TOON (Token-Oriented Object Notation) serialization support
+      (@ref Qore::Json::make_toon() "make_toon()" / @ref Qore::Json::parse_toon() "parse_toon()"); see
+      @ref toonserialization
+    - added the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module: pure-Qore JSON-RPC
+      client with async I/O via HttpClientIo:
+      - full JSON-RPC 1.0, 1.1, and 2.0 protocol support
+      - async I/O with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1) and connection pooling
+      - API-compatible with the native JsonRpcClient class
+      - JSON-RPC 2.0 notification support
+      - debug info variants for all call methods
+      - ConnectionProvider integration with \c jsonrpcio:// and \c jsonrpcios:// URL schemes
+    - added the <a href="../../FhirRestClient/html/index.html">FhirRestClient</a> module for HL7 FHIR JSON REST
+      servers:
+      - FHIR R4-compatible JSON request/response handling with \c application/fhir+json
+      - \c fhir:// and \c fhirs:// ConnectionProvider schemes
+      - CapabilityStatement and SMART discovery helpers
+      - resource read/search/create/update/delete helpers with conditional create and ETag support
+      - \c OperationOutcome exception mapping and validation/terminology delegation helpers
+    - added the <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a> module:
+      - \c fhirrest DataProvider factory for FHIR REST server connections
+      - metadata, resource CRUD/search, validation, and terminology actions
+      - typed generic request/response metadata for action catalogs
+      - generated FHIR R4 resource type catalog and local resource type validation
+      - generated FHIR R4 \c HashDataType metadata for \c Patient, \c Observation, and \c Bundle
+      - generated FHIR R4 resource-specific action metadata for typed \c Patient, \c Observation, and \c Bundle
+        actions
+    - added the <a href="../../JsonLd/html/index.html">JsonLd</a> module with full W3C JSON-LD 1.1 compliance:
+      - expansion, compaction, flattening, framing algorithms
+      - toRdf/fromRdf with N-Quads serialization
+      - thread-safe context caching with TTL
+      - pluggable document loaders (HTTP, file, caching)
+      - passes 1167/1167 non-skipped W3C conformance tests
+    - added the <a href="../../OneRecordClient/html/index.html">OneRecordClient</a> module for IATA ONE Record
+      (API v2.2.0, Cargo Ontology v3.2.0):
+      - REST client for air cargo data sharing via JSON-LD
+      - logistics object CRUD with revision tracking
+      - change request lifecycle (submit, accept, reject, revoke)
+      - logistics events, audit trail, subscriptions
+      - OAuth 2.0 / OpenID Connect authentication
+      - ConnectionProvider integration with \c 1r:// and \c 1rs:// URL schemes
+    - added the <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a> module for
+      ONE Record server support:
+      - REST handler with full URL routing for all ONE Record API v2.2.0 endpoints
+      - pluggable storage backend (abstract interface + in-memory implementation)
+      - pluggable authorization (abstract interface + permissive implementation)
+      - change request workflow with optimistic concurrency (revision-based)
+      - webhook notification delivery via bounded thread pool
+      - verification requests and access delegations
+      - audit trail with per-object history
+      - JSON-LD integration via the JsonLd module
+
+    @subsection json_v1_11 json Module Version 1.11
+    - added CBOR serialization support (make_cbor/parse_cbor)
+    - added the <a href="../../A2aClient/html/index.html">A2aClient</a> module for connecting to A2A agents:
+      - Agent Card discovery via \c /.well-known/agent-card.json
+      - Authenticated extended Agent Card retrieval
+      - Message sending with task lifecycle management
+      - SSE streaming for real-time task updates
+      - Push notification configuration CRUD
+      - Task management (get, cancel, resubscribe)
+      - ConnectionProvider integration with \c a2a:// and \c a2as:// URL schemes
+    - added the <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a> module for A2A server support:
+      - Agent Card serving via GET \c /.well-known/agent-card.json
+      - JSON-RPC dispatch for \c message/send, \c message/stream
+      - Task lifecycle management with state machine validation
+      - SSE streaming for real-time task updates
+      - Push notification config CRUD
+      - Session management
+    - added the <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a> module for DataProvider API:
+      - factory registration for automatic data provider discovery
+      - agent card providers: get and get-extended
+      - message providers: send messages to agents
+      - task providers: get and cancel tasks
+      - event provider: observe task status/artifact/message updates
+      - ConnectionProvider integration with \c a2a:// and \c a2as:// URL schemes
+    - added JWT encode/decode support with HS* and RS* algorithms
+    - added JWT hashdecl examples for typed inputs/outputs in the API docs
+    - jwt_decode() now documents BASE64-PARSE-ERROR and JSON-ERROR for invalid tokens
+    - JsonSchema validation result and error lists now use typed hashdecls for type safety
+
+    @subsection json_v1_10_1 json Module Version 1.10.1
+    - added enums and allowed values metadata for MCP data provider request/response fields
+    - added constructor option metadata for MCP client name and version
+    - added MCP notification event data provider with observer pattern support
+
+    @subsection json_v1_10 json Module Version 1.10
+    - added the <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a> module providing a
+      DataProvider API for MCP servers:
+      - factory registration for automatic data provider discovery
+      - tools provider: list and call MCP tools
+      - resources provider: list and read MCP resources
+      - prompts provider: list and get MCP prompts
+      - completion provider: get autocompletion suggestions
+      - ping provider: verify server connectivity
+      - ConnectionProvider integration for connection management
+      - comprehensive type definitions for all MCP data structures
+    - added the <a href="../../McpClient/html/index.html">McpClient</a> module for connecting to MCP servers as a
+      client:
+      - full MCP protocol support with automatic version negotiation (2024-11-05 through 2025-11-25)
+      - HTTP + Server-Sent Events (SSE) transport
+      - tools: list and call server tools
+      - resources: list and read server resources
+      - prompts: list and get server prompts with arguments
+      - completion: autocompletion for prompts and resources
+      - logging: receive server log messages
+      - event callbacks for server notifications
+      - session management with \c Mcp-Session-Id header
+      - ConnectionProvider integration with \c mcp:// and \c mcps:// URL schemes
+    - added MCP 2025-11-25 protocol version support (latest MCP spec) to
+      <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
+    - added \c completion/complete method for autocompletion of prompts and resources
+    - added logging capability and \c logging/setLevel method
+    - added \c resources/read handler with callback support for custom readers
+    - added \c prompts/get handler with callback support for dynamic prompt generation
+    - added notifications for \c resources/list_changed and \c prompts/list_changed
+    - added \c unregisterTool(), \c unregisterResource(), \c unregisterPrompt() methods
+    - added \c hasTools(), \c getToolNames() methods for tool management
+    - added session timeout configuration and \c cleanupExpiredSessions() method
+    - added \c getSessionCount() and \c getSessionInfo() for session monitoring
+    - added JSON Pointer (RFC 6901) support:
+      - @ref Qore::Json::json_pointer_get() "json_pointer_get()" - navigate JSON structures using JSON Pointer syntax
+      - @ref Qore::Json::json_pointer_exists() "json_pointer_exists()" - check if a JSON Pointer path exists
+      - @ref Qore::Json::json_pointer_escape() "json_pointer_escape()" - escape special characters in JSON Pointer
+        tokens
+    - added \c removeMethod(), \c hasMethod(), \c getMethodNames() to
+      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a>
+    - fixed JSON number parsing for scientific notation with explicit signs (\c 3e+10, \c 3e-10)
+    - fixed typo in MCP error message (\c 2011-11-05 -> \c 2024-11-05)
+    - fixed thread safety issue with rid counter in McpServerHandler
+    - fixed sprintf bug in JsonRpcHandler batch processing
+    - fixed method index population bug in JsonRpcHandler
+    - fixed internal method dispatch in JsonRpcHandler for private methods
+
+    @subsection json_v1_9_1 json Module Version 1.9.1
+    - improved MCP server capabilities by making the call context available to tools as well as improving error
+      handling in tool calls to provide more relevant information to the AI for error correction
+    - fixed a bug where the MCP handler would crash when tools had recursive input types
+      (<a href="https://github.com/qorelanguage/qore/issues/4944">issue 4944</a>)
+    - fixed a bug reporting MCP tool input schemas
+      (<a href="https://github.com/qorelanguage/qore/issues/4943">issue 4943</a>)
+
+    @subsection json_v1_9 json Module Version 1.9
+    - added support for an MCP server with the <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
+      module
+
+    @subsection json_v1_8_2 json Module Version 1.8.2
+    - fixed minor formatting issues in formatted JSON output for better readability and consistency
+      (<a href="https://github.com/qorelanguage/qore/issues/4499">issue 4499</a>)
+
+    @subsection json_v1_8_1 json Module Version 1.8.1
+    - eliminated excess whitespace from compact JSON serialization
+      (<a href="https://github.com/qorelanguage/qore/issues/4459">issue 4459</a>)
+
+    @subsection json_v0_1_8 json Module Version 1.8
+    - fixed a bug where numbers in scientific notation could not be parsed
+      (<a href="https://github.com/qorelanguage/qore/issues/3707">issue 3707</a>)
+    - implemented support for serializing connection objects
+      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+    - fixed the return types of deserialization to avoid type stripping
+      (<a href="https://github.com/qorelanguage/qore/issues/3432">issue 3432</a>)
+    - fixed output of excess noise in floating-point values
+      (<a href="https://github.com/qorelanguage/qore/issues/3375">issue 3375</a>)
+    - updated the <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> module to support the
+      updated abstract connection API
+      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+    - added support for serializing intervals to strings that can be manually converted to the original value
+      (<a href="https://github.com/qorelanguage/qore/issues/3135">issue 3135</a>)
+
+    @subsection json_v0_1_7 json Module Version 1.7
+    - deprecated support for the non-published JSON-RPC 1.1 protocol
+    - added support for JSON-RPC 2.0
+    - added the <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> user module
+    - improved argument error messages with RPC calls in the
+      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+      (<a href="https://github.com/qorelanguage/qore/issues/2573">issue 2573</a>)
+    - fixed date serialization to use ISO-8601 format (instead of near-ISO-8601 format
+      <a href="https://github.com/qorelanguage/qore/issues/2655">issue 2655</a>)
+
+    @subsection json_v0_1_6 json Module Version 1.6
+    - @ref Qore::Json::parse_json() "parse_json()" now ignores UTF-8 and Unicode BOMs at the start of passed JSON string
+      (<a href="https://github.com/qorelanguage/qore/issues/1398">issue 1398</a>)
+    - fixed a bug in request logging in the <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+      (<a href="https://github.com/qorelanguage/qore/issues/1487">issue 1487</a>)
+    - fixed a bug serializing hash keys with embedded quotes
+      (<a href="https://github.com/qorelanguage/qore/issues/2242">issue 2242</a>)
+
+    @subsection json_v0_1_5 json Module Version 1.5
+    - serialize binary values as base64-encoded strings
+    - user modules moved to top-level qore module directory from version-specific module directory since they are
+      valid for multiple versions of qore
+    - serialize nan, +/-inf as \c null according to the JSON spec
+    - added detection for invalid JSON-RPC calls and added a more user-friendly error message in the
+      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+    - new functions added conforming to %Qore's function naming convention, old camel-case functions deprecated
+    - JSON tests ported to QUnit
+    - %Qore 0.8.12 required as a minimum to build
+    - JSON output is more compact; less extraneous whitespace is used
+
+    @subsection json_v0_1_4 json Module Version 1.4
+
+    - date/time values are always serialized with microseconds and in the local time zone for consistency's sake
+    - fixed a crashing bug in the JSON control-character encoding algorithm
+    - updated the <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module for enhanced logging
+    - source released under the MIT license as well as LGPL 2.1
+
+    @subsection json_v0_1_3 json Module Version 1.3
+
+    - always include \c charset=utf-8 in the \c Content-Type in @ref Qore::Json::JsonRpcClient "JsonRpcClient"; JSON
+      messages are always serialized with UTF-8 encoding
+
+    @subsection json_v0_1_2 json Module Version 1.2
+
+    - fixed serialization/deserialization/escaping regarding control characters
+
+    @subsection json_v0_1_1 json Module Version 1.1
+
+    - added support for the new arbitrary-precision numeric type introduced in qore 0.8.6
+    - serialize control characters with escape codes to be compatible with common Javascript JSON libraries (also
+      corresponding deserialization support)
+
+    @subsection json_v0_1_0 json Module Version 1.0
+
+    - Initial release of the json module
+    - Requires qore 0.8.1+ to build and run
+*/

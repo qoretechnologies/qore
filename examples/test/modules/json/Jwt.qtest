@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JwtTest
+
+class JwtTest inherits QUnit::Test {
+    private {
+        string rsa_private_key;
+        string rsa_public_key;
+    }
+
+    constructor() : Test("JwtTest", "1.0", \ARGV) {
+        rsa_private_key = "-----BEGIN PRIVATE KEY-----\n" +
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCghY6vbY9TSJQJ\n" +
+            "ub71l64DQ6qs8am74HOzQQMOtUjPe3uHO4NQugxlnpsawbuAM7gGEIsMSZT7SW7t\n" +
+            "HYfIz9F0d1ui/Imj0GmIjRvNIMQULJnB40uODm/oBhGBajFFGpdSy0yT+mN5+bt6\n" +
+            "8PW47PIPo+X8gAFllFtiROdguZB+rr2gjvbqaHYyjiD2HOVc/p+H1I+7XZ8BLxSu\n" +
+            "XBTDLTOhminR7Gb4svEX9eo2b7LhSv4WRVz6M2LwjhIfsWqt/jiTjwM62cKG91K7\n" +
+            "IpFwQ/ApLM21f+YrJJhHkQEbVsv5TEI2I772DYZbF/nUkElPpFvNvUQNpvivKVvA\n" +
+            "ZVmIauQFAgMBAAECggEAI8dRE+HwKciKEpbfrN73jsu0zaJ5yiIPt9scQtl+Vpy3\n" +
+            "3l8R+FrXq4jMGo0m7T7Z3CQw0fbOqanm+xvzaXuEvJhkCPKP/T7VXvXQxgpxGewN\n" +
+            "A23Vp96o68b6fOV+AOCZ7P7aXTtYk9Xph1AQ/Px3Qawu9XZUmV8VdVRVXDZQMiQH\n" +
+            "Sw0ak7Xfl1EU03x+V4QUZDovtL96Jja22gWkYvOcpoIC8DCjDAm37KLztSiHTeju\n" +
+            "pvfajMsa+oXGOxKakAgDhbQ2eS0hODqVOzy9KheaR8896n2VcP3Ci1wY+9d03BCn\n" +
+            "cXhAvamGBqVpAYfBmequmvJgX8JBKfYiv6M4MjTsmwKBgQDLGQ5UYyLeRwkpcpL2\n" +
+            "u+jryaIodInw2KbyokIeniXtkWTdnVSZsHivi0Kek3jQ3RQKGyJBGAc3tUmWZEOm\n" +
+            "kjd7LLtbZ8s5FC4+wUgT7qFl5qYEITUgr0hURDnhdWfdDk+h64wLN6w5BjPyDc2w\n" +
+            "4qj/nouxEwssgjoaMdve8oQIzwKBgQDKVXGEYSWEV0mxqDItcIYRHLEPPWCnuSTK\n" +
+            "Pd1MqkXaw035YukvWa/TJuGA5NQxO00WGrnuTDlMnWeJw4dBD6XD4ddS8V+ngbPx\n" +
+            "ew8RVbQGE8cMbNw7bWqEeAMcP9USPVrwJtiumfv6AT5ugquDKiB6acNp4T9PN30B\n" +
+            "XaRkS3PS6wKBgCjz+Xa8ssg9bLSF3OqRw4rgEqmzrij5lthwLYL9AsrfuYYSdn+z\n" +
+            "HPLQ0vMk64S6P5M2G3ciwDnUfW0s9JM/Ap78yx7IVCtDTXvr/3u9b6AbnThR9eOM\n" +
+            "VLphM4ap5PKnMxmEZK3SYRDylkDl1acoXUmGD8b5/xPPgqXLjflrz4HzAoGBAKWf\n" +
+            "V3KzStCP2wUP1zMW3sd3IwCEj2/7v7/E8DdnUhMGt/ciHhriYWiIdSLbLU63ahxj\n" +
+            "+Dq2Llkmp7A/W6HIOzqizW1Zo6EsLK3Iu8bGzrwCyHbFTWlf4UdaLcGcBsANdTkL\n" +
+            "s2cJKRe2mPJBCEAv5bIOjSVIelhP5YWOr5hhowfNAoGAUtlgdXG6P2wzLwc0wZHD\n" +
+            "Ulv2eeTEqi/IUI6GCKFt3yQyYwsxxa5veJUQ1RlCzA2fyWq5ppmyRpuQAx+T/5mT\n" +
+            "R/exfFdkrCUX3FKc+0mZktlgWQGm26/r6OM94OTw3S2NavcixI9X2QdWlxKnqZ1G\n" +
+            "mY6BajUXBgMP7AhhxO/gZGw=\n" +
+            "-----END PRIVATE KEY-----\n";
+
+        rsa_public_key = "-----BEGIN PUBLIC KEY-----\n" +
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoIWOr22PU0iUCbm+9Zeu\n" +
+            "A0OqrPGpu+Bzs0EDDrVIz3t7hzuDULoMZZ6bGsG7gDO4BhCLDEmU+0lu7R2HyM/R\n" +
+            "dHdbovyJo9BpiI0bzSDEFCyZweNLjg5v6AYRgWoxRRqXUstMk/pjefm7evD1uOzy\n" +
+            "D6Pl/IABZZRbYkTnYLmQfq69oI726mh2Mo4g9hzlXP6fh9SPu12fAS8UrlwUwy0z\n" +
+            "oZop0exm+LLxF/XqNm+y4Ur+FkVc+jNi8I4SH7Fqrf44k48DOtnChvdSuyKRcEPw\n" +
+            "KSzNtX/mKySYR5EBG1bL+UxCNiO+9g2GWxf51JBJT6Rbzb1EDab4rylbwGVZiGrk\n" +
+            "BQIDAQAB\n" +
+            "-----END PUBLIC KEY-----\n";
+
+        addTestCase("HS256 round trip", \testHs256RoundTrip());
+        addTestCase("HS256 wrong key", \testHs256WrongKey());
+        addTestCase("RS256 round trip", \testRs256RoundTrip());
+        addTestCase("RS256 verify with private key", \testRs256VerifyWithPrivateKey());
+        addTestCase("Invalid format", \testInvalidFormat());
+        addTestCase("No verify without key", \testNoVerifyWithoutKey());
+        addTestCase("Missing alg", \testMissingAlg());
+        addTestCase("Non-object header", \testNonObjectHeader());
+        addTestCase("Non-object payload", \testNonObjectPayload());
+        addTestCase("Invalid base64", \testInvalidBase64());
+        addTestCase("Missing key", \testMissingKey());
+        addTestCase("Unsupported algorithm", \testUnsupportedAlg());
+        set_return_value(main());
+    }
+
+    private hash<JwtClaims> buildClaims() {
+        hash<JwtClaims> claims = cast<hash<JwtClaims>>({
+            "iss": "issuer",
+            "sub": "subject",
+            "aud": "audience",
+            "exp": 1700000000,
+            "extra": {"role": "admin"},
+        });
+        return claims;
+    }
+
+    private hash<JwtHeader> buildHeader() {
+        hash<JwtHeader> header = cast<hash<JwtHeader>>({
+            "kid": "key1",
+            "extra": {"foo": "bar"},
+        });
+        return header;
+    }
+
+    private list<string> splitToken(string token) {
+        list<string> parts = token.split(".");
+        @assert(parts.size() == 3);
+        return parts;
+    }
+
+    testHs256RoundTrip() {
+        hash<JwtClaims> claims = buildClaims();
+        hash<JwtHeader> header = buildHeader();
+        string token = jwt_encode(claims, "secret", "HS256", header);
+        hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, "secret"));
+        assertTrue(result.signature_valid);
+        assertEq("issuer", result.claims.iss);
+        assertEq("admin", result.claims.extra.role);
+        assertEq("key1", result.header.kid);
+        assertEq("bar", result.header.extra.foo);
+    }
+
+    testHs256WrongKey() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, "badsecret"));
+        assertFalse(result.signature_valid);
+    }
+
+    testRs256RoundTrip() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, rsa_private_key, "RS256");
+        hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, rsa_public_key));
+        assertTrue(result.signature_valid);
+        assertEq("subject", result.claims.sub);
+    }
+
+    testRs256VerifyWithPrivateKey() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, rsa_private_key, "RS256");
+        hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, rsa_private_key));
+        assertTrue(result.signature_valid);
+    }
+
+    testInvalidFormat() {
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_decode("abc", "secret");
+        });
+    }
+
+    testNoVerifyWithoutKey() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, NULL, False));
+        assertFalse(result.signature_valid);
+        assertEq("subject", result.claims.sub);
+    }
+
+    testMissingAlg() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        list<string> parts = splitToken(token);
+        string bad_token = "e30." + parts[1] + "." + parts[2];
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_decode(bad_token, NULL, False);
+        });
+    }
+
+    testNonObjectHeader() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        list<string> parts = splitToken(token);
+        string bad_token = "W10." + parts[1] + "." + parts[2];
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_decode(bad_token, NULL, False);
+        });
+    }
+
+    testNonObjectPayload() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        list<string> parts = splitToken(token);
+        string header_b64 = "eyJhbGciOiJIUzI1NiJ9";
+        string bad_token = header_b64 + ".W10." + parts[2];
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_decode(bad_token, NULL, False);
+        });
+    }
+
+    testInvalidBase64() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        list<string> parts = splitToken(token);
+        string bad_token = "!!!." + parts[1] + "." + parts[2];
+        assertThrows("BASE64-PARSE-ERROR", sub() {
+            auto ignored = jwt_decode(bad_token, NULL, False);
+        });
+    }
+
+    testMissingKey() {
+        hash<JwtClaims> claims = buildClaims();
+        string token = jwt_encode(claims, "secret", "HS256");
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_decode(token);
+        });
+    }
+
+    testUnsupportedAlg() {
+        hash<JwtClaims> claims = buildClaims();
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jwt_encode(claims, "secret", "ES256");
+        });
+    }
+}

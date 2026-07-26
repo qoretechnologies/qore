@@ -1,0 +1,346 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief JSON Schema validation class definition
+*/
+/*
+    Qore Programming Language - JSON Module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "qore-json-module.h"
+#include "QC_JsonSchema.h"
+#include "ql_json.h"
+
+#include <sys/stat.h>
+#include <cerrno>
+
+/** @defgroup json_schema_constants JSON Schema Constants
+    JSON Schema related constants
+*/
+///@{
+//! Constant for draft-07 schema version
+const JsonSchemaDraft07 = "http://json-schema.org/draft-07/schema#";
+
+//! Constant for draft-2019-09 schema version
+const JsonSchemaDraft201909 = "https://json-schema.org/draft/2019-09/schema";
+
+//! Constant for draft-2020-12 schema version
+const JsonSchemaDraft202012 = "https://json-schema.org/draft/2020-12/schema";
+///@}
+
+//! Hashdecl for validation error information
+/** @since json 1.11
+*/
+hashdecl JsonSchemaValidationError {
+    //! JSON Pointer path to the error location
+    string path;
+    //! The keyword that failed validation
+    string keyword;
+    //! Human-readable error message
+    string message;
+    //! JSON Pointer path in the schema
+    string schema_path;
+}
+
+//! Hashdecl for validation result
+/** @since json 1.11
+*/
+hashdecl JsonSchemaValidationResult {
+    //! Whether validation succeeded
+    bool valid;
+    //! List of validation errors (empty if valid)
+    list<hash<JsonSchemaValidationError>> errors;
+}
+
+//! JWT header parameters
+/** @since json 1.11
+*/
+hashdecl JwtHeader {
+    //! Algorithm (ex: HS256, RS256)
+    string alg;
+    //! Type (ex: "JWT")
+    *string typ;
+    //! Key ID
+    *string kid;
+    //! Content type
+    *string cty;
+    //! Critical header parameters
+    *list<string> crit;
+    //! Custom header parameters
+    *hash<auto> extra;
+}
+
+//! JWT claims
+/** @since json 1.11
+*/
+hashdecl JwtClaims {
+    //! Issuer
+    *string iss;
+    //! Subject
+    *string sub;
+    //! Audience (string)
+    *string aud;
+    //! Expiration time (UNIX epoch seconds)
+    *int exp;
+    //! Not before time (UNIX epoch seconds)
+    *int nbf;
+    //! Issued at time (UNIX epoch seconds)
+    *int iat;
+    //! JWT ID
+    *string jti;
+    //! Custom claims
+    *hash<auto> extra;
+}
+
+//! JWT decode result
+/** @since json 1.11
+*/
+hashdecl JwtDecodeResult {
+    //! Decoded header
+    hash<JwtHeader> header;
+    //! Decoded claims
+    hash<JwtClaims> claims;
+    //! Algorithm used
+    string alg;
+    //! Base64url header + payload used for signing
+    string signing_input;
+    //! Raw signature
+    binary signature;
+    //! Signature validation result
+    bool signature_valid;
+}
+
+//! The JsonSchema class provides JSON Schema validation functionality
+/** This class allows validating JSON/Qore data against a JSON Schema definition.
+    It supports JSON Schema draft-07, draft-2019-09, and draft-2020-12.
+
+@par Example:
+@code{.py}
+%new-style
+%strict-args
+%require-types
+
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "age": {"type": "integer", "minimum": 0}
+    },
+    "required": ["name"]
+};
+
+JsonSchema validator(schema);
+
+hash<auto> valid_data = {"name": "Alice", "age": 30};
+if (validator.validate(valid_data)) {
+    print("Data is valid\n");
+}
+
+hash<auto> invalid_data = {"age": -5};
+hash<JsonSchemaValidationResult> result = validator.validateWithErrors(invalid_data);
+if (!result.valid) {
+    foreach hash<JsonSchemaValidationError> err in (result.errors) {
+        printf("Error at %s: %s\n", err.path, err.message);
+    }
+}
+@endcode
+
+@since json 1.11
+*/
+qclass JsonSchema [arg=JsonSchemaValidator* jschema; ns=Qore::Json];
+
+//! Creates a JsonSchema validator from a schema hash
+/** @param schema the JSON Schema as a Qore hash
+
+    @par Example:
+    @code{.py}
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"}
+    }
+};
+JsonSchema validator(schema);
+    @endcode
+
+    @throw JSON-SCHEMA-ERROR if the schema is invalid
+*/
+JsonSchema::constructor(hash<auto> schema) {
+    ReferenceHolder<JsonSchemaValidator> holder(new JsonSchemaValidator(schema, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_JSONSCHEMA, holder.release());
+}
+
+//! Creates a JsonSchema validator from a JSON schema string
+/** @param schema_json the JSON Schema as a JSON string
+
+    @par Example:
+    @code{.py}
+string schema = '{"type": "string", "minLength": 1}';
+JsonSchema validator(schema);
+    @endcode
+
+    @throw JSON-SCHEMA-ERROR if the schema is invalid
+*/
+JsonSchema::constructor(string schema_json) {
+    ReferenceHolder<JsonSchemaValidator> holder(new JsonSchemaValidator(schema_json, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_JSONSCHEMA, holder.release());
+}
+
+//! Copy constructor
+/** JsonSchema objects cannot be copied
+*/
+JsonSchema::copy() {
+    xsink->raiseException("JSONSCHEMA-COPY-ERROR", "JsonSchema objects cannot be copied");
+}
+
+//! Validates data against the schema
+/** @param data the data to validate (can be any JSON-compatible type)
+    @param throw_on_error if True, throws an exception on validation failure
+
+    @return True if the data is valid, False otherwise
+
+    @par Example:
+    @code{.py}
+JsonSchema validator(schema);
+bool valid = validator.validate({"name": "Alice"});
+    @endcode
+
+    @throw JSON-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+*/
+bool JsonSchema::validate(auto data, bool throw_on_error = False) {
+    bool result = jschema->validate(data, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (!result && throw_on_error) {
+        QoreHashNode* errors = jschema->validateWithErrors(data, xsink);
+        if (*xsink) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> holder(errors, xsink);
+        QoreListNode* error_list = errors->getKeyValue("errors").get<QoreListNode>();
+        QoreStringNode* msg = new QoreStringNode("JSON Schema validation failed");
+        if (error_list && error_list->size() > 0) {
+            QoreHashNode* first_error = error_list->retrieveEntry(0).get<QoreHashNode>();
+            if (first_error) {
+                QoreValue error_msg = first_error->getKeyValue("message");
+                if (error_msg.getType() == NT_STRING) {
+                    QoreStringValueHelper error_msg_str(error_msg);
+                    msg->concat(": ");
+                    msg->concat(error_msg_str->c_str());
+                }
+            }
+        }
+        xsink->raiseException("JSON-SCHEMA-VALIDATION-ERROR", msg);
+        return false;
+    }
+    return result;
+}
+
+//! Validates data and returns detailed error information
+/** @param data the data to validate
+
+    @return a hash with 'valid' (bool) and 'errors' (list of JsonSchemaValidationError hashes)
+
+@par Example:
+@code{.py}
+JsonSchema validator(schema);
+hash<JsonSchemaValidationResult> result = validator.validateWithErrors(data);
+if (!result.valid) {
+    foreach hash<JsonSchemaValidationError> err in (result.errors) {
+        printf("Error at %s: %s\n", err.path, err.message);
+    }
+}
+@endcode
+*/
+hash<JsonSchemaValidationResult> JsonSchema::validateWithErrors(auto data) {
+    return jschema->validateWithErrors(data, xsink);
+}
+
+//! Loads a JSON Schema from a file path or URL
+/** @param location the file path or URL to load the schema from
+
+    @return a new JsonSchema object
+
+    @par Example:
+    @code{.py}
+JsonSchema validator = JsonSchema::load("/path/to/schema.json");
+    @endcode
+
+    @throw JSON-SCHEMA-ERROR if the schema cannot be loaded or is invalid
+*/
+static JsonSchema JsonSchema::load(string location) [flags=RET_VALUE_ONLY;dom=FILESYSTEM] {
+    SimpleRefHolder<QoreStringNode> content;
+    if (location->find("://") != -1) {
+        xsink->raiseException("JSON-SCHEMA-ERROR", "URL loading not yet implemented; use file paths");
+        return QoreValue();
+    }
+
+    // Check sandbox restrictions (only when sandbox active)
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        // Check for interrupt
+        if (qore_check_cancel(xsink, "loading JSON schema file")) {
+            return QoreValue();
+        }
+
+        // Check filesystem sandbox permissions
+        if (!smh->checkFilesystemAccess(location->c_str(), QSEC_READ, xsink)) {
+            return QoreValue();  // Exception already raised
+        }
+    }
+
+    // Open file first
+    QoreFile f;
+    if (f.open(location->c_str(), O_RDONLY, 0, QCS_DEFAULT)) {
+        xsink->raiseException("JSON-SCHEMA-ERROR", "Cannot open schema file '%s'",
+            location->c_str());
+        return QoreValue();
+    }
+
+    // Check file size limit using fstat() on opened file to avoid TOCTOU
+    if (smh) {
+        struct stat st;
+        if (fstat(f.getFD(), &st) == 0 && st.st_size > JSON_MAX_SCHEMA_FILE_SIZE) {
+            xsink->raiseException("JSON-SCHEMA-ERROR",
+                "Schema file '%s' size (%lld bytes) exceeds sandbox maximum (%d bytes)",
+                location->c_str(), (long long)st.st_size, JSON_MAX_SCHEMA_FILE_SIZE);
+            return QoreValue();
+        }
+    }
+
+    content = f.read(-1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<JsonSchemaValidator> validator(new JsonSchemaValidator(*content, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_JSONSCHEMA, getProgram()), xsink);
+    rv->setPrivate(CID_JSONSCHEMA, validator.release());
+    return rv.release();
+}

@@ -1,0 +1,912 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JsonStreamWriterTest
+
+class JsonStreamWriterTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const SimpleObject = {"name": "Alice", "age": 30};
+        const SimpleArray = (1, 2, 3);
+        const NestedStructure = {"users": ({"name": "Alice"}, {"name": "Bob"}), "count": 2};
+    }
+
+    constructor() : Test("JsonStreamWriterTest", "1.0", \ARGV) {
+        addTestCase("basic object", \testBasicObject());
+        addTestCase("basic array", \testBasicArray());
+        addTestCase("nested structure", \testNestedStructure());
+        addTestCase("formatted output", \testFormattedOutput());
+        addTestCase("value method", \testValueMethod());
+        addTestCase("escaped strings", \testEscapedStrings());
+        addTestCase("number types", \testNumberTypes());
+        addTestCase("error handling", \testErrorHandling());
+        addTestCase("object sequencing", \testObjectSequencing());
+        addTestCase("large data", \testLargeData());
+        addTestCase("empty containers", \testEmptyContainers());
+        addTestCase("unicode strings", \testUnicodeStrings());
+        addTestCase("control characters", \testControlCharacters());
+        addTestCase("special float values", \testSpecialFloatValues());
+        addTestCase("edge case numbers", \testEdgeCaseNumbers());
+        addTestCase("empty strings", \testEmptyStrings());
+        addTestCase("special keys", \testSpecialKeys());
+        addTestCase("null and nothing", \testNullAndNothing());
+        addTestCase("boolean values", \testBooleanValues());
+        addTestCase("deeply nested", \testDeeplyNested());
+        addTestCase("wrong container end", \testWrongContainerEnd());
+        addTestCase("value in manual structure", \testValueInManualStructure());
+        addTestCase("consistency with make_json", \testConsistencyWithMakeJson());
+        addTestCase("sandbox depth limit", \testSandboxDepthLimit());
+        addTestCase("mixed array values", \testMixedArrayValues());
+        addTestCase("object with many keys", \testObjectWithManyKeys());
+        addTestCase("array of arrays", \testArrayOfArrays());
+        addTestCase("very long strings", \testVeryLongStrings());
+        set_return_value(main());
+    }
+
+    testBasicObject() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("name");
+        writer.stringValue("Alice");
+        writer.key("age");
+        writer.numberValue(30);
+        writer.endObject();
+
+        string result = sos.getData();
+        assertEq('{"name":"Alice","age":30}', result);
+
+        # Verify it's valid JSON
+        hash parsed = parse_json(result);
+        assertEq("Alice", parsed.name);
+        assertEq(30, parsed.age);
+    }
+
+    testBasicArray() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startArray();
+        writer.numberValue(1);
+        writer.numberValue(2);
+        writer.numberValue(3);
+        writer.endArray();
+
+        string result = sos.getData();
+        assertEq("[1,2,3]", result);
+
+        list parsed = parse_json(result);
+        assertEq((1, 2, 3), parsed);
+    }
+
+    testNestedStructure() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("users");
+        writer.startArray();
+        writer.startObject();
+        writer.key("name");
+        writer.stringValue("Alice");
+        writer.endObject();
+        writer.startObject();
+        writer.key("name");
+        writer.stringValue("Bob");
+        writer.endObject();
+        writer.endArray();
+        writer.key("count");
+        writer.numberValue(2);
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        assertEq(2, parsed.users.size());
+        assertEq("Alice", parsed.users[0].name);
+        assertEq("Bob", parsed.users[1].name);
+        assertEq(2, parsed.count);
+    }
+
+    testFormattedOutput() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos, JGF_ADD_FORMATTING);
+        writer.startObject();
+        writer.key("name");
+        writer.stringValue("Alice");
+        writer.key("tags");
+        writer.startArray();
+        writer.stringValue("a");
+        writer.stringValue("b");
+        writer.endArray();
+        writer.endObject();
+
+        string result = sos.getData();
+        # Check that it contains newlines and indentation
+        assertTrue(result.find("\n") >= 0, "Should contain newlines");
+        assertTrue(result.find("  ") >= 0, "Should contain indentation");
+
+        # Verify it's still valid JSON
+        hash parsed = parse_json(result);
+        assertEq("Alice", parsed.name);
+        assertEq(("a", "b"), parsed.tags);
+    }
+
+    testValueMethod() {
+        # Test with hash
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.value(SimpleObject);
+        hash parsed1 = parse_json(sos1.getData());
+        assertEq(SimpleObject, parsed1);
+
+        # Test with list
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.value(SimpleArray);
+        list parsed2 = parse_json(sos2.getData());
+        assertEq(SimpleArray, parsed2);
+
+        # Test with nested structure
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.value(NestedStructure);
+        hash parsed3 = parse_json(sos3.getData());
+        assertEq(NestedStructure.count, parsed3.count);
+        assertEq(NestedStructure.users.size(), parsed3.users.size());
+
+        # Test with primitives
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.value("hello");
+        assertEq('"hello"', sos4.getData());
+
+        StringOutputStream sos5();
+        JsonStreamWriter writer5(sos5);
+        writer5.value(42);
+        assertEq("42", sos5.getData());
+
+        StringOutputStream sos6();
+        JsonStreamWriter writer6(sos6);
+        writer6.value(True);
+        assertEq("true", sos6.getData());
+
+        StringOutputStream sos7();
+        JsonStreamWriter writer7(sos7);
+        writer7.value(NOTHING);
+        assertEq("null", sos7.getData());
+    }
+
+    testEscapedStrings() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("text");
+        writer.stringValue("hello\nworld\t\"quoted\"");
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        assertEq("hello\nworld\t\"quoted\"", parsed.text);
+    }
+
+    testNumberTypes() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("int");
+        writer.numberValue(42);
+        writer.key("float");
+        writer.numberValue(3.14159);
+        writer.key("negative");
+        writer.numberValue(-100);
+        writer.key("large");
+        writer.numberValue(9223372036854775807);  # max int64
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        assertEq(42, parsed.int);
+        assertEq(3.14159, parsed.float);
+        assertEq(-100, parsed.negative);
+        assertEq(9223372036854775807, parsed.large);
+    }
+
+    testErrorHandling() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+
+        # endObject without startObject
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer.endObject();
+        });
+
+        # endArray without startArray
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer2.endArray();
+        });
+
+        # key outside object
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer3.key("test");
+        });
+
+        # key inside array
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startArray();
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer4.key("test");
+        });
+    }
+
+    testObjectSequencing() {
+        # key() twice without value
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.startObject();
+        writer1.key("a");
+        assertThrows("JSON-STREAM-WRITER-ERROR", "value", sub() {
+            writer1.key("b");
+        });
+
+        # value without key in object
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.startObject();
+        assertThrows("JSON-STREAM-WRITER-ERROR", "key", sub() {
+            writer2.stringValue("x");
+        });
+
+        # endObject while expecting value
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("a");
+        assertThrows("JSON-STREAM-WRITER-ERROR", "value", sub() {
+            writer3.endObject();
+        });
+
+        # nested container without key
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startObject();
+        assertThrows("JSON-STREAM-WRITER-ERROR", "key", sub() {
+            writer4.startArray();
+        });
+    }
+
+    testLargeData() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+
+        writer.startArray();
+        for (int i = 0; i < 1000; i++) {
+            writer.startObject();
+            writer.key("id");
+            writer.numberValue(i);
+            writer.key("value");
+            writer.stringValue(sprintf("item-%d", i));
+            writer.endObject();
+        }
+        writer.endArray();
+
+        string result = sos.getData();
+        list parsed = parse_json(result);
+        assertEq(1000, parsed.size());
+        assertEq(0, parsed[0].id);
+        assertEq("item-0", parsed[0].value);
+        assertEq(999, parsed[999].id);
+        assertEq("item-999", parsed[999].value);
+    }
+
+    #! Test empty objects and arrays
+    testEmptyContainers() {
+        # Empty object
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.startObject();
+        writer1.endObject();
+        assertEq("{}", sos1.getData());
+        assertEq({}, parse_json("{}"));
+
+        # Empty array
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.startArray();
+        writer2.endArray();
+        assertEq("[]", sos2.getData());
+        assertEq((), parse_json("[]"));
+
+        # Nested empty containers
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("empty_obj");
+        writer3.startObject();
+        writer3.endObject();
+        writer3.key("empty_arr");
+        writer3.startArray();
+        writer3.endArray();
+        writer3.endObject();
+        hash parsed = parse_json(sos3.getData());
+        assertEq({}, parsed.empty_obj);
+        assertEq((), parsed.empty_arr);
+
+        # Empty object via value()
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.value({});
+        assertEq("{}", sos4.getData());
+
+        # Empty list via value()
+        StringOutputStream sos5();
+        JsonStreamWriter writer5(sos5);
+        writer5.value(());
+        assertEq("[]", sos5.getData());
+    }
+
+    #! Test Unicode strings including multi-byte characters
+    testUnicodeStrings() {
+        # Basic Unicode
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.value("Hello, 世界");
+        hash parsed1 = {"v": parse_json(sos1.getData())};
+        assertEq("Hello, 世界", parsed1.v);
+
+        # Emoji (surrogate pairs)
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.value("Test 😀 emoji");
+        string result = sos2.getData();
+        assertTrue(result.find("Test") >= 0);
+
+        # Various Unicode scripts
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("greek");
+        writer3.stringValue("Ελληνικά");
+        writer3.key("russian");
+        writer3.stringValue("Русский");
+        writer3.key("arabic");
+        writer3.stringValue("العربية");
+        writer3.key("hebrew");
+        writer3.stringValue("עברית");
+        writer3.key("japanese");
+        writer3.stringValue("日本語");
+        writer3.endObject();
+        hash parsed3 = parse_json(sos3.getData());
+        assertEq("Ελληνικά", parsed3.greek);
+        assertEq("Русский", parsed3.russian);
+        assertEq("日本語", parsed3.japanese);
+
+        # Unicode in keys
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startObject();
+        writer4.key("日本語キー");
+        writer4.stringValue("value");
+        writer4.endObject();
+        hash parsed4 = parse_json(sos4.getData());
+        assertEq("value", parsed4."日本語キー");
+    }
+
+    #! Test all control characters are properly escaped
+    testControlCharacters() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+
+        # Test each control character
+        writer.key("null");
+        writer.stringValue("\0");  # NUL - should be escaped
+        writer.key("tab");
+        writer.stringValue("\t");
+        writer.key("newline");
+        writer.stringValue("\n");
+        writer.key("cr");
+        writer.stringValue("\r");
+        writer.key("formfeed");
+        writer.stringValue("\f");
+        writer.key("backspace");
+        writer.stringValue("\b");
+        writer.key("backslash");
+        writer.stringValue("\\");
+        writer.key("quote");
+        writer.stringValue("\"");
+        writer.key("combined");
+        writer.stringValue("line1\nline2\ttab\r\nwindows");
+        writer.endObject();
+
+        string result = sos.getData();
+        # Verify it's valid JSON by parsing
+        hash parsed = parse_json(result);
+        assertEq("\t", parsed.tab);
+        assertEq("\n", parsed.newline);
+        assertEq("\r", parsed.cr);
+        assertEq("\\", parsed.backslash);
+        assertEq("\"", parsed.quote);
+        assertEq("line1\nline2\ttab\r\nwindows", parsed.combined);
+    }
+
+    #! Test special floating point values
+    testSpecialFloatValues() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("zero");
+        writer.numberValue(0.0);
+        writer.key("neg_zero");
+        writer.numberValue(-0.0);
+        writer.key("small");
+        writer.numberValue(0.000001);
+        writer.key("large");
+        writer.numberValue(1e308);
+        writer.key("tiny");
+        writer.numberValue(1e-308);
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        # Note: 0.0 may be parsed as integer 0 by Qore
+        assertTrue(parsed.zero == 0);
+        # Note: -0.0 may be normalized to 0.0
+        assertEq(0.000001, parsed.small);
+    }
+
+    #! Test edge case numbers
+    testEdgeCaseNumbers() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("zero");
+        writer.numberValue(0);
+        writer.key("neg_one");
+        writer.numberValue(-1);
+        writer.key("min_int");
+        writer.numberValue(-9223372036854775807 - 1);  # min int64
+        writer.key("max_int");
+        writer.numberValue(9223372036854775807);  # max int64
+        writer.key("pi");
+        writer.numberValue(3.141592653589793);
+        writer.key("e");
+        writer.numberValue(2.718281828459045);
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        assertEq(0, parsed.zero);
+        assertEq(-1, parsed.neg_one);
+        assertEq(3.141592653589793, parsed.pi);
+    }
+
+    #! Test empty strings as keys and values
+    testEmptyStrings() {
+        # Empty string value
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.stringValue("");
+        assertEq('""', sos1.getData());
+
+        # Empty string as object value
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.startObject();
+        writer2.key("empty");
+        writer2.stringValue("");
+        writer2.endObject();
+        hash parsed2 = parse_json(sos2.getData());
+        assertEq("", parsed2.empty);
+
+        # Empty string as key
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("");
+        writer3.stringValue("value");
+        writer3.endObject();
+        hash parsed3 = parse_json(sos3.getData());
+        assertEq("value", parsed3."");
+
+        # Empty array element
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startArray();
+        writer4.stringValue("");
+        writer4.stringValue("non-empty");
+        writer4.stringValue("");
+        writer4.endArray();
+        list parsed4 = parse_json(sos4.getData());
+        assertEq(("", "non-empty", ""), parsed4);
+    }
+
+    #! Test keys with special characters
+    testSpecialKeys() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        writer.key("with space");
+        writer.stringValue("a");
+        writer.key("with\"quote");
+        writer.stringValue("b");
+        writer.key("with\\backslash");
+        writer.stringValue("c");
+        writer.key("with\nnewline");
+        writer.stringValue("d");
+        writer.key("with\ttab");
+        writer.stringValue("e");
+        writer.key("123numeric");
+        writer.stringValue("f");
+        writer.key("special!@#$%^&*()");
+        writer.stringValue("g");
+        writer.endObject();
+
+        string result = sos.getData();
+        hash parsed = parse_json(result);
+        assertEq("a", parsed."with space");
+        assertEq("b", parsed."with\"quote");
+        assertEq("c", parsed."with\\backslash");
+        assertEq("d", parsed."with\nnewline");
+        assertEq("e", parsed."with\ttab");
+        assertEq("f", parsed."123numeric");
+        assertEq("g", parsed."special!@#$%^&*()");
+    }
+
+    #! Test null and NOTHING values
+    testNullAndNothing() {
+        # Explicit nullValue()
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.nullValue();
+        assertEq("null", sos1.getData());
+
+        # NOTHING via value()
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.value(NOTHING);
+        assertEq("null", sos2.getData());
+
+        # NULL via value()
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.value(NULL);
+        assertEq("null", sos3.getData());
+
+        # Null in object
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startObject();
+        writer4.key("nullable");
+        writer4.nullValue();
+        writer4.endObject();
+        hash parsed4 = parse_json(sos4.getData());
+        assertTrue(!exists parsed4.nullable);
+
+        # Null in array
+        StringOutputStream sos5();
+        JsonStreamWriter writer5(sos5);
+        writer5.startArray();
+        writer5.numberValue(1);
+        writer5.nullValue();
+        writer5.numberValue(3);
+        writer5.endArray();
+        list parsed5 = parse_json(sos5.getData());
+        assertEq(1, parsed5[0]);
+        assertTrue(!exists parsed5[1]);
+        assertEq(3, parsed5[2]);
+    }
+
+    #! Test boolean values
+    testBooleanValues() {
+        # True
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.boolValue(True);
+        assertEq("true", sos1.getData());
+
+        # False
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.boolValue(False);
+        assertEq("false", sos2.getData());
+
+        # Both in object
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("yes");
+        writer3.boolValue(True);
+        writer3.key("no");
+        writer3.boolValue(False);
+        writer3.endObject();
+        hash parsed3 = parse_json(sos3.getData());
+        assertEq(True, parsed3.yes);
+        assertEq(False, parsed3.no);
+
+        # Boolean array
+        StringOutputStream sos4();
+        JsonStreamWriter writer4(sos4);
+        writer4.startArray();
+        writer4.boolValue(True);
+        writer4.boolValue(False);
+        writer4.boolValue(True);
+        writer4.endArray();
+        list parsed4 = parse_json(sos4.getData());
+        assertEq((True, False, True), parsed4);
+
+        # Via value()
+        StringOutputStream sos5();
+        JsonStreamWriter writer5(sos5);
+        writer5.value(True);
+        assertEq("true", sos5.getData());
+
+        StringOutputStream sos6();
+        JsonStreamWriter writer6(sos6);
+        writer6.value(False);
+        assertEq("false", sos6.getData());
+    }
+
+    #! Test deeply nested structures (no sandbox)
+    testDeeplyNested() {
+        int depth = 50;
+
+        # Nested objects
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        for (int i = 0; i < depth; i++) {
+            writer1.startObject();
+            writer1.key("level");
+            writer1.numberValue(i);
+            writer1.key("child");
+        }
+        writer1.nullValue();
+        for (int i = 0; i < depth; i++) {
+            writer1.endObject();
+        }
+        string result1 = sos1.getData();
+        auto parsed1 = parse_json(result1);
+        assertEq(0, parsed1.level);
+
+        # Nested arrays
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        for (int i = 0; i < depth; i++) {
+            writer2.startArray();
+        }
+        writer2.numberValue(42);
+        for (int i = 0; i < depth; i++) {
+            writer2.endArray();
+        }
+        string result2 = sos2.getData();
+        assertTrue(result2.find("[[[") >= 0);
+        assertTrue(result2.find("]]]") >= 0);
+    }
+
+    #! Test wrong container end type
+    testWrongContainerEnd() {
+        # startObject + endArray
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.startObject();
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer1.endArray();
+        });
+
+        # startArray + endObject
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.startArray();
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer2.endObject();
+        });
+
+        # Nested wrong end
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key("arr");
+        writer3.startArray();
+        assertThrows("JSON-STREAM-WRITER-ERROR", sub() {
+            writer3.endObject();  # Should be endArray
+        });
+    }
+
+    #! Test using value() inside manually constructed structures
+    testValueInManualStructure() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+
+        writer.startObject();
+        writer.key("manual_key");
+        writer.stringValue("manual_value");
+        writer.key("auto_object");
+        writer.value({"nested": "data", "count": 42});
+        writer.key("auto_array");
+        writer.value((1, 2, 3));
+        writer.key("another_manual");
+        writer.numberValue(100);
+        writer.endObject();
+
+        hash parsed = parse_json(sos.getData());
+        assertEq("manual_value", parsed.manual_key);
+        assertEq("data", parsed.auto_object.nested);
+        assertEq(42, parsed.auto_object.count);
+        assertEq((1, 2, 3), parsed.auto_array);
+        assertEq(100, parsed.another_manual);
+    }
+
+    #! Test that output matches make_json()
+    testConsistencyWithMakeJson() {
+        list<auto> test_values = (
+            {"simple": "object"},
+            (1, 2, 3),
+            {"nested": {"deep": {"value": 42}}},
+            {"mixed": (1, "two", True, NOTHING)},
+            {"special": "line1\nline2\ttab"},
+            {"unicode": "日本語"},
+            {},
+            (),
+            42,
+            "string",
+            True,
+            False,
+        );
+
+        foreach auto val in (test_values) {
+            StringOutputStream sos();
+            JsonStreamWriter writer(sos);
+            writer.value(val);
+            string stream_result = sos.getData();
+            string make_result = make_json(val);
+            assertEq(make_result, stream_result, sprintf("Mismatch for value: %y", val));
+        }
+    }
+
+    #! Test sandbox depth limit
+    testSandboxDepthLimit() {
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+string sub test_depth(int depth) {
+    StringOutputStream sos();
+    JsonStreamWriter writer(sos);
+    for (int i = 0; i < depth; i++) {
+        writer.startObject();
+        writer.key('level');
+    }
+    writer.numberValue(0);
+    for (int i = 0; i < depth; i++) {
+        writer.endObject();
+    }
+    return sos.getData();
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 256 levels should succeed
+        auto result = p.callFunction("test_depth", 256);
+        assertTrue(result.typeCode() == NT_STRING);
+
+        # 257 levels should fail
+        assertThrows("JSON-STREAM-WRITER-ERROR", "depth", \p.callFunction(), ("test_depth", 257));
+    }
+
+    #! Test array with mixed value types
+    testMixedArrayValues() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startArray();
+        writer.stringValue("text");
+        writer.numberValue(42);
+        writer.numberValue(3.14);
+        writer.boolValue(True);
+        writer.boolValue(False);
+        writer.nullValue();
+        writer.startObject();
+        writer.key("nested");
+        writer.stringValue("object");
+        writer.endObject();
+        writer.startArray();
+        writer.numberValue(1);
+        writer.numberValue(2);
+        writer.endArray();
+        writer.endArray();
+
+        list parsed = parse_json(sos.getData());
+        assertEq(8, parsed.size());
+        assertEq("text", parsed[0]);
+        assertEq(42, parsed[1]);
+        assertEq(3.14, parsed[2]);
+        assertEq(True, parsed[3]);
+        assertEq(False, parsed[4]);
+        assertTrue(!exists parsed[5]);
+        assertEq("object", parsed[6].nested);
+        assertEq((1, 2), parsed[7]);
+    }
+
+    #! Test object with many keys
+    testObjectWithManyKeys() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startObject();
+        for (int i = 0; i < 100; i++) {
+            writer.key(sprintf("key_%03d", i));
+            writer.numberValue(i);
+        }
+        writer.endObject();
+
+        hash parsed = parse_json(sos.getData());
+        assertEq(100, parsed.size());
+        assertEq(0, parsed.key_000);
+        assertEq(50, parsed.key_050);
+        assertEq(99, parsed.key_099);
+    }
+
+    #! Test array of arrays
+    testArrayOfArrays() {
+        StringOutputStream sos();
+        JsonStreamWriter writer(sos);
+        writer.startArray();
+        for (int i = 0; i < 5; i++) {
+            writer.startArray();
+            for (int j = 0; j < 3; j++) {
+                writer.numberValue(i * 3 + j);
+            }
+            writer.endArray();
+        }
+        writer.endArray();
+
+        list parsed = parse_json(sos.getData());
+        assertEq(5, parsed.size());
+        assertEq((0, 1, 2), parsed[0]);
+        assertEq((3, 4, 5), parsed[1]);
+        assertEq((12, 13, 14), parsed[4]);
+    }
+
+    #! Test very long strings
+    testVeryLongStrings() {
+        # 10KB string
+        string long_str = strmul("a", 10000);
+
+        StringOutputStream sos1();
+        JsonStreamWriter writer1(sos1);
+        writer1.stringValue(long_str);
+        hash parsed1 = {"v": parse_json(sos1.getData())};
+        assertEq(10000, parsed1.v.length());
+        assertEq(long_str, parsed1.v);
+
+        # Long string with escapes
+        string long_escaped = strmul("a\nb\tc", 1000);
+        StringOutputStream sos2();
+        JsonStreamWriter writer2(sos2);
+        writer2.stringValue(long_escaped);
+        hash parsed2 = {"v": parse_json(sos2.getData())};
+        assertEq(long_escaped, parsed2.v);
+
+        # Long key
+        string long_key = strmul("k", 1000);
+        StringOutputStream sos3();
+        JsonStreamWriter writer3(sos3);
+        writer3.startObject();
+        writer3.key(long_key);
+        writer3.stringValue("value");
+        writer3.endObject();
+        hash parsed3 = parse_json(sos3.getData());
+        assertEq("value", parsed3{long_key});
+    }
+}
