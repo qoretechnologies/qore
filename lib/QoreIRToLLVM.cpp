@@ -13660,14 +13660,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Get pointer to first element
             llvm::Value* arr_ptr = builder->CreateBitCast(case_arr, ptr_type);
 
-            // Call runtime helper: int32_t qore_rt_switch_string_lookup(uint64_t, const char**, int32_t)
-            auto helper = module.getOrInsertFunction("qore_rt_switch_string_lookup",
+            llvm::Value* case_count = llvm::ConstantInt::get(
+                llvm::cast<llvm::IntegerType>(i32_type),
+                static_cast<int32_t>(sw->cases.size()));
+            llvm::Value* case_idx;
+            if (sw->aot_string_case_transform) {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_switch_string_case_lookup_noguard",
                     llvm::FunctionType::get(i32_type,
-                            {i64_type, ptr_type, i32_type}, false));
-            llvm::Value* case_idx = builder->CreateCall(helper,
-                    {val_boxed, arr_ptr,
-                     llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type),
-                             static_cast<int32_t>(sw->cases.size()))});
+                        {i64_type, ptr_type, i32_type, i32_type,
+                         ptr_type}, false));
+                case_idx = builder->CreateCall(helper,
+                    {val_boxed, arr_ptr, case_count,
+                     llvm::ConstantInt::get(i32_type,
+                        sw->aot_string_case_transform_upper ? 1 : 0),
+                     xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
+            } else {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_switch_string_lookup",
+                    llvm::FunctionType::get(i32_type,
+                        {i64_type, ptr_type, i32_type}, false));
+                case_idx = builder->CreateCall(helper,
+                    {val_boxed, arr_ptr, case_count});
+            }
 
             consumeValueUse(sw->switch_val.id, module);
 

@@ -12963,6 +12963,11 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
         uint8_t comparison_operand = 0;
     };
     std::vector<Fusion> fusions;
+    struct SwitchFusion {
+        QoreIRDotEvalMethodDirectInstruction* producer = nullptr;
+        QoreIRSwitchStringInstruction* consumer = nullptr;
+    };
+    std::vector<SwitchFusion> switch_fusions;
     std::unordered_set<QoreIRInstruction*> claimed;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         const auto& instructions = func.blocks[block_id]->instructions;
@@ -13025,14 +13030,67 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
             }
             auto use = uses.find(producer->result.id);
             if (use == uses.end() || use->second.size() != 1
-                    || use->second.front().block_id != block_id
                     || !use->second.front().inst) {
                 continue;
             }
+            size_t consumer_block_id =
+                use->second.front().block_id;
             auto* consumer = const_cast<QoreIRInstruction*>(
                 use->second.front().inst);
-            if (consumer->exception_target || !consumer->result.isValid()
-                    || claimed.count(consumer)) {
+            if (consumer->exception_target || claimed.count(consumer)) {
+                continue;
+            }
+            if (consumer->opcode == QoreIROpcode::SwitchString) {
+                auto* switch_consumer =
+                    static_cast<QoreIRSwitchStringInstruction*>(consumer);
+                bool ascii_cases = !switch_consumer->cases.empty();
+                for (const auto& c : switch_consumer->cases) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR string transform-switch case analysis")) {
+                        return 0;
+                    }
+                    if (!std::all_of(c.value.begin(), c.value.end(),
+                            [](unsigned char ch) {
+                                return ch && ch < 0x80;
+                            })) {
+                        ascii_cases = false;
+                        break;
+                    }
+                }
+                bool safe_path = false;
+                if (consumer_block_id == block_id) {
+                    safe_path = side_effect_free_interval(
+                        producer, switch_consumer);
+                } else if (consumer_block_id < func.blocks.size()) {
+                    auto producer_pos = positions.find(producer);
+                    const auto& consumer_instructions =
+                        func.blocks[consumer_block_id]->instructions;
+                    bool direct_branch =
+                        producer_pos != positions.end()
+                        && producer_pos->second + 2
+                            == instructions.size()
+                        && instructions.back()->opcode
+                            == QoreIROpcode::Br
+                        && static_cast<QoreIRBranchInstruction*>(
+                            instructions.back().get())->target
+                            == func.blocks[consumer_block_id].get();
+                    safe_path = direct_branch
+                        && !consumer_instructions.empty()
+                        && consumer_instructions.front().get()
+                            == switch_consumer;
+                }
+                if (!ascii_cases
+                        || switch_consumer->switch_val.id
+                            != producer->result.id
+                        || !safe_path) {
+                    continue;
+                }
+                claimed.insert(consumer);
+                switch_fusions.push_back(
+                    {producer, switch_consumer});
+                continue;
+            }
+            if (!consumer->result.isValid()) {
                 continue;
             }
             bool comparison_candidate =
@@ -13198,11 +13256,22 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 {producer, consumer, consumer->result, kind});
         }
     }
-    if (fusions.empty()) {
+    if (fusions.empty() && switch_fusions.empty()) {
         return 0;
     }
 
     std::unordered_set<QoreIRInstruction*> eliminated;
+    for (const SwitchFusion& fusion : switch_fusions) {
+        if (++check_count % 100 == 0) {
+            (void)qore_check_cancel(nullptr,
+                "IR string transform-switch fusion");
+        }
+        fusion.consumer->aot_string_case_transform = true;
+        fusion.consumer->aot_string_case_transform_upper =
+            fusion.producer->intrinsic == QoreIRIntrinsic::StringUpper;
+        fusion.consumer->switch_val = fusion.producer->operands[0];
+        eliminated.insert(fusion.producer);
+    }
     for (const Fusion& fusion : fusions) {
         if (fusion.comparison
                 != QoreIRInstruction::
@@ -13288,5 +13357,5 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
             }
         }
     }
-    return fusions.size();
+    return fusions.size() + switch_fusions.size();
 }

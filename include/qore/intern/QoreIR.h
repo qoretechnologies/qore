@@ -1083,6 +1083,8 @@ public:
     QoreIRValue switch_val{};                           //!< Value being switched on (string)
     QoreIRBasicBlock* default_target = nullptr;         //!< Default case target
     std::vector<QoreIRSwitchStringCase> cases;          //!< case string -> target block
+    bool aot_string_case_transform = false;             //!< Transient AOT stack case transform
+    bool aot_string_case_transform_upper = false;       //!< Transient transform direction
 };
 
 struct QoreIRPhiIncoming {

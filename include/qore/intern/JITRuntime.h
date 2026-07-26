@@ -504,6 +504,10 @@ int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
 uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
     ExceptionSink* xsink);
+//! Transform an assigned string and look up an ASCII switch case without retaining the result.
+int32_t qore_rt_switch_string_case_lookup_noguard(uint64_t value,
+    const char** case_strings, int32_t num_cases, int32_t upper,
+    ExceptionSink* xsink);
 
 //! Compare an assigned string after case conversion without retaining the result.
 int64_t qore_rt_string_case_equal_native_noguard(uint64_t value,

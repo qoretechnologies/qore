@@ -8300,6 +8300,32 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_lookup(uint64_t switch_val_bi
     return -1;  // No match, go to default
 }
 
+//! Transform an assigned string and look up an ASCII switch case without retaining the result.
+extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard(
+        uint64_t value, const char** case_strings, int32_t num_cases,
+        int32_t upper, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    QoreStringValueHelper str(v);
+    QoreString transformed(str->getEncoding());
+    int rc = upper
+        ? do_toupper(transformed, *str, xsink)
+        : do_tolower(transformed, *str, xsink);
+    if (rc || (xsink && *xsink)) {
+        return -1;
+    }
+    for (int32_t i = 0; i < num_cases; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(
+                    xsink, "case-transform string switch lookup")) {
+            return -1;
+        }
+        if (transformed.equal(case_strings[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // --- DotEval with pre-evaluated base helper ---
 
 #include "qore/intern/QoreDotEvalOperatorNode.h"

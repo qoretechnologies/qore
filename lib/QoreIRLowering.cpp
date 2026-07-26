@@ -6,6 +6,7 @@
 */
 
 #include <algorithm>
+#include <cstring>
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
@@ -2881,7 +2882,39 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Requirements:
         // 1. Switch expression must be guaranteed string type
         // 2. All non-default cases must be string constants with soft equality
-        bool use_switch_string = guaranteedStringType(&switch_expr);
+        bool assigned_string_case_transform = false;
+        if (switch_expr.hasNode()) {
+            auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                switch_expr.getInternalNode());
+            MethodCallNode* method_call =
+                dot ? dot->getMethodCall() : nullptr;
+            const char* method_name =
+                method_call ? method_call->getName() : nullptr;
+            if (dot && method_call && method_call->isPseudo()
+                    && qoreIrCallHasNoArgs(method_call)
+                    && method_name
+                    && (!strcmp(method_name, "lwr")
+                        || !strcmp(method_name, "upr"))) {
+                QoreParseAnalysis base_analysis;
+                bool have_base_analysis =
+                    getAnalysis(dot->getExpression(), base_analysis)
+                    && base_analysis.hasFlag(
+                        QoreParseAnalysis::KnownTypeInfo);
+                const QoreTypeInfo* base_type = have_base_analysis
+                    ? selectAnalysisType(base_analysis) : nullptr;
+                assigned_string_case_transform = base_type
+                    && QoreTypeInfo::isType(
+                        qore_get_value_type(base_type), NT_STRING)
+                    && (base_analysis.hasFlag(
+                            QoreParseAnalysis::NeverNothing)
+                        || (base_analysis.hasFlag(
+                                QoreParseAnalysis::DefinitelyAssigned)
+                            && !QoreTypeInfo::parseAcceptsReturns(
+                                base_type, NT_NOTHING)));
+            }
+        }
+        bool use_switch_string = guaranteedStringType(&switch_expr)
+            || assigned_string_case_transform;
         std::vector<std::pair<std::string, QoreIRBasicBlock*>> string_cases;
         QoreIRBasicBlock* default_block_for_str_switch = nullptr;
 
@@ -2912,6 +2945,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 break;
             }
             QoreStringValueHelper str(node->val);
+            if (!str->isDataAscii()
+                    || std::memchr(str->c_str(), '\0', str->size())) {
+                use_switch_string = false;
+                break;
+            }
             string_cases.push_back({str->c_str(), cases[i].block});
         }
 

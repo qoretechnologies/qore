@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+int sub lowerSwitch(string value) {
+    switch (value.lwr()) {
+        case \"red\": return 1;
+        case \"green\": return 2;
+        case \"blue\":
+        case \"azure\": return 3;
+        case \"\": return 4;
+        default: return 0;
+    }
+}
+
+int sub upperSwitch(string value) {
+    switch (value.upr()) {
+        case \"RED\": return 1;
+        case \"GREEN\": return 2;
+        case \"BLUE\": return 3;
+        default: return 0;
+    }
+}
+
+int sub unicodeSwitch(string value) {
+    switch (value.lwr()) {
+        case \"\\u00e9\": return 1;
+        default: return 0;
+    }
+}
+
+int sub localUnassigned() {
+    string value;
+    switch (value.lwr()) {
+        case \"value\": return 1;
+        default: return 0;
+    }
+}
+
+int sub localRemoved() {
+    string value = \"VALUE\";
+    remove value;
+    switch (value.lwr()) {
+        case \"value\": return 1;
+        default: return 0;
+    }
+}
+
+int sub main() {
+    printf(\"ascii:%d:%d:%d:%d:%d:%d\\n\",
+        lowerSwitch(\"RED\"), lowerSwitch(\"Blue\"),
+        lowerSwitch(\"\"), lowerSwitch(\"other\"),
+        upperSwitch(\"green\"), upperSwitch(\"other\"));
+    string latin1_red = convert_encoding(\"RED\", \"ISO-8859-1\");
+    printf(\"latin1:%d:%d\\n\",
+        lowerSwitch(latin1_red), upperSwitch(latin1_red));
+    string latin1_eacute = convert_encoding(\"\\u00c9\", \"ISO-8859-1\");
+    printf(\"unicode-case:%d\\n\", unicodeSwitch(latin1_eacute));
+
+    string unassigned_error;
+    try {
+        localUnassigned();
+    } catch (hash<auto> ex) {
+        unassigned_error = ex.err;
+    }
+    string removed_error;
+    try {
+        localRemoved();
+    } catch (hash<auto> ex) {
+        removed_error = ex.err;
+    }
+    printf(\"guards:%s:%s\\n\", unassigned_error, removed_error);
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-string-transform-switch-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/source.qr";
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string ir = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string jit = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=jit %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_TRANSFORM_CONSUMER_FUSION=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/source.qo";
+string disabled_qo = disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /lowerSwitch.*string-transform-consumers=1/
+        || enabled_compile !~ /upperSwitch.*string-transform-consumers=1/) {
+    printf("string transform-switch fusion mismatch:\n%s",
+        enabled_compile);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_switch_string_case_lookup_noguard/
+        || disabled_undefined =~ /qore_rt_switch_string_case_lookup_noguard/) {
+    printf("string transform-switch helper mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (ast != ir || ast != jit || ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sIR:\n%sJIT:\n%s"
+        + "Enabled:\n%sDisabled:\n%s",
+        ast, ir, jit, enabled, disabled);
+    exit(2);
+}
