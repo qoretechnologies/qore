@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub makeRecord(string prefix, string suffix) {
+    return prefix + suffix;
+}
+
+int sub consumerKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string record = makeRecord("record", "done");
+        checksum += record.size();
+        checksum += record.length();
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+    printf("%d\n", consumerKernel(rounds));
+    return 0;
+}
+
+main();

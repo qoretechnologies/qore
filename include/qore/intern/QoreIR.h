@@ -2258,6 +2258,8 @@ public:
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
+    //! Leading operands reused by a later cloned AOT consumer.
+    size_t aot_borrow_call_operand_count = 0;
     //! Direct projection from a fresh fixed aggregate returned by this call.
     AOTAggregateProjectionKind aot_aggregate_projection =
         AOTAggregateProjectionKind::None;

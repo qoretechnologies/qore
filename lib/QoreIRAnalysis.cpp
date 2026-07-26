@@ -12994,6 +12994,11 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
     };
+    struct MultiFusion {
+        QoreIRCallDirectInstruction* producer = nullptr;
+        std::vector<Fusion> consumers;
+        std::vector<QoreIRInstruction*> eliminated;
+    };
     auto analyze_consumer = [&](QoreIRStringConsumerCallInstruction* producer,
             QoreIRValue base, QoreIRInstruction* consumer, bool cross_block,
             Fusion& fusion) {
@@ -13334,6 +13339,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         return true;
     };
     std::vector<Fusion> fusions;
+    std::vector<MultiFusion> multi_fusions;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -13428,9 +13434,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     return 0;
                 }
             }
-            Fusion candidate;
-            candidate.producer = producer;
-            candidate.eliminated.push_back(store);
+            std::vector<Fusion> local_fusions;
+            std::vector<QoreIRInstruction*> local_eliminated{store};
             bool valid = true;
             for (const InstructionPosition& operation : operations->second) {
                 if (qore_ir_analysis_cancelled(check_count,
@@ -13456,54 +13461,71 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 }
                 auto load_uses = uses.find(local_inst->result.id);
                 if (load_uses == uses.end() || load_uses->second.empty()) {
-                    candidate.eliminated.push_back(local_inst);
+                    local_eliminated.push_back(local_inst);
                     continue;
                 }
-                Fusion consumer_fusion;
-                if (candidate.consumer || load_uses->second.size() != 1
-                        || !load_uses->second.front().inst
-                        || !analyze_consumer(producer, local_inst->result,
-                            const_cast<QoreIRInstruction*>(
-                                load_uses->second.front().inst), true,
-                            consumer_fusion)
-                        || !is_supported(
-                            callee, producer, consumer_fusion.kind)) {
-                    valid = false;
+                for (const QoreIRScalarUse& scalar_use : load_uses->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR string producer local consumer analysis")) {
+                        return 0;
+                    }
+                    Fusion consumer_fusion;
+                    if (!scalar_use.inst
+                            || !analyze_consumer(producer,
+                                local_inst->result,
+                                const_cast<QoreIRInstruction*>(
+                                    scalar_use.inst), true,
+                                consumer_fusion)
+                            || !is_supported(
+                                callee, producer, consumer_fusion.kind)
+                            || (!local_fusions.empty()
+                                && (consumer_fusion.kind
+                                        == QoreIRCallDirectInstruction::
+                                            AOTStringConsumerKind::Substr
+                                    || local_fusions.front().kind
+                                        == QoreIRCallDirectInstruction::
+                                            AOTStringConsumerKind::Substr))) {
+                        valid = false;
+                        break;
+                    }
+                    if (consumer_fusion.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTStringConsumerKind::Substr) {
+                        consumer_fusion.preserve_producer_result = true;
+                        consumer_fusion.eliminated.push_back(
+                            consumer_fusion.consumer);
+                        consumer_fusion.replacements.emplace_back(
+                            consumer_fusion.result.id, local_inst->result);
+                    }
+                    local_eliminated.push_back(
+                        consumer_fusion.consumer);
+                    local_fusions.push_back(std::move(consumer_fusion));
+                }
+                if (!valid) {
                     break;
                 }
-                candidate.consumer = consumer_fusion.consumer;
-                candidate.kind = consumer_fusion.kind;
-                candidate.result = consumer_fusion.result;
-                candidate.pattern_operand =
-                    consumer_fusion.pattern_operand;
-                candidate.arg0_operand = consumer_fusion.arg0_operand;
-                candidate.arg1_operand = consumer_fusion.arg1_operand;
-                candidate.arg0 = consumer_fusion.arg0;
-                candidate.arg1 = consumer_fusion.arg1;
-                candidate.has_arg1 = consumer_fusion.has_arg1;
-                candidate.case_transform =
-                    consumer_fusion.case_transform;
-                candidate.case_transform_upper =
-                    consumer_fusion.case_transform_upper;
-                candidate.extra_operands =
-                    std::move(consumer_fusion.extra_operands);
-                candidate.late_load_operands =
-                    std::move(consumer_fusion.late_load_operands);
-                if (candidate.kind
-                        == QoreIRCallDirectInstruction::
-                            AOTStringConsumerKind::Substr) {
-                    candidate.preserve_producer_result = true;
-                    candidate.eliminated.clear();
-                    candidate.eliminated.push_back(candidate.consumer);
-                    candidate.replacements.emplace_back(
-                        candidate.result.id, local_inst->result);
-                } else {
-                    candidate.eliminated.push_back(local_inst);
-                    candidate.eliminated.push_back(candidate.consumer);
-                }
+                local_eliminated.push_back(local_inst);
             }
-            if (valid && candidate.consumer) {
+            if (!valid || local_fusions.empty()) {
+                continue;
+            }
+            if (local_fusions.size() == 1) {
+                Fusion& candidate = local_fusions.front();
+                if (candidate.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::Substr) {
+                    candidate.eliminated.insert(
+                        candidate.eliminated.end(),
+                        local_eliminated.begin(), local_eliminated.end());
+                }
                 fusions.push_back(std::move(candidate));
+            } else if (producer->opcode == QoreIROpcode::CallDirect) {
+                MultiFusion candidate;
+                candidate.producer =
+                    static_cast<QoreIRCallDirectInstruction*>(producer);
+                candidate.consumers = std::move(local_fusions);
+                candidate.eliminated = std::move(local_eliminated);
+                multi_fusions.push_back(std::move(candidate));
             }
         }
     }
@@ -13614,11 +13636,12 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             }
         }
     }
-    if (fusions.empty() && phi_fusions.empty()) {
+    if (fusions.empty() && multi_fusions.empty() && phi_fusions.empty()) {
         return 0;
     }
 
     std::unordered_map<QoreIRInstruction*, Fusion*> producers;
+    std::unordered_map<QoreIRInstruction*, MultiFusion*> multi_producers;
     std::unordered_map<QoreIRInstruction*, Fusion*> phi_producers;
     std::unordered_map<QoreIRInstruction*,
         std::unique_ptr<QoreIRPhiInstruction>> phi_replacements;
@@ -13645,6 +13668,15 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             fusion.eliminated.begin(), fusion.eliminated.end());
         replacements.insert(
             fusion.replacements.begin(), fusion.replacements.end());
+    }
+    for (MultiFusion& fusion : multi_fusions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR multi-string consumer rewrite preparation")) {
+            return 0;
+        }
+        multi_producers.emplace(fusion.producer, &fusion);
+        eliminated.insert(
+            fusion.eliminated.begin(), fusion.eliminated.end());
     }
     for (PhiFusion& fusion : phi_fusions) {
         if (qore_ir_analysis_cancelled(check_count,
@@ -13691,6 +13723,49 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         }
         func.setValueFacts(result, facts);
     };
+    auto apply_string_fusion = [&](QoreIRStringConsumerCallInstruction& producer,
+            const Fusion& fusion) {
+        producer.aot_string_consumer = fusion.kind;
+        producer.aot_string_consumer_pattern_operand =
+            fusion.pattern_operand;
+        producer.aot_string_consumer_arg0_operand =
+            fusion.arg0_operand;
+        producer.aot_string_consumer_arg1_operand =
+            fusion.arg1_operand;
+        producer.aot_string_consumer_arg0 = fusion.arg0;
+        producer.aot_string_consumer_arg1 = fusion.arg1;
+        producer.aot_string_consumer_has_arg1 = fusion.has_arg1;
+        producer.aot_string_consumer_case_transform =
+            fusion.case_transform;
+        producer.aot_string_consumer_case_transform_upper =
+            fusion.case_transform_upper;
+        producer.aot_string_consumer_extra_operands =
+            static_cast<uint8_t>(fusion.extra_operands.size());
+        producer.operands.insert(producer.operands.end(),
+            fusion.extra_operands.begin(), fusion.extra_operands.end());
+        if (!fusion.preserve_producer_result) {
+            producer.result = fusion.result;
+        }
+        set_result_facts(producer.result, fusion.kind);
+    };
+    auto clone_direct_string_producer =
+            [&](const QoreIRCallDirectInstruction& source,
+                    const Fusion& fusion) {
+        auto clone = std::make_unique<QoreIRCallDirectInstruction>(
+            source.func, source.variant, source.pgm, source.expr);
+        clone->intrinsic = source.intrinsic;
+        clone->loc = source.loc;
+        clone->cached_start_line = source.cached_start_line;
+        clone->temp_scope_id = source.temp_scope_id;
+        clone->element_type = source.element_type;
+        clone->result = source.result;
+        clone->operands = source.operands;
+        clone->explicit_type_param_inst = source.explicit_type_param_inst;
+        clone->has_ref_args = source.has_ref_args;
+        clone->is_self_recursive = source.is_self_recursive;
+        apply_string_fusion(*clone, fusion);
+        return clone;
+    };
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
@@ -13704,6 +13779,43 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             }
             (void)qore_ir_rewrite_value_operands(
                 **inst, replacements, check_count, false);
+            auto multi_producer = multi_producers.find(inst->get());
+            if (multi_producer != multi_producers.end()) {
+                MultiFusion& fusion = *multi_producer->second;
+                std::vector<std::unique_ptr<QoreIRInstruction>> clones;
+                clones.reserve(fusion.consumers.size());
+                const auto* source =
+                    static_cast<const QoreIRCallDirectInstruction*>(
+                        inst->get());
+                for (size_t i = 0; i < fusion.consumers.size(); ++i) {
+                    if (++check_count % 100 == 0) {
+                        (void)qore_check_cancel(nullptr,
+                            "IR multi-string consumer call cloning");
+                    }
+                    auto clone = clone_direct_string_producer(
+                        *source, fusion.consumers[i]);
+                    if (i + 1 < fusion.consumers.size()) {
+                        clone->aot_borrow_call_operand_count =
+                            source->operands.size();
+                    }
+                    clones.push_back(std::move(clone));
+                }
+                size_t offset = static_cast<size_t>(
+                    std::distance(instructions.begin(), inst));
+                *inst = std::move(clones.front());
+                auto insert_at = instructions.begin()
+                    + static_cast<std::ptrdiff_t>(offset + 1);
+                for (size_t i = 1; i < clones.size(); ++i) {
+                    if (++check_count % 100 == 0) {
+                        (void)qore_check_cancel(nullptr,
+                            "IR multi-string consumer call insertion");
+                    }
+                    insert_at = instructions.insert(
+                        insert_at, std::move(clones[i])) + 1;
+                }
+                inst = insert_at;
+                continue;
+            }
             auto phi_replacement = phi_replacements.find(inst->get());
             if (phi_replacement != phi_replacements.end()) {
                 *inst = std::move(phi_replacement->second);
@@ -13735,66 +13847,27 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     inst = instructions.begin()
                         + static_cast<std::ptrdiff_t>(offset + 1);
                 }
-                fusion.producer->aot_string_consumer = fusion.kind;
-                fusion.producer->aot_string_consumer_pattern_operand =
-                    fusion.pattern_operand;
-                fusion.producer->aot_string_consumer_arg0_operand =
-                    fusion.arg0_operand;
-                fusion.producer->aot_string_consumer_arg1_operand =
-                    fusion.arg1_operand;
-                fusion.producer->aot_string_consumer_arg0 = fusion.arg0;
-                fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
-                fusion.producer->aot_string_consumer_has_arg1 =
-                    fusion.has_arg1;
-                fusion.producer->aot_string_consumer_case_transform =
-                    fusion.case_transform;
-                fusion.producer
-                    ->aot_string_consumer_case_transform_upper =
-                    fusion.case_transform_upper;
-                fusion.producer->aot_string_consumer_extra_operands =
-                    static_cast<uint8_t>(fusion.extra_operands.size());
-                fusion.producer->operands.insert(
-                    fusion.producer->operands.end(),
-                    fusion.extra_operands.begin(),
-                    fusion.extra_operands.end());
-                if (!fusion.preserve_producer_result) {
-                    fusion.producer->result = fusion.result;
-                }
-                set_result_facts(fusion.producer->result, fusion.kind);
+                apply_string_fusion(*fusion.producer, fusion);
                 ++inst;
                 continue;
             }
             auto phi_producer = phi_producers.find(inst->get());
             if (phi_producer != phi_producers.end()) {
                 Fusion& fusion = *phi_producer->second;
-                fusion.producer->aot_string_consumer = fusion.kind;
-                fusion.producer->aot_string_consumer_pattern_operand =
-                    fusion.pattern_operand;
-                fusion.producer->aot_string_consumer_arg0_operand =
-                    fusion.arg0_operand;
-                fusion.producer->aot_string_consumer_arg1_operand =
-                    fusion.arg1_operand;
-                fusion.producer->aot_string_consumer_arg0 = fusion.arg0;
-                fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
-                fusion.producer->aot_string_consumer_has_arg1 =
-                    fusion.has_arg1;
-                fusion.producer->aot_string_consumer_case_transform =
-                    fusion.case_transform;
-                fusion.producer
-                    ->aot_string_consumer_case_transform_upper =
-                    fusion.case_transform_upper;
-                fusion.producer->aot_string_consumer_extra_operands =
-                    static_cast<uint8_t>(fusion.extra_operands.size());
-                fusion.producer->operands.insert(
-                    fusion.producer->operands.end(),
-                    fusion.extra_operands.begin(),
-                    fusion.extra_operands.end());
-                set_result_facts(fusion.producer->result, fusion.kind);
+                apply_string_fusion(*fusion.producer, fusion);
             }
             ++inst;
         }
     }
-    return fusions.size() + phi_fusions.size();
+    size_t multi_consumers = 0;
+    for (const MultiFusion& fusion : multi_fusions) {
+        if (++check_count % 100 == 0) {
+            (void)qore_check_cancel(nullptr,
+                "IR multi-string consumer result accounting");
+        }
+        multi_consumers += fusion.consumers.size();
+    }
+    return fusions.size() + multi_consumers + phi_fusions.size();
 }
 
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {

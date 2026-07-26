@@ -4253,7 +4253,8 @@ bool QoreIRToLLVM::buildAotFastEntryArgs(const QoreIRInstruction* inst,
 }
 
 llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
-        int arg_start, llvm::Function* llvm_func, int nargs, bool& has_cleanup) {
+        int arg_start, llvm::Function* llvm_func, int nargs, bool& has_cleanup,
+        int borrowed_prefix) {
     has_cleanup = false;
     if (nargs <= 0) {
         return llvm::ConstantPointerNull::get(
@@ -4268,19 +4269,25 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
             llvm::cast<llvm::PointerType>(ptr_type));
 
     for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)) {
+            (void)qore_check_cancel(nullptr,
+                "AOT call-argument cleanup array construction");
+        }
         llvm::Value* cleanup_ptr = null_ptr;
-        uint32_t value_id = inst->operands[arg_start + i].id;
-        auto alloca_it = invoke_alloca_map.find(value_id);
-        if (alloca_it != invoke_alloca_map.end()) {
-            cleanup_ptr = alloca_it->second;
-            if (!cleanup_ptr) {
-                cleanup_ptr = promoteSsaEntryToAlloca(value_id, *current_module,
-                        llvm_func);
-            }
-            if (cleanup_ptr) {
-                has_cleanup = true;
-            } else {
-                cleanup_ptr = null_ptr;
+        if (i >= borrowed_prefix) {
+            uint32_t value_id = inst->operands[arg_start + i].id;
+            auto alloca_it = invoke_alloca_map.find(value_id);
+            if (alloca_it != invoke_alloca_map.end()) {
+                cleanup_ptr = alloca_it->second;
+                if (!cleanup_ptr) {
+                    cleanup_ptr = promoteSsaEntryToAlloca(value_id,
+                            *current_module, llvm_func);
+                }
+                if (cleanup_ptr) {
+                    has_cleanup = true;
+                } else {
+                    cleanup_ptr = null_ptr;
+                }
             }
         }
         llvm::Value* gep = builder->CreateGEP(ptr_type, cleanup_array,
@@ -16770,8 +16777,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
             bool has_arg_cleanups = false;
-            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, arg_start, llvm_func,
-                    nargs, has_arg_cleanups);
+            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, arg_start,
+                llvm_func, nargs, has_arg_cleanups,
+                static_cast<int>(
+                    direct_inst->aot_borrow_call_operand_count));
 
             llvm::Value* call_result;
             BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;

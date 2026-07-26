@@ -1295,7 +1295,8 @@ private:
     // operands[arg_start..].  The runtime uses this to clear consumed
     // call-argument temporaries after callee parameter instantiation.
     llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
-            llvm::Function* llvm_func, int nargs, bool& has_cleanup);
+            llvm::Function* llvm_func, int nargs, bool& has_cleanup,
+            int borrowed_prefix = 0);
 
     // Returns true if a local can be lazily reloaded from the runtime stack.
     bool canReloadLocalFromRuntime(const void* key, bool honor_reload_exempt = true) const;

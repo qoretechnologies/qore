@@ -22,6 +22,18 @@ string sub triple(string left, string middle, string right) {
     return left + middle + right;
 }
 
+int pair_effects;
+
+string sub pairEffect(string value) {
+    ++pair_effects;
+    return value;
+}
+
+string sub effectPair(string left, string right) {
+    ++pair_effects;
+    return left + right;
+}
+
 int sub localSize(bool first) {
     string value = pair(\"left\", \"right\");
     int adjustment;
@@ -61,6 +73,30 @@ int sub repeatedLocal() {
     return value.size() + value.length();
 }
 
+int sub repeatedUtf8Local() {
+    string value = pair(\"Dvo\u0159\", \"\u00e1k\");
+    return value.size() * 100 + value.length();
+}
+
+bool sub repeatedEffectLocal() {
+    pair_effects = 0;
+    string value = pair(pairEffect(\"left\"), pairEffect(\"right\"));
+    return value.size() == 9 && value.length() == 9
+        && pair_effects == 2;
+}
+
+bool sub repeatedSearchLocal(string prefix) {
+    string value = pair(prefix, \"right\");
+    return value.startsWith(prefix) && value.endsWith(\"right\");
+}
+
+bool sub repeatedCalleeEffectLocal() {
+    pair_effects = 0;
+    string value = effectPair(\"left\", \"right\");
+    return value.size() == 9 && value.length() == 9
+        && pair_effects == 1;
+}
+
 int sub reassignedLocal(bool replace) {
     string value = pair(\"left\", \"right\");
     if (replace) {
@@ -91,10 +127,11 @@ int sub mixedPhi(bool first) {
         : convert_encoding(\"latin\", \"ISO-8859-1\")).size();
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%y:%d\\n\", localSize(True),
+printf(\"%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d\\n\", localSize(True),
     localLength(False), phiSize(False), phiLength(True), repeatedLocal(),
-    reassignedLocal(True), removedLocal(), optionalLocal(), searchedLocal(),
-    mixedPhi(False));
+    repeatedUtf8Local(), repeatedEffectLocal(), repeatedSearchLocal(\"left\"),
+    repeatedCalleeEffectLocal(), reassignedLocal(True), removedLocal(),
+    optionalLocal(), searchedLocal(), mixedPhi(False));
 ";
 
 string root = "/tmp/qore-aot-string-summary-cfg-" + string(getpid());
@@ -106,7 +143,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "10:10:11:6:18:1:0:9:True:5\n";
+string expected = "10:10:11:6:18:806:True:True:True:1:0:9:True:5\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -137,8 +174,18 @@ foreach string function in (("localSize", "localLength", "phiSize", "phiLength",
         exit(2);
     }
 }
+foreach string function in (("repeatedLocal", "repeatedUtf8Local",
+        "repeatedEffectLocal", "repeatedSearchLocal")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^\\n]*:.*string-consumers=2",
+            function))) {
+        printf("missing multi-consumer string fusion for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (repeatedLocal|reassignedLocal|removedLocal|optionalLocal|mixedPhi)[^\n]*:.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (repeatedCalleeEffectLocal|reassignedLocal|removedLocal|optionalLocal|mixedPhi)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string CFG fusion:\n%s",
         enabled_compile + disabled_compile);
