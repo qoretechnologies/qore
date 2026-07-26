@@ -83,14 +83,7 @@ add_library(${json_module_name} MODULE ${JSON_CPP_SRC} ${JSON_QPP_SOURCES})
 target_link_libraries(${json_module_name} ${OPENSSL_LIBRARIES})
 add_dependencies(${json_module_name} libqore JSON_QPP_GENERATED_FILES)
 
-# ql_json.dox.h and QC_JsonRpcClient.dox.h are hand-written doxygen input (they document
-# the JSON-RPC client and the serialization overview); module-json picked them up by feeding
-# doxygen its whole source directory, so list them explicitly here to keep that content.
-set(MODULE_DOX_INPUT
-    ${CMAKE_BINARY_DIR}/modules/json/mainpage.dox
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ql_json.dox.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/QC_JsonRpcClient.dox.h
-    ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/json/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${json_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

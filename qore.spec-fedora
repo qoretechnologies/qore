@@ -63,6 +63,10 @@ functionality.
 Summary: Standard library modules
 Requires: libqore%{?_isa} = %{version}-%{release}
 Recommends: %{name} = %{version}
+# the json binary module and its 16 user modules were delivered separately as
+# qore-json-module up to and including json 1.12; they ship with Qore as of 3.0
+Obsoletes: qore-json-module < 1.13
+Provides: qore-json-module = %{version}-%{release}
 
 %description stdlib
 Qore is a scripting language supporting threading and embedded logic, designed

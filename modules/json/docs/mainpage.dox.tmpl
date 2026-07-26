@@ -305,6 +305,23 @@ hash<auto> parsed = parse_toon(toon);
 
     @section jsonreleasenotes Release Notes
 
+    @subsection json_v3_0_0 json Module Version 3.0.0
+
+    - the json module is now delivered with %Qore itself and versions with it; it was previously
+      maintained in a separate \c module-json repository, whose last standalone release was 1.12
+    - the JSON parser and serializer moved into the %Qore library, which exports them as a public
+      C++ API in \c <qore/QoreJson.h> so that other builtin binary modules can parse and generate
+      JSON without depending on this module or on %Qore-language code
+    - the 16 companion user modules (A2aClient, A2aClientDataProvider, A2aServerHandler,
+      FhirRestClient, FhirRestDataProvider, JsonFileDataProvider, JsonLd, JsonRpcClientIo,
+      JsonRpcConnection, JsonRpcHandler, McpClient, McpClientDataProvider, McpServerHandler,
+      NdjsonDataProvider, OneRecordClient and OneRecordServerHandler) ship with %Qore as well
+    - @ref Qore::Json::JsonRpcClient "JsonRpcClient" is now tagged with the \c NETWORK functional
+      domain and @ref Qore::Json::JsonSchema::load() "JsonSchema::load()" with \c FILESYSTEM, so
+      both are subject to the \c PO_NO_NETWORK and \c PO_NO_FILESYSTEM parse options as documented
+    - fixed a crash in @ref Qore::Json::parse_cbor() "parse_cbor()" when a sandbox nesting-depth
+      limit aborted the parse
+
     @subsection json_v1_12 json Module Version 1.12
     - added TOON (Token-Oriented Object Notation) serialization support
       (@ref Qore::Json::make_toon() "make_toon()" / @ref Qore::Json::parse_toon() "parse_toon()"); see

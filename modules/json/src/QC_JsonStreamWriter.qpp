@@ -485,8 +485,8 @@ qclass JsonStreamWriter [arg=JsonStreamWriter* writer; ns=Qore::Json];
 //! Creates a new JsonStreamWriter
 /** @param os the output stream to write to
     @param format optional formatting flags (default: @ref JGF_NONE)
-           - @ref JGF_NONE: compact output without whitespace
-           - @ref JGF_ADD_FORMATTING: pretty-printed output with indentation
+           - @ref JGF_NONE "JGF_NONE": compact output without whitespace
+           - @ref JGF_ADD_FORMATTING "JGF_ADD_FORMATTING": pretty-printed output with indentation
 */
 JsonStreamWriter::constructor(Qore::OutputStream[OutputStream] os, int format = JGF_NONE) {
     self->setPrivate(CID_JSONSTREAMWRITER, new JsonStreamWriter(*os, format, xsink));
