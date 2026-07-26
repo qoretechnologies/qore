@@ -28,6 +28,8 @@ list<int> sub makeValues(int left, int middle, int right) {
 }
 
 int guarded_reference_index = 0;
+int aggregate_projection_effects = 0;
+string aggregate_projection_key_marker;
 
 list<int> sub makeValuesAndSetGuard(
         int left, int middle, int right) {
@@ -1007,7 +1009,33 @@ bool sub guardedMutableLocalProjection() {
 
 bool sub guardedDifferentIndexProjection(int left, int right) {
     list<int> values = makeValues(4, 5, 6);
-    return values[left] == 4 && values[right] == 6;
+    *int first = values[left];
+    *int second = values[right];
+    return first == 4 && second == 6;
+}
+
+bool sub guardedDifferentIndexBounds(int left, int right) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[left];
+    *int second = values[right];
+    return first === NOTHING && second == 6;
+}
+
+bool sub guardedFixedAndDynamicIndexProjection(int index) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[0];
+    *int second = values[index];
+    return first == 4 && second == 6;
+}
+
+bool sub guardedDifferentIndexSideEffectOrder() {
+    aggregate_projection_effects = 0;
+    list<int> values =
+        makeValues((aggregate_projection_effects = 1), 5, 6);
+    *int first = values[(aggregate_projection_effects = 11) - 11];
+    *int second = values[(aggregate_projection_effects = 113) - 111];
+    return first == 1 && second == 6
+        && aggregate_projection_effects == 113;
 }
 
 *int sub guardedPhiProjection(bool left_branch, int index) {
@@ -1105,7 +1133,33 @@ bool sub repeatedMissingLocalProjection(int value) {
 
 bool sub dynamicHashDifferentKeys(string left_key, string right_key) {
     hash<string, int> row = makeRow(4, 5, 6);
-    return row{left_key} == 4 && row{right_key} == 6;
+    *int first = row{left_key};
+    *int second = row{right_key};
+    return first == 4 && second == 6;
+}
+
+bool sub dynamicHashDifferentKeyBounds(
+        string left_key, string right_key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    *int first = row{left_key};
+    *int second = row{right_key};
+    return first === NOTHING && second == 6;
+}
+
+bool sub dynamicHashFixedAndDynamicKeyProjection(string key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    *int first = row.left;
+    *int second = row{key};
+    return first == 4 && second == 6;
+}
+
+bool sub dynamicHashDifferentKeySideEffectOrder() {
+    aggregate_projection_key_marker = \"producer\";
+    hash<string, int> row = makeRow(1, 5, 6);
+    *int first = row{aggregate_projection_key_marker = \"left\"};
+    *int second = row{aggregate_projection_key_marker = \"right\"};
+    return first == 1 && second == 6
+        && aggregate_projection_key_marker == \"right\";
 }
 
 bool sub optionalDynamicHashKey(int value, *string key) {
@@ -1342,6 +1396,11 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedPhiProjection(True, 3) === NOTHING,
     guardedPhiProjection(False, -4) === NOTHING,
     repeatedMissingLocalProjection(4));
+printf(\"%y:%y:%y:%y\\n\",
+    guardedDifferentIndexBounds(3, -1),
+    guardedDifferentIndexBounds(-4, 2),
+    guardedFixedAndDynamicIndexProjection(2),
+    guardedDifferentIndexSideEffectOrder());
 printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedDirectPhiProjection(True, 1) == 2,
     guardedDirectPhiProjection(False, 1) == 5,
@@ -1370,6 +1429,11 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     dynamicHashDifferentKeys(\"left\", \"right\"),
     optionalDynamicHashKey(4, NOTHING),
     dynamicHashSideEffectOrder());
+printf(\"%y:%y:%y:%y\\n\",
+    dynamicHashDifferentKeyBounds(\"missing\", \"right\"),
+    dynamicHashDifferentKeyBounds(\"absent\", \"right\"),
+    dynamicHashFixedAndDynamicKeyProjection(\"right\"),
+    dynamicHashDifferentKeySideEffectOrder());
 printf(\"%d:%d:%y\\n\", sharedListSizeConsumer(),
     sharedMutatingConsumer(), requiredUnsetConsumer());
 printf(\"%d\\n\", sharedBoxedHashConsumer());
@@ -1536,13 +1600,22 @@ foreach string function in (("guardedListIndex",
         "guardedComputedListIndex", "guardedFloatListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
         "guardedSideEffectOrder", "guardedMultiLocalProjection",
+        "guardedMutableLocalProjection",
         "guardedPhiProjection",
         "guardedDirectPhiProjection",
         "guardedDirectFloatPhiProjection",
         "repeatedMissingLocalProjection", "dynamicListIndex",
         "dynamicSignedZeroListIndex", "missingHashProjection",
         "dynamicHashKeyProjection", "repeatedDynamicHashKeyProjection",
-        "dynamicDuplicateHashKeyProjection")) {
+        "dynamicDuplicateHashKeyProjection",
+        "guardedDifferentIndexProjection",
+        "guardedDifferentIndexBounds",
+        "guardedFixedAndDynamicIndexProjection",
+        "guardedDifferentIndexSideEffectOrder",
+        "dynamicHashDifferentKeys",
+        "dynamicHashDifferentKeyBounds",
+        "dynamicHashFixedAndDynamicKeyProjection",
+        "dynamicHashDifferentKeySideEffectOrder")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1640,7 +1713,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1950,8 +2023,10 @@ expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:Tr
 expected += "True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True\n";
 expected += "4:13:True\n";
 expected += "9\n";
 expected += "17:word:True:23:True:True:True:True:True:True\n";

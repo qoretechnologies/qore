@@ -9431,7 +9431,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     auto add_virtualized_projection = [&](VirtualizedCall& candidate,
             const Projection& projection) {
         if (projection.guarded_index.isValid()) {
-            return false;
+            if (!candidate.call
+                    || candidate.call->opcode != QoreIROpcode::CallDirect) {
+                return false;
+            }
+            candidate.materialized_projections.push_back(projection);
+            return true;
         }
         if (projection.kind
                     == QoreIRCallDirectInstruction::
@@ -9808,7 +9813,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 VirtualizedCall candidate;
                 candidate.call = call;
                 std::unique_ptr<Projection> guarded_projection;
-                bool saw_virtualized_projection = false;
                 bool valid = true;
                 for (const QoreIRScalarUse& call_use : use->second) {
                     if (qore_ir_analysis_cancelled(check_count,
@@ -9824,43 +9828,43 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         break;
                     }
                     if (projection.guarded_index.isValid()) {
-                        if (saw_virtualized_projection) {
-                            valid = false;
-                            break;
-                        }
                         if (!guarded_projection) {
                             guarded_projection =
                                 std::make_unique<Projection>(
                                     std::move(projection));
-                        } else if (!same_guarded_projection(
+                        } else if (same_guarded_projection(
                                 *guarded_projection, projection)) {
-                            valid = false;
-                            break;
-                        } else {
                             guarded_projection->eliminated.push_back(
                                 projection.consumer);
                             guarded_projection->replacements.emplace_back(
                                 projection.result.id,
                                 guarded_projection->result);
+                        } else {
+                            if (!add_virtualized_projection(
+                                    candidate, *guarded_projection)) {
+                                valid = false;
+                                break;
+                            }
+                            guarded_projection =
+                                std::make_unique<Projection>(
+                                    std::move(projection));
                         }
                     } else {
-                        if (guarded_projection
-                                || !add_virtualized_projection(
+                        if (!add_virtualized_projection(
                                     candidate, projection)) {
                             valid = false;
                             break;
                         }
-                        saw_virtualized_projection = true;
                     }
                 }
+                if (valid && guarded_projection
+                        && !add_virtualized_projection(
+                            candidate, *guarded_projection)) {
+                    valid = false;
+                }
                 if (valid) {
-                    if (guarded_projection) {
-                        projections.push_back(
-                            std::move(*guarded_projection));
-                    } else {
-                        candidate.eliminated.push_back(call);
-                        virtualized.push_back(std::move(candidate));
-                    }
+                    candidate.eliminated.push_back(call);
+                    virtualized.push_back(std::move(candidate));
                 }
                 continue;
             }
@@ -9918,7 +9922,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             std::unique_ptr<Projection> nested_projection;
             std::unique_ptr<Projection> direct_local_projection;
             std::unique_ptr<Projection> guarded_local_projection;
-            bool saw_virtualized_projection = false;
             auto process_local_projection = [&](Projection projection) {
                 Projection nested = projection;
                 if (descend_nested_projection(nested)) {
@@ -9926,27 +9929,38 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         std::make_unique<Projection>(std::move(nested));
                 }
                 if (projection.guarded_index.isValid()) {
-                    if (saw_virtualized_projection
-                            || direct_local_projection) {
+                    if (direct_local_projection) {
                         return false;
                     }
                     if (!guarded_local_projection) {
                         guarded_local_projection =
                             std::make_unique<Projection>(
                                 std::move(projection));
-                    } else if (!same_guarded_projection(
+                    } else if (same_guarded_projection(
                             *guarded_local_projection, projection)) {
-                        return false;
-                    } else {
                         guarded_local_projection->eliminated.push_back(
                             projection.consumer);
                         guarded_local_projection->replacements.emplace_back(
                             projection.result.id,
                             guarded_local_projection->result);
+                    } else {
+                        if (!add_virtualized_projection(
+                                candidate, *guarded_local_projection)) {
+                            return false;
+                        }
+                        guarded_local_projection =
+                            std::make_unique<Projection>(
+                                std::move(projection));
                     }
                 } else {
-                    if (guarded_local_projection
-                            || direct_local_projection) {
+                    if (guarded_local_projection) {
+                        if (!add_virtualized_projection(
+                                candidate, *guarded_local_projection)) {
+                            return false;
+                        }
+                        guarded_local_projection.reset();
+                    }
+                    if (direct_local_projection) {
                         if (projection_count) {
                             return false;
                         }
@@ -9972,8 +9986,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         direct_local_projection =
                             std::make_unique<Projection>(
                                 std::move(projection));
-                    } else {
-                        saw_virtualized_projection = true;
                     }
                 }
                 ++projection_count;
@@ -10030,6 +10042,19 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 candidate.eliminated.push_back(local_inst);
             }
             if (valid && projection_count) {
+                bool bundled_projection =
+                    !candidate.replacements.empty()
+                    || !candidate.materialized_projections.empty();
+                if (guarded_local_projection && bundled_projection) {
+                    if (!add_virtualized_projection(
+                            candidate, *guarded_local_projection)) {
+                        valid = false;
+                    }
+                    guarded_local_projection.reset();
+                }
+                if (!valid) {
+                    continue;
+                }
                 if (guarded_local_projection) {
                     guarded_local_projection->eliminated.insert(
                         guarded_local_projection->eliminated.end(),
@@ -10443,6 +10468,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     struct MaterializedProjection {
         std::unique_ptr<QoreIRInstruction> source;
         std::unique_ptr<QoreIRInstruction> replacement;
+        Projection* projection = nullptr;
     };
     std::unordered_map<QoreIRInstruction*, MaterializedProjection>
         materialized_replacements;
@@ -10572,9 +10598,52 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         for (const auto& replacement : candidate.replacements) {
             rewrite_sources.insert(replacement.second.id);
         }
-        for (const Projection& projection :
+        for (Projection& projection :
                 candidate.materialized_projections) {
             MaterializedProjection materialized;
+            if (projection.guarded_index.isValid()) {
+                if (!projection.call
+                        || projection.call->opcode
+                            != QoreIROpcode::CallDirect) {
+                    return 0;
+                }
+                const auto* source_call =
+                    static_cast<const QoreIRCallDirectInstruction*>(
+                        projection.call);
+                auto replacement =
+                    std::make_unique<QoreIRCallDirectInstruction>(
+                        source_call->func, source_call->variant,
+                        source_call->pgm, source_call->expr);
+                replacement->intrinsic = source_call->intrinsic;
+                replacement->loc = source_call->loc;
+                replacement->cached_start_line =
+                    source_call->cached_start_line;
+                replacement->temp_scope_id =
+                    source_call->temp_scope_id;
+                replacement->element_type = source_call->element_type;
+                replacement->result = projection.result;
+                replacement->operands = source_call->operands;
+                replacement->explicit_type_param_inst =
+                    source_call->explicit_type_param_inst;
+                replacement->has_ref_args = source_call->has_ref_args;
+                replacement->is_self_recursive =
+                    source_call->is_self_recursive;
+                size_t operand_count = 0;
+                for (QoreIRValue operand : replacement->operands) {
+                    if (++operand_count % 100 == 0
+                            && qore_ir_analysis_cancelled(check_count,
+                                "IR guarded aggregate operand preservation")) {
+                        return 0;
+                    }
+                    rewrite_sources.insert(operand.id);
+                }
+                projection.call = replacement.get();
+                materialized.projection = &projection;
+                materialized.replacement = std::move(replacement);
+                materialized_replacements.emplace(
+                    projection.consumer, std::move(materialized));
+                continue;
+            }
             if (projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedNothingConstant) {
@@ -11110,6 +11179,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         + static_cast<std::ptrdiff_t>(offset + 1);
                 }
                 *inst = std::move(materialized->second.replacement);
+                if (materialized->second.projection) {
+                    apply_call_projection(
+                        *materialized->second.projection,
+                        materialized->second.projection->result);
+                }
                 (void)qore_ir_rewrite_value_operands(
                     **inst, replacements, check_count, false);
                 ++inst;

@@ -16824,6 +16824,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (fused_aggregate_projection
                     && aot_approach_b_callee) {
                 auto projection = direct_inst->aot_aggregate_projection;
+                using ProjectionKind = QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind;
+                auto get_projection_bool_arg = [&](size_t index) {
+                    llvm::Value* value = raw_args[index];
+                    if (value->getType() == i1_type) {
+                        return value;
+                    }
+                    if (nanboxed_values.count(raw_arg_ids[index])) {
+                        auto to_bool = module.getOrInsertFunction(
+                            "qore_rt_to_bool",
+                            llvm::FunctionType::get(
+                                i64_type, {i64_type}, false));
+                        value = builder->CreateCall(to_bool, {value});
+                    }
+                    return builder->CreateICmpNE(
+                        value, llvm::ConstantInt::get(
+                            value->getType(), 0));
+                };
+                auto get_projection_arg =
+                        [&](size_t index, ProjectionKind kind) {
+                    switch (kind) {
+                        case ProjectionKind::NativeInt:
+                        case ProjectionKind::BoxedInt:
+                        case ProjectionKind::NativeIntAddConstant:
+                        case ProjectionKind::BoxedIntAddConstant:
+                        case ProjectionKind::NativeIntBinary:
+                        case ProjectionKind::BoxedIntBinary:
+                        case ProjectionKind::NativeIntMulConstant:
+                        case ProjectionKind::BoxedIntMulConstant:
+                        case ProjectionKind::BoxedBoolIntCompare:
+                        case ProjectionKind::NativeIntSelect:
+                        case ProjectionKind::BoxedIntSelect:
+                            return ensureIntTypeInline(
+                                raw_args[index], raw_arg_ids[index]);
+                        case ProjectionKind::NativeFloat:
+                        case ProjectionKind::BoxedFloat:
+                        case ProjectionKind::NativeFloatAddConstant:
+                        case ProjectionKind::BoxedFloatAddConstant:
+                        case ProjectionKind::NativeFloatSelect:
+                        case ProjectionKind::BoxedFloatSelect:
+                            return ensureFloatType(
+                                raw_args[index], raw_arg_ids[index], module);
+                        case ProjectionKind::BoxedBool:
+                        case ProjectionKind::BoxedBoolSelect:
+                            return get_projection_bool_arg(index);
+                        default:
+                            return raw_args[index];
+                    }
+                };
                 if (projection
                         == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::Size) {
                     call_result = llvm::ConstantInt::get(i64_type,
@@ -16882,15 +16931,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         direct_inst->aot_aggregate_projection_operand;
                     if (operand < 0
                             || static_cast<size_t>(operand)
-                                >= raw_args.size()
-                            || raw_args[static_cast<size_t>(operand)]
-                                ->getType() != i1_type) {
+                                >= raw_args.size()) {
                         error = "internal error: fused AOT aggregate"
                             " constant select condition is invalid";
                         return false;
                     }
-                    llvm::Value* condition =
-                        raw_args[static_cast<size_t>(operand)];
+                    llvm::Value* condition = get_projection_bool_arg(
+                        static_cast<size_t>(operand));
                     bool bool_select = projection
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::
@@ -16938,8 +16985,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (condition_operand < 0
                             || static_cast<size_t>(condition_operand)
                                 >= raw_args.size()
-                            || raw_args[static_cast<size_t>(
-                                condition_operand)]->getType() != i1_type
                             || descriptors.size() != 2) {
                         error = "internal error: fused AOT aggregate"
                             " expression select is invalid";
@@ -16996,8 +17041,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     " out of range";
                                 return nullptr;
                             }
-                            value = raw_args[static_cast<size_t>(
-                                descriptor.operand)];
+                            value = get_projection_arg(
+                                static_cast<size_t>(descriptor.operand),
+                                descriptor.kind);
                         }
                         bool int_binary =
                             descriptor.kind == Kind::NativeIntBinary
@@ -17015,8 +17061,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             if (packed > UINT16_MAX
                                     || rhs >= raw_args.size()
                                     || value->getType() != i64_type
-                                    || raw_args[rhs]->getType()
-                                        != i64_type
                                     || operation
                                         > (int_compare ? 5 : 2)) {
                                 error = "internal error: fused AOT"
@@ -17024,7 +17068,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     " descriptor is invalid";
                                 return nullptr;
                             }
-                            llvm::Value* rhs_value = raw_args[rhs];
+                            llvm::Value* rhs_value =
+                                ensureIntTypeInline(
+                                    raw_args[rhs], raw_arg_ids[rhs]);
                             if (int_compare) {
                                 switch (operation) {
                                     case 0:
@@ -17141,8 +17187,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     call_result = builder->CreateSelect(
-                        raw_args[static_cast<size_t>(
-                            condition_operand)],
+                        get_projection_bool_arg(
+                            static_cast<size_t>(condition_operand)),
                         true_value, false_value);
                     call_return_kind = projection
                             == QoreIRCallDirectInstruction::
@@ -17165,7 +17211,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             " projection operand is out of range";
                         return false;
                     }
-                    call_result = raw_args[static_cast<size_t>(operand)];
+                    call_result = get_projection_arg(
+                        static_cast<size_t>(operand), projection);
                     bool int_add = projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
@@ -17225,17 +17272,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         size_t alternate = static_cast<uint8_t>(
                             direct_inst->aot_aggregate_projection_int >> 8);
                         if (condition >= raw_args.size()
-                                || alternate >= raw_args.size()
-                                || raw_args[condition]->getType() != i1_type
-                                || raw_args[alternate]->getType()
-                                    != call_result->getType()) {
+                                || alternate >= raw_args.size()) {
                             error = "internal error: fused AOT aggregate"
                                 " select descriptor has invalid operands";
                             return false;
                         }
+                        llvm::Value* condition_value =
+                            get_projection_bool_arg(condition);
+                        llvm::Value* alternate_value =
+                            get_projection_arg(alternate, projection);
+                        if (alternate_value->getType()
+                                != call_result->getType()) {
+                            error = "internal error: fused AOT aggregate"
+                                " select descriptor has incompatible"
+                                " operands";
+                            return false;
+                        }
                         call_result = builder->CreateSelect(
-                            raw_args[condition], call_result,
-                            raw_args[alternate]);
+                            condition_value, call_result,
+                            alternate_value);
                     }
                     if (int_binary || int_compare) {
                         uint64_t packed = static_cast<uint64_t>(
@@ -17243,15 +17298,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         size_t rhs = static_cast<uint8_t>(packed);
                         uint8_t operation =
                             static_cast<uint8_t>(packed >> 8);
-                        if (packed > UINT16_MAX || rhs >= raw_args.size()
+                        if (packed > UINT16_MAX
+                                || rhs >= raw_args.size()
                                 || call_result->getType() != i64_type
-                                || raw_args[rhs]->getType() != i64_type
                                 || operation > (int_compare ? 5 : 2)) {
                             error = "internal error: fused AOT aggregate"
                                 " binary descriptor is invalid";
                             return false;
                         }
-                        llvm::Value* rhs_value = raw_args[rhs];
+                        llvm::Value* rhs_value = ensureIntTypeInline(
+                            raw_args[rhs], raw_arg_ids[rhs]);
                         if (int_compare) {
                             switch (operation) {
                                 case 0:
@@ -17567,8 +17623,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     " out of range";
                                 return nullptr;
                             }
-                            llvm::Value* value = raw_args[
-                                static_cast<size_t>(descriptor.operand)];
+                            llvm::Value* value = get_projection_arg(
+                                static_cast<size_t>(descriptor.operand),
+                                descriptor.kind);
                             switch (descriptor.kind) {
                                 case Kind::BoxedIntAddConstant:
                                     if (value->getType() != i64_type) {
