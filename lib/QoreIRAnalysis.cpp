@@ -13123,6 +13123,7 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
     };
     std::vector<SwitchFusion> switch_fusions;
     std::unordered_set<QoreIRInstruction*> claimed;
+    std::unique_ptr<QoreIRControlFlowGraph> cfg;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         const auto& instructions = func.blocks[block_id]->instructions;
         std::unordered_map<const QoreIRInstruction*, size_t> positions;
@@ -13158,6 +13159,147 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 }
             }
             return true;
+        };
+        auto safe_cross_block_path = [&](const QoreIRInstruction* producer,
+                const QoreIRInstruction* consumer,
+                size_t consumer_block_id) {
+            if (consumer_block_id == block_id) {
+                return side_effect_free_interval(producer, consumer);
+            }
+            if (std::getenv(
+                    "QORE_DISABLE_AOT_STRING_TRANSFORM_CFG_FUSION")
+                    || consumer_block_id >= func.blocks.size()) {
+                return false;
+            }
+            if (!cfg) {
+                cfg = std::make_unique<QoreIRControlFlowGraph>(func);
+                if (cfg->cancelled) {
+                    return false;
+                }
+            }
+            if (!cfg->dominates(block_id, consumer_block_id)) {
+                return false;
+            }
+            auto producer_pos = positions.find(producer);
+            const auto& consumer_instructions =
+                func.blocks[consumer_block_id]->instructions;
+            auto consumer_pos = std::find_if(
+                consumer_instructions.begin(), consumer_instructions.end(),
+                [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                    return inst.get() == consumer;
+                });
+            if (producer_pos == positions.end()
+                    || consumer_pos == consumer_instructions.end()) {
+                return false;
+            }
+
+            constexpr size_t max_path_blocks = 32;
+            constexpr size_t max_path_instructions = 512;
+            size_t path_blocks = 0;
+            size_t path_instructions = 0;
+            auto safe_instruction = [&](const QoreIRInstruction* inst) {
+                if (!inst) {
+                    return false;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::LoadLocal:
+                        return !static_cast<const QoreIRLocalInstruction*>(
+                            inst)->is_ref;
+                    case QoreIROpcode::ConstInt:
+                    case QoreIROpcode::ConstFloat:
+                    case QoreIROpcode::ConstBool:
+                    case QoreIROpcode::ConstNothing:
+                    case QoreIROpcode::ConstNull:
+                    case QoreIROpcode::ConstString:
+                    case QoreIROpcode::Phi:
+                        return true;
+                    default:
+                        return qore_ir_is_native_scalar_pure_opcode(
+                            inst->opcode);
+                }
+            };
+            auto safe_range = [&](const auto& block_instructions,
+                    size_t begin, size_t end) {
+                for (size_t offset = begin; offset < end; ++offset) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR cross-block string transform path analysis")
+                            || ++path_instructions
+                                > max_path_instructions
+                            || !safe_instruction(
+                                block_instructions[offset].get())) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            if (instructions.empty()
+                    || producer_pos->second + 1 >= instructions.size()
+                    || !safe_range(instructions,
+                        producer_pos->second + 1,
+                        instructions.size() - 1)) {
+                return false;
+            }
+            QoreIROpcode producer_terminator =
+                instructions.back()->opcode;
+            if (producer_terminator != QoreIROpcode::Br
+                    && producer_terminator != QoreIROpcode::BrIf) {
+                return false;
+            }
+            size_t consumer_offset = static_cast<size_t>(
+                std::distance(
+                    consumer_instructions.begin(), consumer_pos));
+            if (!safe_range(
+                    consumer_instructions, 0, consumer_offset)) {
+                return false;
+            }
+
+            std::vector<uint8_t> state(func.blocks.size(), 0);
+            state[block_id] = 1;
+            std::function<bool(size_t)> visit =
+                [&](size_t current_block) {
+                    if (current_block == consumer_block_id) {
+                        return true;
+                    }
+                    if (current_block >= func.blocks.size()
+                            || !cfg->dominates(block_id, current_block)
+                            || ++path_blocks > max_path_blocks) {
+                        return false;
+                    }
+                    if (state[current_block] == 2) {
+                        return true;
+                    }
+                    if (state[current_block] == 1) {
+                        return false;
+                    }
+                    const auto& current =
+                        func.blocks[current_block]->instructions;
+                    if (current.empty()
+                            || !safe_range(
+                                current, 0, current.size() - 1)) {
+                        return false;
+                    }
+                    QoreIROpcode terminator = current.back()->opcode;
+                    if ((terminator != QoreIROpcode::Br
+                            && terminator != QoreIROpcode::BrIf)
+                            || cfg->successors[current_block].empty()) {
+                        return false;
+                    }
+                    state[current_block] = 1;
+                    for (size_t successor :
+                            cfg->successors[current_block]) {
+                        if (!visit(successor)) {
+                            return false;
+                        }
+                    }
+                    state[current_block] = 2;
+                    return true;
+                };
+            for (size_t successor : cfg->successors[block_id]) {
+                if (!visit(successor)) {
+                    return false;
+                }
+            }
+            return !cfg->successors[block_id].empty();
         };
         for (const auto& inst_ptr : instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -13262,8 +13404,8 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 || consumer->opcode == QoreIROpcode::GeString;
             if (comparison_candidate) {
                 if (consumer->operands.size() != 2
-                        || !side_effect_free_interval(
-                            producer, consumer)) {
+                        || !safe_cross_block_path(
+                            producer, consumer, consumer_block_id)) {
                     continue;
                 }
                 uint8_t transform_operand =
@@ -13367,8 +13509,8 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 if (method_consumer->operands.size() != 2
                         || !method_consumer
                             ->pseudo_arg0_known_assigned_string
-                        || !side_effect_free_interval(
-                            producer, method_consumer)) {
+                        || !safe_cross_block_path(producer,
+                            method_consumer, consumer_block_id)) {
                     continue;
                 }
                 kind = method_consumer->intrinsic
@@ -13392,8 +13534,8 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                         || (method_consumer->operands.size() == 3
                             && !method_consumer
                                 ->pseudo_arg1_known_assigned_int)
-                        || !side_effect_free_interval(
-                            producer, method_consumer)) {
+                        || !safe_cross_block_path(producer,
+                            method_consumer, consumer_block_id)) {
                     continue;
                 }
                 kind = method_consumer->intrinsic

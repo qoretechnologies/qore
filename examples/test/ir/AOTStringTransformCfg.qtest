@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+our int pattern_effects = 0;
+
+bool sub selectedContains(string value, string first, string second,
+        bool select_first) {
+    return value.lwr().contains(select_first ? first : second);
+}
+
+bool sub selectedStartsWith(string value, string first, string second,
+        bool select_first) {
+    return value.upr().startsWith(select_first ? first : second);
+}
+
+bool sub selectedEndsWith(string value, string first, string second,
+        bool select_first) {
+    return value.lwr().endsWith(select_first ? first : second);
+}
+
+int sub selectedFind(string value, string first, string second,
+        bool select_first, int offset) {
+    return value.lwr().find(
+        select_first ? first : second, offset);
+}
+
+int sub selectedRFind(string value, string first, string second,
+        bool select_first) {
+    return value.upr().rfind(select_first ? first : second);
+}
+
+bool sub selectedEqual(string value, string first, string second,
+        bool select_first) {
+    return value.upr() == (select_first ? first : second);
+}
+
+bool sub selectedOrdering(string value, string first, string second,
+        bool select_first) {
+    return value.lwr() < (select_first ? first : second);
+}
+
+string sub effectPattern(string pattern) {
+    ++pattern_effects;
+    return pattern;
+}
+
+bool sub effectfulSelectedContains(string value, string first,
+        string second, bool select_first) {
+    return value.upr().contains(
+        select_first ? effectPattern(first) : second);
+}
+
+bool sub unassignedEffectfulContains(string first, string second,
+        bool select_first) {
+    string value;
+    return value.upr().contains(
+        select_first ? effectPattern(first) : second);
+}
+
+int sub main() {
+    printf(\"predicates:%y:%y:%y:%y\\n\",
+        selectedContains(\"A NEEDLE Z\", \"needle\", \"missing\", True),
+        selectedContains(\"A NEEDLE Z\", \"needle\", \"missing\", False),
+        selectedStartsWith(\"prefix-value\", \"PREFIX\", \"OTHER\", True),
+        selectedEndsWith(\"VALUE-SUFFIX\", \"suffix\", \"other\", True));
+    printf(\"search:%d:%d:%d\\n\",
+        selectedFind(\"Needle needle\", \"needle\", \"missing\", True, 1),
+        selectedFind(\"Needle needle\", \"needle\", \"missing\", False, 1),
+        selectedRFind(\"needle NEEDLE\", \"NEEDLE\", \"OTHER\", True));
+    printf(\"compare:%y:%y:%y\\n\",
+        selectedEqual(\"Straße\", \"STRASSE\", \"OTHER\", True),
+        selectedOrdering(\"B\", \"a\", \"z\", True),
+        selectedOrdering(\"B\", \"a\", \"z\", False));
+
+    string latin_value = convert_encoding(\"café\", \"ISO-8859-1\");
+    string latin_pattern = convert_encoding(\"CAFÉ\", \"ISO-8859-1\");
+    printf(\"latin1:%y\\n\",
+        selectedStartsWith(latin_value, latin_pattern, \"OTHER\", True));
+
+    pattern_effects = 0;
+    printf(\"effectful:%y:%d\\n\",
+        effectfulSelectedContains(\"needle\", \"NEEDLE\", \"OTHER\", True),
+        pattern_effects);
+
+    pattern_effects = 0;
+    string error = \"none\";
+    try {
+        unassignedEffectfulContains(\"X\", \"Y\", True);
+    } catch (hash<auto> ex) {
+        error = ex.err;
+    }
+    printf(\"effect-order:%s:%d\\n\", error, pattern_effects);
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-string-transform-cfg-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/source.qr";
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string expected = "predicates:True:False:True:True\n"
+    + "search:7:-1:7\n"
+    + "compare:True:False:True\n"
+    + "latin1:True\n"
+    + "effectful:True:1\n"
+    + "effect-order:PSEUDO-METHOD-DOES-NOT-EXIST:0\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c"
+        + " --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_AOT_STRING_TRANSFORM_CFG_FUSION=1"
+        + " QORE_IR_OPT_STATS=1 %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/source.qo";
+string disabled_qo = disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+foreach string function in (("selectedContains", "selectedStartsWith",
+        "selectedEndsWith", "selectedFind", "selectedRFind",
+        "selectedEqual", "selectedOrdering")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:"
+                + ".*string-transform-consumers=1",
+            function))) {
+        printf("missing CFG string transform fusion for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(effectfulSelectedContains|unassignedEffectfulContains)[^\n]*:.*string-transform-consumers=[1-9]/
+        || disabled_compile =~ /string-transform-consumers=[1-9]/) {
+    printf("unsafe or disabled CFG string transform fusion:\nenabled:\n%s"
+        + "disabled:\n%s", enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined
+            !~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || enabled_undefined !~ /qore_rt_string_case_equal_native_noguard/
+        || enabled_undefined !~ /qore_rt_string_case_compare_native_noguard/
+        || disabled_undefined
+            =~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || disabled_undefined =~ /qore_rt_string_case_equal_native_noguard/
+        || disabled_undefined
+            =~ /qore_rt_string_case_compare_native_noguard/) {
+    printf("CFG string transform helper mismatch:\nenabled:\n%s"
+        + "disabled:\n%s", enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string sub link(string output, string qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, output, qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+foreach string path in ((
+        link(root + "/enabled-exe", enabled_qo),
+        link(root + "/disabled-exe", disabled_qo))) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+exit(0);
