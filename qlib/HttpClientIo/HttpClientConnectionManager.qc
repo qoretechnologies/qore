@@ -120,6 +120,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
 
+        #! Interval before re-probing HTTP/3 + HTTP/2 for hosts that fell back to HTTP/1.1
+        /** A cached \c "h1" records that the server refused HTTP/2 via ALPN
+            <i>and</i> that HTTP/3 also failed (see @ref heTryH1Fallback()).  That
+            is a property of the remote endpoint, not of the request, so it is
+            cached — but it must not be permanent: a server that later enables
+            ALPN (or an HTTP/3 path that later becomes reachable) has to be
+            discovered again, so the happy-eyeballs race is re-run after this
+            interval.
+        */
+        const H1_REPROBE_INTERVAL = 5m;
+
         #! Maximum number of entries in the protocol cache before eviction
         const MAX_PROTOCOL_CACHE_SIZE = 1000;
 
@@ -232,7 +243,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         Condition create_cond();
         hash<string, bool> creating;
 
-        #! Protocol cache: "host:port" -> "h2" or "h3"
+        #! Protocol cache: "host:port" -> "h1", "h2", or "h3"
+        /** \c "h3" is set by @ref checkAltSvc() and by a winning H3 candidate;
+            \c "h2" after an H3 fallback or a winning H2 candidate; \c "h1" only
+            when the endpoint gave a definitive negative for HTTP/2 over TLS
+            (@ref isDefinitiveH2AlpnRefusal()) <i>and</i> HTTP/3 had already
+            settled as failed — see @ref heTryH1Fallback().
+        */
         hash<string, string> protocol_cache;
 
         #! Alt-Svc alt port map: origin "host:port" -> alt_port
@@ -247,6 +264,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
+
+        #! Last HTTP/1.1 fallback times: "host:port" -> timestamp
+        /** Written by @ref cacheProtocol() whenever \c "h1" is cached; read by
+            @ref resolveProtocol() to re-run the happy-eyeballs race after
+            @ref H1_REPROBE_INTERVAL.
+        */
+        hash<string, date> h1_probe_times;
 
         #! Pending Alt-Svc discoveries from async callbacks
         /** Thread-safe unlimited Queue: the I/O thread pushes {url, alt_svc}
@@ -846,7 +870,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         # h2c failure on plain HTTP → fall back to h1 for this host
-                        handleProtocolFallback(url, ex.err);
+                        handleProtocolFallback(url, ex.err, ex.arg);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, max_retries);
@@ -941,7 +965,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
-                        handleProtocolFallback(url, ex.err);
+                        handleProtocolFallback(url, ex.err, ex.arg);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, max_retries);
@@ -1204,7 +1228,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
-                        handleProtocolFallback(url, ex.err);
+                        handleProtocolFallback(url, ex.err, ex.arg);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, max_retries);
@@ -1550,6 +1574,12 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         HTTP/1.1 unless HTTP/2 is explicitly requested.
         The protocol cache persists negotiation results to avoid repeated probes.
 
+        HTTP/1.1 is never raced for HTTPS: it is only selected here from a
+        cached @c "h1", which the race itself records after losing both legs to
+        an endpoint that refuses HTTP/2 via ALPN (see @ref heTryH1Fallback()).
+        That entry expires after @ref H1_REPROBE_INTERVAL so the race is re-run
+        rather than pinning the host to HTTP/1.1 permanently.
+
         @param url_info parsed URL info
         @param key the pool key "host:port"
 
@@ -1586,9 +1616,24 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
 
         # Check cache — "h3" is set by checkAltSvc() when an Alt-Svc response
-        # header advertises H3 support; "h2" is set after H3 fallback
+        # header advertises H3 support; "h2" is set after H3 fallback; "h1"
+        # after a definitive ALPN refusal with H3 already failed
         if (protocol_cache.hasKey(key)) {
             string cached = protocol_cache{key};
+            if (cached == "h1") {
+                # This endpoint has already told us it speaks neither H3 nor H2.
+                # Honor that until H1_REPROBE_INTERVAL elapses, then re-run the
+                # full race so a server that has since enabled ALPN (or a
+                # now-reachable QUIC path) is rediscovered.
+                if (h1_probe_times.hasKey(key)
+                        && (now_us() - h1_probe_times{key}) < H1_REPROBE_INTERVAL) {
+                    return "h1";
+                }
+                log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after the HTTP/1.1 "
+                    "fallback interval elapsed", key);
+                # QUIC cannot tunnel through HTTP proxies — probe H2 only there
+                return proxy_info ? "h2" : "happy-eyeballs";
+            }
             if (cached == "h3") {
                 # QUIC cannot tunnel through HTTP proxies — downgrade to H2
                 if (proxy_info) {
@@ -2030,6 +2075,90 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return h2_err.err == "SOCKET-CONNECT-ERROR";
     }
 
+    #! Internal: True if an H2 leg error is a definitive refusal of HTTP/2 over TLS
+    /** Only @c HTTP2-ALPN-ERROR qualifies.  It is raised after both the TCP
+        connection and the TLS handshake have succeeded, when the server either
+        selected a protocol other than @c "h2" or did not negotiate ALPN at all
+        — a statement about the endpoint itself, and the only H2 error that
+        justifies remembering "this host cannot do HTTP/2".
+
+        Every other H2 error is about <i>this attempt</i>, not about the
+        endpoint's capabilities: @c HTTP2-ABORT is what a deliberately closed
+        connection reports (including the losing leg of a happy-eyeballs race
+        that H3 just won), and @c HTTP2-EMPTY-READ, @c HTTP2-CONNECTION-CLOSED
+        and the generic @c HTTPCLIENT-CONNECT-ERROR can all be transient.
+        Treating those as capability signals would pin a perfectly good
+        HTTP/3 or HTTP/2 host to HTTP/1.1 — which is why this predicate is
+        deliberately narrower than @ref isH2cIncompatible().
+
+        Pure (no I/O, no side effects) and static so the decision rule can be
+        unit-tested directly.
+
+        @param h2_err the H2 leg's poll-operation error hash (may be @ref NOTHING)
+
+        @return @ref True only for a definitive ALPN refusal
+    */
+    static bool isDefinitiveH2AlpnRefusal(*hash<auto> h2_err) {
+        return h2_err.err == "HTTP2-ALPN-ERROR";
+    }
+
+    #! Internal: last-resort HTTP/1.1 fallback once both happy-eyeballs legs have lost
+    /** Called only from the race's terminal error path, i.e. after H3 has
+        failed to become ready.  If the H2 leg additionally reported a
+        definitive ALPN refusal (@ref isDefinitiveH2AlpnRefusal()), the endpoint
+        supports neither HTTP/3 nor HTTP/2 and the only remaining protocol is
+        HTTP/1.1 — so both losing candidates are closed and a fresh H1
+        connection is returned instead of throwing.
+
+        Some HTTPS servers (Salesforce's OAuth2 token endpoint, for example)
+        complete the TLS handshake but never negotiate ALPN; without this path
+        they are unreachable in @c "auto" mode no matter how many times the
+        request is retried.
+
+        The @c "h1" result is only <i>cached</i> when the H3 candidate has
+        actually settled: an H3 leg still in @c Connecting state (a QUIC
+        handshake that never completed within the race window) has not told us
+        anything about the endpoint's HTTP/3 support, so this request falls back
+        while the next one races H3 again.
+
+        @param h3conn the H3 candidate (closed here when the fallback applies)
+        @param h2conn the H2 candidate (closed here when the fallback applies)
+        @param url_info parsed URL info for the H1 connection
+        @param key the host:port pool key
+
+        @return the new H1 connection, or @ref NOTHING when the fallback does
+        not apply (the caller then throws its normal connect error)
+    */
+    private *HttpClientConnection heTryH1Fallback(Http3ClientConnection h3conn,
+            *Http2ClientConnection h2conn, hash<auto> url_info, string key) {
+        if (!h2conn) {
+            return;
+        }
+        *hash<auto> h2_err = h2conn.getPollOperation().getError();
+        if (!isDefinitiveH2AlpnRefusal(h2_err)) {
+            return;
+        }
+
+        # H3 has lost the race; only a settled H3 candidate proves the endpoint
+        # has no usable HTTP/3 path and makes the "h1" result cacheable
+        bool h3_settled = h3conn.getConnectionState() == HttpClientConnectionState::Closed
+            || exists h3conn.getPollOperation().getError();
+
+        log(LoggerLevel::DEBUG, "happy eyeballs: %s refused HTTP/2 via ALPN and HTTP/3 %s; "
+            "falling back to HTTP/1.1%s", key, h3_settled ? "failed" : "did not connect in time",
+            h3_settled ? "" : " for this request only");
+
+        try { h3conn.close(); } catch () {}
+        try { h2conn.close(); } catch () {}
+
+        if (h3_settled) {
+            AutoWriteLock al(pool_lock);
+            cacheProtocol(key, "h1");
+        }
+
+        return createConnection(url_info, key, "h1");
+    }
+
     #! Internal: builds the happy-eyeballs connect-error description from both legs' errors
     /** Pure formatter (no I/O, no side effects) so the message construction can
         be unit-tested directly and shared by every happy-eyeballs terminal-error
@@ -2265,7 +2394,14 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             return w;
         }
 
-        # Neither connected — collect error details, clean up both, and throw
+        # Neither H3 nor H2 connected.  If H2's failure was a definitive ALPN
+        # refusal the endpoint speaks neither, so HTTP/1.1 is the correct — and
+        # only — remaining choice; otherwise collect error details, clean up
+        # both, and throw.
+        *HttpClientConnection h1 = heTryH1Fallback(h3conn, h2conn, url_info, key);
+        if (h1) {
+            return h1;
+        }
         heThrowConnectError(h3conn, h2conn, key);
     }
 
@@ -2623,16 +2759,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             bool h2_closed = h2_state == HttpClientConnectionState::Closed;
             bool both_closed = h3_closed && h2_closed;
             if (heH2FastFail(h2) || both_closed) {
-                Http3ClientConnection h3 = race.h3conn;
-                # Drop race state first — heThrowConnectError closes both and throws
-                removeAsyncRaceLocked(key);
-                heThrowConnectError(h3, h2, key);
+                conn_out = heAsyncTerminal(race, key);
+                return;
             }
             if (h3_state != HttpClientConnectionState::Connecting
                     && h2_state != HttpClientConnectionState::Connecting) {
-                Http3ClientConnection h3 = race.h3conn;
-                removeAsyncRaceLocked(key);
-                heThrowConnectError(h3, h2, key);
+                conn_out = heAsyncTerminal(race, key);
+                return;
             }
             conn_out = race.h3conn;
             *EventNotifier n = mintRaceNotifier(race, h3_state, h2_state);
@@ -2645,6 +2778,49 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             # closes the lost-wakeup gap where H2 fast-fails while H3 remains
             # pending until connect_timeout.
         }
+    }
+
+    #! Internal: async race terminal path — HTTP/1.1 fallback if applicable, else throw
+    /** The async counterpart of the synchronous race's terminal site: both
+        candidates have lost, so either the endpoint refused HTTP/2 via ALPN
+        (and HTTP/1.1 is the only protocol left — see @ref heTryH1Fallback())
+        or the connection attempt genuinely failed and the error is thrown.
+
+        @param race the in-flight race state
+        @param key the host:port pool key
+
+        @return the pooled H1 fallback connection (never @ref NOTHING; the
+        no-fallback path throws)
+
+        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
+        @throw SOCKET-CONNECT-ERROR TCP was refused (fast-fail)
+
+        @note Caller holds async_race_lock.
+    */
+    private *HttpClientConnection heAsyncTerminal(AsyncRace race, string key) {
+        Http3ClientConnection h3 = race.h3conn;
+        Http2ClientConnection h2 = race.h2conn;
+        *HttpClientConnection h1;
+        try {
+            h1 = heTryH1Fallback(h3, h2, race.url_info, key);
+        } catch (hash<ExceptionInfo> ex) {
+            # The H1 connection could not be created (both candidates are
+            # already closed by heTryH1Fallback()).  Unlike the synchronous
+            # race — where getConnection()'s on_exit block clears the per-key
+            # creating gate — the async race owns that state itself, so it must
+            # be dropped here or the key stays permanently "in creation".
+            removeAsyncRaceLocked(key);
+            rethrow;
+        }
+        if (h1) {
+            finishAsyncRace(key, h1);
+            return h1;
+        }
+        # Drop race state first — heThrowConnectError closes both and throws
+        removeAsyncRaceLocked(key);
+        heThrowConnectError(h3, h2, key);
+        # not reached
+        @assert(False);
     }
 
     #! Internal: creates + submits the H2 candidate when the race phase begins
@@ -2896,10 +3072,12 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         if (result.ex) {
             log(LoggerLevel::ERROR, "connection %d error: %s: %s",
                 conn.getConnectionId(), result.ex.err, result.ex.desc);
-            # Detect h2c incompatibility on plain HTTP and cache h1 fallback
-            if (conn.getProtocol() == "h2" && isH2cIncompatible(result.ex.err)) {
-                log(LoggerLevel::DEBUG, "h2c failed for %s (%s), caching h1 fallback",
-                    key, result.ex.err);
+            # Cache the h1 fallback only on a definitive refusal of HTTP/2 by
+            # the endpoint; see isDefinitiveH2AlpnRefusal() for why the broader
+            # isH2cIncompatible() set must not be used here (this callback runs
+            # on the I/O thread and cannot see the sibling H3 candidate)
+            if (conn.getProtocol() == "h2" && isDefinitiveH2AlpnRefusal(result.ex)) {
+                log(LoggerLevel::DEBUG, "%s refused HTTP/2 via ALPN, caching h1 fallback", key);
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h1");
             }
@@ -2917,11 +3095,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         HttpClientPollOperation op = conn.getPollOperation();
         if (op.isClosed() || op.hasError()) {
-            # Detect h2c failure and cache h1 fallback
+            # Cache the h1 fallback only on a definitive ALPN refusal (see the
+            # result.ex branch above and isDefinitiveH2AlpnRefusal())
             *hash<auto> op_err = op.getError();
-            if (op_err && conn.getProtocol() == "h2" && isH2cIncompatible(op_err.err)) {
-                log(LoggerLevel::DEBUG, "h2c failed for %s (%s), caching h1 fallback",
-                    key, op_err.err);
+            if (conn.getProtocol() == "h2" && isDefinitiveH2AlpnRefusal(op_err)) {
+                log(LoggerLevel::DEBUG, "%s refused HTTP/2 via ALPN, caching h1 fallback", key);
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h1");
             }
@@ -3239,9 +3417,21 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     /** For plain HTTP connections where h2c fails, caches "h1" so subsequent
         connections use HTTP/1.1 directly.  For HTTPS connections, falls back
         from H3 to H2 on any H3-specific error or on a generic connection error
-        while H3 is cached (e.g., from Alt-Svc discovery).
+        while H3 is cached (e.g., from Alt-Svc discovery), and from H2 to H1
+        when the endpoint definitively refused HTTP/2 via ALPN.
+
+        Runs on the user thread from the request retry loops, before the retry
+        re-resolves the protocol, so the fallback decision is ordered with
+        respect to the retry rather than racing the I/O thread's connection
+        completion callback.
+
+        @param url the request URL
+        @param err the error code raised by the failed attempt
+        @param err_arg the exception argument, carrying the underlying
+        poll-operation error hash for @c HTTPCLIENT-CONNECT-ERROR (see
+        @ref HttpClientConnection::waitForReady())
     */
-    private handleProtocolFallback(string url, string err) {
+    private handleProtocolFallback(string url, string err, *hash<auto> err_arg) {
         # Skip during shutdown — see evictDeadConnections() for rationale.
         if (shutdown) {
             return;
@@ -3281,6 +3471,19 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 log(LoggerLevel::DEBUG, "H3 failed for %s (%s), falling back to HTTP/2", key, err);
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h2");
+            } else if (opts.protocol == "auto" && isDefinitiveH2AlpnRefusal(err_arg)) {
+                # HTTPS: the endpoint completed the TLS handshake but refused
+                # HTTP/2 via ALPN.  This is only reached on the non-race paths
+                # (a cached "h2" after an H3 fallback, or an H2 connection made
+                # through a proxy), so H3 has already been tried and lost;
+                # HTTP/1.1 is the only protocol left.  The happy-eyeballs race
+                # handles the same case itself via heTryH1Fallback().
+                #
+                # Not applied when a protocol was explicitly configured: an
+                # explicit "h2" must fail loudly rather than silently downgrade.
+                log(LoggerLevel::DEBUG, "%s refused HTTP/2 via ALPN, falling back to HTTP/1.1", key);
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h1");
             }
         }
     }
@@ -3473,6 +3676,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     private cacheProtocol(string key, string protocol) {
         protocol_cache{key} = protocol;
+        if (protocol == "h1") {
+            # stamp the fallback so resolveProtocol() can re-probe H3 + H2 after
+            # H1_REPROBE_INTERVAL instead of pinning the host to HTTP/1.1 forever
+            h1_probe_times{key} = now_us();
+        } else {
+            remove h1_probe_times{key};
+        }
         if (protocol_cache.size() > MAX_PROTOCOL_CACHE_SIZE) {
             # Evict oldest entries (Qore hashes maintain insertion order);
             # collect only the keys to evict (not the full key list) to avoid
@@ -3486,6 +3696,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             foreach string evict_key in (evict_keys) {
                 remove protocol_cache{evict_key};
                 remove h3_probe_times{evict_key};
+                remove h1_probe_times{evict_key};
             }
         }
     }
