@@ -1123,6 +1123,9 @@ uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink*
 //! Return a list element borrowed from the source list without incrementing its reference count.
 uint64_t qore_rt_list_get_value_noref(uint64_t list_val, int64_t index, ExceptionSink* xsink);
 
+//! Append a value whose exact element type was proven by the compiler.
+void qore_rt_list_append_exact(uint64_t list_bits, uint64_t value_bits);
+
 //! Create a list with pre-allocated capacity; returns NaN-boxed QoreListNode*.
 uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink);
 uint64_t qore_rt_create_sized_list_typed(int64_t capacity, const QoreTypeInfo* element_type, ExceptionSink* xsink);

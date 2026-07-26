@@ -14567,6 +14567,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     bool elem_is_int = false;
     bool elem_is_float = false;
     bool elem_is_bool = false;
+    bool elem_is_string = false;
     if (elem_type) {
         if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
             elem_is_int = true;
@@ -14574,6 +14575,8 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             elem_is_float = true;
         } else if (QoreTypeInfo::parseReturns(elem_type, NT_BOOLEAN) == QTI_IDENT) {
             elem_is_bool = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_STRING) == QTI_IDENT) {
+            elem_is_string = true;
         }
     }
     bool use_typed_scalar_construction = (elem_is_int || elem_is_float || elem_is_bool)
@@ -14723,7 +14726,11 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             selected_output_index = builder.createBinaryOp(QoreIROpcode::AddInt,
                 output_index, one, select->loc)->result;
         } else {
-            builder.createListAppend(result_list, element_val, select->loc);
+            auto* append_inst = builder.createListAppend(result_list, element_val,
+                select->loc);
+            if (elem_is_string) {
+                append_inst->element_type = elem_type;
+            }
         }
         QoreIRBasicBlock* append_exit_block = builder.getBlock();
         builder.createBranch(cont_block, select->loc);

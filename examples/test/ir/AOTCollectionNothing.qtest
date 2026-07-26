@@ -35,6 +35,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
             "typed-empty:list:list:list:hash:hash\n"
             "typed-bool-map:TFTF:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR\n"
             "typed-bool-select:TT:RUNTIME-TYPE-ERROR:SELECT-HELPER-ERROR\n"
+            "typed-string-select:alpha,atom:RUNTIME-TYPE-ERROR:STRING-SELECT-ERROR\n"
             "typed-helper-map:9:7.5:TFTF:RUNTIME-TYPE-ERROR:MAP-HELPER-ERROR\n"
             "qorus-options:missing\n";
     }
@@ -88,6 +89,13 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     return value;
 }
 
+%sbool sub selectStringThrow(string value) {
+    if (value == \"beta\") {
+        throw \"STRING-SELECT-ERROR\", \"expected\";
+    }
+    return True;
+}
+
 %sstring sub verify() {
     list<int> l;
     auto m = map $1 + 1, l;
@@ -133,6 +141,26 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     } catch (hash<ExceptionInfo> ex) {
         throwing_bool_select_error = ex.err;
     }
+    list<string> string_select;
+    {
+        list<string> string_source = (\"alpha\", \"beta\", \"atom\");
+        string_select = (select string_source, $1.startsWith(\"a\"));
+    }
+    list<string> sparse_string = (\"alpha\", \"beta\", \"atom\");
+    delete sparse_string[1];
+    string sparse_string_select_error = \"none\";
+    try {
+        list<string> sparse_string_select = (select sparse_string, True);
+    } catch (hash<ExceptionInfo> ex) {
+        sparse_string_select_error = ex.err;
+    }
+    string throwing_string_select_error = \"none\";
+    try {
+        list<string> throwing_string_select = (select (\"alpha\", \"beta\", \"atom\"),
+            selectStringThrow($1));
+    } catch (hash<ExceptionInfo> ex) {
+        throwing_string_select_error = ex.err;
+    }
 
     list<int> helper_source = (1, 2, 3);
     list<int> helper_int_map = (map mapInt($1), helper_source);
@@ -158,6 +186,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         \"typed-empty:%%s:%%s:%%s:%%s:%%s\\n\"
         \"typed-bool-map:%%s:%%s:%%s\\n\"
         \"typed-bool-select:%%s:%%s:%%s\\n\"
+        \"typed-string-select:%%s:%%s:%%s\\n\"
         \"typed-helper-map:%%d:%%g:%%s:%%s:%%s\\n\"
         \"qorus-options:%%s\\n\",
         kind(m), kind(s), kind(ms), kind(hm), kind(hms),
@@ -165,12 +194,14 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         boolList(bool_map), sparse_bool_error, missing_bool_error,
         boolList(bool_select), sparse_bool_select_error,
         throwing_bool_select_error,
+        join(\",\", string_select), sparse_string_select_error,
+        throwing_string_select_error,
         helper_int_map[0] + helper_int_map[1] + helper_int_map[2],
         helper_float_map[0] + helper_float_map[1] + helper_float_map[2],
         boolList(helper_bool_map), helper_nothing_error, helper_throw_error,
         kind(workflow_options));
 }
-", access, access, access, access, access, access, access, access, access);
+", access, access, access, access, access, access, access, access, access, access);
     }
 
     private string collectionNothingCode() {

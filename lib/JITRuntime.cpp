@@ -3854,6 +3854,11 @@ extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value
     }
 }
 
+extern "C" DLLEXPORT void qore_rt_list_append_exact(uint64_t list_bits, uint64_t value_bits) {
+    QoreListNode* list = fromBits(list_bits).get<QoreListNode>();
+    qore_list_private::get(*list)->pushIntern(fromBits(value_bits).refSelf());
+}
+
 static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     if (list_val.getType() == NT_LIST) {

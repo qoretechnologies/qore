@@ -21412,6 +21412,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
             auto helper = module.getOrInsertFunction("qore_rt_list_append",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            const QoreIRValueFacts* facts = current_ir_func
+                ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
+            bool exact_string_value = inst->element_type
+                && QoreTypeInfo::parseReturns(
+                    inst->element_type, NT_STRING) == QTI_IDENT
+                && nanboxed_values.count(inst->operands[1].id)
+                && value->getType() == i64_type
+                && !std::getenv("QORE_DISABLE_AOT_EXACT_STRING_LIST_APPEND");
+            if (exact_string_value) {
+                auto exact_helper = module.getOrInsertFunction(
+                    "qore_rt_list_append_exact",
+                    llvm::FunctionType::get(void_type,
+                        {i64_type, i64_type}, false));
+                if (facts
+                        && facts->assigned_state == QoreIRAssignedState::Assigned
+                        && facts->never_nothing) {
+                    builder->CreateCall(exact_helper,
+                        {list_boxed, value_boxed});
+                    return true;
+                }
+
+                llvm::Value* is_nothing = builder->CreateICmpEQ(value_boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                    "exact_string_append_is_nothing");
+                llvm::BasicBlock* generic_block = llvm::BasicBlock::Create(ctx,
+                    "exact_string_append_generic", llvm_func);
+                llvm::BasicBlock* direct_block = llvm::BasicBlock::Create(ctx,
+                    "exact_string_append_direct", llvm_func);
+                llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx,
+                    "exact_string_append_cont", llvm_func);
+                auto* weights = llvm::MDBuilder(ctx).createBranchWeights(1, 999);
+                builder->CreateCondBr(is_nothing, generic_block, direct_block,
+                    weights);
+
+                builder->SetInsertPoint(generic_block);
+                builder->CreateCall(helper,
+                    {list_boxed, value_boxed, xsink_arg});
+                builder->CreateBr(cont_block);
+
+                builder->SetInsertPoint(direct_block);
+                builder->CreateCall(exact_helper,
+                    {list_boxed, value_boxed});
+                builder->CreateBr(cont_block);
+
+                builder->SetInsertPoint(cont_block);
+                return true;
+            }
             builder->CreateCall(helper, {list_boxed, value_boxed, xsink_arg});
             return true;
         }
