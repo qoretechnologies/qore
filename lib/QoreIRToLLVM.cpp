@@ -9211,6 +9211,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
     typed_list_data_ptrs.clear();
+    fixed_typed_list_outputs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
     reusable_hashdecl_literal_values.clear();
@@ -21486,12 +21487,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* cap = getVal(inst->operands[0].id, error);
             if (!cap) { return false; }
             llvm::Value* cap_int = ensureIntTypeInline(cap, inst->operands[0].id);
-            bool exact_scalar_output = qore_ir_use_typed_map_fusion(aot_mode,
-                    "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION")
-                && (QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
-                    || QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT);
-            bool fixed_scalar_output = exact_scalar_output && !inst->list_reserve_only;
-            const char* helper_name = fixed_scalar_output
+            bool typed_specialization = qore_ir_use_typed_map_fusion(aot_mode,
+                "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION");
+            bool exact_bool_output = !std::getenv(
+                    "QORE_DISABLE_AOT_TYPED_BOOL_LIST_OUTPUT")
+                && QoreTypeInfo::parseReturns(
+                    inst->element_type, NT_BOOLEAN) == QTI_IDENT;
+            bool exact_typed_output = typed_specialization
+                && (QoreTypeInfo::parseReturns(
+                        inst->element_type, NT_INT) == QTI_IDENT
+                    || QoreTypeInfo::parseReturns(
+                        inst->element_type, NT_FLOAT) == QTI_IDENT
+                    || exact_bool_output);
+            bool fixed_typed_output = exact_typed_output
+                && !inst->list_reserve_only;
+            const char* helper_name = fixed_typed_output
                 ? (aot_mode ? "qore_rt_create_fixed_list_by_type_path"
                             : "qore_rt_create_fixed_list_typed")
                 : (aot_mode ? "qore_rt_create_sized_list_by_type_path"
@@ -21504,8 +21514,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
-            if (exact_scalar_output) {
+            if (exact_typed_output) {
                 emitExceptionCheck(module, llvm_func, inst);
+                if (fixed_typed_output) {
+                    fixed_typed_list_outputs.insert(inst->result.id);
+                }
                 if (qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST")) {
                     auto data_helper = module.getOrInsertFunction(
@@ -21730,6 +21743,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION");
             bool exact_int_element = QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT;
             bool exact_float_element = QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT;
+            bool exact_bool_element = QoreTypeInfo::parseReturns(
+                inst->element_type, NT_BOOLEAN) == QTI_IDENT;
             auto get_output_data = [&]() -> llvm::Value* {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -21782,6 +21797,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
                 builder->CreateCall(helper, {list_boxed, idx_int, val_float});
             };
+            auto emit_fixed_boxed_store = [&](llvm::Value* val_boxed) {
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
+                    get_output_data(), idx_int);
+                builder->CreateStore(val_boxed, entry);
+            };
             if (assigned_native && typed_specialization && exact_int_element
                     && facts->representation == QoreIRValueRepresentation::NativeInt
                     && !nanboxed_values.count(inst->operands[2].id)) {
@@ -21794,6 +21814,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && val->getType() == double_type) {
                 llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
                 emit_float_store(val_float);
+                return true;
+            }
+            if (assigned_native && typed_specialization && exact_bool_element
+                    && !std::getenv("QORE_DISABLE_AOT_TYPED_BOOL_LIST_OUTPUT")
+                    && facts->representation == QoreIRValueRepresentation::NativeBool
+                    && val->getType() == i1_type
+                    && fixed_typed_list_outputs.count(inst->operands[0].id)) {
+                emit_fixed_boxed_store(boxBool(val));
                 return true;
             }
             bool exact_value_type = facts && facts->type_info

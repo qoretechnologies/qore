@@ -11,6 +11,14 @@ list<int> sub makeData() {
     return data;
 }
 
+list<string> sub makeStringData() {
+    list<string> data = ();
+    for (int i = 0; i < 1024; ++i) {
+        push data, "value-" + string(i & 15);
+    }
+    return data;
+}
+
 int sub foldlKernel(list<int> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -43,6 +51,42 @@ int sub foreachKernel(int rounds) {
     return checksum;
 }
 
+int sub boolMapKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> mapped = (map ($1 & 1) == 0, data);
+        checksum += mapped.size() + (mapped[0] ? 1 : 0);
+    }
+    return checksum;
+}
+
+int sub stringMapKernel(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<string> mapped = (map $1, data);
+        checksum += mapped.size() + mapped[0].size();
+    }
+    return checksum;
+}
+
+int sub boolSelectKernel(list<bool> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> selected = (select data, $1);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub stringSelectKernel(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<string> selected = (select data, $1.size() > 7);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
 int sub main() {
     string kernel = ARGV.size() ? ARGV[0] : "foldl";
     int rounds = ARGV.size() > 1 ? ARGV[1].toInt()
@@ -56,6 +100,19 @@ int sub main() {
             break;
         case "foreach":
             printf("%d\n", foreachKernel(rounds));
+            break;
+        case "bool-map":
+            printf("%d\n", boolMapKernel(makeData(), rounds));
+            break;
+        case "string-map":
+            printf("%d\n", stringMapKernel(makeStringData(), rounds));
+            break;
+        case "bool-select":
+            printf("%d\n", boolSelectKernel(
+                (map ($1 & 1) == 0, makeData()), rounds));
+            break;
+        case "string-select":
+            printf("%d\n", stringSelectKernel(makeStringData(), rounds));
             break;
         default:
             throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

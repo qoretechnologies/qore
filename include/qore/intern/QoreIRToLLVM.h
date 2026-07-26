@@ -309,6 +309,7 @@ private:
 
     // Typed-map backing pointers materialized in loop preheaders.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
+    std::unordered_set<uint32_t> fixed_typed_list_outputs;
     std::unordered_set<uint32_t> direct_typed_list_read_sources;
     std::unordered_set<uint32_t> elided_typed_foreach_refself_values;
     std::unordered_set<uint32_t> reusable_hashdecl_literal_values;

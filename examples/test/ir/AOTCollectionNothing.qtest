@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class AOTCollectionNothingTest
@@ -33,6 +33,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     private string expectedOutput() {
         return "typed-nothing:missing:missing:missing:missing:missing\n"
             "typed-empty:list:list:list:hash:hash\n"
+            "typed-bool-map:TFTF:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR\n"
             "qorus-options:missing\n";
     }
 
@@ -41,6 +42,14 @@ class AOTCollectionNothingTest inherits QUnit::Test {
 
         return sprintf("%sstring sub kind(auto v) {
     return !exists v ? \"missing\" : (v instanceof list ? \"list\" : (v instanceof hash ? \"hash\" : v.type()));
+}
+
+%sstring sub boolList(list<bool> values) {
+    string result;
+    for (int i = 0; i < values.size(); ++i) {
+        result += values[i] === NOTHING ? \"N\" : values[i] ? \"T\" : \"F\";
+    }
+    return result;
 }
 
 %sstring sub verify() {
@@ -58,17 +67,37 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     auto ehm = map {$1: $1}, e;
     auto ehms = map ({$1: $1}, e, True);
 
+    list<int> bool_source = (0, 1, 2, 3);
+    list<bool> bool_map = (map ($1 & 1) == 0, bool_source);
+    list<bool> sparse_bool = (True, False, True);
+    delete sparse_bool[1];
+    string sparse_bool_error = \"none\";
+    try {
+        list<bool> sparse_bool_map = (map $1, sparse_bool);
+    } catch (hash<ExceptionInfo> ex) {
+        sparse_bool_error = ex.err;
+    }
+    bool unassigned_bool;
+    string missing_bool_error = \"none\";
+    try {
+        list<bool> missing_bool_map = (map unassigned_bool, bool_source);
+    } catch (hash<ExceptionInfo> ex) {
+        missing_bool_error = ex.err;
+    }
+
     hash<auto> opts;
     auto workflow_options = map (\"name\": $1) + opts.$1, keys opts;
 
     return sprintf(\"typed-nothing:%%s:%%s:%%s:%%s:%%s\\n\"
         \"typed-empty:%%s:%%s:%%s:%%s:%%s\\n\"
+        \"typed-bool-map:%%s:%%s:%%s\\n\"
         \"qorus-options:%%s\\n\",
         kind(m), kind(s), kind(ms), kind(hm), kind(hms),
         kind(em), kind(es), kind(ems), kind(ehm), kind(ehms),
+        boolList(bool_map), sparse_bool_error, missing_bool_error,
         kind(workflow_options));
 }
-", access, access);
+", access, access, access);
     }
 
     private string collectionNothingCode() {
