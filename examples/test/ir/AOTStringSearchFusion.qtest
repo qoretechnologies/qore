@@ -290,7 +290,7 @@ string disabled_compile = compile(disabled,
 foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains",
         "fusedFalseStartsWith", "fusedFind", "fusedFindOffset", "fusedRFind",
         "fusedSubstr", "fusedSize", "fusedLength",
-        "dynamicFindOffset", "dynamicSubstr",
+        "unrelatedPattern", "dynamicFindOffset", "dynamicSubstr",
         "localStartsWith", "localEndsWith", "localContains", "localFind",
         "localRFind", "localSubstr",
         "staticContains", "instanceFind", "staticSubstr", "instanceLength")) {
@@ -303,7 +303,7 @@ foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains"
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|intStringSubstr|sideEffectPattern|phiFind|phiSubstr)[^\n]*:.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (intStringSubstr|sideEffectPattern|phiFind|phiSubstr)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string consumer fusion:\n%s",
         enabled_compile + disabled_compile);

@@ -8038,6 +8038,123 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
     }
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
+        uint64_t* args, int nargs, int64_t start, int64_t length,
+        int32_t has_substr, int32_t has_length, uint64_t pattern_bits,
+        int32_t operation, int64_t offset, int32_t transform,
+        ExceptionSink* xsink) {
+    if (nargs < 0 || (nargs && !args)
+            || has_substr < 0 || has_substr > 1
+            || has_length < 0 || has_length > 1
+            || (!has_substr && has_length)
+            || operation < 0 || operation > 4
+            || transform < 0 || transform > 2) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR",
+                "invalid concatenated string pipeline arguments");
+        }
+        return 0;
+    }
+
+    size_t total_len = 0;
+    const QoreEncoding* encoding = QCS_DEFAULT;
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(
+                    xsink, "concatenated string pipeline sizing")) {
+            return 0;
+        }
+        QoreValue value = fromBits(args[i]);
+        if (value.getType() != NT_STRING) {
+            continue;
+        }
+        QoreStringValueHelper string(value);
+        if (string->size()
+                > std::numeric_limits<size_t>::max() - total_len) {
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR",
+                    "concatenated string pipeline size overflow");
+            }
+            return 0;
+        }
+        total_len += string->size();
+        if (!i) {
+            encoding = string->getEncoding();
+        }
+    }
+
+    QoreString concatenated(encoding);
+    concatenated.reserve(total_len);
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(
+                    xsink, "concatenated string pipeline construction")) {
+            return 0;
+        }
+        QoreValue value = fromBits(args[i]);
+        if (value.getType() != NT_STRING) {
+            continue;
+        }
+        QoreStringValueHelper string(value);
+        concatenated.concat(*string, xsink);
+        if (xsink && *xsink) {
+            return 0;
+        }
+    }
+
+    std::unique_ptr<QoreString> substring;
+    QoreString empty(encoding);
+    const QoreString* source = &concatenated;
+    if (has_substr) {
+        substring.reset(has_length
+            ? concatenated.substr(start, length, xsink)
+            : concatenated.substr(start, xsink));
+        if (xsink && *xsink) {
+            return 0;
+        }
+        source = substring ? substring.get() : &empty;
+    }
+
+    QoreString transformed(source->getEncoding());
+    if (transform) {
+        int rc = transform == 2
+            ? do_toupper(transformed, *source, xsink)
+            : do_tolower(transformed, *source, xsink);
+        if (rc || (xsink && *xsink)) {
+            return 0;
+        }
+        source = &transformed;
+    }
+
+    QoreValue pattern_value = fromBits(pattern_bits);
+    QoreStringValueHelper pattern(
+        pattern_value, source->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    switch (operation) {
+        case 0:
+            return source->startsWith(pattern->c_str()) ? 1 : 0;
+        case 1:
+            return source->endsWith(pattern->c_str()) ? 1 : 0;
+        case 2:
+            return source->find(pattern->c_str()) >= 0 ? 1 : 0;
+        case 3: {
+            qore_offset_t result =
+                source->index(**pattern, offset, xsink);
+            return xsink && *xsink
+                ? 0 : static_cast<int64_t>(result);
+        }
+        case 4: {
+            qore_offset_t result =
+                source->rindex(**pattern, offset, xsink);
+            return xsink && *xsink
+                ? 0 : static_cast<int64_t>(result);
+        }
+    }
+    return 0;
+}
+
 //! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args, int nargs,
         int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {

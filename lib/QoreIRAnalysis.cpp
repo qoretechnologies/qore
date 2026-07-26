@@ -12170,7 +12170,12 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                         || !qore_ir_is_non_overridable_method_call(*inst)))) {
             return nullptr;
         }
-        return static_cast<QoreIRStringConsumerCallInstruction*>(inst);
+        auto* producer =
+            static_cast<QoreIRStringConsumerCallInstruction*>(inst);
+        return producer->aot_string_consumer
+                == QoreIRStringConsumerCallInstruction::
+                    AOTStringConsumerKind::None
+            ? producer : nullptr;
     };
     std::unique_ptr<QoreIRControlFlowGraph> cfg;
     auto side_effect_free_interval = [&](const QoreIRInstruction* producer,
@@ -12282,6 +12287,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         int64_t arg0 = 0;
         int64_t arg1 = 0;
         bool has_arg1 = false;
+        bool case_transform = false;
+        bool case_transform_upper = false;
         std::vector<QoreIRValue> extra_operands;
         std::vector<LateLoadOperand> late_load_operands;
         bool preserve_producer_result = false;
@@ -12317,6 +12324,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         int64_t arg0 = 0;
         int64_t arg1 = 0;
         bool has_arg1 = false;
+        bool case_transform = false;
+        bool case_transform_upper = false;
         std::vector<QoreIRValue> extra_operands;
         std::vector<Fusion::LateLoadOperand> late_load_operands;
         auto get_int_argument = [&](QoreIRValue value, int64_t& constant,
@@ -12342,6 +12351,10 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 return true;
             }
             for (size_t i = 0; i < extra_operands.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR string consumer integer-operand analysis")) {
+                    return false;
+                }
                 if (extra_operands[i].id == value.id) {
                     operand = static_cast<int16_t>(
                         producer->operands.size() + i);
@@ -12394,8 +12407,94 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     return false;
                 }
             }
-            if (producer->operands.size() + extra_operands.size()
-                    >= static_cast<size_t>(INT16_MAX)) {
+            if (extra_operands.size() >= UINT8_MAX
+                    || producer->operands.size() + extra_operands.size()
+                        >= static_cast<size_t>(INT16_MAX)) {
+                return false;
+            }
+            operand = static_cast<int16_t>(
+                producer->operands.size() + extra_operands.size());
+            extra_operands.push_back(value);
+            return true;
+        };
+        auto get_string_argument = [&](QoreIRValue value,
+                int16_t& operand) {
+            operand = get_reused_operand(producer, value, cross_block);
+            if (operand >= 0) {
+                return true;
+            }
+            for (size_t i = 0; i < extra_operands.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR string consumer pattern-operand analysis")) {
+                    return false;
+                }
+                if (extra_operands[i].id == value.id) {
+                    operand = static_cast<int16_t>(
+                        producer->operands.size() + i);
+                    return true;
+                }
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(value);
+            bool exact_string = facts && facts->type_info
+                && QoreTypeInfo::isType(
+                    qore_get_value_type(facts->type_info), NT_STRING);
+            if (!facts || !exact_string
+                    || facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || facts->representation
+                        != QoreIRValueRepresentation::Boxed) {
+                return false;
+            }
+            auto definition = definitions.find(value.id);
+            auto producer_position = positions.find(producer);
+            if (definition == definitions.end()
+                    || producer_position == positions.end()) {
+                return false;
+            }
+            if (definition->second.block
+                    == producer_position->second.block) {
+                if (definition->second.offset
+                        >= producer_position->second.offset) {
+                    auto consumer_position = positions.find(consumer);
+                    if (cross_block
+                            || consumer_position == positions.end()
+                            || consumer_position->second.block
+                                != definition->second.block
+                            || definition->second.offset
+                                >= consumer_position->second.offset
+                            || definition->second.inst->opcode
+                                != QoreIROpcode::LoadLocal) {
+                        return false;
+                    }
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(
+                            definition->second.inst);
+                    if (!load->local || load->is_ref
+                            || load->local->closureUse()
+                            || QoreTypeInfo::isReference(
+                                load->local->getTypeInfo())) {
+                        return false;
+                    }
+                    late_load_operands.push_back({
+                        extra_operands.size(), load, *facts,
+                    });
+                }
+            } else {
+                if (!cfg) {
+                    cfg = std::make_unique<QoreIRControlFlowGraph>(func);
+                    if (cfg->cancelled) {
+                        return false;
+                    }
+                }
+                if (!cfg->dominates(definition->second.block,
+                        producer_position->second.block)) {
+                    return false;
+                }
+            }
+            if (extra_operands.size() >= UINT8_MAX
+                    || producer->operands.size() + extra_operands.size()
+                        >= static_cast<size_t>(INT16_MAX)) {
                 return false;
             }
             operand = static_cast<int16_t>(
@@ -12421,9 +12520,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     || !method->pseudo_arg0_known_assigned_string) {
                 return false;
             }
-            pattern_operand = get_reused_operand(
-                producer, consumer->operands[1], cross_block);
-            if (pattern_operand < 0) {
+            if (!get_string_argument(
+                    consumer->operands[1], pattern_operand)) {
                 return false;
             }
             kind = intrinsic == QoreIRIntrinsic::StringStartsWith
@@ -12443,9 +12541,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                                 arg0_operand)))) {
                 return false;
             }
-            pattern_operand = get_reused_operand(
-                producer, consumer->operands[1], cross_block);
-            if (pattern_operand < 0) {
+            if (!get_string_argument(
+                    consumer->operands[1], pattern_operand)) {
                 return false;
             }
             if (consumer->operands.size() == 2) {
@@ -12473,6 +12570,47 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         } else {
             return false;
         }
+        if (method->aot_string_transform_consumer
+                != QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::None) {
+            auto expected =
+                QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::None;
+            switch (kind) {
+                case QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::StartsWith:
+                    expected = QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::StartsWith;
+                    break;
+                case QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::EndsWith:
+                    expected = QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::EndsWith;
+                    break;
+                case QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::Contains:
+                    expected = QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::Contains;
+                    break;
+                case QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::Find:
+                    expected = QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::Find;
+                    break;
+                case QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::RFind:
+                    expected = QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::RFind;
+                    break;
+                default:
+                    return false;
+            }
+            if (method->aot_string_transform_consumer != expected) {
+                return false;
+            }
+            case_transform = true;
+            case_transform_upper = method->aot_string_transform_upper;
+        }
         if (!cross_block && kind
                     != QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
                 && kind
@@ -12490,6 +12628,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         fusion.arg0 = arg0;
         fusion.arg1 = arg1;
         fusion.has_arg1 = has_arg1;
+        fusion.case_transform = case_transform;
+        fusion.case_transform_upper = case_transform_upper;
         fusion.extra_operands = std::move(extra_operands);
         fusion.late_load_operands = std::move(late_load_operands);
         return true;
@@ -12642,6 +12782,10 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 candidate.arg0 = consumer_fusion.arg0;
                 candidate.arg1 = consumer_fusion.arg1;
                 candidate.has_arg1 = consumer_fusion.has_arg1;
+                candidate.case_transform =
+                    consumer_fusion.case_transform;
+                candidate.case_transform_upper =
+                    consumer_fusion.case_transform_upper;
                 candidate.extra_operands =
                     std::move(consumer_fusion.extra_operands);
                 candidate.late_load_operands =
@@ -12903,6 +13047,11 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
                 fusion.producer->aot_string_consumer_has_arg1 =
                     fusion.has_arg1;
+                fusion.producer->aot_string_consumer_case_transform =
+                    fusion.case_transform;
+                fusion.producer
+                    ->aot_string_consumer_case_transform_upper =
+                    fusion.case_transform_upper;
                 fusion.producer->aot_string_consumer_extra_operands =
                     static_cast<uint8_t>(fusion.extra_operands.size());
                 fusion.producer->operands.insert(
@@ -12930,6 +13079,11 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
                 fusion.producer->aot_string_consumer_has_arg1 =
                     fusion.has_arg1;
+                fusion.producer->aot_string_consumer_case_transform =
+                    fusion.case_transform;
+                fusion.producer
+                    ->aot_string_consumer_case_transform_upper =
+                    fusion.case_transform_upper;
                 fusion.producer->aot_string_consumer_extra_operands =
                     static_cast<uint8_t>(fusion.extra_operands.size());
                 fusion.producer->operands.insert(

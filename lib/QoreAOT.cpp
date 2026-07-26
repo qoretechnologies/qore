@@ -16687,8 +16687,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             changed = qore_ir_optimize_fresh_list_calls(func, query);
         }
         size_t string_consumers = 0;
+        QoreIRStringProducerQuery string_producer_query;
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
-            QoreIRStringProducerQuery query =
+            string_producer_query =
                 [&](const AbstractQoreFunctionVariant* callee,
                         const QoreIRStringConsumerCallInstruction* call,
                         QoreIRCallDirectInstruction::AOTStringConsumerKind
@@ -16729,8 +16730,35 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         || info->second.string_op.kind
                             == AOTStringOpKind::Concat3;
                     if (!supported && info->second.string_expression) {
-                        supported = info->second.string_expression.nodes.back().kind
-                            == AOTStringExpressionNodeKind::Concat;
+                        const auto& expression =
+                            info->second.string_expression;
+                        const auto& final = expression.nodes.back();
+                        bool search_consumer =
+                            consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::StartsWith
+                                || consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::EndsWith
+                                || consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::Contains
+                                || consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::Find
+                                || consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::RFind;
+                        supported =
+                            final.kind
+                                == AOTStringExpressionNodeKind::Concat
+                            || (search_consumer
+                                && final.kind
+                                    == AOTStringExpressionNodeKind::Substr
+                                && final.lhs
+                                    < expression.nodes.size() - 1
+                                && expression.nodes[final.lhs].kind
+                                    == AOTStringExpressionNodeKind::Concat);
                         if (supported) {
                             bool has_hash_string = std::any_of(
                                 info->second.string_expression.nodes.begin(),
@@ -16801,7 +16829,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     return true;
                 };
             string_consumers =
-                qore_ir_fuse_string_producer_consumers(func, query);
+                qore_ir_fuse_string_producer_consumers(
+                    func, string_producer_query);
         }
         size_t string_transform_consumers = 0;
         size_t native_specializations = 0;
@@ -16856,6 +16885,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 "QORE_DISABLE_AOT_STRING_TRANSFORM_CONSUMER_FUSION")) {
             string_transform_consumers =
                 qore_ir_fuse_string_transform_consumers(func);
+        }
+        if (string_producer_query && string_transform_consumers) {
+            string_consumers += qore_ir_fuse_string_producer_consumers(
+                func, string_producer_query);
         }
         if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
                 || aggregate_projections

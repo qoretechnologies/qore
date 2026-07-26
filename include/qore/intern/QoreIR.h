@@ -2162,6 +2162,9 @@ public:
     int64_t aot_string_consumer_arg1 = 0;
     bool aot_string_consumer_has_arg1 = false;
     uint8_t aot_string_consumer_extra_operands = 0;
+    //! Apply lwr()/upr() before the fused search consumer.
+    bool aot_string_consumer_case_transform = false;
+    bool aot_string_consumer_case_transform_upper = false;
 };
 
 //! Direct function call instruction - bypasses AST round-trip for resolved function calls

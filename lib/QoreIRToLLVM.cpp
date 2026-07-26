@@ -5754,9 +5754,27 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
         || consumer
             == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
+    bool search =
+        consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Find
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::RFind;
     if (!expression || std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || expression.nodes.size() > QORE_AOT_STRING_EXPRESSION_MAX_NODES
-            || (consume && final->kind != AOTStringExpressionNodeKind::Concat)
+            || (consume
+                && final->kind != AOTStringExpressionNodeKind::Concat
+                && (!search
+                    || final->kind
+                        != AOTStringExpressionNodeKind::Substr
+                    || final->lhs >= expression.nodes.size() - 1
+                    || expression.nodes[final->lhs].kind
+                        != AOTStringExpressionNodeKind::Concat))
             || (!consume && final->kind != AOTStringExpressionNodeKind::Concat
                 && (final->kind != AOTStringExpressionNodeKind::Substr
                     || final->lhs >= expression.nodes.size() - 1
@@ -6200,17 +6218,58 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         if (operation < 0) {
             return nullptr;
         }
-        auto search = module.getOrInsertFunction(
-            "qore_rt_string_concat_multi_search",
-            llvm::FunctionType::get(i64_type,
-                {ptr_type, i32_type, i64_type, i32_type, i64_type, ptr_type},
-                false));
-        result = builder->CreateCall(search,
-            {args, llvm::ConstantInt::get(i32_type, parts.size()),
-             native_args[static_cast<size_t>(pattern_operand)],
-             llvm::ConstantInt::get(i32_type, operation),
-             consumer_arg0,
-             xsink_arg});
+        bool pipeline =
+            final->kind == AOTStringExpressionNodeKind::Substr
+            || fused_call->aot_string_consumer_case_transform;
+        if (pipeline) {
+            llvm::Value* start =
+                final->kind == AOTStringExpressionNodeKind::Substr
+                ? values[final->rhs]
+                : llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* length =
+                final->kind == AOTStringExpressionNodeKind::Substr
+                    && final->third != UINT8_MAX
+                ? values[final->third]
+                : llvm::ConstantInt::get(i64_type, 0);
+            auto pipeline_search = module.getOrInsertFunction(
+                "qore_rt_string_concat_multi_pipeline_search",
+                llvm::FunctionType::get(i64_type,
+                    {ptr_type, i32_type, i64_type, i64_type, i32_type,
+                     i32_type, i64_type, i32_type, i64_type, i32_type,
+                     ptr_type},
+                    false));
+            result = builder->CreateCall(pipeline_search,
+                {args, llvm::ConstantInt::get(i32_type, parts.size()),
+                 start, length,
+                 llvm::ConstantInt::get(i32_type,
+                    final->kind == AOTStringExpressionNodeKind::Substr),
+                 llvm::ConstantInt::get(i32_type,
+                    final->kind == AOTStringExpressionNodeKind::Substr
+                        && final->third != UINT8_MAX),
+                 native_args[static_cast<size_t>(pattern_operand)],
+                 llvm::ConstantInt::get(i32_type, operation),
+                 consumer_arg0,
+                 llvm::ConstantInt::get(i32_type,
+                    fused_call->aot_string_consumer_case_transform
+                        ? (fused_call
+                                ->aot_string_consumer_case_transform_upper
+                            ? 2 : 1)
+                        : 0),
+                 xsink_arg});
+        } else {
+            auto search_fn = module.getOrInsertFunction(
+                "qore_rt_string_concat_multi_search",
+                llvm::FunctionType::get(i64_type,
+                    {ptr_type, i32_type, i64_type, i32_type, i64_type,
+                     ptr_type},
+                    false));
+            result = builder->CreateCall(search_fn,
+                {args, llvm::ConstantInt::get(i32_type, parts.size()),
+                 native_args[static_cast<size_t>(pattern_operand)],
+                 llvm::ConstantInt::get(i32_type, operation),
+                 consumer_arg0,
+                 xsink_arg});
+        }
         if (operation <= 2) {
             result = builder->CreateICmpNE(
                 result, llvm::ConstantInt::get(i64_type, 0));
@@ -6347,7 +6406,26 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                                     ? 3 : 4;
                 llvm::Value* pattern =
                     native_args[static_cast<size_t>(pattern_operand)];
-                if (operation <= 2) {
+                if (fused_call->aot_string_consumer_case_transform) {
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_pseudo_string_case_consume_native_noguard",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i64_type, i32_type,
+                             i32_type, ptr_type},
+                            false));
+                    consumed_result = builder->CreateCall(helper,
+                        {fallback_result, pattern, consumer_arg0,
+                         llvm::ConstantInt::get(i32_type,
+                            fused_call
+                                ->aot_string_consumer_case_transform_upper),
+                         llvm::ConstantInt::get(i32_type, operation),
+                         xsink_arg});
+                    if (operation <= 2) {
+                        consumed_result = builder->CreateICmpNE(
+                            consumed_result,
+                            llvm::ConstantInt::get(i64_type, 0));
+                    }
+                } else if (operation <= 2) {
                     auto helper = module.getOrInsertFunction(
                         "qore_rt_pseudo_string_predicate_native_noguard",
                         llvm::FunctionType::get(i64_type,
@@ -6435,21 +6513,38 @@ bool QoreIRToLLVM::appendAOTStringConsumerOperands(
         const QoreIRStringConsumerCallInstruction& call,
         std::vector<llvm::Value*>& raw_args,
         std::vector<uint32_t>& raw_arg_ids, std::string& error) {
-    for (int16_t operand : {
-            call.aot_string_consumer_arg0_operand,
-            call.aot_string_consumer_arg1_operand}) {
-        if (operand < 0
-                || static_cast<size_t>(operand) < raw_args.size()) {
-            continue;
+    if (call.aot_string_consumer_extra_operands > call.operands.size()) {
+        error = "internal error: invalid fused AOT string consumer"
+            " extra-operand count";
+        return false;
+    }
+    size_t first_extra =
+        call.operands.size() - call.aot_string_consumer_extra_operands;
+    for (size_t operand = first_extra;
+            operand < call.operands.size(); ++operand) {
+        if (operand != first_extra
+                && !((operand - first_extra) % 100)
+                && qore_check_cancel(
+                    nullptr, "AOT string consumer operand emission")) {
+            error = "AOT string consumer operand emission cancelled";
+            return false;
         }
-        if (static_cast<size_t>(operand) != raw_args.size()
-                || static_cast<size_t>(operand) >= call.operands.size()) {
+        bool native_int =
+            operand == static_cast<size_t>(
+                call.aot_string_consumer_arg0_operand)
+            || operand == static_cast<size_t>(
+                call.aot_string_consumer_arg1_operand);
+        bool boxed_string =
+            operand == static_cast<size_t>(
+                call.aot_string_consumer_pattern_operand);
+        if ((!native_int && !boxed_string)
+                || operand != raw_args.size()) {
             error = "internal error: fused AOT string consumer operand"
                 " is out of order";
             return false;
         }
         uint32_t value_id = call.operands[
-            static_cast<size_t>(operand)].id;
+            operand].id;
         llvm::Value* value = getVal(value_id, error);
         if (!value) {
             return false;
@@ -6459,7 +6554,7 @@ bool QoreIRToLLVM::appendAOTStringConsumerOperands(
                 " is not a native integer";
             return false;
         }
-        if (nanboxed_values.count(value_id)) {
+        if (native_int && nanboxed_values.count(value_id)) {
             value = ensureIntTypeInline(value, value_id);
         }
         raw_args.push_back(value);
@@ -6615,17 +6710,40 @@ llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
     if (operation < 0) {
         return nullptr;
     }
-    auto search = module.getOrInsertFunction(
-        "qore_rt_string_concat_multi_search",
-        llvm::FunctionType::get(i64_type,
-            {ptr_type, i32_type, i64_type, i32_type, i64_type, ptr_type},
-            false));
-    llvm::Value* result = builder->CreateCall(search,
-        {args, llvm::ConstantInt::get(i32_type, params.size()),
-         native_args[static_cast<size_t>(pattern_operand)],
-         llvm::ConstantInt::get(i32_type, operation),
-         consumer_arg0,
-         xsink_arg});
+    llvm::Value* result;
+    if (call.aot_string_consumer_case_transform) {
+        auto pipeline_search = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_pipeline_search",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i64_type, i32_type,
+                 i32_type, i64_type, i32_type, i64_type, i32_type,
+                 ptr_type},
+                false));
+        result = builder->CreateCall(pipeline_search,
+            {args, llvm::ConstantInt::get(i32_type, params.size()),
+             llvm::ConstantInt::get(i64_type, 0),
+             llvm::ConstantInt::get(i64_type, 0),
+             llvm::ConstantInt::get(i32_type, 0),
+             llvm::ConstantInt::get(i32_type, 0),
+             native_args[static_cast<size_t>(pattern_operand)],
+             llvm::ConstantInt::get(i32_type, operation),
+             consumer_arg0,
+             llvm::ConstantInt::get(i32_type,
+                call.aot_string_consumer_case_transform_upper ? 2 : 1),
+             xsink_arg});
+    } else {
+        auto search_fn = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_search",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i32_type, i64_type, ptr_type},
+                false));
+        result = builder->CreateCall(search_fn,
+            {args, llvm::ConstantInt::get(i32_type, params.size()),
+             native_args[static_cast<size_t>(pattern_operand)],
+             llvm::ConstantInt::get(i32_type, operation),
+             consumer_arg0,
+             xsink_arg});
+    }
     return operation <= 2
         ? builder->CreateICmpNE(
             result, llvm::ConstantInt::get(i64_type, 0))

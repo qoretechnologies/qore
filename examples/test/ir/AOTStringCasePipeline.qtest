@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+string sub concatSlice(string left, string right, int start, int length) {
+    return (left + right).substr(start, length);
+}
+
+string sub concatTail(string left, string right, int start) {
+    return (left + right).substr(start);
+}
+
+string sub concatPair(string left, string right) {
+    return left + right;
+}
+";
+
+string consumer_source = "%modern
+
+bool sub lowerContains(string left, string right, int start, int length,
+        string pattern) {
+    return concatSlice(left, right, start, length).lwr().contains(pattern);
+}
+
+bool sub upperStartsWith(string left, string right, int start, int length,
+        string pattern) {
+    return concatSlice(left, right, start, length).upr().startsWith(pattern);
+}
+
+bool sub lowerEndsWith(string left, string right, int start,
+        string pattern) {
+    return concatTail(left, right, start).lwr().endsWith(pattern);
+}
+
+int sub lowerFind(string left, string right, int start, int length,
+        string pattern, int offset) {
+    return concatSlice(left, right, start, length).lwr()
+        .find(pattern, offset);
+}
+
+int sub upperRFind(string left, string right, int start, int length,
+        string pattern, int offset) {
+    return concatSlice(left, right, start, length).upr()
+        .rfind(pattern, offset);
+}
+
+bool sub directUpperContains(string left, string right, string pattern) {
+    return concatPair(left, right).upr().contains(pattern);
+}
+
+bool sub plainSliceContains(string left, string right, int start, int length,
+        string pattern) {
+    return concatSlice(left, right, start, length).contains(pattern);
+}
+
+int sub main() {
+    printf(\"utf8:%y:%y:%y\\n\",
+        lowerContains(\"XXDVO\", \"ŘÁKYY\", 2, 6, \"voř\"),
+        upperStartsWith(\"xxdvo\", \"řákyy\", 2, 6, \"DVO\"),
+        lowerEndsWith(\"XXDVO\", \"ŘÁK\", 2, \"řák\"));
+    printf(\"search:%d:%d:%y:%y\\n\",
+        lowerFind(\"XXNEEDLE\", \" needleZZ\", 2, 13, \"needle\", 1),
+        upperRFind(\"XXneedle\", \" NEEDLEZZ\", 2, 13, \"NEEDLE\", 7),
+        directUpperContains(\"prefix-\", \"needle-suffix\", \"NEEDLE\"),
+        plainSliceContains(\"XXneedle\", \"-tailYY\", 2, 11, \"-tail\"));
+
+    string latin_left = convert_encoding(\"XXCAF\", \"ISO-8859-1\");
+    string latin_right = convert_encoding(\"ÉYY\", \"ISO-8859-1\");
+    string latin_pattern = convert_encoding(\"CAFÉ\", \"ISO-8859-1\");
+    printf(\"latin1:%y\\n\",
+        upperStartsWith(latin_left, latin_right, 2, 4, latin_pattern));
+
+    string concat_error = \"none\";
+    try {
+        lowerContains(convert_encoding(\"ascii\", \"US-ASCII\"), \"ß\",
+            0, 8, \"ss\");
+    } catch (hash<auto> ex) {
+        concat_error = ex.err;
+    }
+    string pattern_error = \"none\";
+    try {
+        lowerContains(latin_left, latin_right, 2, 4, \"漢\");
+    } catch (hash<auto> ex) {
+        pattern_error = ex.err;
+    }
+    printf(\"errors:%s:%s\\n\", concat_error, pattern_error);
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-string-case-pipeline-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_source + consumer_source + "\nmain();\n");
+combined_file.close();
+
+string expected = "utf8:True:True:True\n"
+    + "search:7:0:True:True\n"
+    + "latin1:True\n"
+    + "errors:ENCODING-CONVERSION-ERROR:ENCODING-CONVERSION-ERROR\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+unlink(provider_path);
+
+string sub compileConsumer(string output_dir, string env) {
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s"
+            + " --output-dir=%s %s 2>&1",
+        env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
+    if (!is_file(output_dir + "/consumer.qo")) {
+        printf("consumer compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compileConsumer(enabled_dir, "");
+string disabled_compile = compileConsumer(disabled_dir,
+    "QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1");
+foreach string function in (("lowerContains", "upperStartsWith",
+        "lowerEndsWith", "lowerFind", "upperRFind",
+        "directUpperContains")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:"
+                + ".*string-consumers=1"
+                + ".*string-transform-consumers=1",
+            function))) {
+        printf("missing composed string pipeline for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (!enabled_compile.regex(
+        "IR-OPT-AOT-EFFECTS: [^\\n]*plainSliceContains[^\\n]*:"
+            + ".*string-consumers=1")) {
+    printf("missing untransformed string pipeline:\n%s", enabled_compile);
+    exit(2);
+}
+if (disabled_compile =~ /string-consumers=[1-9]/) {
+    printf("disabled string producer-consumer fusion was applied:\n%s",
+        disabled_compile);
+    exit(2);
+}
+
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_string_concat_multi_pipeline_search/
+        || enabled_undefined =~ /qore_rt_string_concat_multi_substr/
+        || enabled_undefined
+            =~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || disabled_undefined
+            =~ /qore_rt_string_concat_multi_pipeline_search/
+        || disabled_undefined !~ /qore_rt_string_concat_multi_substr/
+        || disabled_undefined
+            !~ /qore_rt_pseudo_string_case_consume_native_noguard/) {
+    printf("composed string pipeline helper mismatch:\nenabled:\n%s"
+        + "disabled:\n%s", enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string sub link(string output, string consumer_qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+        libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+foreach string path in ((
+        link(root + "/enabled-exe", enabled_qo),
+        link(root + "/disabled-exe", disabled_qo))) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+exit(0);

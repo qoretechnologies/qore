@@ -476,6 +476,13 @@ int64_t qore_rt_string_concat_multi_search(uint64_t* args, int nargs,
         uint64_t pattern, int32_t operation, int64_t offset,
         ExceptionSink* xsink);
 
+//! Concatenate strings, optionally apply substr() and case conversion, and
+//! execute an encoding-aware predicate or search without boxed intermediates.
+int64_t qore_rt_string_concat_multi_pipeline_search(uint64_t* args, int nargs,
+        int64_t start, int64_t length, int32_t has_substr,
+        int32_t has_length, uint64_t pattern, int32_t operation,
+        int64_t offset, int32_t transform, ExceptionSink* xsink);
+
 //! Return true when an assigned boxed string equals a constant hash key.
 int32_t qore_rt_string_equals_cstr(uint64_t value, const char* key);
 
