@@ -82,9 +82,54 @@ string sub maybeNothing(bool assign) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%s:%s\\n\", exactCall(),
+string sub sparseIntCall() {
+    code<int(int)> fn = \\increment();
+    list<int> values = (1, 2);
+    delete values[1];
+    try {
+        return sprintf(\"%y\", (map fn($1), values));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+float sub addHalf(float value) {
+    return value + 0.5;
+}
+
+string sub sparseFloatCall() {
+    code<float(float)> fn = \\addHalf();
+    list<float> values = (1.0, 2.0);
+    delete values[1];
+    try {
+        return sprintf(\"%y\", (map fn($1), values));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub largeIntCall() {
+    code<int(int)> fn = \\increment();
+    list<int> result = (map fn($1), (1125899906842624,));
+    return string(result[0]);
+}
+
+string sub wrongTypeCall() {
+    code<int(int)> fn = \\increment();
+    list<auto> values = ();
+    push values, \"wrong\";
+    try {
+        list<int> result = (map fn($1), values);
+        return \"unexpected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%s:%s:%s:%s:%s:%s\\n\", exactCall(),
     mutableCall(False), mutableCall(True), defaultCall(), overloadedCall(),
-    referenceCall(), maybeNothing(False), maybeNothing(True));
+    referenceCall(), maybeNothing(False), maybeNothing(True), sparseIntCall(),
+    sparseFloatCall(), largeIntCall(), wrongTypeCall());
 ";
 
 string root = "/tmp/qore-aot-known-callref-fast-entry-" + string(getpid());
@@ -98,9 +143,13 @@ on_exit {
     unlink(source_path);
     unlink(root + "-enabled");
     unlink(root + "-disabled");
+    unlink(root + "-guarded-disabled");
+    unlink(root + "-context-disabled");
 }
 
-string expected = "5:5:14:7:104:5:RUNTIME-(OVERLOAD|TYPE)-ERROR:5\\n";
+string expected = "5:5:14:7:104:5:RUNTIME-(OVERLOAD|TYPE)-ERROR:5:"
+    "RUNTIME-(OVERLOAD|TYPE)-ERROR:RUNTIME-(OVERLOAD|TYPE)-ERROR:"
+    "1125899906842625:RUNTIME-(OVERLOAD|TYPE)-ERROR\\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -114,7 +163,11 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
 foreach hash<string, string> variant in ((
         ("name": "enabled", "env": ""),
         ("name": "disabled",
-            "env": "QORE_DISABLE_AOT_KNOWN_CALLREF_FAST_ENTRY=1"))) {
+            "env": "QORE_DISABLE_AOT_KNOWN_CALLREF_FAST_ENTRY=1"),
+        ("name": "guarded-disabled",
+            "env": "QORE_DISABLE_AOT_GUARDED_CALLREF_NATIVE_ARGS=1"),
+        ("name": "context-disabled",
+            "env": "QORE_DISABLE_IR_NATIVE_CALLREF_IMPLICIT_CONTEXT=1"))) {
     string executable = root + "-" + variant.name;
     string compile_out = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s %s -O3 -o %s %s 2>&1",

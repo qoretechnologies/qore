@@ -7235,14 +7235,16 @@ next_instruction:
                 QoreValue list_val = getIRValue(values, inst->operands[0]);
                 QoreValue idx_val = getIRValue(values, inst->operands[1]);
                 int64_t index = idx_val.getAsBigInt();
-                int64_t result = 0;
+                QoreValue result(static_cast<int64_t>(0));
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-                        result = l->retrieveEntry(index).getAsBigInt();
+                        QoreValue entry = l->retrieveEntry(index);
+                        result = entry.isNothing()
+                            ? entry : QoreValue(entry.getAsBigInt());
                     }
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(result));
+                setValueSlotDirect(values, inst->result.id, result);
                 ++ip;
                 break;
             }
@@ -7250,14 +7252,16 @@ next_instruction:
                 QoreValue list_val = getIRValue(values, inst->operands[0]);
                 QoreValue idx_val = getIRValue(values, inst->operands[1]);
                 int64_t index = idx_val.getAsBigInt();
-                double result = 0.0;
+                QoreValue result(0.0);
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-                        result = l->retrieveEntry(index).getAsFloat();
+                        QoreValue entry = l->retrieveEntry(index);
+                        result = entry.isNothing()
+                            ? entry : QoreValue(entry.getAsFloat());
                     }
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(result));
+                setValueSlotDirect(values, inst->result.id, result);
                 ++ip;
                 break;
             }

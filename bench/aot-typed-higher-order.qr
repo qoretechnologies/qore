@@ -55,6 +55,44 @@ bool sub selectIntHelper(int value) {
     return (value & 1) == 0;
 }
 
+final class TypedHigherOrderProbe {
+    int mapInt(int value) {
+        return value + 1;
+    }
+
+    bool selectInt(int value) {
+        return (value & 1) == 0;
+    }
+
+    static int mapIntStatic(int value) {
+        return value + 1;
+    }
+
+    static bool selectIntStatic(int value) {
+        return (value & 1) == 0;
+    }
+
+    int methodMapSelectKernel(list<int> data, int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> mapped = (map self.mapInt($1),
+                (select data, self.selectInt($1)));
+            checksum += mapped.size() + mapped[0];
+        }
+        return checksum;
+    }
+
+    static int staticMapSelectKernel(list<int> data, int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> mapped = (map TypedHigherOrderProbe::mapIntStatic($1),
+                (select data, TypedHigherOrderProbe::selectIntStatic($1)));
+            checksum += mapped.size() + mapped[0];
+        }
+        return checksum;
+    }
+}
+
 int sub foldlIntHelper(int accumulator, int value) {
     return accumulator + (value & 7);
 }
@@ -219,6 +257,38 @@ int sub intSelectHelperKernel(list<int> data, int rounds) {
     return checksum;
 }
 
+int sub intMapSelectKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map $1 + 1,
+            (select data, ($1 & 1) == 0));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapSelectHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map mapIntHelper($1),
+            (select data, selectIntHelper($1)));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapSelectCallRefKernel(list<int> data, int rounds) {
+    code<int(int)> map_value = \mapIntHelper();
+    code<bool(int)> select_value = \selectIntHelper();
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map map_value($1),
+            (select data, select_value($1)));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
 int sub stringSelectKernel(list<string> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -284,6 +354,24 @@ int sub main() {
             break;
         case "int-select-helper":
             printf("%d\n", intSelectHelperKernel(makeData(), rounds));
+            break;
+        case "int-map-select":
+            printf("%d\n", intMapSelectKernel(makeData(), rounds));
+            break;
+        case "int-map-select-helper":
+            printf("%d\n", intMapSelectHelperKernel(makeData(), rounds));
+            break;
+        case "int-map-select-callref":
+            printf("%d\n", intMapSelectCallRefKernel(makeData(), rounds));
+            break;
+        case "int-map-select-method":
+            TypedHigherOrderProbe method_probe();
+            printf("%d\n", method_probe.methodMapSelectKernel(
+                makeData(), rounds));
+            break;
+        case "int-map-select-static":
+            printf("%d\n", TypedHigherOrderProbe::staticMapSelectKernel(
+                makeData(), rounds));
             break;
         case "string-select":
             printf("%d\n", stringSelectKernel(makeStringData(), rounds));

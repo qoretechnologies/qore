@@ -12653,6 +12653,14 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
         QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error,
         has_ref_args);
     if (result.isValid()
+            && !std::getenv(
+                "QORE_DISABLE_IR_NATIVE_CALLREF_IMPLICIT_CONTEXT")) {
+        // CallClosureDirect evaluates the target and arguments through IR.
+        // Any nested AST delegation has its own count and still forces the
+        // functional operator to publish its implicit context.
+        --ast_delegate_count;
+    }
+    if (result.isValid()
             && !markReferenceArgumentAssignmentsUnknown(
                 call->getParseArgs(), call->getArgs(), error)) {
         return QoreIRValue();

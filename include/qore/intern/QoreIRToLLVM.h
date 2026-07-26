@@ -356,6 +356,13 @@ private:
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;
 
+    // Boxed source values retained when a typed collection read is unboxed.
+    // Generic calls and NOTHING guards must observe the source value rather
+    // than re-boxing a native zero produced from a sparse list entry.
+    std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
+    std::unordered_map<uint32_t, BatchCalleeParamKind>
+        native_boxed_source_kinds;
+
     // Value IDs known not to be NOTHING.  This is intentionally narrower than
     // assigned-state: only typed locals proven assigned on every load contribute
     // here, so auto/any values assigned to NOTHING are not misclassified.
