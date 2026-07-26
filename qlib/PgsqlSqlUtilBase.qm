@@ -1784,6 +1784,26 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return ds.selectRow("select pg_database_size(%v) as val", dbname).val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
     }
 
+    #! @ref SqlUtil::AbstractDatabase.getSchemaPhysicalSize()
+    private int getSchemaPhysicalSizeImpl(string schema) {
+        # Enumerate only storage roots in the requested namespace.  pg_total_relation_size() already includes
+        # every table/materialized-view index and its TOAST relation and index.  Enumerating relkind 'i', 'I',
+        # or the pg_toast namespace separately would therefore double count storage.  Partitioned roots have no
+        # storage; each physical leaf is relkind 'r' and is counted independently.
+        *hash<auto> row = ds.selectRow("select coalesce(sum(case "
+            "when c.relkind in ('r', 'm') then pg_catalog.pg_total_relation_size(c.oid) "
+            "when c.relkind = 'S' then pg_catalog.pg_relation_size(c.oid) "
+            "else 0 end), 0)::bigint as size_bytes "
+            "from pg_catalog.pg_namespace n "
+            "left join pg_catalog.pg_class c on c.relnamespace = n.oid "
+            "and c.relkind in ('r', 'm', 'S') "
+            "where n.nspname = %v group by n.oid", schema);
+        if (!row) {
+            throw "SCHEMA-NOT-FOUND", sprintf("PostgreSQL schema %y does not exist", schema);
+        }
+        return row.size_bytes;
+    }
+
     #! tries to execute a command so that if an error occurs the current transaction status is not lost
     private auto tryExecArgsImpl(string sql, *softlist<auto> args) {
         return PgsqlDatabase::tryExecArgs(ds, sql, args);
