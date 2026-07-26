@@ -51,6 +51,60 @@ Batch registration uses the multi-deserializer:
 The cross-session barriers are required because one `.qo` can reference classes,
 constants, or members declared in another `.qo`.
 
+### Restored Expression Trees Are Already Parse-Initialized
+
+Expression trees restored from an AOT image (class member initializers, static
+var and global initializers, default argument values) are rebuilt by the AOT
+expression readers in their **post-parse-init** form: target classes and methods
+are resolved, pseudo-method calls are tagged, and argument lists are already
+resolved via `resolveParseArgs()`. Nothing may parse-initialize them again.
+
+Two independent paths would otherwise do exactly that, and both are blocked by
+marking the deserialized declaration as already parse-initialized:
+
+- static class vars: `resolveStaticMembers()` calls `QoreVarInfo::parseInit()`
+  before installing the serialized value, so the later `parseInit()` from
+  `qore_class_private::copy()` during a class merge is a no-op
+- instance class members: `resolveInstanceMembers()` calls
+  `QoreMemberInfo::setParseInitDone()`. The trigger is any class subclassed
+  either inside the same module or by the code loading it:
+  `importInheritedMembers()` → `qore_class_private::initializeMembers()` →
+  `BCNode::initializeMembers()` → `parseImportMembers()` calls
+  `QoreMemberMap::parseInit()` on the **base** class to guarantee parent members
+  are initialized before merging (issue #2657), which walks straight into the
+  restored trees. Re-initializing a restored tree aborts on
+  `!pseudo && !pseudoTypeInfo` in `MethodCallNode::setPseudo()` in debug builds
+  and silently re-resolves call targets in release builds.
+
+The asserts in `MethodCallNode::setPseudo()` and
+`AbstractMethodCallNode::parseSetClassAndMethod()` are the only thing reporting
+a violation of this invariant; they must be kept.
+
+### Restored Expression Trees Resolve Symbols in a Late Phase
+
+A restored tree can reference any symbol in the module, so it can only be
+rebuilt once every symbol it might name is registered. Registration is
+incremental — `deserializeFunctions()` adds each function to its namespace only
+after reading that function's own variants, and the FUNCTIONS section is written
+in `func_list` hash order — so "is the referenced symbol registered yet?" has no
+stable answer mid-phase.
+
+Trees are therefore captured as raw blobs and resolved in a dedicated late
+phase rather than in place:
+
+- BCA (base-class constructor argument) blobs → `resolveBCAExpressions()`
+- general expression-tree param defaults (`VT_EXPR_NATIVE`) →
+  `resolveNativeExprDefaults()`, via `PendingNativeExprDefault`; the signature
+  slot holds a non-`NOTHING` placeholder in the interim so `hasDefaultArg()`
+  stays true and overload resolution still treats the parameter as optional
+- static-method param defaults → `PendingStaticMethodDefault`, resolved in
+  `finalizePreIndex()`
+
+Both `resolveBCAExpressions()` and `resolveNativeExprDefaults()` run in
+`finalizePostIndex()`, after `commitDeserializedClasses()` and
+`rebuildAOTRootIndexes()`, and before any module init function executes. Adding
+a new deferred-tree kind means adding it to that phase, not resolving it earlier.
+
 ## Compile-Time Preload
 
 `qcc -c -L<dir> file.qr` scans `.qo` files in preload directories and preloads

@@ -757,6 +757,15 @@ public:
     //! shells have been registered.
     mutable bool defer_unresolved_const_refs = false;
 
+    //! When non-null, VT_EXPR_NATIVE copies its payload here and returns NOTHING
+    //! instead of deserializing the expression tree in place.
+    /** Set while reading param defaults so that the caller can resolve the tree in a
+        later phase, once every symbol the tree can reference is registered; see
+        QoreAOTBinaryDeserializer::PendingNativeExprDefault.  Mutable so readValue can be
+        called on a const-referenced reader (common from handler paths).
+    */
+    mutable std::vector<uint8_t>* expr_native_capture = nullptr;
+
     //! Open and validate a binary blob
     /** @param data pointer to the binary data
         @param size size of the binary data
@@ -1938,8 +1947,26 @@ public:
         uint32_t param_index = 0;
     };
 
+    //! Native-expression default-arg fixups for params whose default is a general
+    //! expression tree (`VT_EXPR_NATIVE`), e.g.
+    //!   `int sub f(int d = getDelay().durationSeconds())`
+    /** These trees can reference any symbol in the module — including other functions in
+        the same module.  Functions are added to their namespace only after their own
+        variants have been read (see `deserializeFunctions`), and the FUNCTIONS section is
+        written in `func_list` hash order, so whether a referenced sibling is already
+        registered when the default is read is not deterministic.  Capturing the blob here
+        and resolving it in `finalizePostIndex()` — after every function, method and class
+        is registered and indexed — removes the ordering dependency entirely.
+    */
+    struct PendingNativeExprDefault {
+        std::vector<uint8_t> blob;
+        UserVariantBase* uvb = nullptr;
+        uint32_t param_index = 0;
+    };
+
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
+    std::vector<PendingNativeExprDefault> pending_ned;
 
     //! Pre-resolved per-blob type table.  Populated at the start of
     //! phase 2b (deserializeFunctionsAndMethods) by reading the
@@ -1984,6 +2011,9 @@ private:
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
     bool resolveBCAExpressions(std::string& error);
+
+    //! resolves deferred general expression-tree param defaults; see PendingNativeExprDefault
+    bool resolveNativeExprDefaults(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
     bool deserializeTypedefs(std::string& error);

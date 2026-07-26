@@ -2646,6 +2646,19 @@ foreach string module_name in (registry.getProcessModules()) {
         <tt>*hash&lt;auto&gt; instanceof hash&lt;SomeHashDecl&gt;</tt> or <tt>int instanceof float</tt>), but is now
         correctly emitted for disjoint hashdecl and complex-list types (such as <tt>hash&lt;X&gt; instanceof
         hash&lt;Y&gt;</tt>), which can never share a runtime value
+      - fixed class member initialization expressions restored from @ref exec_mode_aot "AOT"-compiled modules being
+        parse-initialized a second time when the class is subclassed, either inside the same module or by the code
+        loading it; this aborted the process on \c %requires in debug builds (for example with a pseudo-method call
+        such as <tt>int delay = SomeDelay.durationSeconds();</tt> in a member initializer) and silently re-resolved
+        call targets in release builds
+      - fixed hashdecl member default-value expressions restored from @ref exec_mode_aot "AOT"-compiled modules
+        being parse-initialized a second time when code referencing a member of the hashdecl by name is parsed,
+        with the same symptoms as the class member case above
+      - fixed loading @ref exec_mode_aot "AOT"-compiled modules with a default argument expression referencing
+        another function in the same module (such as <tt>int d = getDelay().durationSeconds()</tt>), which failed
+        with \c LOAD-MODULE-ERROR (\c "cannot resolve function ... in inline FUNC_CALL expression") depending on
+        the order functions happened to be serialized in; these expressions are now resolved after all functions,
+        methods, and classes in the module are registered
 
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)

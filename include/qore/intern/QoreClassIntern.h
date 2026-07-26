@@ -1010,6 +1010,17 @@ public:
         return access;
     }
 
+    //! marks the member as already parse-initialized, so that parseInit() becomes a no-op
+    /** used for members deserialized from an AOT binary: the type is already resolved and any
+        initialization expression tree was reconstructed in its post-parse-init form by the AOT
+        expression readers, which must not be parse-initialized a second time
+    */
+    DLLLOCAL void setParseInitDone() {
+        assert(!init);
+        assert(!parseTypeInfo);
+        init = true;
+    }
+
 protected:
     DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
             : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {

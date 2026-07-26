@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDefaultArgExprTreeTest
+
+#! Regression test for general expression-tree default arguments in AOT modules
+/** A default argument that is not one of the special-cased forms (constant value, no-arg
+    function call, constant reference, no-arg method call on a constant, hashdecl cast,
+    no-arg static method call) is serialized as a general native expression tree
+    (\c VT_EXPR_NATIVE).
+
+    Such a tree can reference any symbol in the module, including sibling functions.
+    Functions are added to their namespace only after their own variants have been read,
+    and the FUNCTIONS section is written in \c func_list hash order, so resolving these
+    trees while reading the signature succeeded or failed depending on hash ordering —
+    a failure aborted the whole module load with
+    \c "cannot resolve function '...' in inline FUNC_CALL expression".  The trees are now
+    captured and resolved after every function, method and class is registered.
+*/
+class AOTDefaultArgExprTreeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTDefaultArgExprTreeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("function default argument expression tree", \testFunctionDefaultArg());
+        addTestCase("method default argument expression tree", \testMethodDefaultArg());
+        addTestCase("base class constructor argument expression tree", \testBaseConstructorArg());
+        addTestCase("default argument expression tree with a caller-defined-first callee",
+            \testCalleeDeclaredLast());
+
+        set_return_value(main());
+    }
+
+    #! module preamble: a function returning a date, so `getDelay().durationSeconds()` cannot be folded
+    private string modulePreamble(string mod_name) {
+        return sprintf("%%modern
+
+module %s {
+    version = \"1.0\";
+    desc = \"AOT default-argument expression tree regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+public const ErrorDelay = 60s;
+
+# not constant-foldable: forces the pseudo-method call to be serialized as an expression tree
+public date sub getDelay() {
+    return ErrorDelay;
+}
+", mod_name, mod_name);
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    #! compiles \a body into an AOT module and asserts that source and AOT both print "60"
+    private checkModule(string mod_name, string body) {
+        TmpDir tmp("qore-aot-default-arg-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = writeFile(src_dir + "/" + mod_name + ".qm", modulePreamble(mod_name) + body);
+        string script_path = writeFile(tmp.path + "/run.qr", sprintf("%%modern\n"
+            "%%requires %s\n"
+            "printf(\"%%s\\n\", %s::verify());\n", mod_name, mod_name));
+
+        string qmod_path = qmod_dir + "/" + mod_name + ".qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", mod_name, compile_out));
+
+        assertEq("60\n", runModule(src_dir, script_path), mod_name + ": source module");
+        assertEq("60\n", runModule(qmod_dir, script_path), mod_name + ": AOT module");
+    }
+
+    testFunctionDefaultArg() {
+        checkModule("AOTDefArgFunc", "public int sub fdefault(int d = getDelay().durationSeconds()) {
+    return d;
+}
+
+public string sub verify() {
+    return sprintf(\"%d\", fdefault());
+}
+}
+");
+    }
+
+    testMethodDefaultArg() {
+        checkModule("AOTDefArgMethod", "public class C {
+    int mdefault(int v = getDelay().durationSeconds()) {
+        return v;
+    }
+}
+
+public string sub verify() {
+    C c();
+    return sprintf(\"%d\", c.mdefault());
+}
+}
+");
+    }
+
+    testBaseConstructorArg() {
+        checkModule("AOTDefArgBca", "public class Base {
+    public {
+        int d;
+    }
+
+    constructor(int x) {
+        d = x;
+    }
+}
+
+public class Mid inherits Base {
+    constructor() : Base(getDelay().durationSeconds()) {
+    }
+}
+
+public string sub verify() {
+    Mid m();
+    return sprintf(\"%d\", m.d);
+}
+}
+");
+    }
+
+    #! the referenced function is declared after the function whose default references it
+    testCalleeDeclaredLast() {
+        checkModule("AOTDefArgOrder", "public int sub fdefault(int d = getDelay2().durationSeconds()) {
+    return d;
+}
+
+public date sub getDelay2() {
+    return ErrorDelay;
+}
+
+public string sub verify() {
+    return sprintf(\"%d\", fdefault());
+}
+}
+");
+    }
+}

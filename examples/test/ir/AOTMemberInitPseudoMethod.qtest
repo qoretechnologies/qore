@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTMemberInitPseudoMethodTest
+
+#! Regression test for pseudo-method calls in class member initializers in AOT modules
+/** A class member initializer is serialized into the AOT image as an expression tree and
+    rebuilt by the AOT expression readers in its post-parse-init form (target class and method
+    already resolved, pseudo-method calls already tagged).
+
+    When such a class is subclassed inside the same module, AOT deserialization runs
+    importInheritedMembers() -> qore_class_private::initializeMembers() ->
+    BCNode::initializeMembers() -> parseImportMembers(), which calls
+    \c QoreMemberMap::parseInit() on the BASE class to guarantee that parent members are
+    initialized before merging (issue #2657).  Without the parse-init-done marker set by the
+    AOT deserializer, that walked straight into the restored expression trees and
+    parse-initialized them a second time, aborting on
+    \c "!pseudo && !pseudoTypeInfo" in MethodCallNode::setPseudo() in debug builds and
+    silently double-resolving in release builds.
+*/
+class AOTMemberInitPseudoMethodTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! expected output of AOTMemberInitPseudoMod::verify()
+        const ExpectedVerify = "60|date|3|5|1|1|alpha|120|gamma|60";
+
+        #! expected output of AOTMemberInitPseudoMod::verifyTransient()
+        /** the constructor overwrites the transient member with 1; deserialization re-runs the
+            member initializer, so the deserialized object gets the initializer value back
+        */
+        const ExpectedTransient = "1|60000";
+    }
+
+    constructor() : QUnit::Test("AOTMemberInitPseudoMethodTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("pseudo-method member initializers in a subclassed AOT class",
+            \testPseudoMethodMemberInit());
+        addTestCase("pseudo-method member initializer without a subclass",
+            \testPseudoMethodMemberInitNoSubclass());
+        addTestCase("script subclassing an AOT class with a pseudo-method member initializer",
+            \testScriptSubclassOfAOTClass());
+
+        set_return_value(main());
+    }
+
+    #! module with pseudo-method calls in member initializers of a class subclassed in the same module
+    private string moduleCode() {
+        return "%modern
+
+module AOTMemberInitPseudoMod {
+    version = \"1.0\";
+    desc = \"AOT pseudo-method member-initializer regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTMemberInitPseudoMod {
+public const ErrorDelay = 60s;
+public const Names = (\"alpha\", \"beta\", \"gamma\");
+
+public class Base inherits Serializable {
+    public {
+        # pseudo-method call on a date constant
+        int error_delay = ErrorDelay.durationSeconds();
+        # pseudo-method returning a string
+        string delay_type = ErrorDelay.type();
+        # pseudo-method on a list constant
+        int name_count = Names.size();
+        # pseudo-method on a list element
+        int alpha_len = Names[0].size();
+        # pseudo-method call with an argument
+        int beta_pos = Names[1].find(\"et\");
+        # transient member with a pseudo-method initializer
+        transient int transient_ms = ErrorDelay.durationMilliseconds();
+    }
+
+    private:internal {
+        # private:internal member with a pseudo-method initializer
+        string first_name = Names.first();
+    }
+
+    constructor() {
+        transient_ms = 1;
+    }
+
+    string getFirstName() {
+        return first_name;
+    }
+}
+
+# second level of inheritance, also with a pseudo-method member initializer
+public class Middle inherits Base {
+    public {
+        int middle_delay = ErrorDelay.durationSeconds() * 2;
+    }
+}
+
+# third level of inheritance
+public class Leaf inherits Middle {
+    public {
+        string leaf_tag = Names.last();
+    }
+}
+
+public string sub verify() {
+    Base b();
+    Leaf l();
+    return sprintf(\"%d|%s|%d|%d|%d|%d|%s|%d|%s|%d\", b.error_delay, b.delay_type, b.name_count,
+        b.alpha_len, b.beta_pos, b.transient_ms, b.getFirstName(), l.middle_delay, l.leaf_tag,
+        l.error_delay);
+}
+
+public string sub verifyTransient() {
+    Base b();
+    Base b1 = cast<Base>(Serializable::deserialize(Serializable::serializeToData(b)));
+    return sprintf(\"%d|%d\", b.transient_ms, b1.transient_ms);
+}
+}
+
+# private namespace; not exported
+namespace Priv {
+# subclass of Base in the SAME module; this is what drives parseImportMembers() on Base
+class Derived inherits Base {
+    constructor() {
+    }
+}
+}
+";
+    }
+
+    #! same class, but with no subclass in the module: the control case that always worked
+    private string moduleCodeNoSubclass() {
+        return "%modern
+
+module AOTMemberInitPseudoNoSubMod {
+    version = \"1.0\";
+    desc = \"AOT pseudo-method member-initializer regression module (no subclass)\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTMemberInitPseudoNoSubMod {
+public const ErrorDelay = 60s;
+
+public class Solo {
+    public {
+        int error_delay = ErrorDelay.durationSeconds();
+    }
+}
+
+public string sub verify() {
+    Solo s();
+    return sprintf(\"%d\", s.error_delay);
+}
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    #! AOT-compiles \a qm_path into \a qmod_dir and asserts the compile succeeded
+    private string compileModule(string qm_path, string qmod_dir, string mod_name) {
+        string qmod_path = qmod_dir + "/" + mod_name + ".qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", mod_name, compile_out));
+        return qmod_path;
+    }
+
+    testPseudoMethodMemberInit() {
+        TmpDir tmp("qore-aot-member-init-pseudo-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = writeFile(src_dir + "/AOTMemberInitPseudoMod.qm", moduleCode());
+        string script_path = writeFile(tmp.path + "/run.qr", "%modern\n"
+            "%requires AOTMemberInitPseudoMod\n"
+            "printf(\"%s\\n%s\\n\", AOTMemberInitPseudoMod::verify(), "
+            "AOTMemberInitPseudoMod::verifyTransient());\n");
+
+        compileModule(qm_path, qmod_dir, "AOTMemberInitPseudoMod");
+
+        string expected = ExpectedVerify + "\n" + ExpectedTransient + "\n";
+        # sanity check: the source module must produce the expected values
+        assertEq(expected, runModule(src_dir, script_path), "source module member initializers");
+        # the AOT module must load without aborting and produce identical values
+        assertEq(expected, runModule(qmod_dir, script_path), "AOT module member initializers");
+    }
+
+    testPseudoMethodMemberInitNoSubclass() {
+        TmpDir tmp("qore-aot-member-init-pseudo-nosub-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = writeFile(src_dir + "/AOTMemberInitPseudoNoSubMod.qm", moduleCodeNoSubclass());
+        string script_path = writeFile(tmp.path + "/run.qr", "%modern\n"
+            "%requires AOTMemberInitPseudoNoSubMod\n"
+            "printf(\"%s\\n\", AOTMemberInitPseudoNoSubMod::verify());\n");
+
+        compileModule(qm_path, qmod_dir, "AOTMemberInitPseudoNoSubMod");
+
+        assertEq("60\n", runModule(src_dir, script_path), "source module member initializer");
+        assertEq("60\n", runModule(qmod_dir, script_path), "AOT module member initializer");
+    }
+
+    #! a class in the script subclassing an AOT class drives parseImportMembers() on the AOT base
+    testScriptSubclassOfAOTClass() {
+        TmpDir tmp("qore-aot-member-init-pseudo-scriptsub-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = writeFile(src_dir + "/AOTMemberInitPseudoNoSubMod.qm", moduleCodeNoSubclass());
+        string script_path = writeFile(tmp.path + "/run.qr", "%modern\n"
+            "%requires AOTMemberInitPseudoNoSubMod\n"
+            "class Sub inherits AOTMemberInitPseudoNoSubMod::Solo {}\n"
+            "Sub s();\n"
+            "printf(\"%d\\n\", s.error_delay);\n");
+
+        compileModule(qm_path, qmod_dir, "AOTMemberInitPseudoNoSubMod");
+
+        assertEq("60\n", runModule(src_dir, script_path), "script subclass of source module class");
+        assertEq("60\n", runModule(qmod_dir, script_path), "script subclass of AOT module class");
+    }
+}
