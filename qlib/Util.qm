@@ -36,9 +36,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires reflection
 
@@ -1115,9 +1113,7 @@ auto sub process_placeholder(string type, string value) {
 %ifndef NoYaml
         case "yaml": return parse_yaml(get_string_file_data(value));
 %endif
-%ifndef NoJson
         case "json": return parse_json(get_string_file_data(value));
-%endif
         case "bin": return get_binary_file_data(value);
         case "base64": return make_base64_string(get_binary_file_data(value));
         case "base64url": return make_base64_url_string(get_binary_file_data(value));

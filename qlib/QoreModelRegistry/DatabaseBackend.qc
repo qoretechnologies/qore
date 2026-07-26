@@ -24,8 +24,6 @@
 #! Main QoreModelRegistry namespace
 public namespace QoreModelRegistry {
 
-%ifndef NoJson
-
 #! Database-backed model registry storage backend using SqlUtil
 /** Stores model artifacts and metadata in database tables via SqlUtil.
     All tables include a \c tenant_id column for multi-tenant isolation.
@@ -793,7 +791,5 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         }
     }
 }
-
-%endif # NoJson
 
 } # namespace QoreModelRegistry

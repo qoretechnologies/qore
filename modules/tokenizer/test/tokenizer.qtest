@@ -12,9 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/tokenizer"
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module tokenizer
 %define NoTokenizer
@@ -105,9 +103,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         # Load real BERT tokenizer
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -137,9 +132,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -168,9 +160,6 @@ class TokenizerTest inherits QUnit::Test {
     unicodeInputTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -242,9 +231,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -264,9 +250,6 @@ class TokenizerTest inherits QUnit::Test {
     gpt2TokenizerTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");
@@ -288,9 +271,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/t5-small-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -311,9 +291,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -328,9 +305,6 @@ class TokenizerTest inherits QUnit::Test {
     gpt4StyleSplitTokenizerTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         # GPT-4/Qwen-style byte-level BPE: the pre_tokenizer is a Sequence of a
         # Split{Regex} followed by a ByteLevel.  The Split pattern uses inline
@@ -419,9 +393,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/tinyllama-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -441,9 +412,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -458,9 +426,6 @@ class TokenizerTest inherits QUnit::Test {
     truncationTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -480,9 +445,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -500,9 +462,6 @@ class TokenizerTest inherits QUnit::Test {
     batchEncodingTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -522,9 +481,6 @@ class TokenizerTest inherits QUnit::Test {
     modelInputTensorBatchTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -597,9 +553,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -671,9 +624,6 @@ class TokenizerTest inherits QUnit::Test {
     preTokenizedTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         # --- BERT: encodePreTokenized ---
         {
@@ -778,9 +728,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         # --- BERT: word_ids with special tokens ---
         {
             string json_str = ReadOnlyFile::readTextFile(
@@ -845,9 +792,6 @@ class TokenizerTest inherits QUnit::Test {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
 %endif
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -873,9 +817,6 @@ class TokenizerTest inherits QUnit::Test {
     unicodeDigitTest() {
 %ifdef NoTokenizer
         testSkip("tokenizer module not available");
-%endif
-%ifdef NoJson
-        testSkip("json module not available");
 %endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");

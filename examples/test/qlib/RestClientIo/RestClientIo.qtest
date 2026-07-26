@@ -46,9 +46,7 @@
 %requires HttpServer
 %requires RestClientIo
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RestClientIoTest
 
@@ -766,7 +764,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testRestGet() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -775,31 +772,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
         assertEq(True, resp.headers instanceof hash);
-%endif
     }
 
     testRestHead() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restHead("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testRestOptions() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restOptions("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testRestPost() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -808,11 +799,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestPut() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -821,11 +810,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("PUT", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestPatch() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -834,21 +821,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("PATCH", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestDel() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restDel("/api/test", NOTHING);
         assertEq(204, resp.status_code);
-%endif
     }
 
     testRestDoRequest() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -857,7 +840,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testSerializationConfig() {
@@ -911,7 +893,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testDefaultAcceptSentOnWire() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -922,7 +903,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "Accept header must be sent on the wire");
         assertRegex("Qore-RestClientIo/", resp.body.request_headers."user-agent",
             "User-Agent header must be sent on the wire");
-%endif
     }
 
     testTokenManagement() {
@@ -936,7 +916,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testErrorPassthru() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -944,11 +923,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/error");
         assertEq(500, resp.status_code);
         assertEq("internal server error", resp.body.error);
-%endif
     }
 
     testErrorWithoutPassthru() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
             "data": "json",
@@ -960,7 +937,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Without error_passthru, errors should throw exceptions
         assertThrows("REST-RESPONSE-ERROR", sub () { rest.restGet("/error"); });
-%endif
     }
 
     testMissingUrlError() {
@@ -987,7 +963,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(NOTHING, rest.getNegotiatedHttpVersion());
         # getHttpVersion() reports the configured mode even without a connection
         assertEq("2.0", rest.getHttpVersion());
-%ifndef NoJson
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
 
@@ -1000,11 +975,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("127.0.0.1", info[0].host);
         assertEq(port, info[0].port);
         assertEq(True, info[0].ssl);
-%endif
     }
 
     testNegotiatedHttpVersionH1() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
@@ -1018,7 +991,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(True, info.size() >= 1);
         assertEq("h1", info[0].protocol);
         assertEq(h1_port, info[0].port);
-%endif
     }
 
     testConnectionInfoManager() {
@@ -1032,7 +1004,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # a host that has never been contacted yields an empty list
         assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
-%ifndef NoJson
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
 
@@ -1047,7 +1018,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # filtered to an unrelated host: still empty
         assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
-%endif
     }
 
     #! A persistent (connection-scoped) session pins one leased connection for all its requests
@@ -1056,7 +1026,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         closure return value passes through, a clean @ref RestPersistentSession::close() returns the
         connection to the pool for reuse, and using the session after close is rejected. */
     testPersistentSession() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
@@ -1098,7 +1067,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertThrows("PERSISTENT-SESSION-CLOSED", sub () { ps.pinned(sub () {}); });
         ps.close();
         assertFalse(ps.isOpen());
-%endif
     }
 
     #! An aborted or error-tainted persistent session discards (closes) its leased connection
@@ -1108,7 +1076,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         @ref RestPersistentSession::abort() — must NOT return its connection to the pool: the next
         request must open a fresh connection (new id). */
     testPersistentSessionAbort() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
@@ -1143,11 +1110,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
         assertEq(200, rest.restGet("/api/z").status_code);
         assertNeq(after_error_id, mgr.getConnectionInfo(url)[0].connection_id);
-%endif
     }
 
     testSharedManager() {
-%ifndef NoJson
         # Create a shared manager
         HttpClientIo::HttpClientConnectionManager shared_mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -1179,11 +1144,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         hash<RestClient::RestResponseInfo> resp2 = rest2.restGet("/api/test2");
         assertEq(200, resp2.status_code);
-%endif
     }
 
     testSharedManagerCloseNoClose() {
-%ifndef NoJson
         # Create a shared manager
         HttpClientIo::HttpClientConnectionManager shared_mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -1215,11 +1178,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         resp = rest2.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testRestGetAsync() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -1229,11 +1190,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
-%endif
     }
 
     testRestPostAsync() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -1243,11 +1202,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testAsyncConcurrent() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -1263,11 +1220,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, resp.status_code,
                 sprintf("async concurrent request %d status", i));
         }
-%endif
     }
 
     testAsyncError() {
-%ifndef NoJson
         # Test with error_passthru=True: errors returned as responses via RestFuture
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
@@ -1289,11 +1244,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         RestClientIo::RestFuture f2 = rest_strict.restGetAsync("/error");
         assertThrows("REST-RESPONSE-ERROR", \f2.get(), (30s,));
-%endif
     }
 
     testPoolBasic() {
-%ifndef NoJson
         hash<auto> client_opts = {
             "url": sprintf("https://127.0.0.1:%d", port),
             "data": "json",
@@ -1315,11 +1268,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Verify the acquired object is a RestClientIo (and a RestClientIoPool)
         assertTrue(rc instanceof RestClientIo::RestClientIo);
-%endif
     }
 
     testPoolWithOptions() {
-%ifndef NoJson
         # Use the options-based constructor — no factory closure needed
         hash<auto> client_opts = {
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -1340,11 +1291,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
         assertTrue(rc instanceof RestClientIo::RestClientIo);
-%endif
     }
 
     testPoolWithSharedManager() {
-%ifndef NoJson
         # Use the options-based constructor with a shared connection manager
         hash<auto> client_opts = {
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -1387,11 +1336,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit direct.close();
         hash<RestClient::RestResponseInfo> resp3 = direct.restGet("/api/test");
         assertEq(200, resp3.status_code);
-%endif
     }
 
     testPoolConcurrent() {
-%ifndef NoJson
         hash<auto> client_opts = {
             "url": sprintf("https://127.0.0.1:%d", port),
             "data": "json",
@@ -1426,13 +1373,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, results[i].status_code,
                 sprintf("pool concurrent request %d status", i));
         }
-%endif
     }
 
     # ---- HTTP/1.1 Tests ----
 
     testH1BasicGet() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
@@ -1441,11 +1386,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
         assertEq(True, resp.headers instanceof hash);
-%endif
     }
 
     testH1PostWithBody() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
@@ -1454,42 +1397,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testH1HeadRequest() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restHead("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testH1Delete204() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restDel("/api/test", NOTHING);
         assertEq(204, resp.status_code);
-%endif
     }
 
     testH1ErrorPassthru() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createH1Client();
         on_exit rest.close();
 
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/error");
         assertEq(500, resp.status_code);
         assertEq("internal server error", resp.body.error);
-%endif
     }
 
     testH1ConcurrentRequests() {
-%ifndef NoJson
         # HTTP/1.1 concurrent requests — the connection manager creates
         # multiple TCP connections since H1 is serial
         RestClientIo::RestClientIo rest = createH1Client();
@@ -1528,11 +1463,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, results[i].status_code,
                 sprintf("h1 concurrent request %d status", i));
         }
-%endif
     }
 
     testH1PoolBasic() {
-%ifndef NoJson
         hash<auto> client_opts = {
             "url": sprintf("http://127.0.0.1:%d", h1_port),
             "data": "json",
@@ -1548,11 +1481,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
-%endif
     }
 
     testH1Ssl() {
-%ifndef NoJson
         # HTTP/1.1 over HTTPS (no ALPN negotiation → server falls back to HTTP/1.1)
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -1566,13 +1497,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
-%endif
     }
 
     # ---- Auto protocol fallback tests ----
 
     testAutoPlainHttpFallback() {
-%ifndef NoJson
         # Connect to HTTP/1.1-only server with auto protocol — for plain HTTP (non-TLS),
         # auto mode uses HTTP/1.1 directly since ALPN is not available to negotiate H2
         RestClientIo::RestClientIo rest({
@@ -1587,11 +1516,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
-%endif
     }
 
     testAutoPlainHttpFallbackCaching() {
-%ifndef NoJson
         # Verify that multiple requests reuse h1 without issues
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
@@ -1615,11 +1542,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp3.status_code);
         assertEq("POST", resp3.body.method);
         assertEq({"key": "value"}, resp3.body.body);
-%endif
     }
 
     testAutoPlainHttpConcurrentFallback() {
-%ifndef NoJson
         # Concurrent requests to HTTP/1.1-only server with auto protocol
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
@@ -1662,7 +1587,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, results[i].status_code,
                 sprintf("auto h2c→h1 fallback concurrent request %d status", i));
         }
-%endif
     }
 
     # ---- OAuth2 Tests ----
@@ -1684,7 +1608,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testOAuth2ClientCredentials() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("cc-access-token");
         token_handler.setReturnRefreshToken("cc-refresh-token");
@@ -1705,11 +1628,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # No additional token requests should have been made
         assertEq(1, token_handler.getRequestCount(), "no extra token requests");
-%endif
     }
 
     testOAuth2ClientAssertion() {
-%ifndef NoJson
         OAuth2TokenHandler assertion_handler("assertion-client", NOTHING);
         assertion_handler.setReturnToken("assertion-token");
         assertion_handler.setReturnRefreshToken(NOTHING);
@@ -1752,11 +1673,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
             opts.oauth2_client_assertion_type);
         assertTrue(opts.oauth2_client_assertion_provider ? True : False);
-%endif
     }
 
     testOAuth2PasswordGrant() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("pwd-access-token");
 
@@ -1769,11 +1688,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, token_handler.getRequestCount(), "initial token request");
         assertEq("pwd-access-token", rest.getToken());
-%endif
     }
 
     testOAuth2ProactiveRefresh() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("initial-token");
         token_handler.setReturnRefreshToken("initial-refresh");
@@ -1794,11 +1711,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq(2, token_handler.getRequestCount(), "proactive refresh");
         assertEq("refreshed-token", rest.getToken());
-%endif
     }
 
     testOAuth2RefreshWithinWindow() {
-%ifndef NoJson
         # Test that a token expiring WITHIN the 10-minute window triggers proactive refresh
         # This was the actual bug: (now - 10m > expiry) never triggered when expiry was in the future
         token_handler.resetRequestCount();
@@ -1819,11 +1734,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq(2, token_handler.getRequestCount(), "proactive refresh within window");
         assertEq("preemptive-refreshed-token", rest.getToken());
-%endif
     }
 
     testOAuth2NoRefreshOutsideWindow() {
-%ifndef NoJson
         # Test that a token expiring well in the future does NOT trigger refresh
         token_handler.resetRequestCount();
         token_handler.setReturnToken("initial-token");
@@ -1843,11 +1756,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # No extra token request — the token is still valid with plenty of time left
         assertEq(1, token_handler.getRequestCount(), "no refresh outside window");
         assertEq("long-lived-token", rest.getToken());
-%endif
     }
 
     testOAuth2ConcurrentRefresh() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("initial-token");
         token_handler.setReturnRefreshToken("initial-refresh");
@@ -1890,11 +1801,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Only 1 token refresh request should have hit the server
         assertEq(1, token_handler.getRequestCount(), "only 1 refresh request");
         assertEq("concurrent-refreshed-token", rest.getToken());
-%endif
     }
 
     testOAuth2_401Retry() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("initial-token");
         token_handler.setReturnRefreshToken("initial-refresh");
@@ -1935,11 +1844,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # canRetryAuth requires (now_us() - token_timestamp) >= 1m, which won't be true here
         # So the 401 should be returned as-is
         assertEq(401, resp.status_code);
-%endif
     }
 
     testOAuth2OptionsRoundTrip() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
@@ -1964,11 +1871,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq("/oauth/token", opts.oauth2_token_url);
         assertEq(("read", "write"), opts.oauth2_scopes);
         assertEq(True, opts.oauth2_auto_refresh);
-%endif
     }
 
     testOAuth2GetNewToken() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("forced-token");
         token_handler.setReturnRefreshToken("forced-refresh");
@@ -1981,11 +1886,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Force a new token (need to wait past MinimumTokenRefresh)
         # Since token_timestamp was just set, we need to test that it throws
         assertThrows("OAUTH2-ERROR", "rate limit", \rest.getNewToken());
-%endif
     }
 
     testOAuth2BasicAuth() {
-%ifndef NoJson
         # Create a separate handler that doesn't validate client_id/secret in body
         # (they should be in the Authorization header)
         OAuth2TokenHandler basic_handler();
@@ -2000,11 +1903,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, basic_handler.getRequestCount());
         assertEq("basic-auth-token", rest.getToken());
-%endif
     }
 
     testOAuth2SecretOnlyAuth() {
-%ifndef NoJson
         OAuth2TokenHandler secret_handler();
         secret_handler.setReturnToken("secret-only-token");
         server.setHandler("/oauth/secret", "/oauth/secret", MimeTypeFormUrlEncoded, secret_handler);
@@ -2017,11 +1918,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, secret_handler.getRequestCount());
         assertEq("secret-only-token", rest.getToken());
-%endif
     }
 
     testOAuth2Scopes() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("scoped-token");
 
@@ -2032,11 +1931,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, token_handler.getRequestCount());
         assertEq("scoped-token", rest.getToken());
-%endif
     }
 
     testOAuth2TokenArgs() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("args-token");
 
@@ -2047,11 +1944,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, token_handler.getRequestCount());
         assertEq("args-token", rest.getToken());
-%endif
     }
 
     testOAuth2DifferentTokenHost() {
-%ifndef NoJson
         # Token URL is on the same server but via absolute URL
         token_handler.resetRequestCount();
         token_handler.setReturnToken("abs-url-token");
@@ -2063,11 +1958,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertEq(1, token_handler.getRequestCount());
         assertEq("abs-url-token", rest.getToken());
-%endif
     }
 
     testOAuth2InvalidOptions() {
-%ifndef NoJson
         # Missing required options for client_credentials
         assertThrows("OAUTH2-ERROR", sub () {
             new RestClientIo::RestClientIo({
@@ -2127,11 +2020,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 # Missing username and password
             });
         });
-%endif
     }
 
     testOAuth2AuthCodeThrows() {
-%ifndef NoJson
         # authorization_code grant should throw on auto-login
         assertThrows("OAUTH2-ERROR", "manually authorized", sub () {
             new RestClientIo::RestClientIo({
@@ -2159,11 +2050,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "oauth2_redirect_url": "https://example.com/callback",
             });
         });
-%endif
     }
 
     testOAuth2RefreshFailure() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("initial-rf-token");
         token_handler.setReturnRefreshToken("rf-refresh");
@@ -2182,11 +2071,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Request should still work but with error from refresh — ensureToken throws
         assertThrows("OAUTH2-ERROR", sub () { rest.restGet("/api/test"); });
-%endif
     }
 
     testOAuth2Async() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("async-token");
         token_handler.setReturnRefreshToken("async-refresh");
@@ -2204,11 +2091,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # No additional token requests
         assertEq(1, token_handler.getRequestCount(), "no extra token requests");
-%endif
     }
 
     testOAuth2Pool() {
-%ifndef NoJson
         token_handler.resetRequestCount();
         token_handler.setReturnToken("pool-token");
         token_handler.setReturnRefreshToken("pool-refresh");
@@ -2236,7 +2121,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
-%endif
     }
 
     # ---- Phase 1: Simple additions ----
@@ -2260,7 +2144,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testAllowAnyResponse() {
-%ifndef NoJson
         # Default: allow_any_response is False — DESERIALIZATION-ERROR is thrown for
         # non-deserializable content
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
@@ -2296,7 +2179,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(True, rest2.getAllowAnyResponse());
         resp = rest2.restGet("/html");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testSetContentEncoding() {
@@ -2321,7 +2203,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testValidatorAccess() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2344,13 +2225,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest2.close();
         auto v3 = rest2.getValidator();
         assertEq(True, v3 instanceof RestSchemaValidator::AbstractRestSchemaValidator);
-%endif
     }
 
     # ---- Phase 2: Connection path ----
 
     testConnectionPath() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2361,11 +2240,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         # Path should include connection path (server may strip leading /)
         assertRegex("api/v2/users", resp.body.path);
-%endif
     }
 
     testConnectionPathNoDouble() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2375,11 +2252,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Should NOT double-prepend: path should be /api/users, not /api/api/users
         assertRegex("api/users", resp.body.path);
         assertEq(True, resp.body.path !~ /api\/api\//);
-%endif
     }
 
     testConnectionPathClear() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2394,11 +2269,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Path should NOT include connection path
         assertRegex("api/test", resp.body.path);
         assertEq(True, resp.body.path !~ /api\/v2/);
-%endif
     }
 
     testConnectionPathConstructor() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient({
             "default_path": "/api",
         });
@@ -2409,11 +2282,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
         assertEq(200, resp.status_code);
         assertRegex("api/test", resp.body.path);
-%endif
     }
 
     testConnectionPathFromUrl() {
-%ifndef NoJson
         # URL with path should auto-extract connection_path
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d/api/v2", port),
@@ -2448,13 +2319,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest3.close();
 
         assertEq("/custom", rest3.getConnectionPath());
-%endif
     }
 
     # ---- Phase 3: Basic auth ----
 
     testBasicAuth() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2467,11 +2336,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
         assertEq(200, resp.status_code);
         assertEq(True, exists resp.body.request_headers.authorization);
-%endif
     }
 
     testBasicAuthClear() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2480,11 +2347,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         rest.clearUserPassword();
         assertEq(True, !exists rest.getDefaultHeaders().authorization);
-%endif
     }
 
     testBasicAuthConstructor() {
-%ifndef NoJson
         # Username/password without OAuth2 should set basic auth
         RestClientIo::RestClientIo rest = createClient({
             "username": "ctoruser",
@@ -2511,13 +2376,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Should have Bearer token from OAuth2, not Basic auth
         assertRegex("Bearer", rest2.getDefaultHeaders().authorization);
-%endif
     }
 
     # ---- Phase 4: Request signing ----
 
     testSignedRequest() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2532,11 +2395,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Verify the signature header was sent
         assertEq(True, exists resp.body.request_headers."x-signature");
         assertRegex("sig-", resp.body.request_headers."x-signature");
-%endif
     }
 
     testSignedRequestAsync() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2550,7 +2411,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq(True, exists resp.body.request_headers."x-signature");
         assertRegex("async-sig-", resp.body.request_headers."x-signature");
-%endif
     }
 
     # ---- Phase 5: Proxy protocol tests ----
@@ -2588,7 +2448,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Additional Phase 1 tests ----
 
     testAllowAnyResponseAsync() {
-%ifndef NoJson
         # Verify allow_any_response works with async requests too
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -2616,11 +2475,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         RestClientIo::RestFuture f2 = rest2.restGetAsync("/html");
         assertThrows("DESERIALIZATION-ERROR", \f2.get(), (30s,));
-%endif
     }
 
     testAllowAnyResponseWithErrorPassthru() {
-%ifndef NoJson
         # Both error_passthru=True AND allow_any_response=True on 500 + HTML response
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -2653,7 +2510,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         on_exit rest2.close();
         assertThrows("REST-RESPONSE-ERROR", sub () { rest2.restGet("/error"); });
-%endif
     }
 
     testSetContentEncodingInvalid() {
@@ -2668,7 +2524,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Additional Phase 2 tests ----
 
     testConnectionPathTrailingSlash() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2678,11 +2533,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         # Should have /api//test or /api/test depending on normalization
         assertRegex("api/", resp.body.path);
-%endif
     }
 
     testConnectionPathEmptyVsNothing() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2699,11 +2552,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertRegex("api/test", resp.body.path);
-%endif
     }
 
     testConnectionPathH1() {
-%ifndef NoJson
         # Connection path should work with HTTP/1.1 too
         RestClientIo::RestClientIo rest = createH1Client({
             "default_path": "/api",
@@ -2715,13 +2566,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
         assertEq(200, resp.status_code);
         assertRegex("api/test", resp.body.path);
-%endif
     }
 
     # ---- Additional Phase 3 tests ----
 
     testBasicAuthEmptyPassword() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2734,11 +2583,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
         assertEq(200, resp.status_code);
         assertEq(expected, resp.body.request_headers.authorization);
-%endif
     }
 
     testBasicAuthSpecialChars() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2751,11 +2598,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         rest.setUserPassword("ùser", "pàss");
         expected = "Basic " + make_base64_string("ùser:pàss");
         assertEq(expected, rest.getDefaultHeaders().authorization);
-%endif
     }
 
     testBasicAuthOverwrite() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2770,11 +2615,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(expected2, rest.getDefaultHeaders().authorization);
         # Verify the old credentials are gone
         assertEq(True, rest.getDefaultHeaders().authorization != expected1);
-%endif
     }
 
     testBasicAuthTokenInteraction() {
-%ifndef NoJson
         # Last writer wins: setToken overwrites setUserPassword and vice versa
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
@@ -2794,7 +2637,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # clearUserPassword should remove authorization
         rest.clearUserPassword();
         assertEq(True, !exists rest.getDefaultHeaders().authorization);
-%endif
     }
 
     testBasicAuthClearIdempotent() {
@@ -2815,7 +2657,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Additional Phase 4 tests ----
 
     testSignedRequestWithBody() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2833,11 +2674,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertRegex("path:", resp.body.request_headers."x-signature");
         # Verify original body was also sent
         assertEq("value", resp.body.body.key);
-%endif
     }
 
     testSignedRequestWithConnectionPath() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient({
             "default_path": "/echo",
         });
@@ -2855,11 +2694,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertRegex("signed-path:/echo/test", resp.body.request_headers."x-signature");
         # The request path should also be /echo/test
         assertRegex("echo/test", resp.body.path);
-%endif
     }
 
     testSignedRequestSignerThrows() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2876,11 +2713,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertThrows("SIGNER-ERROR", "signing failed", sub () {
             rest.doSignedRequestAsync("x-signature", signer, "GET", "/echo/test", NOTHING);
         });
-%endif
     }
 
     testSignedRequestHdrExcludesSig() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
@@ -2900,7 +2735,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # But the actual request should have both headers
         assertEq(True, exists resp.body.request_headers."x-signature");
         assertEq(True, exists resp.body.request_headers."x-custom");
-%endif
     }
 
     # ---- Additional Phase 5 tests ----
@@ -3027,7 +2861,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testPingPollBasic() {
-%ifndef NoJson
         # Drive the ping state machine directly — no PollingConnectionMonitor thread
         RestConnection rc = createPingConnection("ping-basic");
         AbstractPollOperation op = rc.startPollConnect();
@@ -3037,11 +2870,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_error printf("ping error: %y\n", ex);
         assertFalse(exists ex, "ping should succeed");
         assertTrue(op.goalReached());
-%endif
     }
 
     testPingPollNegotiateAuth() {
-%ifndef NoJson
         # A server that does not challenge should still accept a Negotiate-enabled
         # polling ping. This verifies that async pings carry the option instead of
         # rejecting it at construction time.
@@ -3056,11 +2887,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_error printf("negotiate ping error: %y\n", ex);
         assertFalse(exists ex, "Negotiate-enabled ping should succeed without a challenge");
         assertTrue(op.goalReached());
-%endif
     }
 
     testPingPollViaMonitor() {
-%ifndef NoJson
         # Drive via TestPollingConnectionMonitor (exercises the full PollingConnectionMonitor path)
         RestConnection rc = createPingConnection("ping-monitor");
         TestPollingConnectionMonitor monitor(new Logger("pm", LoggerLevel::getLevelInfo()));
@@ -3073,11 +2902,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             printf("ping via monitor error: %y\n", result.ex);
         }
         assertEq("OK", result.result);
-%endif
     }
 
     testPingPollOAuth2PreRefresh() {
-%ifndef NoJson
         # Token with very short expiry forces tokenRequiresRefresh() == True in constructor.
         # The ping state machine must do: SPS_OAUTH2_REFRESH → (SPS_CONNECTING?) → SPS_IO_WAITING.
         token_handler.resetRequestCount();
@@ -3108,7 +2935,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Verify token refresh occurred
         assertTrue(token_handler.getRequestCount() >= 1, "token refresh should have occurred");
-%endif
     }
 
     #! Regression: OAuth2 pre-refresh must not delete the in-flight async op
@@ -3129,7 +2955,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         onComplete has been dispatched.
     */
     testPingPollOAuth2NoDeletedRace() {
-%ifndef NoJson
         ControllerLogCapture cap();
         AsyncIoController::setLogger(cap);
         # Cap callback workers to 1 so the controller's onComplete dispatch
@@ -3224,11 +3049,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "controller must not log OBJECT-ALREADY-DELETED for "
             "RestClientIoAsyncRequestOperation::onComplete — the OAuth2 op "
             "must outlive the controller's onComplete dispatch");
-%endif
     }
 
     testPingPoll401Retry() {
-%ifndef NoJson
         # Server returns 401 on first request with initial token, then 200 after refresh
         token_handler.resetRequestCount();
         token_handler.setReturnToken("retry-new-token");
@@ -3262,11 +3085,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_error printf("401 retry ping error: %y\n", ex);
         assertFalse(exists ex, "401-retry ping should eventually succeed");
         assertTrue(op.goalReached());
-%endif
     }
 
     testPingPoll401NoRetry() {
-%ifndef NoJson
         # Non-2xx response (500 from /error handler) with no retry configured
         # should result in REST-PING-ERROR
         string url = sprintf("http://127.0.0.1:%d", h1_port);
@@ -3284,7 +3105,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(exists ex, "non-2xx ping without retry should throw");
         assertEq("REST-PING-ERROR", ex.err);
         assertFalse(op.goalReached());
-%endif
     }
 
     #! Regression: a non-OAuth (API-key/static-token) connection that receives HTTP 401
@@ -3296,7 +3116,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         was assigned to a non-nullable string, producing a RUNTIME-TYPE-ERROR ~once/min.
     */
     testPingPollNonOAuth401NoRefresh() {
-%ifndef NoJson
         token_handler.resetRequestCount();
 
         # Static bearer token, rejected by the /auth401 handler; NO OAuth2 grant type,
@@ -3325,13 +3144,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertFalse(op.goalReached());
         # no OAuth2 token refresh must have been attempted
         assertEq(0, token_handler.getRequestCount(), "no OAuth2 refresh must be attempted");
-%endif
     }
 
     #! Regression: a fully-configured OAuth2 connection with oauth2_auto_refresh=False
     #! must NOT attempt a token refresh after a 401 ping response.
     testPingPoll401AutoRefreshDisabled() {
-%ifndef NoJson
         token_handler.resetRequestCount();
 
         string initial_token = sprintf("no-refresh-initial-%d", clock_getmicros());
@@ -3360,7 +3177,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertFalse(op.goalReached());
         assertEq(0, token_handler.getRequestCount(),
             "auto-refresh disabled: no refresh must be attempted");
-%endif
     }
 
     #! Regression: startOAuth2PollRefreshToken() must raise a clear OAUTH2-ERROR (not a
@@ -3370,7 +3186,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         exercises the defensive guard in startOAuth2PollRefreshToken().
     */
     testPingPollIncompleteOAuth2Refresh() {
-%ifndef NoJson
         # token + refresh token + expiry-in-window makes tokenRequiresRefresh() True, so
         # the ping operation constructor enters the proactive OAuth2 refresh path; the
         # missing token URL must produce a clear configuration error, not a type error.
@@ -3394,13 +3209,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(exists ex, "an incomplete OAuth2 refresh must throw");
         assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
         assertEq("OAUTH2-ERROR", ex.err, "incomplete OAuth2 config must raise a config error");
-%endif
     }
 
     #! Regression: repeated HTTP 401 responses on an OAuth2 ping must remain bounded —
     #! at most one refresh + retry per poll operation, never a refresh loop.
     testPingPoll401RefreshBounded() {
-%ifndef NoJson
         token_handler.resetRequestCount();
 
         # The refreshed token is ALSO rejected, so the retry after refresh still gets 401.
@@ -3437,7 +3250,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertFalse(op.goalReached());
         # exactly one refresh was attempted — the retry did not spin into a refresh loop
         assertEq(1, token_handler.getRequestCount(), "exactly one refresh must be attempted");
-%endif
     }
 
     testPingPollNonExistentHost() {
@@ -3457,7 +3269,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testPingPollAbortCancelsRequest() {
-%ifndef NoJson
         Counter entered(1);
         Counter release(1);
         string path = sprintf("/ping-abort-%d", clock_getmicros());
@@ -3484,7 +3295,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         op.abort();
         assertEq("complete", op.getState(), "abort should complete the ping operation");
         assertFalse(op.goalReached(), "aborted ping should not report success");
-%endif
     }
 
     #! Regression test: connection-closed notifier retries are bounded and do not throw HTTPCLIENT-NOT-READY
@@ -3562,7 +3372,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         completes and the winner is pooled before submitting.
     */
     testPingPollHappyEyeballsH3() {
-%ifndef NoJson
         RestConnection rc("ping-he-h3", "ping-he-h3",
             sprintf("https://127.0.0.1:%d", port), {}, {
             "ping_method": "GET",
@@ -3577,7 +3386,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertFalse(exists ex,
             "auto/happy-eyeballs ping must complete without hanging or idle/peer-close");
         assertTrue(op.goalReached(), "auto/happy-eyeballs ping must reach its goal");
-%endif
     }
 
     # ---- Cookie option tests ----
@@ -3629,15 +3437,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Unknown options are silently stripped (not rejected) so that
         # subclass getOptions() can leave consumed service-specific keys
         # (api_profile, encode_chars, etc.) without causing errors.
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient({"not_a_real_option": 42});
         on_exit rest.close();
         assertTrue(True, "unknown option silently stripped");
-%endif
     }
 
     testOptionHttpVersionAlias() {
-%ifndef NoJson
         # http_version "1.1" should map to protocol "h1"
         RestClientIo::RestClientIo h1_alias = new RestClientIo::RestClientIo({
             "url": sprintf("http://127.0.0.1:%d", h1_port),
@@ -3660,7 +3465,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit h2_alias.close();
         resp = h2_alias.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testOptionHttpVersionInvalid() {
@@ -3674,7 +3478,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testOptionSslVerifyCertAlias() {
-%ifndef NoJson
         # ssl_verify_cert False should disable verification (needed for self-signed test cert)
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -3696,23 +3499,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest2.close();
         resp = rest2.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testOptionHttp1OnlyRejected() {
         # Http1-only options are silently stripped (not rejected) so that
         # subclass constructors and connection adapters work without errors.
-%ifndef NoJson
         foreach string key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
             RestClientIo::RestClientIo rest = createClient({key: True});
             rest.close();
         }
         assertTrue(True, "Http1-only options silently stripped");
-%endif
     }
 
     testOptionTokenApiKeyHeader() {
-%ifndef NoJson
         # With token_api_key_header set, the token must be sent in that header
         # as a raw value (no "Bearer" prefix), not in Authorization
         RestClientIo::RestClientIo rest = createClient({
@@ -3737,7 +3536,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         resp = std.restGet("/echo");
         assertEq(200, resp.status_code);
         assertEq("Bearer sekret", resp.body.request_headers.authorization);
-%endif
     }
 
     testOptionRestBodyAuthErrorCheck() {
@@ -3777,7 +3575,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testOptionNegotiateAuth() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest = createClient({
             "negotiate_auth": True,
             "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
@@ -3818,7 +3615,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "negotiate_delegation_mode": "s4u",
             });
         });
-%endif
     }
 
     testOptionPhase3OAuth2Accepted() {
@@ -3853,7 +3649,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # server ignores the peer cert.
 
     testMtlsInlineData() {
-%ifndef NoJson
         # Pass cert/key as inline PEM strings (ssl_cert_data / ssl_key_data) — H2
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
@@ -3866,11 +3661,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testMtlsFilePath() {
-%ifndef NoJson
         # Write cert/key to temp files, pass via ssl_cert_path / ssl_key_path — H2
         string cert_file = tmp_location() + "/rci_mtls_cert_" + get_random_string() + ".pem";
         string key_file = tmp_location() + "/rci_mtls_key_" + get_random_string() + ".pem";
@@ -3898,11 +3691,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testMtlsH1() {
-%ifndef NoJson
         # Same plumbing, H1 path (exercises createAndConfigureSocket in
         # Http1ClientPollOperationImpl.qc)
         RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
@@ -3916,7 +3707,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testMtlsCertConflict() {
@@ -3940,7 +3730,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testMtlsServerEnforceH2Success() {
-%ifndef NoJson
         # Server requires SSL_VERIFY_PEER + FAIL_IF_NO_PEER_CERT. Present the
         # client cert via ssl_cert_data/ssl_key_data. The server accepts the
         # cert (ssl_accept_all_certs=True) and the request succeeds over H2.
@@ -3955,11 +3744,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testMtlsServerEnforceH1Success() {
-%ifndef NoJson
         # Same flow over H1 — exercises Http1ClientPollOperationImpl's
         # createAndConfigureSocket cert/key wiring end-to-end against a
         # cert-requiring server.
@@ -3974,7 +3761,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     # --- Phase 4: authorization_code / implicit grant flows via RestConnection ---
@@ -4041,7 +3827,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testAuthCodeAsyncWithPresetToken() {
-%ifndef NoJson
         # After the caller has completed the out-of-band code exchange and
         # stored the resulting access token, getAsync() must successfully
         # return a RestClientIo that uses the pre-set token without trying
@@ -4070,11 +3855,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq("Bearer post-exchange-token",
             resp.body.request_headers.authorization);
-%endif
     }
 
     testAuthCodeAsyncNoToken() {
-%ifndef NoJson
         # Without a pre-set token, constructing via getAsync() triggers
         # checkLogin() → loginIntern() → getOAuth2LoginInfo(), which must
         # throw OAUTH2-ERROR explaining that the grant type needs manual
@@ -4092,13 +3875,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             });
         assertThrows("OAUTH2-ERROR", "must be manually authorized",
             sub () { rc.getAsync(); });
-%endif
     }
 
     # --- Phase RS-1: copyWithUrl + restDoRawRequest ---
 
     testCopyWithUrl() {
-%ifndef NoJson
         # Parent points at the TLS test server; copy points at the same host —
         # a realistic use case is the same server, different path prefix
         RestClientIo::RestClientIo parent = createClient();
@@ -4114,11 +3895,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # The child must be able to make real requests
         hash<RestClient::RestResponseInfo> resp = child.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
     }
 
     testCopyWithUrlInheritsToken() {
-%ifndef NoJson
         # Parent acquires a token, then copyWithUrl produces a child that
         # inherits the token — the child should send Authorization: Bearer <token>
         # without firing its own OAuth2 login
@@ -4146,7 +3925,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = child.restGet("/echo");
         assertEq(200, resp.status_code);
         assertEq("Bearer inherited-token", resp.body.request_headers.authorization);
-%endif
     }
 
     testGetConstructorOptions() {
@@ -4169,7 +3947,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testRestDoRawRequest() {
-%ifndef NoJson
         # Send a pre-serialized body via restDoRawRequest. The JsonEchoHandler
         # echoes the request headers so we can prove the Content-Type we set is
         # the one that hit the wire (no validator override, no double-serialization).
@@ -4184,7 +3961,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # The echo handler returns the parsed request headers; verify our
         # explicit Content-Type reached the server untouched
         assertRegex("application/json", resp.body.request_headers."content-type");
-%endif
     }
 
     testAuthCodeGeneratePkceChallenge() {
@@ -4199,7 +3975,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testMtlsServerRejectsNoCertH1() {
-%ifndef NoJson
         # Connect to the cert-requiring listener WITHOUT a client cert. The
         # TLS handshake must fail because the server is configured with
         # SSL_VERIFY_FAIL_IF_NO_PEER_CERT; openssl reports a TLS fatal
@@ -4247,7 +4022,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 || ex.err == "SOCKET-SSL-ERROR",
                 sprintf("expected mTLS rejection error, got: %s: %s", ex.err, ex.desc));
         }
-%endif
     }
 
     # --- Phase 3: custom_token_* tests ---
@@ -4278,7 +4052,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testCustomTokenInvalidAuth() {
-%ifndef NoJson
         # Invalid custom_token_auth value — the constructor's initial login call
         # (checkLogin → customGetTokenIntern) hits the switch default and throws
         assertThrows("REST-CUSTOM-TOKEN-ERROR", "invalid custom token auth method",
@@ -4292,11 +4065,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     "custom_token_location": "body-direct",
                 });
             });
-%endif
     }
 
     testCustomTokenBodyDirect() {
-%ifndef NoJson
         custom_token_handler.resetRequestCount();
         custom_token_handler.setResponseFormat("body-direct");
         custom_token_handler.setReturnToken("ct-token-direct");
@@ -4317,11 +4088,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
         assertEq(200, resp.status_code);
         assertEq("Bearer ct-token-direct", resp.body.request_headers.authorization);
-%endif
     }
 
     testCustomTokenBodyPlain() {
-%ifndef NoJson
         custom_token_handler.resetRequestCount();
         custom_token_handler.setResponseFormat("body-plain");
         custom_token_handler.setReturnToken("ct-token-plain");
@@ -4341,11 +4110,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
         assertEq(200, resp.status_code);
         assertEq("Bearer ct-token-plain", resp.body.request_headers.authorization);
-%endif
     }
 
     testCustomTokenRefreshOn401() {
-%ifndef NoJson
         # The MinimumTokenRefresh gate (1m) blocks an immediate post-login retry
         # refresh, so here we verify the wiring reaches canRetryAuth without
         # waiting a minute: construct without initial login, then issue a
@@ -4378,7 +4145,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # so the 401 passes through.  This verifies the pipe is wired without
         # waiting 60s — matching the testOAuth2_401Retry pattern.
         assertEq(401, resp.status_code);
-%endif
     }
 }
 

@@ -33,9 +33,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) PerplexityRestClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module PerplexityDataProvider {
     version = "1.0";

@@ -393,9 +393,6 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
     }
 
     private static hash<auto> inspectJsonArtifact(string path) {
-%ifdef NoJson
-        return {"json_available": False};
-%else
         hash<auto> parsed = parse_json(ReadOnlyFile::readTextFile(path));
         hash<auto> metadata;
         metadata.json_available = True;
@@ -413,18 +410,11 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
             metadata.model_max_length = parsed.model_max_length;
         }
         return metadata;
-%endif
     }
 
     private static nothing writeManifest(string manifest_path,
             hash<OnnxPackageResult> result) {
-%ifdef NoJson
-        throw "QORE-ONNX-TOOLS-ERROR",
-            "the json module is required to write an ONNX package manifest; "
-            "install module-json or pass write_manifest: False";
-%else
         writeTextFile(manifest_path, make_json(makePortableManifest(result)) + "\n");
-%endif
     }
 
     private static hash<auto!> makePortableManifest(hash<OnnxPackageResult> result) {

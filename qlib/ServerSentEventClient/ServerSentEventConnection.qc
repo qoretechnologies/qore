@@ -53,12 +53,10 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                     "type": "string",
                     "desc": "Sets the data serialization option",
                     "allowed_values": (
-%ifndef NoJson
                         <AllowedValueInfo>{
                             "value": "json",
                             "desc": "use JSON serialization",
                         },
-%endif
                         <AllowedValueInfo>{
                             "value": "none",
                             "desc": "no serialization is used",
@@ -376,14 +374,10 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
         *data send_body;
         if (exists sse_body) {
             if (sse_body.typeCode() != NT_STRING) {
-%ifndef NoJson
                 send_body = make_json(sse_body);
                 if (!sse_headers."Content-Type") {
                     sse_headers."Content-Type" = MimeTypeJson;
                 }
-%else
-                throw "SSE-CONNECTION-ERROR", "the json module is required to serialize JSON request bodies";
-%endif
             } else {
                 send_body = sse_body;
             }

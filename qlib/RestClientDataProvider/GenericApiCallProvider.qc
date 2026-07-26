@@ -163,11 +163,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         }
         switch (body_type) {
             case "json":
-%ifndef NoJson
                 body = exists req.body ? make_json(req.body) : NOTHING;
-%else
-                throw "GENERIC-API-CALL-SERIALIZER-ERROR", "JSON serializer not available; install the json module";
-%endif
                 if (!ct_present) hdr."Content-Type" = ContentTypeMap.json;
                 break;
             case "form":

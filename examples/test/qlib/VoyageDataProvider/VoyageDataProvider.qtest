@@ -10,9 +10,7 @@
 %requires DataProvider
 %requires VoyageDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class VoyageDataProviderTest
 
@@ -81,14 +79,10 @@ public class VoyageDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         FakeVoyageRestClientIo rest();
         VoyageDataProvider::VoyageDataProvider prov(rest);
         assertEq("voyage", prov.getName());
@@ -97,7 +91,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq(("create-embeddings", "rerank"),
             sort(select prov.getChildProviderNames(),
                 $1 != AbstractDataProvider::GenericApiCallChildName));
-%endif
     }
 
     actionCatalogTest() {
@@ -137,7 +130,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
 
     createEmbeddingsTest() {
         checkModule();
-%ifndef NoJson
         FakeVoyageRestClientIo rest();
         VoyageDataProvider::VoyageDataProvider prov(rest);
         AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
@@ -162,12 +154,10 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq(0, resp.data[0].index);
         assertEq("voyage-4-large", resp.model);
         assertEq(5, resp.usage.total_tokens);
-%endif
     }
 
     createEmbeddingsBatchTest() {
         checkModule();
-%ifndef NoJson
         FakeVoyageRestClientIo rest();
         rest.response_body = {
             "object": "list",
@@ -201,12 +191,10 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq(1, resp.data[1].index);
         assertEq(2, resp.data[2].index);
         assertEq(15, resp.usage.total_tokens);
-%endif
     }
 
     rerankTest() {
         checkModule();
-%ifndef NoJson
         FakeVoyageRestClientIo rest();
         rest.response_body = {
             "object": "list",
@@ -246,12 +234,10 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq(0.92, resp.data[0].relevance_score);
         assertEq(2, resp.data[1].index);
         assertEq(30, resp.usage.total_tokens);
-%endif
     }
 
     rerankWithDocumentsTest() {
         checkModule();
-%ifndef NoJson
         FakeVoyageRestClientIo rest();
         rest.response_body = {
             "object": "list",
@@ -277,7 +263,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         # verify document text in response
         assertEq("ML is great.", resp.data[0].document);
         assertEq(0.85, resp.data[0].relevance_score);
-%endif
     }
 
     embeddingsRequestTypeTest() {
@@ -328,7 +313,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         if (!api_key) {
             testSkip("VOYAGE_API_KEY not set");
         }
-%ifndef NoJson
         VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
         AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
 
@@ -345,7 +329,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertTrue(resp.data[0].embedding.lsize() > 0, "embedding vector is non-empty");
         assertEq("voyage-3", resp.model);
         assertGt(0, resp.usage.total_tokens);
-%endif
     }
 
     liveRerankTest() {
@@ -353,7 +336,6 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         if (!api_key) {
             testSkip("VOYAGE_API_KEY not set");
         }
-%ifndef NoJson
         VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
         AbstractDataProvider rrk = prov.getChildProvider("rerank");
 
@@ -376,6 +358,5 @@ public class VoyageDataProviderTest inherits QUnit::Test {
             "results sorted by relevance descending");
         assertTrue(resp.data[0].document.val(), "document text returned");
         assertGt(0, resp.usage.total_tokens);
-%endif
     }
 }

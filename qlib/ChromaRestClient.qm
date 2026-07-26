@@ -69,9 +69,7 @@ module ChromaRestClient {
     - the initial version of the %ChromaRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace ChromaRestClient {
 public class ChromaRestClientBase {

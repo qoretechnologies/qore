@@ -22,9 +22,7 @@
 %requires VoyageRestClient
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RerankUsageTest
 

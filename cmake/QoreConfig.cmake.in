@@ -137,13 +137,13 @@ else()
     endif()
 endif()
 
-# verify that qore-extract-qm-metadata can actually run end-to-end; it depends
-# on QoreApiMetadata::toJson(), which in turn requires the json binary module.
-# A simple "load json" probe is not sufficient: if the QoreApiMetadata .qmod
-# was AOT-compiled when json was unavailable, %try-module json baked in NoJson
-# and toJson() will throw at runtime even after json is installed later.
-# Exercise the toJson() entry point directly so we catch both situations and
-# disable metadata extraction (rather than failing downstream builds).
+# verify that qore-extract-qm-metadata can actually run end-to-end; it depends on
+# QoreApiMetadata::toJson().  json is a builtin module as of Qore 3.0, so the case this
+# probe originally guarded against -- QoreApiMetadata AOT-compiled with %try-module json
+# having failed, baking in a throwing stub -- can no longer happen.  The probe is kept as
+# a cheap end-to-end health check on the installed qore: exercising toJson() directly
+# catches any breakage and disables metadata extraction rather than failing downstream
+# external module builds.
 if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
     execute_process(
         COMMAND ${QORE_EXECUTABLE} [==[--exec=%modern

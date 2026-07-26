@@ -35,9 +35,7 @@
 
 %requires SqlUtil
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module QoreModelRegistry {
     version = "1.0.0";

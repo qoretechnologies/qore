@@ -12,9 +12,7 @@
 %requires RestClient
 %requires ElasticSearchDataProvider
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class ElasticSearchDataProviderTest
 
@@ -32,9 +30,6 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     # checkModule helper
     static checkModule(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     constructor() : Test("ElasticSearchDataProvider Test", "1.0") {

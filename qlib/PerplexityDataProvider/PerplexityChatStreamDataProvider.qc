@@ -23,9 +23,7 @@
 */
 
 # for parsing stream events
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! contains all public definitions in the PerplexityDataProvider module
 public namespace PerplexityDataProvider {
@@ -323,13 +321,6 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
         if (!evt."data") {
             return {"event": evt.event, "id": evt.id};
         }
-%ifdef NoJson
-        return {
-            "event": evt.event,
-            "id": evt.id,
-            "raw_data": evt."data",
-        };
-%else
         hash<auto> payload = parse_json(evt."data");
         if (evt.event) {
             payload.event = evt.event;
@@ -338,7 +329,6 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
             payload.id = evt.id;
         }
         return payload;
-%endif
     }
 }
 }

@@ -36,9 +36,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QSchemaMain
 
@@ -591,12 +589,7 @@ class QSchemaMain {
             exit(1);
 %endif
         } else {
-%ifndef NoJson
             output = rev.toJson();
-%else
-            printf("%s json module is required for JSON export\n", color.error("ERROR:"));
-            exit(1);
-%endif
         }
 
         if (opts.output) {

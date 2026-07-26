@@ -37,9 +37,7 @@
 %requires WebSocketClient
 
 # optional module for JSON serialization
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module AsyncApiDataProvider {
     version = "1.0";

@@ -105,9 +105,7 @@ printf("%Y\n", ans.body);
     - the initial version of the %GroqRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! the GroqRestClient namespace contains all the objects in the GroqRestClient module
 public namespace GroqRestClient {

@@ -735,7 +735,6 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 config.output_names = output_names;
             }
             if (embedding_mode == "onnx") {
-%ifndef NoJson
                 if (registry_model_name.val()) {
                     QoreModelRegistry::ModelRegistry registry(registry_options);
                     hash<QoreModelRegistry::ModelVersionInfo> manifest =
@@ -775,9 +774,6 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 if (onnx_session_config) {
                     config.session_config = onnx_session_config;
                 }
-%else
-                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
-%endif
             }
             emb_model = new QoreTokenizerUtils::EmbeddingModel(config);
         }

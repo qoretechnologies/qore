@@ -29,21 +29,7 @@
 %requires(reexport) QoreLlmTypes
 %requires reflection
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-const JGF_ADD_FORMATTING = 0;
-
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module QoreLlmUtils {
     version = "1.0.0";

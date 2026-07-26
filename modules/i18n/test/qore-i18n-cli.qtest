@@ -14,9 +14,7 @@
 
 %requires i18n
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QoreI18nCliTest
 
@@ -32,9 +30,6 @@ class QoreI18nCliTest inherits QUnit::Test {
     }
 
     cliHelpTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         *string qore_bin = getQoreBin();
         if (!exists qore_bin) {
             testSkip("built qore executable not available");
@@ -53,9 +48,6 @@ class QoreI18nCliTest inherits QUnit::Test {
     }
 
     cliWorkflowTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         *string qore_bin = getQoreBin();
         if (!exists qore_bin) {
             testSkip("built qore executable not available");

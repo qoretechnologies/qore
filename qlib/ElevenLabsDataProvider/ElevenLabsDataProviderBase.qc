@@ -230,7 +230,6 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
         *string ct = raw.headers."content-type";
         auto body = raw.body;
 
-%ifndef NoJson
         # Parse JSON bodies (binary or string)
         if (ct =~ /json/i || (body.typeCode() == NT_STRING && body =~ /^\s*[\[{]/)) {
             if (body.typeCode() == NT_BINARY) {
@@ -239,7 +238,6 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
                 body = parse_json(body);
             }
         }
-%endif
 
         # Check for HTTP errors
         if (status >= 400) {
@@ -273,15 +271,11 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
                 continue;
             }
             if (field.value.typeCode() == NT_HASH) {
-%ifndef NoJson
                 # Serialize hash fields as JSON
                 msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n"
                     "Content-Type: application/json\r\n\r\n", mpboundary, field.key));
                 msg += binary(make_json(field.value));
                 msg += binary("\r\n");
-%else
-                throw "JSON-MODULE-MISSING", "json module is required for ElevenLabs JSON multipart fields";
-%endif
             } else if (field.value.typeCode() == NT_BINARY) {
                 msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"%s\"; "
                     "filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n",
@@ -349,12 +343,7 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
         hdr."content-type" = MimeTypeJson;
         hdr."accept" = "*/*";
 
-%ifndef NoJson
         binary json_body = binary(make_json(body));
-%else
-        throw "JSON-MODULE-MISSING", "json module is required for ElevenLabs raw POST";
-        binary json_body = binary();
-%endif
 
         int retries = 0;
         while (True) {

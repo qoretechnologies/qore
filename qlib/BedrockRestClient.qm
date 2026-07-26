@@ -33,9 +33,7 @@
 %requires QoreLlmTypes
 %requires QoreRagTypes
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module BedrockRestClient {
     version = "1.0";
@@ -392,16 +390,10 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             # callers wanting strict JSON should use a tool with a single
             # required structured-output tool.  For v1 we surface the schema
             # to the model as a system-prompt hint.
-%ifdef NoJson
-            push system_blocks, {
-                "text": "Respond with JSON matching the configured output schema.",
-            };
-%else
             push system_blocks, {
                 "text": "Respond with JSON matching the following schema: "
                     + make_json(output_schema),
             };
-%endif
             body.system = system_blocks;
         }
 

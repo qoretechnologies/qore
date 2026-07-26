@@ -22,9 +22,7 @@
 %requires BgeM3RestClient
 %requires BgeM3FastApiDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class BgeM3FastApiDataProviderTest
 
@@ -104,9 +102,6 @@ public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private installHandler(hash<string, hash<auto>> responses) {

@@ -55,9 +55,7 @@ module PerplexityRestClient {
 }
 
 # try importing JSON for SSE parsing
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 /** @mainpage PerplexityRestClient Module
 
@@ -272,14 +270,10 @@ public class PerplexityChatSseStream {
             }
             return body;
         }
-%ifdef NoJson
-        throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
         return call_function_args("to_json", (body,));
-%endif
     }
 
     private setupDecompression() {
@@ -388,9 +382,6 @@ public class PerplexityChatSseStreamIo {
         # Serialize body to JSON
         *data payload;
         if (exists body) {
-%ifdef NoJson
-            throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
             if (body.typeCode() != NT_STRING) {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";
@@ -402,7 +393,6 @@ public class PerplexityChatSseStreamIo {
                 }
                 payload = body;
             }
-%endif
         }
 
         # Build full path

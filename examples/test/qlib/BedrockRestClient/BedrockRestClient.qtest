@@ -17,9 +17,7 @@
 %requires AwsRestClient
 %requires BedrockRestClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class BedrockTest
 
@@ -56,13 +54,11 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         string body_str = body
             ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
             : "";
-%ifndef NoJson
         try {
             last_body = parse_json(body_str);
         } catch () {
             last_body = NOTHING;
         }
-%endif
         # Route by path
         if (last_path =~ /\/converse$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
@@ -117,9 +113,6 @@ public class BedrockTest inherits QUnit::Test {
     }
 
     static checkJson(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     private factoryTest() {

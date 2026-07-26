@@ -36,21 +36,12 @@
 %requires(reexport) QoreRagTypes
 %requires(reexport) SearchIndexDataProvider
 
-%try-module json >= 1.11
-%define NoJson
-%endtry
+%requires json
 
-%ifdef NoJson
-# Stub function when json module is not available or older than 1.11 (pre-NDJSON)
-auto sub make_json(auto val) {
-    throw "JSON-ERROR", "the json module >= 1.11 is required for this operation";
-}
-%else
 # json >= 1.11 ships NdjsonDataProvider — used by the bulk API to stream NDJSON
 # request bodies via NdjsonStringWriter (O(n) streaming buffer) instead of
 # hand-rolled O(n²) string concatenation
 %requires NdjsonDataProvider
-%endif
 
 module OpenSearchDataProvider {
     version = "1.0";

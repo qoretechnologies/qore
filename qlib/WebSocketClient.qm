@@ -45,9 +45,7 @@
 %define NoYaml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 module WebSocketClient {
     version = "2.5";
@@ -3601,9 +3599,7 @@ public class WebSocketClientWithSerialization inherits WebSocketClient, DataProv
     public {
         #! Data serialization support
         const DataSerializationSupport = {
-%ifndef NoJson
             "json": True,
-%endif
             "none": True,
 %ifndef NoYaml
             "yaml": True,
@@ -3830,10 +3826,8 @@ class MyObserver inherits Observer {
     #! Serializes data for sending
     private data serializeData(auto value) {
         switch (serialization) {
-%ifndef NoJson
             case "json":
                 return make_json(value);
-%endif
 %ifndef NoYaml
             case "yaml":
                 return make_yaml(value);
@@ -3855,10 +3849,8 @@ class MyObserver inherits Observer {
     #! Deserializes data received
     private auto deserializeData(string buf) {
         switch (serialization) {
-%ifndef NoJson
             case "json":
                 return parse_json(buf);
-%endif
 %ifndef NoYaml
             case "yaml":
                 return parse_yaml(buf);
@@ -3993,12 +3985,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
                     "type": "string",
                     "desc": "Sets the data serialization option",
                     "allowed_values": (
-%ifndef NoJson
                         <AllowedValueInfo>{
                             "value": "json",
                             "desc": "use JSON serialization",
                         },
-%endif
                         <AllowedValueInfo>{
                             "value": "none",
                             "desc": "no serialization is used",
@@ -4276,27 +4266,19 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "short_desc": "Data serialization for string messages",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "data serialization to use:\n"
-%ifndef NoJson
                     " - `json`: JSON serialization (default)\n"
-%endif
 %ifndef NoYaml
                     " - `yaml`: YAML serialization\n"
 %endif
                     " - `none`: no serialization; raw messages\n",
                 "default_value":
-%ifndef NoJson
                     "json"
-%else
-                    "none"
-%endif
                     ,
                 "allowed_values": (
-%ifndef NoJson
                     <AllowedValueInfo>{
                         "value": "json",
                         "desc": "Use JSON serialization",
                     },
-%endif
 %ifndef NoYaml
                     <AllowedValueInfo>{
                         "value": "yaml",

@@ -4,9 +4,7 @@
 %modern
 
 # try importing JSON and YAML modules
-%try-module json
-%define NoJson
-%endtry
+%requires json
 %try-module yaml
 %define NoYaml
 %endtry
@@ -132,9 +130,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     checkModules() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif

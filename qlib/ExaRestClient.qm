@@ -71,9 +71,7 @@ module ExaRestClient {
     - the initial version of the %ExaRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace ExaRestClient {
 public class ExaRestClientBase {

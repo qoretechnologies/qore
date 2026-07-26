@@ -28,9 +28,7 @@
 %requires qore >= 3.0
 
 # try importing JSON and YAML modules
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -350,20 +348,16 @@ const YamlSerialization = {
 };
 %endif
 
-%ifndef NoJson
 const JsonSerialization = {
     "serialize": \make_json(),
     "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
     "deserialize": \parse_json(),
     "module": "json",
 };
-%endif
 
 #! supported mime types for de/serializing data
 public const MimeDataTypes = {
-%ifndef NoJson
     MimeTypeJson: JsonSerialization,
-%endif
 %ifndef NoYaml
     MimeTypeYaml: YamlSerialization,
     MimeTypeYamlRpc: YamlSerialization,
@@ -630,12 +624,8 @@ public class AsyncApi3Loader {
         auto rv;
         switch (ser) {
             case "json": {
-%ifdef NoJson
-                throw "JSON-MODULE-MISSING", "Trying to parse a JSON schema, but the json module is unavailable";
-%else
                 rv = parse_json(str);
                 break;
-%endif
             }
             case "yaml": {
 %ifdef NoYaml
@@ -2166,16 +2156,12 @@ public class AsyncApiSchemaTokenizer {
         if (!ex) {
             return NOTHING;
         }
-%ifdef NoJson
-        return NOTHING;
-%else
         try {
             return parse_json(ex);
         } catch () {
             # Silently ignore malformed JSON examples
             return NOTHING;
         }
-%endif
     }
 
     #! Parse a channel block and extract channel information
@@ -3360,11 +3346,7 @@ public class AsyncApiSchemaGenerator {
 
     #! Generate JSON output
     string toJson() {
-%ifdef NoJson
-        throw "JSON-NOT-AVAILABLE", "JSON module is not available";
-%else
         return make_json(generate(), JGF_ADD_FORMATTING);
-%endif
     }
 }
 

@@ -28,9 +28,7 @@
 %requires Diff
 %requires Util
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -286,13 +284,11 @@ class QdiffApp {
 
     private auto parseData(string s, string path) {
         # Try JSON first, then YAML, then return as raw string
-%ifndef NoJson
         try {
             return parse_json(s);
         } catch () {
             # not JSON
         }
-%endif
 %ifndef NoYaml
         try {
             return parse_yaml(s);

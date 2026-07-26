@@ -39,9 +39,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 %requires AsyncSocketIo
 
-%try-module json >= 1.8.2
-%define NoJson
-%endtry
+%requires json
 
 module DiscordWebSocketClient {
     version = "1.2";
@@ -1216,7 +1214,6 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
 
     #! Discover the Discord gateway URL
     static string discoverUrl() {
-%ifndef NoJson
         # lookup gateway address
         return parse_json((new HTTPClient({
             "url": GatewayDiscoveryUrl,
@@ -1224,9 +1221,6 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
                 "Accept": MimeTypeJson,
             },
         })).get("")).url;
-%else
-        return DefaultGatewayUrl;
-%endif
     }
 }
 }

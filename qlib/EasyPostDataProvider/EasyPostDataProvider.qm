@@ -39,9 +39,7 @@
 %requires(reexport) RestClient
 %requires(reexport) RestClientIo
 %requires EasyPostRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module EasyPostDataProvider {
     version = "1.0";

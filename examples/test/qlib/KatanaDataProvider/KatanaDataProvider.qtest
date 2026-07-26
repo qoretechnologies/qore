@@ -34,9 +34,7 @@
 %requires RestClientIo
 %requires Mime
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires KatanaRestClient
 %requires KatanaDataProvider
@@ -137,9 +135,6 @@ public class KatanaDataProviderTest inherits QUnit::Test {
     }
 
     private checkJson() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
     }
 
     #! Sets up a Katana client for integration tests (via connection or apikey)

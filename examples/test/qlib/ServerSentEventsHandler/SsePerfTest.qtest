@@ -16,9 +16,7 @@
 %requires ServerSentEventHandler
 %requires ServerSentEventClient
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class SsePerfTest
 
@@ -168,9 +166,6 @@ class SsePerfTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     #! Create a dedicated server for test isolation

@@ -39,9 +39,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module SalesforceRestClient {
     version = "2.0.1";
@@ -121,10 +119,6 @@ list<string> sub create_accounts(list account_list) {
 
 %requires SalesforceRestClient
 
-%try-module json
-%define NoJson
-%endtry
-
 hash<auto> opts = {
     "oauth2_client_id": ENV.SALESFORCE_CONSUMER_KEY,
     "oauth2_client_secret": ENV.SALESFORCE_CONSUMER_SECRET,
@@ -140,15 +134,11 @@ list<hash<auto>> al = map ("Id": $1.Id), rc.get("query?q=select Id, Name from Ac
 hash<auto> h = rc.bulkJobCreate(BulkJobDelete, "Account", BulkJobJson).jobInfo;
 printf("created job %y\n", h.id);
 # create JSON data
-%ifdef NoJson
-throw "JSON-MODULE-MISSING", "json module is required to create bulk JSON data";
-%else
 string data = make_json(al);
 # add batch to job with the Bulk REST API
 rc.bulkJobAddBatch(h.id, data, BulkJobJson, \info);
 # close job with the Bulk REST API
 rc.bulkJobClose(h.id);
-%endif
     @endcode
 
     @see \c "sfrest" in the bin directory for a user-friendly command-line interface to Salesforce.com REST API

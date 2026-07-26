@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) CustomerIoRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module CustomerIoDataProvider {
     version = "1.0";

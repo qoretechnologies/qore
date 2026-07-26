@@ -14,9 +14,7 @@
 %requires ConnectionProvider
 %requires QdrantDataProvider
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QdrantDataProviderTest
 
@@ -35,9 +33,6 @@ public class QdrantDataProviderTest inherits QUnit::Test {
 
     # checkModule helper
     static checkModule(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     constructor() : Test("QdrantDataProvider Test", "1.0", \ARGV, MyOpts) {

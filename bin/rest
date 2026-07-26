@@ -41,9 +41,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RestCmd
 
@@ -487,11 +485,7 @@ class RestCmd {
                 } else if (info.body.typeCode() == NT_BINARY) {
                     str = "<" + info.body.toHex() + ">";
                 } else if (exists info.body) {
-%ifndef NoJson
                     str = make_json(info.body, JGF_ADD_FORMATTING);
-%else
-                    str = sprintf("%y", info.body);
-%endif
                 } else if (info.response_body_raw.typeCode() == NT_STRING) {
                     str = trim(info.response_body_raw);
                 } else if (info.response_body_raw.typeCode() == NT_BINARY) {
@@ -509,12 +503,10 @@ class RestCmd {
         if (!content_type) {
             return NOTHING;
         }
-%ifndef NoJson
         if (content_type =~ /json/) {
             return make_json(body.typeCode() == NT_STRING ? parse_json(body) : body,
                 JGF_ADD_FORMATTING);
         }
-%endif
 %ifndef NoXml
         if (content_type =~ /xml/) {
             if (content_type =~ /xmlrpc/) {

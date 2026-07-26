@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) InstantlyRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module InstantlyDataProvider {
     version = "1.0";

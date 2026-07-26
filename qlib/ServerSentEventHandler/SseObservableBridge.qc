@@ -340,10 +340,8 @@ public class SseObservableBridge inherits DataProvider::Observer {
 
     private string serializeValue(auto v) {
         switch (serialization) {
-%ifndef NoJson
             case "json":
                 return make_json(v);
-%endif
             case "none": {
                 string s = v.typeCode() == NT_STRING ? v : sprintf("%y", v);
                 s =~ s/\r/\\r/g;

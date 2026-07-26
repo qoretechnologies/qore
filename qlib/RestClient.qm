@@ -49,13 +49,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
-
-%try-module json >= 1.11
-%define NoCbor
-%endtry
+%requires json
 
 module RestClient {
     version = "2.6";
@@ -789,17 +783,11 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     public {
         #! Data serialization support mapping codes to MIME types and de/serialization functions
         const SupportsCbor =
-%ifdef NoCbor
-            False
-%else
             exists_function("make_cbor") && exists_function("parse_cbor")
-%endif
         ;
 
         const hash<auto> DataSerializationSupport = {
-%ifndef NoJson
             "json": MimeTypeJson,
-%endif
 %ifndef NoYaml
             "yaml": MimeTypeYaml,
 %endif
@@ -846,9 +834,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %ifndef NoXml
             MimeTypeXml, MimeTypeXmlApp,
 %endif
-%ifndef NoJson
             MimeTypeJsonRpc,
-%endif
             MimeTypeFormUrlEncoded,
             MimeTypeText,
             MimeTypeOctetStream,
@@ -898,9 +884,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         */
         const hash<string, bool> DataSerializationOptions = {
             "auto": True,
-%ifndef NoJson
             "json": True,
-%endif
 %ifndef NoYaml
             "yaml": True,
 %endif
@@ -5384,7 +5368,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
                         if (!body) {
                             throw "REST-PING-ERROR", "No body returned from custom token refresh operation";
                         }
-%ifndef NoJson
                         auto b = parse_json(body);
                         if (b.typeCode() != NT_STRING) {
                             throw "REST-PING-ERROR", "Expecting \"string\" as the body type of the custom token "
@@ -5395,10 +5378,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
                             "access_token": b,
                         });
                         continue;
-%else
-                        throw "REST-PING-ERROR", sprintf("Cannot decode REST body; missing 'json' module: %y",
-                            LoggerUtil::getArgSummary(body));
-%endif
                     }
                     if (real_opts.custom_token_location == "body-plain") {
                         trim body;
@@ -5422,7 +5401,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
                 string body = resp."response-body"
                     ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
                     : "";
-%ifndef NoJson
                 if ((resp."code" / 100) == 2) {
                     auto parsed_body;
                     # remove modifiers from the content type
@@ -5443,7 +5421,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
                     gotOAuth2LoginInfo(parsed_body);
                     continue;
                 }
-%endif
                 conn.authFailure();
                 throw "REST-PING-ERROR", sprintf("%y returned from %y; response body: %y", resp.info."response-uri",
                     resp.info."request-uri", LoggerUtil::getArgSummary(body));
@@ -5522,9 +5499,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     }
 
     private doStartGetToken() {
-%ifdef NoJson
-        throw "REST-PING-ERROR", "cannot retrieve an OAuth2 token without the json module";
-%else
         rc.debug("RestConnection ping: get auth token");
         if (real_opts.custom_token_auth) {
             state = SPS_CUSTOM_GET_TOKEN;
@@ -5533,13 +5507,9 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
             state = SPS_OAUTH2_GET_TOKEN;
             poller = rc.startOAuth2PollSendRecv();
         }
-%endif
     }
 
     private doStartRefresh() {
-%ifdef NoJson
-        throw "REST-PING-ERROR", "cannot retrieve an OAuth2 token without the json module";
-%else
         # remove the Authorization header, so it can be set from the new token
         headers -= "Authorization";
         rc.debug("RestConnecton ping: refresh auth token");
@@ -5551,7 +5521,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
             poller = rc.startOAuth2PollRefreshToken();
         }
         in_refresh = True;
-%endif
     }
 
     private doStartPing() {
@@ -5712,9 +5681,6 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
             }
 
             if (state == SPS_AUTH_REFRESH) {
-%ifdef NoJson
-                throw "REST-ASYNC-ERROR", "cannot process OAuth2 token without the json module";
-%else
                 # Auth token refresh completed; update headers with new token and retry
                 hash<auto> resp = poller.getOutput();
                 if ((resp."code" / 100) == 2) {
@@ -5744,7 +5710,6 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
                 hdr.Authorization = rc.getDefaultHeaders().Authorization;
                 doStartSendRequest();
                 continue;
-%endif
             }
 
             if (state == SPS_SEND_REQUEST || state == SPS_AUTH_RETRY) {
@@ -5854,16 +5819,12 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
 
     private doStartAuthRefresh() {
         auth_refreshed = True;
-%ifdef NoJson
-        throw "REST-ASYNC-ERROR", "cannot refresh OAuth2 token without the json module";
-%else
         state = SPS_AUTH_REFRESH;
         if (rc.hasCustomTokenAuth()) {
             poller = rc.startPollCustomGetToken();
         } else {
             poller = rc.startOAuth2PollRefreshToken();
         }
-%endif
     }
 }
 

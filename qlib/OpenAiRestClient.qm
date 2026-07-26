@@ -128,19 +128,7 @@ stream.close();
     - the initial version of the %OpenAiRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 #! the OpenAiRestClient namespace contains all the objects in the OpenAiRestClient module
 public namespace OpenAiRestClient {
@@ -324,14 +312,10 @@ public class OpenAiResponseSseStream {
             }
             return body;
         }
-%ifdef NoJson
-        throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
         return call_function_args("to_json", (body,));
-%endif
     }
 
     private setupDecompression() {
@@ -634,9 +618,6 @@ public class OpenAiResponseSseStreamIo {
         # Serialize body to JSON
         *data payload;
         if (exists body) {
-%ifdef NoJson
-            throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
             if (body.typeCode() != NT_STRING) {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";
@@ -648,7 +629,6 @@ public class OpenAiResponseSseStreamIo {
                 }
                 payload = body;
             }
-%endif
         }
 
         # Build full path
@@ -758,10 +738,6 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             throw "LLM-CONFIG-ERROR",
                 sprintf("url is required for %y mode", getMode());
         }
-%ifdef NoJson
-        throw "LLM-DEPENDENCY-ERROR",
-            "json module is required for HTTP mode but is not available";
-%endif
     }
 
     string getMode() {

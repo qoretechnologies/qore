@@ -33,9 +33,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) GeminiRestClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module GeminiDataProvider {
     version = "1.0";

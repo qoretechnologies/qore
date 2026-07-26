@@ -27,9 +27,7 @@
 %modern
 
 %requires(reexport) QoreLlmUtils
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module QoreVisionExtraction {
     version = "1.0.0";

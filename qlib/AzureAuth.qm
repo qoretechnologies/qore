@@ -28,15 +28,7 @@
 %requires(reexport) RestClient
 %requires(reexport) RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module AzureAuth {
     version = "1.0";
@@ -203,11 +195,6 @@ class TokenCache {
 */
 public string sub getEntraTokenClientCredentials(string tenant, string client_id,
         string client_secret, string scope, *hash<auto> opts) {
-%ifdef NoJson
-    throw "AZURE-AUTH-MISSING-JSON-MODULE",
-        "AzureAuth requires the json module for token-response parsing; "
-        "install the json module to use Entra client_credentials";
-%else
     string key = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
@@ -242,7 +229,6 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
     (token, expires_in) = parseTokenResponse(resp.body);
     TokenCache::put(key, token, expires_in);
     return token;
-%endif
 }
 
 #! Fetches an Entra access token via the Azure IMDS managed-identity flow
@@ -272,11 +258,6 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
 */
 public string sub getEntraTokenManagedIdentity(string resource, *string client_id,
         *hash<auto> opts) {
-%ifdef NoJson
-    throw "AZURE-AUTH-MISSING-JSON-MODULE",
-        "AzureAuth requires the json module for token-response parsing; "
-        "install the json module to use Azure managed-identity";
-%else
     string key = sprintf("mi|%s|%s", resource, client_id ?? "");
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
@@ -305,7 +286,6 @@ public string sub getEntraTokenManagedIdentity(string resource, *string client_i
     (token, expires_in) = parseTokenResponse(resp.body);
     TokenCache::put(key, token, expires_in);
     return token;
-%endif
 }
 
 #! Removes any cached client-credentials token for the given parameters

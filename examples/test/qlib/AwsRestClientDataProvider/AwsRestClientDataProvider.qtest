@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires AwsRestClientDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class AwsRestClientDataProviderTest
 
@@ -26,9 +24,6 @@ public class AwsRestClientDataProviderTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     httpClientDataProviderTest() {

@@ -39,11 +39,7 @@ public class Notification {
             "uri": uri,
             "diagnostics": diagnostics ?? (),
         };
-%ifndef NoJson
         return make_jsonrpc_request("textDocument/publishDiagnostics", jsonRpcVer, NOTHING, notification);
-%else
-        throw "JSON-MODULE-MISSING", "json module is required for QLS";
-%endif
     }
 
     #! Create a "showMessage" notification.
@@ -52,11 +48,7 @@ public class Notification {
             "type": messageType,
             "message": message,
         };
-%ifndef NoJson
         return make_jsonrpc_request("window/showMessage", jsonRpcVer, NOTHING, notification);
-%else
-        throw "JSON-MODULE-MISSING", "json module is required for QLS";
-%endif
     }
 }
 

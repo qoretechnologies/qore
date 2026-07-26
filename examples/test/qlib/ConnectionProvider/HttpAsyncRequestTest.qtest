@@ -15,9 +15,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HttpAsyncRequestTest
 
@@ -25,15 +23,11 @@
 class EchoRequestHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         string resp_body;
-%ifndef NoJson
         resp_body = make_json({
             "method": hdr.method,
             "path": hdr.path,
             "body": body.typeCode() == NT_STRING ? body : NOTHING,
         });
-%else
-        resp_body = sprintf("method=%s path=%s", hdr.method, hdr.path);
-%endif
         return makeResponse(200, resp_body, {
             "Content-Type": MimeTypeJson,
             "X-Request-Method": hdr.method,
@@ -107,9 +101,6 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
     }
 
     asyncPostTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         HttpRequestPollOperation poller("http://127.0.0.1:" + port, "POST", "/api/data",
             "test body");
 

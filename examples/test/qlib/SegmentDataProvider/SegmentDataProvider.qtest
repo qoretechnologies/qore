@@ -34,9 +34,7 @@
 %requires RestClientIo
 %requires Mime
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires SegmentRestClient
 %requires SegmentDataProvider

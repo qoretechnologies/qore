@@ -28,9 +28,7 @@
 %requires ml
 %requires Util
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QoreOnnxCli
 
@@ -365,20 +363,12 @@ class QoreOnnxCli {
     }
 
     private static auto readJsonFile(string path) {
-%ifdef NoJson
-        throw "QORE-ONNX-ERROR", "the json module is required for JSON input options";
-%else
         return parse_json(ReadOnlyFile::readTextFile(path));
-%endif
     }
 
     private static nothing writeResult(auto result, hash<auto> opts, *string command = NOTHING) {
         if (opts.json) {
-%ifdef NoJson
-            throw "QORE-ONNX-ERROR", "the json module is required for --json output";
-%else
             printf("%s\n", make_json(result));
-%endif
             return;
         }
         if (command.val()) {

@@ -27,19 +27,7 @@
 %modern
 
 %requires(reexport) QoreLlmUtils
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module QoreAgentStrategies {
     version = "1.0.0";

@@ -23,9 +23,7 @@
 */
 
 # for parsing response stream events
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! Contains all public definitions in the GeminiDataProvider module
 public namespace GeminiDataProvider {
@@ -296,13 +294,6 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
         if (!evt."data") {
             return {"event": evt.event, "id": evt.id};
         }
-%ifdef NoJson
-        return {
-            "event": evt.event,
-            "id": evt.id,
-            "raw_data": evt."data",
-        };
-%else
         hash<auto> payload = parse_json(evt."data");
         if (evt.event) {
             payload.event = evt.event;
@@ -311,7 +302,6 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
             payload.id = evt.id;
         }
         return payload;
-%endif
     }
 }
 }

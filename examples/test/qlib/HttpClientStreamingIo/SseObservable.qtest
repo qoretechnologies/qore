@@ -38,9 +38,7 @@
 %requires HttpClientIo
 %requires HttpClientStreamingIo
 %requires AsyncApi
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class SseObservableTest
 
@@ -606,9 +604,6 @@ class SseObservableTest inherits Test {
     }
 
     testAsyncApiValidatedEvents() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
         JsonSseHandler async_handler(schema);
         HttpServer async_server(<HttpServerOptionInfo>{
@@ -647,9 +642,6 @@ class SseObservableTest inherits Test {
     }
 
     testAsyncApiIncomingValidationFailure() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
         InvalidJsonSseHandler invalid_handler();
         HttpServer invalid_server(<HttpServerOptionInfo>{

@@ -41,9 +41,7 @@
 %requires RestClient
 %requires HttpServer
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class AbstractRestClientTest
 
@@ -151,77 +149,61 @@ class AbstractRestClientTest inherits QUnit::Test {
     }
 
     testRestGet() {
-%ifndef NoJson
         hash<RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertEq("GET", resp.body.method);
         assertRegex("api/test", resp.body.path);
         assertEq(True, resp.headers instanceof hash);
-%endif
     }
 
     testRestHead() {
-%ifndef NoJson
         hash<RestResponseInfo> resp = rest.restHead("/api/test");
         assertEq(200, resp.status_code);
         # HEAD responses have no body
         assertEq(True, !exists resp.body || !resp.body);
-%endif
     }
 
     testRestOptions() {
-%ifndef NoJson
         hash<RestResponseInfo> resp = rest.restOptions("/api/test");
         assertEq(200, resp.status_code);
         assertEq(True, exists resp.body);
-%endif
     }
 
     testRestPost() {
-%ifndef NoJson
         hash<auto> body = {"key": "value", "num": 42};
         hash<RestResponseInfo> resp = rest.restPost("/api/test", body);
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestPut() {
-%ifndef NoJson
         hash<auto> body = {"update": True};
         hash<RestResponseInfo> resp = rest.restPut("/api/test", body);
         assertEq(200, resp.status_code);
         assertEq("PUT", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestPatch() {
-%ifndef NoJson
         hash<auto> body = {"patch": "data"};
         hash<RestResponseInfo> resp = rest.restPatch("/api/test", body);
         assertEq(200, resp.status_code);
         assertEq("PATCH", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testRestDel() {
-%ifndef NoJson
         hash<RestResponseInfo> resp = rest.restDel("/api/test", NOTHING);
         assertEq(204, resp.status_code);
-%endif
     }
 
     testRestDoRequest() {
-%ifndef NoJson
         hash<auto> body = {"generic": True};
         hash<RestResponseInfo> resp = rest.restDoRequest("POST", "/api/test", body);
         assertEq(200, resp.status_code);
         assertEq("POST", resp.body.method);
         assertEq(body, resp.body.body);
-%endif
     }
 
     testSerializationMethods() {
@@ -274,10 +256,8 @@ class AbstractRestClientTest inherits QUnit::Test {
         AbstractRestClient arc = client;
 
         # Make a request to establish a connection
-%ifndef NoJson
         hash<RestResponseInfo> resp = arc.restGet("/api/test");
         assertEq(200, resp.status_code);
-%endif
 
         # close() should disconnect without error
         arc.close();

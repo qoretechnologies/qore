@@ -13,9 +13,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module xml
 %define NoXml
@@ -384,14 +382,12 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         }
 %endif
 
-%ifndef NoJson
         {
             string json = eval_expr("make_json", ({"key": "value"}));
             assertTrue(json.val());
             hash<auto> parsed = eval_expr("parse_json", (json));
             assertEq("value", parsed.key);
         }
-%endif
 
 %ifndef NoXml
         {
@@ -403,11 +399,6 @@ class DataProviderExpressionsTest inherits QUnit::Test {
 %endif
 
 %ifdef NoYaml
-%ifdef NoJson
-%ifdef NoXml
-        testSkip("no yaml, json, or xml module available for serialization tests");
-%endif
-%endif
 %endif
     }
 

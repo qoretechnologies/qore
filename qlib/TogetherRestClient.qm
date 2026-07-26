@@ -94,9 +94,7 @@ printf("%Y\n", ans.body);
     - the initial version of the %TogetherRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! the TogetherRestClient namespace contains all the objects in the TogetherRestClient module
 public namespace TogetherRestClient {

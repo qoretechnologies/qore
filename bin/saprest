@@ -39,9 +39,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class SapRestClient
 
@@ -247,9 +245,7 @@ class SapRestClient {
                     case "xml": str = make_xmlrpc_value(args, XGF_ADD_FORMATTING); break;
                     case "rawxml": str = make_xml(args, XGF_ADD_FORMATTING); break;
 %endif
-%ifndef NoJson
                     case "json": str = make_json(args, JGF_ADD_FORMATTING); break;
-%endif
 %ifndef NoYaml
                     case "yaml": str = trim(make_yaml(args, YAML::BlockStyle)); break;
 %endif
@@ -278,9 +274,7 @@ class SapRestClient {
                 case "xml": str = make_xmlrpc_value(rv, opt.reformat ? XGF_ADD_FORMATTING : NOTHING); break;
                 case "rawxml": str = make_xml(rv, opt.reformat ? XGF_ADD_FORMATTING : NOTHING); break;
 %endif
-%ifndef NoJson
                 case "json": str = make_json(rv, opt.reformat ? JGF_ADD_FORMATTING : NOTHING); break;
-%endif
 %ifndef NoYaml
                 case "yaml": str = trim(make_yaml(rv, opt.reformat ? YAML::BlockStyle : NOTHING)); break;
 %endif

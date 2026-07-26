@@ -35,9 +35,7 @@
 
 %modern
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 module SewioWebSocketClient {
     version = "1.2";
@@ -179,16 +177,11 @@ SewioWebSocketClient ws(\event(), ("url": "ws://example.com:8080/path"));
 
             self{key} = v;
         }
-%ifdef NoJson
-        throw "SEWIOWEBSOCKETCLIENT-ERROR", "the json module cannot be loaded; ensure the json module is installed and try again";
-%endif
     }
 
     #! sends data to the server
     sendData(string method, string resource, *hash h) {
-%ifndef NoJson
         send(make_json(("headers": ("X-ApiKey": apikey), "method": method, "resource": resource) + h));
-%endif
     }
 
     #! returns a hash of URL scheme information for URL schemes supported by this object
@@ -210,9 +203,7 @@ SewioWebSocketClient ws(\event(), ("url": "ws://example.com:8080/path"));
     #! our callback wrapper to parse the JSON and call the user's callback with the deserialized data
     private static code getCallback(code cb) {
         return sub (*string json) {
-%ifndef NoJson
             cb(json.val() ? parse_json(json) : NOTHING);
-%endif
         };
     }
 }

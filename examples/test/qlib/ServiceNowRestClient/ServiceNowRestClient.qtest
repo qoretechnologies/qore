@@ -13,9 +13,7 @@
 %requires ServiceNowRestClient
 %requires ServiceNowRestDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires qore >= 0.9.10
 
@@ -505,10 +503,6 @@ class ServiceNowTest inherits QUnit::Test {
             assertEq(Type::Hash, h.body.response.result.type());
         }
 
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
-
         hash<auto> info = parse_url(rc.getURL());
         string url = info.protocol + "://" + info.host;
         if (info.port) {
@@ -607,10 +601,6 @@ class ServiceNowTest inherits QUnit::Test {
         assertThrows("CONNECTION-OPTION-ERROR", sub () {
             ServiceNowRestConnection swsc1("test", "test", url, {"monitor": True}, {"x": 1});
         });
-
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
 
         ServiceNowRestClient client = swsc.get(False);
         # issue #3321: check default timeouts

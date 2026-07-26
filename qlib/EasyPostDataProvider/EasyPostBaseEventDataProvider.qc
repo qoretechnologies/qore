@@ -185,7 +185,6 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
         if (request.body.typeCode() == NT_HASH) {
             payload = request.body;
         } else {
-%ifndef NoJson
             try {
                 auto parsed = parse_json(body_str);
                 if (parsed.typeCode() == NT_HASH) {
@@ -195,7 +194,6 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
                 log(LoggerLevel::ERROR, "EasyPostBaseEventDataProvider: cannot parse webhook body: %s", ex.desc);
                 return;
             }
-%endif
             if (!payload) {
                 log(LoggerLevel::ERROR, "EasyPostBaseEventDataProvider: cannot parse webhook body");
                 return;

@@ -225,7 +225,6 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
             throw "CONSTRUCTOR-ERROR",
                 "tokenizer_config_path option is required unless registry_model_name is provided";
         }
-%ifndef NoJson
         hash<auto> tok_config;
         *hash<auto> tok_runtime_config;
         *QoreModelRegistry::ModelRegistry registry;
@@ -244,13 +243,6 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
             tok_config =
                 parse_json(FileLocationHandler::getTextFileFromLocation(copts.tokenizer_config_path));
         }
-%else
-        throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
-        hash<auto> tok_config = {};
-        *hash<auto> tok_runtime_config;
-        *QoreModelRegistry::ModelRegistry registry;
-        hash<QoreModelRegistry::ModelVersionInfo> manifest;
-%endif
 
         # Build embedding model config
         string emb_mode = copts.embedding_mode;

@@ -337,7 +337,6 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
     #! Ensures the TokenCounter is initialized (lazy creation to avoid file I/O in constructor)
     private ensureTokenCounter() {
         if (!token_counter) {
-%ifndef NoJson
             hash<auto> tokenizer_config;
             *hash<auto> tokenizer_runtime_config;
             if (tokenizer_model_name.val()) {
@@ -352,9 +351,6 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
             }
             token_counter = new QoreTokenizerUtils::TokenCounter(tokenizer_config,
                 tokenizer_runtime_config);
-%else
-            throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
-%endif
         }
     }
 

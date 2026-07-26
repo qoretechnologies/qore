@@ -13,9 +13,7 @@
 %requires HttpServerAsyncIo
 %requires GcpAuth
 
-%try-module json >= 1.11
-%define NoJson
-%endtry
+%requires json
 
 %exec-class GcpAuthTest
 
@@ -123,9 +121,6 @@ public class GcpAuthTest inherits QUnit::Test {
     }
 
     private setup() {
-%ifdef NoJson
-        # json module is required; tests will skip individually
-%endif
         Logger logger("test", LoggerLevel::getLevelInfo());
 
         token_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
@@ -180,9 +175,6 @@ public class GcpAuthTest inherits QUnit::Test {
     }
 
     static checkJson(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     private saJwtBearerTest() {

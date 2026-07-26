@@ -31,9 +31,7 @@
 %requires QoreOnnxTools
 %requires ml
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QoreOnnxToolsTest
 
@@ -207,9 +205,6 @@ class QoreOnnxToolsTest inherits QUnit::Test {
     }
 
     onnxProfileSummaryTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         FsUtil::TmpFile prefix("qore-onnx-tools-profile-", "");
         ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
             "providers": (),
@@ -282,7 +277,6 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("onnx-package", result.diagnostics.kind);
         assertEq("regression", result.diagnostics.task);
         assertTrue(result.diagnostics.examples.size() > 0);
-%ifndef NoJson
         hash<auto> manifest = parse_json(ReadOnlyFile::readTextFile(result.manifest_path));
         assertEq("regression", manifest.task);
         assertEq(17, manifest.opset);
@@ -307,7 +301,6 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         assertEq("Y", manifest.outputs[0].name);
         assertTrue(manifest.validation.valid);
         assertEq(0.0, manifest.benchmarks.baseline.average_ms.toFloat());
-%endif
 
         string default_out_dir = dir.path + DirSep + "default-pkg";
         hash<QoreOnnxTools::OnnxPackageResult> default_result =
@@ -331,9 +324,6 @@ class QoreOnnxToolsTest inherits QUnit::Test {
     }
 
     qoreOnnxCliSmokeTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         if (!ML::ml_get_capabilities().has_onnx) {
             testSkip("ONNX Runtime support is not available");
         }
@@ -436,11 +426,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         if (!trim(out).val()) {
             throw "TEST-ERROR", sprintf("qore-onnx command returned no JSON output: %y", args);
         }
-%ifdef NoJson
-        throw "TEST-ERROR", "json module not available";
-%else
         return parse_json(trim(out));
-%endif
     }
 
     private string runCliText(list<string> args) {

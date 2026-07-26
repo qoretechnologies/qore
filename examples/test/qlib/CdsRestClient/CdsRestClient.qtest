@@ -13,9 +13,7 @@
 %requires CdsRestClient
 %requires CdsRestDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires qore >= 0.9
 
@@ -241,10 +239,6 @@ class CdsTest inherits QUnit::Test {
             assertEq("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", crc.getAuthUrl());
             assertEq("https://login.microsoftonline.com/common/oauth2/v2.0/token", crc.getTokenUrl());
         }
-
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
 
         {
             CdsRestConnection crc({

@@ -96,9 +96,7 @@ printf("Transcript: %s\nSummary: %s\n", result.text, result.summary);
     - the initial version of the %AssemblyAiRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! the AssemblyAiRestClient namespace contains all the objects in the AssemblyAiRestClient module
 public namespace AssemblyAiRestClient {

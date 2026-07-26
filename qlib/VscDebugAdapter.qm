@@ -27,9 +27,7 @@
 %requires(reexport) DebugUtil
 %requires DebugCmdLine
 %requires Util
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %modern
 %no-debugging
@@ -310,9 +308,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
             default:
                 throw "VDA-ERROR", sprintf("Unknown command: %y", cmd);
         }
-%ifndef NoJson
         stdout.write(make_json(res)+"\r\n");
-%endif
     }
 
     private:internal auto resolveValue(string name, *string val, hash strings, auto defVal) {
@@ -463,7 +459,6 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
     #! parse request from VSC frontend
     private:internal hash parseVscRequest(string msg) {
-%ifndef NoJson
         auto req = parse_json(msg);
         debug("receiveVsc: %y", req);
         if (req.typeCode() != NT_HASH) {
@@ -473,9 +468,6 @@ public class VscDebugAdapter inherits DebugCommandLine {
             throw "VDA-ERROR", sprintf("Wrong type: %y", req.type);
         }
         return req;
-%else
-        throw "VDA-ERROR", "json module not available";
-%endif
     }
 
     #! send message for VSC frontend
@@ -483,12 +475,10 @@ public class VscDebugAdapter inherits DebugCommandLine {
         if (msg.event != "output") {
             debug("sendVsc: %y", msg);
         }
-%ifndef NoJson
         string resp = make_json(msg);
         binary b = binary(resp);
         stdout.printf("Content-Length: %d\r\n\r\n", b.size());
         stdout.write(b);
-%endif
     }
 
     #! send event for VSC frontend

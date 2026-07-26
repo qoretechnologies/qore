@@ -90,9 +90,7 @@ printf("%Y\n", ans.body);
     - the initial version of the %MistralRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace MistralRestClient {
 public class MistralRestClientBase {

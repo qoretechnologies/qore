@@ -73,9 +73,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         #! Data serialization support
         const DataSerializationSupport = {
-%ifndef NoJson
             "json": \ServerSentEventHandler::serializeJson(),
-%endif
             "none": \ServerSentEventHandler::serializeDefault(),
         };
     }
@@ -426,12 +424,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return (str ?? ":\n") + "\n";
     }
 
-%ifndef NoJson
     #! JSON value serialization
     static string serializeJson(auto v) {
         return make_json(v);
     }
-%endif
 
     #! Default value serialization
     static string serializeDefault(auto v) {

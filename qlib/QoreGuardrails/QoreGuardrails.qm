@@ -29,9 +29,7 @@
 %requires(reexport) DataProvider
 %requires QoreLlmUtils
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module QoreGuardrails {
     version = "1.0.0";

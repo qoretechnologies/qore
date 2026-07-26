@@ -33,9 +33,7 @@
 %requires RestClientIo
 %requires OneDriveDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class OneDriveDataProviderTest
 
@@ -132,14 +130,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         OneDriveDataProvider::OneDriveDataProvider prov(rest);
         assertEq("onedrive", prov.getName());
@@ -158,7 +152,6 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("create-sharing-link", children), "has create-sharing-link child");
         assertTrue(inlist("copy-item", children), "has copy-item child");
         assertTrue(inlist("events", children), "has events child");
-%endif
     }
 
     actionCatalogTest() {
@@ -295,7 +288,6 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
 
     getDriveInfoTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "drive123",
@@ -316,12 +308,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("me/drive", rest.last_path);
         assertEq("drive123", resp.id);
         assertEq("personal", resp.driveType);
-%endif
     }
 
     getItemTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "item123",
@@ -337,12 +327,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("me/drive/items/item123", rest.last_path);
         assertEq("item123", resp.id);
         assertEq("document.pdf", resp.name);
-%endif
     }
 
     getItemByPathTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "item456",
@@ -355,12 +343,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("GET", rest.last_method);
         assertEq("me/drive/root:/Documents/report.docx", rest.last_path);
         assertEq("item456", resp.id);
-%endif
     }
 
     createFolderTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "folder789",
@@ -388,12 +374,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test with description
         resp = dp.doRequest({"name": "Described Folder", "description": "A test description"});
         assertEq("A test description", rest.last_request.description);
-%endif
     }
 
     uploadFileTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "file123",
@@ -424,12 +408,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             "parent_id": "folder789",
         });
         assertRegex("me/drive/items/folder789:/test.txt:/content", rest.last_path);
-%endif
     }
 
     createUploadSessionTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "uploadUrl": "https://sn3302.up.1drv.com/up/fe6987415ace7X4811...",
@@ -444,12 +426,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertRegex("createUploadSession", rest.last_path);
         assertEq("large-file.zip", rest.last_request.item.name);
         assertTrue(resp.uploadUrl.val());
-%endif
     }
 
     downloadFileTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "file123",
@@ -468,12 +448,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq(2048, resp.size);
         assertEq("application/pdf", resp.content_type);
         assertTrue(resp.download_url.val());
-%endif
     }
 
     deleteItemTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {};
         OneDriveDataProvider::OneDriveDataProvider prov(rest);
@@ -484,12 +462,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("me/drive/items/item123", rest.last_path);
         assertEq("deleted", resp.status);
         assertEq("item123", resp.id);
-%endif
     }
 
     createSharingLinkTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "perm123",
@@ -519,12 +495,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("edit", rest.last_request.type);
         assertEq("organization", rest.last_request.scope);
         assertEq("secret123", rest.last_request.password);
-%endif
     }
 
     updateItemTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "id": "item123",
@@ -548,12 +522,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test update description
         resp = dp.doRequest({"id": "item123", "description": "Updated description"});
         assertEq("Updated description", rest.last_request.description);
-%endif
     }
 
     copyItemTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {};
         rest.response_headers = {
@@ -581,12 +553,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test copy with conflict behavior
         resp = dp.doRequest({"id": "item123", "conflict_behavior": "rename"});
         assertRegex("conflictBehavior=rename", rest.last_path);
-%endif
     }
 
     searchItemsTest() {
         checkModule();
-%ifndef NoJson
         FakeOneDriveRestClientIo rest();
         rest.response_body = {
             "value": (
@@ -616,12 +586,10 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test with search_query
         dp.searchRecords(NOTHING, {"search_query": "budget"});
         assertRegex("me/drive/root/search", rest.last_path);
-%endif
     }
 
     referenceDataTest() {
         checkModule();
-%ifndef NoJson
         # verify getSupportedReferenceData returns expected types
         FakeOneDriveRestClientIo rest();
         OneDriveDataProvider::OneDriveDataProvider prov(rest);
@@ -718,7 +686,6 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             OneDriveDataProvider::OneDriveDataProvider::AppName, "create-sharing-link"
         );
         assertEq("items", action.options.id.ref_data, "create-sharing-link id has ref_data");
-%endif
     }
 
     connectionSchemeTest() {

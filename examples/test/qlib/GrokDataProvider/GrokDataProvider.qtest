@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires GrokDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class GrokDataProviderTest
 
@@ -127,9 +125,7 @@ class StreamObserver inherits Observer {
 
 public class GrokDataProviderTest inherits QUnit::Test {
     public {
-%ifndef NoJson
         *GrokRestClient::GrokRestConnection rc;
-%endif
         Logger logger;
 
         # command-line options
@@ -168,25 +164,19 @@ public class GrokDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private setupConnection() {
-%ifndef NoJson
         *string api_key = ENV.GROK_API_KEY;
         if (api_key) {
             rc = new GrokRestClient::GrokRestConnection("test", "test", NOTHING, NOTHING, {
                 "apikey": api_key,
             });
         }
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         GrokDataProvider prov(rest);
         assertEq("grok", prov.getName());
@@ -198,7 +188,6 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("models"));
         assertTrue(children.contains("responses"));
         assertTrue(children.contains("deferred-completion"));
-%endif
     }
 
     actionCatalogTest() {
@@ -263,7 +252,6 @@ public class GrokDataProviderTest inherits QUnit::Test {
 
     chatCompletionTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         rest.response_body = {
             "id": "chatcmpl-test",
@@ -301,12 +289,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("chatcmpl-test", result.id);
         assertEq("Hello!", result.choices[0].message.content);
         assertEq(15, result.usage.total_tokens);
-%endif
     }
 
     simpleChatCompletionTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         rest.response_body = {
             "id": "chatcmpl-test",
@@ -346,12 +332,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("stop", result.finish_reason);
         assertEq("grok-3", result.model);
         assertEq(18, result.usage.total_tokens);
-%endif
     }
 
     createResponseTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         GrokModelCreateResponseDataProvider prov(rest);
         hash<auto> result = prov.doRequest({
@@ -412,12 +396,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("What is in this image?", rest.last_request.input[0].content[0].text);
         assertEq("input_image", rest.last_request.input[0].content[1].type);
         assertEq("https://example.com/image.jpg", rest.last_request.input[0].content[1].image_url);
-%endif
     }
 
     getResponseTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         rest.response_body = {
             "id": "resp_abc123",
@@ -432,12 +414,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("GET", rest.last_method);
         assertEq("responses/resp_abc123", rest.last_path);
         assertEq("resp_abc123", result.id);
-%endif
     }
 
     deleteResponseTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         rest.response_body = {
             "id": "resp_abc123",
@@ -451,12 +431,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("DELETE", rest.last_method);
         assertEq("responses/resp_abc123", rest.last_path);
         assertEq(True, result.deleted);
-%endif
     }
 
     deferredCompletionTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         rest.response_body = {
             "id": "chatcmpl-test",
@@ -486,12 +464,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("GET", rest.last_method);
         assertEq("chat/deferred-completion/req_xyz", rest.last_path);
         assertEq("Deferred result", result.choices[0].message.content);
-%endif
     }
 
     conversationContextTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         GrokModelCreateResponseDataProvider prov(rest);
 
@@ -538,12 +514,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         # Verify previous_response_id was loaded from context
         assertEq("resp_test", rest.last_request.previous_response_id);
         assertEq("resp_test_2", store.last_saved.previous_response_id);
-%endif
     }
 
     exampleEventDataTest() {
         checkModule();
-%ifndef NoJson
         FakeGrokRestClientIo rest();
         GrokResponseStreamDataProvider prov(rest, {"id": "grok-3"});
         auto example = prov.getExampleEventData(EVENT_GROK_RESPONSE_STREAM);
@@ -555,7 +529,6 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(example.response.hasKey("id"));
         assertTrue(example.response.hasKey("model"));
         assertTrue(example.response.hasKey("output"));
-%endif
     }
 
     dataTypesTest() {
@@ -673,7 +646,6 @@ public class GrokDataProviderTest inherits QUnit::Test {
 
     liveTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no connection; set GROK_API_KEY to run live tests");
         }
@@ -766,6 +738,5 @@ public class GrokDataProviderTest inherits QUnit::Test {
         observer.wait(1);
         assertTrue(observer.events.size() > 0);
         assertTrue(observer.events[0].type.val());
-%endif
     }
 }

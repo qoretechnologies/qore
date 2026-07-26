@@ -17,9 +17,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 const VERSION = "2.0";
 
@@ -72,11 +70,6 @@ class Main {
 %ifdef NoYaml
         if (format == "yaml") {
             error("MODULE-ERROR", "the \"yaml\" module is required for YAML output but is not available");
-        }
-%endif
-%ifdef NoJson
-        if (format == "json") {
-            error("MODULE-ERROR", "the \"json\" module is required for JSON output but is not available");
         }
 %endif
 

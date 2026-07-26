@@ -64,9 +64,7 @@ module MilvusRestClient {
     - the initial version of the %MilvusRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace MilvusRestClient {
 public class MilvusRestClientBase {

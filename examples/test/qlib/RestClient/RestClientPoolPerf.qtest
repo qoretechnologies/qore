@@ -43,9 +43,7 @@
 %requires RestClientIo
 %requires FsUtil
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RestClientPoolPerfTest
 
@@ -278,7 +276,6 @@ http {
     # ── RestClientPool tests ────────────────────────────────────────────
 
     testRestClientPoolSequential() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -308,11 +305,9 @@ http {
 
         printLatencyStats("RestClientPool sequential", latencies);
         printThroughput("RestClientPool sequential", count, total_ms);
-%endif
     }
 
     testRestClientIoPoolSequential() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -342,13 +337,11 @@ http {
 
         printLatencyStats("RestClientIoPool sequential", latencies);
         printThroughput("RestClientIoPool sequential", count, total_ms);
-%endif
     }
 
     # ── Concurrent correctness ─────────────────────────────────────────
 
     testRestClientPoolConcurrent() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -400,11 +393,9 @@ http {
             sprintf("at least 95%% success (got %d/%d)", success_count, total));
 
         printThroughput(sprintf("RestClientPool %d threads", thread_count), success_count, total_ms);
-%endif
     }
 
     testRestClientIoPoolConcurrent() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -457,13 +448,11 @@ http {
             sprintf("at least 95%% success (got %d/%d)", success_count, total));
 
         printThroughput(sprintf("RestClientIoPool %d threads", thread_count), success_count, total_ms);
-%endif
     }
 
     # ── Scalability: increasing thread counts ──────────────────────────
 
     testRestClientPoolScalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -518,11 +507,9 @@ http {
                     threads, success_count, total, total_ms, throughput);
             }
         }
-%endif
     }
 
     testRestClientIoPoolScalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -578,11 +565,9 @@ http {
                     threads, success_count, total, total_ms, throughput);
             }
         }
-%endif
     }
 
     testRestClientIoPoolSharedMgrScalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -649,11 +634,9 @@ http {
                     threads, success_count, total, total_ms, throughput);
             }
         }
-%endif
     }
 
     testRestClientIoPoolSharedMgrH3Scalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -728,13 +711,11 @@ http {
                 printf("\n");
             }
         }
-%endif
     }
 
     # ── HTTP/3 scalability ─────────────────────────────────────────────
 
     testRestClientPoolH3Scalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -790,11 +771,9 @@ http {
                     threads, success_count, total, total_ms, throughput);
             }
         }
-%endif
     }
 
     testRestClientIoPoolH3Scalability() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -850,13 +829,11 @@ http {
                     threads, success_count, total, total_ms, throughput);
             }
         }
-%endif
     }
 
     # ── Head-to-head comparison ────────────────────────────────────────
 
     testPoolComparison() {
-%ifndef NoJson
         if (!container_running) {
             testSkip("nginx container not available");
             return;
@@ -1034,6 +1011,5 @@ http {
             printf("    RestClientIoPool   (H3 async)   : %d/%d OK in %7.1fms = %7.1f req/s\n",
                 async_h3_success, total, async_h3_ms, async_h3_rps);
         }
-%endif
     }
 }

@@ -13,9 +13,7 @@
 %requires RestClient
 %requires OpenAiRestClient
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class Main
 
@@ -123,9 +121,6 @@ public class Main inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     connectionTest() {

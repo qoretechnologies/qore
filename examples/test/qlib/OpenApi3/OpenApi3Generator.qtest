@@ -24,9 +24,7 @@
 
 %modern
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -624,9 +622,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
     }
 
     testGeneratorJson() {
-%ifdef NoJson
-        testSkip("JSON module not available");
-%else
         OpenApi3::OpenApi3SchemaGenerator gen({
             "title": "JSON Test API",
             "version": "1.0.0",
@@ -646,7 +641,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         hash<auto> parsed = parse_json(json_str);
         assertEq("3.0.3", parsed.openapi);
         assertEq("JSON Test API", parsed.info.title);
-%endif
     }
 
     testRoundTrip() {
@@ -1251,9 +1245,6 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
     }
 
     testExtendedTagsInGenerator() {
-%ifdef NoJson
-        testSkip("no json module available");
-%endif
 %ifdef NoYaml
         testSkip("no yaml module available");
 %endif

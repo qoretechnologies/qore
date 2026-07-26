@@ -28,9 +28,7 @@
 
 %requires(reexport) DataProvider
 %requires ml
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires QoreModelRegistry
 %requires QoreOnnxTools

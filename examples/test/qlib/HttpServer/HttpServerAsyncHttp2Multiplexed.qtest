@@ -42,9 +42,7 @@
 %requires WebSocketHandler
 %requires WebSocketClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HttpServerAsyncHttp2MultiplexedTest
 
@@ -1050,9 +1048,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Corner case: POST with request body in multiplexed mode
     testPostWithBody() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
         RestClient rc = getRestClient();
         on_exit delete rc;
 

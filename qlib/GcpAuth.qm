@@ -29,15 +29,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) FileLocationHandler
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module GcpAuth {
     version = "1.0";
@@ -221,11 +213,6 @@ class TokenCache {
 */
 public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
         list<string> scopes, *hash<auto> opts) {
-%ifdef NoJson
-    throw "GCP-AUTH-MISSING-JSON-MODULE",
-        "GcpAuth requires the json module for JWT signing and response "
-        "parsing; install the json module to use service-account credentials";
-%else
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
     string key = sprintf("sa|%s|%s", sa_json_path, scope_str);
     if (!opts.force_refresh) {
@@ -287,7 +274,6 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     (token, expires_in) = parseTokenResponse(resp.body);
     TokenCache::put(key, token, expires_in);
     return token;
-%endif
 }
 
 #! Fetches a GCP access token from the compute metadata server
@@ -310,11 +296,6 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
 */
 public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
-%ifdef NoJson
-    throw "GCP-AUTH-MISSING-JSON-MODULE",
-        "GcpAuth requires the json module for response parsing; install "
-        "the json module to use the GCE/GKE/Cloud-Run metadata server";
-%else
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
     string key = sprintf("mds|%s", scope_str);
     if (!opts.force_refresh) {
@@ -337,7 +318,6 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
     (token, expires_in) = parseTokenResponse(resp.body);
     TokenCache::put(key, token, expires_in);
     return token;
-%endif
 }
 
 #! Fetches a GCP access token via the standard ADC resolution chain
@@ -425,11 +405,6 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
     @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> opts) {
-%ifdef NoJson
-    throw "GCP-AUTH-MISSING-JSON-MODULE",
-        "GcpAuth requires the json module for parsing credentials and token "
-        "responses; install the json module to use authorized_user credentials";
-%else
     string key = sprintf("au|%s", path);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
@@ -464,7 +439,6 @@ public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> 
     (token, expires_in) = parseTokenResponse(resp.body);
     TokenCache::put(key, token, expires_in);
     return token;
-%endif
 }
 
 #! Reads and parses a GCP credential JSON file, throwing a clear error on failure
@@ -521,16 +495,12 @@ hash<auto> sub postTokenForm(string token_uri, hash<auto> form) {
     context rather than this helper masking it.
 */
 string sub credentialFileType(string path) {
-%ifdef NoJson
-    return "service_account";
-%else
     try {
         hash<auto> cred = readCredentialFile(path);
         return cred.type ?? "service_account";
     } catch (hash<ExceptionInfo> ex) {
         return "service_account";
     }
-%endif
 }
 
 #! Clears the entire token cache (for tests)

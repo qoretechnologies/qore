@@ -28,19 +28,7 @@
 %requires(reexport) QoreLlmTypes
 %requires(reexport) RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module GeminiBodyShape {
     version = "1.0.0";
@@ -592,12 +580,6 @@ public list<hash<auto>> sub shapeContentParts(hash<QoreLlmUtils::ChatMessage> ms
     @return a hash suitable for Gemini's \c functionResponse.response
 */
 public hash<auto> sub parseToolResponse(*string content) {
-%ifdef NoJson
-    if (!content.val()) {
-        return {};
-    }
-    return {"result": content};
-%else
     if (!content.val()) {
         return {};
     }
@@ -609,7 +591,6 @@ public hash<auto> sub parseToolResponse(*string content) {
     } catch () {
         return {"result": content};
     }
-%endif
 }
 
 #! Builds a Gemini \c generateContent request body from generic chat inputs

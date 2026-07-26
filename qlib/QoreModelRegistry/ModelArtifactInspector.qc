@@ -59,13 +59,11 @@ public class ModelArtifactInspector {
             "path_hint": name,
         };
 
-%ifndef NoJson
         if (format == "json") {
             info.metadata = inspectJsonFile(path, name);
         } else if (format == "safetensors") {
             info.metadata = inspectSafeTensorsFile(path);
         }
-%endif
         if (format == "onnx") {
             info.metadata = inspectOnnxFile(path);
         }
@@ -468,7 +466,6 @@ public class ModelArtifactInspector {
         }
     }
 
-%ifndef NoJson
     private static hash<auto> inspectJsonFile(string path, string name) {
         hash<auto> json = parse_json(ReadOnlyFile::readTextFile(path));
         hash<auto> result;
@@ -555,7 +552,6 @@ public class ModelArtifactInspector {
         }
         return rv;
     }
-%endif
 
     private static hash<ModelArtifactInfo> selectPrimaryArtifact(
             list<hash<ModelArtifactInfo>> artifacts, *hash<auto> package_manifest) {

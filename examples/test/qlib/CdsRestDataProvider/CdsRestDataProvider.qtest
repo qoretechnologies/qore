@@ -13,9 +13,7 @@
 %requires CdsRestClient
 %requires CdsRestDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires qore >= 2.0
 
@@ -24,9 +22,6 @@
 %exec-class CdsRestDataProviderTest
 
 sub checkModule(Test test) {
-%ifdef NoJson
-    test.testSkip("no json module");
-%endif
 }
 
 class CdsRestDataProviderTest inherits QUnit::Test {

@@ -35,9 +35,7 @@
 %try-module uuid
 %define NoUuid
 %endtry
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module ApolloDataProvider {
     version = "1.0";

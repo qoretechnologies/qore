@@ -29,9 +29,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) SendCloudRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module SendCloudDataProvider {
     version = "1.0";

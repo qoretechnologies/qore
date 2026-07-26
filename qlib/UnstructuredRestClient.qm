@@ -88,9 +88,7 @@ module UnstructuredRestClient {
     - the initial version of the %UnstructuredRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace UnstructuredRestClient {
 public class UnstructuredRestClientBase {

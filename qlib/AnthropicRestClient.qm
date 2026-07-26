@@ -110,19 +110,7 @@ stream.close();
     - the initial version of the %AnthropicRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 #! the AnthropicRestClient namespace contains all the objects in the AnthropicRestClient module
 public namespace AnthropicRestClient {
@@ -323,14 +311,10 @@ public class AnthropicSseStream {
             }
             return body;
         }
-%ifdef NoJson
-        throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
         return call_function_args("to_json", (body,));
-%endif
     }
 
     private setupDecompression() {
@@ -607,9 +591,6 @@ public class AnthropicSseStreamIo {
         # Serialize body to JSON
         *data payload;
         if (exists body) {
-%ifdef NoJson
-            throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
             if (body.typeCode() != NT_STRING) {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";
@@ -621,7 +602,6 @@ public class AnthropicSseStreamIo {
                 }
                 payload = body;
             }
-%endif
         }
 
         # Build full path
@@ -719,10 +699,6 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             throw "LLM-CONFIG-ERROR",
                 "url is required for \"anthropic\" mode";
         }
-%ifdef NoJson
-        throw "LLM-DEPENDENCY-ERROR",
-            "json module is required for Anthropic mode but is not available";
-%endif
     }
 
     string getMode() {

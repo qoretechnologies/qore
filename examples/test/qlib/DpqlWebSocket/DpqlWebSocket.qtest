@@ -29,9 +29,7 @@
 %requires Logger
 %requires FsUtil
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
@@ -55,9 +53,6 @@ public class DpqlWebSocketTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     constructor() : Test("DpqlWebSocketTest", "1.0") {
@@ -165,21 +160,11 @@ public class DpqlWebSocketTest inherits QUnit::Test {
     }
 
     private hash<auto> parseJson(string data) {
-%ifdef NoJson
-        throw "MODULE-ERROR", "json module not available";
-        return {};
-%else
         return parse_json(data);
-%endif
     }
 
     private string makeJson(any value) {
-%ifdef NoJson
-        throw "MODULE-ERROR", "json module not available";
-        return "";
-%else
         return make_json(value);
-%endif
     }
 
     testHandlerOptions() {

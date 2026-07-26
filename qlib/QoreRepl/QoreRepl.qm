@@ -32,9 +32,7 @@
 %requires linenoise
 
 # JSON support for WebSocket message protocol
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 # Reflection support for introspection commands
 %requires reflection

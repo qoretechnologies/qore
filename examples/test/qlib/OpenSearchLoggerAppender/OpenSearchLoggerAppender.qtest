@@ -11,9 +11,7 @@
 %requires RestClientIo
 %requires OpenSearchLoggerAppender
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class OpenSearchLoggerAppenderTest
 
@@ -116,9 +114,6 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
     }
 
     static checkModule(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     constructor() : Test("OpenSearchLoggerAppender Test", "1.0") {

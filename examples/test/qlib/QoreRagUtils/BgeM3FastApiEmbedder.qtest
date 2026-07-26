@@ -18,9 +18,7 @@
 %requires QoreRagUtils
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class BgeM3FastApiEmbedderTest
 
@@ -121,9 +119,6 @@ class BgeM3FastApiEmbedderTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private installHandler(hash<string, hash<auto>> responses) {

@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) Cin7CoreRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module Cin7CoreDataProvider {
     version = "1.0";

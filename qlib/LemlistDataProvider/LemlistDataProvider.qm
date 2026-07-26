@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) LemlistRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module LemlistDataProvider {
     version = "1.0";

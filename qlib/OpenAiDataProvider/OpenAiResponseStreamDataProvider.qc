@@ -23,9 +23,7 @@
 */
 
 # for parsing response stream events
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
@@ -266,13 +264,6 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         if (!evt."data") {
             return {"event": evt.event, "id": evt.id};
         }
-%ifdef NoJson
-        return {
-            "event": evt.event,
-            "id": evt.id,
-            "raw_data": evt."data",
-        };
-%else
         hash<auto> payload = parse_json(evt."data");
         if (evt.event) {
             payload.event = evt.event;
@@ -281,7 +272,6 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
             payload.id = evt.id;
         }
         return payload;
-%endif
     }
 
     private handleContextSave(hash<auto> payload, hash<auto> ctx_info, *OpenAiConversationContextStore ctx_store,

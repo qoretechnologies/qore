@@ -26,22 +26,6 @@
 public namespace QoreApiMetadata {
 #! @endcond
 
-%ifdef NoJson
-#! Stub class when json module is not available
-public class QppDocIndex {
-    #! Cannot build index without JSON support
-    static hash<string, hash<auto>> buildFromMetaFiles(list<string> paths) {
-        throw "JSON-NOT-AVAILABLE",
-            "the json module is required for QppDocIndex";
-    }
-
-    #! Cannot build index without JSON support
-    static hash<string, hash<auto>> buildFromDirectory(string dir_path) {
-        throw "JSON-NOT-AVAILABLE",
-            "the json module is required for QppDocIndex";
-    }
-}
-%else
 #! Loads qpp .meta.json files and builds a qualified-name-keyed index
 /** The index maps fully-qualified symbol names (e.g., "Qore::Thread::Mutex",
     "Qore::printf") to their metadata hashes, which include documentation,
@@ -288,7 +272,6 @@ public class QppDocIndex {
         return name;
     }
 }
-%endif
 
 #! @cond nodoc
 } # namespace QoreApiMetadata

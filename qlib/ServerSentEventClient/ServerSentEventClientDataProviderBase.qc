@@ -56,24 +56,16 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
                 "short_desc": "Data serialization for string messages",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "data serialization to use:\n"
-%ifndef NoJson
                     " - `json`: JSON serialization (default)\n"
-%endif
                     " - `none`: no serialization; raw messages\n",
                 "default_value":
-%ifndef NoJson
                     "json"
-%else
-                    "none"
-%endif
                     ,
                 "allowed_values": (
-%ifndef NoJson
                     <AllowedValueInfo>{
                         "value": "json",
                         "desc": "Use JSON serialization",
                     },
-%endif
                     <AllowedValueInfo>{
                         "value": "none",
                         "desc": "Use no data serialization",

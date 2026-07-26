@@ -21,9 +21,7 @@
 %requires Util
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QoreLlmUtilsTest
 
@@ -278,9 +276,6 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     }
 
     private checkGeminiModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private installGeminiHandler(hash<string, hash<auto>> responses) {

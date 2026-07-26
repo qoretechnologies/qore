@@ -39,9 +39,7 @@
 %requires(reexport) DataProvider
 %requires AsyncApi >= 1.0
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 module ServerSentEventHandler {
     version = "1.2.0";

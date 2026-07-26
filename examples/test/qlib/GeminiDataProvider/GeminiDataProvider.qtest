@@ -11,9 +11,7 @@
 %requires ConnectionProvider
 %requires DataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 class FakeGeminiRestClient inherits RestClientIo::RestClientIo {
     public {

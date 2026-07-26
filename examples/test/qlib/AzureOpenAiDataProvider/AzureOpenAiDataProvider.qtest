@@ -19,9 +19,7 @@
 %requires AzureOpenAiRestClient
 %requires AzureOpenAiDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class AzureOpenAiDataProviderTest
 
@@ -38,9 +36,7 @@ class FakeAzureHandler inherits AbstractHttpRequestHandler {
         last_authorization = hdr."authorization" ?? "";
         string body_str = body ? (body.typeCode() == NT_BINARY
             ? body.toString("UTF-8") : body) : "";
-%ifndef NoJson
         try { last_body = parse_json(body_str); } catch () {}
-%endif
         if (last_path =~ /\/chat\/completions/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
                 "id": "chatcmpl-fake",
@@ -154,9 +150,6 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
     }
 
     static checkJson(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     private setupServer() {

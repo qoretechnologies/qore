@@ -42,9 +42,7 @@
 %requires ConnectionProvider
 %requires DataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires EasyPostRestClient
 %requires EasyPostDataProvider
@@ -101,9 +99,6 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
 
     #! Skip a test if json module is not present
     private checkJson() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
     }
 
     #! Verify the connection scheme is registered correctly

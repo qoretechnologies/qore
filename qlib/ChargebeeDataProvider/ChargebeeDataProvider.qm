@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ChargebeeRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module ChargebeeDataProvider {
     version = "1.0";
