@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub emptyValues() {
+    return ();
+}
+
+list<int> sub constantValues() {
+    return (17, 23, 29);
+}
+
+int sub emptyFirstKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += emptyValues().first() === NOTHING ? 1 : 100;
+    }
+    return checksum;
+}
+
+int sub emptyLastKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += emptyValues().last() === NOTHING ? 1 : 100;
+    }
+    return checksum;
+}
+
+int sub outOfRangeKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += constantValues()[3] === NOTHING ? 1 : 100;
+        checksum += constantValues()[-4] === NOTHING ? 1 : 100;
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+    printf("%d\n", emptyFirstKernel(rounds) + emptyLastKernel(rounds)
+        + outOfRangeKernel(rounds));
+    return 0;
+}
+
+main();

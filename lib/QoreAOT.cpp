@@ -16408,7 +16408,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 index += count;
                             }
                             if (index < 0 || index >= count) {
-                                return false;
+                                if (kind
+                                        != QoreIRAggregateProjectionQueryKind::
+                                            ListIndexValue) {
+                                    return false;
+                                }
+                                operand = -1;
+                                size = 0;
+                                projection = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedNothingConstant;
+                                return true;
                             }
                             value_index = static_cast<size_t>(index);
                         }

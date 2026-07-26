@@ -1142,6 +1142,29 @@ int sub emptyZeroArgProjections() {
     return checksum;
 }
 
+bool sub emptyFirstProjection() {
+    return makeEmptyValues().first() === NOTHING;
+}
+
+bool sub emptyLastProjection() {
+    return makeEmptyValues().last() === NOTHING;
+}
+
+bool sub positiveOutOfRangeProjection() {
+    return makeConstantValues()[3] === NOTHING;
+}
+
+bool sub negativeOutOfRangeProjection() {
+    return makeConstantValues()[-4] === NOTHING;
+}
+
+bool sub outOfRangeProjectionSideEffects() {
+    int effects = 0;
+    *int value = makeValues(
+        (effects = 1), (effects = 2), (effects = 3))[3];
+    return value === NOTHING && effects == 3;
+}
+
 printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%d:%d:%d:%d:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
@@ -1190,6 +1213,9 @@ printf(\"%d:%d:%y:%y:%d:%y:%y:%d:%y:%y\\n\", computedIntProjection(5),
     nestedComputedWrapperOverflowProjection(),
     computedFloatWrapperProjection());
 printf(\"%d\\n\", emptyZeroArgProjections());
+printf(\"%y:%y:%y:%y:%y\\n\", emptyFirstProjection(),
+    emptyLastProjection(), positiveOutOfRangeProjection(),
+    negativeOutOfRangeProjection(), outOfRangeProjectionSideEffects());
 printf(\"%s:%s:%s\\n\", dynamicMixedListIndex(0),
     dynamicMixedListIndex(1), dynamicMixedListIndex(2));
 printf(\"%y:%y:%y:%y\\n\",
@@ -1329,6 +1355,17 @@ if (enabled_compile
     printf("missing empty or zero-argument aggregate projections:\n%s",
         enabled_compile);
     exit(2);
+}
+foreach string function in (("emptyFirstProjection", "emptyLastProjection",
+        "positiveOutOfRangeProjection", "negativeOutOfRangeProjection",
+        "outOfRangeProjectionSideEffects")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing empty or out-of-range list projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
 }
 if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection[^:]*:.*aggregate-projections=2/) {
     printf("missing cross-block aggregate-return projections:\n%s",
@@ -1757,7 +1794,7 @@ if (computed_row_line.find(
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\n11:2.5:True\nTrue:True:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\nTrue:True:True:True:True\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True\n";
