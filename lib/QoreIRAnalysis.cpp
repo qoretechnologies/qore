@@ -11916,6 +11916,294 @@ size_t qore_ir_specialize_proven_collection_operations(
     return specialized;
 }
 
+size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
+        const QoreIRCollectionProducerQuery& is_supported) {
+    if (!is_supported
+            || std::getenv("QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION")) {
+        return 0;
+    }
+    size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    struct Position {
+        size_t block = 0;
+        size_t offset = 0;
+    };
+    std::unordered_map<const QoreIRInstruction*, Position> positions;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    for (size_t block = 0; block < func.blocks.size(); ++block) {
+        const auto& instructions = func.blocks[block]->instructions;
+        for (size_t offset = 0; offset < instructions.size(); ++offset) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR collection predicate position analysis")) {
+                return 0;
+            }
+            const QoreIRInstruction* inst = instructions[offset].get();
+            positions.emplace(inst, Position{block, offset});
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst);
+            }
+        }
+    }
+    std::unique_ptr<QoreIRControlFlowGraph> cfg;
+    auto available_at = [&](QoreIRValue value,
+            const QoreIRInstruction* producer) {
+        auto definition = definitions.find(value.id);
+        auto producer_pos = positions.find(producer);
+        if (definition == definitions.end()
+                || producer_pos == positions.end()) {
+            return false;
+        }
+        auto definition_pos = positions.find(definition->second);
+        if (definition_pos == positions.end()) {
+            return false;
+        }
+        if (definition_pos->second.block == producer_pos->second.block) {
+            return definition_pos->second.offset < producer_pos->second.offset;
+        }
+        if (!cfg) {
+            cfg = std::make_unique<QoreIRControlFlowGraph>(func);
+            if (cfg->cancelled) {
+                return false;
+            }
+        }
+        return cfg->dominates(
+            definition_pos->second.block, producer_pos->second.block);
+    };
+
+    struct Fusion {
+        QoreIRCallDirectInstruction* producer = nullptr;
+        QoreIRInstruction* consumer = nullptr;
+        QoreIRValue result;
+        QoreIRValue expected;
+        QoreIRCallDirectInstruction::AOTCollectionConsumerKind kind =
+            QoreIRCallDirectInstruction::AOTCollectionConsumerKind::None;
+        int16_t expected_operand = -1;
+        int64_t expected_constant = 0;
+        bool has_expected_constant = false;
+        const QoreIRInstruction* late_load = nullptr;
+    };
+    std::vector<Fusion> fusions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR collection predicate analysis")) {
+                return 0;
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
+                    || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            auto* producer = static_cast<QoreIRCallDirectInstruction*>(
+                inst_ptr.get());
+            if (producer->aot_collection_consumer
+                    != QoreIRCallDirectInstruction::
+                        AOTCollectionConsumerKind::None) {
+                continue;
+            }
+            auto use = uses.find(producer->result.id);
+            if (use == uses.end() || use->second.size() != 1
+                    || !use->second.front().inst) {
+                continue;
+            }
+            auto* consumer = const_cast<QoreIRInstruction*>(
+                use->second.front().inst);
+            bool equal = consumer->opcode == QoreIROpcode::EqAny
+                || consumer->opcode == QoreIROpcode::EqInt;
+            bool not_equal = consumer->opcode == QoreIROpcode::NeAny
+                || consumer->opcode == QoreIROpcode::NeInt;
+            if ((!equal && !not_equal) || consumer->exception_target
+                    || !consumer->result.isValid()
+                    || consumer->operands.size() != 2) {
+                continue;
+            }
+            size_t producer_operand =
+                consumer->operands[0].id == producer->result.id
+                ? 0 : consumer->operands[1].id == producer->result.id ? 1 : 2;
+            if (producer_operand > 1) {
+                continue;
+            }
+            QoreIRValue expected = consumer->operands[1 - producer_operand];
+            const QoreIRValueFacts* facts = func.getValueFacts(expected);
+            auto expected_definition = definitions.find(expected.id);
+            const auto* expected_const = expected_definition
+                    != definitions.end()
+                    && expected_definition->second->opcode
+                        == QoreIROpcode::ConstInt
+                ? static_cast<const QoreIRConstInstruction*>(
+                    expected_definition->second)
+                : nullptr;
+            bool has_expected_constant = expected_const
+                && expected_const->constant.kind
+                    == QoreIRConstant::Kind::Int;
+            const QoreIRInstruction* late_load = nullptr;
+            if (!has_expected_constant
+                    && !available_at(expected, producer)
+                    && expected_definition != definitions.end()
+                    && expected_definition->second->opcode
+                        == QoreIROpcode::LoadLocal) {
+                auto producer_pos = positions.find(producer);
+                auto load_pos = positions.find(expected_definition->second);
+                auto consumer_pos = positions.find(consumer);
+                const auto* load = static_cast<
+                    const QoreIRLocalInstruction*>(
+                        expected_definition->second);
+                bool safe_interval = producer_pos != positions.end()
+                    && load_pos != positions.end()
+                    && consumer_pos != positions.end()
+                    && producer_pos->second.block == load_pos->second.block
+                    && load_pos->second.block == consumer_pos->second.block
+                    && producer_pos->second.offset < load_pos->second.offset
+                    && load_pos->second.offset < consumer_pos->second.offset
+                    && load->local && !load->is_ref
+                    && !load->local->closureUse()
+                    && !QoreTypeInfo::isReference(
+                        load->local->getTypeInfo());
+                if (safe_interval) {
+                    const auto& instructions = func.blocks[
+                        producer_pos->second.block]->instructions;
+                    for (size_t offset = producer_pos->second.offset + 1;
+                            offset < load_pos->second.offset; ++offset) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR collection predicate late-load analysis")) {
+                            return 0;
+                        }
+                        QoreIROpcode opcode = instructions[offset]->opcode;
+                        if (opcode != QoreIROpcode::ConstInt
+                                && opcode != QoreIROpcode::ConstFloat
+                                && opcode != QoreIROpcode::ConstBool
+                                && opcode != QoreIROpcode::ConstNothing
+                                && opcode != QoreIROpcode::ConstNull
+                                && opcode != QoreIROpcode::ConstString) {
+                            safe_interval = false;
+                            break;
+                        }
+                    }
+                }
+                if (safe_interval) {
+                    late_load = expected_definition->second;
+                }
+            }
+            if (!facts
+                    || facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || facts->representation
+                        != QoreIRValueRepresentation::NativeInt
+                    || (!has_expected_constant
+                        && !available_at(expected, producer)
+                        && !late_load)) {
+                continue;
+            }
+            int16_t expected_operand = -1;
+            for (size_t operand = 0;
+                    operand < producer->operands.size(); ++operand) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR collection predicate operand analysis")) {
+                    return 0;
+                }
+                if (producer->operands[operand].id == expected.id) {
+                    expected_operand = static_cast<int16_t>(operand);
+                    break;
+                }
+            }
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(
+                    producer, has_ref_args);
+            if (!callee || has_ref_args
+                    || !is_supported(callee, producer)) {
+                continue;
+            }
+            fusions.push_back({producer, consumer, consumer->result, expected,
+                equal
+                    ? QoreIRCallDirectInstruction::
+                        AOTCollectionConsumerKind::EqInt
+                    : QoreIRCallDirectInstruction::
+                        AOTCollectionConsumerKind::NeInt,
+                expected_operand,
+                has_expected_constant
+                    ? expected_const->constant.int_value : 0,
+                has_expected_constant, late_load});
+        }
+    }
+
+    if (fusions.empty()) {
+        return 0;
+    }
+    std::unordered_set<QoreIRInstruction*> eliminated;
+    size_t applied = 0;
+    for (const Fusion& fusion : fusions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR collection predicate rewrite")) {
+            break;
+        }
+        if (fusion.late_load) {
+            auto producer_pos = positions.find(fusion.producer);
+            if (producer_pos == positions.end()) {
+                continue;
+            }
+            auto& instructions =
+                func.blocks[producer_pos->second.block]->instructions;
+            auto producer = std::find_if(
+                instructions.begin(), instructions.end(),
+                [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                    return inst.get() == fusion.producer;
+                });
+            auto load = std::find_if(
+                instructions.begin(), instructions.end(),
+                [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                    return inst.get() == fusion.late_load;
+                });
+            if (producer == instructions.end() || load == instructions.end()
+                    || producer >= load) {
+                continue;
+            }
+            std::rotate(producer, load, load + 1);
+        }
+        fusion.producer->aot_collection_consumer = fusion.kind;
+        fusion.producer->result = fusion.result;
+        if (fusion.has_expected_constant) {
+            fusion.producer->aot_collection_consumer_constant =
+                fusion.expected_constant;
+            fusion.producer->aot_collection_consumer_has_constant = true;
+        } else if (fusion.expected_operand >= 0) {
+            fusion.producer->aot_collection_consumer_operand =
+                fusion.expected_operand;
+        } else {
+            fusion.producer->aot_collection_consumer_operand =
+                static_cast<int16_t>(fusion.producer->operands.size());
+            fusion.producer->aot_collection_consumer_extra_operands = 1;
+            fusion.producer->operands.push_back(fusion.expected);
+        }
+        QoreIRValueFacts facts;
+        facts.type_info = boolTypeInfo;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation = QoreIRValueRepresentation::NativeBool;
+        facts.never_nothing = true;
+        func.setValueFacts(fusion.result, facts);
+        eliminated.insert(fusion.consumer);
+        ++applied;
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(
+            instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                // Finish cleanup after a cancellation so applied rewrites
+                // cannot retain their obsolete consumers.
+                (void)qore_ir_analysis_cancelled(check_count,
+                    "IR collection predicate cleanup");
+                return eliminated.count(inst.get());
+            }), instructions.end());
+    }
+    return applied;
+}
+
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         const QoreIRBoxedReturnParamQuery& get_return_param) {
     if (!get_return_param) {

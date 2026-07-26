@@ -760,7 +760,8 @@ private:
     // Emit an imported typed collection operation. Returns nullptr when no
     // valid summary is available for the supplied fast-entry arguments.
     llvm::Value* emitAOTCollectionOp(const BatchCalleeInfo& info,
-            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            const QoreIRCallDirectInstruction* fused_call = nullptr);
 
     // Emit a bounded affine composition over one exact size/length source.
     llvm::Value* emitAOTComposedInt(const BatchCalleeInfo& info,

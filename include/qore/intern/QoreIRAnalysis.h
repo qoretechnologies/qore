@@ -259,6 +259,13 @@ size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func);
 //! Mark assigned exact list and binary pseudo-method receivers for no-guard lowering.
 size_t qore_ir_specialize_proven_collection_operations(QoreIRFunction& func);
 
+using QoreIRCollectionProducerQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*)>;
+
+//! Fuse an imported optional integer collection projection with Eq/Ne.
+size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
+    const QoreIRCollectionProducerQuery& is_supported);
+
 using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;

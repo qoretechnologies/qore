@@ -6950,11 +6950,38 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
-        const std::vector<llvm::Value*>& native_args, llvm::Module& module) {
+        const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+        const QoreIRCallDirectInstruction* fused_call) {
     const AOTCollectionOpInfo& op = info.collection_op;
     if (!op || std::getenv("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")) {
         return nullptr;
     }
+    QoreIRCallDirectInstruction::AOTCollectionConsumerKind consumer =
+        fused_call ? fused_call->aot_collection_consumer
+                   : QoreIRCallDirectInstruction::
+                        AOTCollectionConsumerKind::None;
+    bool fused_predicate = consumer
+        != QoreIRCallDirectInstruction::AOTCollectionConsumerKind::None;
+    if (fused_predicate && op.kind != AOTCollectionOpKind::ListIndex
+            && op.kind != AOTCollectionOpKind::HashKeyInt) {
+        return nullptr;
+    }
+    auto get_expected = [&]() -> llvm::Value* {
+        if (!fused_call) {
+            return nullptr;
+        }
+        if (fused_call->aot_collection_consumer_has_constant) {
+            return llvm::ConstantInt::get(i64_type,
+                fused_call->aot_collection_consumer_constant);
+        }
+        int16_t operand = fused_call->aot_collection_consumer_operand;
+        if (operand < 0
+                || static_cast<size_t>(operand) >= native_args.size()) {
+            return nullptr;
+        }
+        llvm::Value* value = native_args[static_cast<size_t>(operand)];
+        return value->getType() == i64_type ? value : nullptr;
+    };
     auto get_param = [&](int8_t param) -> llvm::Value* {
         if (param < 0 || static_cast<size_t>(param) >= native_args.size()) {
             return nullptr;
@@ -6989,6 +7016,25 @@ llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
             }
             BatchCalleeParamKind index_kind = getFastEntryParamKind(info,
                 static_cast<unsigned>(op.index_param));
+            if (fused_predicate) {
+                llvm::Value* expected = get_expected();
+                if (index_kind != BatchCalleeParamKind::NativeInt
+                        || !expected) {
+                    return nullptr;
+                }
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_list_index_int_compare",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i64_type, i32_type}, false));
+                llvm::Value* result = builder->CreateCall(helper,
+                    {base, index, expected,
+                     llvm::ConstantInt::get(i32_type,
+                        consumer
+                            == QoreIRCallDirectInstruction::
+                                AOTCollectionConsumerKind::NeInt)});
+                return builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             if (index_kind == BatchCalleeParamKind::NativeInt) {
                 index = boxIntInline(index);
             } else if (index_kind != BatchCalleeParamKind::Boxed) {
@@ -7008,6 +7054,28 @@ llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
             llvm::Value* key = builder->CreateGlobalString(op.key,
                 "collection_hash_key");
             QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(op.key);
+            if (fused_predicate) {
+                llvm::Value* expected = get_expected();
+                if (!expected) {
+                    return nullptr;
+                }
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_hash_key_int_compare_prehashed",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, i64_type, i32_type, i64_type,
+                         i32_type}, false));
+                llvm::Value* result = builder->CreateCall(helper,
+                    {base, key,
+                     llvm::ConstantInt::get(i64_type, hash.hash64),
+                     llvm::ConstantInt::get(i32_type, hash.hash32),
+                     expected,
+                     llvm::ConstantInt::get(i32_type,
+                        consumer
+                            == QoreIRCallDirectInstruction::
+                                AOTCollectionConsumerKind::NeInt)});
+                return builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             auto helper = module.getOrInsertFunction(
                 "qore_rt_hash_key_access_int_prehashed",
                 llvm::FunctionType::get(i64_type,
@@ -16427,6 +16495,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+            bool fused_collection_consumer =
+                direct_inst->aot_collection_consumer
+                    != QoreIRCallDirectInstruction::
+                        AOTCollectionConsumerKind::None;
             bool fused_aggregate_projection =
                 direct_inst->aot_aggregate_projection
                 != QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
@@ -16443,9 +16515,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? 1 : 0;
             int string_consumer_extra_operands = fused_string_consumer
                 ? direct_inst->aot_string_consumer_extra_operands : 0;
+            int collection_consumer_extra_operands =
+                fused_collection_consumer
+                ? direct_inst->aot_collection_consumer_extra_operands : 0;
             int nargs = total_operands - arg_start
                 - projection_extra_operands
-                - string_consumer_extra_operands;
+                - string_consumer_extra_operands
+                - collection_consumer_extra_operands;
             if (nargs < 0) {
                 error = "internal error: fused AOT call has invalid"
                     " trailing operands";
@@ -16583,7 +16659,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 if (!is_approach_b && !aot_context_independent_fast_entry_call
                         && !aot_fixed_hash_remap_call
-                        && !fused_aggregate_projection && !type_name_fast_path
+                        && !fused_aggregate_projection
+                        && !fused_collection_consumer
+                        && !type_name_fast_path
                         && !single_arg_fast_builtin_helper) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                             llvm_func->getEntryBlock().begin());
@@ -16602,6 +16680,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !appendAOTStringConsumerOperands(
                         *direct_inst, raw_args, raw_arg_ids, error)) {
                 return false;
+            }
+            if (fused_collection_consumer) {
+                if (!direct_inst
+                        ->aot_collection_consumer_has_constant) {
+                    int16_t operand =
+                        direct_inst->aot_collection_consumer_operand;
+                    if (operand < 0
+                            || static_cast<size_t>(operand)
+                                >= direct_inst->operands.size()) {
+                        error = "internal error: fused AOT collection"
+                            " consumer operand is out of range";
+                        return false;
+                    }
+                    if (static_cast<size_t>(operand)
+                            >= raw_args.size()) {
+                        if (direct_inst
+                                    ->aot_collection_consumer_extra_operands
+                                    != 1
+                                || static_cast<size_t>(operand)
+                                    != raw_args.size()) {
+                            error = "internal error: fused AOT collection"
+                                " consumer operand is out of order";
+                            return false;
+                        }
+                        uint32_t value_id =
+                            direct_inst->operands[
+                                static_cast<size_t>(operand)].id;
+                        llvm::Value* value = getVal(value_id, error);
+                        if (!value) {
+                            return false;
+                        }
+                        if (value->getType() != i64_type) {
+                            error = "internal error: fused AOT collection"
+                                " consumer operand is not an integer";
+                            return false;
+                        }
+                        if (nanboxed_values.count(value_id)) {
+                            value = ensureIntTypeInline(value, value_id);
+                        }
+                        raw_args.push_back(value);
+                        raw_arg_ids.push_back(value_id);
+                    }
+                }
             }
             if (!args_array && !type_name_fast_path && !single_arg_fast_builtin_helper) {
                 args_array = builder->CreateIntToPtr(
@@ -17196,6 +17317,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                          xsink_arg});
                 }
                 call_may_modify_runtime_locals = false;
+            } else if (fused_collection_consumer
+                    && aot_approach_b_callee) {
+                call_result = emitAOTCollectionOp(
+                    *aot_approach_b_callee, raw_args, module, direct_inst);
+                if (!call_result) {
+                    error = "internal error: fused AOT collection producer"
+                        " summary could not be emitted";
+                    return false;
+                }
+                call_return_kind = BatchCalleeReturnKind::NativeBool;
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                        "qore_rt_clear_arg_cleanups",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper,
+                        {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
             } else if (fused_string_consumer && aot_approach_b_callee) {
                 call_result = emitAOTStringProducerConsumer(
                     *aot_approach_b_callee, raw_args,
@@ -17262,12 +17404,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_may_modify_runtime_locals = false;
             } else if (fused_string_consumer
+                    || fused_collection_consumer
                     || fused_aggregate_projection) {
                 error = fused_string_consumer
                     ? "internal error: fused AOT string producer is not"
                         " eligible for context-independent lowering"
-                    : "internal error: fused AOT aggregate producer is not"
-                        " eligible for context-independent lowering";
+                    : fused_collection_consumer
+                        ? "internal error: fused AOT collection producer is"
+                            " not eligible for direct lowering"
+                        : "internal error: fused AOT aggregate producer is not"
+                            " eligible for context-independent lowering";
                 return false;
             } else if (aot_approach_b_callee) {
                 // AOT Approach B batch callee: direct LLVM call to the

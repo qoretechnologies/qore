@@ -2174,6 +2174,12 @@ public:
     using AOTStringConsumerKind =
         QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
 
+    enum class AOTCollectionConsumerKind : uint8_t {
+        None,
+        EqInt,
+        NeInt,
+    };
+
     enum class AOTAggregateProjectionKind : uint8_t {
         None,
         Size,
@@ -2263,6 +2269,13 @@ public:
         aot_aggregate_projection_guarded_descriptors;
     //! Fixed hash keys corresponding to guarded projection descriptors.
     std::vector<std::string> aot_aggregate_projection_guarded_keys;
+    //! Optional typed collection projection consumed directly as a native predicate.
+    AOTCollectionConsumerKind aot_collection_consumer =
+        AOTCollectionConsumerKind::None;
+    int16_t aot_collection_consumer_operand = -1;
+    int64_t aot_collection_consumer_constant = 0;
+    bool aot_collection_consumer_has_constant = false;
+    uint8_t aot_collection_consumer_extra_operands = 0;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

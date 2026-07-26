@@ -980,6 +980,13 @@ int64_t qore_rt_hash_key_truthy_guarded_prehashed(uint64_t hash_val, const char*
 uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
 uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val, const char* key,
         uint64_t hash64, uint32_t hash32);
+int64_t qore_rt_hash_key_int_compare_prehashed(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32, int64_t expected,
+        int32_t not_equal);
+
+//! Compare an optional typed list projection without materializing a QoreValue.
+int64_t qore_rt_list_index_int_compare(uint64_t list_val, int64_t index,
+        int64_t expected, int32_t not_equal);
 
 //! Resolve several known integer keys from one hash evaluation. Returns 1 only
 //! when every key exists and writes native integer values to `results`.

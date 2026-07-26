@@ -16686,6 +16686,69 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 };
             changed = qore_ir_optimize_fresh_list_calls(func, query);
         }
+        size_t collection_consumers = 0;
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION")) {
+            QoreIRCollectionProducerQuery query =
+                [&](const AbstractQoreFunctionVariant* callee,
+                        const QoreIRCallDirectInstruction* call) {
+                    auto info = aot_batch_callee_map->find(callee);
+                    if (info == aot_batch_callee_map->end() || !call
+                            || !info->second.approach_b_eligible
+                            || info->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                            || (info->second.collection_op.kind
+                                    != AOTCollectionOpKind::ListIndex
+                                && info->second.collection_op.kind
+                                    != AOTCollectionOpKind::HashKeyInt)
+                            || call->operands.size()
+                                != info->second.num_params
+                            || info->second.param_kinds.size()
+                                != call->operands.size()
+                            || info->second.param_rejects_nothing.size()
+                                != call->operands.size()
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                callee, call->expr, func, call->operands, 0,
+                                static_cast<int>(call->operands.size()))) {
+                        return false;
+                    }
+                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT collection predicate validation")) {
+                            return false;
+                        }
+                        const QoreIRValueFacts* facts =
+                            func.getValueFacts(call->operands[i]);
+                        if (!info->second.param_rejects_nothing[i]
+                                || !facts
+                                || facts->assigned_state
+                                    != QoreIRAssignedState::Assigned
+                                || !facts->never_nothing) {
+                            return false;
+                        }
+                        BatchCalleeParamKind kind =
+                            info->second.param_kinds[i];
+                        if ((kind == BatchCalleeParamKind::NativeInt
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::NativeInt)
+                                || (kind == BatchCalleeParamKind::NativeFloat
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::NativeFloat)
+                                || (kind == BatchCalleeParamKind::NativeBool
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::NativeBool)
+                                || (kind == BatchCalleeParamKind::Boxed
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::Boxed)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+            collection_consumers =
+                qore_ir_fuse_collection_producer_consumers(func, query);
+        }
         size_t string_consumers = 0;
         QoreIRStringProducerQuery string_producer_query;
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
@@ -16894,7 +16957,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || aggregate_projections
                 || boxed_return_calls
                 || changed
-                || string_consumers || string_transform_consumers
+                || collection_consumers || string_consumers
+                || string_transform_consumers
                 || cross_block_boxed_facts
                 || boxed_specializations
                 || collection_specializations
@@ -16908,6 +16972,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " borrowed-aggregate-projections=%zu"
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
+                " collection-consumers=%zu"
                 " string-consumers=%zu"
                 " string-transform-consumers=%zu"
                 " post-rewrite-rounds=%zu"
@@ -16920,7 +16985,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
-                string_consumers, string_transform_consumers,
+                collection_consumers, string_consumers,
+                string_transform_consumers,
                 post_rewrite_rounds,
                 cross_block_boxed_facts,
                 boxed_specializations,

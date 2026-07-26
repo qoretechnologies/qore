@@ -190,6 +190,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
+    { "qore_rt_list_index_int_compare",
+        reinterpret_cast<void*>(&qore_rt_list_index_int_compare) },
     { "qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op) },
     { "qore_rt_plugin_unary", reinterpret_cast<void*>(&qore_rt_plugin_unary) },
     { "qore_rt_plugin_binary", reinterpret_cast<void*>(&qore_rt_plugin_binary) },
@@ -292,6 +294,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_hash_key_truthy_guarded_prehashed) },
     { "qore_rt_hash_key_access_int_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_access_int_prehashed) },
+    { "qore_rt_hash_key_int_compare_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_key_int_compare_prehashed) },
     { "qore_rt_hash_keys_int_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_keys_int_prehashed) },
     { "qore_rt_hash_keys_float_prehashed",
@@ -5151,6 +5155,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t has
     return toBits(QoreValue());
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_hash_key_int_compare_prehashed(
+        uint64_t hash_val, const char* key, uint64_t hash64, uint32_t hash32,
+        int64_t expected, int32_t not_equal) {
+    QoreValue value = fromBits(hash_val);
+    bool equal = false;
+    if (value.getType() == NT_HASH) {
+        const QoreHashNode* hash = value.get<const QoreHashNode>();
+        bool exists = false;
+        QoreValue entry = qore_hash_private::get(*hash)
+            ->getKeyValueExistencePrehashedIntern(key,
+                qore_rt_select_precomputed_hash(hash64, hash32), exists);
+        equal = exists && entry.getType() == NT_INT
+            && entry.getAsBigInt() == expected;
+    }
+    return not_equal ? !equal : equal;
+}
+
 extern "C" DLLEXPORT int64_t qore_rt_hash_keys_int_prehashed(
         uint64_t hash_val, const char* const* keys, const uint64_t* hashes64,
         const uint32_t* hashes32, int64_t* results, uint32_t count) {
@@ -5681,6 +5702,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     return qore_rt_list_index_access_compat(list_val, index, 1, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_list_index_int_compare(
+        uint64_t list_val, int64_t index, int64_t expected,
+        int32_t not_equal) {
+    QoreValue value = fromBits(list_val);
+    bool equal = false;
+    if (value.getType() == NT_LIST) {
+        const QoreListNode* list = value.get<const QoreListNode>();
+        int64 normalized = index;
+        if (QoreSquareBracketsOperatorNode::normalizeIndex(normalized,
+                static_cast<int64>(list->size()),
+                runtime_check_parse_option(PO_NEGATIVE_OFFSETS))) {
+            QoreValue entry =
+                list->retrieveEntry(static_cast<size_t>(normalized));
+            equal = entry.getType() == NT_INT
+                && entry.getAsBigInt() == expected;
+        }
+    }
+    return not_equal ? !equal : equal;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_assignment_value(uint64_t value_bits, int64_t index,
