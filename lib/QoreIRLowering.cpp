@@ -2320,18 +2320,77 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.old_implicit_element = old_element;
         flow_stack.push_back(ft);
         StatementBlock* body = foreach_stmt->getCode();
+        VirtualImplicitContext saved_implicit = virtual_implicit;
+        virtual_implicit.arg0 = QoreIRValue();
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+        int saved_ast_count = ast_delegate_count;
+        bool analyze_implicit_element =
+            std::getenv("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT") == nullptr;
+        auto count_implicit_element_observers = [&]() {
+            size_t observers = 0;
+            size_t check_count = 0;
+            for (const auto& block : builder.getFunction()->blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (++check_count % 100 == 0
+                            && qore_check_cancel(nullptr,
+                                "IR foreach implicit-element analysis")) {
+                        return std::numeric_limits<size_t>::max();
+                    }
+                    QoreIROpcode op = inst->opcode;
+                    if (op == QoreIROpcode::Invoke) {
+                        op = static_cast<const QoreIRInvokeInstruction*>(inst.get())
+                            ->invoke_opcode;
+                    }
+                    if (getOpcodeIsCallInvoke(static_cast<int>(op))
+                            || op == QoreIROpcode::InvokeMethodDirect
+                            || op == QoreIROpcode::DotEvalMethodDirect
+                            || op == QoreIROpcode::InvokeDotEvalMethodDirect
+                            || op == QoreIROpcode::LoadImplicitElement
+                            || op == QoreIROpcode::OnBlockExit) {
+                        ++observers;
+                    }
+                }
+            }
+            return observers;
+        };
+        size_t implicit_observers_before = analyze_implicit_element
+            ? count_implicit_element_observers()
+            : std::numeric_limits<size_t>::max();
         if (body) {
             ++loop_depth;
             if (!lowerStatementBlock(body, error)) {
                 --loop_depth;
+                virtual_implicit = saved_implicit;
                 flow_stack.pop_back();
                 cleanup_stack.pop_back();  // ForeachElement
                 return false;
             }
             --loop_depth;
         }
+        virtual_implicit = saved_implicit;
         flow_stack.pop_back();
         cleanup_stack.pop_back();  // ForeachElement
+
+        bool elide_implicit_element = analyze_implicit_element
+            && implicit_observers_before != std::numeric_limits<size_t>::max()
+            && ast_delegate_count == saved_ast_count
+            && count_implicit_element_observers() == implicit_observers_before;
+        if (elide_implicit_element) {
+            for (auto& block : builder.getFunction()->blocks) {
+                auto& instructions = block->instructions;
+                instructions.erase(std::remove_if(
+                    instructions.begin(), instructions.end(),
+                    [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                        return (inst->opcode == QoreIROpcode::PushImplicitElement
+                                && inst->result.id == old_element.id)
+                            || (inst->opcode == QoreIROpcode::PopImplicitElement
+                                && !inst->operands.empty()
+                                && inst->operands[0].id == old_element.id);
+                    }), instructions.end());
+            }
+        }
 
         // Normal body exit falls through to latch block
         if (!blockHasTerminator(builder.getBlock())) {
@@ -2340,7 +2399,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         // Latch block: pop implicit element, increment index, branch to header
         builder.setBlock(latch_block);
-        builder.createPopImplicitElement(old_element, stmt->loc);
+        if (!elide_implicit_element) {
+            builder.createPopImplicitElement(old_element, stmt->loc);
+        }
 
         // Increment index for next iteration
         QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;

@@ -240,6 +240,84 @@ int sub nested(list<int> outer, list<int> inner) {
     return total;
 }
 
+int sub directIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + $# + (value & 0);
+    }
+    return result;
+}
+
+int sub readDynamicIndex() {
+    return $#;
+}
+
+int sub calledIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + readDynamicIndex() + (value & 0);
+    }
+    return result;
+}
+
+class IndexReader {
+    int read() {
+        return $#;
+    }
+}
+
+int sub methodIndex(list<int> values) {
+    IndexReader reader();
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + reader.read() + (value & 0);
+    }
+    return result;
+}
+
+int sub delegatedIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = string($#) =~ /[0-9]/
+            ? result * 10 + $# + (value & 0) : result;
+    }
+    return result;
+}
+
+int sub controlFlowIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        if (value == 2) {
+            continue;
+        }
+        if (value == 4) {
+            break;
+        }
+        result = result * 10 + $#;
+    }
+    return result;
+}
+
+int sub returnIndex(list<int> values) {
+    foreach int value in (values) {
+        if (value > 2) {
+            return $#;
+        }
+    }
+    return -1;
+}
+
+int sub nestedIndex(list<int> outer, list<int> inner) {
+    int result = 0;
+    foreach int left in (outer) {
+        result = result * 10 + $# + (left & 0);
+        foreach int right in (inner) {
+            result = result * 10 + $# + (right & 0);
+        }
+    }
+    return result;
+}
+
 int sub mutationSnapshot() {
     list<int> values = (1, 2, 3);
     int seen = 0;
@@ -366,12 +444,16 @@ if (!(maybeAssignedString(False) === NOTHING)
         stringMutationSnapshot(), stringReassignmentSnapshot());
     exit(2);
 }
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s\\n\", sumInt((1, 2, 3, 4)),
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%d:%d:%d:%d:%d:%d:%d\\n\",
+    sumInt((1, 2, 3, 4)),
     sumFloat((1.5, 2.5, 3.0)), countBool((True, False, True)), unassigned(), empty(), removed(),
     deleted(), optional(NOTHING), optional((8, 9)), optionalBool(NOTHING),
     optionalBool((False, True, True)), sparseAuto(), controlFlow((1, 2, 3, 4, 5)),
     returnFromLoop((1, 2, 3, 4)), nested((1, 2), (3, 4)), basic ? 0 : mutationSnapshot(),
-    basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")), exceptionSnapshot());
+    basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")), exceptionSnapshot(),
+    directIndex((1, 2, 3, 4)), calledIndex((1, 2, 3, 4)), methodIndex((1, 2, 3, 4)),
+    delegatedIndex((1, 2, 3, 4)), controlFlowIndex((1, 2, 3, 4, 5)),
+    returnIndex((1, 2, 3, 4)), nestedIndex((1, 2), (3, 4)));
 ";
 
 string script_path = "/tmp/qore-ir-typed-foreach-" + string(getpid()) + ".qr";
@@ -380,17 +462,20 @@ script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
 script.close();
 
-string sub runMode(string mode, bool disabled, string arg) {
-    return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s 2>&1",
+string sub runMode(string mode, bool disabled, string arg, bool virtual_disabled = False) {
+    return backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s 2>&1",
         disabled ? "QORE_DISABLE_IR_TYPED_FOREACH=1 " : "",
+        virtual_disabled ? "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1 " : "",
         libqore_dir, qore_bin, mode, script_path, arg));
 }
 
-string sub runAot(bool disabled, string arg) {
+string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
     string exe = "/tmp/qore-ir-typed-foreach-" + string(getpid())
-        + (disabled ? "-disabled" : "");
-    string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        + (disabled ? "-disabled" : "")
+        + (virtual_disabled ? "-virtual-disabled" : "");
+    string compile_out = backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         disabled ? "QORE_DISABLE_IR_TYPED_FOREACH=1 " : "",
+        virtual_disabled ? "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1 " : "",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
@@ -400,7 +485,8 @@ string sub runAot(bool disabled, string arg) {
         libqore_dir, exe, arg));
 }
 
-string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb\n";
+string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb:"
+    + "123:123:123:123:2:2:1101\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
@@ -408,7 +494,8 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb\n";
+string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb:"
+    + "123:123:123:123:2:2:1101\n";
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode, True, "basic");
     if (actual != basic_expected) {
@@ -419,10 +506,12 @@ foreach string mode in (("ir", "tiered", "jit")) {
 }
 
 string aot = runAot(False, "");
+string virtual_disabled_aot = runAot(False, "", True);
 string disabled_aot = runAot(True, "basic");
-if (aot != expected || disabled_aot != basic_expected) {
-    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
-        expected, aot, disabled_aot);
+if (aot != expected || virtual_disabled_aot != expected
+        || disabled_aot != basic_expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%svirtual-disabled AOT:\n%sdisabled AOT:\n%s",
+        expected, aot, virtual_disabled_aot, disabled_aot);
     exit(2);
 }
 
