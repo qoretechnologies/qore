@@ -845,6 +845,10 @@ string sub consumeWords(list<string> words) {
     return words[1];
 }
 
+string sub consumeWordMap(hash<string, string> words) {
+    return words.right;
+}
+
 int sub sharedEscapes() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + consumeRow(row);
@@ -875,6 +879,13 @@ string sub boxedMixedUse() {
     list<string> words =
         makeWords(appendMark(\"alpha\"), appendMark(\"beta\"));
     return words[0] + \"/\" + consumeWords(words);
+}
+
+int sub sharedBoxedHashConsumer() {
+    string left = \"alpha\";
+    string right = \"beta\";
+    hash<string, string> words = makeWordMap(left, right);
+    return words.left.size() + consumeWordMap(words).size();
 }
 
 int sub dynamicListIndex(int index) {
@@ -1256,6 +1267,7 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     dynamicHashSideEffectOrder());
 printf(\"%d:%d:%y\\n\", sharedListSizeConsumer(),
     sharedMutatingConsumer(), requiredUnsetConsumer());
+printf(\"%d\\n\", sharedBoxedHashConsumer());
 printf(\"%d:%s:%y:%d:%y:%y:%y:%y:%y:%y\\n\", genericAutoIntProjection(),
     genericAutoStringProjection(), noNarrowProjection(),
     optionalAssignedProjection(), optionalUnassignedProjection(),
@@ -1494,7 +1506,8 @@ if (enabled_compile
         enabled_compile + disabled_compile);
     exit(2);
 }
-foreach string function in (("sharedEscapes", "sharedListSizeConsumer")) {
+foreach string function in (("sharedEscapes", "sharedListSizeConsumer",
+        "sharedBoxedHashConsumer")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1746,6 +1759,7 @@ expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 expected += "4:13:True\n";
+expected += "9\n";
 expected += "17:word:True:23:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

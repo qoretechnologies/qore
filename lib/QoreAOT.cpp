@@ -16450,8 +16450,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     auto found = aot_batch_callee_map->find(callee);
                     if (found == aot_batch_callee_map->end()
                             || !found->second.approach_b_eligible
-                            || found->second.return_kind
-                                != BatchCalleeReturnKind::NativeInt
                             || !found->second.never_returns_nothing
                             || call->operands.size()
                                 != found->second.num_params
@@ -16507,8 +16505,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     index = 0;
                     key.clear();
-                    if (found->second.collection_op.kind
-                            == AOTCollectionOpKind::HashKeyInt) {
+                    AOTCollectionOpKind collection_kind =
+                        found->second.collection_op.kind;
+                    if (collection_kind == AOTCollectionOpKind::HashKeyInt) {
+                        if (found->second.return_kind
+                                != BatchCalleeReturnKind::NativeInt) {
+                            return false;
+                        }
                         if (found->second.collection_op.key.empty()) {
                             return false;
                         }
@@ -16517,8 +16520,22 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             QoreIRAggregateProjectionQueryKind::HashKeyInt;
                         return true;
                     }
-                    if (found->second.collection_op.kind
-                            == AOTCollectionOpKind::ListSize) {
+                    if (collection_kind == AOTCollectionOpKind::HashKeyBoxed) {
+                        if (found->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                                || found->second.collection_op.key.empty()) {
+                            return false;
+                        }
+                        key = found->second.collection_op.key;
+                        kind =
+                            QoreIRAggregateProjectionQueryKind::HashKeyValue;
+                        return true;
+                    }
+                    if (collection_kind == AOTCollectionOpKind::ListSize) {
+                        if (found->second.return_kind
+                                != BatchCalleeReturnKind::NativeInt) {
+                            return false;
+                        }
                         kind = QoreIRAggregateProjectionQueryKind::ListSize;
                         return true;
                     }
