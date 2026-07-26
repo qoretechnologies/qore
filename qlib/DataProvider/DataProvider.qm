@@ -1217,6 +1217,13 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_6 DataProvider v3.6
+    - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now case-folds
+      words in all upper case, so that technical names in upper case produce readable display names (ex:
+      \c "PAYMENT-DISPUTE-ADJUDICATE-28" -> \c "Payment Dispute Adjudicate 28"); acronyms are preserved, and an
+      explicit acronym classification can be given for domain- or language-specific words
+    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" to
+      recognize case in all scripts; previously word breaks after acronyms were only detected in Latin script,
+      and an empty name caused a \c RUNTIME-TYPE-ERROR exception
     - added semantic string-backed data types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6, and
       \c phone) that carry a UI-renderable format identity while remaining string-compatible; Swagger and
       OpenAPI schema \c format values are mapped to these types on import and emitted on schema generation

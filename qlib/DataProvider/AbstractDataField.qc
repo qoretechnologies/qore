@@ -70,6 +70,57 @@ public hashdecl DataFieldInfo {
 
 #! describes a data type based on a hashdecl
 public class AbstractDataField inherits Qore::Serializable {
+    public {
+        #! Maximum length in characters of an all upper-case word assumed to be an acronym
+        /** All upper-case words no longer than this are not case-folded when converting a technical name to a
+            display name with @ref getDisplayName(), so that short acronyms are preserved
+            (ex: \c "CUSTOMER_ID" -> \c "Customer ID"); this rule is script-independent, so short acronyms in
+            other scripts are preserved as well (ex: Ukrainian \c "ПІБ", Greek \c "ΑΦΜ")
+
+            @see Acronyms
+
+            @since DataProvider 3.6
+        */
+        const AcronymMaxLength = 3;
+
+        #! Common short words and abbreviations that are case-folded despite being no longer than @ref AcronymMaxLength
+        /** Used by @ref getDisplayName() to case-fold upper-case words that are ordinary words or abbreviations
+            rather than acronyms (ex: \c "MAX_RETRIES" -> \c "Max Retries"); keys must be in upper case
+
+            @note This list is necessarily language-specific; use the \c extra_acronyms argument to
+            @ref getDisplayName() to override the classification of any word in any language
+
+            @since DataProvider 3.6
+        */
+        const NonAcronyms = map {$1: True}, (
+            "ADD", "AGE", "ALL", "AMT", "ANY", "AVG", "BOX", "BUY", "CNT", "COL", "DAY", "DIR", "DOC", "END",
+            "ERR", "FEE", "GET", "HAS", "IDX", "JOB", "KEY", "LEN", "LOG", "LOW", "MAP", "MAX", "MIN", "NET",
+            "NEW", "NUM", "OLD", "ONE", "OUT", "OWN", "PAY", "PCT", "QTY", "RAW", "REF", "ROW", "RUN", "SEQ",
+            "SET", "SRC", "SUB", "SUM", "TAG", "TAX", "TOP", "TWO", "USE", "VAL", "WEB", "YES", "ZIP",
+        );
+
+        #! Well-known acronyms longer than @ref AcronymMaxLength that are never case-folded
+        /** Used by @ref getDisplayName() to preserve acronyms that would otherwise be case-folded due to their
+            length (ex: \c "HTTP_SERVER" -> \c "HTTP Server"); keys must be in upper case
+
+            Acronyms specific to a particular domain or language can be added by passing the \c extra_acronyms
+            argument to @ref getDisplayName()
+
+            @since DataProvider 3.6
+        */
+        const Acronyms = map {$1: True}, (
+            # data formats and encodings
+            "ASCII", "EBCDIC", "HTML", "JSON", "MIME", "TOML", "UTF8", "XHTML", "XSLT", "YAML",
+            # protocols and standards
+            "AMQP", "CIDR", "FTPS", "GRPC", "HTTP", "HTTPS", "IMAP", "IPV4", "IPV6", "LDAP", "LDAPS", "MQTT",
+            "OAUTH", "OAUTH2", "OIDC", "POP3", "REST", "SAML", "SFTP", "SMTP", "SOAP", "WSDL",
+            # identifiers and database terms
+            "GUID", "JDBC", "ODBC", "RDBMS", "UUID",
+            # business and finance
+            "EDIFACT", "EORI", "IBAN", "IDOC", "ISBN", "ISIN", "SEPA", "SWIFT",
+        );
+    }
+
     private {
         #! the default value for the field, if any
         auto default_value;
@@ -467,12 +518,48 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! Converts a technical name into a display name
-    static string getDisplayName(string name) {
+    /** Word breaks are taken from dashes, underscores, dots, spaces, and case transitions, and each word is
+        capitalized; acronyms are preserved (ex: \c "getUserURL" -> \c "Get User URL", \c "createTPSReports" ->
+        \c "Create TPS Reports")
+
+        Words in all upper case are case-folded to an initial capital followed by lower case, so that technical
+        names in upper case produce readable display names (ex: \c "PAYMENT-DISPUTE-28" ->
+        \c "Payment Dispute 28"); acronyms are excluded from case folding and are recognized as follows, in
+        order of precedence:
+        - words classified explicitly with the \c extra_acronyms argument
+        - words listed in @ref Acronyms (ex: \c "HTTP_SERVER" -> \c "HTTP Server")
+        - words no longer than @ref AcronymMaxLength characters that are not listed in @ref NonAcronyms
+          (ex: \c "CUSTOMER_ID" -> \c "Customer ID", but \c "MAX_RETRIES" -> \c "Max Retries")
+
+        Words that contain any lower-case letter carry their own case information and are therefore never
+        case-folded, and words in caseless scripts (ex: Chinese, Japanese, Korean, Arabic, Hebrew, Thai,
+        Devanagari) are always left unchanged
+
+        @param name the technical name to convert
+        @param extra_acronyms optional explicit acronym classification for domain- or language-specific words;
+        keys must be in upper case, a @ref True "True" value marks the word as an acronym to be preserved, and
+        a @ref False "False" value marks it as an ordinary word to be case-folded
+
+        @return the display name corresponding to the technical name
+
+        @note Case conversions use locale-independent Unicode case mappings, with the exception that the final
+        form of the Greek sigma is used at the end of a word; language-specific mappings (ex: the Turkish
+        dotless \c i) are not applied
+
+        @since DataProvider 3.6 words in upper case are case-folded, and case handling is Unicode-aware in all
+        scripts
+    */
+    static string getDisplayName(string name, *hash<string, bool> extra_acronyms) {
         # convert dashes and underscores to spaces
         name =~ s/[-_]/ /g;
+        # case-fold all upper-case words that are not acronyms; this must be done before word breaks are
+        # detected below, as case transitions carry no information in an all upper-case word
+        if (name =~ /\p{Lu}/) {
+            name = AbstractDataField::foldUpperCaseWords(name, extra_acronyms);
+        }
         # word break (space) before
         bool wb;
-        string display_name;
+        string display_name = "";
         for (int i = 0, int e = name.length(); i < e; ++i) {
             string c = name[i];
             if (!i || wb) {
@@ -490,7 +577,7 @@ public class AbstractDataField inherits Qore::Serializable {
             }
             if (c =~ /\p{Lu}/ && (display_name =~ /\p{Ll}$/) && i > 1) {
                 display_name += " ";
-            } else if (c =~ /[a-z]/ && display_name =~ /(^| )[A-Z]{2,}[a-z]$/ && i > 1) {
+            } else if (c =~ /\p{Ll}/ && display_name =~ /(^| )\p{Lu}{2,}\p{Ll}$/ && i > 1) {
                 splice display_name, -2, 0, " ";
             }
             display_name += c;
@@ -498,11 +585,85 @@ public class AbstractDataField inherits Qore::Serializable {
         return display_name;
     }
 
+    #! Case-folds all upper-case words in a technical name that are not acronyms
+    /** @param name the technical name with dashes and underscores already converted to spaces
+        @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+
+        @return the name with all upper-case non-acronym words converted to an initial capital followed by
+        lower case; all other characters are returned unchanged
+
+        @since DataProvider 3.6
+    */
+    private static string foldUpperCaseWords(string name, *hash<string, bool> extra_acronyms) {
+        string rv = "";
+        string word = "";
+        for (int i = 0, int e = name.length(); i < e; ++i) {
+            string c = name[i];
+            # word separators must match those handled in getDisplayName()
+            if (c == " " || c == ".") {
+                rv += AbstractDataField::foldUpperCaseWord(word, extra_acronyms) + c;
+                word = "";
+                continue;
+            }
+            word += c;
+        }
+        return rv + AbstractDataField::foldUpperCaseWord(word, extra_acronyms);
+    }
+
+    #! Case-folds a single word if it is in all upper case and is not an acronym
+    /** @param word the word to case-fold
+        @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+
+        @return the word converted to an initial capital followed by lower case, if it is an all upper-case
+        non-acronym word, otherwise the word unchanged
+
+        @since DataProvider 3.6
+    */
+    private static string foldUpperCaseWord(string word, *hash<string, bool> extra_acronyms) {
+        # words with no upper-case letter (ex: camelCase words, digits, and words in caseless scripts such as
+        # Chinese, Japanese, Arabic, and Hebrew) and words with any lower-case letter carry their own case
+        # information and are left unchanged
+        if (word !~ /\p{Lu}/ || word =~ /\p{Ll}/) {
+            return word;
+        }
+        # an explicit classification by the caller takes precedence over all other rules
+        *bool acronym = extra_acronyms{word};
+        if (!exists acronym) {
+            # short words and well-known acronyms are assumed to be acronyms and are left unchanged
+            acronym = (word.length() <= AcronymMaxLength && !NonAcronyms{word}) || Acronyms{word};
+        }
+        if (acronym) {
+            return word;
+        }
+        # the first upper-case letter keeps its case; all other letters are converted to lower case
+        string rv = "";
+        bool first = True;
+        for (int i = 0, int e = word.length(); i < e; ++i) {
+            string c = word[i];
+            if (first && c =~ /\p{Lu}/) {
+                first = False;
+                rv += c;
+                continue;
+            }
+            rv += c.lwr();
+        }
+        # Unicode case mappings always produce the medial form of the Greek sigma; use the final form at the
+        # end of the word
+        rv =~ s/σ$/ς/;
+        return rv;
+    }
+
     #! Converts a display name into a technical name
+    /** @param display_name the display name to convert
+
+        @return the technical name corresponding to the display name
+
+        @since DataProvider 3.6 display names in all scripts are converted to lower case; previously only
+        Latin-script display names were converted
+    */
     static string getNameFromDisplayName(string display_name) {
-        string name = display_name;
         # convert the name to all lower case
-        name =~ tr/A-Z/a-z/;
+        string name = display_name.lwr();
         # convert spaces to dashes
         name =~ s/\s+/-/g;
         # remove all punctuation and special characters

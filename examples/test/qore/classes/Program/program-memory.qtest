@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class ProgramMemoryTest
+
+class ProgramMemoryImportedBaseClass {
+}
+
+class ProgramMemoryImportedClass inherits ProgramMemoryImportedBaseClass {
+}
+
+class ProgramMemoryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ProgramMemoryTest", "1.0", \ARGV) {
+        addTestCase("child Program class handles are reclaimed", \classHandleReclamationTest());
+    }
+
+    classHandleReclamationTest() {
+        bool tracking = True;
+        try {
+            call_function("start_alloc_tracking");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                tracking = False;
+            } else {
+                rethrow;
+            }
+        }
+
+        if (!tracking) {
+            testSkip("allocation-tracking build required for leak-byte assertion");
+        }
+
+        for (int i = 0; i < 1000; ++i) {
+            Program pgm();
+            pgm.importClass("ProgramMemoryImportedClass");
+            delete pgm;
+        }
+
+        hash<auto> result = call_function("stop_alloc_tracking");
+        int live_bytes = 0;
+        foreach string key in (keys result) {
+            if (key != "_objects") {
+                live_bytes += result{key}.leak_bytes;
+            }
+        }
+        assertEq(0, live_bytes, "child Program teardown must release all tracked allocations");
+    }
+}
