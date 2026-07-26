@@ -16,12 +16,20 @@ if (!is_file(qcc_bin)) {
 string code = "%modern
 
 list<int> values = (1, 2, 3, 4);
+list<int> empty = ();
+list<float> float_values = (1.5, 2.0, 3.0);
 int native_foldl = (foldl \$1 + (\$2 & 7), values);
 int delegated_foldl = (foldl string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
 int native_foldr = (foldr \$1 + (\$2 & 7), values);
 int delegated_foldr = (foldr string(\$2) =~ /./ ? \$1 + \$2 : \$1, values);
-printf(\"%d:%d:%d:%d\\n\", native_foldl, delegated_foldl,
-    native_foldr, delegated_foldr);
+int ordered_foldr = (foldr \$1 - \$2 * \$2, values);
+float float_foldr = (foldr \$1 - \$2 * \$2, float_values);
+auto empty_foldl = (foldl \$1 + \$2 * \$2, empty);
+auto empty_foldr = (foldr \$1 + \$2 * \$2, empty);
+printf(\"%d:%d:%d:%d:%d:%.2f:%s:%s\\n\", native_foldl, delegated_foldl,
+    native_foldr, delegated_foldr, ordered_foldr, float_foldr,
+    exists empty_foldl ? string(empty_foldl) : \"NOTHING\",
+    exists empty_foldr ? string(empty_foldr) : \"NOTHING\");
 ";
 
 string root = "/tmp/qore-ir-fold-context-elision-" + string(getpid());
@@ -32,7 +40,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "10:10:10:10\n";
+string expected = "10:10:10:10:-10:-3.25:NOTHING:NOTHING\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -54,19 +62,22 @@ if (set_argv.count(ir_dump) != 2) {
     exit(2);
 }
 
-string compile_out = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s -O3 --strip-debug-info -o %s %s 2>&1",
-    libqore_dir, qcc_bin, exe, src));
-if (!is_file(exe)) {
-    printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
-}
-string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
-    libqore_dir, exe));
-if (aot != expected) {
-    printf("AOT mismatch\nexpected:\n%sactual:\n%s", expected, aot);
-    exit(2);
+foreach string env in (("", "QORE_DISABLE_IR_TYPED_FOLDR_DIRECT_INDEX=1")) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 --strip-debug-info -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, src));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", env, compile_out);
+        exit(2);
+    }
+    string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, exe));
+    if (aot != expected) {
+        printf("AOT mismatch (%s)\nexpected:\n%sactual:\n%s",
+            env, expected, aot);
+        exit(2);
+    }
+    unlink(exe);
 }
 
 unlink(src);
-unlink(exe);

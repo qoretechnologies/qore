@@ -259,7 +259,7 @@ private:
     QoreIRValue lowerFoldrNative(const QoreFoldrOperatorNode* foldr, const QoreValue& expr, std::string& error);
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
-        std::string& error);
+        const QoreTypeInfo* element_type, std::string& error);
     //! Insert runtime $1/$2 setup before an AST-delegated fold body.
     QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
         QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);

@@ -13506,7 +13506,7 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
             if (string_join) {
                 return lower_string_join(list);
             }
-            return lowerFoldrNativeValue(foldr, list, error);
+            return lowerFoldrNativeValue(foldr, list, root.list_element_type, error);
         }
     }
 
@@ -14991,8 +14991,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         // Empty check: if size == 0, return NOTHING
         builder.setBlock(empty_check_block);
         QoreIRValue zero = builder.createConstInt(0, foldl->loc)->result;
-        QoreIRValue identity_val = elem_is_int
-            ? zero : builder.createConstFloat(0.0, foldl->loc)->result;
+        QoreIRValue identity_val = builder.createConstNothing(foldl->loc)->result;
         QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, foldl->loc)->result;
         builder.createBranchIf(is_empty, exit_block, init_block, foldl->loc);
 
@@ -15207,16 +15206,122 @@ QoreIRValue QoreIRLowering::lowerFoldrNative(const QoreFoldrOperatorNode* foldr,
         return QoreIRValue();
     }
 
-    return lowerFoldrNativeValue(foldr, input_list, error);
+    const QoreTypeInfo* list_type = getExprTypeInfo(foldr->getRight());
+    const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    return lowerFoldrNativeValue(foldr, input_list, element_type, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
-        std::string& error) {
+        const QoreTypeInfo* element_type, std::string& error) {
     if (!ensureBuilderContext(error)) {
         return QoreIRValue();
     }
 
-    // foldr is identical to foldl except with reverse iteration
+    bool elem_is_int = element_type
+        && QoreTypeInfo::parseReturns(element_type, NT_INT) == QTI_IDENT;
+    bool elem_is_float = element_type
+        && QoreTypeInfo::parseReturns(element_type, NT_FLOAT) == QTI_IDENT;
+    bool use_direct_index = !std::getenv("QORE_DISABLE_IR_TYPED_FOLDR_DIRECT_INDEX")
+        && (elem_is_int || elem_is_float);
+
+    if (use_direct_index) {
+        QoreIRValue list_size = builder.createListSize(input_list, foldr->loc)->result;
+
+        QoreIRBasicBlock* empty_check_block = createBlock("foldr.empty.check");
+        QoreIRBasicBlock* init_block = createBlock("foldr.init");
+        QoreIRBasicBlock* header_block = createBlock("foldr.header");
+        QoreIRBasicBlock* body_block = createBlock("foldr.body");
+        QoreIRBasicBlock* exit_block = createBlock("foldr.exit");
+        if (!empty_check_block || !init_block || !header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for foldr";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(empty_check_block, foldr->loc);
+
+        builder.setBlock(empty_check_block);
+        QoreIRValue zero = builder.createConstInt(0, foldr->loc)->result;
+        QoreIRValue nothing_val = builder.createConstNothing(foldr->loc)->result;
+        QoreIRValue is_empty = builder.createBinaryOp(
+            QoreIROpcode::EqInt, list_size, zero, foldr->loc)->result;
+        builder.createBranchIf(is_empty, exit_block, init_block, foldr->loc);
+
+        builder.setBlock(init_block);
+        QoreIRValue one = builder.createConstInt(1, foldr->loc)->result;
+        QoreIRValue last_index = builder.createBinaryOp(
+            QoreIROpcode::SubInt, list_size, one, foldr->loc)->result;
+        QoreIRValue first_val = elem_is_int
+            ? builder.createListGetInt(input_list, last_index, foldr->loc)->result
+            : builder.createListGetFloat(input_list, last_index, foldr->loc)->result;
+        QoreIRValue initial_index = builder.createBinaryOp(
+            QoreIROpcode::SubInt, last_index, one, foldr->loc)->result;
+        {
+            auto* br = builder.createBranch(header_block, foldr->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
+
+        builder.setBlock(header_block);
+        auto* index_phi = builder.createPhi({}, foldr->loc, QoreIRPhiValueKind::NativeInt);
+        QoreIRValue index_val = index_phi->result;
+        auto* accum_phi = builder.createPhi({}, foldr->loc);
+        QoreIRValue accum_val = accum_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(
+            QoreIROpcode::LtInt, index_val, zero, foldr->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, foldr->loc);
+
+        builder.setBlock(body_block);
+        QoreIRValue element_val = elem_is_int
+            ? builder.createListGetInt(input_list, index_val, foldr->loc)->result
+            : builder.createListGetFloat(input_list, index_val, foldr->loc)->result;
+
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = accum_val;
+        virtual_implicit.arg1 = element_val;
+        virtual_implicit.element = QoreIRValue();
+        virtual_implicit.active = true;
+
+        int saved_ast_count = ast_delegate_count;
+        QoreIRValue fold_result = lowerExpression(foldr->getLeft(), error);
+        virtual_implicit = saved;
+
+        if (!fold_result.isValid()) {
+            return QoreIRValue();
+        }
+        if (ast_delegate_count > saved_ast_count) {
+            QoreIRValue old_argv = insertFoldImplicitArgvSetup(
+                body_block, 1, accum_val, element_val, foldr->loc);
+            builder.createPopImplicitArg(old_argv, foldr->loc);
+        }
+
+        QoreIRValue next_index = builder.createBinaryOp(
+            QoreIROpcode::SubInt, index_val, one, foldr->loc)->result;
+        QoreIRBasicBlock* body_exit_block = builder.getBlock();
+        {
+            auto* br = builder.createBranch(header_block, foldr->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
+
+        index_phi->incoming.push_back({initial_index, init_block});
+        index_phi->incoming.push_back({next_index, body_exit_block});
+        index_phi->operands.push_back(initial_index);
+        index_phi->operands.push_back(next_index);
+
+        accum_phi->incoming.push_back({first_val, init_block});
+        accum_phi->incoming.push_back({fold_result, body_exit_block});
+        accum_phi->operands.push_back(first_val);
+        accum_phi->operands.push_back(fold_result);
+
+        builder.setBlock(exit_block);
+        auto* result_phi = builder.createPhi({
+            {nothing_val, empty_check_block},
+            {accum_val, header_block},
+        }, foldr->loc);
+        return result_phi->result;
+    }
+
+    // Untyped and ownership-sensitive element types retain reverse iteration.
 
     // Create reverse iterator from input list
     auto* iter_inst = builder.createIteratorCreateReverse(input_list, foldr->loc);
