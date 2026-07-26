@@ -123,9 +123,6 @@ void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSigna
 // ============================================================================
 
 const QoreAOTExprSlotKindInfo* getAOTExprSlotKindInfo(uint8_t kind_byte) {
-    if (kind_byte >= 256) {
-        return nullptr;
-    }
     return &AOT_EXPR_SLOT_KIND_REGISTRY[kind_byte];
 }
 

@@ -3589,7 +3589,7 @@ private:
     typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
-    static volatile unsigned programIdCounter;   // to generate programId
+    static unsigned programIdCounter;   // to generate programId
     unsigned programId;
 };
 

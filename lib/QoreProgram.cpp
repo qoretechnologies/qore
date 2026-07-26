@@ -309,7 +309,7 @@ unsigned qore_num_warnings = NUM_WARNINGS;
 qore_program_private::qore_program_to_object_map_t qore_program_private::qore_program_to_object_map;
 qore_program_private::programid_to_program_map_t qore_program_private::programid_to_program_map;
 QoreRWLock qore_program_private::lck_programMap;
-volatile unsigned qore_program_private::programIdCounter = 1;
+unsigned qore_program_private::programIdCounter = 1;
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
@@ -3408,7 +3408,7 @@ int QoreProgram::issueModuleCmd(const char* module, const char* cmd, ExceptionSi
 
 QoreRWLock QoreBreakpoint::lck_breakpoint;
 QoreBreakpointList_t QoreBreakpoint::breakpointList;
-volatile unsigned QoreBreakpoint::breakpointIdCounter = 1;
+unsigned QoreBreakpoint::breakpointIdCounter = 1;
 
 void QoreBreakpoint::unassignAllStatements() {
     for (std::list<AbstractStatement*>::iterator it = statementList.begin(); it != statementList.end(); ++it) {

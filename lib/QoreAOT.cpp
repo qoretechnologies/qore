@@ -19486,8 +19486,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
                         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             clock::now() - it->second).count();
                         if (ms >= 50) {  // only print passes >= 50ms
-                            fprintf(stderr, "PASS: %s = %ld ms\n",
-                                    PassID.str().c_str(), ms);
+                            fprintf(stderr, "PASS: %s = %lld ms\n",
+                                    PassID.str().c_str(), static_cast<long long>(ms));
                             fflush(stderr);
                         }
                         timings->erase(it);
@@ -19533,7 +19533,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         auto opt_duration = std::chrono::duration_cast<std::chrono::milliseconds>(opt_end - opt_start).count();
 
         if (debug_opt || getenv("QORE_SHOW_OPT_TIME")) {
-            fprintf(stderr, "AOT: Optimization passes completed in %ld ms\n", opt_duration);
+            fprintf(stderr, "AOT: Optimization passes completed in %lld ms\n",
+                static_cast<long long>(opt_duration));
             fflush(stderr);
         }
 

@@ -256,7 +256,7 @@ public:
 class ClassDeclParseInfo {
 private:
     struct decl_free {
-        DLLLOCAL void operator()(char* p) const {
+        void operator()(char* p) const {
             free(p);
         }
     };
@@ -540,7 +540,7 @@ static void apply_callable_type_params(UserVariantBase* variant, std::vector<Qor
 static char* parse_explicit_generic_call_name(const QoreProgramLocation* loc, char* raw_name,
         ptype_vec_t& type_args) {
     struct call_decl_free {
-        DLLLOCAL void operator()(char* p) const {
+        void operator()(char* p) const {
             free(p);
         }
     };

@@ -1440,7 +1440,14 @@ if(NOT DEFINED NO_SIGNAL_HANDLING)
 endif()
 
 # prepare scanner and parser targets
-bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
+# The separate CHECK_GRAMMAR_CONFLICTS target validates the one documented
+# reduce/reduce conflict, so do not duplicate that expected diagnostic here.
+if(BISON_VERSION VERSION_GREATER_EQUAL 3.0)
+    bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+        COMPILE_FLAGS "-Wno-deprecated -Wno-conflicts-rr")
+else()
+    bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
+endif()
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 

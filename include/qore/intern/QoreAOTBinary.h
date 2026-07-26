@@ -1135,7 +1135,7 @@ public:
 
     -1 (unknown location) round-trips in both encodings.
 */
-DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
+static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
     writer.writeU32(static_cast<uint32_t>(line));
 }
 
@@ -1144,7 +1144,7 @@ DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int
     value in an int16_t); if false, it is zero-extended (matching the call sites that stored it in a uint16_t).  The
     distinction only affects legacy blobs; the wide encoding is always sign-preserving.
 */
-DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         bool signed_legacy = true) {
     if (reader.getHeader().version >= 11) {
         return static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
@@ -1154,7 +1154,7 @@ DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader,
 }
 
 //! Returns the serialized size in bytes of a single source line number in the given blob
-DLLLOCAL static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
+static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
     return reader.getHeader().version >= 11 ? 4 : 2;
 }
 

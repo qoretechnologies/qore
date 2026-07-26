@@ -3945,6 +3945,19 @@ const uint8_t* QoreAOTBinaryReader::getSectionData(const QoreAOTSectionHeader& s
     return decompressed.data();
 }
 
+template <typename Size>
+static bool qoreAOTGetPluginIdByteCount(uint32_t count, Size& bytes) {
+    constexpr Size max_count =
+        std::numeric_limits<Size>::max() / sizeof(uint16_t);
+    if constexpr (max_count < std::numeric_limits<uint32_t>::max()) {
+        if (count > static_cast<uint32_t>(max_count)) {
+            return false;
+        }
+    }
+    bytes = static_cast<Size>(count) * sizeof(uint16_t);
+    return true;
+}
+
 static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
         uint16_t import_idx, const char*& module_name, std::string& error) {
     module_name = nullptr;
@@ -3991,11 +4004,11 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
             return false;
         }
         uint32_t type_count = QoreAOTBinaryReader::readU32(ptr);
-        if (type_count > std::numeric_limits<size_t>::max() / sizeof(uint16_t)) {
+        size_t type_bytes;
+        if (!qoreAOTGetPluginIdByteCount(type_count, type_bytes)) {
             error = "PLUGIN_IMPORTS type id byte count overflow";
             return false;
         }
-        size_t type_bytes = static_cast<size_t>(type_count) * sizeof(uint16_t);
         if (!ensure(type_bytes, "plugin import type ids")) {
             return false;
         }
@@ -4004,11 +4017,11 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
             return false;
         }
         uint32_t operation_count = QoreAOTBinaryReader::readU32(ptr);
-        if (operation_count > std::numeric_limits<size_t>::max() / sizeof(uint16_t)) {
+        size_t operation_bytes;
+        if (!qoreAOTGetPluginIdByteCount(operation_count, operation_bytes)) {
             error = "PLUGIN_IMPORTS operation id byte count overflow";
             return false;
         }
-        size_t operation_bytes = static_cast<size_t>(operation_count) * sizeof(uint16_t);
         if (!ensure(operation_bytes, "plugin import operation ids")) {
             return false;
         }

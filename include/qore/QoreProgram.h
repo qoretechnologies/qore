@@ -1166,7 +1166,7 @@ private:
     QoreObject* qo; // reference to Qore script object, it's private object but we cannot
     static QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
     static QoreBreakpointList_t breakpointList;
-    static volatile unsigned breakpointIdCounter;   // to generate breakpointId
+    static unsigned breakpointIdCounter;   // to generate breakpointId
     unsigned breakpointId;
 
     DLLLOCAL void unassignAllStatements();

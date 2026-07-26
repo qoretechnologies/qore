@@ -63,9 +63,6 @@ extern QoreValue readOneExpr(
 // ============================================================================
 
 const QoreAOTExprKindInfo* getAOTExprKindInfo(uint8_t kind_byte) {
-    if (kind_byte >= 256) {
-        return nullptr;
-    }
     return &AOT_EXPR_KIND_REGISTRY[kind_byte];
 }
 
