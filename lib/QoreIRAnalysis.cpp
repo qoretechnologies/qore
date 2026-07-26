@@ -872,6 +872,26 @@ static bool qore_ir_is_read_only_string_use(const QoreIRInstruction& inst,
     return false;
 }
 
+static bool qore_ir_is_borrow_safe_string_pseudo_use(
+        const QoreIRInstruction& inst, QoreIRValue value) {
+    if (inst.operands.empty() || inst.operands[0].id != value.id) {
+        return false;
+    }
+    if (inst.opcode == QoreIROpcode::DotEvalMethodDirect) {
+        const auto& direct =
+            static_cast<const QoreIRDotEvalMethodDirectInstruction&>(inst);
+        return direct.pseudo
+            && qore_ir_is_read_only_string_intrinsic(direct.intrinsic);
+    }
+    if (inst.opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+        const auto& invoke =
+            static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction&>(inst);
+        return invoke.pseudo
+            && qore_ir_is_read_only_string_intrinsic(invoke.intrinsic);
+    }
+    return false;
+}
+
 static bool qore_ir_is_read_only_collection_pseudo_use(
         const QoreIRInstruction& inst, QoreIRValue value) {
     if (inst.operands.empty() || inst.operands[0].id != value.id) {
@@ -4904,6 +4924,13 @@ static bool qore_ir_is_hoistable_query_load(
 
 static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& inst,
         uint32_t value_id) {
+    if (!std::getenv("QORE_DISABLE_IR_BORROWED_STRING_PSEUDO_READS")
+            && (qore_ir_is_read_only_string_use(
+                    inst, QoreIRValue(value_id))
+                || qore_ir_is_borrow_safe_string_pseudo_use(
+                    inst, QoreIRValue(value_id)))) {
+        return true;
+    }
     switch (inst.opcode) {
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:
@@ -5161,7 +5188,10 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     continue;
             }
 
-            index_local = get_loaded_local(index_value);
+            // The structural proof below validates the initialization and
+            // updates, so assigned-state uncertainty from throwing loop-body
+            // operations does not invalidate the induction-variable identity.
+            index_local = get_raw_loaded_local(index_value);
             QoreIRValue size_value = bound_value;
             QoreIRInstruction* subtract = get_definition(size_value);
             int64_t bound_offset = 0;
@@ -5196,7 +5226,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     continue;
                 }
                 int64_t zero = -1;
-                index_local = get_loaded_local(reverse_index);
+                index_local = get_raw_loaded_local(reverse_index);
                 if (!index_local || !get_const_int(zero_value, zero) || zero != 0) {
                     continue;
                 }
@@ -5483,6 +5513,35 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
 
         size_t increments = 0;
         bool invalidated = false;
+        auto is_read_only_string_candidate =
+            [&](const QoreIRInstruction* inst) {
+                if (std::getenv(
+                        "QORE_DISABLE_IR_BORROWED_STRING_PSEUDO_READS")
+                        || QoreTypeInfo::parseReturns(
+                        element_type, NT_STRING) != QTI_IDENT) {
+                    return false;
+                }
+                if (!inst->operands.empty()
+                        && qore_ir_is_read_only_string_use(
+                            *inst, inst->operands[0])) {
+                    return true;
+                }
+                for (QoreIRValue operand : inst->operands) {
+                    QoreIRInstruction* operand_def =
+                        get_definition(operand);
+                    if (operand_def
+                            && operand_def->opcode
+                                == QoreIROpcode::ListIndexDynamic
+                            && operand_def->operands.size() == 2
+                            && get_raw_loaded_local(
+                                operand_def->operands[0]) == list_local
+                            && qore_ir_is_borrow_safe_string_pseudo_use(
+                                *inst, operand)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
         auto is_unrelated_local_lvalue_path = [&](const QoreIRInstruction* inst) {
             switch (inst->opcode) {
                 case QoreIROpcode::LValuePathAssign:
@@ -5513,7 +5572,8 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 }
                 QoreIRInstruction* inst = instructions[offset].get();
                 if ((qore_ir_may_mutate_unknown_local(inst->opcode)
-                        && !is_unrelated_local_lvalue_path(inst))
+                        && !is_unrelated_local_lvalue_path(inst)
+                        && !is_read_only_string_candidate(inst))
                         || qore_ir_may_mutate_list(inst->opcode)) {
                     invalidated = true;
                     break;
@@ -5589,7 +5649,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     continue;
                 }
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(&inst);
-                LocalVar* read_index_local = get_loaded_local(inst.operands[1]);
+                LocalVar* read_index_local = get_raw_loaded_local(inst.operands[1]);
                 int64_t read_index_offset = 0;
                 if (!read_index_local && !reverse_loop) {
                     QoreIRInstruction* index_expr = get_definition(inst.operands[1]);
@@ -5597,9 +5657,9 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     if (index_expr && index_expr->operands.size() == 2
                             && index_expr->opcode == QoreIROpcode::AddInt) {
                         LocalVar* lhs_local =
-                            get_loaded_local(index_expr->operands[0]);
+                            get_raw_loaded_local(index_expr->operands[0]);
                         LocalVar* rhs_local =
-                            get_loaded_local(index_expr->operands[1]);
+                            get_raw_loaded_local(index_expr->operands[1]);
                         if (lhs_local
                                 && get_const_int(index_expr->operands[1],
                                     adjustment)) {
@@ -5617,7 +5677,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                                 adjustment)
                             && adjustment != std::numeric_limits<int64_t>::min()) {
                         read_index_local =
-                            get_loaded_local(index_expr->operands[0]);
+                            get_raw_loaded_local(index_expr->operands[0]);
                         read_index_offset = -adjustment;
                     }
                 }
