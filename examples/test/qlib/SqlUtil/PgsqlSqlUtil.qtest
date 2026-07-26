@@ -412,20 +412,31 @@ class PgsqlTest inherits SqlTestBase {
         ds.exec(sprintf("create table %s.other_payloads as select * from %s.payloads", OtherSchema, SizeSchema));
         ds.commit();
 
+        # independent decomposition of the physical storage rooted in a single namespace
+        code<int(string)> decompose = int sub (string schema) {
+            return ds.selectRow("select "
+                "coalesce((select sum(pg_catalog.pg_table_size(c.oid) + pg_catalog.pg_indexes_size(c.oid)) "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where n.nspname = %v and c.relkind in ('r', 'm')), 0) "
+                "+ coalesce((select sum(pg_catalog.pg_relation_size(c.oid)) "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where n.nspname = %v and c.relkind = 'S'), 0) as size_bytes",
+                schema, schema).size_bytes;
+        };
+
         int measured = db.getSchemaPhysicalSize(SizeSchema);
-        int expected = ds.selectRow("select "
-            "coalesce((select sum(pg_catalog.pg_table_size(c.oid) + pg_catalog.pg_indexes_size(c.oid)) "
-            "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
-            "where n.nspname = %v and c.relkind in ('r', 'm')), 0) "
-            "+ coalesce((select sum(pg_catalog.pg_relation_size(c.oid)) "
-            "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
-            "where n.nspname = %v and c.relkind = 'S'), 0) as size_bytes",
-            SizeSchema, SizeSchema).size_bytes;
-        assertEq(expected, measured,
+        assertEq(decompose(SizeSchema), measured,
             "schema size equals independent table/index/TOAST/sequence decomposition");
         assertGt(0, measured, "populated schema reports allocated bytes");
         assertEq(0, db.getSchemaPhysicalSize(EmptySchema), "empty schema reports zero bytes");
-        assertGt(db.getSchemaPhysicalSize(OtherSchema), measured,
+
+        # Isolation: the other schema holds a copy of the payload data, so a measurement that ignored the
+        # requested namespace would return more than this schema's own decomposition.  Each schema must
+        # report exactly its own storage; ordering between the two totals is deliberately not asserted, as
+        # it is not required to prove isolation.
+        int other_measured = db.getSchemaPhysicalSize(OtherSchema);
+        assertGt(0, other_measured, "cross-schema fixture data has physical storage of its own");
+        assertEq(decompose(OtherSchema), other_measured,
             "measurement is isolated to the requested schema");
 
         hash<auto> storage = ds.selectRow("select "

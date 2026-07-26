@@ -1468,7 +1468,10 @@ string sql = t.getSqlFromList(list);
         @return the schema size in bytes, or \c -1 when the driver does not
             implement schema-level physical measurement
 
-        @throw SCHEMA-NOT-FOUND if @p schema does not exist
+        @throw SCHEMA-NOT-FOUND @p schema is empty, or, when the driver implements
+            schema-level physical measurement, @p schema does not exist; drivers
+            without an implementation return \c -1 without checking whether the
+            schema exists
 
         @note Each physical object is counted once. In particular, driver
             implementations must not add index or overflow storage separately
