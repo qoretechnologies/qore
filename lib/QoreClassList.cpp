@@ -66,7 +66,7 @@ void QoreClassList::deleteAll() {
     for (auto& i : hm) {
         //printd(5, "QoreClassList::deleteAll() this: %p cls: '%s' %p priv: %p ns_const: %d ns_vars: %d\n", this,
         //  i.second.cls->getName(), i.second.cls, qore_class_private::get(*i.second.cls), ns_const, ns_vars);
-        qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
+        qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
     }
     hm.clear();
     ns_const = false;
@@ -199,7 +199,7 @@ void QoreClassList::parseRemove(const char* name, ExceptionSink* xsink) {
         // Roll back any pending variants first
         qore_class_private::parseRollback(*(i->second.cls));
         // Then delete the class
-        qore_class_private::get(*i->second.cls)->deref(!ns_const, !ns_vars);
+        qore_class_private::derefClass(*i->second.cls, !ns_const, !ns_vars);
         hm.erase(i);
     }
 }
@@ -228,7 +228,7 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
         if (ns.hashDeclList.find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "hashdecl '%s' has already been defined in " \
                 "namespace '%s'", i.first, ns.name.c_str());
-            qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
         } else if (QoreClass* existing = ns.classList.find(i.first)) {
             if (ns.imported && qore_class_private::isPublic(*existing)
                 && qore_class_private::isPublic(*i.second.cls)) {
@@ -238,16 +238,16 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
                 parse_error(*qore_class_private::get(*i.second.cls)->loc,
                     "class '%s' has already been defined in namespace '%s'", i.first, ns.name.c_str());
             }
-            qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
         } else if (find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "class '%s' is already pending in namespace " \
                 "'%s'", i.first, ns.name.c_str());
-            qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
         } else if (ns.nsl.find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "cannot add class '%s' to existing " \
                 "namespace '%s' because a subnamespace has already been defined with this name", i.first,
                 ns.name.c_str());
-            qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
         } else {
             printd(5, "QoreClassList::assimilate() this: %p adding: %p '%s::%s'\n", this, i.second,
                 ns.name.c_str(), i.second.cls->getName());

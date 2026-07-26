@@ -1971,9 +1971,8 @@ public:
 #define QCCM_NORMAL (1 << 0)
 #define QCCM_STATIC (1 << 1)
 
-// set of QoreClass pointers associated to a qore_class_private object
-typedef vector_set_t<QoreClass*> qc_set_t;
-//typedef std::set<QoreClass*> qc_set_t;
+// QoreClass pointers associated with a qore_class_private object and their pointer reference counts
+typedef vector_map_t<QoreClass*, unsigned> qc_ref_map_t;
 
 // private QoreClass implementation
 // only dynamically allocated; reference counter managed in "refs"
@@ -1985,7 +1984,7 @@ public:
     QoreClass* cls;                 // parent class
     qore_ns_private* ns = nullptr;  // parent namespace
     BCList* scl = nullptr;          // base class list
-    qc_set_t qcset;                 // set of QoreClass pointers associated with this private object (besides cls)
+    qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
 
     mutable VRMutex gate;           // for synchronized static methods
 
@@ -2217,15 +2216,47 @@ public:
             }
 
             // delete all linked QoreClass objects
-            for (auto& i : qcset) {
-                i->priv = nullptr;
-                delete i;
+            for (auto& i : qcrefs) {
+                i.first->priv = nullptr;
+                delete i.first;
             }
 
             delete this;
             return true;
         }
         return false;
+    }
+
+    DLLLOCAL static void refClass(QoreClass& qc) {
+        qore_class_private* priv = qc.priv;
+        priv->ref();
+        if (&qc != priv->cls) {
+            AutoLocker al(priv->gate.asl_lock);
+            qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
+            assert(i != priv->qcrefs.end());
+            ++i->second;
+        }
+    }
+
+    DLLLOCAL static void derefClass(QoreClass& qc, bool ns_const, bool ns_vars) {
+        qore_class_private* priv = qc.priv;
+        bool del = false;
+        if (&qc != priv->cls) {
+            AutoLocker al(priv->gate.asl_lock);
+            qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
+            assert(i != priv->qcrefs.end());
+            assert(i->second);
+            if (!--i->second) {
+                priv->qcrefs.erase(i);
+                qc.priv = nullptr;
+                del = true;
+            }
+        }
+
+        priv->deref(ns_const, ns_vars);
+        if (del) {
+            delete &qc;
+        }
     }
 
     DLLLOCAL bool hasAbstract() const {

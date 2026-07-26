@@ -87,7 +87,7 @@
 #include "qore/intern/ql_time.h"
 #include "qore/intern/ql_lib.h"
 #ifdef QORE_HAVE_ALLOC_TRACKING
-#include "qore/intern/ql_alloc_tracking.h"
+DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #endif
 #include "qore/intern/ql_math.h"
 #include "qore/intern/ql_type.h"
