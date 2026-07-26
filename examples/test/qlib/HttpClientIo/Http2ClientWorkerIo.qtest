@@ -1,0 +1,682 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Http2ClientWorkerIo.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Issue #5369: HTTP/2 client stream writes and cancels from async I/O
+    continuePoll workers.
+
+    Both DATA-frame sends and RST_STREAM submissions used to reach the nghttp2
+    session only through the blocking controller facade, which
+    SocketSyncPoll::assertNotOnIoThread() correctly rejects from a
+    controller-owned continuePoll worker.  Writing therefore threw
+    SOCKET-SYNC-ON-IO-THREAD-ERROR and cancelling silently did nothing (the
+    exception was swallowed, so no RST_STREAM was ever sent and the server kept
+    streaming into a stream nobody was reading).
+
+    These tests drive both operations from a Qore poll operation's
+    continuePoll(), which the controller always dispatches on a worker thread
+    with the continuePoll-worker marker set, and assert the effect end-to-end at
+    the server.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires HttpServerUtil
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class Http2ClientWorkerIoTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Content type that selects the bidirectional echo handler's body-streaming path
+const BidiContentType = "application/x-worker-bidi-test";
+
+#! Content type that selects the burst server-streaming handler
+const BurstContentType = "application/x-worker-burst-test";
+
+#! Content type that selects the single-chunk latency-guard handler
+const SingleChunkContentType = "application/x-worker-single-chunk-test";
+
+#! Bidirectional echo handler: echoes every inbound DATA chunk back on the same stream
+/** Modelled on HttpClientIo.qtest's BidiEchoHandler: overrides the 5-arg
+    handleRequest() to get direct socket access, registers its own body queue so
+    inbound DATA frames are drained by the I/O thread, and writes each chunk back
+    with the async server write API.
+*/
+class BidiEchoHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return hdr."content-type" == BidiContentType;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        if (!cx."header-info".body_streaming) {
+            return makeResponse(400, "expected body streaming");
+        }
+        int stream_id = cx."header-info".stream_id;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
+        *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
+
+        Queue body_queue(-1);
+        register_body_queue(body_queue);
+
+        s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+            {"content-type": "application/octet-stream"});
+        if (io_wake) {
+            io_wake();
+        }
+
+        while (True) {
+            auto chunk;
+            try {
+                chunk = body_queue.get(20s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    break;
+                }
+                rethrow;
+            }
+            # the NOTHING sentinel signals END_STREAM observed by the I/O thread
+            if (!(chunk instanceof binary)) {
+                break;
+            }
+            s.sendHttp2StreamData(stream_id, chunk);
+            if (io_wake) {
+                io_wake();
+            }
+        }
+
+        s.sendHttp2StreamData(stream_id, NOTHING, True);
+        if (io_wake) {
+            io_wake();
+        }
+
+        cx."response-sent" = True;
+        return <HttpResponseInfo>{"code": 200, "body": ""};
+    }
+}
+
+#! Server-streaming handler used to prove that a client RST_STREAM actually arrives
+/** Emits one message, then parks on a Counter until the test has submitted the
+    cancel.  Once released it streams until Http2Session::sendStreamData() reports
+    the peer's reset with \c HTTP2-STREAM-RESET.
+
+    Without a working client-side cancel the reset never arrives, that error never
+    fires, and the handler streams until it hits the message cap or the deadline —
+    exactly the unbounded server-side resource leak reported in issue #5369.
+*/
+class BurstStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! safety cap on messages emitted when the peer's reset never arrives
+        const MaxMessages = 5000;
+
+        #! safety deadline for the burst loop when the peer's reset never arrives
+        const BurstDeadline = 15s;
+    }
+
+    private {
+        #! released by the test once the cancel has been submitted from a worker
+        Counter go_ahead;
+        #! reaches zero when the burst loop has exited
+        Counter finished;
+        #! written only by the handler thread; the test reads these after waitForFinish(),
+        #! which establishes the required happens-before edge, so no lock is needed
+        int sent = 0;
+        bool saw_reset = False;
+        *string reset_err;
+        *string handler_error;
+        #! guards release() so the test's on_exit safety net cannot double-decrement
+        Mutex release_lock();
+        bool released = False;
+    }
+
+    constructor() {
+        go_ahead = new Counter(1);
+        finished = new Counter(1);
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return hdr."content-type" == BurstContentType;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        on_exit finished.dec();
+
+        try {
+            int stream_id = cx."header-info".stream_id;
+            *code<nothing()> io_wake = cx."header-info".io_wake;
+            *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
+
+            Queue body_queue(-1);
+            register_body_queue(body_queue);
+
+            s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                {"content-type": "application/octet-stream"});
+            s.sendHttp2StreamData(stream_id, binary("msg"));
+            if (io_wake) {
+                io_wake();
+            }
+            ++sent;
+
+            # park until the test has submitted the cancel from a continuePoll worker
+            go_ahead.waitForZero(60s);
+
+            # Http2Session::sendStreamData() raises HTTP2-STREAM-RESET once the peer's
+            # RST_STREAM has closed the stream, so the write itself is the server's view
+            # of the client's cancel; the cap and deadline only bound the unfixed case
+            date deadline = now_us() + BurstDeadline;
+            while (sent < MaxMessages && now_us() < deadline) {
+                try {
+                    s.sendHttp2StreamData(stream_id, binary("msg"));
+                } catch (hash<ExceptionInfo> ex) {
+                    reset_err = ex.err;
+                    saw_reset = ex.err == "HTTP2-STREAM-RESET";
+                    break;
+                }
+                if (io_wake) {
+                    io_wake();
+                }
+                ++sent;
+            }
+
+            if (!exists reset_err) {
+                # close the stream so the unfixed case still tears down cleanly
+                s.sendHttp2StreamData(stream_id, NOTHING, True);
+                if (io_wake) {
+                    io_wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            handler_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+
+        cx."response-sent" = True;
+        return <HttpResponseInfo>{"code": 200, "body": ""};
+    }
+
+    #! Releases the burst loop; called by the test after the cancel is submitted
+    /** Idempotent so the test's on_exit safety net can call it unconditionally
+    */
+    release() {
+        AutoLock al(release_lock);
+        if (!released) {
+            released = True;
+            go_ahead.dec();
+        }
+    }
+
+    #! Waits for the burst loop to exit
+    waitForFinish(timeout t) {
+        finished.waitForZero(t);
+    }
+
+    int getSent() {
+        return sent;
+    }
+
+    bool sawReset() {
+        return saw_reset;
+    }
+
+    #! Returns the error code that ended the burst loop, or NOTHING if it ran to the cap
+    *string getResetError() {
+        return reset_err;
+    }
+
+    *string getHandlerError() {
+        return handler_error;
+    }
+}
+
+#! Server-streaming handler that emits exactly one chunk, then parks
+/** Regression guard for the SSE per-chunk latency fix
+    (QoreSocketObjectHttp2EnqueuePollOperation::continuePoll()'s StreamData
+    branch): a write issued from an ordinary handler thread must still take the
+    blocking controller facade, which flushes synchronously, so the client sees
+    the chunk without waiting for a later event to provoke a wake.
+*/
+class SingleChunkHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter go_ahead;
+        #! guards release() so the test's on_exit safety net cannot double-decrement
+        Mutex release_lock();
+        bool released = False;
+    }
+
+    constructor() {
+        go_ahead = new Counter(1);
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return hdr."content-type" == SingleChunkContentType;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        int stream_id = cx."header-info".stream_id;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
+        *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
+
+        Queue body_queue(-1);
+        register_body_queue(body_queue);
+
+        s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+            {"content-type": "application/octet-stream"});
+        s.sendHttp2StreamData(stream_id, binary("first"));
+        if (io_wake) {
+            io_wake();
+        }
+
+        # no further writes until the test confirms it already got "first"
+        go_ahead.waitForZero(60s);
+
+        s.sendHttp2StreamData(stream_id, binary("second"), True);
+        if (io_wake) {
+            io_wake();
+        }
+
+        cx."response-sent" = True;
+        return <HttpResponseInfo>{"code": 200, "body": ""};
+    }
+
+    #! Idempotent so the test's on_exit safety net can call it unconditionally
+    release() {
+        AutoLock al(release_lock);
+        if (!released) {
+            released = True;
+            go_ahead.dec();
+        }
+    }
+}
+
+#! Poll operation that writes on an HTTP/2 client stream from continuePoll()
+/** The controller always dispatches a Qore poll operation's continuePoll() on a
+    worker thread with the continuePoll-worker marker set, so this is the exact
+    execution context that used to raise SOCKET-SYNC-ON-IO-THREAD-ERROR.
+*/
+class WorkerStreamWritePollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        HttpClientIo::Http2ClientStreamHandle sh;
+        list<binary> chunks;
+        bool done = False;
+    }
+
+    constructor(HttpClientIo::Http2ClientStreamHandle sh, list<binary> chunks) {
+        self.sh = sh;
+        self.chunks = chunks;
+    }
+
+    string getGoal() {
+        return "h2-client-stream-written";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        foreach binary chunk in (chunks) {
+            sh.sendData(chunk);
+        }
+        # half-close the write side so the echo handler's drain loop terminates
+        sh.sendData(binary(), True);
+        done = True;
+        return NOTHING;
+    }
+}
+
+#! Poll operation that cancels an HTTP/2 client stream from continuePoll()
+class WorkerStreamCancelPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        HttpClientIo::Http2ClientStreamHandle sh;
+        bool done = False;
+    }
+
+    constructor(HttpClientIo::Http2ClientStreamHandle sh) {
+        self.sh = sh;
+    }
+
+    string getGoal() {
+        return "h2-client-stream-cancelled";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        sh.cancel();
+        done = True;
+        return NOTHING;
+    }
+}
+
+#! Captures WARN+ log messages so a swallowed cancel failure cannot pass unnoticed
+class CapturingLoggerAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex m();
+        list<string> messages;
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%p %m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(m);
+            messages += params;
+        }
+    }
+
+    int countMessagesContaining(string text) {
+        AutoLock al(m);
+        int count = 0;
+        foreach string message in (messages) {
+            if (message.find(text) >= 0) {
+                ++count;
+            }
+        }
+        return count;
+    }
+}
+
+public class Http2ClientWorkerIoTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        CapturingLoggerAppender capture();
+    }
+
+    constructor() : Test("Http2ClientWorkerIoTest", "1.0") {
+        logger = new Logger("test",
+            m_options.verbose > 2 ? LoggerLevel::getLevelDebug() : LoggerLevel::getLevelInfo());
+        logger.addAppender(capture);
+
+        addTestCase("write from a continuePoll worker reaches the server",
+            \writeFromContinuePollWorker());
+        addTestCase("cancel from a continuePoll worker reaches the server",
+            \cancelFromContinuePollWorker());
+        addTestCase("handler-thread writes still flush synchronously",
+            \handlerThreadWriteFlushesSynchronously());
+        set_return_value(main());
+    }
+
+    #! Runs a poll operation on the async I/O controller and returns its result
+    /** The operation is bound to an EventNotifier rather than a socket, so the
+        controller has nothing to poll and drives continuePoll() immediately on a
+        worker thread.
+    */
+    private hash<SocketPollResultInfo> runOnWorker(object op, string owner) {
+        EventNotifier notifier();
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": owner,
+            "to": 30s,
+        });
+        return q.get(30s);
+    }
+
+    #! Starts an H2 server with the given handler bound to the default path
+    private HttpServer startServer(AbstractHttpRequestHandler handler, reference<string> url) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        server.setDefaultHandler("test", handler);
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+        url = sprintf("https://127.0.0.1:%d", info.port);
+        return server;
+    }
+
+    private HttpClientIo::HttpClientConnectionManager makeManager() {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "logger": logger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            });
+    }
+
+    #! Reads until the first body chunk arrives, skipping the response-headers hash
+    private binary readFirstChunk(HttpClientIo::Http2ClientStreamHandle sh, timeout total) {
+        date deadline = now_us() + total;
+        while (now_us() < deadline) {
+            auto rv = sh.readData(5s);
+            if (!exists rv) {
+                continue;
+            }
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.error) {
+                    throw "STREAM-ERROR", sprintf("unexpected stream error: %y", rv);
+                }
+                if (rv.end_stream) {
+                    throw "STREAM-ERROR", "the stream ended before any body data arrived";
+                }
+                continue;
+            }
+            return binary(rv);
+        }
+        throw "STREAM-TIMEOUT", sprintf("no body data arrived within %y", total);
+    }
+
+    #! Reads from the stream handle until END_STREAM, returning the concatenated body
+    private binary drain(HttpClientIo::Http2ClientStreamHandle sh, timeout total) {
+        binary out = binary();
+        date deadline = now_us() + total;
+        while (now_us() < deadline) {
+            auto rv = sh.readData(5s);
+            if (!exists rv) {
+                continue;
+            }
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.end_stream) {
+                    break;
+                }
+                if (rv.error) {
+                    throw "STREAM-ERROR", sprintf("unexpected stream error: %y", rv);
+                }
+                continue;
+            }
+            out += binary(rv);
+        }
+        return out;
+    }
+
+    #! An HTTP/2 client-stream write issued from a continuePoll worker must reach the peer
+    /** Before the fix the write threw SOCKET-SYNC-ON-IO-THREAD-ERROR from
+        SocketSyncPoll::assertNotOnIoThread() and no DATA frame was ever enqueued.
+    */
+    writeFromContinuePollWorker() {
+        string url;
+        HttpServer server = startServer(new BidiEchoHandler(), \url);
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager();
+        on_exit delete mgr;
+
+        HttpClientIo::Http2ClientStreamHandle sh =
+            cast<HttpClientIo::Http2ClientStreamHandle>(mgr.acquireStream(url));
+        sh.startStreaming("POST", "/echo", {"content-type": BidiContentType}, True);
+
+        list<binary> chunks = (binary("worker-0"), binary("worker-1"), binary("worker-2"));
+        binary expected = binary();
+        foreach binary chunk in (chunks) {
+            expected += chunk;
+        }
+
+        hash<SocketPollResultInfo> result =
+            runOnWorker(new WorkerStreamWritePollOperation(sh, chunks), "h2-worker-write");
+        assertNothing(result.ex, "write from a continuePoll worker must not raise");
+
+        assertEq(expected, drain(sh, 20s), "the server echoed every worker-issued chunk");
+    }
+
+    #! An HTTP/2 client-stream cancel issued from a continuePoll worker must reach the peer
+    /** Before the fix the RST_STREAM submission threw and the exception was
+        swallowed by a bare catch, so the server kept streaming into a stream
+        nobody was reading.
+    */
+    cancelFromContinuePollWorker() {
+        string url;
+        BurstStreamHandler handler();
+        HttpServer server = startServer(handler, \url);
+        on_exit {
+            # never leave the handler parked if an assertion fails early
+            handler.release();
+            delete server;
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager();
+        on_exit delete mgr;
+
+        HttpClientIo::Http2ClientStreamHandle sh =
+            cast<HttpClientIo::Http2ClientStreamHandle>(mgr.acquireStream(url));
+        sh.startStreaming("POST", "/burst", {"content-type": BurstContentType}, True);
+
+        # the handler's first message proves the stream is live before we cancel
+        assertEq(binary("msg"), readFirstChunk(sh, 20s), "received the server's first message");
+
+        hash<SocketPollResultInfo> result =
+            runOnWorker(new WorkerStreamCancelPollOperation(sh), "h2-worker-cancel");
+        assertNothing(result.ex, "cancel from a continuePoll worker must not raise");
+        # the cancel path logs "cancel stream <id> failed" at WARN when the RST_STREAM
+        # submission raises, which is exactly how the bug used to hide
+        assertEq(0, capture.countMessagesContaining("cancel stream"),
+            "no cancel failure was logged");
+
+        # release the burst loop only after the RST_STREAM has been submitted
+        handler.release();
+        handler.waitForFinish(60s);
+
+        assertNothing(handler.getHandlerError(), "the handler ran without error");
+        assertTrue(handler.sawReset(),
+            sprintf("the server observed the client's RST_STREAM (sent %d message(s), loop ended "
+                "with %y)", handler.getSent(), handler.getResetError()));
+        assertLt(BurstStreamHandler::MaxMessages, handler.getSent(),
+            sprintf("the server stopped streaming early (sent %d of %d)", handler.getSent(),
+                BurstStreamHandler::MaxMessages));
+    }
+
+    #! Handler-thread writes must keep taking the facade, which flushes synchronously
+    /** Guards the SSE per-chunk latency fix: an ordinary handler thread is
+        neither the I/O thread nor a continuePoll worker, so it must not take the
+        new enqueue-and-wake fast path.  The handler emits one chunk and then
+        parks, so the client can only see it if that write was flushed on its own
+        rather than waiting for a later event to provoke a wake.
+    */
+    handlerThreadWriteFlushesSynchronously() {
+        string url;
+        SingleChunkHandler handler();
+        HttpServer server = startServer(handler, \url);
+        on_exit {
+            handler.release();
+            delete server;
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager();
+        on_exit delete mgr;
+
+        HttpClientIo::Http2ClientStreamHandle sh =
+            cast<HttpClientIo::Http2ClientStreamHandle>(mgr.acquireStream(url));
+        sh.startStreaming("POST", "/single", {"content-type": SingleChunkContentType}, True);
+
+        date start = now_us();
+        binary first = readFirstChunk(sh, 10s);
+        date elapsed = now_us() - start;
+        assertEq(binary("first"), first, "the parked handler's chunk was delivered on its own");
+        assertLt(2s, elapsed,
+            sprintf("the chunk arrived without waiting for a later event (actual: %y)", elapsed));
+
+        handler.release();
+        assertEq(binary("second"), drain(sh, 20s), "the remaining chunk arrived after release");
+    }
+}

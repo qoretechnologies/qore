@@ -765,6 +765,10 @@ public class HttpClientStreamHandle {
     }
 
     #! Cancels the request
+    /** @note Safe to call from any thread, including a poll operation's \c continuePoll()
+        running on an async I/O controller worker.  The protocol-level reset is only queued
+        off the I/O thread; the controller's next cycle writes it to the wire.
+    */
     cancel() {
         *int sid;
         {
@@ -786,7 +790,9 @@ public class HttpClientStreamHandle {
             try {
                 conn.cancelRequest(sid);
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "cancel stream %d: %s: %s", sid, ex.err, ex.desc);
+                # a cancel that does not reach the peer leaves it streaming into a stream
+                # nobody is reading; report it rather than hiding it at DEBUG
+                log(LoggerLevel::WARN, "cancel stream %d failed: %s: %s", sid, ex.err, ex.desc);
             }
         }
         # Note: cancelRequest() above rejects the Promise in the poll operation,
@@ -923,6 +929,11 @@ public class HttpClientStreamHandle {
     #! Sends data on a streaming connection
     /** Sends data on the write side of a bidirectional stream. Only meaningful when
         \c startStreaming() was called with \c body_streaming = \c True.
+
+        @note Safe to call from any thread, including a poll operation's \c continuePoll()
+        running on an async I/O controller worker (for example while delivering application
+        events).  Off the I/O thread the payload is only queued and the controller is woken;
+        the controller's next cycle writes it to the wire.
 
         @param data the data to send (string or binary)
         @param end_stream if \c True, signals end of the write side (half-close)

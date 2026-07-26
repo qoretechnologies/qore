@@ -1921,6 +1921,9 @@ bool Http2ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS
 /** @param stream_id the stream ID to send data on
     @param data the data to send (string or binary)
     @param end_stream if True, signals end of stream
+
+    @note Safe from any thread, including a controller-owned \c continuePoll() worker
+    delivering application events; see @ref Qore::Socket::sendHttp2StreamData().
 */
 nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
         bool end_stream = False) [flags=NAMED_ARGS] {

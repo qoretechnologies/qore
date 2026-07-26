@@ -416,6 +416,36 @@ the controller's `SocketQuicClientPollOperation::continuePoll()` is the only pat
 and sends UDP packets.  This keeps QUIC socket ownership with the I/O thread and avoids races
 between app-thread `sendto()` and controller-driven receive/write processing.
 
+### Protocol enqueues from the async I/O execution path
+
+Some protocol operations are pure, mutex-protected session enqueues that perform no socket I/O:
+`Http2Session::submitRequest()`, `sendStreamData()`, and `submitRstStream()`, and the equivalent
+`QuicSession` submissions.  Routing those through the blocking controller facade is only correct
+on an ordinary caller thread; from the I/O thread it deadlocks the controller, and from a
+controller-owned `continuePoll()` worker it creates a nested wait that steals readiness
+registration from the outer poll operation — which is exactly what
+`SocketSyncPoll::assertNotOnIoThread()` rejects.
+
+Therefore every such entry point takes a fast path when
+`qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()` holds: enqueue directly on
+the session, then
+
+- **on the I/O thread**: do nothing further — the surrounding `continuePoll()` cycle flushes to
+  the wire after action dispatch, and the controller cannot be woken from its own I/O thread;
+- **in a continuePoll worker**: wake the controller and return.  The worker does **not** own the
+  socket, so it must not call `sendPendingData()`; the next controller cycle flushes, because both
+  `SocketHttp2ClientMultiplexPollOperation::continuePoll()` and the server-side HTTP/2 poll
+  operation flush pending session data at the top of every cycle.
+
+Ordinary caller threads keep the facade, which additionally flushes synchronously from the I/O
+thread — required by the SSE per-chunk latency fix in
+`QoreSocketObjectHttp2EnqueuePollOperation::continuePoll()`'s `StreamData` branch.
+
+Operations that genuinely block stay guarded and must **not** grow a fast path —
+`Socket::waitForHttp2StreamDrain()` and `Socket::waitForQuicClientStreamDrain()` being the
+examples.  A continuePoll worker that hits `HTTP2-FLOW-CONTROL` therefore cannot wait for drain
+and must surface the error to its caller.
+
 ## HTTP/2 Extended CONNECT Rejection (RFC 8441)
 
 When the server does not advertise `ENABLE_CONNECT_PROTOCOL` in its SETTINGS, extended CONNECT requests (i.e.,

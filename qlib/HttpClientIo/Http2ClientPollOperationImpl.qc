@@ -154,11 +154,16 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
             log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
             return;
         }
-        # Cancel at the nghttp2 level
+        # Cancel at the nghttp2 level; the RST_STREAM enqueue is safe from any thread, including
+        # a continuePoll worker delivering events, so a failure here is a real error worth
+        # reporting rather than something to swallow silently
         Socket sock = self.getSocket();
         try {
             sock.cancelHttp2Stream(stream_id);
-        } catch () {
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed RST_STREAM means the peer keeps streaming into a stream nobody is
+            # reading, so this is a resource leak worth surfacing, not diagnostic noise
+            log(LoggerLevel::WARN, "cancel stream %d failed: %s: %s", stream_id, ex.err, ex.desc);
         }
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
