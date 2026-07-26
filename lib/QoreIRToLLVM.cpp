@@ -16866,6 +16866,59 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = llvm::ConstantInt::get(
                         i64_type, VAL_NOTHING);
                     call_return_kind = BatchCalleeReturnKind::Boxed;
+                } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntConstantSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntConstantSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolConstantSelect) {
+                    int16_t operand =
+                        direct_inst->aot_aggregate_projection_operand;
+                    if (operand < 0
+                            || static_cast<size_t>(operand)
+                                >= raw_args.size()
+                            || raw_args[static_cast<size_t>(operand)]
+                                ->getType() != i1_type) {
+                        error = "internal error: fused AOT aggregate"
+                            " constant select condition is invalid";
+                        return false;
+                    }
+                    llvm::Value* condition =
+                        raw_args[static_cast<size_t>(operand)];
+                    bool bool_select = projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedBoolConstantSelect;
+                    llvm::Type* selected_type =
+                        bool_select ? i1_type : i64_type;
+                    llvm::Value* selected = builder->CreateSelect(
+                        condition,
+                        llvm::ConstantInt::get(selected_type,
+                            bool_select
+                            ? direct_inst->aot_aggregate_projection_int != 0
+                            : direct_inst->aot_aggregate_projection_int),
+                        llvm::ConstantInt::get(selected_type,
+                            bool_select
+                            ? direct_inst->aot_aggregate_projection_size != 0
+                            : direct_inst->aot_aggregate_projection_size));
+                    if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntConstantSelect) {
+                        call_result = selected;
+                        call_return_kind =
+                            BatchCalleeReturnKind::NativeInt;
+                    } else {
+                        call_result = bool_select
+                            ? boxBool(selected) : boxInt(selected);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    }
                 } else {
                     int16_t operand =
                         direct_inst->aot_aggregate_projection_operand;

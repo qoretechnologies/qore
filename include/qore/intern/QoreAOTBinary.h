@@ -297,7 +297,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 33;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 34;
 
 //! Maximum serialized nodes in a bounded pure native-integer expression summary.
 constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 64;
@@ -421,6 +421,9 @@ struct QoreAOTSymbolIndexRecord {
     std::vector<int64_t> aggregate_return_value_ints;
     std::vector<double> aggregate_return_value_floats;
     std::vector<std::string> aggregate_return_keys;
+    int8_t aggregate_return_shape_condition_param = -1;
+    uint8_t aggregate_return_shape_true_size = 0;
+    uint8_t aggregate_return_shape_false_size = 0;
     int8_t boxed_return_param = -1;
     std::string fast_specialization_key;
     uint8_t boxed_return_kind = 0;
@@ -483,6 +486,9 @@ struct QoreAOTFastEntryIndexInfo {
     std::vector<int64_t> aggregate_return_value_ints;
     std::vector<double> aggregate_return_value_floats;
     std::vector<std::string> aggregate_return_keys;
+    int8_t aggregate_return_shape_condition_param = -1;
+    uint8_t aggregate_return_shape_true_size = 0;
+    uint8_t aggregate_return_shape_false_size = 0;
     int8_t boxed_return_param = -1;
     std::string specialization_key;
     uint8_t boxed_return_kind = 0;

@@ -6990,6 +6990,10 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeStringRef(rec.object_compound_get_member.c_str());
     writer.writeU8(static_cast<uint8_t>(rec.object_compound_get_param));
     writer.writeU8(rec.object_compound_get_op);
+    writer.writeU8(static_cast<uint8_t>(
+        rec.aggregate_return_shape_condition_param));
+    writer.writeU8(rec.aggregate_return_shape_true_size);
+    writer.writeU8(rec.aggregate_return_shape_false_size);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7090,6 +7094,12 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.aggregate_return_value_floats =
         info.aggregate_return_value_floats;
     rec.aggregate_return_keys = info.aggregate_return_keys;
+    rec.aggregate_return_shape_condition_param =
+        info.aggregate_return_shape_condition_param;
+    rec.aggregate_return_shape_true_size =
+        info.aggregate_return_shape_true_size;
+    rec.aggregate_return_shape_false_size =
+        info.aggregate_return_shape_false_size;
     rec.boxed_return_param = info.boxed_return_param;
     rec.boxed_return_kind = info.boxed_return_kind;
     rec.composed_int_source_kind = info.composed_int_source_kind;
@@ -8579,6 +8589,19 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.object_compound_get_param =
         static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
     rec.object_compound_get_op = QoreAOTBinaryReader::readU8(ptr);
+    if (version < 34) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 3) {
+        error = "truncated SYMBOL_INDEX conditional aggregate shape metadata";
+        return false;
+    }
+    rec.aggregate_return_shape_condition_param =
+        static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.aggregate_return_shape_true_size =
+        QoreAOTBinaryReader::readU8(ptr);
+    rec.aggregate_return_shape_false_size =
+        QoreAOTBinaryReader::readU8(ptr);
     return true;
 }
 

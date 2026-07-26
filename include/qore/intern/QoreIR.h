@@ -2210,6 +2210,9 @@ public:
         BoxedIntMulConstant,
         BoxedBoolIntCompare,
         BoxedValueMaybeNothing,
+        NativeIntConstantSelect,
+        BoxedIntConstantSelect,
+        BoxedBoolConstantSelect,
     };
 
     struct AOTAggregateProjectionDescriptor {

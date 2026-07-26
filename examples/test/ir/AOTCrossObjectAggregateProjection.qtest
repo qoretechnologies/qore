@@ -29,9 +29,17 @@ list<string> sub crossWords(string left, string right) {
     return (left, right);
 }
 
+list<int> sub crossVariable(bool long_value, int value) {
+    if (long_value) {
+        return (value, value + 1, value + 2);
+    }
+    return ();
+}
+
 string sub crossAggregateAnchor() {
-    return sprintf(\"%d:%g:%s\", crossRow(1).value,
-        crossFloats(1.0)[0], crossWords(\"left\", \"right\")[1]);
+    return sprintf(\"%d:%g:%s:%d\", crossRow(1).value,
+        crossFloats(1.0)[0], crossWords(\"left\", \"right\")[1],
+        crossVariable(True, 1).size());
 }
 ";
 
@@ -49,6 +57,14 @@ string sub crossWordProjection() {
     return crossWords(\"left\", \"right\")[1];
 }
 
+int sub crossVariableSize(bool long_value) {
+    return crossVariable(long_value, 1).size();
+}
+
+bool sub crossVariableEmpty(bool long_value) {
+    return crossVariable(long_value, 1).empty();
+}
+
 int sub projectionKernel(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -58,9 +74,10 @@ int sub projectionKernel(int rounds) {
 }
 
 int sub main() {
-    printf(\"%d:%y:%s:%d\\n\", crossRowProjection(5),
+    printf(\"%d:%y:%s:%d:%d:%y:%y\\n\", crossRowProjection(5),
         crossFloatProjection(), crossWordProjection(),
-        projectionKernel(1000));
+        projectionKernel(1000), crossVariableSize(True),
+        crossVariableEmpty(False), crossVariableEmpty(True));
     return 0;
 }
 ";
@@ -98,7 +115,9 @@ if (provider_index
         || provider_index
             !~ /crossFloats\([^\n]*\"aggregate_return_value_kinds\": \[6, 6\][^\n]*\"aggregate_return_value_floats\": \[0.25, 0.5\]/
         || provider_index
-            !~ /crossWords\([^\n]*\"aggregate_return_value_params\": \[0, 1\]/) {
+            !~ /crossWords\([^\n]*\"aggregate_return_value_params\": \[0, 1\]/
+        || provider_index
+            !~ /crossVariable\([^\n]*\"aggregate_return_shape_condition_param\": 0[^\n]*\"aggregate_return_shape_true_size\": 3[^\n]*\"aggregate_return_shape_false_size\": 0/) {
     printf("provider aggregate metadata mismatch:\n%s", provider_index);
     exit(2);
 }
@@ -128,7 +147,8 @@ string enabled_compile = compileConsumer(enabled_dir, "");
 string disabled_compile = compileConsumer(disabled_dir,
     "QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
 foreach string function in (("crossRowProjection", "crossFloatProjection",
-        "crossWordProjection", "projectionKernel")) {
+        "crossWordProjection", "crossVariableSize",
+        "crossVariableEmpty", "projectionKernel")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -146,10 +166,11 @@ string enabled_qo = enabled_dir + "/consumer.qo";
 string disabled_qo = disabled_dir + "/consumer.qo";
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
-if (enabled_undefined =~ /cross(Row|Floats|Words)/
+if (enabled_undefined =~ /cross(Row|Floats|Words|Variable)/
         || disabled_undefined !~ /crossRow[^\n]*_fast/
         || disabled_undefined !~ /crossFloats[^\n]*_fast/
-        || disabled_undefined !~ /crossWords[^\n]*_fast/) {
+        || disabled_undefined !~ /crossWords[^\n]*_fast/
+        || disabled_undefined !~ /crossVariable[^\n]*_fast/) {
     printf("cross-object call elimination mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
     exit(2);
@@ -168,7 +189,7 @@ string sub link(string output, string consumer_qo) {
 
 string enabled_exe = link(root + "/enabled-exe", enabled_qo);
 string disabled_exe = link(root + "/disabled-exe", disabled_qo);
-string expected = "12:True:right:506500\n";
+string expected = "12:True:right:506500:3:True:False\n";
 foreach string path in ((enabled_exe, disabled_exe)) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));

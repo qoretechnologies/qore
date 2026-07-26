@@ -1116,6 +1116,12 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.aggregate_return_value_floats =
                 info.aggregate_return.value_floats;
             entry.aggregate_return_keys = info.aggregate_return.keys;
+            entry.aggregate_return_shape_condition_param =
+                info.aggregate_return.shape_condition_param;
+            entry.aggregate_return_shape_true_size =
+                info.aggregate_return.shape_true_size;
+            entry.aggregate_return_shape_false_size =
+                info.aggregate_return.shape_false_size;
             entry.boxed_return_param = info.boxed_return_param;
             entry.boxed_return_kind =
                 static_cast<uint8_t>(info.boxed_return_kind);
@@ -7065,6 +7071,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
     };
     Shape common;
     bool have_common = false;
+    bool common_shape = true;
     const QoreIRBasicBlock* true_target = nullptr;
     const QoreIRBasicBlock* false_target = nullptr;
     int8_t condition_param = -1;
@@ -7295,10 +7302,11 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     if (!have_common) {
                         common = shape->second;
                         have_common = true;
-                    } else if (common.kind != shape->second.kind
-                            || common.size != shape->second.size
-                            || common.keys != shape->second.keys) {
+                    } else if (common.kind != shape->second.kind) {
                         return false;
+                    } else if (common.size != shape->second.size
+                            || common.keys != shape->second.keys) {
+                        common_shape = false;
                     }
                     if (block.get() == true_target) {
                         true_shape = shape->second;
@@ -7326,6 +7334,26 @@ static bool qore_aot_get_conditional_aggregate_shape(
         return false;
     }
     result.kind = common.kind;
+    if (!common_shape) {
+        if (std::getenv(
+                    "QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_SHAPE")
+                || condition_param < 0 || return_count != 2
+                || !have_true_shape || !have_false_shape
+                || common.kind != AOTAggregateReturnKind::FixedList) {
+            result = AOTAggregateReturnInfo();
+            return false;
+        }
+        size_t true_size = true_shape.size;
+        size_t false_size = false_shape.size;
+        if (true_size > UINT8_MAX || false_size > UINT8_MAX) {
+            result = AOTAggregateReturnInfo();
+            return false;
+        }
+        result.shape_condition_param = condition_param;
+        result.shape_true_size = static_cast<uint8_t>(true_size);
+        result.shape_false_size = static_cast<uint8_t>(false_size);
+        return true;
+    }
     result.keys = std::move(common.keys);
     result.value_params.assign(common.size, -1);
     result.value_kinds.assign(common.size,
@@ -13793,18 +13821,50 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.aggregate_return.value_floats =
         rec.aggregate_return_value_floats;
     info.aggregate_return.keys = rec.aggregate_return_keys;
+    info.aggregate_return.shape_condition_param =
+        rec.aggregate_return_shape_condition_param;
+    info.aggregate_return.shape_true_size =
+        rec.aggregate_return_shape_true_size;
+    info.aggregate_return.shape_false_size =
+        rec.aggregate_return_shape_false_size;
     if (!info.aggregate_return) {
         if (!info.aggregate_return.value_params.empty()
                 || !info.aggregate_return.value_kinds.empty()
                 || !info.aggregate_return.value_ints.empty()
                 || !info.aggregate_return.value_floats.empty()
-                || !info.aggregate_return.keys.empty()) {
+                || !info.aggregate_return.keys.empty()
+                || info.aggregate_return.hasConditionalShape()
+                || info.aggregate_return.shape_true_size
+                || info.aggregate_return.shape_false_size) {
             return false;
         }
     } else {
         bool fixed_hash = info.aggregate_return.kind
             == AOTAggregateReturnKind::FixedHash;
-        if (info.return_kind != BatchCalleeReturnKind::Boxed
+        bool conditional_shape =
+            info.aggregate_return.hasConditionalShape();
+        if (info.return_kind != BatchCalleeReturnKind::Boxed) {
+            return false;
+        }
+        if (conditional_shape) {
+            size_t condition = static_cast<uint8_t>(
+                info.aggregate_return.shape_condition_param);
+            if (info.aggregate_return.kind
+                        != AOTAggregateReturnKind::FixedList
+                    || !info.aggregate_return.value_params.empty()
+                    || !info.aggregate_return.value_kinds.empty()
+                    || !info.aggregate_return.value_ints.empty()
+                    || !info.aggregate_return.value_floats.empty()
+                    || !info.aggregate_return.keys.empty()
+                    || condition >= info.param_kinds.size()
+                    || condition >= info.param_rejects_nothing.size()
+                    || !info.param_rejects_nothing[condition]
+                    || info.param_kinds[condition]
+                        != BatchCalleeParamKind::NativeBool) {
+                return false;
+            }
+        } else if (info.aggregate_return.shape_true_size
+                || info.aggregate_return.shape_false_size
                 || (fixed_hash
                     ? info.aggregate_return.keys.size()
                         != info.aggregate_return.value_params.size()
@@ -15788,6 +15848,28 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     const AOTAggregateReturnInfo& aggregate =
                         found->second.aggregate_return;
+                    bool conditional_shape =
+                        aggregate.hasConditionalShape();
+                    if (conditional_shape && !key.empty()) {
+                        return false;
+                    }
+                    auto set_conditional_shape_projection =
+                            [&](QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind selected_kind) {
+                        size_t condition = static_cast<uint8_t>(
+                            aggregate.shape_condition_param);
+                        if (condition >= nargs
+                                || condition + arg_offset
+                                    > static_cast<size_t>(INT16_MAX)) {
+                            return false;
+                        }
+                        operand = static_cast<int16_t>(
+                            condition + arg_offset);
+                        int_constant = aggregate.shape_true_size;
+                        size = aggregate.shape_false_size;
+                        projection = selected_kind;
+                        return true;
+                    };
                     if (!key.empty()
                             && (kind
                                     == QoreIRAggregateProjectionQueryKind::
@@ -15819,6 +15901,24 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 && aggregate.kind
                                     != AOTAggregateReturnKind::FixedHash) {
                             return false;
+                        }
+                        if (conditional_shape) {
+                            if (aggregate.shape_true_size
+                                    == aggregate.shape_false_size) {
+                                operand = -1;
+                                size = 0;
+                                int_constant =
+                                    aggregate.shape_true_size;
+                                projection =
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedIntConstant;
+                                return true;
+                            }
+                            return set_conditional_shape_projection(
+                                QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedIntConstantSelect);
                         }
                         operand = -1;
                         size = 0;
@@ -15854,6 +15954,37 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                         operand = -1;
                         size = 0;
+                        if (conditional_shape
+                                && kind
+                                    != QoreIRAggregateProjectionQueryKind::
+                                        AggregateExistsValue) {
+                            bool true_value = kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateValValue
+                                ? aggregate.shape_true_size != 0
+                                : aggregate.shape_true_size == 0;
+                            bool false_value = kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateValValue
+                                ? aggregate.shape_false_size != 0
+                                : aggregate.shape_false_size == 0;
+                            if (true_value == false_value) {
+                                int_constant = true_value;
+                                projection =
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedBoolConstant;
+                                return true;
+                            }
+                            bool projected =
+                                set_conditional_shape_projection(
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedBoolConstantSelect);
+                            int_constant = true_value;
+                            size = false_value;
+                            return projected;
+                        }
                         bool nonempty =
                             !aggregate.value_params.empty();
                         int_constant = kind
@@ -15873,6 +16004,21 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (aggregate.kind
                                 != AOTAggregateReturnKind::FixedList) {
                             return false;
+                        }
+                        if (conditional_shape) {
+                            if (aggregate.shape_true_size
+                                    == aggregate.shape_false_size) {
+                                size = aggregate.shape_true_size;
+                                operand = -1;
+                                projection =
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::Size;
+                                return true;
+                            }
+                            return set_conditional_shape_projection(
+                                QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        NativeIntConstantSelect);
                         }
                         size = static_cast<int64_t>(
                             aggregate.value_params.size());

@@ -335,9 +335,16 @@ struct AOTAggregateReturnInfo {
     std::vector<int64_t> value_ints;
     std::vector<double> value_floats;
     std::vector<std::string> keys;
+    int8_t shape_condition_param = -1;
+    uint8_t shape_true_size = 0;
+    uint8_t shape_false_size = 0;
 
     explicit operator bool() const {
         return kind != AOTAggregateReturnKind::None;
+    }
+
+    bool hasConditionalShape() const {
+        return shape_condition_param >= 0;
     }
 };
 

@@ -8924,6 +8924,31 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         auto validate_descriptor = [&](QoreIRCallDirectInstruction::
                 AOTAggregateProjectionKind kind, int16_t value_operand,
                 int64_t descriptor_int) {
+            bool constant_select = kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            NativeIntConstantSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            BoxedIntConstantSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            BoxedBoolConstantSelect;
+            if (constant_select) {
+                if (value_operand < 0
+                        || static_cast<size_t>(value_operand)
+                            >= call->operands.size()) {
+                    return false;
+                }
+                const QoreIRValueFacts* condition_facts =
+                    func.getValueFacts(call->operands[value_operand]);
+                return condition_facts
+                    && condition_facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && condition_facts->never_nothing
+                    && condition_facts->representation
+                        == QoreIRValueRepresentation::NativeBool;
+            }
             bool descriptor_constant = kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeIntConstant
@@ -9341,6 +9366,18 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedNothingConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            NativeIntConstantSelect
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            BoxedIntConstantSelect
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::
+                            BoxedBoolConstantSelect
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::Size) {

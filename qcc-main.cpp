@@ -5119,7 +5119,13 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         }
         json_print_string(rec.aggregate_return_keys[i]);
     }
-    printf("], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+    printf("], \"aggregate_return_shape_condition_param\": %d"
+        ", \"aggregate_return_shape_true_size\": %u"
+        ", \"aggregate_return_shape_false_size\": %u"
+        ", \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+        rec.aggregate_return_shape_condition_param,
+        rec.aggregate_return_shape_true_size,
+        rec.aggregate_return_shape_false_size,
         rec.boxed_return_param, rec.boxed_return_kind);
     printf(", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
         ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
@@ -5784,7 +5790,13 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             }
             json_file_string(f, rec.aggregate_return_keys[j]);
         }
-        fprintf(f, "], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+        fprintf(f, "], \"aggregate_return_shape_condition_param\": %d"
+            ", \"aggregate_return_shape_true_size\": %u"
+            ", \"aggregate_return_shape_false_size\": %u"
+            ", \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+            rec.aggregate_return_shape_condition_param,
+            rec.aggregate_return_shape_true_size,
+            rec.aggregate_return_shape_false_size,
             rec.boxed_return_param, rec.boxed_return_kind);
         fprintf(f, ", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
             ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD

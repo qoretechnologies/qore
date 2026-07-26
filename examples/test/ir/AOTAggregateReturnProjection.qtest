@@ -233,6 +233,13 @@ list<int> sub makeVariableShape(bool long_value, int value) {
     return (value, value + 1);
 }
 
+list<int> sub makeMaybeValues(bool present, int value) {
+    if (present) {
+        return (value,);
+    }
+    return ();
+}
+
 int conditional_shape_effects = 0;
 
 list<int> sub makeConditionalSideEffect(bool reverse, int value) {
@@ -734,6 +741,22 @@ bool sub conditionalDifferentZeroProjection(bool negative) {
 
 int sub variableShapeProjection(bool long_value) {
     return makeVariableShape(long_value, 4).size();
+}
+
+bool sub variableEmptyProjection(bool present) {
+    return makeMaybeValues(present, 4).empty();
+}
+
+bool sub variableValProjection(bool present) {
+    return makeMaybeValues(present, 4).val();
+}
+
+int sub variableElementsProjection(bool present) {
+    return elements makeMaybeValues(present, 4);
+}
+
+bool sub variableExistsProjection(bool present) {
+    return exists makeMaybeValues(present, 4);
 }
 
 int sub conditionalSideEffectProjection(bool reverse) {
@@ -1304,11 +1327,18 @@ printf(\"%d:%s:%y:%d:%y:%y:%y:%y:%y:%y\\n\", genericAutoIntProjection(),
     optionalRemovedProjection(), optionalDeletedProjection(),
     optionalMaybeProjection(True), optionalMaybeProjection(False),
     optionalDefaultUnsetProjection());
+printf(\"%d:%d:%y:%y:%y:%y:%d:%d:%y:%y\\n\",
+    variableShapeProjection(False), variableShapeProjection(True),
+    variableEmptyProjection(False), variableEmptyProjection(True),
+    variableValProjection(False), variableValProjection(True),
+    variableElementsProjection(False), variableElementsProjection(True),
+    variableExistsProjection(False), variableExistsProjection(True));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
 string exe = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid());
 string disabled = exe + "-disabled";
+string shape_disabled = exe + "-shape-disabled";
 string qo_dir = exe + "-qo";
 File source();
 source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
@@ -1330,6 +1360,8 @@ string sub compile(string out, string env) {
 string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
 string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
+string shape_disabled_compile = compile(shape_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_SHAPE=1");
 foreach string function in (("freshHashProjection", "sideEffectProjection",
         "freshListSize", "freshListProjection", "freshFloatProjection",
         "duplicateKeyProjection", "constantHashProjection",
@@ -1516,7 +1548,10 @@ foreach string function in (("listFirstProjection", "listLastProjection",
         "listEmptyProjection", "listValProjection",
         "listElementsProjection", "hashElementsProjection",
         "duplicateHashElementsProjection",
-        "listExistsProjection", "hashExistsProjection")) {
+        "listExistsProjection", "hashExistsProjection",
+        "variableShapeProjection", "variableEmptyProjection",
+        "variableValProjection", "variableElementsProjection",
+        "variableExistsProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1542,10 +1577,16 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|conditionalDifferentComputedProjection|conditionalDifferentZeroProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection|conditionalDifferentComputedProjection|conditionalDifferentZeroProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
+    exit(2);
+}
+if (shape_disabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (variableShapeProjection|variableEmptyProjection|variableValProjection|variableElementsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("disabled conditional aggregate shape projection:\n%s",
+        shape_disabled_compile);
     exit(2);
 }
 foreach string function in (("sharedEscapes", "sharedListSizeConsumer",
@@ -1595,6 +1636,7 @@ string conditional_values_line;
 string conditional_computed_values_line;
 string conditional_computed_floats_line;
 string conditional_compared_values_line;
+string variable_shape_line;
 string computed_row_line;
 string computed_values_line;
 string computed_floats_line;
@@ -1660,6 +1702,9 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeConditionalComparedValues(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         conditional_compared_values_line = line;
+    } else if (line.find("makeVariableShape(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        variable_shape_line = line;
     } else if (line.find("makeComputedRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         computed_row_line = line;
@@ -1736,6 +1781,19 @@ if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
         conditional_values_line);
     exit(2);
 }
+if (variable_shape_line.find("\"aggregate_return_kind\": 1") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_value_params\": []") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_condition_param\": 0") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_true_size\": 3") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_false_size\": 2") == -1) {
+    printf("missing serialized conditional aggregate cardinality metadata:\n%s",
+        variable_shape_line);
+    exit(2);
+}
 if (conditional_computed_values_line.find(
             "\"aggregate_return_value_kinds\": [7, 7, 5, 11, 10, 1]") == -1
         || conditional_computed_values_line.find(
@@ -1803,6 +1861,7 @@ expected += "True:True:True:True:True:True:True:True\n";
 expected += "4:13:True\n";
 expected += "9\n";
 expected += "17:word:True:23:True:True:True:True:True:True\n";
+expected += "2:3:True:False:False:True:0:1:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -1813,7 +1872,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-foreach string path in ((exe, disabled)) {
+foreach string path in ((exe, disabled, shape_disabled)) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
     if (actual != expected) {
@@ -1826,3 +1885,4 @@ foreach string path in ((exe, disabled)) {
 unlink(src);
 unlink(exe);
 unlink(disabled);
+unlink(shape_disabled);
