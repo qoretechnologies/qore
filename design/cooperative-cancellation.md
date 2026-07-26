@@ -632,6 +632,14 @@ Otherwise a request carries a **scope**, computed on the requesting thread by
 | an unrestricted `Program` — no `SandboxManager` on it or any enclosing caller `Program` | `0` (unscoped) | applies to any thread |
 | a sandboxed `Program` | that program's ID | applies only to threads executing in it or under a call that originated in it |
 
+The scope is the `Program` that the governing `SandboxManager` was found on, resolved with the same
+order as the manager lookup itself (`find_thread_sandbox_manager_ref_intern()`: current `Program` →
+enclosing callers, innermost first → call-program fallback). That is not necessarily the *current*
+`Program`: when unrestricted library or module code is called from sandboxed code, the manager is
+found on an enclosing caller `Program`, and the request must be scoped to that caller. Scoping it to
+the current `Program` instead would widen it to every thread that has entered the — possibly shared
+— module `Program`, including threads that never entered the sandboxed `Program`.
+
 The scope is evaluated by the **target** thread at its next cancellation point
 (`check_cancel_in_scope()`), against its current `Program` and its chain of enclosing caller
 `Program`s (`ThreadData::current_pgm_ctx` → `ProgramThreadCountContextHelper::getOldProgram()`),

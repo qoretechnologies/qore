@@ -465,7 +465,9 @@ DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operati
     the target thread is executing in it or in a call that originated in it. This allows a
     %Program to cancel threads running its own code wherever they currently are — including
     inside child Programs it called into — while preventing it from reaching threads that never
-    entered it.
+    entered it.  The scoping %Program is the sandboxed %Program governing the call, which is not
+    necessarily the %Program issuing the request: a request issued by unrestricted library or
+    module code called from sandboxed code is scoped to the sandboxed caller.
 
     The scope is evaluated by the target thread at its next cancellation point, so a return
     value of 0 means the request was delivered, not that it was necessarily honored; an

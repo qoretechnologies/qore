@@ -2568,14 +2568,33 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     return tlpd;
 }
 
-QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
+//! Resolves the sandbox manager governing the current thread, optionally reporting its Program
+/** The resolution order is: the current Program, then the enclosing caller Programs innermost
+    first, then the call-program context fallback.  Callers that need the Program the manager was
+    found on (ex: get_cancel_scope_pgm_id()) must use this function rather than combining a manager
+    lookup with getProgram(): the manager can be found on an enclosing caller Program while the
+    current Program has none, which is the normal case for library or module code called from
+    sandboxed user code.
+
+    @param pgm if non-null, set to the Program the manager was found on, or nullptr if none
+
+    @return the referenced manager (the caller owns the reference), or nullptr if there is none
+*/
+static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** pgm = nullptr) {
+    if (pgm) {
+        *pgm = nullptr;
+    }
     ThreadData* td = thread_data.get();
     if (!td) {
         return nullptr;
     }
     // helper: try to resolve a ref'd manager from a single program
-    auto try_pgm = [](QoreProgram* pgm) -> QoreSandboxManager* {
-        return pgm ? qore_program_private::get(*pgm)->getSandboxManagerRef() : nullptr;
+    auto try_pgm = [pgm](QoreProgram* p) -> QoreSandboxManager* {
+        QoreSandboxManager* sm = p ? qore_program_private::get(*p)->getSandboxManagerRef() : nullptr;
+        if (sm && pgm) {
+            *pgm = p;
+        }
+        return sm;
     };
     // 1) the current program context
     if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
@@ -2595,6 +2614,10 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
         }
     }
     return nullptr;
+}
+
+QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
+    return find_thread_sandbox_manager_ref_intern();
 }
 
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,
@@ -4008,20 +4031,26 @@ void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
     governing it or any of its enclosing caller Programs.  An unrestricted Program can already
     terminate the process outright, so scoping its cancellation requests would protect nothing.
 
-    Otherwise the current Program's ID is returned, and the request is only honored if the target
-    thread is executing in that Program or in a call that originated in it (see
+    Otherwise the ID of the sandboxed Program is returned, and the request is only honored if the
+    target thread is executing in that Program or in a call that originated in it (see
     check_cancel_in_scope()).  This is what prevents sandboxed code from reaching threads that
     never entered it, while still allowing it to cancel threads running its own code.
+
+    The sandboxed Program is the Program the governing sandbox manager was found on, which is not
+    necessarily the current Program: when unrestricted library or module code is called from
+    sandboxed code, the manager is found on an enclosing caller Program.  Scoping the request to
+    the current Program in that case would widen it to every thread that has entered the (possibly
+    shared) module Program, including threads that never entered the sandboxed Program.
 */
 static unsigned get_cancel_scope_pgm_id() {
-    QoreProgram* pgm = getProgram();
-    if (!pgm) {
+    QoreProgram* pgm = nullptr;
+    QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm);
+    if (!sm) {
         return 0;
     }
-    QoreSandboxManagerHelper smh;
-    if (!smh) {
-        return 0;
-    }
+    sm->deref(nullptr);
+    // the manager is owned by the Program it was found on, therefore the Program cannot be nullptr here
+    assert(pgm);
     return pgm->getProgramId();
 }
 

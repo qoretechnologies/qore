@@ -62,6 +62,8 @@ public class ThreadCancelTest inherits QUnit::Test {
         addTestCase("sandboxed program cancels its own callers", \testSandboxedProgramCanCancelItsOwnCallers());
         addTestCase("sandboxed program cannot cancel unrelated thread",
             \testSandboxedProgramCannotCancelUnrelatedThread());
+        addTestCase("request from unrestricted code is scoped to its sandboxed caller",
+            \testScopeUsesSandboxedCallerAndNotCurrentProgram());
         addTestCase("cancel after dropped out-of-scope request", \testCancelAfterDroppedRequest());
         addTestCase("thread_cancelled ignores out-of-scope request",
             \testThreadCancelledIgnoresOutOfScopeRequest());
@@ -747,6 +749,71 @@ bool sub do_cancel(int tid) {
         assertTrue(delivered, "the request is delivered");
         assertEq(0, rc, "the thread must exit normally");
         assertNothing(ex_info, "an out-of-scope request must not cancel the thread");
+    }
+
+    testScopeUsesSandboxedCallerAndNotCurrentProgram() {
+        # the request is issued by unrestricted code in a shared program that a sandboxed program
+        # called into, so the scope must be the sandboxed caller and not the program issuing the
+        # request; the target blocks in the shared program without ever entering the sandboxed one,
+        # therefore the request must be dropped.  Scoping to the current program instead would let
+        # sandboxed code reach any thread that has entered the shared program.
+        Program shared(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        shared.parse("
+%modern
+
+sub block_forever(Counter ready, Mutex m, Condition c, Counter release) {
+    AutoLock al(m);
+    ready.dec();
+    while (release.getCount()) {
+        c.wait(m);
+    }
+}
+
+bool sub do_cancel(int tid) {
+    return cancel_thread(tid, \"scoped to the sandboxed caller\");
+}
+", "shared_program_cancel_test");
+
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("
+%modern
+
+bool sub call_cancel(Program p, int tid) {
+    return p.callFunction(\"do_cancel\", tid);
+}
+", "sandboxed_caller_scope_test");
+
+        Counter ready(1);
+        Counter done(1);
+        Counter release(1);
+        Mutex m();
+        Condition c();
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        # the target enters the shared program from this program; it never enters the sandboxed one
+        background sub() {
+            child_tid = gettid();
+            try {
+                shared.callFunction("block_forever", ready, m, c, release);
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        bool delivered = sandboxed.callFunction("call_cancel", shared, child_tid);
+
+        # delivery succeeds; the target must drop the request and return normally
+        releaseBlocker(m, c, release);
+        int rc = done.waitForZero(20s);
+        assertTrue(delivered, "the request is delivered");
+        assertEq(0, rc, "the thread must exit normally");
+        assertNothing(ex_info, "a request issued by unrestricted code called from a sandboxed "
+            "program must be scoped to the sandboxed caller");
     }
 
     testCancelAfterDroppedRequest() {

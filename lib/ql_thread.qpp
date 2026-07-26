@@ -1022,7 +1022,9 @@ bool active_exception() [dom=PROCESS] {
     if the target thread is executing in that program, or in a call that originated in it.
     Sandboxed code can therefore cancel threads that are running its own code — wherever they
     currently are, including inside child programs it called into — but cannot reach threads
-    that never entered it.
+    that never entered it.  The scoping program is the sandboxed program governing the call and
+    not necessarily the program issuing the request: a request issued by unrestricted code in a
+    program called from sandboxed code is scoped to the sandboxed caller.
 
     The scope is evaluated by the target thread at its next cancellation check point, so a
     return value of @ref True means the request was delivered, not that it was necessarily
