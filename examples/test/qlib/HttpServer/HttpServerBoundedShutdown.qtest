@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for bounding HttpServer::waitStop():
+    - a request handler that never returns must not block shutdown forever
+    - getRunningListenerCount() reports what is still in flight after a timeout
+    - an idle server still stops promptly
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpServerBoundedShutdownTest
+
+#! a handler that blocks until it is explicitly released
+/** models the failure mode being tested: an in-flight request that will not return on its own, which
+    keeps its listener from stopping and therefore keeps HttpServer::waitStop() from returning
+*/
+class BlockingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the TID of each request thread as it enters the handler
+        Queue entered();
+
+        #! the handler returns when this reaches zero
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        entered.push(gettid());
+        release.waitForZero();
+        return makeResponse(200, "released", {"Content-Type": "text/plain"});
+    }
+
+    #! releases every blocked request thread; safe to call more than once
+    releaseAll() {
+        if (release.getCount()) {
+            release.dec();
+        }
+    }
+}
+
+#! a handler that returns immediately
+class QuickHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerBoundedShutdownTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        #! how long the bounded wait is given before it must give up
+        const WaitTimeout = 2s;
+
+        #! an upper bound for waits that must succeed
+        const StopTimeout = 30s;
+    }
+
+    constructor() : Test("HttpServerBoundedShutdownTest", "1.0") {
+        addTestCase("blocked handler does not block shutdown forever", \testBlockedHandlerBoundedWait());
+        addTestCase("idle server stops promptly", \testIdleServerStops());
+        addTestCase("unbounded wait still waits for a released handler", \testUnboundedWaitAfterRelease());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("bounded-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! returns a started server with the given handler bound to the default path
+    private hash<auto> startServer(AbstractHttpRequestHandler handler) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "port": port,
+            "url": "http://localhost:" + port,
+        };
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getManager() {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "logger": mLogger,
+                "request_timeout": StopTimeout,
+                "connect_timeout": 15s,
+            });
+    }
+
+    testBlockedHandlerBoundedWait() {
+        BlockingHandler handler();
+        hash<auto> setup = startServer(handler);
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stop();
+        }
+
+        Counter client_done(1);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        background sub() {
+            on_exit client_done.dec();
+            try {
+                mgr.request(setup.url, "GET", "/block");
+            } catch (hash<ExceptionInfo> ex) {
+                # the response arrives once the handler is released; any error here is reported
+                # by the assertions below, which do not depend on the client outcome
+            }
+        }();
+
+        # the request is now executing inside the handler and will not return on its own
+        assertGt(0, handler.entered.get(StopTimeout), "the request must reach the handler");
+
+        server.stopNoWait();
+
+        # without a bound, this call would never return
+        int rc = server.waitStop(WaitTimeout);
+        assertEq(-1, rc, "waitStop() must give up when a handler does not return");
+        assertGt(0, server.getRunningListenerCount(), "the blocked listener must still be reported as running");
+
+        # once the handler returns, the same call completes normally
+        handler.releaseAll();
+        assertEq(0, server.waitStop(StopTimeout), "waitStop() must succeed once the handler returns");
+        assertEq(0, server.getRunningListenerCount(), "no listener may remain after a successful wait");
+        assertEq(0, client_done.waitForZero(StopTimeout), "the client must finish");
+    }
+
+    testIdleServerStops() {
+        hash<auto> setup = startServer(new QuickHandler());
+        HttpServer server = setup.server;
+
+        # a completed request must not leave anything behind that delays the wait
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        hash<auto> resp = mgr.request(setup.url, "GET", "/quick");
+        assertEq(200, resp.status_code, "the request must succeed");
+
+        server.stopNoWait();
+        assertEq(0, server.waitStop(StopTimeout), "an idle server must stop within the timeout");
+        assertEq(0, server.getRunningListenerCount(), "no listener may remain after a successful wait");
+    }
+
+    testUnboundedWaitAfterRelease() {
+        # the default (no timeout) behaviour is unchanged: it waits for the handler to return
+        BlockingHandler handler();
+        hash<auto> setup = startServer(handler);
+        HttpServer server = setup.server;
+        on_exit {
+            handler.releaseAll();
+            server.stop();
+        }
+
+        Counter client_done(1);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        background sub() {
+            on_exit client_done.dec();
+            try {
+                mgr.request(setup.url, "GET", "/block");
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+
+        assertGt(0, handler.entered.get(StopTimeout), "the request must reach the handler");
+        server.stopNoWait();
+
+        # release from another thread; the unbounded wait returns when the handler returns,
+        # whether the release lands before or after the wait starts
+        background handler.releaseAll();
+
+        assertEq(0, server.waitStop(), "the unbounded wait must return once the handler returns");
+        assertEq(0, server.getRunningListenerCount(), "no listener may remain after a successful wait");
+        assertEq(0, client_done.waitForZero(StopTimeout), "the client must finish");
+    }
+}

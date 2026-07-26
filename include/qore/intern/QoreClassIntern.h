@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1015,6 +1015,17 @@ public:
         return access;
     }
 
+    //! marks the member as already parse-initialized, so that parseInit() becomes a no-op
+    /** used for members deserialized from an AOT binary: the type is already resolved and any
+        initialization expression tree was reconstructed in its post-parse-init form by the AOT
+        expression readers, which must not be parse-initialized a second time
+    */
+    DLLLOCAL void setParseInitDone() {
+        assert(!init);
+        assert(!parseTypeInfo);
+        init = true;
+    }
+
 protected:
     DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
             : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {
@@ -1586,13 +1597,15 @@ public:
     }
 
     // for builtin base classes
-    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, bool n_virtual = false) : loc(loc), sclass(qc),
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, bool n_virtual = false) : loc(loc),
             access(Public), is_virtual(n_virtual), parameterized_parent_registered(false) {
+        setClassPointer(qc);
     }
 
     // for builtin base classes with explicit access level
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
-            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false) {
+            : loc(loc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false) {
+        setClassPointer(qc);
     }
 
     // called at runtime with committed classes
@@ -1611,6 +1624,14 @@ public:
             free(cstr);
         delete parsed_type;
     }
+
+    //! Sets the base class pointer to the canonical (primary) pointer for the class
+    /** BCNode holds an unreferenced pointer, therefore it must not store a wrapper for a class
+        imported into a Program; such wrappers are reclaimed when the Program's class list is destroyed, while
+        primary pointers are valid as long as the class's private data is valid (which is guaranteed here by the
+        subclass's hierarchy reference on the base class)
+    */
+    DLLLOCAL void setClassPointer(QoreClass* qc);
 
     DLLLOCAL int tryResolveClass(QoreClass* cls, bool raise_error);
 
@@ -2232,29 +2253,50 @@ public:
         return false;
     }
 
+    //! References a specific QoreClass pointer (handle) along with the private data
+    /** Every reference to a copied QoreClass wrapper (i.e. a handle that is not \c priv->cls) must be acquired
+        with this call and released with derefClass(), otherwise the wrapper can be deleted while the pointer is
+        still in use.  Holders that only reference the private data (qore_class_private::ref()) keep the class
+        definition alive but not the wrapper itself.
+
+        Untracked handles (no entry in qcrefs) are referenced in the private data only; this cannot happen for
+        wrappers created by QoreClass::QoreClass(const QoreClass&), but is handled without corrupting memory in
+        case a handle is acquired from an unknown source in a release build.
+    */
     DLLLOCAL static void refClass(QoreClass& qc) {
         qore_class_private* priv = qc.priv;
         priv->ref();
         if (&qc != priv->cls) {
             AutoLocker al(priv->gate.asl_lock);
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
+            // the handle must be registered; if not, only the private data is referenced
             assert(i != priv->qcrefs.end());
-            ++i->second;
+            if (i != priv->qcrefs.end()) {
+                ++i->second;
+            }
         }
     }
 
+    //! Dereferences a specific QoreClass pointer (handle) along with the private data
+    /** Deletes the wrapper when the last pointer reference is released; see refClass() for the pointer
+        reference contract
+    */
     DLLLOCAL static void derefClass(QoreClass& qc, bool ns_const, bool ns_vars) {
         qore_class_private* priv = qc.priv;
         bool del = false;
         if (&qc != priv->cls) {
             AutoLocker al(priv->gate.asl_lock);
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
+            // the handle must be registered; if not, only the private data reference is released, and the
+            // wrapper is reclaimed with the private data (i.e. in deref() below)
             assert(i != priv->qcrefs.end());
-            assert(i->second);
-            if (!--i->second) {
-                priv->qcrefs.erase(i);
-                qc.priv = nullptr;
-                del = true;
+            if (i != priv->qcrefs.end()) {
+                assert(i->second);
+                if (!--i->second) {
+                    priv->qcrefs.erase(i);
+                    qc.priv = nullptr;
+                    del = true;
+                }
             }
         }
 
@@ -3806,17 +3848,24 @@ protected:
 };
 
 class qore_class_private_holder {
+    //! the class pointer (handle) to release, if the object was created with one
+    /** the pointer is tracked separately from the private data, as it can be a wrapper for a class imported into
+        a Program, in which case the pointer reference has to be released as well
+    */
+    QoreClass* qc = nullptr;
     qore_class_private* c;
 
 public:
-    DLLLOCAL qore_class_private_holder(QoreClass* n_c) : c(qore_class_private::get(*n_c)) {
+    DLLLOCAL qore_class_private_holder(QoreClass* n_c) : qc(n_c), c(qore_class_private::get(*n_c)) {
     }
 
     DLLLOCAL qore_class_private_holder(qore_class_private* n_c) : c(n_c) {
     }
 
     DLLLOCAL ~qore_class_private_holder() {
-        if (c) {
+        if (qc) {
+            qore_class_private::derefClass(*qc, true, true);
+        } else if (c) {
             c->deref(true, true);
         }
     }
@@ -3826,6 +3875,12 @@ public:
     }
 
     DLLLOCAL QoreClass* release() {
+        if (qc) {
+            QoreClass* rv = qc;
+            qc = nullptr;
+            c = nullptr;
+            return rv;
+        }
         if (c) {
             QoreClass* rv = c->cls;
             c = nullptr;

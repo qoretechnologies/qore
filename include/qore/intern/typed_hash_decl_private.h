@@ -52,14 +52,29 @@ public:
             : QoreMemberInfoBase(loc, n_typeInfo, n_parseTypeInfo, e) {
     }
 
-    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old) {
+    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init) {
     }
 
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
 
     DLLLOCAL int parseInit(const char* name, bool priv);
 
+    //! marks the member as already parse-initialized, so that parseInit() becomes a no-op
+    /** used for members deserialized from an AOT binary: the type is already resolved and any
+        default-value expression tree was reconstructed in its post-parse-init form by the AOT
+        expression readers, which must not be parse-initialized a second time
+    */
+    DLLLOCAL void setParseInitDone() {
+        assert(!init);
+        assert(!parseTypeInfo);
+        init = true;
+    }
+
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
+
+private:
+    //! has parseInit() been called on this member?
+    bool init = false;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
@@ -382,6 +397,10 @@ public:
     }
 
     DLLLOCAL const HashDeclMemberInfo* findLocalMember(const char* name) const {
+        return members.find(name);
+    }
+
+    DLLLOCAL HashDeclMemberInfo* findLocalMember(const char* name) {
         return members.find(name);
     }
 

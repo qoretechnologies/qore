@@ -116,6 +116,14 @@ bool HashDeclMemberInfo::equal(const HashDeclMemberInfo& other) const {
 }
 
 int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
+    // AOT-deserialized members are marked parse-initialized by the deserializer; their
+    // default-value expression trees are already in post-parse-init form and must not be
+    // parse-initialized again (see HashDeclMemberInfo::setParseInitDone())
+    if (init) {
+        return 0;
+    }
+    init = true;
+
     int err = 0;
     if (!typeInfo) {
         typeInfo = QoreParseTypeInfo::resolveAndDelete(parseTypeInfo, loc, err);

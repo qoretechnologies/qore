@@ -2001,6 +2001,11 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
     return err;
 }
 
+void BCNode::setClassPointer(QoreClass* qc) {
+    // normalize to the canonical (primary) class pointer; see the declaration for details
+    sclass = qc ? qore_class_private::get(*qc)->cls : nullptr;
+}
+
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
         if (parsed_type) {
@@ -2099,6 +2104,9 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
                 }
             }
         }
+        // store the canonical (primary) class pointer for the resolved class and not a wrapper for a
+        // class imported into this Program
+        setClassPointer(sclass);
         if (cls == sclass) {
             parse_error(*cls->priv->loc, "class '%s' cannot inherit itself", cls->getName());
             assert(cls->priv->scl);
@@ -2636,8 +2644,12 @@ const QoreMethod* BCList::parseResolveSelfMethod(const QoreProgramLocation* loc,
 }
 
 bool BCList::match(const QoreClass* cls) {
+    // NOTE: classes are identified by their private data and not by the QoreClass pointer, as the same class can be
+    // addressed through multiple QoreClass wrappers (one per Program importing the class); BCNode stores the
+    // canonical (primary) pointer, while callers can hold any wrapper
+    const qore_class_private* qc = cls ? qore_class_private::get(*cls) : nullptr;
     for (auto& i : *this) {
-        if (cls == (*i).sclass) {
+        if (qc && (*i).sclass && qc == qore_class_private::get(*(*i).sclass)) {
             return true;
         }
     }
@@ -3980,6 +3992,11 @@ QoreClass::~QoreClass() {
             AutoLocker al(priv->gate.asl_lock);
             qc_ref_map_t::iterator i = priv->qcrefs.find(this);
             if (i != priv->qcrefs.end()) {
+                // a wrapper with outstanding pointer references must not be deleted directly; it must be released
+                // with qore_class_private::derefClass(), which deletes it when the last pointer reference is
+                // released.  Deleting it here would leave the remaining holders (ex: objects of the class) with a
+                // dangling class pointer
+                assert(i->second == 1);
                 priv->qcrefs.erase(i);
             }
         }
@@ -6965,7 +6982,8 @@ void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
 
 QoreClassHolder::~QoreClassHolder() {
     if (c) {
-        qore_class_private::get(*c)->deref(true, true);
+        // release the class pointer (handle) reference in case the class is a wrapper
+        qore_class_private::derefClass(*c, true, true);
     }
 }
 

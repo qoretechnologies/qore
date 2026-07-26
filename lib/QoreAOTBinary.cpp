@@ -1270,6 +1270,12 @@ using PendingStaticMethodDefault = QoreAOTBinaryDeserializer::PendingStaticMetho
 static thread_local std::vector<PendingStaticMethodDefault>*
     g_aot_pending_static_method_defaults = nullptr;
 
+// Same deferral mechanism for general expression-tree param defaults; see
+// QoreAOTBinaryDeserializer::PendingNativeExprDefault.
+using PendingNativeExprDefault = QoreAOTBinaryDeserializer::PendingNativeExprDefault;
+static thread_local std::vector<PendingNativeExprDefault>*
+    g_aot_pending_native_expr_defaults = nullptr;
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -4602,6 +4608,11 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             const uint8_t* blob = ptr;
             const uint8_t* blob_end = ptr + blob_size;
             ptr = blob_end;
+            if (expr_native_capture) {
+                // deferred mode: hand the raw payload to the caller untouched
+                expr_native_capture->assign(blob, blob_end);
+                return QoreValue();
+            }
             const uint8_t* ep = blob;
             QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
                 nullptr, 0, nullptr, 0);
@@ -14275,6 +14286,18 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
     };
     StaticMethodDefaultsRAII smd_raii(&pending_smd);
 
+    // Same for general expression-tree param defaults, which are resolved in
+    // finalizePostIndex() once every function, method and class is registered.
+    struct NativeExprDefaultsRAII {
+        NativeExprDefaultsRAII(std::vector<PendingNativeExprDefault>* p) {
+            g_aot_pending_native_expr_defaults = p;
+        }
+        ~NativeExprDefaultsRAII() {
+            g_aot_pending_native_expr_defaults = nullptr;
+        }
+    };
+    NativeExprDefaultsRAII ned_raii(&pending_ned);
+
     // Resolve the per-blob TYPE_TABLE once up front so
     // readAndSetupVariantSignature can look up return/param types by
     // index.  Safe at this point: all sibling sessions' shells are
@@ -14406,9 +14429,58 @@ bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
         return false;
     }
 
+    // Resolve deferred general expression-tree param defaults.  Same rationale as the BCA
+    // blobs above: the trees can reference any function, method or class in the module, and
+    // only here is every one of them registered and indexed.
+    if (!resolveNativeExprDefaults(error)) {
+        return false;
+    }
+
     printd(2, "AOT: deserialized namespace tree: %d namespaces, %d classes\n",
         static_cast<int>(ns_list.size()), static_cast<int>(class_list.size()));
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
+    size_t i = 0;
+    for (auto& pd : pending_ned) {
+        // each iteration deserializes a whole expression tree, so check every 10
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT default-argument expression resolution")) {
+            error = "AOT default-argument expression resolution cancelled";
+            pending_ned.clear();
+            return false;
+        }
+        ++i;
+        const uint8_t* p = pd.blob.data();
+        const uint8_t* pend = p + pd.blob.size();
+        std::string expr_error;
+        QoreValue v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        if (!expr_error.empty() || p != pend) {
+            v.discard(nullptr);
+            error = "cannot deserialize deferred default-argument expression for parameter "
+                + std::to_string(pd.param_index);
+            if (!expr_error.empty()) {
+                error += ": ";
+                error += expr_error;
+            }
+            if (p != pend) {
+                error += "; trailing-bytes=" + std::to_string(pend - p);
+            }
+            pending_ned.clear();
+            return false;
+        }
+        UserSignature* sig = pd.uvb->getUserSignature();
+        arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
+        if (pd.param_index < defaults.size()) {
+            defaults[pd.param_index].discard(nullptr);
+            defaults[pd.param_index] = v;
+        } else {
+            // the placeholder was never installed; nothing to replace
+            v.discard(nullptr);
+        }
+    }
+    pending_ned.clear();
     return true;
 }
 
@@ -14730,7 +14802,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             printd(2, "AOT deser: class '%s' already exists in namespace, using existing\n", name);
             // Class already exists - use the existing one and delete the new one
             QoreClass* existing = ns_list[ns_idx]->classList.find(name);
-            qore_class_private::get(*qc)->deref(true, true);
+            // release the class pointer (handle) reference in case the class is a wrapper
+            qore_class_private::derefClass(*qc, true, true);
             qc = existing;
             class_already_existed = true;
             preexisting_classes.insert(i);
@@ -15224,13 +15297,31 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             pim.default_val = QoreValue();  // Clear to prevent double-deref
             priv->addMember(pim.name.c_str(), static_cast<ClassAccess>(pim.access), ti,
                 default_val);
-            // Apply member flags — specifically the transient flag, which
-            // excludes the member from Serializable::serialize(). Without
-            // this, `transient RWLock rwlock();` style members get serialized
-            // (and fail) at runtime because the flag is lost.
-            if (pim.flags & 0x01) {
-                QoreMemberInfo* new_mi = priv->members.find(pim.name.c_str());
-                if (new_mi) {
+            QoreMemberInfo* new_mi = priv->members.find(pim.name.c_str());
+            assert(new_mi);
+            if (new_mi) {
+                // Mark the member as already parse-initialized, mirroring the
+                // `vi->parseInit()` call in resolveStaticMembers().  The type is
+                // already resolved here and the initialization expression was
+                // rebuilt by the AOT expression readers in its post-parse-init
+                // form, so parse-initializing it again is not just redundant, it
+                // is destructive: the readers resolve the target class/method and
+                // tag pseudo-method calls themselves, and a second pass asserts in
+                // MethodCallNode::setPseudo() (debug builds) or silently
+                // double-resolves (release builds).
+                //
+                // The trigger is a class that is subclassed inside the same
+                // module: importInheritedMembers() -> initializeMembers() ->
+                // BCNode::initializeMembers() -> parseImportMembers() calls
+                // `qc.members.parseInit()` on the BASE class to guarantee parent
+                // members are initialized before merging (issue #2657), which
+                // walks straight into the AOT-restored expression trees.
+                new_mi->setParseInitDone();
+                // Apply member flags — specifically the transient flag, which
+                // excludes the member from Serializable::serialize(). Without
+                // this, `transient RWLock rwlock();` style members get serialized
+                // (and fail) at runtime because the flag is lost.
+                if (pim.flags & 0x01) {
                     new_mi->setTransient();
                     if (!priv->has_transient_member) {
                         priv->has_transient_member = true;
@@ -15850,6 +15941,19 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 }
             }
             hdp->addMember(phm.name.c_str(), mti, phm.default_val);
+            // Mark the member as already parse-initialized; the default-value expression tree
+            // was rebuilt by the AOT expression readers in its post-parse-init form.  Without
+            // this, source code that references a member of an AOT hashdecl by name reaches
+            // typed_hash_decl_private::parseCheckMemberAccess() -> parseInit(), which
+            // parse-initializes every member's default expression a second time (the
+            // hashdecl-level `parse_init_done` guard is not set for AOT hashdecls, since the
+            // deserializer resolves parents and member types itself).  See
+            // QoreMemberInfo::setParseInitDone() for the equivalent class-member case.
+            HashDeclMemberInfo* new_hmi = hdp->findLocalMember(phm.name.c_str());
+            assert(new_hmi);
+            if (new_hmi) {
+                new_hmi->setParseInitDone();
+            }
 
             printd(5, "AOT deser: added member '%s' to hashdecl '%s'\n",
                 phm.name.c_str(), hd->getName());
@@ -16873,14 +16977,38 @@ static bool readAndSetupVariantSignature(
         }
 
         if (has_default == 1) {
-            // Constant default value
+            // Constant default value, or — for defaults that are none of the special-cased
+            // forms below — a general expression tree (VT_EXPR_NATIVE).
+            //
+            // A general expression-tree default (VT_EXPR_NATIVE) can reference any symbol
+            // in the module, including sibling functions that are registered only after
+            // their own variants have been read.  Capture the raw payload and resolve it
+            // in finalizePostIndex(), once everything is registered and indexed; without
+            // this, resolution succeeds or fails depending on the FUNCTIONS section order,
+            // which follows `func_list` hash order.
+            std::vector<uint8_t> ned_blob;
+            if (g_aot_pending_native_expr_defaults) {
+                reader.expr_native_capture = &ned_blob;
+            }
             param_defaults[j] = reader.readValue(ptr, end, error);
+            reader.expr_native_capture = nullptr;
             if (!error.empty()) {
                 // Clean up already-read defaults
                 for (uint32_t k = 0; k < j; ++k) {
                     param_defaults[k].discard(nullptr);
                 }
                 return false;
+            }
+            if (!ned_blob.empty()) {
+                QoreAOTBinaryDeserializer::PendingNativeExprDefault pd;
+                pd.blob = std::move(ned_blob);
+                pd.uvb = uvb;
+                pd.param_index = j;
+                g_aot_pending_native_expr_defaults->push_back(std::move(pd));
+                // Use a non-NOTHING placeholder so hasDefaultArg(j) reports true and
+                // min_param_types counts this param as optional; the fixup pass replaces
+                // it with the deserialized tree before any call can execute.
+                param_defaults[j] = QoreValue(true);
             }
         } else if (has_default == 2) {
             // Expression default: no-arg function call (e.g., getcwd())

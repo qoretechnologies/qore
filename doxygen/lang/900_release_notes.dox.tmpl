@@ -1021,6 +1021,15 @@ cargo install tree-sitter-cli@0.26.5
       - cancelling an already-cancelled thread updates the reason string
       - cancelling a thread that has already exited returns @ref False
       - attempting to cancel the current thread raises \c THREAD-CANCEL-ERROR
+      - requests from an unrestricted @ref Qore::Program "Program" — one with no
+        @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller \c Program —
+        apply to any thread, including threads blocked inside child Programs; requests from a
+        sandboxed \c Program apply only to threads executing in it or in a call that originated in it,
+        so sandboxed code can cancel threads running its own code but cannot reach threads that never
+        entered it
+      - the scope is evaluated by the target thread at its next check point, so a @ref True return from
+        @ref Qore::cancel_thread() "cancel_thread()" means the request was delivered; an out-of-scope
+        request is dropped by the target and has no effect
     - <b>Modern threading primitives</b>
       - new @ref Qore::Thread::Future "Future" / @ref Qore::Thread::Promise "Promise" classes for cross-thread
         result delivery: @ref Qore::Thread::Promise "Promise" is the producer side (set a value or error),
@@ -1679,6 +1688,12 @@ foreach string module_name in (registry.getProcessModules()) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+
+    - @ref ftppollerintro "FtpPoller" module
+      - FTP errors during polling are logged with the new \c "log_error" callback (falling back to \c "log_info" if
+        not set) instead of being reported only as informational messages
+      - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be
+        configured (previously hardcoded to 1 minute)
 
     - @ref geminirestclientintro "GeminiRestClient" module
       - request/response body shapers extracted into the standalone
@@ -2643,6 +2658,19 @@ foreach string module_name in (registry.getProcessModules()) {
         <tt>*hash&lt;auto&gt; instanceof hash&lt;SomeHashDecl&gt;</tt> or <tt>int instanceof float</tt>), but is now
         correctly emitted for disjoint hashdecl and complex-list types (such as <tt>hash&lt;X&gt; instanceof
         hash&lt;Y&gt;</tt>), which can never share a runtime value
+      - fixed class member initialization expressions restored from @ref exec_mode_aot "AOT"-compiled modules being
+        parse-initialized a second time when the class is subclassed, either inside the same module or by the code
+        loading it; this aborted the process on \c %requires in debug builds (for example with a pseudo-method call
+        such as <tt>int delay = SomeDelay.durationSeconds();</tt> in a member initializer) and silently re-resolved
+        call targets in release builds
+      - fixed hashdecl member default-value expressions restored from @ref exec_mode_aot "AOT"-compiled modules
+        being parse-initialized a second time when code referencing a member of the hashdecl by name is parsed,
+        with the same symptoms as the class member case above
+      - fixed loading @ref exec_mode_aot "AOT"-compiled modules with a default argument expression referencing
+        another function in the same module (such as <tt>int d = getDelay().durationSeconds()</tt>), which failed
+        with \c LOAD-MODULE-ERROR (\c "cannot resolve function ... in inline FUNC_CALL expression") depending on
+        the order functions happened to be serialized in; these expressions are now resolved after all functions,
+        methods, and classes in the module are registered
 
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
@@ -2660,6 +2688,11 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
       (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
+
+    - fixed a crash caused by objects and class hierarchies referring to reclaimed class handles for classes
+      imported into a @ref Qore::Program "Program"; objects now hold a reference to the class handle of their
+      class, so objects that outlive the @ref Qore::Program "Program" that created them (such as objects held in
+      class constants by binary modules) no longer refer to freed memory when destroyed
 
     - @ref dataproviderintro "DataProvider" module
       - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have

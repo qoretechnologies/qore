@@ -32,7 +32,7 @@
 %requires(reexport) DataProvider
 
 module FtpPoller {
-    version = "2.1";
+    version = "2.2";
     desc = "user module providing FTP polling functionality";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>";
     url = "http://qore.org";
@@ -159,6 +159,12 @@ poller.waitStop();
 
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
+    @section ftppollerv2_2 Version 2.2
+    - FTP errors during polling are now logged with the new \c "log_error" callback (falling back to \c "log_info" if
+      not set) instead of being reported only as informational messages
+    - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be configured
+      (previously hardcoded to 1 minute)
+
     @section ftppollerv2_1 Version 2.1
     - added support for the data provider action catalog API
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
@@ -214,12 +220,19 @@ public class FtpPoller {
         #! RequiredKeys for the constructor(hash) without an @ref Qore::FtpClient argument
         const RequiredKeysWithHost = RequiredKeys + "host";
 
+        #! default pause in seconds when Ftp errors are detected
+        const ErrorDelaySeconds = 60;
+
+        #! pause when Ftp errors are detected
+        const ErrorDelay = seconds(ErrorDelaySeconds);
+
         #! default values for constructor hash argument
         const Defaults = {
             "protocol": "ftp",
             "port": 21,
             "mask": "*",
             "poll_interval": 10,
+            "error_delay": ErrorDelaySeconds,
             "reopts": 0,
             "tempfile_template": ".tmp.%s.part",
             "atomic_transfer": False,
@@ -227,8 +240,8 @@ public class FtpPoller {
 
         #! optional constructor hash keys
         const OptionalKeys = (
-            "path", "user", "pass", "regex_mask", "minage", "log_info", "log_detail", "log_debug", "local_dir",
-            "delete_remote_file", "move_remote_file",
+            "path", "user", "pass", "regex_mask", "minage", "log_error", "log_info", "log_detail", "log_debug",
+            "local_dir", "delete_remote_file", "move_remote_file",
 %ifndef PO_NO_PROCESS_CONTROL
             "sleep",
 %endif
@@ -239,9 +252,6 @@ public class FtpPoller {
 
         #! all keys
         const AllKeys = RequiredKeysWithHost + keys Defaults + OptionalKeys;
-
-        #! pause when Ftp errors are detected
-        const ErrorDelay = 1m;
     }
 
     private {
@@ -336,6 +346,12 @@ public class FtpPoller {
         #! minimum file age
         *softint minage;
 
+        #! delay in seconds before retrying the poll after an FTP error
+        int error_delay = ErrorDelaySeconds;
+
+        #! optional error log closure
+        *code<nothing(string, ...)> log_error;
+
         #! optional info log closure
         *code<nothing(string, ...)> log_info;
 
@@ -362,11 +378,15 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+          seconds; must be > 0 if given)
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
         - \c log_debug: a @ref closure "closure" or @ref call_reference "call reference" for logging verbose
           debgugging information; must accept a single string giving the log message
         - \c log_detail: a @ref closure "closure" or @ref call_reference "call reference" for logging detailed
           information; must accept a single string giving the log message
+        - \c log_error: a @ref closure "closure" or @ref call_reference "call reference" for logging errors; must
+          accept a single string giving the log message; if not set, then \c log_info is used for errors as well
         - \c log_info: a @ref closure "closure" or @ref call_reference "call reference" for logging important
           information; must accept a single string giving the log message
         - \c mask: the file glob mask to use (default: \c "*", ignored if \c "regex_mask" is also present)
@@ -415,10 +435,16 @@ public class FtpPoller {
         }
 
         conf.poll_interval = int(conf.poll_interval);
+        conf.error_delay = int(conf.error_delay);
 
         if (conf.poll_interval <= 0) {
             throw "FTPPOLLER-CONSTRUCTOR-ARG-ERROR", sprintf("poll_interval cannot be <= 0 (val: %d)",
                 conf.poll_interval);
+        }
+
+        if (conf.error_delay <= 0) {
+            throw "FTPPOLLER-CONSTRUCTOR-ARG-ERROR", sprintf("error_delay cannot be <= 0 (val: %d)",
+                conf.error_delay);
         }
 
         if (conf.delete_remote_file && conf.move_remote_file.val()) {
@@ -456,12 +482,16 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+          seconds; must be > 0 if given)
         - \c host: (required) the hostname or address to connect to
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
         - \c log_debug: a @ref closure "closure" or @ref call_reference "call reference" for logging verbose
           debgugging information; must accept a single string giving the log message
         - \c log_detail: a @ref closure "closure" or @ref call_reference "call reference" for logging detailed
           information; must accept a single string giving the log message
+        - \c log_error: a @ref closure "closure" or @ref call_reference "call reference" for logging errors; must
+          accept a single string giving the log message; if not set, then \c log_info is used for errors as well
         - \c log_info: a @ref closure "closure" or @ref call_reference "call reference" for logging important
           information; must accept a single string giving the log message
         - \c mask: the file glob mask to use (default: \c "*", ignored if \c "regex_mask" is also present)
@@ -513,11 +543,16 @@ public class FtpPoller {
         }
 
         conf.poll_interval = int(conf.poll_interval);
+        conf.error_delay = int(conf.error_delay);
         conf.port = int(conf.port);
 
         if (conf.poll_interval <= 0) {
             throw "FTPPOLLER-CONSTRUCTOR-ERROR", sprintf("poll_interval cannot be <= 0 (val: %d)",
                 conf.poll_interval);
+        }
+        if (conf.error_delay <= 0) {
+            throw "FTPPOLLER-CONSTRUCTOR-ERROR", sprintf("error_delay cannot be <= 0 (val: %d)",
+                conf.error_delay);
         }
         if (conf.port <= 0) {
             throw "FTPPOLLER-CONSTRUCTOR-ERROR", sprintf("port cannot be <= 0 (val: %d)", conf.port);
@@ -625,6 +660,18 @@ public class FtpPoller {
             ftp.cwd(path[0]);
         } else {
             logInfo("%s: connected", url);
+        }
+    }
+
+    #! calls the \c "log_error" @ref closure "closure" or @ref call_reference "call reference" with error information
+    /** if no \c "log_error" callback was set, then the \c "log_info" callback is used instead, if set, to ensure
+        that errors are never silently discarded
+    */
+    private logError(string fmt, ...) {
+        if (log_error) {
+            call_function(log_error, vsprintf(fmt, argv));
+        } else if (log_info) {
+            call_function(log_info, vsprintf(fmt, argv));
         }
     }
 
@@ -1073,11 +1120,12 @@ public class FtpPoller {
                 ftpSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {
                 if (get_files) {
-                    logInfo("FTP error in %y: %s: %s; waiting %y for next try", path, ex.err, ex.desc, ErrorDelay);
-                    ftpSleep(ErrorDelay);
+                    logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc,
+                        error_delay);
+                    ftpSleep(error_delay);
                 } else {
                     # error thrown in "post transfer" code
-                    logInfo("error in post transfer code; polling terminated: %s: %s", ex.err, ex.desc);
+                    logError("error in post transfer code; polling terminated: %s: %s", ex.err, ex.desc);
                     rethrow;
                 }
             }
@@ -1200,6 +1248,20 @@ public class FtpPollerDataProviderBase inherits DataProvider::AbstractDataProvid
                 "type": AbstractDataProviderTypeMap."int",
                 "desc": "The interval in seconds between polling for files",
                 "default_value": 10,
+            },
+
+            "error_delay": <DataProviderOptionInfo>{
+                "display_name": "Error Retry Delay",
+                "short_desc": "The delay in seconds before retrying after an FTP error",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The number of seconds to wait before polling again after an FTP error; the error is logged "
+                    "at error level, and then polling continues after this delay.\n\n"
+                    "Transient problems such as a network interruption or a server restart are common with FTP; a "
+                    "low value recovers from such problems quickly, while a high value reduces the load on a server "
+                    "that is failing persistently.\n\n"
+                    "**NOTE**: files are not polled while this delay is in effect",
+                "default_value": FtpPoller::ErrorDelaySeconds,
+                "example_value": 60,
             },
 
             "regex": <DataProviderOptionInfo>{
@@ -1353,6 +1415,11 @@ public class FtpPollerDataProviderBase inherits DataProvider::AbstractDataProvid
             copts.regex_mask = remove copts.mask;
         }
 
+        # NOTE: AbstractDataProvider::error() throws a data provider exception; the logging method must be called
+        # explicitly on LoggerWrapper here
+        copts.log_error = sub (string msg) {
+            LoggerWrapper::error("%s", msg);
+        };
         copts.log_info = sub (string msg) {
             info("%s", msg);
         };

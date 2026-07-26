@@ -34,6 +34,11 @@ class MyFtpPoller inherits FtpPoller {
 
     postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
     }
+
+    #! Returns the error retry delay in effect (used to verify the "error_delay" option)
+    int getErrorDelay() {
+        return error_delay;
+    }
 }
 
 class FtpPollerTest inherits QUnit::Test {
@@ -51,6 +56,8 @@ class FtpPollerTest inherits QUnit::Test {
 
     constructor() : Test("FtpPollerTest", "1.0") {
         addTestCase("main test", \mainTest());
+        addTestCase("error delay option test", \errorDelayOptionTest());
+        addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
 
         # Return for compatibility with test harness that checks return value
@@ -99,6 +106,7 @@ class FtpPollerTest inherits QUnit::Test {
         # printf("files: %y\n", file_paths);
 
         MyFtpPoller poller(ftp_client, {"path": tmp_dir.path});
+        assertEq(FtpPoller::ErrorDelaySeconds, poller.getErrorDelay());
         assertTrue(poller.runOnce());
 
         foreach hash<FtpPollerFileEventInfo> file in (poller.files) {
@@ -108,20 +116,107 @@ class FtpPollerTest inherits QUnit::Test {
         }
     }
 
-    private dataProviderTest() {
-        Logger logger();
-        {
-            LoggerLevel level;
-            if (m_options.verbose > 3) {
-                level = LoggerLevel::getLevelDebug();
-            } else if (m_options.verbose > 2) {
-                level = LoggerLevel::getLevelInfo();
-            } else {
-                level = LoggerLevel::getLevelError();
+    private errorDelayOptionTest() {
+        assertEq(FtpPoller::ErrorDelaySeconds,
+            FtpPollerDataProviderBase::ConstructorOptions.error_delay.default_value);
+        assertEq(FtpPoller::ErrorDelaySeconds, FtpPoller::ErrorDelay.durationSeconds());
+
+        int port = getPort();
+
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+
+        port = serv.getPort();
+
+        FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
+        assertEq(5, new MyFtpPoller(ftp_client, {"path": tmp_dir.path, "error_delay": 5}).getErrorDelay());
+        # a string value must be converted like "poll_interval"
+        assertEq(7, new MyFtpPoller(ftp_client, {"path": tmp_dir.path, "error_delay": "7"}).getErrorDelay());
+
+        # the option is validated before any connection is attempted
+        assertThrows("FTPPOLLER-CONSTRUCTOR-ARG-ERROR", "error_delay cannot be <= 0",
+            sub () {
+                new MyFtpPoller(ftp_client, {"path": tmp_dir.path, "error_delay": 0});
             }
-            logger = new Logger("test", level);
+        );
+        assertThrows("FTPPOLLER-CONSTRUCTOR-ARG-ERROR", "error_delay cannot be <= 0",
+            sub () {
+                new MyFtpPoller(ftp_client, {"path": tmp_dir.path, "error_delay": -1});
+            }
+        );
+        # the hash-only constructor used by the data providers reports FTPPOLLER-CONSTRUCTOR-ERROR
+        assertThrows("FTPPOLLER-CONSTRUCTOR-ERROR", "error_delay cannot be <= 0",
+            sub () {
+                new FtpDelayedPollerDataProvider({
+                    "url": "ftp://user:pass@127.0.0.1:1/tmp",
+                    "error_delay": 0,
+                });
+            }
+        );
+    }
+
+    private errorLoggingTest() {
+        int port = getPort();
+
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        # make every directory listing fail so that the poll loop always takes the error path
+        serv.setBroken("nlst", 100ms);
+
+        port = serv.getPort();
+
+        # errors must be reported through "log_error" when it is set
+        {
+            MessageCollector errors();
+            MessageCollector info();
+            FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
+            MyFtpPoller poller(ftp_client, {
+                "path": tmp_dir.path,
+                "error_delay": 1,
+                "log_error": sub (string msg) { errors.add(msg); },
+                "log_info": sub (string msg) { info.add(msg); },
+            });
+            on_exit poller.stop();
+
+            poller.start();
+            assertRegex("FTP error in .*; waiting 1s for next try", errors.waitForMatch("FTP error in "));
+            # informational messages must not carry the error
+            assertThrows("MESSAGE-TIMEOUT", \info.waitForMatch(), ("FTP error in ", 0));
         }
-        logger.addAppender(new StdoutAppender());
+
+        # without "log_error", errors must fall back to "log_info" so that they are never lost
+        {
+            MessageCollector info();
+            FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
+            MyFtpPoller poller(ftp_client, {
+                "path": tmp_dir.path,
+                "error_delay": 1,
+                "log_info": sub (string msg) { info.add(msg); },
+            });
+            on_exit poller.stop();
+
+            poller.start();
+            assertRegex("FTP error in ", info.waitForMatch("FTP error in "));
+        }
+    }
+
+    private dataProviderTest() {
+        # NOTE: the logger must be at least at INFO level, and its output must be captured, so that any FTP error
+        # reported by the poller is available if no file events arrive; otherwise a failure here gives no information
+        # about the underlying error at all
+        LoggerLevel level = m_options.verbose > 3 ? LoggerLevel::getLevelDebug() : LoggerLevel::getLevelInfo();
+        Logger logger("test", level);
+        CapturingAppender capture();
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
 
         int port = getPort();
 
@@ -142,6 +237,9 @@ class FtpPollerTest inherits QUnit::Test {
         FtpDelayedPollerDataProvider prov({
             "url": sprintf("ftp://user:pass@127.0.0.1:%d%s", port, tmp_dir.path),
             "poll_interval": 1,
+            # NOTE: the default is 1 minute, which would guarantee a test failure if the first poll fails for any
+            # transient reason; with 1s the poller recovers well inside the event wait below
+            "error_delay": 1,
             "local_dir": local_dir.path,
             "remote_file_disposition": "NONE",
         });
@@ -155,11 +253,10 @@ class FtpPollerTest inherits QUnit::Test {
 
         prov.observersReady();
 
-        hash<string, hash<auto>> event_map = observer.wait(files.size());
+        hash<string, hash<auto>> event_map = observer.wait(files.size(), capture);
         prov.stopEvents();
+        assertEq(files.size(), event_map.size());
         map assertEq($1, event_map{$1}.name), (map basename($1.path), files);
-
-        assertTrue(True);
 
         map assertEq(File::readBinaryFile($1.path),
             File::readBinaryFile(local_dir.path + DirSep + basename($1.path)), basename($1.path)),
@@ -168,6 +265,11 @@ class FtpPollerTest inherits QUnit::Test {
 }
 
 class MyObserver inherits Observer {
+    public {
+        #! how long to wait for all expected file events
+        const EventTimeout = 30s;
+    }
+
     private {
         hash<string, hash<auto>> h();
         Mutex m();
@@ -182,18 +284,107 @@ class MyObserver inherits Observer {
         cond.broadcast();
     }
 
-    hash<string, hash<auto>> wait(int expected) {
-        date start = now_us();
+    #! Waits for \a expected file events and returns them
+    /** @param expected the number of file events to wait for
+        @param capture the appender capturing the poller's log messages; its contents are included in the exception
+        if the events do not arrive, otherwise the failure gives no information about the underlying error
+
+        @throw ERROR not all expected events were received in @ref EventTimeout
+    */
+    hash<string, hash<auto>> wait(int expected, CapturingAppender capture) {
+        # NOTE: a monotonic clock must be used here; wall clock steps on CI machines can trip the deadline
+        int start = clock_get_monotonic_us();
 
         m.lock();
         on_exit m.unlock();
 
         while (h.size() != expected) {
             cond.wait(m, 1s);
-            if ((now_us() - start) > 5s) {
-                throw "ERROR", sprintf("%d/%d files received in timeout: %y", h.size(), expected, keys h);
+            if ((clock_get_monotonic_us() - start) > EventTimeout.durationMicroseconds()) {
+                throw "ERROR", sprintf("%d/%d files received in %y: %y; poller log:\n%s", h.size(), expected,
+                    EventTimeout, keys h, capture.getLog());
             }
         }
         return h;
+    }
+}
+
+#! Collects log messages from a poller log callback so that they can be matched deterministically
+class MessageCollector {
+    public {
+        #! how long to wait for a matching message by default
+        const DefaultTimeout = 30s;
+    }
+
+    private {
+        list<string> msgs();
+        Mutex m();
+        Condition cond();
+    }
+
+    #! Stores a message and wakes any waiter
+    add(string msg) {
+        m.lock();
+        on_exit m.unlock();
+
+        msgs += msg;
+        cond.broadcast();
+    }
+
+    #! Waits for a message matching \a pattern and returns it
+    /** @param pattern the regular expression to match
+        @param to how long to wait; use 0 to check the messages already collected without waiting
+
+        @throw MESSAGE-TIMEOUT no matching message was collected in \a to
+    */
+    string waitForMatch(string pattern, timeout to = DefaultTimeout) {
+        # NOTE: a monotonic clock must be used here; wall clock steps on CI machines can trip the deadline
+        int start = clock_get_monotonic_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            foreach string msg in (msgs) {
+                if (regex(msg, pattern)) {
+                    return msg;
+                }
+            }
+            int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+            if (elapsed_ms >= to) {
+                throw "MESSAGE-TIMEOUT", sprintf("no message matching %y received in %dms; messages: %y", pattern,
+                    to, msgs);
+            }
+            cond.wait(m, to - elapsed_ms);
+        }
+    }
+}
+
+#! An appender that stores all log messages in memory so that they can be reported on a test failure
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    private {
+        list<string> lines();
+        Mutex m();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture",
+            new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            m.lock();
+            on_exit m.unlock();
+            lines += params.toString();
+        }
+    }
+
+    #! Returns all captured log messages as a single string
+    string getLog() {
+        m.lock();
+        on_exit m.unlock();
+
+        return lines ? lines.join("") : "<no log messages>";
     }
 }
