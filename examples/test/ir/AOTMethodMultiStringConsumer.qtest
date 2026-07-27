@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int producer_effects;
+
+final class StringFactory {
+    static string makeStatic(string left, string right) {
+        return left + right;
+    }
+
+    string makeInstance(string left, string right) {
+        return left + right;
+    }
+
+    static string makeEffectful(string left, string right) {
+        ++producer_effects;
+        return left + right;
+    }
+
+    int stableConsumers() {
+        string static_value =
+            StringFactory::makeStatic(\"Dvo\\u0159\\u00e1k-\", \"value\");
+        string instance_value = makeInstance(\"left-\", \"value\");
+        return static_value.size() * 100 + static_value.length()
+            + instance_value.size() * 100 + instance_value.length();
+    }
+
+    int argumentConsumers(string left, string right) {
+        string static_value =
+            StringFactory::makeStatic(left, right);
+        int result =
+            static_value.size() * 100 + static_value.length() * 10;
+        string instance_value = makeInstance(right, left);
+        return result + instance_value.size() * 100
+            + instance_value.length() * 10;
+    }
+}
+
+class OverridableStringFactory {
+    string makeValue() {
+        return \"leftright\";
+    }
+
+    int consumeValue() {
+        string value = makeValue();
+        return value.size() + value.length();
+    }
+}
+
+class OverriddenStringFactory inherits OverridableStringFactory {
+    string makeValue() {
+        return \"right-left\";
+    }
+}
+
+bool sub missingGuard() {
+    string missing;
+    try {
+        string value = StringFactory::makeStatic(missing, \"tail\");
+        return value.size() + value.length() == 0;
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+}
+
+bool sub encodingGuard() {
+    try {
+        string value = StringFactory::makeStatic(
+            convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
+        return value.size() + value.length() == 0;
+    } catch (hash<auto> ex) {
+        return ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+}
+
+int sub effectfulConsumers() {
+    producer_effects = 0;
+    string value = StringFactory::makeEffectful(\"left\", \"right\");
+    return producer_effects * 100 + value.size() + value.length();
+}
+
+StringFactory factory();
+OverridableStringFactory overridden = new OverriddenStringFactory();
+string left = sprintf(\"%d\", 1);
+string right = sprintf(\"%d\", 2);
+printf(\"%d:%d:%y:%y:%d:%d\\n\", factory.stableConsumers(),
+    factory.argumentConsumers(left, right), missingGuard(), encodingGuard(),
+    effectfulConsumers(), overridden.consumeValue());
+";
+
+string root = "/tmp/qore-aot-method-multi-string-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected = "2422:440:True:True:118:20\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, src));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, src));
+foreach string function in (("stableConsumers", "argumentConsumers")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*string-consumers=4",
+            function))) {
+        printf("missing method multi-string fusion for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(effectfulConsumers|OverridableStringFactory__consumeValue)[^:]*:.*string-consumers=[1-9]/
+        || disabled_compile =~ /string-consumers=[1-9]/) {
+    printf("unsafe or disabled method multi-string fusion:\n%s%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled, disabled)) {
+    if (!is_file(path)) {
+        printf("AOT compile failed for %s:\n%s%s",
+            path, enabled_compile, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(enabled);
+unlink(disabled);

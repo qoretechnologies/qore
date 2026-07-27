@@ -13272,7 +13272,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
     };
     struct MultiFusion {
-        QoreIRCallDirectInstruction* producer = nullptr;
+        QoreIRStringConsumerCallInstruction* producer = nullptr;
         std::vector<Fusion> consumers;
         std::vector<QoreIRInstruction*> eliminated;
     };
@@ -13796,10 +13796,9 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                         local_eliminated.begin(), local_eliminated.end());
                 }
                 fusions.push_back(std::move(candidate));
-            } else if (producer->opcode == QoreIROpcode::CallDirect) {
+            } else {
                 MultiFusion candidate;
-                candidate.producer =
-                    static_cast<QoreIRCallDirectInstruction*>(producer);
+                candidate.producer = producer;
                 candidate.consumers = std::move(local_fusions);
                 candidate.eliminated = std::move(local_eliminated);
                 multi_fusions.push_back(std::move(candidate));
@@ -14025,11 +14024,44 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         }
         set_result_facts(producer.result, fusion.kind);
     };
-    auto clone_direct_string_producer =
-            [&](const QoreIRCallDirectInstruction& source,
-                    const Fusion& fusion) {
-        auto clone = std::make_unique<QoreIRCallDirectInstruction>(
-            source.func, source.variant, source.pgm, source.expr);
+    auto clone_string_producer =
+            [&](const QoreIRStringConsumerCallInstruction& source,
+                    const Fusion& fusion)
+                    -> std::unique_ptr<QoreIRStringConsumerCallInstruction> {
+        std::unique_ptr<QoreIRStringConsumerCallInstruction> clone;
+        if (source.opcode == QoreIROpcode::CallDirect) {
+            const auto& direct =
+                static_cast<const QoreIRCallDirectInstruction&>(source);
+            auto call = std::make_unique<QoreIRCallDirectInstruction>(
+                direct.func, direct.variant, direct.pgm, direct.expr);
+            call->explicit_type_param_inst =
+                direct.explicit_type_param_inst;
+            call->has_ref_args = direct.has_ref_args;
+            call->is_self_recursive = direct.is_self_recursive;
+            clone = std::move(call);
+        } else if (source.opcode == QoreIROpcode::CallStaticDirect) {
+            const auto& direct = static_cast<
+                const QoreIRCallStaticDirectInstruction&>(source);
+            auto call =
+                std::make_unique<QoreIRCallStaticDirectInstruction>(
+                    direct.method, direct.variant, direct.expr);
+            call->receiver_type_info = direct.receiver_type_info;
+            call->explicit_type_param_inst =
+                direct.explicit_type_param_inst;
+            call->has_ref_args = direct.has_ref_args;
+            clone = std::move(call);
+        } else if (source.opcode == QoreIROpcode::CallMethodDirect) {
+            const auto& direct = static_cast<
+                const QoreIRCallMethodDirectInstruction&>(source);
+            auto call =
+                std::make_unique<QoreIRCallMethodDirectInstruction>(
+                    direct.method, direct.qc, direct.variant,
+                    direct.expr);
+            call->has_ref_args = direct.has_ref_args;
+            clone = std::move(call);
+        } else {
+            return nullptr;
+        }
         clone->intrinsic = source.intrinsic;
         clone->loc = source.loc;
         clone->cached_start_line = source.cached_start_line;
@@ -14037,9 +14069,6 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         clone->element_type = source.element_type;
         clone->result = source.result;
         clone->operands = source.operands;
-        clone->explicit_type_param_inst = source.explicit_type_param_inst;
-        clone->has_ref_args = source.has_ref_args;
-        clone->is_self_recursive = source.is_self_recursive;
         apply_string_fusion(*clone, fusion);
         return clone;
     };
@@ -14062,15 +14091,18 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 std::vector<std::unique_ptr<QoreIRInstruction>> clones;
                 clones.reserve(fusion.consumers.size());
                 const auto* source =
-                    static_cast<const QoreIRCallDirectInstruction*>(
+                    static_cast<const QoreIRStringConsumerCallInstruction*>(
                         inst->get());
                 for (size_t i = 0; i < fusion.consumers.size(); ++i) {
                     if (++check_count % 100 == 0) {
                         (void)qore_check_cancel(nullptr,
                             "IR multi-string consumer call cloning");
                     }
-                    auto clone = clone_direct_string_producer(
+                    auto clone = clone_string_producer(
                         *source, fusion.consumers[i]);
+                    if (!clone) {
+                        return 0;
+                    }
                     if (i + 1 < fusion.consumers.size()) {
                         clone->aot_borrow_call_operand_count =
                             source->operands.size();

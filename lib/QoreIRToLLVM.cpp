@@ -18596,7 +18596,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
-                    nargs, has_arg_cleanups);
+                    nargs, has_arg_cleanups, static_cast<int>(
+                        direct_inst->aot_borrow_call_operand_count));
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
@@ -19124,7 +19125,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
-                    nargs, has_arg_cleanups);
+                    nargs, has_arg_cleanups, static_cast<int>(
+                        direct_inst->aot_borrow_call_operand_count));
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
