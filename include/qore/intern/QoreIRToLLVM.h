@@ -808,6 +808,14 @@ private:
             llvm::Value* base, bool rejects_nothing, llvm::Module& module,
             BatchCalleeReturnKind& return_kind);
 
+    // Assign an imported exact-object member and return its declared scalar representation.
+    llvm::Value* emitAOTObjectSetGet(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, int32_t slot,
+            llvm::Value* base, llvm::Value* args, int nargs,
+            bool rejects_nothing, BatchCalleeReturnKind proven_return_kind,
+            llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
     BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,

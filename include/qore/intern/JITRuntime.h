@@ -1624,6 +1624,17 @@ uint64_t qore_rt_object_member_set_get_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,
         int32_t value_param, int32_t rejects_nothing, ExceptionSink* xsink);
 
+//! Native scalar variants of exact-class object member assignment-return lowering.
+int64_t qore_rt_object_member_set_get_int_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+double qore_rt_object_member_set_get_float_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+int64_t qore_rt_object_member_set_get_bool_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+
 //! Apply a compound operation to an exact-class object member and return its resulting value.
 uint64_t qore_rt_object_member_compound_get_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,

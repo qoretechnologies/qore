@@ -45,6 +45,28 @@ class OptionalBox {
     }
 }
 
+class FloatBox {
+    private {
+        float value;
+    }
+
+    float echo(float value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class BoolBox {
+    private {
+        bool value;
+    }
+
+    bool echo(bool value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
 class InheritedMemberBase {
     public {
         int value;
@@ -153,6 +175,8 @@ int sub concurrentChecksum() {
 int sub main() {
     GenericBox<int> generic(1);
     OptionalBox optional();
+    FloatBox float_box();
+    BoolBox bool_box();
     InheritedMemberBox inherited();
     OverrideBase base = new OverrideChild();
     NearMiss near_miss();
@@ -162,8 +186,9 @@ int sub main() {
     auto flexible = local_no_narrow.echo({\"n\": 1});
     flexible.s = \"x\";
     reference<int> reference_result = reference_box.echo(13);
-    printf(\"%d:%y:%d:%d:%d:%s:%d:%d:%d:%d\\n\", generic.echo(7),
-        optional.echo(absent) === NOTHING, callOverride(base),
+    printf(\"%d:%y:%y:%y:%d:%d:%d:%s:%d:%d:%d:%d\\n\", generic.echo(7),
+        optional.echo(absent) === NOTHING, float_box.echo(1.25) == 1.25,
+        !bool_box.echo(False), callOverride(base),
         near_miss.echo(9), near_miss.getWrites(), flexible.fullType(),
         inherited.echo(11), reference_result, reference_value,
         concurrentChecksum());
@@ -199,12 +224,32 @@ if (!is_file(disabled_exe)) {
     exit(2);
 }
 
+string native_disabled_exe = root + "/native-disabled";
+string native_disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_NATIVE_OBJECT_SET_GET=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, native_disabled_exe, source_path));
+if (!is_file(native_disabled_exe)) {
+    printf("native-disabled compile failed:\n%s", native_disabled_compile);
+    exit(2);
+}
+
 string enabled_symbols = backquote(sprintf("nm -D %s 2>&1", enabled_exe));
 string disabled_symbols = backquote(sprintf("nm -D %s 2>&1", disabled_exe));
+string native_disabled_symbols = backquote(sprintf(
+    "nm -D %s 2>&1", native_disabled_exe));
 if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
-        || disabled_symbols.regex("qore_rt_object_member_set_get_aot")) {
-    printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s",
-        enabled_symbols, disabled_symbols);
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_float_aot")
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_bool_aot")
+        || disabled_symbols.regex("qore_rt_object_member_set_get_aot")
+        || disabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || !native_disabled_symbols.regex("qore_rt_object_member_set_get_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_float_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_bool_aot")) {
+    printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s"
+        "native-disabled:\n%s", enabled_symbols, disabled_symbols,
+        native_disabled_symbols);
     exit(2);
 }
 
@@ -213,10 +258,13 @@ string separate_read = backquote(sprintf(
     "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s 2>&1",
     env, enabled_exe));
 string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
-if (ast != "7:True:1004:9:1:hash<auto>:11:13:13:8020\n"
-        || enabled != ast || separate_read != ast || disabled != ast) {
+string native_disabled = backquote(sprintf(
+    "%s %s 2>&1", env, native_disabled_exe));
+if (ast != "7:True:True:True:1004:9:1:hash<auto>:11:13:13:8020\n"
+        || enabled != ast || separate_read != ast || disabled != ast
+        || native_disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
-        "Separate read:\n%sDisabled:\n%s",
-        ast, enabled, separate_read, disabled);
+        "Separate read:\n%sDisabled:\n%sNative-disabled:\n%s",
+        ast, enabled, separate_read, disabled, native_disabled);
     exit(2);
 }

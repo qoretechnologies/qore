@@ -134,7 +134,8 @@ if (!is_file(consumer_qo)) {
 }
 
 string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
-if (undefined_symbols !~ /qore_rt_object_member_set_get_aot/) {
+if (undefined_symbols !~ /qore_rt_object_member_set_get_aot/
+        || undefined_symbols !~ /qore_rt_object_member_set_get_int_aot/) {
     printf("consumer did not import the object set/get summary:\n%scompile:\n%s",
         undefined_symbols, consumer_compile);
     exit(2);
