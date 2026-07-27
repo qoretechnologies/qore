@@ -984,6 +984,43 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
     return 0;
 }
 
+int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
+        const char* key, size_t hash, const QoreMemberInfo& info,
+        const qore_class_private* member_class_ctx, QoreValue value,
+        qore_type_t expected_type, ExceptionSink* xsink) {
+    if (value.getType() != expected_type) {
+        return 0;
+    }
+    const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(
+        info.getTypeInfo(),
+        instantiated_type ? instantiated_type : theclass->getTypeInfo());
+    if (QoreTypeInfo::parseReturns(member_type, expected_type) != QTI_IDENT) {
+        return 0;
+    }
+
+    QoreSafeVarRWWriteLocker sl(rml);
+    if (status == OS_DELETED) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "write attempted to member \"%s\" in an already-deleted object",
+            key);
+        return -1;
+    }
+
+    QoreHashNode* odata = member_class_ctx
+        ? getCreateInternalData(member_class_ctx) : data;
+    HashMember* member = hash
+        ? odata->priv->findCreateMemberPrehashed(key, hash)
+        : odata->priv->findCreateMember(key);
+    if (!member->val.isNothing()
+            && member->val.getType() != expected_type) {
+        return 0;
+    }
+    AbstractQoreNode* old = member->val.assign(value);
+    assert(!old);
+    (void)old;
+    return 1;
+}
+
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
     const qore_class_private* class_ctx = runtime_get_class();
     const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,

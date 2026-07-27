@@ -16308,7 +16308,8 @@ template <typename T, typename LValueConvert, typename ValueConvert>
 static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
         const char* member_name, int32_t value_param, ExceptionSink* xsink,
-        LValueConvert&& lvalue_convert, ValueConvert&& value_convert) {
+        qore_type_t expected_type, LValueConvert&& lvalue_convert,
+        ValueConvert&& value_convert) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
@@ -16335,6 +16336,20 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             qore_object_private* object_priv =
                 qore_object_private::get(*object);
 
+            QoreValue assigned_value = fromBits(args[value_param]);
+            static const bool use_direct_scalar = !std::getenv(
+                "QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR");
+            if (member_info && use_direct_scalar) {
+                int rc = object_priv
+                    ->tryAssignScalarMemberResolvedPrehashed(member_name,
+                        descriptor->key_hash, *member_info,
+                        descriptor->member_class_ctx, assigned_value,
+                        expected_type, xsink);
+                if (rc) {
+                    return rc > 0 ? value_convert(assigned_value) : T();
+                }
+            }
+
             LValueHelper helper(xsink);
             static const bool use_lvalue_prehash = !std::getenv(
                 "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
@@ -16350,7 +16365,6 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             if (rc) {
                 return T();
             }
-            QoreValue assigned_value = fromBits(args[value_param]);
             if (helper.assign(assigned_value.hasNode()
                     ? assigned_value.refSelf() : assigned_value)
                     || *xsink) {
@@ -16382,6 +16396,7 @@ extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_int_aot(
         int32_t value_param, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<int64_t>(
         ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        NT_INT,
         [](const LValueHelper& helper) { return helper.getAsBigInt(); },
         [](QoreValue value) { return value.getAsBigInt(); });
 }
@@ -16392,6 +16407,7 @@ extern "C" DLLEXPORT double qore_rt_object_member_set_get_float_aot(
         int32_t value_param, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<double>(
         ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        NT_FLOAT,
         [](const LValueHelper& helper) { return helper.getAsFloat(); },
         [](QoreValue value) { return value.getAsFloat(); });
 }
@@ -16402,6 +16418,7 @@ extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_bool_aot(
         int32_t value_param, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<int64_t>(
         ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        NT_BOOLEAN,
         [](const LValueHelper& helper) { return helper.getAsBool(); },
         [](QoreValue value) { return value.getAsBool(); });
 }

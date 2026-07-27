@@ -257,14 +257,20 @@ string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
 string separate_read = backquote(sprintf(
     "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s 2>&1",
     env, enabled_exe));
+string direct_scalar_disabled = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR=1 %s 2>&1",
+    env, enabled_exe));
 string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
 string native_disabled = backquote(sprintf(
     "%s %s 2>&1", env, native_disabled_exe));
 if (ast != "7:True:True:True:1004:9:1:hash<auto>:11:13:13:8020\n"
-        || enabled != ast || separate_read != ast || disabled != ast
+        || enabled != ast || separate_read != ast
+        || direct_scalar_disabled != ast || disabled != ast
         || native_disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
-        "Separate read:\n%sDisabled:\n%sNative-disabled:\n%s",
-        ast, enabled, separate_read, disabled, native_disabled);
+        "Separate read:\n%sDirect scalar disabled:\n%s"
+        "Disabled:\n%sNative-disabled:\n%s",
+        ast, enabled, separate_read, direct_scalar_disabled, disabled,
+        native_disabled);
     exit(2);
 }
