@@ -2780,27 +2780,65 @@ public class TerminalColor {
         return input_enc == "UTF-8" ? out : convert_encoding(out, input_enc);
     }
 
-    #! Returns the visible length of text without ANSI codes
+    #! Returns the terminal display width of text without ANSI codes
+    /** Uses the Unicode terminal-column width rather than the number of
+        codepoints. East Asian wide characters therefore consume two columns,
+        while combining marks consume no additional columns.
+
+        @param text text whose visible terminal width is required
+        @return the number of terminal display columns occupied by @p text
+        @par Example
+        @c visibleLength("ステップの例") returns 12.
+        @note ANSI styling does not contribute to the returned width.
+    */
     static int visibleLength(string text) {
-        return stripAnsi(text).length();
+        return char_width(stripAnsi(text));
     }
 
     #! Pads text on the right to a visible width
+    /** @param text text to pad; ANSI styling is ignored when measuring it
+        @param width requested terminal display width
+        @param pad_char padding text; defaults to one space
+        @return @p text padded on the right without exceeding @p width
+        @par Example
+        @c padRight("界", 4) returns a string occupying four columns.
+        @note When @p pad_char is wider than the remaining space, ordinary
+            spaces complete the exact requested width.
+    */
     static string padRight(string text, int width, string pad_char = " ") {
         int pad = width - visibleLength(text);
         if (pad <= 0) {
             return text;
         }
-        return text + strmul(pad_char, pad);
+        int pad_width = visibleLength(pad_char);
+        if (pad_width <= 0) {
+            return text;
+        }
+        return text + strmul(pad_char, pad / pad_width)
+            + strmul(" ", pad % pad_width);
     }
 
     #! Pads text on the left to a visible width
+    /** @param text text to pad; ANSI styling is ignored when measuring it
+        @param width requested terminal display width
+        @param pad_char padding text; defaults to one space
+        @return @p text padded on the left without exceeding @p width
+        @par Example
+        @c padLeft("界", 4) returns a string occupying four columns.
+        @note When @p pad_char is wider than the remaining space, ordinary
+            spaces complete the exact requested width.
+    */
     static string padLeft(string text, int width, string pad_char = " ") {
         int pad = width - visibleLength(text);
         if (pad <= 0) {
             return text;
         }
-        return strmul(pad_char, pad) + text;
+        int pad_width = visibleLength(pad_char);
+        if (pad_width <= 0) {
+            return text;
+        }
+        return strmul(pad_char, pad / pad_width)
+            + strmul(" ", pad % pad_width) + text;
     }
 
     #! Format a hash/record value with colors
