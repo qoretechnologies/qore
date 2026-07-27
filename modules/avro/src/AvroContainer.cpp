@@ -693,9 +693,14 @@ int QoreAvroFileWriter::writeHeader(const QoreHashNode* opts, ExceptionSink* xsi
         return -1;
     }
 
-    // getSchemaValue() returns a new reference and make_json() does not consume it
+    const QoreJsonApi* json = avro_get_json_api(xsink);
+    if (!json) {
+        return -1;
+    }
+
+    // getSchemaValue() returns a new reference and generate() does not consume it
     ValueHolder schema_value(data->getSchemaValue(), xsink);
-    SimpleRefHolder<QoreStringNode> schema_json(make_json(*schema_value, JGF_NONE, QCS_UTF8,
+    SimpleRefHolder<QoreStringNode> schema_json(json->generate(*schema_value, JGF_NONE, QCS_UTF8,
         xsink));
     if (!schema_json) {
         return -1;

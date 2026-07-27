@@ -2,7 +2,9 @@
 
 Tracking issue: [#5367](https://github.com/qoretechnologies/qore/issues/5367)
 Depends on: [#5366](https://github.com/qoretechnologies/qore/issues/5366) (builtin `json` with a
-public C++ API — see `design/json-module-migration.md`)
+public C++ API — see `design/json-module-migration.md`) and
+[#5371](https://github.com/qoretechnologies/qore/issues/5371) (the module C++ API mechanism that
+both modules publish through — see `design/module-cpp-api.md`)
 First consumer: [#5365](https://github.com/qoretechnologies/qore/issues/5365) (Salesforce Pub/Sub
 event source in `module-grpc`)
 
@@ -15,8 +17,8 @@ datum codec in both directions, object container files, and reader/writer schema
 Avro is schema-driven: the encoded bytes carry no field names, no tags and no type markers, just
 values packed in schema order. Nothing can be decoded without the schema, and the schema is itself
 a JSON document. So the module is two things — a JSON-driven schema parser and a binary codec —
-and #5366 having put a JSON parser with a public C++ API into libqore is what makes the first half
-cheap.
+and the `json` module publishing its parser as a C++ API (#5366, then #5371) is what makes the
+first half cheap.
 
 **Both framings are first-class.** A *container file* is self-describing: schema in the header,
 then blocks of records. A *bare datum* has no framing at all — the schema arrives out of band and
@@ -69,7 +71,9 @@ that only surfaced under test (`design/json-module-migration.md`, decision 2). T
 to repeat that for an encoding this size.
 
 Consequence: the module links **libqore only** (plus zlib, already a hard libqore dependency, for
-the container-file `deflate` codec).
+the container-file `deflate` codec). The JSON codec it needs for schema parsing is resolved at run
+time through the module C++ API mechanism rather than linked, so there is no build-time dependency
+on the `json` module either — see `design/module-cpp-api.md`.
 
 ### 3. Parser invariants are enforced with real checks, never `assert()`
 
@@ -88,9 +92,10 @@ heap-corrupting read of a garbage pointer in release builds, where `assert` comp
 `AVRO_MAX_NESTING_DEPTH` is 256 and applies to both the schema parser and the datum codec, in all
 builds, regardless of whether a `QoreSandboxManager` is installed.
 
-This differs deliberately from `JSON_MAX_NESTING_DEPTH`, which libqore enforces in sandbox mode
-only. In JSON the nesting of the *document* bounds recursion, and a trusted caller parsing its own
-trusted document cannot hurt itself. In Avro a **recursive schema** — a record with a field of its
+This differs deliberately from `JSON_MAX_NESTING_DEPTH`, which the `json` module enforces in
+sandbox mode only. In JSON the nesting of the *document* bounds recursion, and a trusted caller
+parsing its own trusted document cannot hurt itself.
+In Avro a **recursive schema** — a record with a field of its
 own type, which is legal and common (linked lists, trees) — means the *datum* drives recursion
 depth without limit. Sixteen bytes of crafted input can request a hundred thousand levels of
 descent. That is a stack overflow, i.e. a crash, not a policy decision, so it is not gated on

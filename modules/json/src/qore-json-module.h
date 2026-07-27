@@ -29,14 +29,13 @@
 #include <qore/Qore.h>
 #include <qore/InputStream.h>
 #include <qore/OutputStream.h>
-#include <qore/QoreJson.h>
 #include <qore/QoreSandboxManager.h>
+#include "QoreJson.h"
 
 //! Maximum file size for JsonSchema::load() (sandbox only) - 10MB
 #define JSON_MAX_SCHEMA_FILE_SIZE (10 * 1024 * 1024)
 
-// JSON_MAX_NESTING_DEPTH and JSON_INTERRUPT_CHECK_INTERVAL are defined in
-// <qore/QoreJson.h> so that the library codec and this module share one definition;
+// JSON_MAX_NESTING_DEPTH and JSON_INTERRUPT_CHECK_INTERVAL are defined in QoreJson.h;
 // ql_cbor.qpp and ql_toon.qpp derive their own limits from them
 
 #endif

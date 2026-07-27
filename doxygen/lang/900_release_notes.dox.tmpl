@@ -1927,9 +1927,9 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref jsonintro "json" module
       - previously the external \c module-json repository, now built and installed with %Qore, so
-        JSON support is always present; the JSON parser and serializer themselves moved into the
-        library, and \c <qore/QoreJson.h> exports them as a public C++ API for use by other builtin
-        binary modules
+        JSON support is always present; the JSON parser and serializer are also published to other
+        binary modules as a versioned C++ API through \c <qore/QoreJsonApi.h>, which is how the
+        @ref avrointro "avro" module parses Avro schemas without Qore-language code
       - JSON, CBOR and TOON serialization, a SAX-style @ref Qore::Json::JsonSaxParser "JsonSaxParser",
         JSON Schema validation via @ref Qore::Json::JsonSchema "JsonSchema", incremental output via
         @ref Qore::Json::JsonStreamWriter "JsonStreamWriter", JWT signing and verification, and a

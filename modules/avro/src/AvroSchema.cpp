@@ -903,7 +903,11 @@ AvroSchemaData* AvroSchemaData::parseValue(QoreValue schema, ExceptionSink* xsin
 }
 
 AvroSchemaData* AvroSchemaData::parseJson(const QoreString& schema_json, ExceptionSink* xsink) {
-    ValueHolder v(parse_json(&schema_json, xsink), xsink);
+    const QoreJsonApi* json = avro_get_json_api(xsink);
+    if (!json) {
+        return nullptr;
+    }
+    ValueHolder v(json->parse(schema_json, xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -921,8 +925,12 @@ QoreValue QoreAvroSchema::getHash() const {
 }
 
 QoreStringNode* QoreAvroSchema::getJson(ExceptionSink* xsink) const {
+    const QoreJsonApi* json = avro_get_json_api(xsink);
+    if (!json) {
+        return nullptr;
+    }
     ValueHolder v(getHash(), xsink);
-    return make_json(*v, JGF_NONE, QCS_UTF8, xsink);
+    return json->generate(*v, JGF_NONE, QCS_UTF8, xsink);
 }
 
 QoreStringNode* QoreAvroSchema::getCanonicalForm() const {

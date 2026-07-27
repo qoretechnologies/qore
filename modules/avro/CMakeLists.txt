@@ -39,10 +39,11 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# The Avro schema parser consumes libqore's public JSON API (<qore/QoreJson.h>); zlib provides the
-# container-file "deflate" codec and OpenSSL provides random sync markers.  Both are already hard
-# libqore dependencies, so no new dependency is introduced.  The Avro binary codec itself is
-# hand-written -- see design/avro-module.md for why Apache avro-cpp is not vendored.
+# The Avro schema parser consumes the json module's C++ API (<qore/QoreJsonApi.h>), resolved at
+# run time rather than linked, so there is no build-time dependency on the json module here.  zlib
+# provides the container-file "deflate" codec and OpenSSL provides random sync markers; both are
+# already hard libqore dependencies, so no new dependency is introduced.  The Avro binary codec
+# itself is hand-written -- see design/avro-module.md for why Apache avro-cpp is not vendored.
 include_directories(${OPENSSL_INCLUDE_DIR})
 include_directories(${ZLIB_INCLUDE_DIRS})
 

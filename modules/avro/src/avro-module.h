@@ -28,6 +28,7 @@
 #define _QORE_AVRO_MODULE_H
 
 #include <qore/Qore.h>
+#include <qore/QoreJsonApi.h>
 #include <qore/QoreSandboxManager.h>
 #include <qore/qore_thread.h>
 
@@ -46,5 +47,17 @@
 
 // namespace for the module
 extern QoreNamespace AvroNs;
+
+//! returns the json module's C++ API, resolving and caching it on the first call
+/** An Avro schema is a JSON document, so the schema parser and the container-file writer need a
+    JSON codec.  It is resolved through the module C++ API mechanism rather than linked, so the
+    \c json module is loaded on demand the first time a schema is parsed; see
+    design/module-cpp-api.md.
+
+    @param xsink Qore-language exceptions are raised here
+
+    @return the json module's API struct, or nullptr if an exception was raised
+*/
+DLLLOCAL const QoreJsonApi* avro_get_json_api(ExceptionSink* xsink);
 
 #endif // _QORE_AVRO_MODULE_H

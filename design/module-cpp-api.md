@@ -131,6 +131,12 @@ happens to be current would be a surprising side effect of a C++ call.
 `ModuleManager::runTimeLoadModule()` already supports this: `ProgramRuntimeParseContextHelper` is
 a no-op for a null Program.
 
+This is also why on-demand loading is not a sandboxing hole. Nothing the producer declares becomes
+callable from Qore as a result: no namespace, class, function or constant is added to any Program,
+so a restricted Program cannot reach a functional domain it was denied by having some other module
+resolve a C++ API. The only new capability is in the consuming module's own native code, which is
+trusted by construction — it is the only thing that can call `q_get_module_cpp_api()` at all.
+
 ### 5. Only types with an already-public ABI cross the boundary
 
 `QoreValue`, `BinaryNode*`, `QoreString&`, `ExceptionSink*`, plain C types, and opaque handles
@@ -235,10 +241,27 @@ linked against neither libqore nor `avro`, including only the installed header �
 `Qore::Avro::AvroSchema` class, so the two paths are proven to share one implementation rather
 than merely to agree with themselves.
 
-## Relationship to the JSON codec in libqore
+## Second producer: the `json` module, moved back out of libqore
 
 #5366 moved the JSON codec out of `module-json` into `lib/QoreJson.cpp` because this mechanism did
 not exist — `design/json-module-migration.md` decision 1 records that "the alternative — leaving
 the codec in the module and having `avro` resolve symbols across `dlopen()`ed modules — was
-rejected as fragile." libqore itself does not use that API, so once this mechanism exists the codec
-has no remaining reason to live in the core library. Moving it back is tracked separately.
+rejected as fragile." That judgement was correct about *raw* symbol resolution, which is exactly
+what this mechanism replaces.
+
+libqore never used the codec: the only `parse_json` / `make_json` references anywhere under `lib/`
+were two comments in `QoreAOTRuntime.cpp`. So with the mechanism in place the codec has no reason
+to live in the core library, and it is back in `modules/json/src/QoreJson.cpp` behind a
+module-private `QoreJson.h`, published as `QoreJsonApi` through `include/qore/QoreJsonApi.h`.
+libqore loses ~950 lines it had no use for.
+
+This makes the dependency chain `avro` → `json` a real cross-module C++ dependency in the shipped
+tree, resolved lazily: `avro_get_json_api()` in `modules/avro/src/avro-module.cpp` resolves on
+first use rather than in the module init function, so a Program that only encodes and decodes
+against schemas it already holds never loads the `json` module at all.
+
+`<qore/QoreJson.h>` is gone. That is an API break only once 3.0.0 has released; it has not, so the
+window was open. `examples/test/json/json_cpp_api.cpp` — which existed specifically to verify the
+old header's contract "exactly as a builtin binary module (ex: avro) consumes it" — now resolves
+`QoreJsonApi` through `q_get_module_cpp_api()` and verifies the same operations plus the version
+gate, so the coverage it provided is kept rather than deleted.

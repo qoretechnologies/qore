@@ -253,6 +253,20 @@ hash<auto> parsed = parse_toon(toon);
     |\c makeJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
     |\c make_jsonrpc11_error()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
 
+    @section jsoncppapisec C++ API for Other Binary Modules
+
+    The JSON parser and serializer are also published to other binary %Qore modules as a versioned
+    C++ API, so a module whose own data format is JSON can parse and generate it from C++ without
+    %Qore-language code.  The builtin \c avro module is the first consumer: an Avro schema is a
+    JSON document, so its schema parser resolves this API the first time a schema is parsed.
+
+    The consumer includes only the installed <tt>&lt;qore/QoreJsonApi.h&gt;</tt> header, does not
+    link against this module, and resolves the API at run time, which loads the \c json module on
+    demand.
+
+    See the \c "JSON C++ API" section of the %Qore library documentation for the API reference, and
+    \c "Developing Qore Modules" for the mechanism it is published through.
+
     @section codetags Function and Method Tags
 
     @subsection NOOP NOOP
@@ -309,9 +323,10 @@ hash<auto> parsed = parse_toon(toon);
 
     - the json module is now delivered with %Qore itself and versions with it; it was previously
       maintained in a separate \c module-json repository, whose last standalone release was 1.12
-    - the JSON parser and serializer moved into the %Qore library, which exports them as a public
-      C++ API in \c <qore/QoreJson.h> so that other builtin binary modules can parse and generate
-      JSON without depending on this module or on %Qore-language code
+    - the JSON parser and serializer are published to other binary modules as a versioned C++ API
+      in \c <qore/QoreJsonApi.h>, so a module whose own data format is JSON &mdash; the
+      \c avro module, whose schemas are JSON documents &mdash; can parse and generate JSON from
+      C++ without %Qore-language code; see @ref jsoncppapisec
     - the 16 companion user modules (A2aClient, A2aClientDataProvider, A2aServerHandler,
       FhirRestClient, FhirRestDataProvider, JsonFileDataProvider, JsonLd, JsonRpcClientIo,
       JsonRpcConnection, JsonRpcHandler, McpClient, McpClientDataProvider, McpServerHandler,
