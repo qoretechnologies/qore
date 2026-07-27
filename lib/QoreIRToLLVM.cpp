@@ -17048,6 +17048,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && batch_callees->at(direct_inst->variant).approach_b_eligible
                     && qore_ir_fast_entry_args_need_no_binding(
                         direct_inst->variant, direct_inst->expr, arg_start, nargs);
+            const BatchCalleeInfo* aggregate_projection_callee =
+                aot_approach_b_callee;
+            if (!aot_mode && fused_aggregate_projection && is_approach_b) {
+                aggregate_projection_callee =
+                    &batch_callees->at(direct_inst->variant);
+            }
             bool aot_context_independent_fast_entry_call = aot_approach_b_callee
                     && aot_approach_b_callee->context_independent_fast_entry;
             bool aot_fixed_hash_remap_call = aot_approach_b_callee
@@ -17095,7 +17101,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         is_approach_b = false;
                     }
                 }
-                bool selective_aot_boxing = aot_approach_b_callee
+                const BatchCalleeInfo* selective_summary_callee =
+                    aot_approach_b_callee
+                    ? aot_approach_b_callee
+                    : fused_aggregate_projection
+                        ? aggregate_projection_callee : nullptr;
+                bool selective_summary_boxing = selective_summary_callee
                     && !type_name_fast_path && !single_arg_fast_builtin_helper
                     && std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS") == nullptr;
                 for (int i = 0; i < nargs; ++i) {
@@ -17105,10 +17116,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         error = "cancelled during AOT direct argument boxing";
                         return false;
                     }
-                    bool needs_boxed = !selective_aot_boxing
-                        || getFastEntryParamKind(*aot_approach_b_callee,
+                    bool needs_boxed = !selective_summary_boxing
+                        || getFastEntryParamKind(*selective_summary_callee,
                             static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed
-                        || (fastEntryParamRejectsNothing(*aot_approach_b_callee,
+                        || (fastEntryParamRejectsNothing(*selective_summary_callee,
                                 static_cast<unsigned>(i))
                             && (nanboxed_values.count(raw_arg_ids[i])
                                 || native_boxed_sources.count(
@@ -17244,7 +17255,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_may_modify_runtime_locals = false;
             } else if (fused_aggregate_projection
-                    && aot_approach_b_callee) {
+                    && aggregate_projection_callee) {
                 auto projection = direct_inst->aot_aggregate_projection;
                 using ProjectionKind = QoreIRCallDirectInstruction::
                     AOTAggregateProjectionKind;
@@ -18125,6 +18136,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
                          xsink_arg});
                 }
+                call_may_throw = has_arg_cleanups;
                 call_may_modify_runtime_locals = false;
             } else if (fused_collection_consumer
                     && aot_approach_b_callee) {

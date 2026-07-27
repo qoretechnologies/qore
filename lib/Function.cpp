@@ -5893,6 +5893,12 @@ void UserVariantBase::attemptJITCompilation() const {
     auto callees = collectBatchCallees(*cached_ir, pgm);
 
     if (!callees.empty()) {
+        std::shared_ptr<QoreIRFunction> compile_ir;
+        if (!getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+            compile_ir.reset(lowerIRFunction(
+                cached_ir->getDisplayName().c_str(), cached_ir->name,
+                nullptr, nullptr, false, false));
+        }
         if (getenv("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 cached_ir->name.c_str(), (int)callees.size());
@@ -5904,7 +5910,8 @@ void UserVariantBase::attemptJITCompilation() const {
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());
-        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr, &callees);
+        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir,
+            deopt_ptr, &callees, std::move(compile_ir));
     } else {
         // No eligible callees: single-function background compilation
         QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr);

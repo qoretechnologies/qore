@@ -11459,26 +11459,15 @@ static bool qore_aot_collect_float_expression_summaries(
     return true;
 }
 
-static bool resolveAOTBatchFunctionEffectSummaries(
-        const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
-        const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
-            effect_only_candidates,
+bool qore_ir_resolve_batch_function_summaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
-    if (std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
+    if (std::getenv("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
+            || std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return true;
     }
-    std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>> functions;
-    functions.reserve(candidates.size() + effect_only_candidates.size());
     size_t check_count = 0;
-    for (const auto* candidate_set : {&candidates, &effect_only_candidates}) {
-        for (const auto& [variant, func] : *candidate_set) {
-            if (++check_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT batch function effect collection")) {
-                return false;
-            }
-            functions.emplace_back(variant, func.get());
-        }
-    }
     std::unordered_map<const AbstractQoreFunctionVariant*,
         const QoreIRFunction*> function_map;
     function_map.reserve(functions.size());
@@ -11584,8 +11573,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
     }
     if (!std::getenv("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
-        for (const auto* candidate_set : {&candidates, &effect_only_candidates}) {
-            for (const auto& [variant, func] : *candidate_set) {
+        for (const auto& [variant, func] : functions) {
                 if (++check_count % 100 == 0
                         && qore_check_cancel(nullptr,
                             "AOT exact boxed return-kind analysis")) {
@@ -11599,7 +11587,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     continue;
                 }
                 BatchCalleeBoxedReturnKind declared_kind =
-                    get_declared_boxed_return_kind(variant, func.get());
+                    get_declared_boxed_return_kind(variant, func);
                 if (declared_kind
                         != BatchCalleeBoxedReturnKind::Unknown) {
                     callee->second.boxed_return_kind = declared_kind;
@@ -11710,7 +11698,6 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                             func->name.c_str(), static_cast<int>(kind));
                     }
                 }
-            }
         }
     }
     struct ScalarIntOperand {
@@ -12952,6 +12939,302 @@ static bool resolveAOTBatchFunctionEffectSummaries(
     }
     return qore_aot_collect_float_expression_summaries(
         functions, batch_callees, check_count);
+}
+
+size_t qore_ir_fuse_batch_aggregate_return_projections(
+        QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    QoreIRAggregateProjectionQuery projection_query =
+        [&](const AbstractQoreFunctionVariant* callee,
+                const QoreIRInstruction* call,
+                QoreIRAggregateProjectionQueryKind query_kind,
+                int64_t index, const std::string& key,
+                int16_t& operand, int64_t& size,
+                int64_t& int_constant, double& float_constant,
+                QoreIRCallDirectInstruction::AOTAggregateProjectionKind&
+                    projection,
+                std::vector<QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionDescriptor>&,
+                std::vector<std::string>&) {
+            using ProjectionKind = QoreIRCallDirectInstruction::
+                AOTAggregateProjectionKind;
+            if (!callee || !call
+                    || call->opcode != QoreIROpcode::CallDirect) {
+                return false;
+            }
+            const auto* direct =
+                static_cast<const QoreIRCallDirectInstruction*>(call);
+            auto found = batch_callees.find(callee);
+            if (found == batch_callees.end()
+                    || !found->second.approach_b_eligible
+                    || !found->second.aggregate_return
+                    || direct->has_ref_args
+                    || call->operands.size() != found->second.num_params
+                    || found->second.param_kinds.size()
+                        != call->operands.size()
+                    || found->second.param_rejects_nothing.size()
+                        != call->operands.size()
+                    || !qore_aot_fast_entry_operands_need_no_binding(
+                        callee, direct->expr, func, call->operands, 0,
+                        static_cast<int>(call->operands.size()), true)) {
+                return false;
+            }
+            for (size_t i = 0; i < call->operands.size(); ++i) {
+                if (i && !(i % 100)
+                        && qore_check_cancel(nullptr,
+                            "JIT aggregate-return argument validation")) {
+                    return false;
+                }
+                const QoreIRValueFacts* facts =
+                    func.getValueFacts(call->operands[i]);
+                BatchCalleeParamKind param_kind =
+                    found->second.param_kinds[i];
+                QoreIRValueRepresentation expected =
+                    param_kind == BatchCalleeParamKind::NativeInt
+                    ? QoreIRValueRepresentation::NativeInt
+                    : param_kind == BatchCalleeParamKind::NativeFloat
+                        ? QoreIRValueRepresentation::NativeFloat
+                        : param_kind == BatchCalleeParamKind::NativeBool
+                            ? QoreIRValueRepresentation::NativeBool
+                            : QoreIRValueRepresentation::Boxed;
+                if (!facts
+                        || (found->second.param_rejects_nothing[i]
+                            && (facts->assigned_state
+                                    != QoreIRAssignedState::Assigned
+                                || !facts->never_nothing
+                                || facts->representation != expected))) {
+                    return false;
+                }
+            }
+
+            const AOTAggregateReturnInfo& aggregate =
+                found->second.aggregate_return;
+            if (aggregate.hasConditionalShape()
+                    || aggregate.value_kinds.size()
+                        != aggregate.value_params.size()
+                    || aggregate.value_ints.size()
+                        != aggregate.value_params.size()
+                    || aggregate.value_floats.size()
+                        != aggregate.value_params.size()) {
+                return false;
+            }
+            if (query_kind
+                    == QoreIRAggregateProjectionQueryKind::DiscardResult) {
+                operand = -1;
+                size = 0;
+                projection = ProjectionKind::None;
+                return true;
+            }
+            if (query_kind == QoreIRAggregateProjectionQueryKind::ListSize) {
+                if (aggregate.kind != AOTAggregateReturnKind::FixedList) {
+                    return false;
+                }
+                operand = -1;
+                size = static_cast<int64_t>(aggregate.value_params.size());
+                projection = ProjectionKind::Size;
+                return true;
+            }
+
+            size_t value_index = SIZE_MAX;
+            bool boxed_projection = false;
+            if (query_kind == QoreIRAggregateProjectionQueryKind::HashKeyInt
+                    || query_kind
+                        == QoreIRAggregateProjectionQueryKind::HashKeyValue) {
+                if (aggregate.kind != AOTAggregateReturnKind::FixedHash
+                        || key.empty()
+                        || aggregate.keys.size()
+                            != aggregate.value_params.size()) {
+                    return false;
+                }
+                boxed_projection = query_kind
+                    == QoreIRAggregateProjectionQueryKind::HashKeyValue;
+                for (size_t i = aggregate.keys.size(); i > 0; --i) {
+                    if (!(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "JIT aggregate-return key lookup")) {
+                        return false;
+                    }
+                    if (aggregate.keys[i - 1] == key) {
+                        value_index = i - 1;
+                        break;
+                    }
+                }
+                if (value_index == SIZE_MAX) {
+                    if (!boxed_projection) {
+                        return false;
+                    }
+                    operand = -1;
+                    size = 0;
+                    projection = ProjectionKind::BoxedNothingConstant;
+                    return true;
+                }
+            } else if (query_kind
+                        == QoreIRAggregateProjectionQueryKind::ListIndexInt
+                    || query_kind
+                        == QoreIRAggregateProjectionQueryKind::ListIndexFloat
+                    || query_kind
+                        == QoreIRAggregateProjectionQueryKind::ListIndexValue) {
+                if (aggregate.kind != AOTAggregateReturnKind::FixedList) {
+                    return false;
+                }
+                int64_t count =
+                    static_cast<int64_t>(aggregate.value_params.size());
+                if (index < 0) {
+                    index += count;
+                }
+                boxed_projection = query_kind
+                    == QoreIRAggregateProjectionQueryKind::ListIndexValue;
+                if (index < 0 || index >= count) {
+                    if (!boxed_projection) {
+                        return false;
+                    }
+                    operand = -1;
+                    size = 0;
+                    projection = ProjectionKind::BoxedNothingConstant;
+                    return true;
+                }
+                value_index = static_cast<size_t>(index);
+            } else {
+                return false;
+            }
+
+            AOTAggregateReturnValueKind value_kind =
+                aggregate.value_kinds[value_index];
+            int8_t param = aggregate.value_params[value_index];
+            if (value_kind == AOTAggregateReturnValueKind::IntConstant) {
+                operand = -1;
+                int_constant = aggregate.value_ints[value_index];
+                projection = boxed_projection
+                    ? ProjectionKind::BoxedIntConstant
+                    : ProjectionKind::NativeIntConstant;
+                return query_kind
+                    != QoreIRAggregateProjectionQueryKind::ListIndexFloat;
+            }
+            if (value_kind == AOTAggregateReturnValueKind::FloatConstant) {
+                operand = -1;
+                float_constant = aggregate.value_floats[value_index];
+                projection = boxed_projection
+                    ? ProjectionKind::BoxedFloatConstant
+                    : ProjectionKind::NativeFloatConstant;
+                return boxed_projection
+                    || query_kind
+                        == QoreIRAggregateProjectionQueryKind::ListIndexFloat;
+            }
+            if (value_kind == AOTAggregateReturnValueKind::BoolConstant
+                    && boxed_projection) {
+                operand = -1;
+                int_constant = aggregate.value_ints[value_index];
+                projection = ProjectionKind::BoxedBoolConstant;
+                return true;
+            }
+            if (param < 0
+                    || static_cast<size_t>(param)
+                        >= call->operands.size()) {
+                return false;
+            }
+            size_t param_index = static_cast<size_t>(param);
+            const QoreIRValueFacts* facts =
+                func.getValueFacts(call->operands[param_index]);
+            if (!facts || facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || param_index > static_cast<size_t>(INT16_MAX)) {
+                return false;
+            }
+            operand = static_cast<int16_t>(param_index);
+            if (value_kind == AOTAggregateReturnValueKind::Parameter) {
+                if (boxed_projection) {
+                    if (facts->representation
+                            == QoreIRValueRepresentation::NativeInt) {
+                        projection = ProjectionKind::BoxedInt;
+                    } else if (facts->representation
+                            == QoreIRValueRepresentation::NativeFloat) {
+                        projection = ProjectionKind::BoxedFloat;
+                    } else if (facts->representation
+                            == QoreIRValueRepresentation::NativeBool) {
+                        projection = ProjectionKind::BoxedBool;
+                    } else if (facts->representation
+                            == QoreIRValueRepresentation::Boxed) {
+                        projection = ProjectionKind::BoxedValue;
+                    } else {
+                        return false;
+                    }
+                    return true;
+                }
+                bool float_projection = query_kind
+                    == QoreIRAggregateProjectionQueryKind::ListIndexFloat;
+                if (facts->representation
+                        != (float_projection
+                            ? QoreIRValueRepresentation::NativeFloat
+                            : QoreIRValueRepresentation::NativeInt)) {
+                    return false;
+                }
+                projection = float_projection
+                    ? ProjectionKind::NativeFloat
+                    : ProjectionKind::NativeInt;
+                return true;
+            }
+            int_constant = aggregate.value_ints[value_index];
+            if (value_kind
+                    == AOTAggregateReturnValueKind::IntParamAddConstant
+                    && facts->representation
+                        == QoreIRValueRepresentation::NativeInt) {
+                projection = boxed_projection
+                    ? ProjectionKind::BoxedIntAddConstant
+                    : ProjectionKind::NativeIntAddConstant;
+                return true;
+            }
+            if (value_kind
+                    == AOTAggregateReturnValueKind::IntParamMulConstant
+                    && facts->representation
+                        == QoreIRValueRepresentation::NativeInt) {
+                projection = boxed_projection
+                    ? ProjectionKind::BoxedIntMulConstant
+                    : ProjectionKind::NativeIntMulConstant;
+                return true;
+            }
+            if (value_kind
+                    == AOTAggregateReturnValueKind::FloatParamAddConstant
+                    && facts->representation
+                        == QoreIRValueRepresentation::NativeFloat) {
+                float_constant = aggregate.value_floats[value_index];
+                projection = boxed_projection
+                    ? ProjectionKind::BoxedFloatAddConstant
+                    : ProjectionKind::NativeFloatAddConstant;
+                return boxed_projection
+                    || query_kind
+                        == QoreIRAggregateProjectionQueryKind::ListIndexFloat;
+            }
+            return false;
+        };
+    return qore_ir_fuse_aggregate_return_projections(
+        func, projection_query);
+}
+
+static bool resolveAOTBatchFunctionEffectSummaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            std::unique_ptr<QoreIRFunction>>>& candidates,
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            std::unique_ptr<QoreIRFunction>>>& effect_only_candidates,
+        std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    std::vector<std::pair<const AbstractQoreFunctionVariant*,
+        const QoreIRFunction*>> functions;
+    functions.reserve(candidates.size() + effect_only_candidates.size());
+    size_t check_count = 0;
+    for (const auto* candidate_set : {&candidates, &effect_only_candidates}) {
+        for (const auto& [variant, func] : *candidate_set) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT batch function summary collection")) {
+                return false;
+            }
+            functions.emplace_back(variant, func.get());
+        }
+    }
+    return qore_ir_resolve_batch_function_summaries(
+        functions, batch_callees);
 }
 
 static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::Module& module,

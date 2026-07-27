@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+string code = "%modern
+
+int effects;
+
+hash<string, int> sub makeHash(int value) {
+    hash<string, int> result = {
+        \"left\": value,
+        \"right\": value + 1,
+    };
+    result.left += 1;
+    result.right += 2;
+    return result;
+}
+
+list<int> sub makeList(int value) {
+    list<int> result = (value, value + 1);
+    result[0] += 1;
+    result[1] += 2;
+    return result;
+}
+
+list<*int> sub makeOptional(*int value) {
+    return (value,);
+}
+
+hash<string, int> sub makeEffect(int value) {
+    ++effects;
+    return {\"value\": value};
+}
+
+int sub maybeAssigned(bool assign, int value) {
+    int candidate;
+    if (assign) {
+        candidate = value;
+    }
+    return makeHash(candidate).left;
+}
+
+string sub kernel(int count, *int optional) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        checksum += makeHash(i).left + makeHash(i).right;
+        checksum += makeList(i)[0] + makeList(i)[1];
+    }
+    *int projected_optional = makeOptional(optional)[0];
+    int effect_value = makeEffect(11).value;
+    string unassigned = \"accepted\";
+    try {
+        maybeAssigned(False, 7);
+    } catch (hash<ExceptionInfo> ex) {
+        unassigned = \"rejected\";
+    }
+    return sprintf(\"%d:%s:%d:%d:%s\", checksum,
+        projected_optional === NOTHING ? \"NOTHING\" : string(projected_optional),
+        effect_value, effects, unassigned);
+}
+
+kernel(1, 1);
+if (ENV.QORE_JIT_TEST_WARMUP) {
+    sleep(1000ms);
+}
+printf(\"%s\\n\", kernel(1000, NOTHING));
+";
+
+string script_path = "/tmp/qore-jit-aggregate-return-projection-"
+    + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode, string env = "") {
+    return backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        env, libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "2006000:NOTHING:11:2:rejected\n";
+string ast = runMode("ast");
+if (ast != expected) {
+    printf("AST mismatch\nexpected:\n%sactual:\n%s", expected, ast);
+    exit(2);
+}
+
+string disabled = runMode("jit",
+    "QORE_JIT_TEST_WARMUP=1 QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES=1");
+if (disabled != expected) {
+    printf("disabled JIT mismatch\nexpected:\n%sactual:\n%s",
+        expected, disabled);
+    exit(2);
+}
+
+string enabled = runMode("jit",
+    "QORE_JIT_TEST_WARMUP=1 QORE_JIT_TIMING=1");
+if (enabled !~ /fused [1-9][0-9]* aggregate-return projection group/
+        || enabled !~ /2006000:NOTHING:11:2:rejected\n$/) {
+    printf("enabled JIT aggregate-return projection mismatch:\n%s", enabled);
+    exit(2);
+}
+
+unlink(script_path);

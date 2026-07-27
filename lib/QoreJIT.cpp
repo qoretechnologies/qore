@@ -1152,7 +1152,8 @@ bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::s
 
 bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
-        const std::vector<BatchCallee>& callees) {
+        const std::vector<BatchCallee>& callees,
+        QoreIRFunction* rewrite_root) {
     // Copy root_func.name before any LLVM operations (same heap-corruption workaround
     // as compileFunctionInternal — see comment there for details).
     const std::string root_func_name = root_func.name;
@@ -1223,14 +1224,55 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             info.capture_kinds.push_back(
                 qore_ir_get_scalar_local_kind(info.capture_locals[i]));
         }
-        if (info.approach_b_eligible) {
-            info.fast_name = callee.ir_func->name + "_fast";
+        {
             const UserVariantBase* uvb = callee.variant->getUserVariantBase();
             const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
             info.param_kinds = qore_ir_get_fast_entry_param_kinds(*callee.ir_func, sig);
             info.param_rejects_nothing = qore_ir_get_fast_entry_param_rejects_nothing(sig);
         }
+        if (info.approach_b_eligible) {
+            info.fast_name = callee.ir_func->name + "_fast";
+        }
         batch_callee_map[callee.variant] = std::move(info);
+    }
+    if (!std::getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_SUMMARIES")) {
+        if (!qore_ir_resolve_batch_function_summaries(
+                effect_functions, batch_callee_map)) {
+            error = "cancelled during JIT batch function summary analysis";
+            return false;
+        }
+    }
+    if (rewrite_root
+            && !std::getenv("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
+        size_t projections = qore_ir_fuse_batch_aggregate_return_projections(
+            *rewrite_root, batch_callee_map);
+        size_t late_specializations = 0;
+        if (projections
+                && !std::getenv("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {
+            constexpr size_t max_rounds = 4;
+            for (size_t round = 0; round < max_rounds; ++round) {
+                size_t changes = 0;
+                changes += qore_ir_propagate_exact_boxed_local_facts(
+                    *rewrite_root, true);
+                changes += qore_ir_specialize_proven_boxed_operations(
+                    *rewrite_root);
+                changes += qore_ir_specialize_proven_collection_operations(
+                    *rewrite_root);
+                changes += qore_ir_specialize_proven_native_operations(
+                    *rewrite_root);
+                late_specializations += changes;
+                if (!changes) {
+                    break;
+                }
+            }
+        }
+        if (std::getenv("QORE_JIT_TIMING")) {
+            fprintf(stderr,
+                "[BG-JIT] fused %zu aggregate-return projection group(s)"
+                " and applied %zu late specialization(s) in '%s'\n",
+                projections, late_specializations,
+                root_func_name.c_str());
+        }
     }
 
     // Determine which callees need their bodies compiled vs just forward-declared.
@@ -1629,7 +1671,8 @@ void QoreJIT::bgCompileThreadLoop() {
 
         if (work.has_callees) {
             // Batch compile: root function + callees
-            success = compileFunctionBatchInternal(*work.ir_func, error, work.deopt_ptr, work.callees);
+            success = compileFunctionBatchInternal(*work.ir_func, error,
+                work.deopt_ptr, work.callees, work.owned_ir_func.get());
         } else {
             // Single-function compilation
             success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
@@ -1716,7 +1759,8 @@ void QoreJIT::bgCompileThreadLoop() {
 }
 
 void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
-        void* deopt_counter, const std::vector<BatchCallee>* callees) {
+        void* deopt_counter, const std::vector<BatchCallee>* callees,
+        std::shared_ptr<QoreIRFunction> owned_ir_func) {
     // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
     // so we do NOT re-check here — the state is already 1 when we're called.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -1748,7 +1792,9 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 
     BgCompileWork work;
     work.uvb = uvb;
-    work.ir_func = ir_func;
+    work.owned_ir_func = std::move(owned_ir_func);
+    work.ir_func = work.owned_ir_func
+        ? work.owned_ir_func.get() : ir_func;
     work.deopt_ptr = deopt_counter;
     work.variant_refs.reserve(1 + (callees ? callees->size() : 0));
     work.variant_refs.push_back(const_cast<AbstractQoreFunctionVariant*>(variant)->ref());
@@ -1885,7 +1931,8 @@ void QoreJIT::shutdown() {
         std::string error;
         bool success;
         if (work.has_callees) {
-            success = compileFunctionBatchInternal(*work.ir_func, error, work.deopt_ptr, work.callees);
+            success = compileFunctionBatchInternal(*work.ir_func, error,
+                work.deopt_ptr, work.callees, work.owned_ir_func.get());
         } else {
             success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
         }

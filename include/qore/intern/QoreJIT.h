@@ -458,6 +458,20 @@ struct BatchCalleeInfo {
     uint8_t object_compound_get_op = 0;      //!< LVCompoundOp value
 };
 
+//! Populate conservative interprocedural summaries for a batch of lowered
+//! functions. The function pointers remain owned by the caller.
+DLLLOCAL bool qore_ir_resolve_batch_function_summaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees);
+
+//! Fuse exact fixed aggregate return projections in an owned compilation IR.
+DLLLOCAL size_t qore_ir_fuse_batch_aggregate_return_projections(
+        QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees);
+
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.
 DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         const QoreIRFunction& ir_func, const UserSignature* sig);
@@ -565,7 +579,8 @@ public:
     //! The function stays at IR tier until compilation finishes in the background.
     //! Safe to call from any thread, including during tiered execution.
     void enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
-            void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr);
+            void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr,
+            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr);
 
     //! Wait for all pending background compilations to complete.
     //! Used during shutdown.
@@ -613,12 +628,14 @@ private:
             void* deopt_counter);
     bool compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,
-            const std::vector<BatchCallee>& callees);
+            const std::vector<BatchCallee>& callees,
+            QoreIRFunction* rewrite_root = nullptr);
 
     //! Background compilation work item
     struct BgCompileWork {
         const UserVariantBase* uvb;                         //!< function to compile
         const QoreIRFunction* ir_func;                      //!< IR representation
+        std::shared_ptr<QoreIRFunction> owned_ir_func;      //!< Optional private compilation IR
         void* deopt_ptr;                                    //!< deopt counter pointer
         std::vector<BatchCallee> callees;                   //!< direct callees (if any)
         std::vector<AbstractQoreFunctionVariant*> variant_refs; //!< refs keeping queued variants alive
