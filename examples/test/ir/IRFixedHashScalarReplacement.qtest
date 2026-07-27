@@ -41,6 +41,26 @@ int sub scalarAutoMutation() {
     return values.left + values.right;
 }
 
+int sub scalarAutoOwnedList() {
+    list<int> nested = (3, 4, 5);
+    hash<auto> values = (\"base\": 2, \"nested\": nested);
+    return values.base + values.nested[1];
+}
+
+int sub scalarAutoOwnedHash() {
+    hash<string, int> nested = {\"left\": 3, \"right\": 4};
+    hash<auto> values = (\"base\": 2, \"nested\": nested);
+    return values.base + values.nested.right;
+}
+
+int sub scalarAutoOwnedAliasIsolation() {
+    list<int> nested = (1, 2);
+    hash<auto> values = (\"base\": 1, \"nested\": nested);
+    list<int> projected = values.nested;
+    projected[0] = 9;
+    return nested[0] * 100 + projected[0] * 10 + values.base;
+}
+
 bool sub autoNothing() {
     hash<auto> values = (\"left\": NOTHING, \"right\": 2);
     return values.left === NOTHING;
@@ -176,7 +196,8 @@ printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d\
     crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
     conditionalAssignment(True), removedKey(), deletedKey(),
     crossBlockMutation(True), crossBlockMutation(False), cyclicMutation(3));
-printf(\"%.1f:%d:%d:%s\\n\", scalarAutoMixed(4), scalarAutoMutation(),
+printf(\"%.1f:%d:%d:%d:%d:%d:%s\\n\", scalarAutoMixed(4), scalarAutoMutation(),
+    scalarAutoOwnedList(), scalarAutoOwnedHash(), scalarAutoOwnedAliasIsolation(),
     autoNothing(), autoTypeChange());
 ";
 
@@ -191,13 +212,15 @@ string sub runMode(string mode) {
         libqore_dir, qore_bin, mode, script_path));
 }
 
-string sub runAot(bool disabled, bool field_disabled) {
+string sub runAot(bool disabled, bool field_disabled, bool aggregate_disabled) {
     string exe = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid())
         + (disabled ? "-disabled" : "")
-        + (field_disabled ? "-field-disabled" : "");
-    string compile_out = backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        + (field_disabled ? "-field-disabled" : "")
+        + (aggregate_disabled ? "-aggregate-disabled" : "");
+    string compile_out = backquote(sprintf("%s%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         disabled ? "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 " : "",
         field_disabled ? "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT=1 " : "",
+        aggregate_disabled ? "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION=1 " : "",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
@@ -207,7 +230,7 @@ string sub runAot(bool disabled, bool field_disabled) {
 }
 
 string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1:562:127:6\n"
-    + "7.0:7:1:x\n";
+    + "7.0:7:6:6:191:1:x\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -215,12 +238,15 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string aot = runAot(False, False);
-string disabled_aot = runAot(True, False);
-string field_disabled_aot = runAot(False, True);
-if (aot != expected || disabled_aot != expected || field_disabled_aot != expected) {
-    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%sfield-disabled AOT:\n%s",
-        expected, aot, disabled_aot, field_disabled_aot);
+string aot = runAot(False, False, False);
+string disabled_aot = runAot(True, False, False);
+string field_disabled_aot = runAot(False, True, False);
+string aggregate_disabled_aot = runAot(False, False, True);
+if (aot != expected || disabled_aot != expected || field_disabled_aot != expected
+        || aggregate_disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%sfield-disabled AOT:\n%s"
+            + "aggregate-disabled AOT:\n%s",
+        expected, aot, disabled_aot, field_disabled_aot, aggregate_disabled_aot);
     exit(2);
 }
 
@@ -232,6 +258,9 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarBool:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-lists=1.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=2/
+        || stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=1/
         || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: constantDynamicKey:.*scalar-hashes=1/
         || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=1/
@@ -264,8 +293,24 @@ string field_disabled_stats = backquote(sprintf(
     libqore_dir, qore_bin, script_path));
 if (field_disabled_stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || field_disabled_stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=0/
-        || field_disabled_stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=0/) {
+        || field_disabled_stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=0/) {
     printf("field-sensitive fixed-hash scalar replacement gate failed:\n%s",
         field_disabled_stats);
+    exit(2);
+}
+
+string aggregate_disabled_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION=1 QORE_IR_OPT_STATS=1 "
+        + "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (aggregate_disabled_stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=1/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-hashes=0/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=0/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=0/) {
+    printf("field-sensitive fixed-hash aggregate projection gate failed:\n%s",
+        aggregate_disabled_stats);
     exit(2);
 }

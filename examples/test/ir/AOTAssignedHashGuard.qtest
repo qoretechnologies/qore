@@ -52,7 +52,9 @@ file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 file.write(source);
 file.close();
 
-string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string env = sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1",
+    libqore_dir);
 string enabled_exe = root + "/enabled";
 string disabled_exe = root + "/disabled";
 string enabled_compile = backquote(sprintf(

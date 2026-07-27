@@ -2189,6 +2189,16 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedPathOperation>
         scalarized_path_operations;
+    struct ScalarizedOwnedAggregateRead {
+        LocalVar* local = nullptr;
+        bool auto_ref = true;
+        bool is_closure = false;
+        bool is_ref = false;
+        uint32_t slot_id = UINT32_MAX;
+        QoreIRValueFacts facts;
+    };
+    std::unordered_map<const QoreIRInstruction*,
+        ScalarizedOwnedAggregateRead> scalarized_owned_aggregate_reads;
     struct ScalarizedAggregatePhi {
         size_t block = 0;
         QoreIRValue result;
@@ -2287,6 +2297,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             && element_type == autoTypeInfo
             && std::getenv(
                 "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT")
+                == nullptr;
+        const bool field_sensitive_aggregate_projection =
+            field_sensitive_hash
+            && std::getenv(
+                "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION")
                 == nullptr;
         if (!hashdecl_type && !deferred_hashdecl_type) {
             if (element_type == bigIntTypeInfo) {
@@ -2436,6 +2451,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             continue;
         }
         bool retain_aggregate_owner = false;
+        std::unordered_map<std::string, const QoreIRLocalInstruction*>
+            hash_owned_aggregate_loads;
         for (size_t operand_index = 0;
                 operand_index < aggregate_values.size(); ++operand_index) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -2446,7 +2463,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             const QoreIRValueFacts* facts = func.getValueFacts(operand);
             bool exact_string_constant = false;
             bool exact_aggregate_constructor = false;
-            bool exact_owned_hashdecl_aggregate = false;
+            bool exact_owned_aggregate = false;
             if (facts
                     && facts->representation
                         == QoreIRValueRepresentation::Boxed
@@ -2481,21 +2498,18 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     && QoreTypeInfo::isInputIdentical(
                         expected_type, constructor_type);
             }
-            if (hashdecl_type && facts
+            if ((hashdecl_type || field_sensitive_aggregate_projection)
+                    && facts
                     && facts->representation
                         == QoreIRValueRepresentation::Boxed
-                    && operand_index < hash_keys.size()) {
+                    && (!hashdecl_type
+                        || operand_index < hash_keys.size())) {
                 auto definition = definitions.find(operand.id);
                 const auto* load = definition != definitions.end()
                         && definition->second.inst->opcode
                             == QoreIROpcode::LoadLocal
                     ? static_cast<const QoreIRLocalInstruction*>(
                         definition->second.inst) : nullptr;
-                const HashDeclMemberInfo* member =
-                    typed_hash_decl_private::get(*hashdecl_type)->findMember(
-                        hash_keys[operand_index].c_str());
-                const QoreTypeInfo* member_type = member
-                    ? func.specializeType(member->getTypeInfo()) : nullptr;
                 const QoreTypeInfo* value_type =
                     qore_get_value_type(func.specializeType(facts->type_info));
                 auto exact_type =
@@ -2504,16 +2518,34 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         != func.exact_assigned_boxed_local_types.end()) {
                     value_type = exact_type->second;
                 }
-                bool aggregate_type =
-                    QoreTypeInfo::getUniqueReturnComplexList(member_type)
-                        || QoreTypeInfo::getUniqueReturnComplexHash(
-                            member_type);
-                exact_owned_hashdecl_aggregate = load && load->local
+                bool exact_aggregate_type =
+                    QoreTypeInfo::getUniqueReturnComplexList(value_type)
+                        || QoreTypeInfo::getUniqueReturnComplexHash(value_type);
+                bool compatible_aggregate_type =
+                    field_sensitive_aggregate_projection
+                    && exact_aggregate_type;
+                if (hashdecl_type) {
+                    const HashDeclMemberInfo* member =
+                        typed_hash_decl_private::get(*hashdecl_type)->findMember(
+                            hash_keys[operand_index].c_str());
+                    const QoreTypeInfo* member_type = member
+                        ? func.specializeType(member->getTypeInfo()) : nullptr;
+                    compatible_aggregate_type =
+                        (QoreTypeInfo::getUniqueReturnComplexList(member_type)
+                            || QoreTypeInfo::getUniqueReturnComplexHash(
+                                member_type))
+                        && QoreTypeInfo::hasType(value_type)
+                        && QoreTypeInfo::isInputIdentical(
+                            member_type, value_type);
+                }
+                exact_owned_aggregate = load && load->local
                     && constant_local_assignments.count(load->local)
-                    && aggregate_type
-                    && QoreTypeInfo::hasType(value_type)
-                    && QoreTypeInfo::isInputIdentical(
-                        member_type, value_type);
+                    && compatible_aggregate_type;
+                if (exact_owned_aggregate
+                        && operand_index < hash_keys.size()) {
+                    hash_owned_aggregate_loads.emplace(
+                        hash_keys[operand_index], load);
+                }
             }
             bool expected_scalar = hashdecl_type
                 ? facts && (facts->representation
@@ -2523,7 +2555,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     || facts->representation
                         == QoreIRValueRepresentation::NativeBool
                     || exact_string_constant
-                    || exact_owned_hashdecl_aggregate)
+                    || exact_owned_aggregate)
                 : field_sensitive_hash
                     ? facts
                         && (facts->representation
@@ -2531,7 +2563,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             || facts->representation
                                 == QoreIRValueRepresentation::NativeFloat
                             || facts->representation
-                                == QoreIRValueRepresentation::NativeBool)
+                                == QoreIRValueRepresentation::NativeBool
+                            || exact_owned_aggregate)
                 : exact_aggregate_constructor
                     || (facts
                         && facts->representation == expected_representation
@@ -2615,6 +2648,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
         std::vector<std::pair<const QoreIRInstruction*,
             ScalarizedPathOperation>> candidate_path_operations;
+        std::unordered_map<const QoreIRInstruction*,
+            ScalarizedOwnedAggregateRead>
+                candidate_owned_aggregate_reads;
         std::vector<ScalarizedAggregatePhi> candidate_aggregate_phis;
         std::vector<ScalarizedAggregateMaterialization>
             candidate_aggregate_materializations;
@@ -3643,6 +3679,25 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             break;
                         }
                         replacement = value_it->second;
+                        auto owned =
+                            hash_owned_aggregate_loads.find(key);
+                        if (owned != hash_owned_aggregate_loads.end()) {
+                            const QoreIRValueFacts* read_facts =
+                                func.getValueFacts(use.inst->result);
+                            if (!read_facts) {
+                                invalid = true;
+                                break;
+                            }
+                            candidate_owned_aggregate_reads.emplace(
+                                use.inst, ScalarizedOwnedAggregateRead{
+                                    owned->second->local,
+                                    owned->second->auto_ref,
+                                    owned->second->is_closure,
+                                    owned->second->is_ref,
+                                    owned->second->slot_id,
+                                    *read_facts});
+                            continue;
+                        }
                     } else {
                         const auto* index_inst =
                             static_cast<const QoreIRExprInstruction*>(use.inst);
@@ -3892,7 +3947,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         }
         if (invalid || (candidate_replacements.empty()
                 && candidate_path_operations.empty()
-                && candidate_literal_int_queries.empty())) {
+                && candidate_literal_int_queries.empty()
+                && candidate_owned_aggregate_reads.empty())) {
             continue;
         }
         if (!retain_aggregate_owner) {
@@ -3902,6 +3958,33 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             eliminated.insert(aggregate);
             eliminated.insert(store_pos->inst);
             eliminated.insert(local_cleanup.begin(), local_cleanup.end());
+            for (const auto& [key, load] :
+                    hash_owned_aggregate_loads) {
+                (void)key;
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR fixed-aggregate dead owned-load analysis")) {
+                    return {};
+                }
+                auto load_uses = uses.find(load->result.id);
+                bool constructor_only = load_uses != uses.end()
+                    && !load_uses->second.empty();
+                if (constructor_only) {
+                    for (const QoreIRScalarUse& use :
+                            load_uses->second) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate dead owned-load use analysis")) {
+                            return {};
+                        }
+                        if (use.inst != make) {
+                            constructor_only = false;
+                            break;
+                        }
+                    }
+                }
+                if (constructor_only) {
+                    eliminated.insert(load);
+                }
+            }
         }
         for (const InstructionPosition* load_pos : load_positions) {
             eliminated.insert(load_pos->inst);
@@ -3910,6 +3993,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         replacements.insert(candidate_replacements.begin(), candidate_replacements.end());
         scalarized_path_operations.insert(candidate_path_operations.begin(),
             candidate_path_operations.end());
+        scalarized_owned_aggregate_reads.insert(
+            candidate_owned_aggregate_reads.begin(),
+            candidate_owned_aggregate_reads.end());
         scalarized_aggregate_phis.insert(scalarized_aggregate_phis.end(),
             candidate_aggregate_phis.begin(), candidate_aggregate_phis.end());
         scalarized_aggregate_materializations.insert(
@@ -4142,6 +4228,28 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
             } else {
+                auto owned_read =
+                    scalarized_owned_aggregate_reads.find(it->get());
+                if (owned_read
+                        != scalarized_owned_aggregate_reads.end()) {
+                    const QoreIRInstruction* old = it->get();
+                    auto load = std::make_unique<QoreIRLocalInstruction>(
+                        QoreIROpcode::LoadLocal,
+                        owned_read->second.local,
+                        owned_read->second.auto_ref);
+                    load->loc = old->loc;
+                    load->cached_start_line = old->cached_start_line;
+                    load->temp_scope_id = old->temp_scope_id;
+                    load->is_closure = owned_read->second.is_closure;
+                    load->is_ref = owned_read->second.is_ref;
+                    load->slot_id = owned_read->second.slot_id;
+                    load->result = old->result;
+                    func.setValueFacts(load->result,
+                        owned_read->second.facts);
+                    *it = std::move(load);
+                    ++it;
+                    continue;
+                }
                 auto literal_query = scalarized_literal_int_queries.find(
                     it->get());
                 if (literal_query
