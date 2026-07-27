@@ -27,8 +27,8 @@
 
 #define _QORE_QL_JSON_H
 
-// JGF_* generation flags, parse_json() and the serialization entry points live in the
-// library; see <qore/QoreJson.h>, included from qore-json-module.h
+// JGF_* generation flags, parse_json() and the serialization entry points are declared in
+// QoreJson.h, included from qore-json-module.h
 
 DLLEXPORT QoreStringNode* make_jsonrpc_request_args(const std::string& version, const QoreListNode* params, QoreValue id, unsigned offset, ExceptionSink* xsink);
 DLLEXPORT QoreStringNode* make_jsonrpc_request(const std::string& version, const QoreListNode* params, QoreValue id, unsigned offset, ExceptionSink* xsink);

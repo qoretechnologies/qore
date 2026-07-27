@@ -1417,8 +1417,17 @@ public class HttpAsyncSocketIoController {
     private handleAcceptComplete(hash<HttpListenerInfo> linfo, hash<auto> output) {
         Socket sock = output.sock;
         string uh = sock.uniqueHash();
-        # Ensure the accepted socket is closed on any unexpected exception
-        on_error try { sock.close(); } catch () {}
+        # Ensure the accepted socket is closed on any unexpected exception.
+        # Log first: closing here sends a FIN to a client that is typically still in
+        # its TLS handshake, which surfaces on the client as an opaque
+        # "SOCKET-SSL-ERROR ... the SSL_connect() call could not be completed" with
+        # nothing on the server side to explain it.  Without this the whole
+        # accept → handshake → registration window is silent on failure.
+        on_error {
+            log(LoggerLevel::ERROR, "closing accepted connection %s: pre-handshake setup failed: "
+                "%s: %s", uh, $1.err, $1.desc);
+            try { sock.close(); } catch () {}
+        }
 
         # Check stopping flag — reject new connections during shutdown
         {
@@ -2189,10 +2198,17 @@ public class HttpAsyncSocketIoController {
     private handleSslResult(hash<SocketPollResultInfo> result, string uh,
             hash<HttpListenerInfo> linfo, string http_version) {
         if (result.canceled) {
+            bool shutting_down;
             {
                 AutoWriteLock al(m);
+                shutting_down = stopping;
                 remove connections{uh};
             }
+            # A cancel during shutdown is routine; at any other time it means an
+            # in-flight TLS handshake was torn down for a reason the client can only
+            # observe as an unexplained connection close, so make it visible.
+            log(shutting_down ? LoggerLevel::DEBUG : LoggerLevel::WARN,
+                "SSL handshake canceled for %s%s", uh, shutting_down ? " (shutting down)" : "");
             return;
         }
 
@@ -4484,14 +4500,27 @@ public class HttpAsyncSocketIoController {
                     HttpConnectionState::Http2);
                 controller.wakeSocket(cinfo.sock);
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR,
+                # Submitting a response onto a connection that has already gone away
+                # (client disconnect, server shutdown) is a routine race, not a server
+                # fault: the HTTP/2 session is torn down with the socket, so
+                # submitHttp2Response() reports "no HTTP/2 session active".  Reporting
+                # that at ERROR drowns out genuine failures, and there is no peer left
+                # to send RST_STREAM to either.
+                bool connection_gone = True;
+                try {
+                    connection_gone = !cinfo.sock.isOpen();
+                } catch (hash<ExceptionInfo> ex2) {
+                }
+                log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
-                # Send RST_STREAM so the client gets an error instead of waiting forever
-                try {
-                    cinfo.sock.resetHttp2Stream(stream_id);
-                    controller.wakeSocket(cinfo.sock);
-                } catch () {}
+                if (!connection_gone) {
+                    # Send RST_STREAM so the client gets an error instead of waiting forever
+                    try {
+                        cinfo.sock.resetHttp2Stream(stream_id);
+                        controller.wakeSocket(cinfo.sock);
+                    } catch () {}
+                }
             }
             return;
         }

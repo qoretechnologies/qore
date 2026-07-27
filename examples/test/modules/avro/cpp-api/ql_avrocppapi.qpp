@@ -1,0 +1,240 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file ql_avrocppapi.qpp Qore-language drivers for the avro C++ API tests */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "avrocppapi-module.h"
+
+/** @defgroup avrocppapi_functions avrocppapi Test Module Functions
+    Drivers that let examples/test/modules/avro/AvroCppApi.qtest exercise every member of
+    QoreAvroApi from Qore-language code.  Each one resolves the avro module's C++ API, parses the
+    schema through it, and releases every handle it takes.
+*/
+///@{
+namespace Qore::AvroCppApi;
+
+//! returns the version of the avro C++ API struct this module resolved
+/** @return a hash with \c major and \c minor keys taken from the resolved struct's header
+*/
+hash<auto> avro_cpp_api_version() [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("major", static_cast<int64>(api->hdr.major), xsink);
+    rv->setKeyValue("minor", static_cast<int64>(api->hdr.minor), xsink);
+    return rv.release();
+}
+
+//! decodes an Avro binary datum against a schema given as JSON text
+/** @param schema_json the schema as JSON text
+    @param data the Avro binary encoding of one datum
+
+    @return the decoded value
+*/
+auto avro_cpp_decode(string schema_json, binary data) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->decode(*schema, data->getPtr(), data->size(), xsink);
+}
+
+//! decodes an Avro binary datum applying the specification's schema resolution rules
+/** @param writer_json the schema the data were written with, as JSON text
+    @param reader_json the schema to read the data as, as JSON text
+    @param data the Avro binary encoding of one datum
+
+    @return the decoded value
+*/
+auto avro_cpp_decode_resolved(string writer_json, string reader_json, binary data) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder writer(api, avrocppapi_parse(api, *writer_json, xsink));
+    if (!writer) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder reader(api, avrocppapi_parse(api, *reader_json, xsink));
+    if (!reader) {
+        return QoreValue();
+    }
+    return api->decode_resolved(*writer, *reader, data->getPtr(), data->size(), xsink);
+}
+
+//! encodes a %Qore value as an Avro binary datum against a schema given as JSON text
+/** @param schema_json the schema as JSON text
+    @param data the value to encode
+
+    @return the Avro binary encoding of the value, with no framing
+*/
+binary avro_cpp_encode(string schema_json, auto data) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->encode(*schema, data, xsink);
+}
+
+//! decodes an Avro binary datum against a schema given as %Qore data
+/** @param schema_def the schema as a hash, list or string
+    @param data the Avro binary encoding of one datum
+
+    @return the decoded value
+*/
+auto avro_cpp_decode_value_schema(auto schema_def, binary data) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, api->parse_schema_value(schema_def, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->decode(*schema, data->getPtr(), data->size(), xsink);
+}
+
+//! returns the CRC-64-AVRO fingerprint of a schema's Parsing Canonical Form
+/** @param schema_json the schema as JSON text
+
+    @return the fingerprint
+*/
+int avro_cpp_fingerprint(string schema_json) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->fingerprint(*schema);
+}
+
+//! returns the Avro Parsing Canonical Form of a schema
+/** @param schema_json the schema as JSON text
+
+    @return the Parsing Canonical Form
+*/
+string avro_cpp_canonical_form(string schema_json) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->canonical_form(*schema);
+}
+
+//! round-trips a schema through the C++ API and returns it as JSON text again
+/** @param schema_json the schema as JSON text
+
+    @return the schema as JSON text in UTF-8
+*/
+string avro_cpp_schema_json(string schema_json) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->schema_json(*schema, xsink);
+}
+
+//! returns the Parsing Canonical Form of a named type declared inside a schema
+/** @param schema_json the schema as JSON text
+    @param fullname the full name of the named type (ex: \c "com.example.Event")
+
+    @return the named type's Parsing Canonical Form, or @ref nothing if the schema declares no
+        such type
+*/
+*string avro_cpp_named_type_canonical_form(string schema_json, string fullname) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder named(api, api->named_type(*schema, fullname->c_str()));
+    if (!named) {
+        return QoreValue();
+    }
+    return api->canonical_form(*named);
+}
+
+//! parses a schema in C++ and returns the corresponding %Qore AvroSchema object
+/** @param schema_json the schema as JSON text
+
+    @return a \c Qore::Avro::AvroSchema object for the schema parsed in C++
+*/
+object avro_cpp_schema_object(string schema_json) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, avrocppapi_parse(api, *schema_json, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->schema_object(*schema, xsink);
+}
+
+//! returns the fingerprint of the schema held by a %Qore AvroSchema object
+/** Takes the handle back out of an object that %Qore-language code created, which is the
+    direction an event source needs when a schema was parsed on the Qore side.
+
+    @param obj a \c Qore::Avro::AvroSchema object
+
+    @return the CRC-64-AVRO fingerprint of the object's schema
+
+    @throw AVRO-SCHEMA-ERROR \a obj is not an \c AvroSchema object
+*/
+int avro_cpp_fingerprint_of_object(object obj) [flags=RET_VALUE_ONLY] {
+    const QoreAvroApi* api = avrocppapi_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    QoreAvroSchemaHolder schema(api, api->schema_from_object(obj, xsink));
+    if (!schema) {
+        return QoreValue();
+    }
+    return api->fingerprint(*schema);
+}
+///@}

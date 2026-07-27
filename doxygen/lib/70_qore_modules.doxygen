@@ -152,4 +152,21 @@
 
     @note Classes must not be created more than once, because each Qore class gets a unique ID at creation time.
     Initialize classes in the \c init callback and use \c copy() in the \c ns_init callback.
+
+    @subsection module_cpp_api_dev Sharing a C++ API Between Modules
+
+    A module can publish a C++ API for other binary modules to consume, without the API having to be moved into
+    libqore.  The exporting module declares a struct of function pointers in an installed header and publishes it
+    through a single \c extern \c "C" entry point; the consuming module includes only that header and resolves the
+    struct at run time with @ref q_get_module_cpp_api(), which loads the exporting module on demand and verifies that
+    the version it publishes can serve the version the consumer was compiled against.
+
+    A version mismatch between two independently released modules is therefore a %Qore-language exception at
+    resolution time rather than a process abort at the first call, and an optional C++ dependency becomes possible —
+    the C++ equivalent of the \c %%try-module directive.
+
+    See @ref module_cpp_api for the entry point naming convention, the append-only and public-ABI-types-only rules,
+    the process for bumping the major version, and complete producer and consumer examples.  Two builtin modules
+    publish C++ APIs this way and are worth reading as real examples of both sides: @ref json_cpp_api, and
+    @ref avro_cpp_api, which is itself a consumer of the first.
  */

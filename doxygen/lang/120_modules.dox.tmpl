@@ -74,6 +74,11 @@ ModuleName/
         pluggable transport support
     |user|<a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>|Provides an API for asynchronous \
         (polling-based) socket I/O
+    |binary|<a href="../../modules/avro/html/index.html#avrointro">avro</a>|Provides <a href="https://avro.apache.org">Apache Avro</a> \
+        schema parsing, the binary datum codec in both directions, object container files, and \
+        reader/writer schema resolution, also provides the following user module:\n\
+        - <a href="../../modules/AvroUtil/html/index.html#avroutilintro">AvroUtil</a>: maps Avro schemas to \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> types
     |user|<a href="../../modules/AwsEventStream/html/index.html#awseventstreamintro">AwsEventStream</a>|Decodes the AWS event-stream binary framing format used by Bedrock \
         streaming, Kinesis, S3 Select, and Transcribe streaming
     |user|<a href="../../modules/AwsRestClient/html/index.html#awsrestclientintro">AwsRestClient</a>|Provides a REST API for AWS services
@@ -951,7 +956,11 @@ ModuleName/
             for gRPC services\n\
         - <a href="https://github.com/qoretechnologies/module-grpc">ArrowFlightDataProvider</a>: \
             provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
-            for Apache Arrow Flight columnar data transport
+            for Apache Arrow Flight columnar data transport\n\
+        - <a href="https://github.com/qoretechnologies/module-grpc">SalesforcePubSubDataProvider</a>: \
+            provides a Salesforce <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a> \
+            event source for platform events, Change Data Capture events and custom channels; attaches itself \
+            to @ref salesforcerestdataproviderintro "SalesforceRestDataProvider" as its \c "pubsub" child
     |binary|<a href="https://github.com/qoretechnologies/module-imagemagick">imagemagick</a>|Provides comprehensive image \
         processing and manipulation via <a href="https://imagemagick.org/">ImageMagick</a> MagickWand API, \
         supporting 200+ formats, transformations, effects, and compositing, also provides the following user module:\n\

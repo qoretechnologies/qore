@@ -1,0 +1,129 @@
+/** @mainpage Qore avro Module
+
+    @tableofcontents
+
+    @section avrointro avro Module Introduction
+
+    The \c avro module implements <a href="https://avro.apache.org">Apache Avro</a> for %Qore:
+    schema parsing, the binary datum codec in both directions, object container files, and
+    reader/writer schema resolution.
+
+    Avro is schema-driven. The encoded bytes carry no field names, no tags and no type markers —
+    just values packed in schema order — so nothing can be decoded without the schema, and the
+    schema is itself a JSON document. The module therefore supports both framings that occur in
+    practice:
+
+    - a <b>bare datum</b>, which has no framing at all and is decoded against a schema supplied
+      out of band, typically resolved at runtime by ID; this is what streaming APIs such as the
+      <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Salesforce
+      Pub/Sub API</a> deliver
+    - an <b>object container file</b>, which is self-describing: the schema and codec are in the
+      header, followed by blocks of records
+
+    @section avrocapabilities Key Capabilities
+
+    - full schema parsing with a named-type registry, so recursive and re-referenced types work
+    - every Avro type: \c null, \c boolean, \c int, \c long, \c float, \c double, \c bytes,
+      \c string, \c record, \c enum, \c array, \c map, \c union and \c fixed
+    - every logical type: \c decimal (at arbitrary precision), \c uuid, \c date, \c time-millis,
+      \c time-micros, \c timestamp-millis, \c timestamp-micros, \c local-timestamp-millis,
+      \c local-timestamp-micros and \c duration
+    - reader/writer schema resolution following the specification's reconciliation rules
+    - object container files with the \c null and \c deflate codecs, over a file path, a
+      \c binary value, or a %Qore @ref Qore::InputStream "InputStream" /
+      @ref Qore::OutputStream "OutputStream"
+    - Parsing Canonical Form and the CRC-64-AVRO fingerprint, for content-addressed schema caches
+    - a companion <a href="../../AvroUtil/html/index.html#avroutilintro">AvroUtil</a> user
+      module mapping Avro schemas to
+      <a href="../../DataProvider/html/index.html#dataproviderintro">data provider</a> types
+    - a versioned C++ API for other binary modules, so a consumer that decodes many data against a
+      schema supplied out of band can do so without a %Qore-language call per datum; see
+      @ref avrocppapisec below
+
+    @section avroclasses avro Module Classes
+
+    |!Class|!Description
+    |@ref Qore::Avro::AvroSchema "AvroSchema"|a parsed, immutable schema; parses schema JSON and \
+        encodes and decodes bare data against it
+    |@ref Qore::Avro::AvroFileReader "AvroFileReader"|reads an object container file; an \
+        @ref Qore::AbstractIterator "AbstractIterator" over the objects it holds
+    |@ref Qore::Avro::AvroFileWriter "AvroFileWriter"|writes an object container file
+
+    @section avroquickstart At a Glance
+
+    @code{.py}
+%requires avro
+
+AvroSchema schema('{"type": "record", "name": "Event", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long"}
+]}');
+
+binary data = schema.encode({"id": "a", "count": 1});
+hash<auto> event = schema.decode(data);
+    @endcode
+
+    @section avropages Documentation
+
+    - @subpage avrogettingstarted
+    - @subpage avrocookbook
+    - @subpage avroschemaguide
+    - @subpage avrorelnotes
+
+    @section avroexceptions Exceptions
+
+    |!Error Code|!Raised When
+    |\c AVRO-SCHEMA-ERROR|the schema is not valid Avro
+    |\c AVRO-DECODE-ERROR|the data do not match the schema, or are truncated
+    |\c AVRO-ENCODE-ERROR|the value cannot be represented by the schema
+    |\c AVRO-RESOLUTION-ERROR|the reader and writer schemas cannot be reconciled
+    |\c AVRO-CODEC-ERROR|an unsupported or corrupt container-file codec
+    |\c AVRO-FILE-ERROR|container-file framing is invalid
+
+    @section avrolimits Limits
+
+    Values chosen so that hostile or corrupt input cannot exhaust the process:
+
+    |!Limit|!Value|!Applies To
+    |maximum nesting depth|256|schemas and data alike; a recursive schema lets the *data* drive \
+        recursion depth, so this is enforced in all builds, not only under sandboxing
+    |maximum decimal precision|1000|schema \c precision attribute; conversion between base 256 \
+        and base 10 is quadratic in the digit count
+    |maximum container block size|256 MiB|both the stored block size and the size a compressed \
+        block expands to
+    |maximum elements of a zero-width type|1000000|an \c array or \c map whose element type can \
+        encode to zero bytes; for every other element type the block count is bounded by the \
+        remaining input
+
+    @section avrosandbox Sandboxing and Cancellation
+
+    - @ref Qore::Avro::AvroFileReader::constructor(string) and
+      @ref Qore::Avro::AvroFileWriter "AvroFileWriter::constructor(string, AvroSchema, *hash)"
+      are tagged
+      with the @ref Qore::PO_NO_FILESYSTEM "FILESYSTEM" functional domain; the \c binary and
+      stream forms are not, so they remain usable in a filesystem-restricted
+      @ref Qore::Program "Program"
+    - every unbounded encode and decode loop is a cancellation point, so a long operation can be
+      interrupted with @ref Qore::cancel_thread() or a
+      @ref Qore::SandboxManager "SandboxManager" interrupt
+
+    @section avrocppapisec C++ API for Other Binary Modules
+
+    The schema parser and the binary codec are also published to other binary %Qore modules as a
+    versioned C++ API, so a consumer that decodes or encodes many data against a schema supplied
+    out of band &mdash; the Salesforce Pub/Sub API, for example, which sends bare data and answers
+    for the writer schema by ID &mdash; can do so from C++ without a %Qore-language call per datum.
+
+    The consumer includes only the installed <tt>&lt;qore/QoreAvroApi.h&gt;</tt> header, does not
+    link against this module, and resolves the API at run time, which loads the \c avro module on
+    demand.  A schema handle can be converted to and from a
+    @ref Qore::Avro::AvroSchema "AvroSchema" object, so a schema parsed on one side does not have
+    to be parsed again on the other.
+
+    See the \c "Avro C++ API" section of the %Qore library documentation for the API reference,
+    and \c "Developing Qore Modules" for the mechanism it is published through.
+
+    @section avrolicense License
+
+    The \c avro module is released under the MIT license.
+*/

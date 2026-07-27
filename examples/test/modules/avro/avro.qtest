@@ -1,0 +1,462 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  avro.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires avro
+%requires json
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AvroTest
+
+#! tests the Avro binary datum codec against fixed byte vectors
+/** Every expected byte string below is taken from the Avro specification's encoding rules and was
+    verified against an independent Avro implementation, so these tests validate the encoding
+    itself and not merely that the module agrees with itself.
+*/
+class AvroTest inherits QUnit::Test {
+    public {
+        #! (schema JSON, value, expected encoding as hex)
+        const Vectors = (
+            ('"null"',    NOTHING,     ""),
+            ('"boolean"', True,        "01"),
+            ('"boolean"', False,       "00"),
+            ('"int"',     0,           "00"),
+            ('"int"',     -1,          "01"),
+            ('"int"',     1,           "02"),
+            ('"int"',     64,          "8001"),
+            ('"int"',     -64,         "7f"),
+            ('"int"',     2147483647,  "feffffff0f"),
+            ('"int"',     -2147483648, "ffffffff0f"),
+            ('"long"',    64,          "8001"),
+            ('"long"',    -65,         "8101"),
+            ('"long"',    1234567890123456789, "aa84ccde8fbd88a222"),
+            ('"long"',    9223372036854775807, "feffffffffffffffff01"),
+            ('"float"',   1.5,         "0000c03f"),
+            ('"float"',   -0.5,        "000000bf"),
+            ('"double"',  1.5,         "000000000000f83f"),
+            ('"double"',  -0.75,       "000000000000e8bf"),
+            ('"string"',  "foo",       "06666f6f"),
+            ('"string"',  "",          "00"),
+            ('"string"',  "é中",       "0ac3a9e4b8ad"),
+            ('"bytes"',   <cafe>,      "04cafe"),
+        );
+
+        const RecordSchema = '{"type": "record", "name": "com.example.Event", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"},
+            {"name": "note", "type": ["null", "string"], "default": null}
+        ]}';
+
+        const NodeSchema = '{"type": "record", "name": "Node", "fields": [
+            {"name": "value", "type": "int"},
+            {"name": "next", "type": ["null", "Node"], "default": null}
+        ]}';
+
+        const EnumSchema = '{"type": "enum", "name": "Suit",
+            "symbols": ["SPADES", "HEARTS", "DIAMONDS", "CLUBS"]}';
+    }
+
+    constructor() : QUnit::Test("avro", "1.0") {
+        addTestCase("primitive vectors", \primitiveVectorTest());
+        addTestCase("record", \recordTest());
+        addTestCase("union", \unionTest());
+        addTestCase("enum", \enumTest());
+        addTestCase("array", \arrayTest());
+        addTestCase("map", \mapTest());
+        addTestCase("fixed", \fixedTest());
+        addTestCase("recursive schema", \recursiveTest());
+        addTestCase("schema forms", \schemaFormTest());
+        addTestCase("schema introspection", \introspectionTest());
+        addTestCase("named types", \namedTypeTest());
+        addTestCase("canonical form", \canonicalFormTest());
+        addTestCase("fingerprint", \fingerprintTest());
+        addTestCase("field defaults", \defaultTest());
+        addTestCase("union branch selection", \branchSelectionTest());
+        addTestCase("aliases", \aliasTest());
+        set_return_value(main());
+    }
+
+    primitiveVectorTest() {
+        foreach list<auto> v in (Vectors) {
+            AvroSchema schema(v[0]);
+            binary want = parse_hex_string(v[2]);
+            assertEq(want, schema.encode(v[1]), sprintf("encode %s %y", v[0], v[1]));
+            assertEq(v[1], schema.decode(want), sprintf("decode %s %y", v[0], v[1]));
+        }
+
+        # an empty bytes value is a zero length prefix and nothing else
+        AvroSchema b('"bytes"');
+        assertEq(parse_hex_string("00"), b.encode(binary()));
+        assertEq(binary(), b.decode(parse_hex_string("00")));
+
+        # a bare "string" schema also accepts a binary value's bytes when the schema is "bytes"
+        assertEq(parse_hex_string("046869"), b.encode("hi"));
+    }
+
+    recordTest() {
+        AvroSchema schema(RecordSchema);
+        assertEq("record", schema.getType());
+        assertEq("com.example.Event", schema.getName());
+        assertEq("com.example", schema.getNamespace());
+
+        binary data = schema.encode({"id": "abc", "count": 7, "note": NOTHING});
+        assertEq(parse_hex_string("066162630e00"), data);
+        assertEq({"id": "abc", "count": 7, "note": NOTHING}, schema.decode(data));
+
+        binary data2 = schema.encode({"id": "abc", "count": 7, "note": "hi"});
+        assertEq(parse_hex_string("066162630e02046869"), data2);
+        assertEq({"id": "abc", "count": 7, "note": "hi"}, schema.decode(data2));
+
+        # a hash key that is not a field is ignored; field order comes from the schema, not the hash
+        binary data3 = schema.encode({"count": 7, "id": "abc", "extra": "ignored"});
+        assertEq(data, data3);
+    }
+
+    unionTest() {
+        AvroSchema schema(("null", "string"));
+        assertEq("union", schema.getType());
+        assertNothing(schema.getName());
+
+        assertEq(parse_hex_string("00"), schema.encode(NOTHING));
+        assertEq(parse_hex_string("020874657374"), schema.encode("test"));
+        assertNothing(schema.decode(parse_hex_string("00")));
+        assertEq("test", schema.decode(parse_hex_string("020874657374")));
+
+        # NULL is accepted for the null branch as well as NOTHING
+        assertEq(parse_hex_string("00"), schema.encode(NULL));
+
+        # a three-branch union
+        AvroSchema three(("null", "long", "string"));
+        assertEq(parse_hex_string("028001"), three.encode(64));
+        assertEq(parse_hex_string("040874657374"), three.encode("test"));
+        assertEq(64, three.decode(three.encode(64)));
+        assertEq("test", three.decode(three.encode("test")));
+    }
+
+    enumTest() {
+        AvroSchema schema(EnumSchema);
+        assertEq("enum", schema.getType());
+        assertEq(("SPADES", "HEARTS", "DIAMONDS", "CLUBS"), schema.getSymbols());
+        assertNothing(schema.getEnumDefault());
+
+        assertEq(parse_hex_string("02"), schema.encode("HEARTS"));
+        assertEq("HEARTS", schema.decode(parse_hex_string("02")));
+        # an integer index selects the symbol at that position
+        assertEq(parse_hex_string("04"), schema.encode(2));
+        assertEq("DIAMONDS", schema.decode(parse_hex_string("04")));
+
+        AvroSchema with_default('{"type": "enum", "name": "E", "symbols": ["A", "B"],
+            "default": "A"}');
+        assertEq("A", with_default.getEnumDefault());
+    }
+
+    arrayTest() {
+        AvroSchema schema('{"type": "array", "items": "long"}');
+        assertEq("array", schema.getType());
+        assertEq("long", schema.getItemType().getType());
+
+        assertEq(parse_hex_string("0602040600"), schema.encode((1, 2, 3)));
+        assertEq((1, 2, 3), schema.decode(parse_hex_string("0602040600")));
+        assertEq(parse_hex_string("00"), schema.encode(()));
+        assertEq((), schema.decode(parse_hex_string("00")));
+
+        # the long-block form: a negative count followed by the block size in bytes
+        assertEq((1, 2, 3), schema.decode(parse_hex_string("0506" + "020406" + "00")));
+
+        # nested arrays
+        AvroSchema nested('{"type": "array", "items": {"type": "array", "items": "int"}}');
+        list<auto> v = ((1, 2), (), (3,));
+        assertEq(v, nested.decode(nested.encode(v)));
+    }
+
+    mapTest() {
+        AvroSchema schema('{"type": "map", "values": "string"}');
+        assertEq("map", schema.getType());
+        assertEq("string", schema.getItemType().getType());
+
+        hash<auto> v = {"a": "one", "b": "two"};
+        assertEq(parse_hex_string("040261066f6e6502620674776f00"), schema.encode(v));
+        assertEq(v, schema.decode(schema.encode(v)));
+        assertEq({}, schema.decode(parse_hex_string("00")));
+        assertEq(parse_hex_string("00"), schema.encode({}));
+    }
+
+    fixedTest() {
+        AvroSchema schema('{"type": "fixed", "name": "MD5", "size": 16}');
+        assertEq("fixed", schema.getType());
+        assertEq("MD5", schema.getName());
+        assertEq(16, schema.getFixedSize());
+
+        binary v = <000102030405060708090a0b0c0d0e0f>;
+        # a fixed value has no length prefix: the bytes are the whole encoding
+        assertEq(v, schema.encode(v));
+        assertEq(v, schema.decode(v));
+
+        AvroSchema zero('{"type": "fixed", "name": "Z", "size": 0}');
+        assertEq(binary(), zero.encode(binary()));
+        assertEq(binary(), zero.decode(binary()));
+    }
+
+    recursiveTest() {
+        AvroSchema schema(NodeSchema);
+        hash<auto> v = {
+            "value": 1,
+            "next": {"value": 2, "next": {"value": 3, "next": NOTHING}},
+        };
+        assertEq(parse_hex_string("020204020600"), schema.encode(v));
+        assertEq(v, schema.decode(schema.encode(v)));
+
+        # a self-reference resolves to the same node, so the registry holds exactly one entry
+        assertEq(("Node",), schema.getNamedTypeNames());
+    }
+
+    schemaFormTest() {
+        # a bare primitive name, an object with a type attribute, and Qore data are all schemas
+        AvroSchema a('"int"');
+        AvroSchema b('{"type": "int"}');
+        assertEq(a.getCanonicalForm(), b.getCanonicalForm());
+
+        AvroSchema fromhash({
+            "type": "record",
+            "name": "Point",
+            "fields": (
+                {"name": "x", "type": "double"},
+                {"name": "y", "type": "double"},
+            ),
+        });
+        assertEq("Point", fromhash.getName());
+        hash<auto> p = {"x": 1.5, "y": -2.5};
+        assertEq(p, fromhash.decode(fromhash.encode(p)));
+
+        AvroSchema fromlist(("null", "int"));
+        assertEq("union", fromlist.getType());
+        assertEq(2, fromlist.getBranches().size());
+
+        # getHash() returns the schema as it was parsed, getJson() the same as text
+        AvroSchema r(RecordSchema);
+        assertEq("record", r.getHash().type);
+        assertEq("record", parse_json(r.getJson()).type);
+
+        # a namespace attribute qualifies an unqualified name
+        AvroSchema ns('{"type": "record", "name": "R", "namespace": "a.b", "fields": []}');
+        assertEq("a.b.R", ns.getName());
+        assertEq("a.b", ns.getNamespace());
+
+        # a name containing a dot is a fullname and the namespace attribute is ignored
+        AvroSchema full('{"type": "record", "name": "c.d.R", "namespace": "a.b", "fields": []}');
+        assertEq("c.d.R", full.getName());
+    }
+
+    introspectionTest() {
+        AvroSchema schema(RecordSchema);
+        list<auto> fields = schema.getFields();
+        assertEq(3, fields.size());
+
+        hash<AvroFieldInfo> f0 = fields[0];
+        assertEq("id", f0.name);
+        assertEq("string", f0.type.getType());
+        assertFalse(f0.has_default);
+        assertEq((), f0.aliases);
+
+        hash<AvroFieldInfo> f2 = fields[2];
+        assertEq("note", f2.name);
+        assertEq("union", f2.type.getType());
+        assertTrue(f2.has_default);
+        assertNothing(f2.default_value);
+        assertEq(("null", "string"), map $1.getType(), f2.type.getBranches());
+
+        # non-record schemas return empty introspection rather than raising
+        AvroSchema prim('"int"');
+        assertEq((), prim.getFields());
+        assertEq((), prim.getBranches());
+        assertEq((), prim.getSymbols());
+        assertNothing(prim.getItemType());
+        assertEq(0, prim.getFixedSize());
+        assertEq(0, prim.getPrecision());
+        assertEq(0, prim.getScale());
+        assertNothing(prim.getLogicalType());
+    }
+
+    namedTypeTest() {
+        AvroSchema schema('{"type": "record", "name": "a.Outer", "fields": [
+            {"name": "inner", "type": {"type": "record", "name": "Inner",
+                "fields": [{"name": "v", "type": "int"}]}},
+            {"name": "again", "type": "Inner"},
+            {"name": "e", "type": {"type": "enum", "name": "E", "symbols": ["X"]}},
+            {"name": "f", "type": {"type": "fixed", "name": "F", "size": 2}}
+        ]}');
+
+        # nested names inherit the enclosing namespace, and are listed in definition order
+        assertEq(("a.Outer", "a.Inner", "a.E", "a.F"), schema.getNamedTypeNames());
+
+        *AvroSchema inner = schema.getNamedType("a.Inner");
+        assertTrue(exists inner);
+        assertEq("record", inner.getType());
+        assertEq("a.Inner", inner.getName());
+        assertEq(("v",), map $1.name, inner.getFields());
+
+        assertNothing(schema.getNamedType("no.such.Type"));
+
+        # a handle rooted at an interior type keeps the parsed schema alive and encodes on its own
+        assertEq({"v": 7}, inner.decode(inner.encode({"v": 7})));
+
+        # the second reference to Inner is the same node, so both fields encode identically
+        hash<auto> v = {"inner": {"v": 1}, "again": {"v": 2}, "e": "X", "f": <0102>};
+        assertEq(v, schema.decode(schema.encode(v)));
+    }
+
+    canonicalFormTest() {
+        # documentation, aliases, default values and whitespace do not change how data are read
+        AvroSchema a('{"type": "record", "name": "R", "doc": "hello",
+            "fields": [{"name": "f", "type": "int", "doc": "a field", "default": 3}]}');
+        AvroSchema b('{"type":"record","name":"R","fields":[{"name":"f","type":"int"}]}');
+        assertEq(b.getCanonicalForm(), a.getCanonicalForm());
+        assertEq('{"name":"R","type":"record","fields":[{"name":"f","type":"int"}]}',
+            a.getCanonicalForm());
+
+        # a logical type is stripped, so it does not change the canonical form either
+        AvroSchema logical('{"type": "long", "logicalType": "timestamp-micros"}');
+        assertEq('"long"', logical.getCanonicalForm());
+
+        # names are resolved to fullnames and repeat references stay as the fullname
+        AvroSchema nested('{"type": "record", "name": "R", "namespace": "x", "fields": [
+            {"name": "a", "type": {"type": "fixed", "name": "F", "size": 4}},
+            {"name": "b", "type": "F"}
+        ]}');
+        assertEq('{"name":"x.R","type":"record","fields":['
+            + '{"name":"a","type":{"name":"x.F","type":"fixed","size":4}},'
+            + '{"name":"b","type":"x.F"}]}', nested.getCanonicalForm());
+
+        AvroSchema en('{"type": "enum", "name": "E", "symbols": ["A", "B"], "default": "A"}');
+        assertEq('{"name":"E","type":"enum","symbols":["A","B"]}', en.getCanonicalForm());
+    }
+
+    fingerprintTest() {
+        # the specification's own example: the CRC-64-AVRO fingerprint of "null" is
+        # 7195948357588979594
+        AvroSchema n('"null"');
+        assertEq(7195948357588979594, n.getFingerprint());
+
+        # schemas that differ only in documentation share a fingerprint, so it is usable as a
+        # cache key
+        AvroSchema a('{"type": "record", "name": "R", "doc": "one",
+            "fields": [{"name": "f", "type": "int"}]}');
+        AvroSchema b('{"type": "record", "name": "R",
+            "fields": [{"name": "f", "type": "int"}]}');
+        assertEq(a.getFingerprint(), b.getFingerprint());
+
+        # a schema that reads data differently does not
+        AvroSchema c('{"type": "record", "name": "R",
+            "fields": [{"name": "f", "type": "long"}]}');
+        assertNeq(a.getFingerprint(), c.getFingerprint());
+    }
+
+    defaultTest() {
+        AvroSchema schema('{"type": "record", "name": "D", "fields": [
+            {"name": "i", "type": "int", "default": 3},
+            {"name": "s", "type": "string", "default": "x"},
+            {"name": "b", "type": "boolean", "default": true},
+            {"name": "d", "type": "double", "default": 1.5},
+            {"name": "by", "type": "bytes", "default": "Êþ"},
+            {"name": "fx", "type": {"type": "fixed", "name": "F2", "size": 2},
+                "default": ""},
+            {"name": "n", "type": "null", "default": null},
+            {"name": "a", "type": {"type": "array", "items": "int"}, "default": [1, 2]},
+            {"name": "m", "type": {"type": "map", "values": "int"}, "default": {"k": 5}},
+            {"name": "e", "type": {"type": "enum", "name": "E3", "symbols": ["P", "Q"]},
+                "default": "Q"},
+            {"name": "u", "type": ["int", "null"], "default": 9}
+        ]}');
+
+        # every field is supplied from its default when the hash omits it
+        hash<auto> v = schema.decode(schema.encode({}));
+        assertEq(3, v.i);
+        assertEq("x", v.s);
+        assertEq(True, v.b);
+        assertEq(1.5, v.d);
+        assertEq(<cafe>, v.by);
+        assertEq(<0102>, v.fx);
+        assertNothing(v.n);
+        assertEq((1, 2), v.a);
+        assertEq({"k": 5}, v.m);
+        assertEq("Q", v.e);
+        assertEq(9, v.u);
+    }
+
+    branchSelectionTest() {
+        # an int prefers "int" when it fits, "long" otherwise
+        AvroSchema il(("int", "long"));
+        assertEq(parse_hex_string("0002"), il.encode(1));
+        assertEq(parse_hex_string("02" + "feffffffffffffffff01"), il.encode(9223372036854775807));
+
+        # a float prefers "double" over "float", so no precision is lost
+        AvroSchema fd(("float", "double"));
+        assertEq(0.1, fd.decode(fd.encode(0.1)));
+
+        # a string that is a symbol of an enum branch selects the enum
+        AvroSchema se('["string", {"type": "enum", "name": "E4", "symbols": ["A"]}]');
+        assertEq(parse_hex_string("0200"), se.encode("A"));
+        assertEq("A", se.decode(se.encode("A")));
+        # a string that is not a symbol falls back to the string branch
+        assertEq("zz", se.decode(se.encode("zz")));
+
+        # a binary prefers "bytes" over a "fixed" of the same size
+        AvroSchema bf('["bytes", {"type": "fixed", "name": "F4", "size": 2}]');
+        assertEq(parse_hex_string("00040102"), bf.encode(<0102>));
+        assertEq(<0102>, bf.decode(bf.encode(<0102>)));
+
+        # a hash chooses the record branch it satisfies with the fewest unmatched keys
+        AvroSchema recs('[
+            {"type": "record", "name": "A", "fields": [{"name": "a", "type": "int"}]},
+            {"type": "record", "name": "B", "fields": [{"name": "b", "type": "int"}]}
+        ]');
+        assertEq({"b": 5}, recs.decode(recs.encode({"b": 5})));
+        assertEq({"a": 5}, recs.decode(recs.encode({"a": 5})));
+
+        # a hash with no matching record branch falls back to a map branch
+        AvroSchema recmap('[
+            {"type": "record", "name": "C", "fields": [{"name": "c", "type": "int"}]},
+            {"type": "map", "values": "int"}
+        ]');
+        assertEq({"z": 1, "y": 2}, recmap.decode(recmap.encode({"z": 1, "y": 2})));
+    }
+
+    aliasTest() {
+        # a named type's aliases are resolved against its own namespace
+        AvroSchema schema('{"type": "record", "name": "R", "namespace": "n",
+            "aliases": ["Old", "other.Name"], "fields": [
+                {"name": "f", "type": "int", "aliases": ["g"]}
+            ]}');
+        assertEq("n.R", schema.getName());
+        hash<AvroFieldInfo> f = schema.getFields()[0];
+        assertEq(("g",), f.aliases);
+
+        # a field may be supplied under its alias name when encoding is not involved: aliases
+        # matter for resolution, and the field itself still encodes under its real name
+        assertEq({"f": 1}, schema.decode(schema.encode({"f": 1})));
+    }
+}

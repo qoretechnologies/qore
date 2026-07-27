@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroCppApi.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+# the "avrocppapi" test module consumes the avro module's C++ API and exposes the results to
+# Qore; it is built into the build tree by examples/test/modules/avro/cpp-api/CMakeLists.txt and
+# is never installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires avrocppapi
+%requires avro
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AvroCppApiTest
+
+#! tests the C++ API the avro module publishes through the module C++ API mechanism
+/** Every case here crosses a real module boundary: the \c avrocppapi test module links against
+    neither libavro nor the \c avro module, includes only the installed <qore/QoreAvroApi.h>, and
+    resolves the struct at run time.  Results are checked against the same operations performed
+    through the \c Qore::Avro::AvroSchema class, so the two paths are proven to share one
+    implementation rather than merely to agree with themselves.
+*/
+class AvroCppApiTest inherits QUnit::Test {
+    public {
+        const RecordSchema = '{"type": "record", "name": "com.example.Event", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"},
+            {"name": "note", "type": ["null", "string"], "default": null}
+        ]}';
+
+        #! the same record with a field added, for the resolution test
+        const ReaderSchema = '{"type": "record", "name": "com.example.Event", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"},
+            {"name": "note", "type": ["null", "string"], "default": null},
+            {"name": "source", "type": "string", "default": "unknown"}
+        ]}';
+
+        #! a schema with a named type nested inside it
+        const NestedSchema = '{"type": "record", "name": "com.example.Outer", "fields": [
+            {"name": "inner", "type": {"type": "record", "name": "com.example.Inner",
+                "fields": [{"name": "v", "type": "int"}]}},
+            {"name": "again", "type": "com.example.Inner"}
+        ]}';
+
+        const Event = {"id": "abc", "count": 7, "note": "hello"};
+    }
+
+    constructor() : QUnit::Test("AvroCppApi", "1.0") {
+        addTestCase("api version", \versionTest());
+        addTestCase("decode and encode", \codecTest());
+        addTestCase("schema resolution", \resolutionTest());
+        addTestCase("schema identity", \identityTest());
+        addTestCase("named types", \namedTypeTest());
+        addTestCase("Qore object bridge", \objectBridgeTest());
+        addTestCase("negative", \negativeTest());
+        set_return_value(main());
+    }
+
+    versionTest() {
+        # the consumer compiled against 1.0 and the module publishes exactly that; appending a
+        # member to QoreAvroApi bumps the minor and this expectation with it
+        hash<auto> v = avro_cpp_api_version();
+        assertEq(1, v.major);
+        assertEq(0, v.minor);
+    }
+
+    codecTest() {
+        AvroSchema schema(RecordSchema);
+        binary want = schema.encode(Event);
+
+        # encoding through the C++ API must produce the same bytes as the Qore class
+        assertEq(want, avro_cpp_encode(RecordSchema, Event));
+
+        # ... and decoding it must produce the same value
+        assertEq(Event, avro_cpp_decode(RecordSchema, want));
+        assertEq(schema.decode(want), avro_cpp_decode(RecordSchema, want));
+
+        # a schema supplied as Qore data rather than JSON text
+        hash<auto> schema_def = parse_json(RecordSchema);
+        assertEq(Event, avro_cpp_decode_value_schema(schema_def, want));
+
+        # primitives, including the zero-length encodings
+        assertEq(parse_hex_string("06666f6f"), avro_cpp_encode('"string"', "foo"));
+        assertEq("foo", avro_cpp_decode('"string"', parse_hex_string("06666f6f")));
+        assertEq(binary(), avro_cpp_encode('"null"', NOTHING));
+        assertEq(NOTHING, avro_cpp_decode('"null"', binary()));
+        assertEq(1234567890123456789, avro_cpp_decode('"long"',
+            parse_hex_string("aa84ccde8fbd88a222")));
+
+        # a union branch selected through the C++ API
+        assertEq(Event - "note" + {"note": NOTHING},
+            avro_cpp_decode(RecordSchema, avro_cpp_encode(RecordSchema, Event - "note")));
+    }
+
+    resolutionTest() {
+        # data written with the older schema, read with the newer one: the added field takes its
+        # declared default
+        binary data = avro_cpp_encode(RecordSchema, Event);
+        hash<auto> got = avro_cpp_decode_resolved(RecordSchema, ReaderSchema, data);
+        assertEq("unknown", got.source);
+        assertEq(Event.id, got.id);
+        assertEq(Event.count, got.count);
+
+        # the same result the Qore class produces
+        AvroSchema reader(ReaderSchema);
+        AvroSchema writer(RecordSchema);
+        assertEq(reader.decode(data, writer), got);
+    }
+
+    identityTest() {
+        AvroSchema schema(RecordSchema);
+
+        # the fingerprint and canonical form are the schema's identity, so they must be identical
+        # on both paths -- this is what a schema cache keyed by fingerprint depends on
+        assertEq(schema.getFingerprint(), avro_cpp_fingerprint(RecordSchema));
+        assertEq(schema.getCanonicalForm(), avro_cpp_canonical_form(RecordSchema));
+
+        # a schema that differs only in documentation has the same fingerprint
+        string documented = '{"type": "record", "name": "com.example.Event", "doc": "an event",
+            "fields": [
+                {"name": "id", "type": "string"},
+                {"name": "count", "type": "long"},
+                {"name": "note", "type": ["null", "string"], "default": null}
+            ]}';
+        assertEq(avro_cpp_fingerprint(RecordSchema), avro_cpp_fingerprint(documented));
+
+        # ... and a different schema does not
+        assertNeq(avro_cpp_fingerprint(RecordSchema), avro_cpp_fingerprint(ReaderSchema));
+
+        # the schema round-trips back to JSON text and re-parses to the same schema
+        string json = avro_cpp_schema_json(RecordSchema);
+        assertEq(avro_cpp_fingerprint(RecordSchema), avro_cpp_fingerprint(json));
+    }
+
+    namedTypeTest() {
+        AvroSchema outer(NestedSchema);
+        AvroSchema inner = outer.getNamedType("com.example.Inner");
+
+        # a handle rooted at an interior named type, taken through the C++ API
+        assertEq(inner.getCanonicalForm(),
+            avro_cpp_named_type_canonical_form(NestedSchema, "com.example.Inner"));
+
+        # the schema itself is a named type too
+        assertEq(outer.getCanonicalForm(),
+            avro_cpp_named_type_canonical_form(NestedSchema, "com.example.Outer"));
+
+        # a name the schema does not declare returns nothing rather than raising
+        assertNothing(avro_cpp_named_type_canonical_form(NestedSchema, "com.example.Missing"));
+    }
+
+    objectBridgeTest() {
+        # a schema parsed in C++, handed to Qore as an AvroSchema object
+        object o = avro_cpp_schema_object(RecordSchema);
+        assertTrue(o instanceof AvroSchema, "C++ handle -> Qore object");
+        AvroSchema schema = cast<AvroSchema>(o);
+        assertEq("record", schema.getType());
+        assertEq("com.example.Event", schema.getName());
+
+        # the object is a fully working AvroSchema, not a shell
+        binary data = schema.encode(Event);
+        assertEq(Event, schema.decode(data));
+        assertEq(avro_cpp_fingerprint(RecordSchema), schema.getFingerprint());
+
+        # and the reverse direction: a schema parsed in Qore, taken back into C++
+        AvroSchema qore_schema(RecordSchema);
+        assertEq(qore_schema.getFingerprint(), avro_cpp_fingerprint_of_object(qore_schema));
+
+        # an interior named type survives the round trip as well
+        AvroSchema nested(NestedSchema);
+        AvroSchema inner = nested.getNamedType("com.example.Inner");
+        assertEq(inner.getFingerprint(), avro_cpp_fingerprint_of_object(inner));
+    }
+
+    negativeTest() {
+        # an invalid schema raises the module's own exception across the boundary
+        assertThrows("AVRO-SCHEMA-ERROR", \avro_cpp_decode(), ('{"type": "nosuchtype"}', binary()));
+
+        # text that is not JSON at all fails in the JSON parse, before schema validation
+        assertThrows("JSON-PARSE-ERROR", \avro_cpp_fingerprint(), ("not json at all",));
+
+        # truncated data
+        assertThrows("AVRO-DECODE-ERROR", \avro_cpp_decode(), (RecordSchema, parse_hex_string("06")));
+
+        # a value the schema cannot represent
+        assertThrows("AVRO-ENCODE-ERROR", \avro_cpp_encode(), ('"int"', "not an int"));
+
+        # incompatible writer and reader schemas
+        assertThrows("AVRO-RESOLUTION-ERROR", \avro_cpp_decode_resolved(),
+            ('"string"', '"int"', parse_hex_string("06666f6f")));
+
+        # an object of the wrong class handed to schema_from_object()
+        assertThrows("OBJECT-INCOMPATIBLE", \avro_cpp_fingerprint_of_object(), new Mutex());
+    }
+}

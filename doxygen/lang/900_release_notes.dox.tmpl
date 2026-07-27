@@ -236,10 +236,10 @@
     - Unicode-aware case conversion (1-to-many uppercase mappings, fixed UTF-8 corruption bug)
 
     <i>Modules and integrations:</i>
-    - new builtin modules: @ref dataframeintro "dataframe", @ref i18nintro "i18n",
-      @ref jsonintro "json", @ref krb5intro "krb5", @ref linenoiseintro "linenoise",
-      @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
-      @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
+    - new builtin modules: @ref avrointro "avro", @ref dataframeintro "dataframe",
+      @ref i18nintro "i18n", @ref jsonintro "json", @ref krb5intro "krb5",
+      @ref linenoiseintro "linenoise", @ref mlintro "ml", @ref mongodbintro "mongodb",
+      @ref ocrintro "ocr", @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
@@ -780,6 +780,27 @@ int echoed = child.echo(value);
 
     See @ref try-child-module "%try-child-module" and
     @ref user_module_children "Child Modules" for details.
+    @endparblock
+
+    @par Versioned C++ APIs Between Binary Modules
+    @parblock
+    A binary module can now publish a C++ API for other binary modules to consume, without the
+    API having to be moved into \c libqore.  The exporting module declares a struct of function
+    pointers in an installed header and publishes it through a single \c extern \c "C" entry
+    point named <tt>&lt;feature&gt;_qore_cpp_api</tt>; the consuming module includes only that
+    header and resolves the struct at run time with \c q_get_module_cpp_api(), declared in the
+    new \c <qore/QoreModuleCppApi.h>.
+
+    Resolution loads the exporting module on demand and verifies that the version it publishes
+    can serve the version the consumer was compiled against, so a mismatch between two
+    independently released modules is a %Qore-language exception at resolution time rather than
+    a process abort at the first call.  Because resolution can fail cleanly, an <i>optional</i>
+    C++ dependency between modules is possible for the first time &mdash; the C++ equivalent of
+    the @ref try-module "%try-module" directive.
+
+    See the \c "Developing Qore Modules" chapter of the %Qore library documentation for the
+    naming convention, the append-only and public-ABI-types-only rules, and complete producer and
+    consumer examples.
     @endparblock
 
     @par Native IR Lowering for context Statement
@@ -1787,6 +1808,33 @@ foreach string module_name in (registry.getProcessModules()) {
       - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
         for @ref RestClient::RestClient "RestClient" instances, built on
         @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+      - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a generic
+        client when called on a subclass, which discarded whatever the subclass adds &mdash;
+        @ref AwsRestClient::AwsRestClient "AwsRestClient" lost its AWS SigV4 request signing, so the copy's
+        requests went out unsigned.  The copy is now constructed from the object's own class through the new
+        @ref RestClient::RestClient::copySelf() "copySelf()" hook, which also fixes the equivalent defect in
+        @ref restclientio_intro "RestClientIo"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+
+    - @ref salesforcerestclientintro "SalesforceRestClient" module
+      - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
+        @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
+        @ref SalesforceRestClient::SalesforceRestClientBase::getOrgId() "getOrgId()", so that APIs outside the REST
+        client can identify the authenticated org &mdash; the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a> identifies the
+        org through call metadata rather than through the endpoint, which is a single global host
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+      - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" now captures the org identity from
+        the OAuth2 token response, which @ref RestClientIo::RestClientIo "RestClientIo" would otherwise discard, so
+        the identity is available on the async path as well
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+
+    - @ref salesforcerestdataproviderintro "SalesforceRestDataProvider" module
+      - declared \c SalesforcePubSubDataProvider as an optional @ref user_module_children "child module", so that
+        the Salesforce <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a>
+        event source in <a href="https://github.com/qoretechnologies/module-grpc">module-grpc</a> attaches itself as
+        the \c "pubsub" child when installed, without the consumer having to load it explicitly
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
       - added @ref Schema::DataSchema "DataSchema", @ref Schema::DataSchemaLoader "DataSchemaLoader", and
@@ -1882,6 +1930,24 @@ foreach string module_name in (registry.getProcessModules()) {
 
     @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
 
+    - @ref avrointro "avro" module
+      - new builtin module implementing <a href="https://avro.apache.org">Apache Avro</a>: schema
+        parsing with a named-type registry, the binary datum codec in both directions, object
+        container files, and reader/writer schema resolution
+      - decodes a <i>bare datum</i> against a schema supplied out of band — the framing streaming
+        APIs such as the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Salesforce
+        Pub/Sub API</a> deliver — as well as self-describing object container files, with the
+        \c null and \c deflate codecs, over a file path, a \c binary value or a %Qore
+        @ref Qore::InputStream "InputStream" / @ref Qore::OutputStream "OutputStream"
+      - every logical type, including \c decimal converted exactly at arbitrary precision, and
+        Parsing Canonical Form with the CRC-64-AVRO fingerprint for content-addressed schema caches
+      - the schema parser and codec are also published to other binary modules as a versioned C++
+        API through \c <qore/QoreAvroApi.h>, so a consumer that decodes many data against a schema
+        supplied out of band can do so from C++ without a %Qore-language call per datum
+      - companion @ref avroutilintro "AvroUtil" module mapping Avro schemas to
+        @ref dataproviderintro "DataProvider" types
+
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
         string, bool, date) and null/missing-value support
@@ -1900,9 +1966,9 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref jsonintro "json" module
       - previously the external \c module-json repository, now built and installed with %Qore, so
-        JSON support is always present; the JSON parser and serializer themselves moved into the
-        library, and \c <qore/QoreJson.h> exports them as a public C++ API for use by other builtin
-        binary modules
+        JSON support is always present; the JSON parser and serializer are also published to other
+        binary modules as a versioned C++ API through \c <qore/QoreJsonApi.h>, which is how the
+        @ref avrointro "avro" module parses Avro schemas without Qore-language code
       - JSON, CBOR and TOON serialization, a SAX-style @ref Qore::Json::JsonSaxParser "JsonSaxParser",
         JSON Schema validation via @ref Qore::Json::JsonSchema "JsonSchema", incremental output via
         @ref Qore::Json::JsonStreamWriter "JsonStreamWriter", JWT signing and verification, and a
@@ -2002,6 +2068,11 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref asyncsocketiointro "AsyncSocketIo" module
       - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+
+    - @ref avroutilintro "AvroUtil" module
+      - new module mapping @ref avrointro "avro" schemas to @ref dataproviderintro "DataProvider"
+        types, so Avro-described data can be exposed through the data provider API; the Avro
+        counterpart of the \c GrpcTypeHelper class in the \c GrpcDataProvider module
 
     - @ref awseventstreamintro "AwsEventStream" module
       - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming

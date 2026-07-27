@@ -1658,7 +1658,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSSLPrivateKey.cpp
     lib/QoreSocketObject.cpp
     lib/QoreCondition.cpp
-    lib/QoreJson.cpp
+    lib/QoreModuleCppApi.cpp
     lib/QoreQueue.cpp
     lib/QoreQueueHelper.cpp
     lib/QoreRegex.cpp
@@ -2004,7 +2004,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
-#include \"${CMAKE_SOURCE_DIR}/lib/QoreJson.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreModuleCppApi.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueueHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
@@ -2598,12 +2598,14 @@ if (ADDRESS_SANITIZER)
 endif()
 
 # JSON C++ API smoke test.  Unlike the IR smoke targets above this deliberately links
-# only libqore and includes only installed public headers -- it verifies the
-# include/qore/QoreJson.h contract exactly as a builtin binary module (ex: avro) consumes
-# it, with no json module loaded and no Qore-language code involved.
+# only libqore and includes only installed public headers -- it resolves the json module's
+# QoreJsonApi struct through q_get_module_cpp_api() exactly as a builtin binary module
+# (ex: avro) consumes it, with no Qore-language code involved.  Run it against the build
+# tree with:
+#   QORE_MODULE_DIR=build/modules/json LD_LIBRARY_PATH=build build/qore-json-cpp-api-smoke
 add_executable(qore-json-cpp-api-smoke EXCLUDE_FROM_ALL
     examples/test/json/json_cpp_api.cpp)
-add_dependencies(qore-json-cpp-api-smoke libqore)
+add_dependencies(qore-json-cpp-api-smoke libqore json)
 target_include_directories(qore-json-cpp-api-smoke PRIVATE
     ${CMAKE_BINARY_DIR}
     ${CMAKE_BINARY_DIR}/include
@@ -2930,8 +2932,15 @@ if (DOXYGEN_FOUND)
 endif (DOXYGEN_FOUND)
 # end of documentation
 
+# test modules for the module C++ API mechanism; built but never installed
+add_subdirectory(examples/test/module-cpp-api)
+
 # astparser module
 add_subdirectory(modules/astparser)
+# avro module
+add_subdirectory(modules/avro)
+# test module consuming the avro C++ API; built but never installed
+add_subdirectory(examples/test/modules/avro/cpp-api)
 # reflection module
 add_subdirectory(modules/reflection)
 # logger module
@@ -3040,6 +3049,7 @@ set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/astparser
+    ${CMAKE_BINARY_DIR}/modules/avro
     ${CMAKE_BINARY_DIR}/modules/json
     ${CMAKE_BINARY_DIR}/modules/reflection
     ${CMAKE_BINARY_DIR}/modules/logger_bin
@@ -3080,7 +3090,7 @@ set(QORE_QM_METADATA_ENV
     "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser json reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser avro json reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
@@ -3177,6 +3187,7 @@ qore_user_module("qlib/MllpUtil")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "../../doxygen/DataProvider-Full.svg;Qore-Q-square.svg")
+qore_user_module("qlib/AvroUtil.qm")
 qore_user_module("qlib/DataProviderML")
 qore_user_module("qlib/DataProviderDataFrame")
 qore_user_module("qlib/QoreModelRegistry")

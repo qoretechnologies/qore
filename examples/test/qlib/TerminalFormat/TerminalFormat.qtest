@@ -31,7 +31,9 @@ public class TerminalFormatTest inherits QUnit::Test {
         addTestCase("Table: render vs renderLines", \tableRenderApi(), NOTHING);
 
         addTestCase("TerminalColor: multibyte strip/visible", \terminalColorMultibyte(), NOTHING);
+        addTestCase("TerminalColor: Unicode display width", \terminalColorDisplayWidth(), NOTHING);
         addTestCase("Markdown: multibyte pipe-table cells", \markdownTablesMultibyte(), NOTHING);
+        addTestCase("Tables: Unicode display width", \tablesDisplayWidth(), NOTHING);
 
         set_return_value(main());
     }
@@ -453,6 +455,29 @@ public class TerminalFormatTest inherits QUnit::Test {
             "padLeft: multibyte padded to visible width");
     }
 
+    terminalColorDisplayWidth() {
+        string japanese = "ステップの例";
+        assertEq(6, japanese.length(),
+            "Japanese sample has six Unicode characters");
+        assertEq(12, char_width(japanese),
+            "Japanese sample occupies twelve terminal columns");
+        assertEq(12, Util::TerminalColor::visibleLength(japanese),
+            "visible length reports terminal columns");
+        assertEq(12, Util::TerminalColor::visibleLength(
+                "\033[31m" + japanese + "\033[0m"),
+            "ANSI styling does not change terminal width");
+
+        string right = Util::TerminalColor::padRight(japanese, 15);
+        string left = Util::TerminalColor::padLeft(japanese, 15);
+        assertEq(15, char_width(Util::TerminalColor::stripAnsi(right)),
+            "right padding reaches the requested display width");
+        assertEq(15, char_width(Util::TerminalColor::stripAnsi(left)),
+            "left padding reaches the requested display width");
+        assertEq(15, char_width(Util::TerminalColor::padRight(
+                japanese, 15, "界")),
+            "wide padding is completed with spaces without overshooting");
+    }
+
     markdownTablesMultibyte() {
         # Regression for qonsole crash: rendering a pipe table whose cells
         # contained multi-byte characters (em-dash, accented letters, etc.)
@@ -467,5 +492,29 @@ public class TerminalFormatTest inherits QUnit::Test {
         assertTrue(regex(lines[2], "café"), "multibyte table: café cell");
         assertTrue(regex(lines[2], "—"), "multibyte table: em-dash cell");
         assertTrue(regex(lines[3], "naïve"), "multibyte table: naïve cell");
+    }
+
+    tablesDisplayWidth() {
+        TerminalTableRenderer tr = tbl();
+        list<string> table_lines = tr.renderLines(
+            ("項目", "Status"),
+            (("ステップの例", "完了"), ("test", "ready")));
+        int expected_width = char_width(table_lines[0]);
+        foreach string line in (table_lines) {
+            assertEq(expected_width, char_width(line),
+                "plain table rows align by terminal display columns");
+        }
+
+        TerminalMarkdownRenderer mr = md();
+        list<string> markdown_lines = mr.renderLines(
+            "| 項目 | Status |\n"
+            "| --- | --- |\n"
+            "| ステップの例 | 完了 |\n"
+            "| test | ready |");
+        expected_width = char_width(markdown_lines[0]);
+        foreach string line in (markdown_lines) {
+            assertEq(expected_width, char_width(line),
+                "Markdown table rows align by terminal display columns");
+        }
     }
 }

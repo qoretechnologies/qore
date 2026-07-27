@@ -80,6 +80,51 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Serves a fixed string and counts the requests it served
+/** Lets a test assert that a request actually reached this server rather than another one.
+*/
+class CountingStringHandler inherits AbstractHttpRequestHandler {
+    private {
+        Sequence seq();
+        string m_data;
+        string m_mime;
+    }
+
+    constructor(string mime, string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    #! Returns the number of requests served
+    int getCount() {
+        return seq.getCurrent();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        seq.next();
+        return makeResponse(200, m_data, {"Content-Type": m_mime});
+    }
+}
+
+#! A REST connection whose async client acquisition always fails with a given error
+/** Lets a test drive both branches of the ping's async-client fallback.
+*/
+class AsyncFailureRestConnection inherits RestConnection {
+    public {
+        #! The error code thrown by getAsyncImpl()
+        string async_err;
+    }
+
+    constructor(string name, string description, string url, hash<auto> attributes, hash<auto> options,
+            string async_err) : RestConnection(name, description, url, attributes, options) {
+        self.async_err = async_err;
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        throw async_err, "test failure acquiring the async client";
+    }
+}
+
 public class Main inherits QUnit::Test {
     private {
         HttpServer m_http;
@@ -154,6 +199,8 @@ public class Main inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("negotiate auth options", \negotiateAuthOptionsTest());
         addTestCase("ping_body view hint", \pingBodyViewHintTest());
+        addTestCase("absolute ping URL", \absolutePingUrlTest());
+        addTestCase("async ping fallback", \asyncPingFallbackTest());
         addTestCase("OPTIONS tests", \methodOptionsTest());
         addTestCase("DELETE tests", \methodDeleteTest());
         addTestCase("GET tests", \methodGetTest());
@@ -649,6 +696,131 @@ public class Main inherits QUnit::Test {
         assertEq("hash", RestConnection::ConnectionScheme.options.ping_headers.type);
         assertEq("string", RestConnection::ConnectionScheme.options.ping_method.type);
         assertEq("string", RestConnection::ConnectionScheme.options.ping_path.type);
+    }
+
+    #! Tests that a ping path given as an absolute URL retargets the client at that URL
+    /** A connection can ping a URL that is not on the connection's own host at all;
+        @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" resolves
+        its default \c "ping_path: auto" to the org's identity service URL on the login host,
+        for example.  Two mistakes are possible and both were live: sending the absolute URL
+        through as a request path (so it goes to the connection's own host), and prepending the
+        connection's URL path component to it.  Both leave the ping talking to the connection's
+        own host, which answers with whatever it makes of the mangled path.
+
+        The ping URL therefore names a second HTTP server here, so reaching it is not something
+        a mangled path on the connection's own server can accidentally satisfy; the second
+        server counts the requests it serves and the count is asserted directly.
+
+        Both the synchronous ping (which prefers the async client) and the polling ping are
+        covered, since the retarget is implemented separately on each path.
+    */
+    absolutePingUrlTest() {
+        # second server: the ping target, on a different port than the connection URL
+        HttpServer ping_server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit delete ping_server;
+
+        CountingStringHandler ping_handler(MimeTypeText, VALUE_TEXT.input);
+        ping_server.setHandler("/ping", "/ping", MimeTypeText, ping_handler);
+        int ping_port = ping_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # the connection URL carries a path component that must not be prepended to the ping URL
+        string url = sprintf("http://127.0.0.1:%d/v1", port);
+
+        RestConnection rc("test", "test", url, {"monitor": False}, {
+            "data": "text",
+            "ping_method": "GET",
+            "ping_path": sprintf("http://127.0.0.1:%d/ping", ping_port),
+        });
+
+        # synchronous ping
+        hash<PingInfo> ping = rc.ping();
+        on_error if (ping.ex) {
+            printf("%s\n", get_exception_string(ping.ex));
+        }
+        assertTrue(ping.ok, "sync ping reaches the absolute ping URL");
+        assertEq("OK", ping.info);
+        assertEq(1, ping_handler.getCount(), "sync ping was served by the ping URL's host");
+
+        # polling ping
+        {
+            TestPollingConnectionMonitor monitor(logger);
+            on_exit delete monitor;
+
+            monitor.add(rc);
+            hash<auto> info = monitor.waitForResult();
+            on_error if (info.ex) {
+                printf("%s\n", get_exception_string(info.ex));
+            }
+            assertEq("OK", info.result, "polling ping reaches the absolute ping URL");
+            assertEq(2, ping_handler.getCount(), "polling ping was served by the ping URL's host");
+        }
+
+        # negative test: an absolute ping URL on a host with nothing listening must fail; without
+        # the retarget the request goes to the connection's own host instead and can spuriously
+        # succeed.
+        #
+        # The socket is bound but never listened on and is held for the rest of the test: holding
+        # it reserves the port so no other process can start serving on it, and a connection to a
+        # bound-but-not-listening socket is refused, so the failure below is deterministic
+        Socket dead_sock();
+        dead_sock.bind("127.0.0.1:0", True);
+        int dead_port = dead_sock.getSocketInfo().port;
+
+        RestConnection bad("test", "test", url, {"monitor": False}, {
+            "data": "text",
+            "ping_method": "GET",
+            "ping_path": sprintf("http://127.0.0.1:%d/ping", dead_port),
+        });
+
+        hash<PingInfo> bad_ping = bad.ping();
+        assertFalse(bad_ping.ok, "sync ping fails when the absolute ping URL is unreachable");
+
+        {
+            TestPollingConnectionMonitor monitor(logger);
+            on_exit delete monitor;
+
+            monitor.add(bad);
+            hash<auto> info = monitor.waitForResult();
+            assertEq("error", info.result, "polling ping fails when the absolute ping URL is unreachable");
+        }
+    }
+
+    #! Tests that only "async I/O is unavailable" makes a ping fall back to the sync client
+    /** The ping prefers the async client, so every failure acquiring it used to be swallowed and
+        the entire ping retried synchronously.  That does the work twice and then reports the
+        second failure while hiding the first, which is the one that explains the problem.
+    */
+    asyncPingFallbackTest() {
+        string url = sprintf("http://127.0.0.1:%d/api_text", port);
+        hash<auto> ping_opts = {
+            "data": "text",
+            "ping_method": "GET",
+            "ping_path": "/api_text",
+        };
+
+        # a connection class with no async support pings with the sync client
+        foreach string err in (("CONNECTION-ASYNC-UNSUPPORTED", "LOAD-MODULE-ERROR")) {
+            AsyncFailureRestConnection rc("test", "test", url, {"monitor": False}, ping_opts, err);
+
+            hash<PingInfo> ping = rc.ping();
+            on_error if (ping.ex) {
+                printf("%s\n", get_exception_string(ping.ex));
+            }
+            assertTrue(ping.ok, sprintf("ping falls back to the sync client on %s", err));
+        }
+
+        # any other error acquiring the async client is a real ping failure and must be reported
+        {
+            AsyncFailureRestConnection rc("test", "test", url, {"monitor": False}, ping_opts,
+                "OAUTH2-ERROR");
+
+            hash<PingInfo> ping = rc.ping();
+            assertFalse(ping.ok, "a real async client error fails the ping");
+            assertEq("OAUTH2-ERROR", ping.ex.err, "the original error is reported, not a sync retry");
+        }
     }
 
     negotiateAuthOptionsTest() {

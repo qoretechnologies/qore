@@ -1,0 +1,209 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_AvroFileWriter.qpp defines the %Qore AvroFileWriter class */
+/*
+    Qore avro module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "avro-module.h"
+#include "QC_AvroFileWriter.h"
+#include "QC_AvroSchema.h"
+#include "AvroContainer.h"
+
+#include <qore/ReferenceHolder.h>
+
+// sets the private data of the object from the sink, taking ownership of the sink
+static void avro_setup_writer(QoreObject* self, AvroSink* sink, QoreAvroSchema* schema,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!sink) {
+        assert(*xsink);
+        return;
+    }
+    SimpleRefHolder<QoreAvroFileWriter> writer(new QoreAvroFileWriter(sink, schema->getData(),
+        schema->getRoot(), opts, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_AVROFILEWRITER, writer.release());
+}
+
+//! Writes an Avro object container file
+/** The file is self-describing: the schema is written into the header, so a reader needs nothing
+    but the file itself.  Objects are buffered and written in blocks; call
+    @ref Qore::Avro::AvroFileWriter::close() "close()" (or destroy the object) to flush the last
+    block.
+
+    @par Example:
+    @code{.py}
+%requires avro
+
+AvroSchema schema('{"type": "record", "name": "Event", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long"}
+]}');
+
+{
+    AvroFileWriter writer("events.avro", schema, {"codec": "deflate"});
+    writer.write({"id": "a", "count": 1});
+    writer.write({"id": "b", "count": 2});
+}
+    @endcode
+
+    @since %avro 1.0
+*/
+qclass AvroFileWriter [arg=QoreAvroFileWriter* writer; ns=Qore::Avro];
+
+//! Creates an Avro object container file on the filesystem
+/** An existing file at \a path is truncated.
+
+    @param path the path of the file to write
+    @param schema the schema every object written to the file must conform to
+    @param opts writer options:
+    - \c codec: (\c string) \c "null" (the default) or \c "deflate"
+    - \c block_size: (\c int) the number of encoded bytes to buffer before writing a block;
+      64 KiB by default
+    - \c metadata: (\c hash) extra header metadata; values must be strings or binary values, and
+      keys may not use the reserved \c "avro." prefix
+    - \c sync: (\c binary) a 16-byte sync marker; a random one is generated if not given, so set
+      this when byte-for-byte reproducible output is needed
+
+    @throw FILE-OPEN2-ERROR the file cannot be created
+    @throw AVRO-CODEC-ERROR the \c codec option names a codec this module does not implement
+    @throw AVRO-FILE-ERROR an option is invalid, or a metadata key uses the reserved prefix
+
+    @note this method is subject to @ref PO_NO_FILESYSTEM
+
+    @since %avro 1.0
+*/
+AvroFileWriter::constructor(string path, AvroSchema[QoreAvroSchema] schema,
+        *hash<auto> opts) [dom=FILESYSTEM] {
+    avro_setup_writer(self, avro_sink_from_file(path->c_str(), xsink), *schema, opts, xsink);
+}
+
+//! Writes an Avro object container file to an output stream
+/** The stream is not closed when the writer is closed or destroyed; the caller owns it.
+
+    @param output_stream the stream to write the container file to
+    @param schema the schema every object written to the file must conform to
+    @param opts writer options; see AvroFileWriter::constructor(string, AvroSchema, *hash<auto>)
+
+    @throw AVRO-CODEC-ERROR the \c codec option names a codec this module does not implement
+    @throw AVRO-FILE-ERROR an option is invalid, or a metadata key uses the reserved prefix
+
+    @par Example: writing a container file to memory
+    @code{.py}
+BinaryOutputStream os();
+{
+    AvroFileWriter writer(os, schema);
+    writer.write({"id": "a", "count": 1});
+}
+binary data = os.getData();
+    @endcode
+
+    @since %avro 1.0
+*/
+AvroFileWriter::constructor(Qore::OutputStream[OutputStream] output_stream,
+        AvroSchema[QoreAvroSchema] schema, *hash<auto> opts) {
+    avro_setup_writer(self, avro_sink_from_stream(output_stream.release()), *schema, opts, xsink);
+}
+
+//! Flushes any buffered objects and releases the file
+/** @since %avro 1.0
+*/
+AvroFileWriter::destructor() {
+    writer->close(xsink);
+    writer->deref();
+}
+
+//! Writes one object to the file
+/** The object is encoded immediately and buffered; a block is written once the buffer reaches the
+    writer's block size.
+
+    @param datum the value to write; it must conform to the writer's schema
+
+    @throw AVRO-ENCODE-ERROR the value cannot be represented by the schema
+    @throw AVRO-FILE-ERROR the writer has already been closed, or the file cannot be written
+    @throw AVRO-CODEC-ERROR a block cannot be compressed
+
+    @note if encoding raises an exception the writer is closed, because a partially-encoded value
+        would corrupt the block
+
+    @since %avro 1.0
+*/
+nothing AvroFileWriter::write(auto datum) {
+    writer->write(datum, xsink);
+}
+
+//! Writes every element of a list to the file
+/** @param data the values to write, each of which must conform to the writer's schema
+
+    @throw AVRO-ENCODE-ERROR a value cannot be represented by the schema
+    @throw AVRO-FILE-ERROR the writer has already been closed, or the file cannot be written
+    @throw AVRO-CODEC-ERROR a block cannot be compressed
+
+    @since %avro 1.0
+*/
+nothing AvroFileWriter::writeAll(list<auto> data) {
+    ConstListIterator li(data);
+    while (li.next()) {
+        if (writer->write(li.getValue(), xsink)) {
+            return QoreValue();
+        }
+    }
+}
+
+//! Writes any buffered objects as a block
+/** Call this to bound how much data an unexpected termination could lose, or to make a partially
+    written file readable.  It is not necessary before
+    @ref Qore::Avro::AvroFileWriter::close() "close()".
+
+    @throw AVRO-FILE-ERROR the writer has already been closed, or the file cannot be written
+    @throw AVRO-CODEC-ERROR a block cannot be compressed
+
+    @since %avro 1.0
+*/
+nothing AvroFileWriter::flush() {
+    writer->flush(xsink);
+}
+
+//! Flushes any buffered objects and releases the file
+/** Calling this more than once is not an error.  A writer created over an output stream does not
+    close the stream.
+
+    @throw AVRO-FILE-ERROR the file cannot be written
+    @throw AVRO-CODEC-ERROR a block cannot be compressed
+
+    @since %avro 1.0
+*/
+nothing AvroFileWriter::close() {
+    writer->close(xsink);
+}
+
+//! Returns the file's 16-byte sync marker
+/** @return the marker written into the header and after every block, either the one supplied in
+    the \c sync option or the random one generated for this file
+
+    @since %avro 1.0
+*/
+binary AvroFileWriter::getSyncMarker() [flags=CONSTANT] {
+    return writer->getSyncMarker();
+}

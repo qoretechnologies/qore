@@ -3291,6 +3291,9 @@ ws.setEventQueue();
         if (http_opts.connect_timeout) {
             mgr_opts.connect_timeout = http_opts.connect_timeout;
         }
+        if (exists http_opts.max_request_retries) {
+            mgr_opts.max_request_retries = http_opts.max_request_retries;
+        }
         return mgr_opts;
     }
 
@@ -3315,43 +3318,83 @@ ws.setEventQueue();
             *bool reconnect) {
         ensureHcioMgr();
 
-        # Acquire a stream — the manager negotiates the best protocol via
-        # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
-        # WS handshake — no probe-and-discard.
-        HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
+        int retries = 0;
+        while (True) {
+            # Acquire a stream — the manager negotiates the best protocol via
+            # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
+            # WS handshake — no probe-and-discard.
+            HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
 
-        if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
-            logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
-            return connectH1WebSocketOnStream(stream, hdr, \info, reconnect);
-        }
-
-        bool is_h3 = stream instanceof HttpClientIo::Http3ClientStreamHandle;
-        logDebug("HCIO auto: negotiated %s, using CONNECT handshake", is_h3 ? "H3" : "H2");
-        try {
-            return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
-        } catch (hash<ExceptionInfo> ex) {
-            # The HTTP connection itself negotiated fine, but the RFC 8441/9220
-            # extended-CONNECT WebSocket handshake failed.  The usual cause is a
-            # server (e.g. nginx) that does not advertise
-            # SETTINGS_ENABLE_CONNECT_PROTOCOL and therefore cannot tunnel
-            # WebSocket over H2/H3: depending on the server this surfaces as a
-            # non-200 status, a reset stream (HTTP2-ERROR/HTTP3-ERROR), a receive
-            # error, or a timeout — so we fall back on *any* error rather than a
-            # fragile error-code whitelist.  In "auto" mode (and when H3 was not
-            # explicitly required) retry with a plain HTTP/1.1 101 Upgrade on a
-            # fresh H1-only connection.  If that attempt also fails, its error is
-            # surfaced instead, so a genuine failure is never masked.
-            if (http_opts.http_version != "auto" || isHttp3Required()) {
-                rethrow;
+            if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
+                logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
+                return connectH1WebSocketOnStream(stream, hdr, \info, reconnect);
             }
-            logInfo("WebSocket over %s failed (%s: %s); falling back to HTTP/1.1 Upgrade",
-                is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc);
-            # discard the failed H2/H3 stream and manager so the H1 path opens a
-            # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
-            remove hcio_stream;
-            remove hcio_mgr;
-            return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+
+            bool is_h3 = stream instanceof HttpClientIo::Http3ClientStreamHandle;
+            logDebug("HCIO auto: negotiated %s, using CONNECT handshake", is_h3 ? "H3" : "H2");
+            try {
+                return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
+            } catch (hash<ExceptionInfo> ex) {
+                # A connection that died while it was still being established (e.g. a
+                # peer FIN in the middle of the TLS handshake, or a pooled connection
+                # the server closed under us) is transient and unrelated to whether the
+                # server can tunnel WebSocket.  Every other manager entry point —
+                # request(), acquireAndStartStreaming() — retries these on a fresh
+                # connection; without the same retry here a single transient drop fails
+                # connect() outright.  Retried BEFORE the H1 fallback below so a
+                # transient drop is never misread as "this server cannot do RFC 8441".
+                #
+                # Gated on !isSubmitted() — the manager's isConnectionOnlyFailure()
+                # rule.  Once the CONNECT has been submitted on the stream, a
+                # connection-class error (the RST_STREAM an RFC-8441-incapable server
+                # sends, HTTP2-ERROR, a receive error) is a real answer from the peer,
+                # not a lost connection: retrying it would just delay the HTTP/1.1
+                # Upgrade fallback below by the whole retry budget.
+                if (retries < getHcioMaxConnectRetries() && !stream.isSubmitted()
+                        && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                    ++retries;
+                    logInfo("WebSocket %s connection error (%s: %s); retrying on a fresh "
+                        "connection (%d/%d)", is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc,
+                        retries, getHcioMaxConnectRetries());
+                    # drop the dead stream; the next acquireStream() evicts the closed
+                    # connection at checkout and creates a fresh one
+                    remove hcio_stream;
+                    continue;
+                }
+                # The HTTP connection itself negotiated fine, but the RFC 8441/9220
+                # extended-CONNECT WebSocket handshake failed.  The usual cause is a
+                # server (e.g. nginx) that does not advertise
+                # SETTINGS_ENABLE_CONNECT_PROTOCOL and therefore cannot tunnel
+                # WebSocket over H2/H3: depending on the server this surfaces as a
+                # non-200 status, a reset stream (HTTP2-ERROR/HTTP3-ERROR), a receive
+                # error, or a timeout — so we fall back on *any* error rather than a
+                # fragile error-code whitelist.  In "auto" mode (and when H3 was not
+                # explicitly required) retry with a plain HTTP/1.1 101 Upgrade on a
+                # fresh H1-only connection.  If that attempt also fails, its error is
+                # surfaced instead, so a genuine failure is never masked.
+                if (http_opts.http_version != "auto" || isHttp3Required()) {
+                    rethrow;
+                }
+                logInfo("WebSocket over %s failed (%s: %s); falling back to HTTP/1.1 Upgrade",
+                    is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc);
+                # discard the failed H2/H3 stream and manager so the H1 path opens a
+                # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
+                remove hcio_stream;
+                remove hcio_mgr;
+                return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+            }
         }
+    }
+
+    #! Returns the number of times the WebSocket CONNECT handshake retries a dead connection
+    /** Mirrors @ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming()'s
+        connection-error retry budget so the WebSocket path is no less resilient than any
+        other request path through the manager.
+
+        @since WebSocketClient 2.6
+    */
+    private int getHcioMaxConnectRetries() {
+        return http_opts.max_request_retries ?? HttpClientIo::DefaultMaxRequestRetries;
     }
 
     #! Performs H1 WebSocket Upgrade handshake on an already-acquired HCIO stream

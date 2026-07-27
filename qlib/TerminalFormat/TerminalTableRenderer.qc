@@ -84,11 +84,11 @@ public class TerminalTableRenderer {
         int num_cols = headers.size();
 
         # Calculate column widths
-        list<int> widths = map $1.length(), headers;
+        list<int> widths = map char_width($1), headers;
         foreach auto row in (rows) {
             list<auto> cells = row.typeCode() == NT_LIST ? row : (row,);
             for (int c = 0; c < min(cells.size(), num_cols); ++c) {
-                int len = cells[c].toString().length();
+                int len = char_width(cells[c].toString());
                 if (len > widths[c]) {
                     widths[c] = len;
                 }
@@ -159,7 +159,7 @@ public class TerminalTableRenderer {
 
     #! Pads a cell value to the given width
     private string padCell(string val, int width, bool right = False) {
-        int padding = width - val.length();
+        int padding = width - char_width(val);
         if (padding <= 0) {
             return val;
         }

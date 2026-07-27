@@ -1,0 +1,303 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroContainer.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires avro
+%requires json
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class AvroContainerTest
+
+#! tests Avro object container file reading and writing
+class AvroContainerTest inherits QUnit::Test {
+    public {
+        const RecordSchema = '{"type": "record", "name": "Event", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"},
+            {"name": "note", "type": ["null", "string"], "default": null}
+        ]}';
+
+        const Objects = (
+            {"id": "a", "count": 1, "note": NOTHING},
+            {"id": "b", "count": 2, "note": "x"},
+            {"id": "c", "count": 3, "note": "y"},
+        );
+
+        const Sync = <000102030405060708090a0b0c0d0e0f>;
+
+        #! a container file written by an independent Avro implementation, null codec
+        const ExternalNullFile = "4f626a0104146176726f2e636f646563086e756c6c166176726f2e736368656d61e6027b2274"
+            + "797065223a20227265636f7264222c20226e616d65223a20224576656e74222c20226669656c"
+            + "6473223a205b7b226e616d65223a20226964222c202274797065223a2022737472696e67227d"
+            + "2c207b226e616d65223a2022636f756e74222c202274797065223a20226c6f6e67227d2c207b"
+            + "2264656661756c74223a206e756c6c2c20226e616d65223a20226e6f7465222c202274797065"
+            + "223a205b226e756c6c222c2022737472696e67225d7d5d7d00000102030405060708090a0b0c"
+            + "0d0e0f041402610200026204020278000102030405060708090a0b0c0d0e0f";
+
+        #! the same schema written by that implementation with the deflate codec
+        const ExternalDeflateFile = "4f626a0104146176726f2e636f6465630e6465666c617465166176726f2e736368656d61e602"
+            + "7b2274797065223a20227265636f7264222c20226e616d65223a20224576656e74222c202266"
+            + "69656c6473223a205b7b226e616d65223a20226964222c202274797065223a2022737472696e"
+            + "67227d2c207b226e616d65223a2022636f756e74222c202274797065223a20226c6f6e67227d"
+            + "2c207b2264656661756c74223a206e756c6c2c20226e616d65223a20226e6f7465222c202274"
+            + "797065223a205b226e756c6c222c2022737472696e67225d7d5d7d0000010203040506070809"
+            + "0a0b0c0d0e0f0212634a64620000013300000102030405060708090a0b0c0d0e0f";
+    }
+
+    constructor() : QUnit::Test("AvroContainer", "1.0") {
+        addTestCase("file round trip", \fileRoundTripTest());
+        addTestCase("memory round trip", \memoryRoundTripTest());
+        addTestCase("stream round trip", \streamRoundTripTest());
+        addTestCase("deflate codec", \deflateTest());
+        addTestCase("multiple blocks", \multiBlockTest());
+        addTestCase("empty file", \emptyFileTest());
+        addTestCase("metadata", \metadataTest());
+        addTestCase("sync marker", \syncMarkerTest());
+        addTestCase("iterator", \iteratorTest());
+        addTestCase("interoperability", \interopTest());
+        addTestCase("writer errors", \writerErrorTest());
+        addTestCase("reader errors", \readerErrorTest());
+        set_return_value(main());
+    }
+
+    #! returns a container file holding Objects, written to memory with the given options
+    private binary write(*hash<auto> opts, *list<auto> objects) {
+        AvroSchema schema(RecordSchema);
+        BinaryOutputStream os();
+        {
+            AvroFileWriter w(os, schema, opts);
+            w.writeAll(objects ?? Objects);
+        }
+        return os.getData();
+    }
+
+    fileRoundTripTest() {
+        AvroSchema schema(RecordSchema);
+        TmpDir td();
+        string path = td.path + DirSep + "events.avro";
+
+        {
+            AvroFileWriter w(path, schema);
+            w.writeAll(Objects);
+        }
+        assertTrue(is_file(path));
+
+        AvroFileReader r(path);
+        assertEq("null", r.getCodec());
+        assertEq("Event", r.getSchema().getName());
+        assertEq(AvroSyncSize, r.getSyncMarker().size());
+        assertEq(Objects, map $1, r);
+    }
+
+    memoryRoundTripTest() {
+        binary file = write();
+        # the magic is "Obj" followed by the format version
+        assertEq(parse_hex_string("4f626a01"), file.substr(0, 4));
+
+        AvroFileReader r(file);
+        assertEq(Objects, map $1, r);
+    }
+
+    streamRoundTripTest() {
+        AvroSchema schema(RecordSchema);
+        TmpDir td();
+        string path = td.path + DirSep + "stream.avro";
+        {
+            FileOutputStream os(path);
+            {
+                AvroFileWriter w(os, schema);
+                w.writeAll(Objects);
+            }
+            # a writer over a stream does not close the stream: the caller owns it
+            os.close();
+        }
+
+        AvroFileReader r(new FileInputStream(path));
+        assertEq(Objects, map $1, r);
+    }
+
+    deflateTest() {
+        binary file = write({"codec": "deflate"});
+        AvroFileReader r(file);
+        assertEq("deflate", r.getCodec());
+        assertEq(Objects, map $1, r);
+
+        # a highly compressible payload must be smaller with deflate than without
+        hash<auto> one = {"id": "aaaaaaaaaaaaaaaaaaaa", "count": 1, "note": NOTHING};
+        list<auto> many = map one, xrange(1, 200);
+        # assertLt(bound, value) asserts value < bound
+        assertLt(write(NOTHING, many).size(), write({"codec": "deflate"}, many).size());
+    }
+
+    multiBlockTest() {
+        # a tiny block size forces one block per object
+        binary file = write({"block_size": 1});
+        AvroFileReader r(file);
+        assertEq(Objects, map $1, r);
+
+        # an explicit flush also ends a block, and the file stays readable
+        AvroSchema schema(RecordSchema);
+        BinaryOutputStream os();
+        {
+            AvroFileWriter w(os, schema);
+            w.write(Objects[0]);
+            w.flush();
+            w.write(Objects[1]);
+            w.flush();
+            # flushing with nothing buffered writes no block
+            w.flush();
+            w.write(Objects[2]);
+        }
+        assertEq(Objects, map $1, new AvroFileReader(os.getData()));
+    }
+
+    emptyFileTest() {
+        binary file = write(NOTHING, ());
+        AvroFileReader r(file);
+        assertEq("Event", r.getSchema().getName());
+        assertFalse(r.next());
+        assertFalse(r.valid());
+        # iteration does not restart once it has ended
+        assertFalse(r.next());
+        assertEq((), map $1, new AvroFileReader(file));
+    }
+
+    metadataTest() {
+        binary file = write({"metadata": {"producer": "qore", "run": <cafe>}});
+        AvroFileReader r(file);
+        hash<string, binary> meta = r.getMetadata();
+
+        # the reserved entries are present alongside the caller's
+        assertTrue(exists meta."avro.schema");
+        assertEq("null", meta."avro.codec".toString());
+        assertEq("qore", meta.producer.toString());
+        assertEq(<cafe>, meta.run);
+
+        # the embedded schema is the one the writer was given
+        assertEq("Event", parse_json(meta."avro.schema".toString()).name);
+
+        # a caller may not write into the reserved namespace
+        assertThrows("AVRO-FILE-ERROR", "reserves",
+            \write(), ({"metadata": {"avro.codec": "lies"}},));
+        # nor supply a metadata value that is not a string or binary
+        assertThrows("AVRO-FILE-ERROR", "must be a string or binary",
+            \write(), ({"metadata": {"n": 1}},));
+    }
+
+    syncMarkerTest() {
+        # an explicit sync marker makes the output byte-for-byte reproducible
+        binary a = write({"sync": Sync});
+        binary b = write({"sync": Sync});
+        assertEq(a, b);
+        assertEq(Sync, new AvroFileReader(a).getSyncMarker());
+
+        # without one, a random marker is generated, so two files differ
+        assertNeq(write(), write());
+
+        assertThrows("AVRO-FILE-ERROR", "exactly 16 bytes",
+            \write(), ({"sync": <0102>},));
+    }
+
+    iteratorTest() {
+        AvroFileReader r(write());
+        assertFalse(r.valid());
+        assertThrows("INVALID-ITERATOR", \r.getValue());
+
+        assertTrue(r.next());
+        assertTrue(r.valid());
+        assertEq(Objects[0], r.getValue());
+        assertTrue(r.next());
+        assertEq(Objects[1], r.getValue());
+        assertTrue(r.next());
+        assertEq(Objects[2], r.getValue());
+        assertFalse(r.next());
+        assertFalse(r.valid());
+        assertThrows("INVALID-ITERATOR", \r.getValue());
+
+        # AbstractIterator operators work directly on the reader
+        assertEq(("a", "b", "c"), map $1.id, new AvroFileReader(write()));
+        assertEq(2, (select new AvroFileReader(write()), $1.count > 1).size());
+    }
+
+    interopTest() {
+        # a file written by an independent Avro implementation reads identically
+        AvroFileReader r(parse_hex_string(ExternalNullFile));
+        assertEq("null", r.getCodec());
+        assertEq("Event", r.getSchema().getName());
+        assertEq((
+            {"id": "a", "count": 1, "note": NOTHING},
+            {"id": "b", "count": 2, "note": "x"},
+        ), map $1, r);
+
+        AvroFileReader d(parse_hex_string(ExternalDeflateFile));
+        assertEq("deflate", d.getCodec());
+        assertEq(({"id": "a", "count": 1, "note": NOTHING},), map $1, d);
+    }
+
+    writerErrorTest() {
+        AvroSchema schema(RecordSchema);
+        BinaryOutputStream os();
+        AvroFileWriter w(os, schema);
+        w.write(Objects[0]);
+
+        # a value that does not conform to the schema closes the writer, since a partially
+        # encoded value would corrupt the block
+        assertThrows("AVRO-ENCODE-ERROR", \w.write(), ({"id": 1, "count": "x"},));
+        assertThrows("AVRO-FILE-ERROR", "already been closed", \w.write(), (Objects[0],));
+        assertThrows("AVRO-FILE-ERROR", "already been closed", \w.flush());
+        # close() on an already-closed writer is not an error
+        w.close();
+        w.close();
+
+        assertThrows("AVRO-CODEC-ERROR", "unsupported codec",
+            \write(), ({"codec": "snappy"},));
+        assertThrows("AVRO-FILE-ERROR", "block_size",
+            \write(), ({"block_size": 0},));
+    }
+
+    readerErrorTest() {
+        assertThrows("AVRO-FILE-ERROR", "not an Avro object container file",
+            sub () { new AvroFileReader(<00010203040506070809>); });
+        assertThrows("AVRO-FILE-ERROR", "truncated",
+            sub () { new AvroFileReader(parse_hex_string("4f626a01")); });
+
+        # a valid header with a corrupt sync marker after the first block
+        binary file = write({"sync": Sync});
+        binary corrupt = file.substr(0, file.size() - AvroSyncSize) + <ffffffffffffffffffffffffffffffff>;
+        assertThrows("AVRO-FILE-ERROR", "sync marker", sub () {
+            AvroFileReader r(corrupt);
+            list<auto> ignored = map $1, r;
+        });
+
+        # a file truncated in the middle of a block
+        assertThrows("AVRO-FILE-ERROR", "truncated", sub () {
+            AvroFileReader r(file.substr(0, file.size() - 4));
+            list<auto> ignored = map $1, r;
+        });
+    }
+}

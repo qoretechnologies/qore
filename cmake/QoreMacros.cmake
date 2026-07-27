@@ -1496,7 +1496,8 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         file(GLOB _qmod_resource_srcs
             "${_source_root}/*.svg"
             "${_source_root}/*.yaml"
-            "${_source_root}/*.json")
+            "${_source_root}/*.json"
+            "${_source_root}/*.proto")
         if (IS_DIRECTORY "${_source_root}/jar")
             file(GLOB _qmod_jar_srcs "${_source_root}/jar/*.jar")
             set(_qmod_jar_stage_commands
@@ -1716,7 +1717,8 @@ MACRO (QORE_USER_MODULE _module_file)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
-            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg"
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.proto")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
     else()
@@ -2054,7 +2056,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     unset(_mod_jar_targets)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
-            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg"
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.proto")
         file(GLOB _mod_jar_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/jar/*.jar")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
@@ -2331,7 +2334,8 @@ MACRO (QORE_USER_MODULES _inputs)
                 string(SUBSTRING ${f} 5 ${f_len} new_f)
 
                 file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/${f}/*.qm" "${CMAKE_SOURCE_DIR}/${f}/*.qc"
-                    "${CMAKE_SOURCE_DIR}/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
+                    "${CMAKE_SOURCE_DIR}/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg"
+                    "${CMAKE_SOURCE_DIR}/${f}/*.proto")
                 set(qm_install_subdir "${new_f}") # install files into a subdir
                 #message(STATUS "_mod_targets ${_mod_targets}")
             else()

@@ -31,13 +31,15 @@
     for more information.
 
     This code was previously maintained in the external json module
-    (module-json, src/ql_json.qpp); it was moved into the library so that
-    builtin binary modules can parse and generate JSON from C++ -- see
+    (module-json, src/ql_json.qpp), then briefly in the library (lib/QoreJson.cpp)
+    so that builtin binary modules could parse and generate JSON from C++.  It is
+    back in the module now that the module C++ API mechanism makes that possible
+    without promoting the codec into libqore -- see design/module-cpp-api.md and
     design/json-module-migration.md.
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreJson.h>
+#include "QoreJson.h"
 #include <qore/QoreSandboxManager.h>
 
 #include <cassert>

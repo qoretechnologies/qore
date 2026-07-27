@@ -1,0 +1,392 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression tests for the WebSocket-over-HTTP/2 CONNECT connection-retry path.
+
+    A connection that dies while it is still being established (the peer sends a
+    FIN in the middle of the TLS handshake) used to fail WebSocketClient::connect()
+    outright, even though every other HttpClientIo entry point retries such errors
+    on a fresh connection.  See connectViaHcioAuto() in qlib/WebSocketClient.qm.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketClientConnectRetryTest
+
+#! Echoes text messages back with an "ECHO:" prefix
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid,
+            *hash<auto> conn) {
+        return new EchoWsConnection(self);
+    }
+}
+
+#! A raw TCP relay that closes the first \a drop_count connections before relaying anything
+/** This reproduces the CI failure mode exactly: the client completes the TCP connect and
+    sends its TLS ClientHello, then the peer closes the connection, so SSL_connect() sees
+    EOF and the connection is torn down with SOCKET-SSL-ERROR before the WebSocket CONNECT
+    request is ever submitted on the stream.
+
+    Connections after the first \a drop_count are relayed byte-for-byte to the backend, so
+    a client that retries reaches the real HTTPS/HTTP2 server.
+*/
+class DropFirstRelay {
+    public {
+        #! Port the relay listens on
+        int port;
+    }
+
+    private {
+        Socket listener();
+        int backend_port;
+        int drop_count;
+        Counter running(1);
+        bool stop_flag = False;
+        # number of inbound TCP connections accepted so far (atomic lvalue update)
+        int conn_count = 0;
+        Mutex relay_lock();
+        list<Socket> relay_socks = ();
+    }
+
+    #! @param backend_port the HTTPS port to relay to
+    #! @param drop_count how many initial connections to close without relaying
+    constructor(int backend_port, int drop_count) {
+        self.backend_port = backend_port;
+        self.drop_count = drop_count;
+        listener.bindINET("localhost", "0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background acceptLoop();
+    }
+
+    #! Returns the number of inbound TCP connections accepted so far
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    stop() {
+        stop_flag = True;
+        try {
+            listener.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        {
+            AutoLock al(relay_lock);
+            foreach Socket s in (relay_socks) {
+                try { s.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+            relay_socks = ();
+        }
+        running.waitForZero(20s);
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stop_flag) {
+            *Socket c;
+            try {
+                c = listener.accept(250ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (stop_flag) {
+                    return;
+                }
+                # accept() timeouts are expected while idle
+                if (ex.err == "SOCKET-TIMEOUT") {
+                    continue;
+                }
+                return;
+            }
+            if (!c) {
+                continue;
+            }
+            ++conn_count;
+            if (conn_count <= drop_count) {
+                # close mid-handshake: the client has connected and will send its
+                # ClientHello into a socket that is already gone
+                try { c.close(); } catch (hash<ExceptionInfo> ex) {}
+                continue;
+            }
+            background relay(c);
+        }
+    }
+
+    private relay(Socket client) {
+        Socket backend();
+        try {
+            backend.connectINET("localhost", string(backend_port), 10s);
+        } catch (hash<ExceptionInfo> ex) {
+            try { client.close(); } catch (hash<ExceptionInfo> ex2) {}
+            return;
+        }
+        {
+            AutoLock al(relay_lock);
+            relay_socks += client;
+            relay_socks += backend;
+        }
+        Counter dirs(2);
+        background pump(client, backend, dirs);
+        background pump(backend, client, dirs);
+        dirs.waitForZero();
+        try { client.close(); } catch (hash<ExceptionInfo> ex) {}
+        try { backend.close(); } catch (hash<ExceptionInfo> ex) {}
+    }
+
+    #! Copies all available bytes from \a from to \a to until either side closes
+    private pump(Socket from, Socket to, Counter dirs) {
+        on_exit dirs.dec();
+        while (!stop_flag) {
+            *binary b;
+            try {
+                b = from.recvBinary(0, 250ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-TIMEOUT") {
+                    continue;
+                }
+                return;
+            }
+            if (!b) {
+                return;
+            }
+            try {
+                to.sendBinary(b);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+        }
+    }
+}
+
+class WebSocketClientConnectRetryTest inherits Test {
+    public {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        HttpServer mServer;
+        Logger mLogger;
+        EchoWsHandler mWsHandler();
+        int mSslPort;
+    }
+
+    constructor() : Test("WebSocketClientConnectRetryTest", "1.0") {
+        addTestCase("connect retries a connection dropped during establishment",
+            \testRetryAfterMidHandshakeDrop());
+        addTestCase("retry budget is bounded by max_request_retries",
+            \testRetryBudgetHonored());
+        addTestCase("max_request_retries = 0 disables the retry",
+            \testRetryDisabled());
+        addTestCase("a healthy server needs exactly one connection",
+            \testNoSpuriousRetry());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("ws-connect-retry-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mServer.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    #! Creates a WebSocket client pointed at \a port
+    private WebSocketClient getWsClient(int port, code cb, *int max_request_retries) {
+        hash<auto> opts = {
+            "url": "wss://localhost:" + port + "/ws",
+            "logger": mLogger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        };
+        if (exists max_request_retries) {
+            opts.max_request_retries = max_request_retries;
+        }
+        return new WebSocketClient(cb, opts);
+    }
+
+    #! The connection dropped mid-TLS-handshake must be retried, and the WebSocket must work
+    private testRetryAfterMidHandshakeDrop() {
+        DropFirstRelay relay(mSslPort, 1);
+        on_exit relay.stop();
+
+        list<auto> msgs = ();
+        Counter cnt(1);
+        WebSocketClient wsc = getWsClient(relay.port, sub (*data msg) {
+            if (exists msg) {
+                msgs += msg;
+                cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the retried connection is still HTTP/2");
+        assertEq(2, relay.getConnectionCount(),
+            "the dropped connection was retried exactly once");
+
+        wsc.send("hello");
+        cnt.waitForZero(20s);
+        assertEq(1, msgs.size(), "the echo arrived on the retried connection");
+        assertEq("ECHO:hello", msgs[0], "the retried connection carries WebSocket traffic");
+
+        wsc.disconnect();
+    }
+
+    #! With every connection dropped, connect() fails after max_request_retries + 1 attempts
+    private testRetryBudgetHonored() {
+        # 1000 == "drop everything": the client can never get through
+        DropFirstRelay relay(mSslPort, 1000);
+        on_exit relay.stop();
+
+        WebSocketClient wsc = getWsClient(relay.port, sub (*data msg) {}, 1);
+        on_exit delete wsc;
+
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \wsc.connect());
+        assertEq(2, relay.getConnectionCount(),
+            "max_request_retries = 1 means one initial attempt plus one retry");
+    }
+
+    #! max_request_retries = 0 must not retry at all
+    private testRetryDisabled() {
+        DropFirstRelay relay(mSslPort, 1000);
+        on_exit relay.stop();
+
+        WebSocketClient wsc = getWsClient(relay.port, sub (*data msg) {}, 0);
+        on_exit delete wsc;
+
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \wsc.connect());
+        assertEq(1, relay.getConnectionCount(),
+            "max_request_retries = 0 makes exactly one connection attempt");
+    }
+
+    #! A server that never drops anything must not trigger a retry
+    private testNoSpuriousRetry() {
+        DropFirstRelay relay(mSslPort, 0);
+        on_exit relay.stop();
+
+        list<auto> msgs = ();
+        Counter cnt(1);
+        WebSocketClient wsc = getWsClient(relay.port, sub (*data msg) {
+            if (exists msg) {
+                msgs += msg;
+                cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+        assertEq(1, relay.getConnectionCount(), "a healthy connect makes exactly one connection");
+
+        wsc.send("hi");
+        cnt.waitForZero(20s);
+        assertEq("ECHO:hi", msgs[0], "the first-attempt connection carries WebSocket traffic");
+
+        wsc.disconnect();
+    }
+}

@@ -1,6 +1,9 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /** @file QoreJson.h
-    @brief public JSON parsing and serialization API
+    @brief the module-private JSON parsing and serialization codec
+
+    Other binary modules consume this through the QoreJsonApi struct declared in
+    <qore/QoreJsonApi.h> and published by JsonCppApi.cpp; see design/module-cpp-api.md.
 
     Qore Programming Language
 
@@ -33,32 +36,18 @@
 #define _QORE_QOREJSON_H
 
 #include <qore/Qore.h>
+#include <qore/QoreJsonApi.h>
 
-/** @defgroup json_cpp_api JSON C++ API
-
-    Converts between JSON text (<a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a>) and
-    %Qore values.  This is the implementation behind the Qore-language \c parse_json() and
-    \c make_json() functions in the \c json binary module, exported here so that other binary
-    modules (\c avro, for example, whose schemas are themselves JSON documents) can parse and
-    generate JSON from C++ without depending on the \c json module or on Qore-language code.
-
-    All functions in this group respect sandboxing: nesting depth is bounded by
-    @ref JSON_MAX_NESTING_DEPTH and long operations are periodically checked for cancellation.
-
-    ///@{
-*/
+// The codec itself.  These entry points are module-private: other binary modules reach them
+// through the QoreJsonApi struct published in <qore/QoreJsonApi.h>, not by resolving these
+// symbols.  JGF_NONE and JGF_ADD_FORMATTING are declared with that struct, since consumers need
+// them; the limits below are implementation details and stay here.
 
 //! maximum JSON nesting depth (enforced in sandbox mode only)
 #define JSON_MAX_NESTING_DEPTH 256
 
 //! iterations between cancellation checks when serializing or parsing containers
 #define JSON_INTERRUPT_CHECK_INTERVAL 100
-
-//! no flags; standard JSON generation without whitespace formatting
-#define JGF_NONE           0
-
-//! use whitespace formatting including line breaks and indentation
-#define JGF_ADD_FORMATTING (1 << 0)
 
 //! parses a JSON string and returns the corresponding %Qore value
 /** A leading UTF-8, UTF-16 or UTF-32 byte-order mark is skipped if present.  Any non-whitespace
@@ -74,11 +63,11 @@
 
     @since %Qore 3.0
 */
-DLLEXPORT QoreValue parse_json(const QoreString* str, ExceptionSink* xsink);
+DLLLOCAL QoreValue parse_json(const QoreString* str, ExceptionSink* xsink);
 
 //! serializes a %Qore value to a new JSON string
 /** @param data the value to serialize
-    @param format flags from @ref json_cpp_api (@ref JGF_NONE or @ref JGF_ADD_FORMATTING)
+    @param format @ref JGF_NONE or @ref JGF_ADD_FORMATTING
     @param enc the encoding of the returned string; if nullptr, UTF-8 is used
     @param xsink %Qore-language exceptions are raised here
 
@@ -93,7 +82,7 @@ DLLEXPORT QoreValue parse_json(const QoreString* str, ExceptionSink* xsink);
 
     @since %Qore 3.0
 */
-DLLEXPORT QoreStringNode* make_json(QoreValue data, int format, const QoreEncoding* enc,
+DLLLOCAL QoreStringNode* make_json(QoreValue data, int format, const QoreEncoding* enc,
         ExceptionSink* xsink);
 
 //! appends the JSON serialization of a %Qore value to an existing string
@@ -111,7 +100,7 @@ DLLEXPORT QoreStringNode* make_json(QoreValue data, int format, const QoreEncodi
 
     @since %Qore 3.0
 */
-DLLEXPORT int json_serialize_value(QoreString& str, QoreValue data, int indent, ExceptionSink* xsink);
+DLLLOCAL int json_serialize_value(QoreString& str, QoreValue data, int indent, ExceptionSink* xsink);
 
 //! appends the JSON serialization of a list to an existing string, optionally skipping elements
 /** @param str the string to append to; its encoding is used for the serialized text
@@ -126,9 +115,8 @@ DLLEXPORT int json_serialize_value(QoreString& str, QoreValue data, int indent, 
 
     @since %Qore 3.0
 */
-DLLEXPORT int json_serialize_list(QoreString& str, const QoreListNode* l, int indent,
+DLLLOCAL int json_serialize_list(QoreString& str, const QoreListNode* l, int indent,
         ExceptionSink* xsink, unsigned offset = 0);
 
-///@}
 
 #endif // _QORE_QOREJSON_H

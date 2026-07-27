@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  module-cpp-api.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+# the "cppapiuser" test module consumes the "cppapitest" test module's C++ API and exposes the
+# result to Qore; both are built into the build tree by examples/test/module-cpp-api/CMakeLists.txt
+# and neither is installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+# cppapisrc.qm is a Qore-language module with no C++ code at all
+%prepend-module-path "${SCRIPT_DIR}"
+%requires cppapisrc
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ModuleCppApiTest
+
+#! tests the versioned module C++ API mechanism (include/qore/QoreModuleCppApi.h)
+/** Every case here goes through q_get_module_cpp_api() from a real binary module: "cppapiuser"
+    resolves "cppapitest"'s struct at run time and calls through it.  The two modules do not link
+    against each other and neither one is a dependency of the other in its module descriptor, so a
+    successful call proves on-demand loading, symbol resolution and the ABI contract together.
+*/
+class ModuleCppApiTest inherits QUnit::Test {
+    public {
+        #! the version the cppapitest module publishes
+        const ApiMajor = 1;
+        const ApiMinor = 2;
+
+        #! the major version cppapitest answers with a struct whose header does not describe it
+        const BadHeaderMajor = 7;
+
+        #! the version the deliberately mismatched struct declares
+        const BadHeaderStructMajor = 9;
+        const BadHeaderStructMinor = 9;
+    }
+
+    constructor() : QUnit::Test("module-cpp-api", "1.0") {
+        addTestCase("resolution", \resolutionTest());
+        addTestCase("version negotiation", \versionTest());
+        addTestCase("negative resolution", \negativeTest());
+        addTestCase("calls through the resolved struct", \callTest());
+        addTestCase("opaque handles", \handleTest());
+        addTestCase("on-demand loading", \loadTest());
+        set_return_value(main());
+    }
+
+    resolutionTest() {
+        # the producer publishes exactly the version its header declares
+        hash<auto> v = cpp_api_resolve("cppapitest", ApiMajor, ApiMinor);
+        assertEq(ApiMajor, v.major);
+        assertEq(ApiMinor, v.minor);
+
+        # a consumer compiled against an older minor gets the same (append-only) struct
+        for (int minor = 0; minor <= ApiMinor; ++minor) {
+            hash<auto> old = cpp_api_resolve("cppapitest", ApiMajor, minor);
+            assertEq(ApiMajor, old.major, sprintf("minor %d: major", minor));
+            assertEq(ApiMinor, old.minor, sprintf("minor %d: minor", minor));
+        }
+    }
+
+    versionTest() {
+        # a minor newer than the producer serves is refused by the producer, which returns no
+        # struct at all; the error must still name the module and the requested version
+        assertThrows("MODULE-CPP-API-VERSION-ERROR",
+            sprintf("module 'cppapitest'.*version %d\\.%d", ApiMajor, ApiMinor + 1),
+            \cpp_api_resolve(), ("cppapitest", ApiMajor, ApiMinor + 1));
+
+        # a major the producer does not implement is refused the same way
+        assertThrows("MODULE-CPP-API-VERSION-ERROR", "cannot serve",
+            \cpp_api_resolve(), ("cppapitest", ApiMajor + 1, 0));
+
+        # a producer that accepts the request but answers with a struct whose header describes a
+        # different major version must not reach the caller: the caller would then be calling
+        # through a layout it was not compiled against.  The producer-side check cannot catch
+        # this, so it proves the validation in q_get_module_cpp_api() itself
+        assertThrows("MODULE-CPP-API-VERSION-ERROR",
+            sprintf("publishes C\\+\\+ API major version %d.*compiled against major version %d",
+                BadHeaderStructMajor, BadHeaderMajor),
+            \cpp_api_resolve(), ("cppapitest", BadHeaderMajor, 0));
+
+        # the same struct requested for the version it actually declares resolves normally
+        hash<auto> v = cpp_api_resolve("cppapitest", BadHeaderStructMajor, BadHeaderStructMinor);
+        assertEq(BadHeaderStructMajor, v.major);
+        assertEq(BadHeaderStructMinor, v.minor);
+
+        # ... and a minor higher than the struct declares is refused by the header check, even
+        # though the producer accepted the request
+        assertThrows("MODULE-CPP-API-VERSION-ERROR",
+            sprintf("publishes C\\+\\+ API version %d\\.%d", BadHeaderStructMajor, BadHeaderStructMinor),
+            \cpp_api_resolve(), ("cppapitest", BadHeaderStructMajor, BadHeaderStructMinor + 1));
+    }
+
+    negativeTest() {
+        # a feature that does not exist fails as a module load error, not as an API error
+        assertThrows("LOAD-MODULE-ERROR", \cpp_api_resolve(),
+            ("no-such-module-anywhere", ApiMajor, 0));
+
+        # a binary module that exports no C++ API entry point: cppapiuser itself is one
+        assertThrows("MODULE-CPP-API-ERROR", "exports no C\\+\\+ API.*cppapiuser_qore_cpp_api",
+            \cpp_api_resolve(), ("cppapiuser", ApiMajor, 0));
+
+        # a Qore-language module cannot export a C++ API at all
+        assertEq("cppapisrc", CppApiSrc::CppApiSrcMarker, "the Qore-language module is loaded");
+        assertThrows("MODULE-CPP-API-ERROR", "Qore-language module",
+            \cpp_api_resolve(), ("cppapisrc", ApiMajor, 0));
+
+        # an empty feature name is rejected before anything is loaded
+        assertThrows("MODULE-CPP-API-ERROR", "empty module feature name",
+            \cpp_api_resolve(), ("", ApiMajor, 0));
+    }
+
+    callTest() {
+        # plain C types across the boundary
+        assertEq(5, cpp_api_add(2, 3));
+        assertEq(-1, cpp_api_add(-4, 3));
+        assertEq(9223372036854775807, cpp_api_add(9223372036854775806, 1));
+
+        # a QoreString in, a QoreStringNode out: the caller owns the reference returned
+        assertEq("olleh", cpp_api_reverse("hello"));
+        assertEq("", cpp_api_reverse(""));
+        assertEq("a", cpp_api_reverse("a"));
+
+        # multi-byte characters survive: the producer reverses characters, not bytes, so a
+        # byte-wise implementation on either side of the boundary would corrupt this
+        assertEq("中é", cpp_api_reverse("é中"));
+
+        # the returned string is a normal Qore string, not a borrowed buffer
+        string s = cpp_api_reverse("abc");
+        assertEq("cba", s);
+        assertEq(3, s.size());
+    }
+
+    handleTest() {
+        # nothing is leaked from an earlier test case
+        assertEq(0, cpp_api_counter_live_count());
+
+        # an opaque handle created, used and released entirely through the API struct
+        assertEq(6, cpp_api_counter_roundtrip((1, 2, 3)));
+        assertEq(0, cpp_api_counter_live_count());
+
+        # ... and with an extra reference taken and released across the boundary
+        assertEq(6, cpp_api_counter_roundtrip((1, 2, 3), True));
+        assertEq(0, cpp_api_counter_live_count());
+
+        # a handle with no operations still balances
+        assertEq(0, cpp_api_counter_roundtrip(()));
+        assertEq(0, cpp_api_counter_live_count());
+    }
+
+    loadTest() {
+        # resolving the API loaded the producer on demand: it is not a declared dependency of
+        # cppapiuser, and nothing anywhere issued "%requires cppapitest"
+        assertTrue(get_module_hash().hasKey("cppapitest"), "producer loaded on demand");
+
+        # a Program that consumes the C++ API does not gain the producer as a feature: the
+        # resolution helper passes no Program, so the producer's code is made available without
+        # its Qore-language namespace being imported anywhere
+        Program p(PO_MODERN);
+        p.loadModule("cppapiuser");
+        p.parse("int sub f(int a, int b) { return cpp_api_add(a, b); }", "module-cpp-api-child");
+        assertEq(7, p.callFunction("f", 3, 4));
+        list<string> features = p.getFeatureList();
+        assertTrue(features.contains("cppapiuser"), "the required consumer is a feature");
+        assertFalse(features.contains("cppapitest"), "the resolved producer is not a feature");
+    }
+}

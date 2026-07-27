@@ -13,18 +13,40 @@ public C++ JSON API becomes available to every builtin module.
 
 ## Decisions
 
-### 1. The codec core lives in libqore, not in the module
+### 1. The codec core stays in the module and is published as a C++ API
+
+**Superseded, and then reverted.** As first implemented this decision moved the codec into
+libqore; it is back in the module now that
+[#5371](https://github.com/qoretechnologies/qore/issues/5371) exists. Both states are recorded
+here because the reasoning for the move is what motivated #5371.
 
 `ql_json.qpp` lines ~411-1193 are a hand-written JSON parser and serializer with **no jsoncons
 dependency** (jsoncons is used only by `JsonSchemaImpl.cpp`, `QC_JsonSchema.h` and `ql_cbor.qpp`),
-and `parse_json()` / `make_jsonrpc_request*()` are already `DLLEXPORT` in `src/ql_json.h`.
+and `parse_json()` / `make_jsonrpc_request*()` were already `DLLEXPORT` in `src/ql_json.h`.
 
-That core moves to `lib/QoreJson.cpp` with a new installed header `include/qore/QoreJson.h`. JWT
-(OpenSSL), `JsonSchema`, CBOR and TOON stay in the module.
+That core moved to `lib/QoreJson.cpp` with an installed header `include/qore/QoreJson.h`, because
+`modules/avro` needed a C++ JSON parser and "the alternative — leaving the codec in the module and
+having `avro` resolve symbols across `dlopen()`ed modules — was rejected as fragile". That
+judgement was correct about *raw* symbol resolution, which fails as a lazy-binding process abort
+rather than as an error; the module C++ API mechanism (`design/module-cpp-api.md`) makes it a
+versioned, on-demand resolution with a clean exception on mismatch instead.
 
-Consequence: `modules/avro` links libqore and nothing else, and jsoncons never enters libqore.
-The alternative — leaving the codec in the module and having `avro` resolve symbols across
-`dlopen()`ed modules — was rejected as fragile.
+So the codec is back in `modules/json/src/QoreJson.cpp` with a module-private
+`modules/json/src/QoreJson.h`, and `include/qore/QoreJsonApi.h` publishes it as `QoreJsonApi`.
+libqore never used the codec — the only `parse_json` / `make_json` references anywhere under
+`lib/` were two comments in `QoreAOTRuntime.cpp` — so the core library loses ~950 lines it had no
+use for, and the natural layering is restored. JWT (OpenSSL), `JsonSchema`, CBOR and TOON were
+never affected either way.
+
+The consequences that mattered are preserved: jsoncons never enters libqore, and `modules/avro`
+still has no link-time dependency on `modules/json`; it resolves `QoreJsonApi` on first use, which
+loads the `json` module on demand. `bin/qore-extract-qm-metadata` uses JSON at the *Qore* level
+(`QoreApiMetadata`'s `MetadataStore::toJson()`), so the qm-metadata bootstrap never depended on
+the codec's location — only on `json` remaining a builtin module, which it is.
+
+Removing `<qore/QoreJson.h>` is an API break only once 3.0.0 has released. It has not, so the
+window was open; after 3.0.0 ships, the header would have had to stay until the next major
+version.
 
 ### 2. jsoncons is vendored at v1.8.1, not fetched and not discovered
 
@@ -160,6 +182,8 @@ Each phase must build and test green before the next starts.
 
 1. **Codec core into libqore.** `lib/QoreJson.cpp` + `include/qore/QoreJson.h`. `module-json`
    keeps building against the installed header; nothing else changes yet.
+   *Reverted by decision 1 above:* the codec is back in `modules/json/src/QoreJson.cpp` and is
+   published as `QoreJsonApi` through the module C++ API mechanism instead.
 2. **`modules/json/`.** Vendor jsoncons v1.8.1; move 7 QPP sources, 3 `.cpp`, headers,
    `docs/mainpage.dox.tmpl`; `CMakeLists.txt` modelled on `modules/protobuf`; resolve the nghttp2
    target collision; 9 binary suites to `modules/json/test/`.

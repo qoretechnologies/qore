@@ -1248,7 +1248,32 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     }
                 }
             }
-            return new RestClientIo(opts, mgr);
+            return copySelf(opts);
+        }
+
+        #! Constructs a sibling instance of this client's own class from resolved options
+        /** Used by @ref copyWithUrl() so that copying a subclass yields that subclass rather than
+            a generic client.  This used to construct @ref RestClientIo unconditionally, which
+            silently downgraded every subclass: a client that customizes authentication or
+            headers lost that behaviour on the copy, and
+            <a href="../../SalesforceRestClient/html/index.html#salesforcerestclientintro">SalesforceRestClientIo</a>
+            in particular lost the OAuth2 hook that captures the Salesforce org identity, so the
+            copy would drop the instance URL on its next token refresh.
+
+            The default implementation constructs this object's own class through the conventional
+            <tt>(opts, shared_mgr)</tt> constructor, sharing this instance's connection manager so
+            pooled connections to hosts common to both URLs are reused.  A subclass whose
+            constructor does not take those arguments must override this method.
+
+            @param opts the resolved constructor options, including the new URL and any inherited
+            OAuth2 token state
+
+            @return a new instance of this object's class
+
+            @since %RestClientIo 1.0
+        */
+        private RestClient::AbstractRestClient copySelf(hash<auto> opts) {
+            return cast<RestClient::AbstractRestClient>(Class::getClass(self).newObject(opts, mgr));
         }
 
         #! Returns the logger for this client
@@ -4985,6 +5010,16 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         #! RestClientIo instance (kept alive for the connection manager + stream)
         RestClientIo rcio;
 
+        #! The connection's own client when @ref rcio was retargeted at an absolute ping URL
+        /** @ref rcio then shares this object's connection manager, so the owner has to stay
+            alive for the life of the ping operation.
+
+            @note set in the constructor and never modified afterwards
+
+            @since %RestClientIo 1.0
+        */
+        *RestClientIo ping_url_parent;
+
         #! Current state
         string state;
 
@@ -5108,24 +5143,38 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # constructor — token refresh is handled by the state machine if needed.
         rcio = cast<RestClientIo>(conn.getAsync(False, {"skip_login": True}));
 
+        # Update real_url from the RestClientIo's actual URL (fixes auto_url placeholders);
+        # this has to happen before any ping-URL retargeting below, since real_url describes
+        # the connection itself and not the ping target
+        conn.real_url = rcio.getUrl().toString();
+
+        # A ping path given as an absolute URL names a different target than the connection
+        # itself -- SalesforceRestConnection resolves `ping_path: auto` to the org's identity
+        # service URL on the login host, for example -- so the client has to be retargeted at
+        # that URL.  Passing the URL through as a request path instead sends it to the
+        # connection's own host, which answers with an error page.  A RestClientIo's URL is
+        # immutable by design (its connection manager pools by URL), so retargeting goes
+        # through copyWithUrl(), which shares the parent's manager and carries the parent's
+        # OAuth2 token over so no duplicate login is performed.  Mirrors
+        # RestConnection::pingImpl() and RestPingPollOperation::doStartPing().
+        #
         # An absolute ping_path (starting with "/") must not inherit the
         # connection's URL path component, otherwise an `api: v1` style
         # connection turns ping_path `/get_server_info` into
         # `/v1/get_server_info` and the ping reliably 404s against backends
         # that expose health endpoints outside the API namespace
-        # (e.g. SGLang at `/get_server_info`).  Mirrors RestConnection::ping()
-        # which clears the connection path on the sync client before issuing
-        # an absolute ping.
-        if (ping_path && ping_path[0] == "/") {
+        # (e.g. SGLang at `/get_server_info`).
+        if (ping_path =~ /^http/) {
+            ping_url_parent = rcio;
+            rcio = cast<RestClientIo>(ping_url_parent.copyWithUrl(ping_path));
+            ping_path = "";
+        } else if (ping_path && ping_path[0] == "/") {
             rcio.clearConnectionPath();
         }
 
         if (schema_validator) {
             rcio.setValidator(schema_validator);
         }
-
-        # Update real_url from the RestClientIo's actual URL (fixes auto_url placeholders)
-        conn.real_url = rcio.getUrl().toString();
 
         # If the token is in the expiry window, refresh it before the first request
         if (rcio.tokenRequiresRefresh()) {

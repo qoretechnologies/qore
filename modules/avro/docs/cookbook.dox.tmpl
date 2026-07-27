@@ -1,0 +1,246 @@
+/** @page avrocookbook avro Module Cookbook
+
+    @tableofcontents
+
+    Every example assumes <tt>\%requires avro</tt>.
+
+    @section avrocookbookprimitives Primitives
+
+    @code{.py}
+AvroSchema i('"int"');
+AvroSchema l('"long"');
+AvroSchema s('"string"');
+AvroSchema b('"bytes"');
+AvroSchema d('"double"');
+
+printf("%y\n", i.encode(64));           # <8001>: zigzag varint
+printf("%y\n", s.decode(s.encode("hello")));
+printf("%y\n", b.decode(b.encode(<cafe>)));
+printf("%y\n", d.decode(d.encode(1.5)));
+    @endcode
+
+    A bare primitive name is a complete schema; so is a schema object with a \c type attribute:
+
+    @code{.py}
+AvroSchema same('{"type": "int"}');
+    @endcode
+
+    @section avrocookbookrecord Records
+
+    @code{.py}
+AvroSchema schema('{
+    "type": "record",
+    "name": "com.example.Person",
+    "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "age", "type": "int"},
+        {"name": "email", "type": ["null", "string"], "default": null}
+    ]
+}');
+
+binary data = schema.encode({"name": "Ada", "age": 36});
+hash<auto> p = schema.decode(data);
+# p = {"name": "Ada", "age": 36, "email": NOTHING}
+    @endcode
+
+    A field that is absent from the hash is taken from its \c default; a field with no default
+    that is absent raises \c AVRO-ENCODE-ERROR.
+
+    @section avrocookbookunion Unions
+
+    @code{.py}
+AvroSchema nullable(("null", "string"));
+printf("%y\n", nullable.decode(nullable.encode(NOTHING)));    # NOTHING
+printf("%y\n", nullable.decode(nullable.encode("present")));  # "present"
+    @endcode
+
+    Branch selection when encoding is deterministic; see @ref avroschemaguideunion.
+
+    @section avrocookbookenum Enums
+
+    @code{.py}
+AvroSchema schema('{
+    "type": "enum",
+    "name": "Suit",
+    "symbols": ["SPADES", "HEARTS", "DIAMONDS", "CLUBS"],
+    "default": "SPADES"
+}');
+
+printf("%y\n", schema.decode(schema.encode("HEARTS")));   # "HEARTS"
+printf("%y\n", schema.decode(schema.encode(2)));          # "DIAMONDS", by index
+    @endcode
+
+    @section avrocookbookarraymap Arrays and Maps
+
+    @code{.py}
+AvroSchema arr('{"type": "array", "items": "long"}');
+printf("%y\n", arr.decode(arr.encode((1, 2, 3))));
+
+AvroSchema m('{"type": "map", "values": "string"}');
+printf("%y\n", m.decode(m.encode({"a": "one", "b": "two"})));
+    @endcode
+
+    @section avrocookbookfixed Fixed
+
+    @code{.py}
+AvroSchema md5('{"type": "fixed", "name": "MD5", "size": 16}');
+binary digest = <000102030405060708090a0b0c0d0e0f>;
+printf("%y\n", md5.decode(md5.encode(digest)));
+    @endcode
+
+    A \c binary of any other length raises \c AVRO-ENCODE-ERROR.
+
+    @section avrocookbooklogical Logical Types
+
+    @code{.py}
+AvroSchema dec('{"type": "bytes", "logicalType": "decimal", "precision": 20, "scale": 4}');
+printf("%y\n", dec.decode(dec.encode(1234567890123.4567n)));
+
+AvroSchema day('{"type": "int", "logicalType": "date"}');
+printf("%y\n", day.decode(day.encode(2026-07-27Z)));
+
+AvroSchema ts('{"type": "long", "logicalType": "timestamp-micros"}');
+printf("%y\n", ts.decode(ts.encode(2026-07-27T13:45:30.123456Z)));
+
+# a time of day is a relative date, with no date part
+AvroSchema tod('{"type": "int", "logicalType": "time-millis"}');
+printf("%y\n", tod.decode(tod.encode(PT13H45M30S)));
+
+AvroSchema dur('{"type": "fixed", "name": "Dur", "size": 12, "logicalType": "duration"}');
+printf("%y\n", dur.decode(dur.encode(P1M2DT3H)));
+    @endcode
+
+    @section avrocookbookrecursive Recursive Schemas
+
+    @code{.py}
+AvroSchema schema('{
+    "type": "record",
+    "name": "Node",
+    "fields": [
+        {"name": "value", "type": "int"},
+        {"name": "next", "type": ["null", "Node"], "default": null}
+    ]
+}');
+
+hash<auto> list = {"value": 1, "next": {"value": 2, "next": {"value": 3, "next": NOTHING}}};
+printf("%y\n", schema.decode(schema.encode(list)));
+    @endcode
+
+    @section avrocookbookresolution Reading Data Written With an Older Schema
+
+    @code{.py}
+AvroSchema v1('{"type": "record", "name": "E", "fields": [
+    {"name": "id", "type": "string"}
+]}');
+
+AvroSchema v2('{"type": "record", "name": "E", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long", "default": 0},
+    {"name": "label", "type": "string", "aliases": ["name"], "default": ""}
+]}');
+
+binary old_data = v1.encode({"id": "abc"});
+hash<auto> v = v2.decode(old_data, v1);
+# v = {"id": "abc", "count": 0, "label": ""}
+    @endcode
+
+    @section avrocookbookcontainer Container Files
+
+    @code{.py}
+AvroSchema schema('{"type": "record", "name": "Event", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long"}
+]}');
+
+{
+    AvroFileWriter writer("events.avro", schema, {
+        "codec": "deflate",
+        "block_size": 32 * 1024,
+        "metadata": {"producer": "my-service"},
+    });
+    writer.writeAll((
+        {"id": "a", "count": 1},
+        {"id": "b", "count": 2},
+    ));
+}
+
+AvroFileReader reader("events.avro");
+printf("codec: %s\n", reader.getCodec());
+printf("producer: %s\n", reader.getMetadata().producer.toString());
+map printf("%y\n", $1), reader;
+    @endcode
+
+    @section avrocookbookmemory Container Files in Memory
+
+    @code{.py}
+BinaryOutputStream os();
+{
+    AvroFileWriter writer(os, schema);
+    writer.write({"id": "a", "count": 1});
+}
+binary file = os.getData();
+
+AvroFileReader reader(file);
+while (reader.next()) {
+    printf("%y\n", reader.getValue());
+}
+    @endcode
+
+    Reproducible output needs a fixed sync marker, since a random one is generated otherwise:
+
+    @code{.py}
+AvroFileWriter writer(os, schema, {"sync": <000102030405060708090a0b0c0d0e0f>});
+    @endcode
+
+    @section avrocookbookstreams Container Files Over Streams
+
+    @code{.py}
+AvroFileReader reader(new FileInputStream("large.avro"));
+int count = 0;
+while (reader.next()) {
+    ++count;
+}
+printf("%d objects\n", count);
+    @endcode
+
+    The stream is read incrementally, so files far larger than memory can be processed. A writer
+    created over an @ref Qore::OutputStream "OutputStream" does not close the stream — the caller
+    owns it.
+
+    @section avrocookbookcache Caching Schemas by Fingerprint
+
+    @code{.py}
+hash<string, AvroSchema> cache;
+
+AvroSchema intern(string schema_json) {
+    AvroSchema schema(schema_json);
+    string key = schema.getFingerprint().toString();
+    if (!cache{key}) {
+        cache{key} = schema;
+    }
+    return cache{key};
+}
+    @endcode
+
+    @section avrocookbookintrospect Inspecting a Schema
+
+    @code{.py}
+AvroSchema schema(schema_json);
+printf("type: %s\n", schema.getType());
+printf("name: %y\n", schema.getName());
+foreach string name in (schema.getNamedTypeNames()) {
+    AvroSchema t = schema.getNamedType(name);
+    printf("  %s: %s\n", name, t.getType());
+}
+    @endcode
+
+    @section avrocookbookdataprovider Mapping a Schema to a DataProvider Type
+
+    @code{.py}
+%requires AvroUtil
+
+AbstractDataProviderType type = AvroTypeHelper::schemaToDataType(schema);
+    @endcode
+
+    See <a href="../../AvroUtil/html/index.html#avroutilintro">AvroUtil</a>.
+*/

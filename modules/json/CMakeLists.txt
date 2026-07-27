@@ -64,8 +64,10 @@ set(JSON_QPP_SRC
 # C++ source files
 set(JSON_CPP_SRC
     src/json-module.cpp
+    src/JsonCppApi.cpp
     src/JsonSchemaImpl.cpp
     src/JsonStreamReadHandler.cpp
+    src/QoreJson.cpp
 )
 
 set(QORE_DOX_JSON_TMPL_SRC

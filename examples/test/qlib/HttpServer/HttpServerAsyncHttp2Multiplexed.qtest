@@ -293,9 +293,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     globalSetUp() {
-        mLogger = new Logger("http2-mux-test", LoggerLevel::getLevelInfo());
+        # Always attach an appender: every server-side path that drops a connection
+        # before or during the TLS handshake logs at WARN/ERROR, and with no appender
+        # those messages are discarded — a client-side "SOCKET-SSL-ERROR ...
+        # SSL_connect() could not be completed" then has no server-side explanation at
+        # all in a CI log.  Below -vvv the logger level is WARN, so a passing run stays
+        # silent and only a real failure prints.
+        mLogger = new Logger("http2-mux-test", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        mLogger.addAppender(new StdoutAppender());
         if (m_options.verbose > 2) {
-            mLogger.addAppender(new StdoutAppender());
             mWsHandler.debug = True;
         }
 

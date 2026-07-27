@@ -52,7 +52,7 @@
 %requires json
 
 module RestClient {
-    version = "2.6";
+    version = "2.7";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -143,6 +143,25 @@ printf("%Y\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_7 RestClient v2.7
+    - fixed pings swallowing every failure acquiring the async client and silently retrying the
+      whole ping synchronously; only \c CONNECTION-ASYNC-UNSUPPORTED and \c LOAD-MODULE-ERROR
+      fall back now, so a real failure such as an OAuth2 login error is reported as-is instead of
+      being replaced by the second attempt's error
+    - fixed pings with a \c ping_path given as an absolute URL; the client is now retargeted at
+      that URL with @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" instead of
+      the URL being sent to the connection's own host as a request path, which made every
+      <a href="../../SalesforceRestClient/html/index.html">SalesforceRestConnection</a>
+      synchronous ping fail deserializing the resulting HTML error page
+    - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a
+      generic @ref RestClient::RestClient "RestClient" when called on a subclass; a client that
+      customizes authentication or headers &mdash; @ref AwsRestClient::AwsRestClient
+      "AwsRestClient", whose \c signRequest() applies AWS SigV4 signing &mdash; lost that
+      behaviour on the copy, and its requests went out unsigned.  The copy is now constructed from
+      the object's own class through the new
+      @ref RestClient::RestClient::copySelf() "copySelf()" hook
+      (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection restclientv2_6 RestClient v2.6
     - added @ref RestClient::RestClient::doRequestWithResponseLimit()
@@ -2030,7 +2049,30 @@ hash<auto> ans = rest.del("/orders/1");
                 opts.oauth2_refresh_token = refresh_token;
             }
         }
-        return new RestClient(opts, True);
+        return copySelf(opts);
+    }
+
+    #! Constructs a sibling instance of this client's own class from resolved options
+    /** Used by @ref copyWithUrl() so that copying a subclass yields that subclass rather than a
+        generic client.  This used to construct @ref RestClient unconditionally, which silently
+        downgraded every subclass: a client that customizes authentication or headers &mdash;
+        @ref AwsRestClient::AwsRestClient "AwsRestClient", whose \c signRequest() applies AWS
+        SigV4 signing &mdash; lost that behaviour on the copy, and its requests went out unsigned.
+
+        The default implementation constructs this object's own class through the conventional
+        <tt>(opts, do_not_connect)</tt> constructor, which every REST client class in the
+        distribution uses.  A subclass whose constructor does not take those arguments must
+        override this method.
+
+        @param opts the resolved constructor options, including the new URL and any inherited
+        OAuth2 token state
+
+        @return a new instance of this object's class
+
+        @since %RestClient 2.7
+    */
+    private AbstractRestClient copySelf(hash<auto> opts) {
+        return cast<AbstractRestClient>(Class::getClass(self).newObject(opts, True));
     }
 
     #! Closes the client by disconnecting the underlying HTTP connection
@@ -5108,10 +5150,20 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     private pingImpl() {
         # Try async client first (RestClientIo), fall back to sync (RestClient).
         # Both implement restDoRequest() via AbstractRestClient.
+        #
+        # Only "async I/O is not available here" falls back: CONNECTION-ASYNC-UNSUPPORTED from a
+        # connection class that does not implement getAsyncImpl(), and LOAD-MODULE-ERROR when the
+        # async client module itself cannot be loaded (startPollConnect() treats that error the
+        # same way).  Any other exception is a real failure of this ping -- an OAuth2 login error,
+        # for example -- and must propagate: retrying the whole ping synchronously does the work
+        # twice only to fail again, and reports the second failure while hiding the first.
         AbstractRestClient client;
         try {
             client = getAsync();
-        } catch () {
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CONNECTION-ASYNC-UNSUPPORTED" && ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
             client = get();
         }
         *string ping_path;
@@ -5124,23 +5176,31 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             ping_body = getPingBody();
         }
 
-        # An absolute ping_path (starting with "/") must NOT inherit the
-        # connection's URL path component, otherwise an `api: v1` style
-        # connection turns ping_path `/get_server_info` into
-        # `/v1/get_server_info` and the ping reliably 404s against backends
-        # that expose health endpoints outside the API namespace
-        # (e.g. SGLang at `/get_server_info`).  Both RestClient (sync) and
-        # RestClientIo (async) expose `clearConnectionPath()`.  The absolute-URL
-        # branch (`setURL`) remains RestClient-only since RestClientIo does
-        # not currently expose `setURL`.
-        if (client instanceof RestClient) {
-            RestClient rc = cast<RestClient>(client);
-            if (ping_path =~ /^http/) {
-                rc.setURL(ping_path);
-                ping_path = "";
-            } else if (ping_path[0] == "/") {
-                rc.clearConnectionPath();
-            }
+        # A ping path given as an absolute URL names a different target than the connection
+        # itself -- SalesforceRestConnection resolves `ping_path: auto` to the org's identity
+        # service URL on the login host, for example -- so the client has to be retargeted at
+        # that URL.  Passing the URL through as a request path instead sends it to the
+        # connection's own host, which answers with an error page, and the ping then fails
+        # deserializing HTML.
+        #
+        # Retargeting goes through AbstractRestClient::copyWithUrl(), which both client classes
+        # implement and which carries the parent's OAuth2 token over to the copy, so no duplicate
+        # login is performed.  It cannot be `setURL()`: that is RestClient-only, since a
+        # RestClientIo's URL is immutable by design (its connection manager pools by URL);
+        # copyWithUrl() shares the parent's manager, so pooled connections are still reused.
+        #
+        # An absolute ping_path (starting with "/") must NOT inherit the connection's URL path
+        # component, otherwise an `api: v1` style connection turns ping_path `/get_server_info`
+        # into `/v1/get_server_info` and the ping reliably 404s against backends that expose
+        # health endpoints outside the API namespace (e.g. SGLang at `/get_server_info`).  Both
+        # RestClient (sync) and RestClientIo (async) expose `clearConnectionPath()`.
+        #
+        # NOTE: the parent is held for the life of the ping; the async copy shares the parent's
+        # connection manager
+        AbstractRestClient parent = client;
+        if (ping_path =~ /^http/) {
+            client = parent.copyWithUrl(ping_path);
+            ping_path = "";
         } else if (ping_path[0] == "/") {
             client.clearConnectionPath();
         }
