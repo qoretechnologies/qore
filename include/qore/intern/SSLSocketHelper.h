@@ -181,8 +181,14 @@ private:
     // must be called with refs > 1
     DLLLOCAL int sysCallError(ExceptionSink* xsink, int rc, const char* mname, const char* ssl_func);
 
-    DLLLOCAL void handleErrorIntern(ExceptionSink* xsink, int e, const char* mname, const char* func,
-            bool always_error);
+    //! Reports one OpenSSL error-queue entry, or a transport-level failure when the queue is empty
+    /** @param e a packed @c ERR_get_error() code, or 0 when the OpenSSL error queue was empty —
+        in which case the failure came from the transport, not from TLS, and \a sockerr carries
+        the reason
+        @param sockerr the socket errno captured before the OpenSSL calls that can clobber it
+    */
+    DLLLOCAL void handleErrorIntern(ExceptionSink* xsink, unsigned long e, int sockerr, const char* mname,
+            const char* func, bool always_error);
 };
 
 class SSLSocketReferenceHelper {

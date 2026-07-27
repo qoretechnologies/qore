@@ -9740,28 +9740,61 @@ bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const ch
     assert(refs > 1);
     assert(xsink);
 
-    long e = ERR_get_error();
+    // Capture the transport error before ERR_get_error()/ERR_error_string() below can clobber
+    // it; when the OpenSSL error queue turns out to be empty this is the only information there
+    // is about what went wrong.
+    int sockerr = sock_get_error();
+
+    unsigned long e = ERR_get_error();
+    if (!e) {
+        // Nothing in the OpenSSL error queue: the failure came from the transport rather than
+        // from TLS.  Reported with e = 0 so handleErrorIntern() can tell this apart from a real
+        // error code; it used to be reported as SSL_ERROR_ZERO_RETURN, which is a value from the
+        // SSL_get_error() enum and not something ERR_get_error() can ever return.
+        handleErrorIntern(xsink, 0, sockerr, mname, func, always_error);
+        return *xsink || !qs.isOpen();
+    }
     do {
-        //printd(5, "SSLSocketHelper::sslError() '%s' func: '%s' always_error: %d e: %ld\n", mname, func, always_error, e);
-        handleErrorIntern(xsink, e ? e : SSL_ERROR_ZERO_RETURN, mname, func, always_error);
+        //printd(5, "SSLSocketHelper::sslError() '%s' func: '%s' always_error: %d e: %lu\n", mname, func, always_error, e);
+        handleErrorIntern(xsink, e, sockerr, mname, func, always_error);
     } while ((e = ERR_get_error()));
 
     return *xsink || !qs.isOpen();
 }
 
-void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char* mname, const char* func,
-        bool always_error) {
-    if (e == SSL_ERROR_ZERO_RETURN) {
-        // the remote end has closed the connection
-        // NOTE: For HTTP/2 connections, don't auto-close on SSL_ERROR_ZERO_RETURN.
-        // This could be a timeout or the end of a read operation, not necessarily a connection close.
-        // Let the HTTP/2 layer handle connection lifecycle.
+void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, int sockerr, const char* mname,
+        const char* func, bool always_error) {
+    if (!e) {
+        // The OpenSSL error queue was empty, so this is a transport-level failure and not a TLS
+        // protocol error.  SSL_OP_IGNORE_UNEXPECTED_EOF (set in SSLSocketHelper::setup()) makes a
+        // bare TCP FIN arrive here as well, with errno 0; a reset arrives with ECONNRESET.
+        // NOTE: For HTTP/2 connections, don't auto-close here.  This could be a timeout or the end
+        // of a read operation, not necessarily a connection close.  Let the HTTP/2 layer handle
+        // connection lifecycle.
         if (!qs.h2_session) {
             qore_socket_close_private_from_controller(&qs);
         }
         if (always_error) {
-            xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the %s() call could not be " \
-                "completed because the TLS/SSL connection was terminated (err: %d)", mname, func, e);
+            // Report what actually happened.  This used to print "(err: 6)", which was the
+            // SSL_ERROR_ZERO_RETURN placeholder substituted for the empty error queue: it carried
+            // no information at all and did not even say whether the connection had got as far as
+            // a working TLS session.
+            //
+            // Whether the peer sent a close notification cannot be reported here: SSL_OP_IGNORE_
+            // UNEXPECTED_EOF (set in SSLSocketHelper::setup()) makes OpenSSL flag a bare TCP FIN
+            // as a received shutdown, so SSL_get_shutdown() cannot tell the two apart.  Where the
+            // failure happened can be reported, and that is the useful part: a connection dropped
+            // mid-handshake is a different problem from a session closed after it was up.
+            bool in_handshake = ssl && !SSL_is_init_finished(ssl);
+            SimpleRefHolder<QoreStringNode> errstr(new QoreStringNodeMaker("error in Socket::%s(): the %s() "
+                "call could not be completed because the TLS/SSL connection was terminated by the remote "
+                "end%s", mname, func, in_handshake ? " during the TLS handshake" : ""));
+            // errno is meaningful only when the transport itself reported a failure; a plain EOF
+            // leaves it at 0, so this adds ECONNRESET and friends without inventing a cause
+            if (sockerr) {
+                errstr->sprintf(" (last socket error %d: %s)", sockerr, strerror(sockerr));
+            }
+            xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
         }
     } else {
         char buf[121];
@@ -9776,16 +9809,15 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
             qs.ssl_err_str = nullptr;
         }
         xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
-#ifdef ECONNRESET
-        // close the socket if connection reset received
-        if (e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET) {
-            //printd(5, "SSLSocketHelper::handleErrorIntern() Socket::%s() (%s) socket closed by remote end\n", mname, func);
-            // For HTTP/2 connections, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session) {
-                qore_socket_close_private_from_controller(&qs);
-            }
-        }
-#endif
+        // There used to be a connection-reset close here, guarded by
+        // "e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET".  It could never run: `e` is
+        // a packed ERR_get_error() code in this branch while SSL_ERROR_SYSCALL (5) belongs to the
+        // SSL_get_error() enum, and a packed ERR code is never 5.  It is not resurrected here
+        // because errno is only meaningful for a transport failure, and a transport failure
+        // leaves the OpenSSL error queue empty and is therefore handled above — where the socket
+        // is closed unconditionally.  Reaching this branch means OpenSSL reported a real protocol
+        // error, so any errno left over from an earlier call says nothing about this connection.
+        (void)sockerr;
     }
 }
 
