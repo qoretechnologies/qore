@@ -57,6 +57,7 @@ class SalesforceTest inherits QUnit::Test {
         addTestCase("AND/OR expression tests", \andOrExpressionTests());
         addTestCase("SOQL operator unit tests", \soqlOperatorUnitTests());
         addTestCase("org identity unit tests", \orgIdentityUnitTests());
+        addTestCase("option URL resolution unit tests", \optionUrlResolutionUnitTests());
         addTestCase("Salesforce.com REST", \salesForceRestTests());
         addTestCase("connection tests", \connectionTest());
 
@@ -646,6 +647,74 @@ class SalesforceTest inherits QUnit::Test {
         });
         assertEq("https://acme--new.my.salesforce.com", hook.getInstanceUrl());
         assertEq("00Dxx0000001gPLEAY", hook.getOrgId());
+    }
+
+    optionUrlResolutionUnitTests() {
+        # the target URL resolution rule in SalesforceRestClientBase::getOptions(), pinned in
+        # precedence order.  These are pure option-hash transformations; no client is constructed
+        # and no I/O happens.
+        string Login = "https://login.salesforce.com/services/oauth2/authorize";
+        string Instance = "https://acme.my.salesforce.com";
+
+        # no token, no URL: the login host, where the OAuth2 authorization flow starts
+        assertEq(Login, SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        }).url);
+
+        # a token and an instance URL but no URL: the org's instance, not the login host --
+        # without this a directly-constructed tokened client would talk to the wrong host
+        assertEq(Instance, SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "tok",
+            "instance_url": Instance,
+        }).url);
+
+        # a token but no instance URL: nothing to derive from, so the login host again
+        assertEq(Login, SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "tok",
+        }).url);
+
+        # an instance URL but no token: the instance URL is identity only until a token exists
+        assertEq(Login, SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "instance_url": Instance,
+        }).url);
+
+        # an explicitly-supplied URL wins over the derived one.  This is what lets a client carry
+        # the org identity while targeting somewhere else, which retargeting via
+        # AbstractRestClient::copyWithUrl() depends on; the derivation used to clobber it
+        assertEq("https://other.my.salesforce.com", SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "tok",
+            "instance_url": Instance,
+            "url": "https://other.my.salesforce.com",
+        }).url);
+
+        # ... and the org identity survives the resolution either way
+        hash<auto> resolved = SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "tok",
+            "instance_url": Instance,
+            "url": "https://other.my.salesforce.com",
+        });
+        assertEq(Instance, resolved.instance_url);
+
+        # the connection path, where the URL and the instance URL coincide after login: the rule
+        # is a no-op there, which is why making the derivation a default changed nothing for it
+        assertEq(Instance, SalesforceRestClientBase::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "tok",
+            "instance_url": Instance,
+            "url": Instance,
+        }).url);
     }
 
     soqlOperatorUnitTests() {

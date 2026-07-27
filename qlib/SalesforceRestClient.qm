@@ -453,9 +453,6 @@ public class SalesforceRestClientBase {
 
     #! returns options for the RestClient constructors
     static hash getOptions(*hash<auto> opts) {
-        if (opts.token && opts.instance_url) {
-            opts.url = opts.instance_url;
-        }
         # data "auto" == "json"
         if (opts."data" == "auto") {
             delete opts."data";
@@ -468,9 +465,22 @@ public class SalesforceRestClientBase {
             "oauth2_token_url": opts.oauth2_token_url ?? Defaults.oauth2_token_url,
             "oauth2_client_id": opts.oauth2_client_id,
             "oauth2_client_secret": opts.oauth2_client_secret,
-
-            "url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
-        } + Defaults + opts;
+        } + Defaults + opts + {
+            # The target URL is resolved last so that the whole rule is visible in one place, in
+            # precedence order: an explicitly-supplied URL always wins; failing that, a client
+            # that already holds a token targets the org's own instance rather than the login
+            # host; failing that, the login host, which is where the OAuth2 flow starts.
+            #
+            # The instance-URL step is a *default*, not an override: it exists so that
+            # SalesforceRestClient({"token": ..., "instance_url": ...}) with no "url" reaches the
+            # org instead of the login host.  It used to be written as an unconditional
+            # assignment to opts.url before this merge, which silently discarded any URL the
+            # caller did supply -- and made it impossible to build a client that carries the org
+            # identity while targeting a different URL, which is what retargeting via
+            # AbstractRestClient::copyWithUrl() requires.
+            "url": opts.url ?? (opts.token ? opts.instance_url : NOTHING)
+                ?? opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
+        };
     }
 }
 
