@@ -225,12 +225,30 @@ Each phase must build and test green before the next starts.
 - `test/lsp-websocket.qtest:10797` asserts completion results contain no json-module symbols;
   verify that still holds once json is builtin.
 
-### module-json retirement
+### module-json: `develop` only, repository stays live
 
-The repo has a plain `README`, not `README.md`. Replace it with a `README.md` stating the module
-was incorporated directly into Qore as of **Qore 3.0**, pointing at `modules/json/` and `qlib/` in
-the qore repo, and noting 1.12.0 as the final standalone release. Then archive the GitHub repo,
-remove the GitLab mirror and CI pipeline, and drop the `github-ci-helper` branch.
+Issue #5366 calls for retiring the repository outright -- archiving it on GitHub and removing the
+GitLab mirror, CI pipeline and `github-ci-helper` branch. **That is wrong and must not be done.**
+module-json branches are named after the **Qore** release line they support, not the module
+version, and the branches for earlier lines are still built and released from there because Qore
+and Qorus versions on those lines depend on them:
+
+| Branch | Qore release line | json module version |
+| --- | --- | --- |
+| `develop` | superseded by this migration | 1.12.0, its final release |
+| `2.x` | Qore 2.x | 1.9.2 |
+| `1.19.x` | Qore 1.19.x | 1.8.3 |
+| `1.12.x` | Qore 1.12.x | 1.8.2 |
+| `0.9.x`, `0.9.4`, `0.9.3`, `0.8.13`, `0.8.12`, `master`, ... | earlier Qore releases | per branch |
+
+So only `develop` is superseded. The GitHub repository, the GitLab mirror, its CI pipeline and the
+`github-ci-helper` branch all stay in place to serve the maintenance branches.
+
+The only change made there is on `develop`: its plain `README` is replaced with a `README.md`
+recording that Qore 3.0 and later ship the module in-tree, where each piece went, what it means
+for consumers on 3.0+ (nothing to install, no `qore-json-module` dependency, no `%try-module json`
+guards) and on earlier releases (nothing changes), and stating explicitly that the repository is
+not retired.
 
 ## Sequencing risk
 
