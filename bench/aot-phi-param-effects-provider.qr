@@ -1,0 +1,9 @@
+%modern
+
+int sub observeList(list<int> value) {
+    return value.size();
+}
+
+int sub observeSelected(bool first, list<int> left, list<int> right) {
+    return observeList(first ? left : right);
+}

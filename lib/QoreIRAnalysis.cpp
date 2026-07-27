@@ -1024,7 +1024,8 @@ bool qore_ir_compute_function_effect_summaries(
                 }
             }
         }
-        std::unordered_map<uint32_t, size_t> loaded_params;
+        std::unordered_map<uint32_t, std::unordered_set<size_t>>
+            param_value_origins;
         for (const auto& block : func->blocks) {
             if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
                 return false;
@@ -1038,7 +1039,9 @@ bool qore_ir_compute_function_effect_summaries(
                     const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
                     auto param_it = param_indexes.find(load->local);
                     if (param_it != param_indexes.end() && inst->result.isValid()) {
-                        loaded_params[inst->result.id] = param_it->second;
+                        param_value_origins[inst->result.id] = {
+                            param_it->second,
+                        };
                     }
                 }
                 if (inst && inst->opcode == QoreIROpcode::Return) {
@@ -1108,6 +1111,80 @@ bool qore_ir_compute_function_effect_summaries(
                 }
             }
         }
+        const bool propagate_phi_param_effects =
+            !std::getenv("QORE_DISABLE_AOT_PHI_PARAM_EFFECTS");
+        if (propagate_phi_param_effects) {
+            std::unordered_map<uint32_t,
+                std::vector<const QoreIRPhiInstruction*>> phi_users;
+            for (const auto& block : func->blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR function phi parameter-use analysis")) {
+                        return false;
+                    }
+                    if (!inst_ptr
+                            || inst_ptr->opcode != QoreIROpcode::Phi
+                            || !inst_ptr->result.isValid()) {
+                        continue;
+                    }
+                    const auto* phi = static_cast<
+                        const QoreIRPhiInstruction*>(inst_ptr.get());
+                    if (phi->value_kind
+                            != QoreIRPhiValueKind::QoreValue) {
+                        continue;
+                    }
+                    for (const QoreIRPhiIncoming& incoming
+                            : phi->incoming) {
+                        phi_users[incoming.value.id].push_back(phi);
+                    }
+                }
+            }
+            std::vector<uint32_t> origin_worklist;
+            origin_worklist.reserve(param_value_origins.size());
+            for (const auto& [value, origins] : param_value_origins) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR function phi parameter worklist construction")) {
+                    return false;
+                }
+                (void)origins;
+                origin_worklist.push_back(value);
+            }
+            for (size_t offset = 0; offset < origin_worklist.size();
+                    ++offset) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR function phi parameter-origin analysis")) {
+                    return false;
+                }
+                uint32_t source = origin_worklist[offset];
+                auto source_origins = param_value_origins.find(source);
+                auto users = phi_users.find(source);
+                if (source_origins == param_value_origins.end()
+                        || users == phi_users.end()) {
+                    continue;
+                }
+                const auto source_origin_values =
+                    source_origins->second;
+                for (const QoreIRPhiInstruction* phi : users->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR function phi parameter-user propagation")) {
+                        return false;
+                    }
+                    auto& result_origins =
+                        param_value_origins[phi->result.id];
+                    bool changed = false;
+                    for (size_t param : source_origin_values) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR function phi parameter-set propagation")) {
+                            return false;
+                        }
+                        changed |= result_origins.insert(param).second;
+                    }
+                    if (changed) {
+                        origin_worklist.push_back(phi->result.id);
+                    }
+                }
+            }
+        }
         for (const auto& block : func->blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 if (qore_ir_analysis_cancelled(check_count,
@@ -1129,54 +1206,62 @@ bool qore_ir_compute_function_effect_summaries(
                 }
                 bool callee_arg_analysis_cancelled = false;
                 qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
-                    auto loaded_it = loaded_params.find(operand.id);
-                    if (loaded_it == loaded_params.end()) {
-                        return;
-                    }
-                    size_t param_index = loaded_it->second;
-                    if (inst->opcode == QoreIROpcode::Return) {
+                    auto origins_it =
+                        param_value_origins.find(operand.id);
+                    if (origins_it == param_value_origins.end()
+                            || (propagate_phi_param_effects
+                                && inst->opcode == QoreIROpcode::Phi)) {
                         return;
                     }
                     bool has_ref_args = true;
                     const AbstractQoreFunctionVariant* callee =
                         qore_ir_get_resolved_effect_callee(inst, has_ref_args,
                             &closure_values);
-                    if (callee || inst->opcode == QoreIROpcode::CallDirect
+                    bool is_call = callee
+                        || inst->opcode == QoreIROpcode::CallDirect
                             || inst->opcode == QoreIROpcode::CallStaticDirect
                             || inst->opcode == QoreIROpcode::CallMethodDirect
                             || inst->opcode == QoreIROpcode::InvokeMethodDirect
                             || inst->opcode == QoreIROpcode::CallClosureDirect
                             || (inst->opcode == QoreIROpcode::Invoke
                                 && static_cast<const QoreIRInvokeInstruction*>(inst)
-                                    ->invoke_opcode == QoreIROpcode::CallClosureDirect)) {
-                        if (!callee || has_ref_args) {
-                            effect.param_noescape[param_index] = false;
-                            effect.param_may_modify[param_index] = true;
-                            return;
+                                    ->invoke_opcode
+                                        == QoreIROpcode::CallClosureDirect);
+                    for (size_t param_index : origins_it->second) {
+                        if (inst->opcode == QoreIROpcode::Return) {
+                            continue;
                         }
-                        size_t arg_offset =
-                            qore_ir_get_effect_callee_arg_offset(inst);
-                        for (size_t arg = arg_offset;
-                                arg < inst->operands.size(); ++arg) {
-                            if (qore_ir_analysis_cancelled(check_count,
-                                    "IR function parameter callee argument analysis")) {
-                                callee_arg_analysis_cancelled = true;
-                                return;
+                        if (is_call) {
+                            if (!callee || has_ref_args) {
+                                effect.param_noescape[param_index] = false;
+                                effect.param_may_modify[param_index] = true;
+                                continue;
                             }
-                            if (inst->operands[arg].id == operand.id) {
-                                effect.param_callees[param_index].emplace_back(
-                                    callee, arg - arg_offset);
+                            size_t arg_offset =
+                                qore_ir_get_effect_callee_arg_offset(inst);
+                            for (size_t arg = arg_offset;
+                                    arg < inst->operands.size(); ++arg) {
+                                if (qore_ir_analysis_cancelled(check_count,
+                                        "IR function parameter callee argument analysis")) {
+                                    callee_arg_analysis_cancelled = true;
+                                    return;
+                                }
+                                if (inst->operands[arg].id == operand.id) {
+                                    effect.param_callees[param_index].emplace_back(
+                                        callee, arg - arg_offset);
+                                }
                             }
+                            continue;
                         }
-                        return;
+                        if (!effect.param_noescape[param_index]) {
+                            continue;
+                        }
+                        if (qore_ir_is_read_only_aggregate_use(
+                                *inst, operand)) {
+                            continue;
+                        }
+                        effect.param_noescape[param_index] = false;
                     }
-                    if (!effect.param_noescape[param_index]) {
-                        return;
-                    }
-                    if (qore_ir_is_read_only_aggregate_use(*inst, operand)) {
-                        return;
-                    }
-                    effect.param_noescape[param_index] = false;
                 });
                 if (callee_arg_analysis_cancelled) {
                     return false;

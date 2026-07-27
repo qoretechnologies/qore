@@ -44,6 +44,14 @@ int sub readListPseudos(list<int> value) {
         + (value.empty() ? 100 : 0) + (value.val() ? 1 : 0);
 }
 
+int sub observeSelected(bool first, list<int> left, list<int> right) {
+    return readListSize(first ? left : right);
+}
+
+int sub mutateSelected(bool first, list<int> left, list<int> right) {
+    return mutateList(first ? left : right);
+}
+
 auto sub readHashPseudo(hash<auto> value) {
     return value.size();
 }
@@ -93,9 +101,17 @@ string sub removedString() {
     return \"missing\";
 }
 
-printf(\"%s:%s:%s:%d:%d:%s\\n\", aliasing(), unassignedHash(), removedString(),
+string sub phiEffects() {
+    list<int> left = (1, 1);
+    list<int> right = (2, 2);
+    return sprintf(\"%d:%d:%d:%d\", observeSelected(True, left, right),
+        mutateSelected(False, left, right), left[0], right[0]);
+}
+
+printf(\"%s:%s:%s:%d:%d:%s:%s\\n\", aliasing(), unassignedHash(), removedString(),
     freshListSize(), readListPseudos((4, 3, 2, 1)),
-    readHashPseudo({\"size\": string sub () { return \"callref-size\"; }}));
+    readHashPseudo({\"size\": string sub () { return \"callref-size\"; }}),
+    phiEffects());
 ";
 
 string src = "/tmp/qore-aot-aggregate-noescape-" + string(getpid()) + ".qr";
@@ -181,6 +197,34 @@ if (!effect_line
     printf("missing forwarded aggregate parameter-effect metadata:\n%s", dump);
     exit(2);
 }
+string observe_selected_line;
+string mutate_selected_line;
+foreach string candidate in (dump.split("\n")) {
+    if (candidate.find("\"abi_kind\": \"qore_fast_v1\"") == -1) {
+        continue;
+    }
+    if (candidate.find("observeSelected(") != -1) {
+        observe_selected_line = candidate;
+    } else if (candidate.find("mutateSelected(") != -1) {
+        mutate_selected_line = candidate;
+    }
+}
+if (!observe_selected_line
+        || observe_selected_line.find(
+            "\"fast_param_noescape\": [0, 1, 1]") == -1
+        || observe_selected_line.find(
+            "\"fast_param_may_modify\": [0, 0, 0]") == -1) {
+    printf("missing phi noescape metadata:\n%s", dump);
+    exit(2);
+}
+if (!mutate_selected_line
+        || mutate_selected_line.find(
+            "\"fast_param_noescape\": [0, 0, 0]") == -1
+        || mutate_selected_line.find(
+            "\"fast_param_may_modify\": [0, 1, 1]") == -1) {
+    printf("unsafe phi parameter-effect metadata:\n%s", dump);
+    exit(2);
+}
 if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
     printf("noescape metadata present in disabled control:\n%s", disabled_dump);
     exit(2);
@@ -199,7 +243,8 @@ if (!hash_pseudo_line
     exit(2);
 }
 
-string expected = "62:1:abcdefabc:1:1:rejected:rejected:4:10:callref-size\n";
+string expected =
+    "62:1:abcdefabc:1:1:rejected:rejected:4:10:callref-size:2:9:1:2\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
         libqore_dir, qore_bin, mode, src));
