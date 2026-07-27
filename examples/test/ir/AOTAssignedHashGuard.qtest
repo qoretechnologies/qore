@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-assigned-hash-guard-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+int sub assignedAccess(int count) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        list<int> values = (i, i + 1);
+        hash<auto> record = (\"value\": i, \"values\": values);
+        checksum += record.value + record.values[1];
+    }
+    return checksum;
+}
+
+bool sub unassignedAccess() {
+    hash<auto> record;
+    return record.value === NOTHING;
+}
+
+bool sub removedAccess() {
+    hash<auto> record = (\"value\": 1, \"text\": \"x\");
+    remove record;
+    return record.value === NOTHING;
+}
+
+int sub main() {
+    printf(\"%d:%y:%y\\n\", assignedAccess(100),
+        unassignedAccess(), removedAccess());
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string enabled_exe = root + "/enabled";
+string disabled_exe = root + "/disabled";
+string enabled_compile = backquote(sprintf(
+    "%s QORE_IR_OPT_STATS=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+string disabled_compile = backquote(sprintf(
+    "%s QORE_IR_OPT_STATS=1"
+        " QORE_DISABLE_IR_ASSIGNED_HASH_GUARD_ELISION=1"
+        " %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, disabled_exe, source_path));
+
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile
+        !~ /assignedAccess.*assigned-hash-guards-elided=[1-9][0-9]*/
+        || disabled_compile =~ /assigned-hash-guards-elided=/) {
+    printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string ast = backquote(sprintf("%s %s %s 2>&1", env, qore_bin, source_path));
+string jit = backquote(sprintf("%s %s --exec-mode=jit %s 2>&1",
+    env, qore_bin, source_path));
+string jit_disabled = backquote(sprintf(
+    "%s QORE_DISABLE_IR_ASSIGNED_HASH_GUARD_ELISION=1"
+        " %s --exec-mode=jit %s 2>&1",
+    env, qore_bin, source_path));
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+if (!ast || ast !~ /:True:True\n$/
+        || jit != ast || jit_disabled != ast
+        || enabled != ast || disabled != ast) {
+    printf("execution mismatch:\nAST:\n%sJIT:\n%sJIT disabled:\n%s"
+        "AOT:\n%sAOT disabled:\n%s",
+        ast, jit, jit_disabled, enabled, disabled);
+    exit(2);
+}
+
+unlink(enabled_exe);
+unlink(disabled_exe);
+unlink(source_path);
+rmdir(root);

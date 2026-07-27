@@ -325,6 +325,7 @@ private:
         fresh_container_init_types;
     std::unordered_set<uint32_t> exact_fresh_container_values;
     size_t fused_fresh_container_inits = 0;
+    size_t assigned_hash_guard_elisions = 0;
 
     // Local variable allocas (LocalVar* address → alloca)
     std::unordered_map<const void*, llvm::Value*> local_allocas;

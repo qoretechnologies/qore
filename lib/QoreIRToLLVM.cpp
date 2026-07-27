@@ -9380,6 +9380,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     fresh_container_init_types.clear();
     exact_fresh_container_values.clear();
     fused_fresh_container_inits = 0;
+    assigned_hash_guard_elisions = 0;
     local_allocas.clear();
     aot_call_target_contexts.clear();
     aot_exact_class_guards.clear();
@@ -11332,6 +11333,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             " fused-fresh-container-inits=%zu\n",
             aot_mode ? "AOT" : "JIT", fn_name.c_str(),
             fused_fresh_container_inits);
+    }
+    if (assigned_hash_guard_elisions
+            && std::getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr,
+            "IR-OPT-%s-LOWERING: %s:"
+            " assigned-hash-guards-elided=%zu\n",
+            aot_mode ? "AOT" : "JIT", fn_name.c_str(),
+            assigned_hash_guard_elisions);
     }
 
     // Reset per-function state
@@ -23700,6 +23709,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool preserve_weak_result = dot_eval_only_bases.count(inst->result.id);
             bool known_hash = inst->opcode == QoreIROpcode::HashKeyAccessHash;
             bool guarded_hash = inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded;
+            if (guarded_hash && current_ir_func
+                    && std::getenv(
+                        "QORE_DISABLE_IR_ASSIGNED_HASH_GUARD_ELISION")
+                        == nullptr) {
+                bool weak_or_reference_local = false;
+                auto definition =
+                    value_definitions.find(inst->operands[0].id);
+                if (definition != value_definitions.end()
+                        && definition->second->opcode
+                            == QoreIROpcode::LoadLocal) {
+                    const auto* load = static_cast<
+                        const QoreIRLocalInstruction*>(
+                            definition->second);
+                    weak_or_reference_local = load->is_ref
+                        || (load->local
+                            && (QoreTypeInfo::isReference(
+                                    load->local->getTypeInfo())
+                                || weak_assigned_locals.count(
+                                    reinterpret_cast<const void*>(
+                                        load->local))));
+                }
+                std::vector<QoreIRValue> assigned_values{
+                    inst->operands[0]};
+                if (!weak_or_reference_local
+                        && qore_ir_values_proven_assigned_at(
+                            *current_ir_func, inst, assigned_values)) {
+                    guarded_hash = false;
+                    known_hash = true;
+                    ++assigned_hash_guard_elisions;
+                }
+            }
             bool truthy_only = native_boolean_result_values.count(inst->result.id)
                 && !std::getenv("QORE_DISABLE_HASH_KEY_TRUTHY_FUSION")
                 && (known_hash || guarded_hash);
