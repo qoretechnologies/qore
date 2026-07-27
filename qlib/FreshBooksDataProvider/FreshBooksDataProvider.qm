@@ -1753,62 +1753,6 @@ module FreshBooksDataProvider {
             },
         });
 
-        # ========== API CALL ACTION ==========
-
-        # Make an API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": FreshBooksDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "Other",
-            "display_name": "Make an API Call",
-            "short_desc": "Execute a custom FreshBooks API call",
-            "desc": "Make a custom REST API call to any FreshBooks endpoint",
-            "action_code": DPAT_API,
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "HTTP method to use",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "HTTP method: GET, POST, PUT, or DELETE",
-                    "allowed_values": (
-                        <AllowedValueInfo>{
-                            "value": "GET",
-                            "desc": "HTTP GET request",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "POST",
-                            "desc": "HTTP POST request",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "PUT",
-                            "desc": "HTTP PUT request",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "DELETE",
-                            "desc": "HTTP DELETE request",
-                        },
-                    ),
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "Path",
-                    "short_desc": "API path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The API path (e.g. /accounting/account/ACCOUNT_ID/users/clients)",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Body",
-                    "short_desc": "Request body",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Optional JSON request body for POST/PUT requests",
-                },
-            },
-            "output_type": AbstractDataProviderType::get(AutoHashType),
-        });
-
         # ========== TRIGGER ACTIONS ==========
 
         # Invoice Created Trigger

@@ -52,7 +52,6 @@ public class SquarespaceDataProvider inherits SquarespaceDataProviderBase {
             "inventory": Class::forName("SquarespaceInventoryDataProvider"),
             "transactions": Class::forName("SquarespaceTransactionsDataProvider"),
             # Action providers
-            "execute-api-call": Class::forName("SquarespaceExecuteApiCallDataProvider"),
             # Events container
             "events": Class::forName("SquarespaceEventsDataProvider"),
         };

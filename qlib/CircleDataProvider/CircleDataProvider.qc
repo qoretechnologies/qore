@@ -66,7 +66,6 @@ public class CircleDataProvider inherits CircleDataProviderBase {
             "update-space": Class::forName("CircleUpdateSpaceDataProvider"),
             "delete-space": Class::forName("CircleDeleteSpaceDataProvider"),
             "send-message": Class::forName("CircleSendMessageDataProvider"),
-            "execute-api-call": Class::forName("CircleExecuteApiCallDataProvider"),
             "events": Class::forName("CircleEventsContainerDataProvider"),
         };
     }

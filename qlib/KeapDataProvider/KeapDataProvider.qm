@@ -1744,52 +1744,6 @@ module KeapDataProvider {
             },
         });
 
-        # ========== GENERIC API ACTION ==========
-
-        # Execute API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": KeapDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "API",
-            "display_name": "Execute API Call",
-            "short_desc": "Execute a raw API call",
-            "desc": "Execute a raw API call against the Keap REST API",
-            "action_code": DPAT_API,
-            "output_type": AbstractDataProviderTypeMap."hash",
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "HTTP method",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "HTTP method to use for the API call",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "desc": "Retrieve data"},
-                        <AllowedValueInfo>{"value": "POST", "desc": "Create a resource"},
-                        <AllowedValueInfo>{"value": "PUT", "desc": "Replace a resource"},
-                        <AllowedValueInfo>{"value": "PATCH", "desc": "Partially update a resource"},
-                        <AllowedValueInfo>{"value": "DELETE", "desc": "Delete a resource"},
-                    ),
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "API path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "API path relative to /crm/rest/v2",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Request body",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Request body for POST/PUT/PATCH",
-                },
-            },
-        });
-
         # ========== EVENT ACTIONS ==========
 
         # Contact Added

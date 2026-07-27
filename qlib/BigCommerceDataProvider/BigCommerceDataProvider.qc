@@ -49,7 +49,6 @@ public class BigCommerceDataProvider inherits BigCommerceDataProviderBase {
             "customer-addresses": Class::forName("BigCommerceCustomerAddressesDataProvider"),
             "customers": Class::forName("BigCommerceCustomersDataProvider"),
             "events": Class::forName("BigCommerceEventsDataProvider"),
-            "execute-api-call": Class::forName("BigCommerceExecuteApiCallDataProvider"),
             "orders": Class::forName("BigCommerceOrdersDataProvider"),
             "products": Class::forName("BigCommerceProductsDataProvider"),
             "shipments": Class::forName("BigCommerceShipmentsDataProvider"),

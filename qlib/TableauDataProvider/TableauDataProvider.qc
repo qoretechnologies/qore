@@ -52,7 +52,6 @@ public class TableauDataProvider inherits TableauDataProviderBase {
             "users": Class::forName("TableauUsersDataProvider"),
             "extract-refresh-tasks": Class::forName("TableauExtractRefreshTasksDataProvider"),
             # Action providers
-            "execute-api-call": Class::forName("TableauExecuteApiCallDataProvider"),
             # Events container
             "events": Class::forName("TableauEventsDataProvider"),
         };

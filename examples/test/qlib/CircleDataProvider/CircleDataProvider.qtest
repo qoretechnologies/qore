@@ -35,6 +35,7 @@
 
 %requires json
 
+%requires RestClientDataProvider
 %requires CircleRestClient
 %requires CircleDataProvider
 
@@ -215,10 +216,9 @@ public class CircleDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("recipient_id"), "send message has recipient_id");
         assertTrue(fields.hasKey("body"), "send message has body");
 
-        CircleDataProvider::CircleExecuteApiCallRequestDataType apiCallReq();
-        fields = apiCallReq.getFields();
-        assertTrue(fields.hasKey("method"), "execute api call has method");
-        assertTrue(fields.hasKey("path"), "execute api call has path");
+        fields = RestClientDataProvider::GenericApiCallRequestDataType.getFields();
+        assertTrue(fields.hasKey("method"), "generic api call has method");
+        assertTrue(fields.hasKey("path"), "generic api call has path");
 
         CircleDataProvider::CircleCreateSpaceRequestDataType createSpaceReq();
         fields = createSpaceReq.getFields();
@@ -494,15 +494,16 @@ public class CircleDataProviderTest inherits QUnit::Test {
         skipIfNoCredentials();
 
         CircleDataProvider::CircleDataProvider prov = getProvider();
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
-        assertEq("execute-api-call", apiCall.getName(), "api call provider name");
+        AbstractDataProvider apiCall = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        assertEq(AbstractDataProvider::GenericApiCallChildName, apiCall.getName(), "api call provider name");
 
-        # Test GET request via execute-api-call
-        apiCall.doRequest({
+        # Test GET request via the framework-injected generic API call child
+        hash<auto> resp = apiCall.doRequest({
             "method": "GET",
             "path": "spaces",
         });
-        assertTrue(True, "execute API call completed");
+        assertEq(200, resp.status, "generic API call should succeed");
+        assertTrue(resp.body instanceof hash, "generic API call should return a hash body");
     }
 
     triggerExampleDataTests() {

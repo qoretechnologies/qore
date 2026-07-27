@@ -232,7 +232,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("blog-posts"));
         assertTrue(children.contains("orders"));
         assertTrue(children.contains("shipments"));
-        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
         assertTrue(children.contains("events"));
 
         # Check customers child provider
@@ -321,9 +321,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         assertTrue(shipmentChildren.contains("update"));
         assertTrue(shipmentChildren.contains("delete"));
 
-        # Check execute-api-call child provider
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
-        assertEq("execute-api-call", apiCall.getName());
+        # Check the framework-injected generic API call child provider
+        AbstractDataProvider apiCall =
+            prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        assertEq(AbstractDataProvider::GenericApiCallChildName, apiCall.getName());
         hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
         assertTrue(apiCallInfo.supports_request);
 
@@ -491,8 +492,9 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             prov.getChildProviderEx("nonexistent");
         });
 
-        # Test execute-api-call has correct info
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        # Test the framework-injected generic API call child has correct info
+        AbstractDataProvider apiCall =
+            prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
         hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
         assertTrue(apiCallInfo.supports_request);
     }
@@ -599,8 +601,8 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         # Test 5: Create product
         testCreateProduct();
 
-        # Test 6: Execute API call
-        testExecuteApiCall();
+        # Test the framework-injected generic API call
+        testGenericApiCall();
 
         # Cleanup
         cleanup();
@@ -742,9 +744,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
     }
 
     #! Test execute API call
-    private testExecuteApiCall() {
+    private testGenericApiCall() {
         BigCommerceDataProvider::BigCommerceDataProvider prov(client);
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        AbstractDataProvider apiCall =
+            prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
 
         # Use the catalog summary endpoint (V3)
         hash<auto> result = apiCall.doRequest({
@@ -752,9 +755,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             "path": "v3/catalog/summary",
         });
 
-        assertTrue(result instanceof hash, "API call should return a hash");
+        assertEq(200, result.status, "API call should succeed");
+        assertTrue(result.body instanceof hash, "API call should return a hash body");
         if (m_options.verbose) {
-            printf("API call result keys: %y\n", keys result);
+            printf("API call result keys: %y\n", keys result.body);
         }
     }
 

@@ -238,7 +238,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("product-variants"));
         assertTrue(children.contains("inventory"));
         assertTrue(children.contains("transactions"));
-        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
         assertTrue(children.contains("events"));
 
         # Check orders child provider
@@ -474,8 +474,8 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         # Create the data provider using the established client
         SquarespaceDataProvider::SquarespaceDataProvider prov(client);
 
-        # Test 1: Execute API call (validates connection works)
-        testExecuteApiCall(prov);
+        # Test the framework-injected generic API call (validates connection works)
+        testGenericApiCall(prov);
 
         # Test 2: List products with field verification
         testListProducts(prov);
@@ -508,21 +508,22 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         cleanup(prov);
     }
 
-    #! Integration test: Execute API call (validates connection)
-    private testExecuteApiCall(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+    #! Integration test: generic API call (validates connection)
+    private testGenericApiCall(SquarespaceDataProvider::SquarespaceDataProvider prov) {
         if (m_options.verbose) {
-            printf("Testing execute-api-call (GET site info)...\n");
+            printf("Testing the generic API call child (GET site info)...\n");
         }
 
-        AbstractDataProvider exec = prov.getChildProvider("execute-api-call");
-        auto result = exec.doRequest({
+        AbstractDataProvider exec = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        hash<auto> result = exec.doRequest({
             "method": "GET",
             "path": "1.0/authorization/website",
         });
 
-        assertTrue(result.val(), "API call should return a result");
+        assertEq(200, result.status, "API call should succeed");
+        assertTrue(result.body.val(), "API call should return a result");
         if (m_options.verbose) {
-            printf("  Site title: %s\n", result.website.siteTitle ?? "N/A");
+            printf("  Site title: %s\n", result.body.website.siteTitle ?? "N/A");
         }
     }
 
@@ -560,16 +561,16 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         }
 
         # Get a store page ID for the product
-        AbstractDataProvider exec = prov.getChildProvider("execute-api-call");
-        auto storePages = exec.doRequest({
+        AbstractDataProvider exec = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        hash<auto> storePages = exec.doRequest({
             "method": "GET",
             "path": "1.0/commerce/store_pages",
         });
-        if (!storePages.storePages || !storePages.storePages.size()) {
+        if (!storePages.body.storePages || !storePages.body.storePages.size()) {
             testSkip("No store pages available for product creation");
             return;
         }
-        string storePageId = storePages.storePages[0].id;
+        string storePageId = storePages.body.storePages[0].id;
 
         # Create a product
         string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");

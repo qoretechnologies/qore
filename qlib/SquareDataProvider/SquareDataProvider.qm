@@ -1489,64 +1489,6 @@ module SquareDataProvider {
             },
         });
 
-        # ========== EXECUTE API CALL ==========
-
-        # API Request
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SquareDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "Other",
-            "display_name": "API Request",
-            "short_desc": "Make a custom API call",
-            "desc": "Make a custom API call to the Square API",
-            "action_code": DPAT_API,
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "The HTTP method",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The HTTP method to use for the API call",
-                    "allowed_values": (
-                        <AllowedValueInfo>{
-                            "value": "GET",
-                            "desc": "Retrieve data",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "POST",
-                            "desc": "Create data",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "PUT",
-                            "desc": "Update data",
-                        },
-                        <AllowedValueInfo>{
-                            "value": "DELETE",
-                            "desc": "Delete data",
-                        },
-                    ),
-                    "example_value": "GET",
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "The API path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The API path to call relative to /v2 (e.g. 'customers' or "
-                        "'payments/PAYMENT_ID')",
-                    "example_value": "locations",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Optional request body",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Optional request body for POST and PUT requests",
-                },
-            },
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
-        });
-
         # ========== TRIGGERS ==========
 
         # New Customer

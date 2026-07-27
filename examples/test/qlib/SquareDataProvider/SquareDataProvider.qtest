@@ -267,7 +267,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("services"));
         assertTrue(children.contains("refunds"));
         assertTrue(children.contains("inventory"));
-        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
         assertTrue(children.contains("events"));
 
         # Check customers child provider
@@ -513,8 +513,8 @@ public class SquareDataProviderTest inherits QUnit::Test {
             prov.getChildProviderEx("nonexistent");
         });
 
-        # Test execute-api-call with invalid method
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        # Test the framework-injected generic API call child
+        AbstractDataProvider apiCall = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
         hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
         assertTrue(apiCallInfo.supports_request);
     }
@@ -562,8 +562,8 @@ public class SquareDataProviderTest inherits QUnit::Test {
         # Test 5: List payments
         testListPayments();
 
-        # Test 6: Execute API call
-        testExecuteApiCall();
+        # Test the framework-injected generic API call
+        testGenericApiCall();
 
         # Test 7: List refunds
         testListRefunds();
@@ -694,24 +694,25 @@ public class SquareDataProviderTest inherits QUnit::Test {
     }
 
     #! Test execute API call
-    private testExecuteApiCall() {
+    private testGenericApiCall() {
         SquareDataProvider::SquareDataProvider prov(client);
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        AbstractDataProvider apiCall = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
 
         hash<auto> result = apiCall.doRequest({
             "method": "GET",
             "path": "locations",
         });
 
-        assertTrue(result.hasKey("locations"), "API call should return locations");
-        if (result.locations) {
-            assertTrue(result.locations.size() > 0, "Should have at least one location");
-            hash<auto> firstLoc = result.locations[0];
+        assertEq(200, result.status, "API call should succeed");
+        assertTrue(result.body.hasKey("locations"), "API call should return locations");
+        if (result.body.locations) {
+            assertTrue(result.body.locations.size() > 0, "Should have at least one location");
+            hash<auto> firstLoc = result.body.locations[0];
             assertTrue(firstLoc.hasKey("id"), "Location should have 'id' field");
             assertTrue(firstLoc.hasKey("name"), "Location should have 'name' field");
             if (m_options.verbose) {
                 printf("Found %d locations, first: %s (%s)\n",
-                    result.locations.size(), firstLoc.name, firstLoc.id);
+                    result.body.locations.size(), firstLoc.name, firstLoc.id);
             }
         }
     }

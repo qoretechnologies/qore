@@ -475,52 +475,6 @@ module TableauDataProvider {
             "output_type": TableauDeleteExtractRefreshTaskDataProvider::ResponseType,
         });
 
-        # ========== API CALL ACTION ==========
-
-        # Execute API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": TableauDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "API",
-            "display_name": "Execute API Call",
-            "short_desc": "Make an arbitrary API call",
-            "desc": "Make an arbitrary API call to the Tableau REST API",
-            "action_code": DPAT_API,
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "The HTTP method",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The HTTP method to use for the API call",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
-                        <AllowedValueInfo>{"value": "POST", "display_name": "POST"},
-                        <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
-                        <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
-                    ),
-                    "example_value": "GET",
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "The relative API path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The relative API path (e.g. `projects` or "
-                        "`datasources/DATASOURCE_ID`)",
-                    "example_value": "projects",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Optional request body",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Optional request body for POST and PUT requests",
-                },
-            },
-            "output_type": TableauExecuteApiCallDataProvider::ResponseType,
-        });
-
         # ========== EVENT TRIGGERS ==========
 
         # Datasource Created (webhook)

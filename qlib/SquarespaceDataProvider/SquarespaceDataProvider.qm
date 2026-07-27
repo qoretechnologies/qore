@@ -557,23 +557,6 @@ module SquarespaceDataProvider {
             },
         });
 
-        # ========== EXECUTE API CALL ==========
-
-        # API Request
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SquarespaceDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "Other",
-            "display_name": "API Request",
-            "short_desc": "Make a custom API call",
-            "desc": "Make a custom API call to the Squarespace API",
-            "action_code": DPAT_API,
-            "data_provider_info": SquarespaceExecuteApiCallDataProvider::ProviderInfo,
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
-            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceExecuteApiCallRequestDataType::Fields),
-        });
-
         # ========== TRIGGERS ==========
 
         # Order Created/Updated

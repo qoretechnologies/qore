@@ -75,7 +75,6 @@ public class FreshBooksDataProvider inherits FreshBooksDataProviderBase {
             "delete-item": Class::forName("FreshBooksDeleteItemDataProvider"),
             "delete-payment": Class::forName("FreshBooksDeletePaymentDataProvider"),
             "delete-service": Class::forName("FreshBooksDeleteServiceDataProvider"),
-            "execute-api-call": Class::forName("FreshBooksExecuteApiCallDataProvider"),
             # Events container
             "events": Class::forName("FreshBooksEventsDataProvider"),
         };

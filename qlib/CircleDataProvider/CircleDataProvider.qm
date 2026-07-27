@@ -644,26 +644,6 @@ module CircleDataProvider {
                 CircleSendMessageRequestDataType::Fields),
         });
 
-        # ========== GENERIC API CALL ==========
-
-        # Execute API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": CircleDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "API",
-            "display_name": "Make an API Call",
-            "short_desc": "Perform an arbitrary authorized API call",
-            "desc": "Performs an arbitrary authorized API call to the Circle REST API",
-            "action_code": DPAT_API,
-            "data_provider_info": CircleExecuteApiCallDataProvider::ProviderInfo,
-            "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderTypeMap."hash";
-            },
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                CircleExecuteApiCallRequestDataType::Fields),
-        });
-
         # ========== EVENT TRIGGERS ==========
 
         # New Comment

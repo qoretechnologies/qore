@@ -2431,56 +2431,6 @@ module ZohoInventoryDataProvider {
             "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
-        # ========== UTILITY ACTIONS ==========
-
-        # Make API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": ZohoInventoryDataProvider::AppName,
-            "path": "/api-call",
-            "action": "api-call",
-            "groups": "Utility",
-            "display_name": "Make API Call",
-            "short_desc": "Make a custom API call",
-            "desc": "Make a custom API call to the Zoho Inventory API",
-            "action_code": DPAT_API,
-            "options": {
-                "organization_id": <ActionOptionInfo>{
-                    "display_name": "Organization",
-                    "short_desc": "Zoho Inventory organization",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
-                    "ref_data": "organizations",
-                },
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "HTTP method to use",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The HTTP method to use for the API call",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "desc": "HTTP GET request"},
-                        <AllowedValueInfo>{"value": "POST", "desc": "HTTP POST request"},
-                        <AllowedValueInfo>{"value": "PUT", "desc": "HTTP PUT request"},
-                        <AllowedValueInfo>{"value": "DELETE", "desc": "HTTP DELETE request"},
-                    ),
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "API endpoint path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "API path, e.g. /items",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Request body for POST/PUT requests",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Request body for POST/PUT requests",
-                },
-            },
-            "output_type": AbstractDataProviderType::get(AutoHashType),
-        });
-
         # ========== TRIGGER ACTIONS (POLLING) ==========
 
         # New Contact Trigger
