@@ -29,6 +29,29 @@ bool sub scalarBool(bool base) {
     return values.left;
 }
 
+float sub scalarAutoMixed(int base) {
+    hash<auto> values = (\"integer\": base, \"ratio\": 2.5, \"enabled\": True);
+    return values.integer + values.ratio + (values.enabled ? 0.5 : 0.0);
+}
+
+int sub scalarAutoMutation() {
+    hash<auto> values = (\"left\": 1, \"right\": 2, \"enabled\": True);
+    values.left += 4;
+    values.enabled = False;
+    return values.left + values.right;
+}
+
+bool sub autoNothing() {
+    hash<auto> values = (\"left\": NOTHING, \"right\": 2);
+    return values.left === NOTHING;
+}
+
+string sub autoTypeChange() {
+    hash<auto!> values = (\"left\": 1, \"right\": 2);
+    values.left = \"x\";
+    return values.left;
+}
+
 int sub dynamicKey(string key) {
     hash<string, int> values = {\"left\": 7, \"middle\": 8, \"right\": 9};
     return values{key};
@@ -153,6 +176,8 @@ printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d\
     crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
     conditionalAssignment(True), removedKey(), deletedKey(),
     crossBlockMutation(True), crossBlockMutation(False), cyclicMutation(3));
+printf(\"%.1f:%d:%d:%s\\n\", scalarAutoMixed(4), scalarAutoMutation(),
+    autoNothing(), autoTypeChange());
 ";
 
 string script_path = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid()) + ".qr";
@@ -166,11 +191,13 @@ string sub runMode(string mode) {
         libqore_dir, qore_bin, mode, script_path));
 }
 
-string sub runAot(bool disabled) {
+string sub runAot(bool disabled, bool field_disabled) {
     string exe = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid())
-        + (disabled ? "-disabled" : "");
-    string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        + (disabled ? "-disabled" : "")
+        + (field_disabled ? "-field-disabled" : "");
+    string compile_out = backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         disabled ? "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 " : "",
+        field_disabled ? "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT=1 " : "",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
@@ -179,7 +206,8 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1:562:127:6\n";
+string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1:562:127:6\n"
+    + "7.0:7:1:x\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -187,11 +215,12 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string aot = runAot(False);
-string disabled_aot = runAot(True);
-if (aot != expected || disabled_aot != expected) {
-    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
-        expected, aot, disabled_aot);
+string aot = runAot(False, False);
+string disabled_aot = runAot(True, False);
+string field_disabled_aot = runAot(False, True);
+if (aot != expected || disabled_aot != expected || field_disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%sfield-disabled AOT:\n%s",
+        expected, aot, disabled_aot, field_disabled_aot);
     exit(2);
 }
 
@@ -201,6 +230,8 @@ string stats = backquote(sprintf(
 if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarFloat:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarBool:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=1/
         || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: constantDynamicKey:.*scalar-hashes=1/
         || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=1/
@@ -218,9 +249,23 @@ if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: escapedHash:.*scalar-hashes=0/
         || stats !~ /IR-OPT: missingKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: autoNothing:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: autoTypeChange:.*scalar-hashes=0/
         || stats !~ /IR-OPT: conditionalAssignment:.*scalar-hashes=0/
         || stats !~ /IR-OPT: removedKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/) {
     printf("unsafe fixed-hash scalar replacement:\n%s", stats);
+    exit(2);
+}
+
+string field_disabled_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT=1 QORE_IR_OPT_STATS=1 "
+        + "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (field_disabled_stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=0/) {
+    printf("field-sensitive fixed-hash scalar replacement gate failed:\n%s",
+        field_disabled_stats);
     exit(2);
 }

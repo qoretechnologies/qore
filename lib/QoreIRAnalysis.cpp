@@ -2281,6 +2281,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         QoreIRValueRepresentation expected_representation =
             QoreIRValueRepresentation::Boxed;
         bool expected_boxed_aggregate = false;
+        const bool field_sensitive_hash = hash_candidate
+            && !hashdecl_type
+            && !deferred_hashdecl_type
+            && element_type == autoTypeInfo
+            && std::getenv(
+                "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT")
+                == nullptr;
         if (!hashdecl_type && !deferred_hashdecl_type) {
             if (element_type == bigIntTypeInfo) {
                 expected_representation = QoreIRValueRepresentation::NativeInt;
@@ -2294,6 +2301,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     || QoreTypeInfo::getUniqueReturnComplexHash(element_type)) {
                 expected_representation = QoreIRValueRepresentation::Boxed;
                 expected_boxed_aggregate = true;
+            } else if (field_sensitive_hash) {
+                // Each field is validated independently below.
             } else {
                 continue;
             }
@@ -2515,6 +2524,14 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         == QoreIRValueRepresentation::NativeBool
                     || exact_string_constant
                     || exact_owned_hashdecl_aggregate)
+                : field_sensitive_hash
+                    ? facts
+                        && (facts->representation
+                                == QoreIRValueRepresentation::NativeInt
+                            || facts->representation
+                                == QoreIRValueRepresentation::NativeFloat
+                            || facts->representation
+                                == QoreIRValueRepresentation::NativeBool)
                 : exact_aggregate_constructor
                     || (facts
                         && facts->representation == expected_representation

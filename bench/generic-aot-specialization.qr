@@ -121,6 +121,15 @@ int sub benchPlainHash3Record(int inner) {
     return checksum;
 }
 
+int sub benchPlainHash3StaticRecord(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        hash<auto> result = ("first": i, "second": i + 1, "third": i + 2);
+        checksum += result.first + result.third;
+    }
+    return checksum;
+}
+
 int sub benchPlainHash3MixedConstruct(int inner) {
     int checksum = 0;
     for (int i = 0; i < inner; i++) {
@@ -261,6 +270,7 @@ class BenchGenericAotSpecialization {
                 && kernel != "typed_list_literal"
                 && kernel != "plain_hash_record"
                 && kernel != "plain_hash3_record"
+                && kernel != "plain_hash3_static_record"
                 && kernel != "plain_hash3_mixed_construct"
                 && kernel != "hashdecl_construct_only"
                 && kernel != "hashdecl_access_only") {
@@ -300,6 +310,10 @@ class BenchGenericAotSpecialization {
         if (!kernel || kernel == "plain_hash3_record") {
             printTiming(measureKernel(mode, "plain_hash3_record", hash_inner, samples, warmup,
                 int sub () { return benchPlainHash3Record(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash3_static_record") {
+            printTiming(measureKernel(mode, "plain_hash3_static_record", hash_inner, samples, warmup,
+                int sub () { return benchPlainHash3StaticRecord(hash_inner); }));
         }
         if (!kernel || kernel == "plain_hash3_mixed_construct") {
             printTiming(measureKernel(mode, "plain_hash3_mixed_construct", hash_inner, samples, warmup,
