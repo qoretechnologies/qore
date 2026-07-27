@@ -319,6 +319,12 @@ private:
     std::unordered_set<uint32_t> direct_typed_list_read_sources;
     std::unordered_set<uint32_t> elided_typed_foreach_refself_values;
     std::unordered_set<uint32_t> reusable_hashdecl_literal_values;
+    // Single-use declaration initializers that can construct the target
+    // container representation directly.
+    std::unordered_map<uint32_t, const QoreTypeInfo*>
+        fresh_container_init_types;
+    std::unordered_set<uint32_t> exact_fresh_container_values;
+    size_t fused_fresh_container_inits = 0;
 
     // Local variable allocas (LocalVar* address → alloca)
     std::unordered_map<const void*, llvm::Value*> local_allocas;

@@ -4297,7 +4297,17 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
     if (!enabled) {
         const char* keys[] = {key0, key1};
         uint64_t values[] = {val0_bits, val1_bits};
-        return qore_rt_make_hash_const_keys_impl(keys, values, 2, nullptr, xsink, true);
+        uint64_t result = qore_rt_make_hash_const_keys_impl(
+            keys, values, 2, nullptr, xsink, true);
+        if (!infer_value_type && (!xsink || !*xsink)) {
+            QoreValue value = fromBits(result);
+            if (value.getType() == NT_HASH) {
+                qore_hash_private::get(*value.get<QoreHashNode>())
+                    ->complexTypeInfo =
+                    qore_get_complex_hash_type(autoTypeInfo);
+            }
+        }
+        return result;
     }
 
     QoreValue val0 = fromBits(val0_bits);
