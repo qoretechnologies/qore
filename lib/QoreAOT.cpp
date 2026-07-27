@@ -7905,6 +7905,8 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         aggregate->opcode == QoreIROpcode::MakeList
         ? QoreTypeInfo::getUniqueReturnComplexList(aggregate_type)
         : QoreTypeInfo::getUniqueReturnComplexHash(aggregate_type);
+    bool field_sensitive_elements = element_type == autoTypeInfo
+        || element_type == autoNoNarrowTypeInfo;
     BatchCalleeParamKind element_kind = element_type == bigIntTypeInfo
         ? BatchCalleeParamKind::NativeInt
         : element_type == floatTypeInfo
@@ -7968,17 +7970,20 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     ? BatchCalleeParamKind::NativeFloat
                     : hashdecl
                         ? qore_ir_get_scalar_local_kind(local->second)
+                        : field_sensitive_elements
+                            ? qore_ir_get_scalar_local_kind(local->second)
                         : element_kind;
             if (qore_ir_get_scalar_local_kind(local->second)
                         != expected_kind
-                    || (!hashdecl
+                    || (!hashdecl && !field_sensitive_elements
                         && element_kind == BatchCalleeParamKind::Boxed
                         && (!element_type
                             || local->second->getTypeInfo()
                                 != element_type))) {
                 return false;
             }
-        } else if (!hashdecl && ((source->second.kind
+        } else if (!hashdecl && !field_sensitive_elements
+                && ((source->second.kind
                         == AOTAggregateReturnValueKind::IntConstant
                     && element_kind != BatchCalleeParamKind::NativeInt)
                 || (source->second.kind

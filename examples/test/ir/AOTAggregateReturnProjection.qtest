@@ -1509,7 +1509,7 @@ if (enabled_compile
 }
 foreach string function in (("emptyFirstProjection", "emptyLastProjection",
         "positiveOutOfRangeProjection", "negativeOutOfRangeProjection",
-        "outOfRangeProjectionSideEffects")) {
+        "outOfRangeProjectionSideEffects", "dynamicMixedListIndex")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1713,7 +1713,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);

@@ -40,12 +40,21 @@ ReturnPair sub hashdeclProducer(int value) {
     return values;
 }
 
+hash<auto> sub autoHashProducer(int value) {
+    hash<auto> values = (\"left\": value, \"middle\": value + 1,
+        \"right\": value + 2);
+    values.left += 1;
+    values.right += 2;
+    return values;
+}
+
 int sub aggregateKernel(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
         checksum += hashProducer(i).left + hashProducer(i).right;
         checksum += listProducer(i)[0] + listProducer(i)[1];
         checksum += hashdeclProducer(i).left + hashdeclProducer(i).right;
+        checksum += autoHashProducer(i).left + autoHashProducer(i).right;
     }
     return checksum;
 }
@@ -93,12 +102,12 @@ string native_projection_disabled_compile = compile(
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION=1"
     " QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION=1");
 if (enabled_compile
-        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6.*native-specializations=2/) {
+        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=8.*native-specializations=3/) {
     printf("missing scalarized aggregate-return projections:\n%s", enabled_compile);
     exit(2);
 }
 if (native_projection_disabled_compile
-        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6.*native-specializations=1/) {
+        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=8.*native-specializations=1/) {
     printf("native scalar projection disable control mismatch:\n%s",
         native_projection_disabled_compile);
     exit(2);
@@ -112,7 +121,7 @@ if (enabled_compile
     exit(2);
 }
 
-string expected = "3009000:8\n";
+string expected = "4013000:8\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

@@ -7062,11 +7062,15 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
     }
 
     std::unordered_set<const LocalVar*> universe;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR local value fact candidate analysis")) {
                 return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
             }
             if (inst->opcode == QoreIROpcode::LoadLocal
                     || inst->opcode == QoreIROpcode::StoreLocal
@@ -7126,12 +7130,10 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                 }
                 return true;
             }
-            const QoreIRValueFacts* facts =
-                func.getValueFacts(store->operands[0]);
-            if (facts
-                    && facts->assigned_state
-                        == QoreIRAssignedState::Assigned
-                    && facts->never_nothing) {
+            std::unordered_set<uint32_t> visiting;
+            if (qore_ir_value_is_proven_assigned(func,
+                    store->operands[0], definitions, &known, visiting,
+                    check_count)) {
                 known.insert(store->local);
             } else {
                 known.erase(store->local);
