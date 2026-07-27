@@ -568,7 +568,9 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 #! represents a PostgreSQL-specific foreign constraint
 public class PgsqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
     #! creates the constraint from the supplied arguments
-    constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+    constructor(string n, Columns c, ForeignConstraintTarget t, bool deferrable = False,
+            bool initially_deferred = False)
+            : AbstractForeignConstraint(n, c, t, deferrable, initially_deferred) {
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -591,8 +593,9 @@ public class PgsqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
 
     #! returns a string that can be used to create the constraint in the database
     string getCreateSql(string name, string table_name, *hash<auto> opt) {
-        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)", table_name, name,
-            (foldl $1 + ", " + $2, h.keys()), target.table, (foldl $1 + ", " + $2, target.columns.keys()));
+        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name, name,
+            (foldl $1 + ", " + $2, h.keys()), target.table, (foldl $1 + ", " + $2, target.columns.keys()),
+            getDeferrabilitySql());
     }
 }
 
@@ -3736,8 +3739,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
         hash<string, PgsqlForeignConstraint> rv;
         # get foreign referential constraints
-        *hash<auto> qh = ds.select("select constraint_name, att2.attname source_column, ns.nspname \"schema\", "
-            "cl.relname target_table, att.attname target_column from (select con1.conname constraint_name, "
+        *hash<auto> qh = ds.select("select constraint_name, condeferrable, condeferred, "
+            "att2.attname source_column, ns.nspname \"schema\", cl.relname target_table, "
+            "att.attname target_column from (select con1.conname constraint_name, con1.condeferrable, "
+            "con1.condeferred, "
             "generate_subscripts(con1.conkey, 1) AS rn, unnest(con1.conkey) parent, unnest(con1.confkey) child, "
             "con1.confrelid, con1.conrelid from pg_class cl join pg_namespace ns on cl.relnamespace = ns.oid "
             "join pg_constraint con1 on con1.conrelid = cl.oid where cl.relname = %v and ns.nspname = %v "
@@ -3761,13 +3766,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     ? row.target_table
                     : sprintf("%s.%s", row.schema, row.target_table);
                 c.target.columns.(row.target_column) = True;
+                c.deferrable = row.condeferrable;
+                c.initially_deferred = row.condeferred;
             }
 
             foreach hash<auto> c in (ch.pairIterator()) {
                 # get a description of the target table's columns
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table, targ_columns.subset(c.value.target.columns.keys()));
-                rv{c.key} = new PgsqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
+                rv{c.key} = new PgsqlForeignConstraint(c.key, new Columns(c.value.columns), fct,
+                    c.value.deferrable, c.value.initially_deferred);
             }
         }
         return new ForeignConstraints(rv);
@@ -4042,7 +4050,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table,
             hash<auto> tch, *hash<auto> opt) {
         ForeignConstraintTarget fct(table, new Columns(tch));
-        return new PgsqlForeignConstraint(cname, new Columns(ch), fct);
+        return new PgsqlForeignConstraint(cname, new Columns(ch), fct, opt.deferrable, opt.initially_deferred);
     }
 
     private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash opt) {
@@ -4137,6 +4145,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # declarative table partitioning was introduced in PostgreSQL 10
         getServerVersion();
         return server_version_major >= 10;
+    }
+
+    private bool supportsDeferrableForeignConstraintsImpl() {
+        return True;
     }
 
     private bool supportsPartitionMethodImpl(string method, bool subpartition) {

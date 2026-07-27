@@ -9175,7 +9175,9 @@ uk.addSourceConstraint(table_name, constraint_name);
         *AbstractForeignConstraint findEqual(AbstractForeignConstraint fk) {
             foreach AbstractForeignConstraint fk2 in (h.iterator()) {
                 if (fk2.matchKeys(fk) && fk2.target.table == fk.target.table
-                    && fk2.target.columns.matchKeys(fk.target.columns))
+                    && fk2.target.columns.matchKeys(fk.target.columns)
+                    && fk2.deferrable == fk.deferrable
+                    && fk2.initially_deferred == fk.initially_deferred)
                     return fk2;
             }
         }
@@ -9255,10 +9257,55 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
         public {
             #! a ForeignConstraintTarget object to describe the target table and columns
             ForeignConstraintTarget target;
+
+            #! @ref True "True" if constraint checks can be deferred until transaction commit
+            bool deferrable;
+
+            #! @ref True "True" if constraint checks are deferred by default; only valid when \c deferrable is
+            #! @ref True "True"
+            bool initially_deferred;
         }
 
-        constructor(string name, Columns cols, ForeignConstraintTarget t) : AbstractColumnConstraint(name, cols) {
+        #! creates a foreign constraint
+        /** @param name the constraint name
+            @param cols the source columns
+            @param t the target table and columns
+            @param deferrable @ref True "True" if checks can be deferred until transaction commit
+            @param initially_deferred @ref True "True" if checks are deferred by default; requires \a deferrable
+                to be @ref True "True"
+
+            @throw FOREIGN-CONSTRAINT-ERROR \a initially_deferred is @ref True "True" and \a deferrable is
+                @ref False "False"
+        */
+        constructor(string name, Columns cols, ForeignConstraintTarget t, bool deferrable = False,
+                bool initially_deferred = False) : AbstractColumnConstraint(name, cols) {
+            if (initially_deferred && !deferrable) {
+                throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: initially_deferred requires "
+                    "deferrable", name);
+            }
             target = t;
+            self.deferrable = deferrable;
+            self.initially_deferred = initially_deferred;
+        }
+
+        #! returns the portable SQL clause representing the constraint's deferrability
+        /** @par Example:
+            @code{.py}
+string sql = constraint.getDeferrabilitySql();
+            @endcode
+
+            @return an empty string for a non-deferrable constraint, or a leading-space SQL clause for a
+            deferrable constraint
+
+            @since SqlUtil 3.0.0
+        */
+        string getDeferrabilitySql() {
+            if (!deferrable) {
+                return "";
+            }
+            return initially_deferred
+                ? " deferrable initially deferred"
+                : " deferrable initially immediate";
         }
 
         #! Returns @ref True "True" if the constraint refers to the given target column
@@ -9307,6 +9354,8 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             AbstractForeignConstraint c = cast<AbstractForeignConstraint>(con);
             return (h.keys() != c.h.keys())
                 || !target.equal(c.target)
+                || deferrable != c.deferrable
+                || initially_deferred != c.initially_deferred
                 ? False : True;
         }
     }

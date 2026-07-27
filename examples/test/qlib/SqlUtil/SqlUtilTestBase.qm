@@ -122,6 +122,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("Delete", \deleteTest());
         addTestCase("result set placeholder", \resultSetPlaceholderTest());
         addTestCase("Serialization", \serializationTest());
+        addTestCase("deferrable foreign constraints", \deferrableForeignConstraintsTest());
         addTestCase("implicit composite foreign key join", \implicitCompositeForeignKeyJoinTest());
         addTestCase("Temp Tables", \tempTableTest());
         addTestCase("wrong schema", \test2358SqlutilSchema());
@@ -150,6 +151,172 @@ public class SqlTestBase inherits QUnit::Test {
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());
+    }
+
+    deferrableForeignConstraintsTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        AbstractDatabase db = (new Database(ds)).getDatabase();
+
+        if (!table.supportsDeferrableForeignConstraints()) {
+            AbstractTable probe = db.makeTable("sqlutil_dfk_probe", {
+                "columns": {
+                    "id": c_number(14, True),
+                    "parent_id": c_number(14),
+                },
+            });
+            assertFalse(probe.supportsDeferrableForeignConstraints(),
+                "driver does not advertise deferrable foreign constraints");
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "does not support deferrable foreign constraints", sub () {
+                probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlutil_dfk_probe", "id",
+                    {"deferrable": True});
+            });
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "initially_deferred requires deferrable", sub () {
+                probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlutil_dfk_probe", "id",
+                    {"initially_deferred": True});
+            });
+            assertFalse(probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlutil_dfk_probe", "id",
+                {"deferrable": False}) =~ /deferrable/i,
+                "explicit portable defaults preserve existing SQL");
+            return;
+        }
+
+        assertTrue(table.supportsDeferrableForeignConstraints(),
+            "driver advertises deferrable foreign constraints");
+
+        const string ParentName = "sqlutil_dfk_p";
+        const string ChildName = "sqlutil_dfk_c";
+        const string NonDeferrableName = "fk_dfk_nd";
+        const string ImmediateName = "fk_dfk_imm";
+        const string DeferredName = "fk_dfk_def";
+
+        code<nothing()> cleanup = sub () {
+            ds.rollback();
+            db.dropTableIfExists(ChildName);
+            db.dropTableIfExists(ParentName);
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        hash<auto> parent_desc = {
+            "columns": {
+                "tenant_id": c_number(14, True),
+                "entity_id": c_number(14, True),
+            },
+            "primary_key": {
+                "name": "pk_sqlutil_dfk_p",
+                "columns": ("tenant_id", "entity_id"),
+            },
+        };
+        hash<auto> child_desc = {
+            "columns": {
+                "id": c_number(14, True),
+                "nd_tenant": c_number(14),
+                "nd_entity": c_number(14),
+                "imm_tenant": c_number(14),
+                "imm_entity": c_number(14),
+                "def_tenant": c_number(14),
+                "def_entity": c_number(14),
+            },
+            "primary_key": {
+                "name": "pk_sqlutil_dfk_c",
+                "columns": "id",
+            },
+            "foreign_constraints": {
+                (NonDeferrableName): {
+                    "columns": ("nd_tenant", "nd_entity"),
+                    "table": ParentName,
+                    "target_columns": ("tenant_id", "entity_id"),
+                },
+                (ImmediateName): {
+                    "columns": ("imm_tenant", "imm_entity"),
+                    "table": ParentName,
+                    "target_columns": ("tenant_id", "entity_id"),
+                    "deferrable": True,
+                    "initially_deferred": False,
+                },
+                (DeferredName): {
+                    "columns": ("def_tenant", "def_entity"),
+                    "table": ParentName,
+                    "target_columns": ("tenant_id", "entity_id"),
+                    "deferrable": True,
+                    "initially_deferred": True,
+                },
+            },
+        };
+
+        AbstractTable parent = db.makeTable(ParentName, parent_desc);
+        parent.createCommit();
+        AbstractTable child = db.makeTable(ChildName, child_desc);
+
+        ForeignConstraints template_fks = child.getForeignConstraints();
+        assertFalse(template_fks.memberGate(NonDeferrableName).getCreateSql(ChildName) =~ /deferrable/i,
+            "default foreign constraint SQL remains non-deferrable");
+        assertTrue(template_fks.memberGate(ImmediateName).getCreateSql(ChildName)
+            =~ /deferrable initially immediate/i,
+            "initially-immediate SQL is generated");
+        assertTrue(template_fks.memberGate(DeferredName).getCreateSql(ChildName)
+            =~ /deferrable initially deferred/i,
+            "initially-deferred SQL is generated");
+        child.createCommit();
+
+        AbstractTable actual = db.getTable(ChildName);
+        ForeignConstraints actual_fks = actual.getForeignConstraints();
+        assertFalse(actual_fks.memberGate(NonDeferrableName).deferrable,
+            "non-deferrable mode is introspected");
+        assertTrue(actual_fks.memberGate(ImmediateName).deferrable,
+            "deferrable mode is introspected");
+        assertFalse(actual_fks.memberGate(ImmediateName).initially_deferred,
+            "initially-immediate mode is introspected");
+        assertTrue(actual_fks.memberGate(DeferredName).deferrable,
+            "deferred constraint is introspected as deferrable");
+        assertTrue(actual_fks.memberGate(DeferredName).initially_deferred,
+            "initially-deferred mode is introspected");
+
+        hash<auto> reverse_desc = actual.getDescriptionHash();
+        assertFalse(exists reverse_desc.foreign_constraints{NonDeferrableName}.deferrable,
+            "portable defaults are omitted from reverse descriptions");
+        assertEq(True, reverse_desc.foreign_constraints{ImmediateName}.deferrable,
+            "reverse description preserves deferrability");
+        assertEq(False, reverse_desc.foreign_constraints{ImmediateName}.initially_deferred,
+            "reverse description preserves initially-immediate mode");
+        assertEq(True, reverse_desc.foreign_constraints{DeferredName}.initially_deferred,
+            "reverse description preserves initially-deferred mode");
+        assertEq((), actual.getAlignSql(child), "the creation template aligns without drift");
+
+        AbstractTable reverse_template = db.makeTable(ChildName, reverse_desc);
+        assertEq((), actual.getAlignSql(reverse_template),
+            "the reverse-engineered template aligns without drift");
+
+        parent.insert({"tenant_id": 1, "entity_id": 10});
+        child.insert({"id": 1, "def_tenant": 1, "def_entity": 10});
+        ds.commit();
+
+        assertEq(1, parent.update({"tenant_id": 2, "entity_id": 20},
+            {"tenant_id": 1, "entity_id": 10}),
+            "the parent key can move before the deferred child key");
+        assertEq(1, child.update({"def_tenant": 2, "def_entity": 20}, {"id": 1}),
+            "the child key completes the bounded move");
+        ds.commit();
+
+        assertEq(1, parent.update({"tenant_id": 3, "entity_id": 30},
+            {"tenant_id": 2, "entity_id": 20}),
+            "an unresolved deferred move is accepted before commit");
+        *hash<ExceptionInfo> commit_error;
+        try {
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            commit_error = ex;
+        }
+        assertTrue(commit_error ? True : False, "an unresolved deferred move fails at commit");
+        if (commit_error) {
+            assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+        }
+        ds.rollback();
     }
 
     implicitCompositeForeignKeyJoinTest() {
