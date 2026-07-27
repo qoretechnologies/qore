@@ -772,6 +772,27 @@ int echoed = child.echo(value);
     @ref user_module_children "Child Modules" for details.
     @endparblock
 
+    @par Versioned C++ APIs Between Binary Modules
+    @parblock
+    A binary module can now publish a C++ API for other binary modules to consume, without the
+    API having to be moved into \c libqore.  The exporting module declares a struct of function
+    pointers in an installed header and publishes it through a single \c extern \c "C" entry
+    point named <tt>&lt;feature&gt;_qore_cpp_api</tt>; the consuming module includes only that
+    header and resolves the struct at run time with \c q_get_module_cpp_api(), declared in the
+    new \c <qore/QoreModuleCppApi.h>.
+
+    Resolution loads the exporting module on demand and verifies that the version it publishes
+    can serve the version the consumer was compiled against, so a mismatch between two
+    independently released modules is a %Qore-language exception at resolution time rather than
+    a process abort at the first call.  Because resolution can fail cleanly, an <i>optional</i>
+    C++ dependency between modules is possible for the first time &mdash; the C++ equivalent of
+    the @ref try-module "%try-module" directive.
+
+    See the \c "Developing Qore Modules" chapter of the %Qore library documentation for the
+    naming convention, the append-only and public-ABI-types-only rules, and complete producer and
+    consumer examples.
+    @endparblock
+
     @par Native IR Lowering for context Statement
     @parblock
     The @ref context "context" statement, including contextual column

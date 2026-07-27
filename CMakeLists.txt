@@ -1642,6 +1642,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocketObject.cpp
     lib/QoreCondition.cpp
     lib/QoreJson.cpp
+    lib/QoreModuleCppApi.cpp
     lib/QoreQueue.cpp
     lib/QoreQueueHelper.cpp
     lib/QoreRegex.cpp
@@ -1986,6 +1987,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreJson.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreModuleCppApi.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueueHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
@@ -2893,6 +2895,9 @@ if (DOXYGEN_FOUND)
     add_dependencies(install-docs docs)
 endif (DOXYGEN_FOUND)
 # end of documentation
+
+# test modules for the module C++ API mechanism; built but never installed
+add_subdirectory(examples/test/module-cpp-api)
 
 # astparser module
 add_subdirectory(modules/astparser)

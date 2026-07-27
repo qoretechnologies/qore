@@ -1,0 +1,128 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file ql_cppapiuser.qpp Qore-language drivers for the module C++ API mechanism tests */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+
+/** @defgroup cppapiuser_functions cppapiuser Test Module Functions
+    Drivers that let examples/test/module-cpp-api/module-cpp-api.qtest exercise
+    q_get_module_cpp_api() and a resolved C++ API struct from Qore-language code.
+*/
+///@{
+namespace Qore::CppApiTest;
+
+//! resolves any module's C++ API and returns the version of the struct the module published
+/** @param feature the feature name of the module publishing the API
+    @param major the major version to request
+    @param minor the minimum minor version to request
+
+    @return a hash with \c major and \c minor keys taken from the resolved struct's header
+
+    @throw LOAD-MODULE-ERROR the module could not be found or loaded
+    @throw MODULE-CPP-API-ERROR the module exports no C++ API
+    @throw MODULE-CPP-API-VERSION-ERROR the module cannot serve the requested version
+*/
+hash<auto> cpp_api_resolve(string feature, int major, int minor) [flags=RET_VALUE_ONLY] {
+    const void* api = q_get_module_cpp_api(feature->c_str(), static_cast<unsigned>(major),
+        static_cast<unsigned>(minor), xsink);
+    if (!api) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    const QoreModuleCppApiHeader* hdr = reinterpret_cast<const QoreModuleCppApiHeader*>(api);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("major", static_cast<int64>(hdr->major), xsink);
+    rv->setKeyValue("minor", static_cast<int64>(hdr->minor), xsink);
+    return rv.release();
+}
+
+//! returns the sum of the arguments, computed by the cppapitest module through its C++ API
+/** @param a the first addend
+    @param b the second addend
+
+    @return the sum of \a a and \a b
+*/
+int cpp_api_add(int a, int b) [flags=RET_VALUE_ONLY] {
+    const QoreCppApiTestApi* api = cppapiuser_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    return api->add(a, b);
+}
+
+//! returns the argument reversed, computed by the cppapitest module through its C++ API
+/** @param str the string to reverse
+
+    @return \a str reversed
+*/
+string cpp_api_reverse(string str) [flags=RET_VALUE_ONLY] {
+    const QoreCppApiTestApi* api = cppapiuser_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    return api->reverse(*str, xsink);
+}
+
+//! adds each element of \a vals to an opaque counter handle owned by the cppapitest module
+/** Exercises an opaque handle crossing the module boundary with the explicit \c ref and \c deref
+    members of the API struct.
+
+    @param vals the values to add to the counter
+    @param extra_ref if @ref True "True", takes an extra reference to the handle and releases it
+    again, so that reference counting across the boundary is exercised in both directions
+
+    @return the counter's final value
+*/
+int cpp_api_counter_roundtrip(list<int> vals, bool extra_ref = False) [flags=RET_VALUE_ONLY] {
+    const QoreCppApiTestApi* api = cppapiuser_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    CounterHolder c(api, api->counter_create(0));
+    if (extra_ref) {
+        api->counter_ref(*c);
+    }
+    int64 rv = 0;
+    ConstListIterator i(vals);
+    while (i.next()) {
+        rv = api->counter_add(*c, i.getValue().getAsBigInt());
+    }
+    if (extra_ref) {
+        api->counter_deref(*c);
+    }
+    return rv;
+}
+
+//! returns the number of counter handles the cppapitest module currently has allocated
+/** @return the number of live counter handles; zero unless a handle has been leaked
+*/
+int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
+    const QoreCppApiTestApi* api = cppapiuser_get_api(xsink);
+    if (!api) {
+        return QoreValue();
+    }
+    return api->counter_live_count();
+}
+///@}
