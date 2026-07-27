@@ -26,7 +26,6 @@
 
 #include "AvroContainer.h"
 
-#include <qore/QoreJson.h>
 #include <qore/ReferenceHolder.h>
 
 #include <openssl/rand.h>

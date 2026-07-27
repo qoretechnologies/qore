@@ -27,7 +27,6 @@
 #include "AvroSchema.h"
 #include "AvroDecimal.h"
 
-#include <qore/QoreJson.h>
 #include <qore/ReferenceHolder.h>
 
 #include <cstring>
