@@ -401,8 +401,29 @@ public class WebSocketConnection {
             after async H1 poll-op registration or H2/H3 stream-listener
             registration completes; otherwise initial server messages can be
             written before the transport is ready.
+
+            Read and written only under @ref send_lock so the transition and the
+            drain of the frames buffered before it are atomic with respect to
+            @ref send() (see @ref send_lock).
         */
         bool direct_send_enabled = False;
+
+        #! The connection's single outbound ordering point
+        /** Held across every outbound frame write and across the
+            @ref direct_send_enabled transition together with the drain of the frames
+            buffered on @ref channel before it.  WebSocket requires that messages on a
+            connection reach the peer in the order they were sent, and this connection
+            has two outbound paths — the @ref channel buffer used before the transport
+            is registered, and the direct transport write used after — so without a
+            single ordering point a frame written directly could overtake an earlier
+            frame still sitting on @ref channel.  That is exactly what happened when a
+            message delivered during the registration window was answered from
+            @ref gotMessage() (buffered) while the next message, delivered after
+            @ref enableDirectSend(), was written straight to the transport.
+
+            @since WebSocketHandler 2.8
+        */
+        Mutex send_lock();
 
         #! Listener ID this connection belongs to
         string lid;
@@ -479,6 +500,7 @@ public class WebSocketConnection {
         @since WebSocketHandler 2.7
     */
     setWsPollOp(*HttpWebSocketPollOperationBase poll_op) {
+        AutoLock al(send_lock);
         self.async_ws_poll_op = poll_op;
         if (!poll_op) {
             direct_send_enabled = False;
@@ -508,17 +530,28 @@ public class WebSocketConnection {
         @since WebSocketHandler 2.7
     */
     setStreamProcessor(*WebSocketStreamProcessor proc) {
+        AutoLock al(send_lock);
         self.stream_processor = proc;
         if (!proc) {
             direct_send_enabled = False;
         }
     }
 
-    #! Enables direct transport writes after async registration is complete
+    #! Enables direct transport writes after async registration is complete and flushes buffered frames
     /** Internal API used by WebSocketHandler::startImpl().
+
+        The transition and the drain of the frames buffered on @ref channel before it are
+        performed atomically under @ref send_lock: a frame handed to @ref send() by another
+        thread (for example an echo sent from @ref gotMessage() on an I/O worker) either
+        lands on @ref channel before the drain — and is therefore written by the drain — or
+        blocks until the drain has finished and is written after it.  Without that, a frame
+        sent after the transition could be written to the transport ahead of an earlier
+        frame still buffered on @ref channel, which is a WebSocket protocol violation.
     */
     enableDirectSend() {
+        AutoLock al(send_lock);
         direct_send_enabled = True;
+        flushBufferedFramesLocked();
     }
 
     #! Sets the stream context for WebSocket over HTTP/2 or HTTP/3
@@ -733,23 +766,35 @@ public class WebSocketConnection {
         notifyIo();
     }
 
-    #! Pushes an already-encoded message on the connection's message channel
-    sendEncoded(binary msg) {
-        if (dropIfQueueFull()) {
-            return;
-        }
-        if (direct_send_enabled && async_ws_poll_op) {
-            async_ws_poll_op.sendRawFrame(msg);
-            notifyIo();
-            return;
-        }
-        # H2/H3: send directly via stream context if available
-        if (direct_send_enabled && stream_ctx) {
-            streamSendOrDrop(msg);
+    #! Writes an encoded frame through the connection's single outbound ordering point
+    /** All outbound frames go through here so that the two outbound paths (the
+        @ref channel buffer used before the transport is registered and the direct
+        transport write used after) can never deliver frames out of order; see
+        @ref send_lock.
+
+        @param encoded the encoded WebSocket frame to write
+
+        @since WebSocketHandler 2.8
+    */
+    private sendFrame(binary encoded) {
+        AutoLock al(send_lock);
+        sendFrameLocked(encoded);
+    }
+
+    #! Writes an encoded frame; @ref send_lock must be held
+    /** Once direct sends are enabled, any frames still buffered on @ref channel are
+        flushed first so a direct write can never overtake them.
+
+        @since WebSocketHandler 2.8
+    */
+    private sendFrameLocked(binary encoded) {
+        if (direct_send_enabled && (async_ws_poll_op || stream_ctx)) {
+            flushBufferedFramesLocked();
+            sendDirectLocked(encoded);
             return;
         }
         try {
-            channel.send(msg);
+            channel.send(encoded);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
@@ -757,6 +802,43 @@ public class WebSocketConnection {
             return;
         }
         notifyIo();
+    }
+
+    #! Writes an encoded frame straight to the registered transport; @ref send_lock must be held
+    /** @since WebSocketHandler 2.8
+    */
+    private sendDirectLocked(binary encoded) {
+        if (async_ws_poll_op) {
+            async_ws_poll_op.sendRawFrame(encoded);
+            notifyIo();
+            return;
+        }
+        # H2/H3: send directly via the stream context
+        streamSendOrDrop(encoded);
+    }
+
+    #! Flushes frames buffered on @ref channel to the transport; @ref send_lock must be held
+    /** Only meaningful once direct sends are enabled; a no-op otherwise.
+
+        @since WebSocketHandler 2.8
+    */
+    private flushBufferedFramesLocked() {
+        if (!direct_send_enabled || (!async_ws_poll_op && !stream_ctx)) {
+            return;
+        }
+        # a backpressure drop in sendDirectLocked() closes the channel; tryRecv() still
+        # drains what is left, and the loop ends when the buffer is empty
+        while (*binary d = pollDataImmediate()) {
+            sendDirectLocked(d);
+        }
+    }
+
+    #! Pushes an already-encoded message on the connection's message channel
+    sendEncoded(binary msg) {
+        if (dropIfQueueFull()) {
+            return;
+        }
+        sendFrame(msg);
     }
 
     #! Returns True if this connection requires per-connection encoding
@@ -787,29 +869,7 @@ public class WebSocketConnection {
             hash<auto> headers;
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
-        binary encoded = sendWithExtensions(msg);
-        if (direct_send_enabled && async_ws_poll_op) {
-            async_ws_poll_op.sendRawFrame(encoded);
-            notifyIo();
-            return;
-        }
-        # For H2/H3 WebSocket with a stream context, send directly via the
-        # stream context. Using the channel + notifyIo() only wakes the I/O
-        # controller but doesn't trigger the stream processor to drain the
-        # channel if no incoming data arrives.
-        if (direct_send_enabled && stream_ctx) {
-            streamSendOrDrop(encoded);
-            return;
-        }
-        try {
-            channel.send(encoded);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "CHANNEL-CLOSED") {
-                rethrow;
-            }
-            return;
-        }
-        notifyIo();
+        sendFrame(sendWithExtensions(msg));
     }
 
     #! Pushes an unencoded message on the connection's message channel
@@ -825,25 +885,7 @@ public class WebSocketConnection {
             hash<auto> headers;
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
-        binary encoded = sendWithExtensions(msg, op, fin);
-        if (direct_send_enabled && async_ws_poll_op) {
-            async_ws_poll_op.sendRawFrame(encoded);
-            notifyIo();
-            return;
-        }
-        if (direct_send_enabled && stream_ctx) {
-            streamSendOrDrop(encoded);
-            return;
-        }
-        try {
-            channel.send(encoded);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "CHANNEL-CLOSED") {
-                rethrow;
-            }
-            return;
-        }
-        notifyIo();
+        sendFrame(sendWithExtensions(msg, op, fin));
     }
 
     #! Applies extension transforms to outgoing message and encodes it
@@ -2372,17 +2414,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 ws_async_io.registerH1WebSocketConnection(sock, ws_poll_op,
                     ws_async_target, ws_listener, cx);
             }
+            # enables direct sends and atomically drains any data queued before that point
+            # (for example from getConnectionImpl() or registered()), so a frame sent from
+            # another thread can never be written ahead of the buffered frames
             wsc.enableDirectSend();
-
-            # Drain any data queued before async H1 direct sends were enabled
-            # (for example from getConnectionImpl() or registered()).
-            while (*binary d = wsc.pollDataImmediate()) {
-                ws_poll_op.sendRawFrame(d);
-            }
-            # Wake the I/O controller to flush any queued data
-            if (async_ctrl) {
-                async_ctrl.wakeSocket(sock);
-            }
 
             # Block until the connection closes
             Counter done(1);
@@ -2428,23 +2463,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             logError("WebSocketHandler: NO register_stream_listener callback for cid %y "
                 "(h2=%y h3=%y) — frames will not be delivered!", cid, is_http2, is_http3);
         }
+        # Enables direct sends and atomically drains any data queued before that point (for
+        # example from getConnectionImpl() or registered()).  register_stream_listener()
+        # above replays a missed stream-data notification inline, and the I/O controller can
+        # dispatch onStreamData() to a worker as soon as the listener is registered, so an
+        # echo sent from gotMessage() can race this transition; enableDirectSend() holds the
+        # connection's send lock across the flag flip and the drain so that echo is either
+        # drained here or written after the drain — never ahead of it.
         wsc.enableDirectSend();
-
-        # Drain any data queued before H2/H3 direct sends were enabled
-        # (for example from getConnectionImpl() or registered()).
-        {
-            bool sent = False;
-            while (*binary d = wsc.pollDataImmediate()) {
-                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-                if (ctx) {
-                    ctx.sendData(d);
-                    sent = True;
-                }
-            }
-            if (sent && async_ctrl) {
-                async_ctrl.wakeSocket(sock);
-            }
-        }
 
         # Heartbeat is handled by AsyncSocketIoController timers in the stream
         # processor. PINGs are sent only when no inbound WebSocket frame has
