@@ -56,6 +56,7 @@ class SalesforceTest inherits QUnit::Test {
         addTestCase("Salesforce.com DataProvider test", \salesForceDataProviderTests());
         addTestCase("AND/OR expression tests", \andOrExpressionTests());
         addTestCase("SOQL operator unit tests", \soqlOperatorUnitTests());
+        addTestCase("org identity unit tests", \orgIdentityUnitTests());
         addTestCase("Salesforce.com REST", \salesForceRestTests());
         addTestCase("connection tests", \connectionTest());
 
@@ -524,6 +525,60 @@ class SalesforceTest inherits QUnit::Test {
     }
 
     # Unit tests for SOQL operators that don't require a Salesforce connection
+    orgIdentityUnitTests() {
+        # the org ID is the second-to-last path element of the identity service URL, which the
+        # OAuth2 login returns as "id"; it is not returned as a field of its own
+        assertEq("00Dxx0000001gPLEAY", SalesforceRestClientBase::getOrgId(
+            "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC"));
+
+        # sandbox and My Domain hosts encode the same structure
+        assertEq("00D5g000004MyDoEAK", SalesforceRestClientBase::getOrgId(
+            "https://acme--dev.sandbox.my.salesforce.com/id/00D5g000004MyDoEAK/0055g00000AbCdEAAV"));
+
+        # a query string or fragment must not be taken for a path element
+        assertEq("00Dxx0000001gPLEAY", SalesforceRestClientBase::getOrgId(
+            "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC?a=1"));
+        assertEq("00Dxx0000001gPLEAY", SalesforceRestClientBase::getOrgId(
+            "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC#frag"));
+
+        # a trailing slash makes no difference: split() drops a trailing empty field, so the user
+        # ID is still the last element and the org ID the one before it
+        assertEq("00Dxx0000001gPLEAY", SalesforceRestClientBase::getOrgId(
+            "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC/"));
+
+        # nothing to parse
+        assertNothing(SalesforceRestClientBase::getOrgId(NOTHING));
+        assertNothing(SalesforceRestClientBase::getOrgId(""));
+
+        # a URL with no org ID element
+        assertNothing(SalesforceRestClientBase::getOrgId("id"));
+
+        # an unauthenticated client reports no instance URL, ID service URL or org ID
+        SalesforceRestClient c({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "url": "https://login.salesforce.com",
+        }, True);
+        assertNothing(c.getInstanceUrl());
+        assertNothing(c.getIdServiceUrl());
+        assertNothing(c.getOrgId());
+
+        # a client holding a token reports all three, with the org ID derived from the identity
+        # service URL; this is the state a Pub/Sub subscription needs before it can send its
+        # "instanceurl" and "tenantid" call metadata
+        SalesforceRestClient t({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "an-access-token",
+            "instance_url": "https://acme.my.salesforce.com",
+            "id_service_url": "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+        }, True);
+        assertEq("https://acme.my.salesforce.com", t.getInstanceUrl());
+        assertEq("https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+            t.getIdServiceUrl());
+        assertEq("00Dxx0000001gPLEAY", t.getOrgId());
+    }
+
     soqlOperatorUnitTests() {
         # Test soql_escape_string function
         assertEq("test", soql_escape_string("test"), "soql_escape_string: no escaping needed");

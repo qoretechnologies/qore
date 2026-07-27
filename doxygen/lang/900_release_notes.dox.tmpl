@@ -1799,6 +1799,15 @@ foreach string module_name in (registry.getProcessModules()) {
         for @ref RestClient::RestClient "RestClient" instances, built on
         @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
 
+    - @ref salesforcerestclientintro "SalesforceRestClient" module
+      - added @ref SalesforceRestClient::SalesforceRestClient::getInstanceUrl() "SalesforceRestClient::getInstanceUrl()",
+        @ref SalesforceRestClient::SalesforceRestClient::getIdServiceUrl() "SalesforceRestClient::getIdServiceUrl()"
+        and @ref SalesforceRestClient::SalesforceRestClient::getOrgId() "SalesforceRestClient::getOrgId()", so that
+        APIs outside the REST client can identify the authenticated org &mdash; the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a> needs both as
+        call metadata
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+
     - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
       - added @ref Schema::DataSchema "DataSchema", @ref Schema::DataSchemaLoader "DataSchemaLoader", and
         @ref Schema::MigrationExecutor "MigrationExecutor" classes for data-driven schema definitions and

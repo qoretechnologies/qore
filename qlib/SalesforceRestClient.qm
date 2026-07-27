@@ -42,7 +42,7 @@
 %requires json
 
 module SalesforceRestClient {
-    version = "2.0.1";
+    version = "2.1";
     desc = "user module for calling Salesforce.com REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -145,6 +145,13 @@ rc.bulkJobClose(h.id);
     functionality and a more detailed example of code using this module.
 
     @section salesforcerestclientrelnotes Release Notes
+
+    @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - added @ref SalesforceRestClient::SalesforceRestClient::getInstanceUrl() "SalesforceRestClient::getInstanceUrl()",
+      @ref SalesforceRestClient::SalesforceRestClient::getIdServiceUrl() "SalesforceRestClient::getIdServiceUrl()" and
+      @ref SalesforceRestClient::SalesforceRestClient::getOrgId() "SalesforceRestClient::getOrgId()", so that APIs
+      outside the REST client can identify the authenticated org
+      (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection salesforcerestclientv2_0_1 SalesforceRestClient v2.0.1
     - fixed OAuth2 refresh token handling
@@ -336,6 +343,37 @@ public class SalesforceRestClientBase {
     #! returns a date string in GMT for use in Salesforce.com requests
     static string getGmtDate(date d) {
         return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
+
+    #! Returns the org ID (tenant ID) encoded in an identity service URL
+    /** The OAuth2 login response returns the identity service URL as \c id and does not return the
+        org ID as a field of its own; the org ID is the second-to-last path element, as in
+        \c "https://login.salesforce.com/id/<org-id>/<user-id>".
+
+        @param id_service_url the identity service URL, or @ref nothing
+
+        @return the org ID, or @ref nothing if \a id_service_url is empty or has no org ID element
+
+        @par Example:
+        @code{.py}
+*string org_id = SalesforceRestClientBase::getOrgId(id_service_url);
+        @endcode
+
+        @since %SalesforceRestClient 2.1
+    */
+    static *string getOrgId(*string id_service_url) {
+        if (!id_service_url.val()) {
+            return;
+        }
+        # strip any query string or fragment before splitting on "/"
+        string url = (id_service_url =~ x/^([^?#]*)/)[0];
+        list<string> parts = url.split("/");
+        # the last path element is the user ID and the one before it is the org ID
+        if (parts.size() < 2) {
+            return;
+        }
+        string org_id = parts[parts.size() - 2];
+        return org_id.val() ? org_id : NOTHING;
     }
 
     #! returns options for the RestClient constructors
@@ -1105,6 +1143,58 @@ sfrest.logout();
             "instance_url": instance_url,
             "id_service_url": id_service_url,
         };
+    }
+
+    #! Returns the Salesforce instance URL for the authenticated org
+    /** The instance URL identifies the org's API host and is returned by the OAuth2 login as
+        \c instance_url; it is not the login URL.  APIs outside the REST client need it, in
+        particular the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
+        API</a>, which sends it as the \c instanceurl call metadata header.
+
+        @return the instance URL, or @ref nothing if no login has been performed yet
+
+        @par Example:
+        @code{.py}
+*string instance_url = sfrest.getInstanceUrl();
+        @endcode
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getInstanceUrl() {
+        return instance_url.val() ? instance_url : NOTHING;
+    }
+
+    #! Returns the identity service URL for the authenticated user
+    /** Returned by the OAuth2 login as \c id; see
+        @ref getOrgId() "getOrgId()" for the org ID it encodes.
+
+        @return the identity service URL, or @ref nothing if no login has been performed yet
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getIdServiceUrl() {
+        return id_service_url.val() ? id_service_url : NOTHING;
+    }
+
+    #! Returns the 18-character org ID (tenant ID) for the authenticated org
+    /** The org ID is not returned as a field of its own by the OAuth2 login; it is the
+        second-to-last path element of the identity service URL, which the login returns as
+        \c id.  The
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
+        API</a> sends it as the \c tenantid call metadata header.
+
+        @return the org ID, or @ref nothing if no login has been performed yet
+
+        @par Example:
+        @code{.py}
+*string org_id = sfrest.getOrgId();
+        @endcode
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getOrgId() {
+        return SalesforceRestClientBase::getOrgId(id_service_url);
     }
 
     #! Checks the API and sets the final URL
