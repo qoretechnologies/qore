@@ -667,14 +667,28 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         publishing the frame state, so no transport bytes can be lost to a
         drain-vs-swap race.
 
+        Body bytes this handle is holding back for the next @ref readData()
+        call are handed over too: when the response headers and the first
+        tunnel bytes arrive in one event, @ref readData() returns the response
+        hash without the body and defers the body — and the WebSocket client
+        installs the frame state instead of reading again, so those bytes
+        would otherwise be dropped.  They are fed to the decoder after
+        @a initial_body and ahead of anything still buffered on the Channel,
+        which is the order they arrived in.
+
         @param msg_queue Queue that will receive typed frame hashes
+        @param initial_body optional body bytes already consumed by the caller
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
         @throw HTTPCLIENT-STREAM-CLOSED if the stream is already closed
 
     */
-    installFrameState(Queue msg_queue) {
+    installFrameState(Queue msg_queue, *data initial_body) {
         int sid;
+        *data install_body = initial_body;
+        bool restore_pending_body = False;
+        *data restore_body;
+        bool restore_pending_end_stream = False;
         {
             AutoLock al(lock);
             if (!streaming) {
@@ -684,9 +698,28 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
             sid = stream_id;
+            if (exists pending_body) {
+                restore_pending_body = True;
+                restore_body = pending_body;
+                install_body = appendInitialBody(install_body, pending_body);
+                remove pending_body;
+            }
+            restore_pending_end_stream = pending_end_stream;
+            # After installation, stream completion is owned by the C++ frame
+            # state; do not replay a readData()-synthesized end marker.
+            pending_end_stream = False;
         }
 
-        h3conn.installFrameState(sid, msg_queue);
+        try {
+            h3conn.installFrameState(sid, msg_queue, install_body);
+        } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(lock);
+            if (restore_pending_body && !exists pending_body) {
+                pending_body = restore_body;
+            }
+            pending_end_stream = restore_pending_end_stream;
+            rethrow;
+        }
     }
 
     #! Installs an SSE parser on an existing streaming request
@@ -710,7 +743,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (exists pending_body) {
                 restore_pending_body = True;
                 restore_body = pending_body;
-                install_body = appendSseInitialBody(install_body, pending_body);
+                install_body = appendInitialBody(install_body, pending_body);
                 remove pending_body;
             }
             restore_pending_end_stream = pending_end_stream;

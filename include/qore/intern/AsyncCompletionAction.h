@@ -173,25 +173,36 @@ public:
     }
 
     //! Installs a WebSocket frame-state decoder on this ChannelAction
-    /** Drains any items already buffered in the channel (feeding their body
-        bytes into the frame state first, so the decoder sees pre-swap bytes
-        before any post-install execute() chunks), then publishes the frame
-        state.  All three steps are serialized against execute(), complete()
-        and executeError() via a per-action mutex, so in-flight dispatches
-        that were targeting the old channel path cannot leak bytes past the
-        install.
+    /** Feeds @a initial (body bytes the caller already took off the channel)
+        into the frame state, then drains any items still buffered in the
+        channel into it, then publishes the frame state.  All three steps are
+        serialized against execute(), complete() and executeError() via a
+        per-action mutex, so in-flight dispatches that were targeting the old
+        channel path cannot leak bytes past the install.
+
+        @a initial exists because the stream handle's readData() splits a
+        coalesced headers+body event: it returns the response hash without the
+        body so the extended-CONNECT handshake can validate the status code,
+        and holds the body back for the next read.  Those bytes precede
+        everything still buffered here, so they must be fed first.
 
         @param fs the frame state (ownership transferred); holds one
                msg_queue ref that is dropped in cleanup()/destructor
+        @param initial optional already-consumed response item to feed first
         @param xsink exception sink
     */
     DLLLOCAL void installFrameState(std::unique_ptr<WebSocketStreamFrameState> fs,
-            ExceptionSink* xsink) {
+            QoreValue initial, ExceptionSink* xsink) {
         std::lock_guard<std::mutex> lg(mtx);
         if (sse_state) {
+            initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STATE-ERROR",
                 "cannot install frame state after SSE state has been installed");
             return;
+        }
+        if (initial.getType() != NT_NOTHING) {
+            feedHashBodyLocked(initial, fs.get());
+            initial.discard(xsink);
         }
         // Drain anything the I/O thread already pushed before this call.
         // feedHashBodyLocked() extracts body bytes and hands them to the
@@ -208,6 +219,13 @@ public:
             }
         }
         frame_state = std::move(fs);
+        // The stream can already have ended before the swap (complete() ran
+        // while the channel path was still active, so it closed the channel
+        // instead of pushing the decoder's sentinel).  Deliver the sentinel
+        // now, or the consumer waits for a close that never arrives.
+        if (completed) {
+            frame_state->pushCloseSentinel();
+        }
     }
 
     //! Installs an SSE parser on this ChannelAction

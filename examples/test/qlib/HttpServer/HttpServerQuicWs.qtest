@@ -195,6 +195,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         addTestCase("WebSocket text echo over HTTP/3", \testH3WsTextEcho());
         addTestCase("WebSocket registered send over HTTP/3", \testH3WsRegisteredSend());
+        addTestCase("WebSocket registered send coalesced with the CONNECT response over HTTP/3",
+            \testH3WsRegisteredSendCoalesced());
         addTestCase("WebSocket binary echo over HTTP/3", \testH3WsBinaryEcho());
         addTestCase("WebSocket close handshake over HTTP/3", \testH3WsCloseHandshake());
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
@@ -292,6 +294,58 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
         assertEq("registered-welcome", msgs.get(5s),
             "HTTP/3 WebSocket should receive data sent from registered()");
+    }
+
+    #! Test the initial server send when it reaches the client with the CONNECT response
+    /** The server writes the extended-CONNECT 200 and then, from registered(), the first
+        WebSocket frame.  When the transport has not flushed the response before that frame is
+        queued, both leave in one write cycle and reach the client in a single datagram — so the
+        client's HTTP/3 poll operation reports the response headers and those first tunnel bytes
+        as one event.  The stream handle then returns the response hash without the body (the
+        handshake has to see a plain 200) and holds the body back for the next read, a read the
+        WebSocket client never makes because it installs the frame-state decoder instead.
+
+        This is the arrangement that dropped the frame; the DEBUG-only
+        \c QORE_QUIC_DEFER_CONNECT_RESPONSE_MS hook produces it on demand instead of leaving it
+        to a loaded machine's scheduling.  Without the hook (release library build) the test
+        still exercises the ordinary path.
+    */
+    testH3WsRegisteredSendCoalesced() {
+        if (!inlist("debug", get_feature_list())) {
+            testSkip("the QUIC CONNECT-response hold hook requires a debug library build");
+        }
+        setenv("QORE_QUIC_DEFER_CONNECT_RESPONSE_MS", "50");
+        on_exit unsetenv("QORE_QUIC_DEFER_CONNECT_RESPONSE_MS");
+
+        RegisteredSendWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Queue msgs();
+        WebSocketClient wsc = createH3Client(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, setup.port);
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+        assertEq("registered-welcome", msgs.get(5s),
+            "data sent from registered() must survive arriving with the CONNECT response");
+
+        # the tunnel must still work normally afterwards: the decoder has to pick up where the
+        # handed-over bytes left off
+        wsc.send("echo-after-coalesced");
+        assertEq("echo-after-coalesced", msgs.get(5s),
+            "the tunnel must keep decoding after the deferred body is handed over");
     }
 
     #! Test WebSocket text echo over HTTP/3

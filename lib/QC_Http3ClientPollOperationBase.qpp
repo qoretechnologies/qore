@@ -986,7 +986,8 @@ void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
 }
 
 void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* msg_queue,
-        ExceptionSink* xsink) {
+        QoreValue initial, ExceptionSink* xsink) {
+    ValueHolder initial_holder(initial, xsink);
     // Send callback runs on the I/O thread from within execute() -> feedData.
     // sendQuicClientStreamData enqueues the DATA frame; ngtcp2 flushes it in
     // the surrounding continuePoll write cycle.
@@ -1032,7 +1033,7 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
         ch_action->ref();
     }
 
-    ch_action->installFrameState(std::move(frame_state), xsink);
+    ch_action->installFrameState(std::move(frame_state), initial_holder.release(), xsink);
     ch_action->deref(xsink);
 }
 
@@ -1645,6 +1646,9 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags
     @param stream_id the QUIC stream ID returned by submitRequestStreamingWithChannel()
     @param message_queue the Queue that will receive typed frame hashes
            ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
+    @param initial_body optional body bytes already consumed by the caller
+           (the stream handle defers the body of a coalesced headers+body
+           event to the next read); fed to the decoder before the drain
 
     @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
            complete
@@ -1653,9 +1657,18 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags
     @since %Qore 3.0
 */
 nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
-        Queue[Queue] message_queue) [flags=NAMED_ARGS] {
+        Queue[Queue] message_queue, *data initial_body) [flags=NAMED_ARGS] {
+    QoreValue initial;
+    if (initial_body) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("body", initial_body->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        initial = h.release();
+    }
     Queue* queue_ptr = message_queue.release();
-    priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, xsink);
+    priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, initial, xsink);
 }
 
 //! Installs an SSE parser on an active ChannelAction stream

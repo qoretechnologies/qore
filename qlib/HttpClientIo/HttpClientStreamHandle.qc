@@ -272,7 +272,7 @@ public class HttpClientStreamHandle {
     }
 
     #! Appends body bytes split out by @ref getCoalescedDeferredBody() to an
-    #! already-consumed initial SSE body.
+    #! already-consumed initial body.
     /** If either side is binary, the result stays binary to avoid lossy string
         conversion of arbitrary streamed bytes.
 
@@ -280,9 +280,10 @@ public class HttpClientStreamHandle {
         @param deferred_body body held by the stream handle for the next
                @ref readData() call
 
-        @return the body value to pass to @ref installSseState()
+        @return the body value to pass to @ref installSseState() or
+        @ref installFrameState()
     */
-    static *data appendSseInitialBody(*data initial_body, data deferred_body) {
+    static *data appendInitialBody(*data initial_body, data deferred_body) {
         if (!exists initial_body) {
             return deferred_body;
         }
@@ -986,15 +987,21 @@ public class HttpClientStreamHandle {
 
         Concrete implementations drain any residual body bytes already in the
         Channel and hand them to the new frame state so the frame decoder
-        sees a contiguous byte stream.
+        sees a contiguous byte stream.  They also hand over any body bytes the
+        handle itself is holding back: @ref readData() splits a coalesced
+        headers+body event so the extended-CONNECT handshake can validate the
+        response, and defers that body to the next read — a read the WebSocket
+        client never makes, because it installs the frame state instead.
 
         @param msg_queue Queue that will receive typed frame hashes
+        @param initial_body optional body bytes already consumed by the caller,
+               fed to the decoder ahead of everything still buffered
 
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
                support frame-state streaming (H1 uses a dedicated C++ codec)
 
     */
-    installFrameState(Queue msg_queue) {
+    installFrameState(Queue msg_queue, *data initial_body) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "frame-state streaming is not supported by " + conn.getProtocol();
     }

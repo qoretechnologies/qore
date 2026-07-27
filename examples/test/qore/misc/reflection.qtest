@@ -1295,7 +1295,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "registerStreamQueue",
             ("stream_id", "queue", "notifier"));
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installFrameState",
-            ("stream_id", "message_queue"));
+            ("stream_id", "message_queue", "initial_body"));
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installSseState",
             ("stream_id", "queue", "notifier", "initial_body"));
         assertNamedConstructorVariantCount("Http3ClientPollOperationBase",
@@ -1323,7 +1323,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "registerStreamNotify",
             ("stream_id",));
         assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "installFrameState",
-            ("stream_id", "message_queue"));
+            ("stream_id", "message_queue", "initial_body"));
         assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "installSseState",
             ("stream_id", "queue", "notifier", "initial_body"));
         assertNamedConstructorVariantCount("Http3ServerPollOperation",
