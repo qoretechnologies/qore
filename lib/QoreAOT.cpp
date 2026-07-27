@@ -20021,6 +20021,12 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         }
     }
 
+    size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
+    if (pruned_calls && getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",
+            pruned_calls);
+    }
+
     // Dump IR after optimization if requested
     if (getenv("QORE_DUMP_IR_AFTER_OPT")) {
         fprintf(stderr, "=== IR AFTER OPTIMIZATION (O%d) ===\n", opt_level);

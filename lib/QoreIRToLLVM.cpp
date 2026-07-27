@@ -373,6 +373,7 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
@@ -493,6 +494,48 @@ static BatchCalleeReturnKind qore_ir_get_concrete_native_return_kind(
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
+}
+
+size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
+    if (std::getenv("QORE_DISABLE_IR_NOOP_DECREF_PRUNE")) {
+        return 0;
+    }
+
+    std::vector<llvm::CallInst*> dead_calls;
+    size_t checked = 0;
+    for (llvm::Function& function : module) {
+        if (function.isDeclaration()) {
+            continue;
+        }
+        for (llvm::BasicBlock& block : function) {
+            for (llvm::Instruction& inst : block) {
+                if (++checked % 100 == 0
+                        && qore_check_cancel(
+                            nullptr, "LLVM no-op runtime call pruning")) {
+                    return 0;
+                }
+                auto* call = llvm::dyn_cast<llvm::CallInst>(&inst);
+                if (!call || !call->getCalledFunction()
+                        || call->arg_empty()) {
+                    continue;
+                }
+                llvm::StringRef name = call->getCalledFunction()->getName();
+                if (name != "qore_rt_decref"
+                        && name != "qore_rt_decref_nothrow") {
+                    continue;
+                }
+                const auto* value =
+                    llvm::dyn_cast<llvm::ConstantInt>(call->getArgOperand(0));
+                if (value && value->isZero()) {
+                    dead_calls.push_back(call);
+                }
+            }
+        }
+    }
+    for (llvm::CallInst* call : dead_calls) {
+        call->eraseFromParent();
+    }
+    return dead_calls.size();
 }
 
 static bool qore_ir_generic_fast_entry_matches(

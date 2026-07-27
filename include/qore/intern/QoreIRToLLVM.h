@@ -68,6 +68,10 @@ public:
     //! Returns the NaN-boxed QoreValue as uint64_t.
     bool lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error);
 
+    //! Remove decref calls whose value is proven to be NOTHING.
+    //! @return the number of calls removed
+    static size_t pruneNoopDecrefs(llvm::Module& module);
+
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
     //! instead of inttoptr patterns with embedded pointers.

@@ -845,6 +845,11 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
     auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
     MPM.run(module, MAM);
+    size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
+    if (pruned_calls && getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: pruned-noop-decrefs=%zu\n",
+            pruned_calls);
+    }
 
     delete tm;
 }
