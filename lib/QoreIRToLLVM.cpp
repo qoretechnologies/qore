@@ -496,18 +496,42 @@ static BatchCalleeReturnKind qore_ir_get_concrete_native_return_kind(
     return BatchCalleeReturnKind::Boxed;
 }
 
-static bool qore_ir_value_has_input_identical_type(
+static const QoreTypeInfo* qore_ir_value_input_type(
         const QoreIRFunction& func, QoreIRValue value,
-        const QoreTypeInfo* target_type) {
+        const std::unordered_map<uint32_t,
+            const QoreIRInstruction*>* definitions = nullptr) {
     const QoreIRValueFacts* facts = func.getValueFacts(value);
-    if (!facts || !QoreTypeInfo::hasType(facts->type_info)
-            || !QoreTypeInfo::hasType(target_type)) {
-        return false;
+    if (!facts || !QoreTypeInfo::hasType(facts->type_info)) {
+        return nullptr;
     }
     const QoreTypeInfo* source_type = facts->type_info;
+    if (definitions) {
+        auto definition = definitions->find(value.id);
+        if (definition != definitions->end()
+                && definition->second->opcode
+                    == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<
+                const QoreIRLocalInstruction*>(definition->second);
+            if (load->local) {
+                source_type =
+                    qore_get_value_type(load->local->getTypeInfo());
+            }
+        }
+    }
     auto exact = func.exact_assigned_boxed_local_types.find(value.id);
     if (exact != func.exact_assigned_boxed_local_types.end()) {
         source_type = exact->second;
+    }
+    return source_type;
+}
+
+static bool qore_ir_value_has_input_identical_type(
+        const QoreIRFunction& func, QoreIRValue value,
+        const QoreTypeInfo* target_type) {
+    const QoreTypeInfo* source_type =
+        qore_ir_value_input_type(func, value);
+    if (!source_type || !QoreTypeInfo::hasType(target_type)) {
+        return false;
     }
     return QoreTypeInfo::isInputIdentical(target_type, source_type);
 }
@@ -9967,9 +9991,55 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     const QoreIRMakeHashConstKeysInstruction*>(
                         definition->second);
                 if (make->unique_keys && !make->typeInfo
-                        && make->keys.size() == 2) {
-                    fresh_container_init_types.emplace(
-                        source.id, target_type);
+                        && (make->keys.size() == 2
+                            || (make->keys.size() == 3
+                                && std::getenv(
+                                    "QORE_DISABLE_IR_FRESH_HASH_3_INIT")
+                                    == nullptr))) {
+                    bool operands_assigned =
+                        qore_ir_values_proven_assigned_at(func,
+                            definition->second,
+                            definition->second->operands);
+                    if (!operands_assigned) {
+                        continue;
+                    }
+                    const QoreTypeInfo* common_type = nullptr;
+                    bool exact_elements = true;
+                    size_t element_count = 0;
+                    for (QoreIRValue element
+                            : definition->second->operands) {
+                        if (element_count++ && !(element_count % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM fresh hash initializer analysis")) {
+                            error = "cancelled during LLVM fresh hash initializer analysis";
+                            return false;
+                        }
+                        const QoreTypeInfo* element_type =
+                            qore_ir_value_input_type(
+                                func, element, &value_definitions);
+                        if (!element_type
+                                || element_type == autoTypeInfo
+                                || element_type == anyTypeInfo) {
+                            exact_elements = false;
+                            break;
+                        }
+                        if (!common_type) {
+                            common_type = element_type;
+                        } else if (!QoreTypeInfo::matchCommonType(
+                                common_type, element_type)) {
+                            common_type = autoTypeInfo;
+                            break;
+                        }
+                    }
+                    if (exact_elements) {
+                        const QoreTypeInfo* construction_type =
+                            !common_type || common_type == autoTypeInfo
+                                || common_type == anyTypeInfo
+                                ? autoHashTypeInfo
+                                : qore_get_complex_hash_type(common_type);
+                        fresh_container_init_types.emplace(
+                            source.id, construction_type);
+                    }
                 }
             }
         }
@@ -25893,6 +25963,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool unique_keys = mhck->unique_keys && qore_ir_use_unique_hash_literal_insert();
             if (aot_mode && count == 3 && unique_keys && !mhck->typeInfo
                     && !std::getenv("QORE_DISABLE_AOT_FIXED_HASH_3_BUILD")) {
+                auto fresh_init = fresh_container_init_types.find(
+                    inst->result.id);
+                bool force_auto_type =
+                    fresh_init != fresh_container_init_types.end()
+                    && fresh_init->second == autoHashTypeInfo;
                 std::vector<llvm::Value*> args;
                 args.reserve(7);
                 for (size_t operand = 0; operand < 3; ++operand) {
@@ -25911,9 +25986,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     {ptr_type, i64_type, ptr_type, i64_type, ptr_type,
                         i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_make_hash_const_keys_3_unique", fixed_ft);
+                    force_auto_type
+                        ? "qore_rt_make_hash_const_keys_3_unique_auto"
+                        : "qore_rt_make_hash_const_keys_3_unique",
+                    fixed_ft);
                 auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_make_hash_const_keys_3_unique_throwing",
+                    force_auto_type
+                        ? "qore_rt_make_hash_const_keys_3_unique_auto_throwing"
+                        : "qore_rt_make_hash_const_keys_3_unique_throwing",
                     fixed_ft);
                 llvm::Value* hash_result = emitMaybeInvoke(
                     helper, helper_throwing, args, module, llvm_func, inst);
@@ -25922,6 +26002,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 trackResultForCleanup(
                     hash_result, inst->result.id, llvm_func);
                 emitExceptionCheck(module, llvm_func, inst);
+                if (fresh_init != fresh_container_init_types.end()) {
+                    exact_fresh_container_values.insert(inst->result.id);
+                    ++fused_fresh_container_inits;
+                }
                 return true;
             }
             if (count == 2 && unique_keys && !mhck->typeInfo) {
@@ -26041,7 +26125,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(hash_result, inst->result.id, llvm_func);
                 emitExceptionCheck(module, llvm_func, inst);
-                if (force_auto_type) {
+                if (fresh_init != fresh_container_init_types.end()) {
                     exact_fresh_container_values.insert(inst->result.id);
                     ++fused_fresh_container_inits;
                 }

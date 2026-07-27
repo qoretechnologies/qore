@@ -252,6 +252,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_auto) },
     { "qore_rt_make_hash_const_keys_2_unique_auto_throwing",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_auto_throwing) },
+    { "qore_rt_make_hash_const_keys_3_unique_auto",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_3_unique_auto) },
+    { "qore_rt_make_hash_const_keys_3_unique_auto_throwing",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_3_unique_auto_throwing) },
     { "qore_rt_fixed_hash_remap2_aot",
         reinterpret_cast<void*>(&qore_rt_fixed_hash_remap2_aot) },
     { "qore_rt_fixed_hash_remap2_aot_throwing",
@@ -4353,10 +4357,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique(
+static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1,
         uint64_t val1_bits, const char* key2, uint64_t val2_bits,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool infer_value_type) {
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
     QoreValue val2 = fromBits(val2_bits);
@@ -4377,18 +4381,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique(
     hp->setKeyValueKnownAbsentIntern(key1, val1);
     hp->setKeyValueKnownAbsentIntern(key2, val2);
 
-    const QoreTypeInfo* value_type = val0.getFullTypeInfo();
-    bool common_type =
-        QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
-    if (common_type) {
-        common_type =
-            QoreTypeInfo::matchCommonType(value_type, val2.getFullTypeInfo());
-    }
-    if (!value_type || value_type == anyTypeInfo || !common_type) {
-        value_type = autoTypeInfo;
+    const QoreTypeInfo* value_type = autoTypeInfo;
+    if (infer_value_type) {
+        value_type = val0.getFullTypeInfo();
+        bool common_type =
+            QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
+        if (common_type) {
+            common_type =
+                QoreTypeInfo::matchCommonType(value_type, val2.getFullTypeInfo());
+        }
+        if (!value_type || value_type == anyTypeInfo || !common_type) {
+            value_type = autoTypeInfo;
+        }
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique(
+        const char* key0, uint64_t val0_bits, const char* key1,
+        uint64_t val1_bits, const char* key2, uint64_t val2_bits,
+        ExceptionSink* xsink) {
+    return qore_rt_make_hash_const_keys_3_unique_impl(
+        key0, val0_bits, key1, val1_bits, key2, val2_bits, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t
@@ -4396,6 +4411,24 @@ qore_rt_make_hash_const_keys_3_unique_throwing(
         const char* key0, uint64_t val0, const char* key1, uint64_t val1,
         const char* key2, uint64_t val2, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash_const_keys_3_unique(
+        key0, val0, key1, val1, key2, val2, xsink);
+    QORE_RT_CHECK_THROW(xsink);
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique_auto(
+        const char* key0, uint64_t val0_bits, const char* key1,
+        uint64_t val1_bits, const char* key2, uint64_t val2_bits,
+        ExceptionSink* xsink) {
+    return qore_rt_make_hash_const_keys_3_unique_impl(
+        key0, val0_bits, key1, val1_bits, key2, val2_bits, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t
+qore_rt_make_hash_const_keys_3_unique_auto_throwing(
+        const char* key0, uint64_t val0, const char* key1, uint64_t val1,
+        const char* key2, uint64_t val2, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys_3_unique_auto(
         key0, val0, key1, val1, key2, val2, xsink);
     QORE_RT_CHECK_THROW(xsink);
     return result;

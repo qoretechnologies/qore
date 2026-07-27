@@ -27,6 +27,41 @@ int sub freshInitChecksum(int count) {
     return checksum;
 }
 
+string sub freshThreeKeyInit(bool first) {
+    hash<auto> record = (\"first\": 1, \"second\": 2, \"third\": 3);
+    string key = first ? \"first\" : \"third\";
+    return sprintf(\"%d:%s\", record{key}, record.fullType());
+}
+
+string sub freshThreeKeyAutoInit() {
+    hash<auto!> record = (\"first\": 1, \"second\": 2, \"third\": 3);
+    return record.fullType();
+}
+
+int sub freshThreeKeyChecksum(int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        hash<auto> record = (\"first\": i, \"second\": i + 1,
+            \"third\": i + 2);
+        string key = i % 2 ? \"first\" : \"third\";
+        result += record{key};
+    }
+    return result;
+}
+
+hash<auto> sub freshThreeKeyResult(int value) {
+    hash<auto> record = (\"first\": value, \"second\": value + 1,
+        \"third\": value + 2);
+    return record;
+}
+
+hash<auto> sub freshThreeKeyMixedResult(int value) {
+    list<int> values = (value, value + 1);
+    hash<auto> record = (\"value\": value, \"values\": values,
+        \"text\": \"mixed\");
+    return record;
+}
+
 string sub maybeUnassigned() {
     int value;
     bool assign = False;
@@ -42,7 +77,10 @@ string sub maybeUnassigned() {
 }
 
 int sub main() {
-    printf(\"%d:%s\\n\", freshInitChecksum(100), maybeUnassigned());
+    printf(\"%d:%s:%s:%d:%s:%s:%s\\n\", freshInitChecksum(100),
+        freshThreeKeyInit(True), freshThreeKeyAutoInit(),
+        freshThreeKeyChecksum(2), freshThreeKeyResult(1).fullType(),
+        freshThreeKeyMixedResult(1).fullType(), maybeUnassigned());
     return 0;
 }
 
@@ -70,7 +108,10 @@ if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
         enabled_compile, disabled_compile);
     exit(2);
 }
-if (enabled_compile !~ /freshInitChecksum.*fused-fresh-container-inits=1/
+if (enabled_compile
+            !~ /freshThreeKeyResult.*fused-fresh-container-inits=1/
+        || enabled_compile
+            !~ /freshThreeKeyMixedResult.*fused-fresh-container-inits=2/
         || disabled_compile =~ /fused-fresh-container-inits=/) {
     printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
@@ -89,7 +130,8 @@ string enabled_generic_hash = backquote(sprintf(
     "%s QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1 %s 2>&1",
     env, enabled_exe));
 string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
-if (!ast || ast !~ /:RUNTIME-TYPE-ERROR\n$/
+if (!ast || ast
+        !~ /:1:hash<string, int>:hash<auto>:3:hash<string, int>:hash<auto>:RUNTIME-TYPE-ERROR\n$/
         || jit != ast || jit_disabled != ast
         || enabled != ast || enabled_generic_hash != ast
         || disabled != ast) {
