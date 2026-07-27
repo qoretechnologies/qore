@@ -1895,17 +1895,8 @@ foreach string module_name in (registry.getProcessModules()) {
         JSON Schema validation via @ref Qore::Json::JsonSchema "JsonSchema", incremental output via
         @ref Qore::Json::JsonStreamWriter "JsonStreamWriter", JWT signing and verification, and a
         @ref Qore::Json::JsonRpcClient "JsonRpcClient"
-      - 16 companion user modules also ship with %Qore now: @ref a2aclientintro "A2aClient",
-        @ref a2aclientdataproviderintro "A2aClientDataProvider",
-        @ref a2aserverhandlerintro "A2aServerHandler", @ref fhirrestclientintro "FhirRestClient",
-        @ref fhirrestdataproviderintro "FhirRestDataProvider",
-        @ref jsonfiledataproviderintro "JsonFileDataProvider", @ref jsonldintro "JsonLd",
-        @ref jsonrpcclientiointro "JsonRpcClientIo", @ref jsonrpcconnectionintro "JsonRpcConnection",
-        @ref jsonrpchandlerintro "JsonRpcHandler", @ref mcpclientintro "McpClient",
-        @ref mcpclientdataproviderintro "McpClientDataProvider",
-        @ref mcpserverhandlerintro "McpServerHandler", @ref ndjsondataproviderintro "NdjsonDataProvider",
-        @ref onerecordclientintro "OneRecordClient" and
-        @ref onerecordserverhandlerintro "OneRecordServerHandler", so the MCP, A2A, FHIR, JSON-RPC,
+      - its 16 companion user modules ship with %Qore as well and are listed under
+        @ref qore_3_0_0_new_user_modules "New User Modules" below, so the MCP, A2A, FHIR, JSON-RPC,
         NDJSON and JSON-LD connection schemes and data provider factories are always available
 
     - @ref krb5intro "krb5" module
@@ -1954,6 +1945,18 @@ foreach string module_name in (registry.getProcessModules()) {
         alignment, and sliding-window overflow for long documents
 
     @subsection qore_3_0_0_new_user_modules New User Modules
+    - @ref a2aclientintro "A2aClient" module
+      - new module providing a client API for connecting to
+        <a href="https://a2a-protocol.org">A2A</a> (Agent-to-Agent) agents
+
+    - @ref a2aclientdataproviderintro "A2aClientDataProvider" module
+      - new module providing a data provider API for
+        <a href="https://a2a-protocol.org">A2A</a> agents
+
+    - @ref a2aserverhandlerintro "A2aServerHandler" module
+      - new module providing an <a href="https://a2a-protocol.org">A2A</a> server handler for use with the
+        @ref httpserverintro "HttpServer" module
+
     - @ref aftershipdataproviderintro "AftershipDataProvider" module
       - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
 
@@ -2147,6 +2150,14 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref exarestclientintro "ExaRestClient" module
       - new module providing a REST client for <a href="https://exa.ai">Exa</a>'s neural-search API
 
+    - @ref fhirrestclientintro "FhirRestClient" module
+      - new module providing a REST client for JSON-based
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
+
+    - @ref fhirrestdataproviderintro "FhirRestDataProvider" module
+      - new module providing a data provider API for JSON-based
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
+
     - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
       - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
 
@@ -2282,6 +2293,25 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref jotformrestclientintro "JotformRestClient" module
       - new module providing a REST client for the <a href="https://www.jotform.com/">JotForm</a> REST API
 
+    - @ref jsonfiledataproviderintro "JsonFileDataProvider" module
+      - new module providing JSON file read/write support and data provider integration
+
+    - @ref jsonldintro "JsonLd" module
+      - new module providing <a href="https://www.w3.org/TR/json-ld11/">JSON-LD 1.1</a> processing,
+        implementing the W3C expansion, compaction, flattening, framing and RDF serialization algorithms
+
+    - @ref jsonrpcclientiointro "JsonRpcClientIo" module
+      - new module providing a pure-%Qore <a href="https://www.jsonrpc.org/specification">JSON-RPC</a>
+        client with async I/O via the @ref httpclientiointro "HttpClientIo" module
+
+    - @ref jsonrpcconnectionintro "JsonRpcConnection" module
+      - new module providing <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> client connections
+
+    - @ref jsonrpchandlerintro "JsonRpcHandler" module
+      - new module providing infrastructure for implementing
+        <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> server-side services using the
+        @ref httpserverintro "HttpServer" module
+
     - @ref katanadataproviderintro "KatanaDataProvider" module
       - new module providing a data provider API for <a href="https://katanamrp.com/">Katana</a> Manufacturing ERP
 
@@ -2334,6 +2364,18 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for <a href="https://www.mailgun.com/">Mailgun</a>'s email API
 
+    - @ref mcpclientintro "McpClient" module
+      - new module providing a <a href="https://modelcontextprotocol.io">Model Context Protocol</a>
+        (MCP) client API for connecting to MCP servers
+
+    - @ref mcpclientdataproviderintro "McpClientDataProvider" module
+      - new module providing a data provider API for
+        <a href="https://modelcontextprotocol.io">MCP</a> servers
+
+    - @ref mcpserverhandlerintro "McpServerHandler" module
+      - new module providing an <a href="https://modelcontextprotocol.io">MCP</a> server handler for use
+        with the @ref httpserverintro "HttpServer" module
+
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for <a href="https://memcached.org/">Memcached</a> caching servers
 
@@ -2355,6 +2397,9 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
 
+    - @ref ndjsondataproviderintro "NdjsonDataProvider" module
+      - new module providing NDJSON (Newline Delimited JSON) support and data provider integration
+
     - @ref ollamadataproviderintro "OllamaDataProvider" module
       - new module providing a data provider API for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
 
@@ -2366,6 +2411,16 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref onedriverestclientintro "OneDriveRestClient" module
       - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
+
+    - @ref onerecordclientintro "OneRecordClient" module
+      - new module providing an
+        <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> client for air
+        cargo data sharing via REST/JSON-LD
+
+    - @ref onerecordserverhandlerintro "OneRecordServerHandler" module
+      - new module providing an
+        <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> server handler
+        for use with the @ref httpserverintro "HttpServer" module
 
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
