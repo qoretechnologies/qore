@@ -9105,7 +9105,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             query_kind = QoreIRAggregateProjectionQueryKind::
                 HashKeyDynamicValue;
         } else if (get_consumer
-                && consumer->opcode == QoreIROpcode::CallDirect) {
+                && (consumer->opcode == QoreIROpcode::CallDirect
+                    || consumer->opcode == QoreIROpcode::CallStaticDirect
+                    || (consumer->opcode
+                            == QoreIROpcode::CallMethodDirect
+                        && qore_ir_is_non_overridable_method_call(
+                            *consumer)))) {
             bool consumer_has_ref_args = true;
             const AbstractQoreFunctionVariant* consumer_callee =
                 qore_ir_get_resolved_effect_callee(

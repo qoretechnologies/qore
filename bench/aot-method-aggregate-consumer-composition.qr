@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+
+%modern
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return ("left": left, "middle": middle, "right": right);
+}
+
+final class RowConsumer {
+    static int consumeStatic(hash<string, int> row) {
+        return row.middle;
+    }
+
+    int consumeInstance(hash<string, int> row) {
+        return row.middle;
+    }
+
+    int run(int rounds) {
+        int checksum;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += RowConsumer::consumeStatic(
+                makeRow(i, i + 1, i + 2));
+            checksum += self.consumeInstance(
+                makeRow(i, i + 1, i + 2));
+        }
+        return checksum;
+    }
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    RowConsumer consumer();
+    printf("%d\n", consumer.run(rounds));
+    return 0;
+}
+
+main();

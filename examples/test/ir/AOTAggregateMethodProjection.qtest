@@ -14,6 +14,10 @@ if (!is_file(qcc_bin)) {
 
 string code = "%modern
 
+hash<string, int> sub makeConsumerHash(int left, int right) {
+    return (\"left\": left, \"right\": right);
+}
+
 final class ExactProjection {
     static list<int> makeStatic(int left, int middle, int right) {
         return (left, middle, right);
@@ -29,6 +33,14 @@ final class ExactProjection {
 
     static list<string> makeStrings(string left, string middle, string right) {
         return (left, middle, right);
+    }
+
+    static int consumeStatic(hash<string, int> row) {
+        return row.right;
+    }
+
+    int consumeInstance(hash<string, int> row) {
+        return row.right;
     }
 
     static int staticProjection() {
@@ -103,6 +115,21 @@ final class ExactProjection {
             (effects = 3))[1];
         return value * 10 + effects;
     }
+
+    static int staticConsumerProjection() {
+        return consumeStatic(makeConsumerHash(100, 101));
+    }
+
+    int instanceConsumerProjection() {
+        return self.consumeInstance(makeConsumerHash(102, 103));
+    }
+
+    int consumerSideEffectProjection() {
+        int effects = 0;
+        int value = self.consumeInstance(makeConsumerHash(
+            (effects = 6), (effects = 7)));
+        return value * 10 + effects;
+    }
 }
 
 class OverridableProjection {
@@ -117,11 +144,23 @@ class OverridableProjection {
     hash<string, int> makeHash(int left, int right) {
         return (\"left\": left, \"right\": right);
     }
+
+    int consumeHash(hash<string, int> row) {
+        return row.left;
+    }
+
+    int consumerProjection() {
+        return consumeHash(makeConsumerHash(1, 2));
+    }
 }
 
 class OverriddenProjection inherits OverridableProjection {
     hash<string, int> makeHash(int left, int right) {
         return (\"left\": right, \"right\": left);
+    }
+
+    int consumeHash(hash<string, int> row) {
+        return row.right;
     }
 }
 
@@ -138,6 +177,17 @@ int sub objectSideEffectProjection(ExactProjection source) {
     int effects = 0;
     int value = source.makeHash((effects = 4), (effects = 5)).left;
     return value * 10 + effects;
+}
+
+int sub objectConsumerProjection(ExactProjection source) {
+    return source.consumeInstance(makeConsumerHash(104, 105));
+}
+
+int sub deletedObjectConsumerProjection() {
+    ExactProjection source();
+    ExactProjection alias = source;
+    delete source;
+    return alias.consumeInstance(makeConsumerHash(106, 107));
 }
 
 int sub maybeObjectProjection(*ExactProjection source) {
@@ -159,12 +209,18 @@ ExactProjection exact();
 OverridableProjection overridable();
 OverridableProjection overridden = new OverriddenProjection();
 string deleted_error;
+string deleted_consumer_error;
 try {
     deletedObjectProjection();
 } catch (hash<ExceptionInfo> ex) {
     deleted_error = ex.err;
 }
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s\\n\",
+try {
+    deletedObjectConsumerProjection();
+} catch (hash<ExceptionInfo> ex) {
+    deleted_consumer_error = ex.err;
+}
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s\\n\",
     ExactProjection::staticProjection(),
     exact.instanceProjection(), ExactProjection::staticMultiProjection(),
     exact.instanceMultiProjection(), ExactProjection::staticCfgProjection(True),
@@ -174,7 +230,11 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s\\n\",
     ExactProjection::boxedPhiProjection(True), objectDirectProjection(exact),
     objectMultiProjection(exact), objectSideEffectProjection(exact),
     maybeObjectProjection(exact), overriddenObjectProjection(overridden),
-    deleted_error);
+    deleted_error, ExactProjection::staticConsumerProjection(),
+    exact.instanceConsumerProjection(),
+    exact.consumerSideEffectProjection(),
+    objectConsumerProjection(exact),
+    overridden.consumerProjection(), deleted_consumer_error);
 ";
 
 string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
@@ -186,7 +246,9 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "5:8:15:24:33:42:41:51:81:23:11:right:91:185:45:94:2:OBJECT-ALREADY-DELETED\n";
+string expected =
+    "5:8:15:24:33:42:41:51:81:23:11:right:91:185:45:94:2:"
+        + "OBJECT-ALREADY-DELETED:101:103:77:105:2:OBJECT-ALREADY-DELETED\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -212,7 +274,9 @@ foreach string function in (("staticProjection", "instanceProjection",
         "staticCfgProjection", "instanceCfgProjection",
         "staticPhiProjection", "instancePhiProjection",
         "sideEffectProjection", "objectDirectProjection",
-        "objectSideEffectProjection", "deletedObjectProjection")) {
+        "objectSideEffectProjection", "deletedObjectProjection",
+        "staticConsumerProjection", "instanceConsumerProjection",
+        "consumerSideEffectProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
             function))) {
@@ -222,7 +286,7 @@ foreach string function in (("staticProjection", "instanceProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|boxedPhiProjection|objectMultiProjection|maybeObjectProjection|overriddenObjectProjection)[^\n]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::(projection|consumerProjection)|reassignedProjection|boxedPhiProjection|objectMultiProjection|maybeObjectProjection|overriddenObjectProjection|objectConsumerProjection|deletedObjectConsumerProjection)[^\n]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled method aggregate projection:\n%s",
         enabled_compile + disabled_compile);

@@ -17869,32 +17869,47 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         int64_t& index, std::string& key) {
                     if (std::getenv(
                             "QORE_DISABLE_AOT_AGGREGATE_CONSUMER_COMPOSITION")
-                            || !callee || !call
-                            || call->opcode != QoreIROpcode::CallDirect) {
+                            || !callee || !call) {
                         return false;
                     }
-                    const auto* direct =
-                        static_cast<const QoreIRCallDirectInstruction*>(call);
+                    const QoreValue* expr = nullptr;
+                    if (call->opcode == QoreIROpcode::CallDirect) {
+                        expr = &static_cast<
+                            const QoreIRCallDirectInstruction*>(
+                                call)->expr;
+                    } else if (call->opcode
+                            == QoreIROpcode::CallStaticDirect) {
+                        expr = &static_cast<
+                            const QoreIRCallStaticDirectInstruction*>(
+                                call)->expr;
+                    } else if (call->opcode
+                            == QoreIROpcode::CallMethodDirect) {
+                        expr = &static_cast<
+                            const QoreIRCallMethodDirectInstruction*>(
+                                call)->expr;
+                    } else {
+                        return false;
+                    }
+                    size_t nargs = call->operands.size();
                     auto found = aot_batch_callee_map->find(callee);
                     if (found == aot_batch_callee_map->end()
                             || !found->second.approach_b_eligible
                             || !found->second.never_returns_nothing
-                            || call->operands.size()
-                                != found->second.num_params
+                            || nargs != found->second.num_params
                             || found->second.param_kinds.size()
-                                != call->operands.size()
+                                != nargs
                             || found->second.param_rejects_nothing.size()
-                                != call->operands.size()
+                                != nargs
                             || found->second.collection_op.base_param < 0
                             || static_cast<size_t>(
                                 found->second.collection_op.base_param)
-                                >= call->operands.size()
+                                >= nargs
                             || !qore_aot_fast_entry_operands_need_no_binding(
-                                callee, direct->expr, func, call->operands, 0,
-                                static_cast<int>(call->operands.size()))) {
+                                callee, *expr, func, call->operands, 0,
+                                static_cast<int>(nargs))) {
                         return false;
                     }
-                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                    for (size_t i = 0; i < nargs; ++i) {
                         if (i && !(i % 100)
                                 && qore_check_cancel(nullptr,
                                     "AOT aggregate consumer validation")) {
@@ -17921,16 +17936,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return false;
                         }
                     }
-                    base_operand = static_cast<size_t>(
+                    size_t base_param = static_cast<size_t>(
                         found->second.collection_op.base_param);
-                    if (base_operand
+                    if (base_param
                                 >= found->second.param_noescape.size()
-                            || !found->second.param_noescape[base_operand]
-                            || base_operand
+                            || !found->second.param_noescape[base_param]
+                            || base_param
                                 >= found->second.param_may_modify.size()
-                            || found->second.param_may_modify[base_operand]) {
+                            || found->second.param_may_modify[base_param]) {
                         return false;
                     }
+                    base_operand = base_param;
                     index = 0;
                     key.clear();
                     AOTCollectionOpKind collection_kind =
