@@ -32,6 +32,7 @@
 #ifndef _QORE_QOREAOT_H
 #define _QORE_QOREAOT_H
 
+#include <array>
 #include <cassert>
 #include <algorithm>
 #include <atomic>
@@ -128,6 +129,40 @@ struct QoreAOTObjectMemberDescriptor {
     size_t key_hash = 0;
 };
 
+//! One immutable entry in a bounded AOT object-method dispatch cache.
+struct QoreAOTMethodDispatchCacheEntry {
+    static constexpr size_t MAX_ARGS = 8;
+
+    const QoreClass* receiver_class = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const qore_class_private* class_ctx = nullptr;
+    const QoreProgram* caller_program = nullptr;
+    const QoreProgram* object_program = nullptr;
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreParseOptions parse_options;
+    uint64_t dispatch_epoch = 0;
+    std::array<const QoreTypeInfo*, MAX_ARGS> arg_types{};
+    std::array<uint8_t, MAX_ARGS> arg_states{};
+    uint8_t nargs = 0;
+};
+
+//! Bounded polymorphic cache owned by one AOT call target.
+struct QoreAOTMethodDispatchCache {
+    static constexpr size_t SIZE = 4;
+    std::atomic<const QoreAOTMethodDispatchCacheEntry*> entries[SIZE];
+    std::mutex write_mutex;
+    std::vector<std::unique_ptr<const QoreAOTMethodDispatchCacheEntry>>
+        owned_entries;
+
+    QoreAOTMethodDispatchCache() {
+        for (auto& entry : entries) {
+            entry.store(nullptr, std::memory_order_relaxed);
+        }
+    }
+
+};
+
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
@@ -146,6 +181,8 @@ struct QoreAOTCallTarget {
     //! Lazily resolved immutable metadata for object member summary lowering.
     std::atomic<const QoreAOTObjectMemberDescriptor*> object_member_descriptor{
         nullptr};
+    //! Lazily populated bounded cache for polymorphic object method calls.
+    std::atomic<QoreAOTMethodDispatchCache*> method_dispatch_cache{nullptr};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
@@ -155,6 +192,7 @@ struct QoreAOTCallTarget {
 
     ~QoreAOTCallTarget() {
         delete object_member_descriptor.load(std::memory_order_relaxed);
+        delete method_dispatch_cache.load(std::memory_order_relaxed);
     }
 };
 

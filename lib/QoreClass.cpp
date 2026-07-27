@@ -40,6 +40,7 @@
 #include "qore/intern/QoreLibIntern.h"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <set>
 #include <vector>
@@ -50,6 +51,16 @@
 
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
+
+static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
+
+uint64_t qore_get_method_dispatch_epoch() {
+    return qore_method_dispatch_epoch.load(std::memory_order_acquire);
+}
+
+static void qore_bump_method_dispatch_epoch() {
+    qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
+}
 
 AbstractQoreClassUserData::~AbstractQoreClassUserData() {
 }
@@ -1794,6 +1805,7 @@ void qore_class_private::addBuiltinMethod(const char* mname, MethodVariantBase* 
     } else {
         ahm.overrideAbstractVariant(mname, variant);
     }
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant) {
@@ -1818,6 +1830,7 @@ void qore_class_private::addBuiltinStaticMethod(const char* mname, MethodVariant
     variant->setMethod(nm);
 
     nm->priv->addBuiltinVariant(variant);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBuiltinConstructor(BuiltinConstructorVariantBase* variant) {
@@ -4654,6 +4667,7 @@ int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, b
     } else if (!n_static && !con && !dst)
         ahm.parseOverrideAbstractVariant(mname, f);
 
+    qore_bump_method_dispatch_epoch();
     return 0;
 }
 
@@ -6458,7 +6472,8 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
 // at run time
 QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
-        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
     //QORE_TRACE("NormalMethodFunction::evalMethodTmpArgs()");
     const char* cname = getClassName();
     const char* mname = getName();
@@ -6470,6 +6485,9 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     if (*xsink)
         return QoreValue();
 
+    if (resolved_variant) {
+        *resolved_variant = variant;
+    }
     const MethodVariant* mv = METHV_const(variant);
     if (mv->isAbstract()) {
         xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
@@ -6525,7 +6543,8 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
 QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
     const char* mname = getName();
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
         CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc), receiver_type_info,
@@ -6533,6 +6552,9 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     if (*xsink)
         return QoreValue();
 
+    if (resolved_variant) {
+        *resolved_variant = variant;
+    }
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 

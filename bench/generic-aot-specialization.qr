@@ -5,6 +5,7 @@
 %strict-args
 %require-types
 %enable-all-warnings
+%disable-warning non-existent-method-call
 
 %exec-class BenchGenericAotSpecialization
 
@@ -177,6 +178,64 @@ int sub benchGenericHashdeclAccessOnly(int inner) {
     return checksum;
 }
 
+class BenchDynamicDispatchA {
+    int apply(int value) {
+        return value + 1;
+    }
+}
+
+class BenchDynamicDispatchB {
+    int apply(int value) {
+        return value + 2;
+    }
+}
+
+class BenchDynamicOverload {
+    int apply(int value) {
+        return value + 3;
+    }
+
+    int apply(string value) {
+        return value.size() + 5;
+    }
+}
+
+int sub benchDynamicDispatchCall(auto receiver, int value) {
+    return receiver.apply(value);
+}
+
+int sub benchDynamicOverloadCall(auto receiver, auto value) {
+    return receiver.apply(value);
+}
+
+int sub benchDynamicMonomorphicDispatch(int inner) {
+    BenchDynamicDispatchA receiver();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicDispatchCall(receiver, i);
+    }
+    return checksum;
+}
+
+int sub benchDynamicBimorphicDispatch(int inner) {
+    BenchDynamicDispatchA left();
+    BenchDynamicDispatchB right();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicDispatchCall(i % 2 ? left : right, i);
+    }
+    return checksum;
+}
+
+int sub benchDynamicOverloadDispatch(int inner) {
+    BenchDynamicOverload receiver();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicOverloadCall(receiver, i % 2 ? i : "1234567");
+    }
+    return checksum;
+}
+
 hash<BenchTiming> sub measureKernel(string mode, string kernel, int inner, int samples, int warmup, code<int()> fn) {
     int checksum = 0;
     for (int i = 0; i < warmup; i++) {
@@ -291,7 +350,10 @@ class BenchGenericAotSpecialization {
                 && kernel != "plain_hash_return_projection"
                 && kernel != "plain_hash3_mixed_construct"
                 && kernel != "hashdecl_construct_only"
-                && kernel != "hashdecl_access_only") {
+                && kernel != "hashdecl_access_only"
+                && kernel != "dynamic_monomorphic_dispatch"
+                && kernel != "dynamic_bimorphic_dispatch"
+                && kernel != "dynamic_overload_dispatch") {
             stderr.printf("unknown kernel: %s\n", kernel);
             usage();
             exit(2);
@@ -348,6 +410,18 @@ class BenchGenericAotSpecialization {
         if (!kernel || kernel == "hashdecl_access_only") {
             printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
                 int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+        }
+        if (!kernel || kernel == "dynamic_monomorphic_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_monomorphic_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicMonomorphicDispatch(inner); }));
+        }
+        if (!kernel || kernel == "dynamic_bimorphic_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_bimorphic_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicBimorphicDispatch(inner); }));
+        }
+        if (!kernel || kernel == "dynamic_overload_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_overload_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicOverloadDispatch(inner); }));
         }
     }
 }

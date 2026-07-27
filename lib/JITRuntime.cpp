@@ -16013,13 +16013,319 @@ static const QoreTypeParamInstantiation* qore_rt_get_dot_eval_explicit_type_inst
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
 }
 
+static bool qore_rt_get_aot_dispatch_arg_key(QoreValue value,
+        const QoreTypeInfo*& type_info, uint8_t& state) {
+    state = 0;
+    switch (value.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+        case NT_RTCONSTREF:
+        case NT_PLUGIN_VALUE:
+            return false;
+        case NT_OBJECT:
+            if (!value.get<const QoreObject>()->isValid()) {
+                return false;
+            }
+            break;
+        case NT_HASH:
+            state = value.get<const QoreHashNode>()->empty() ? 1 : 0;
+            break;
+        case NT_LIST:
+            state = value.get<const QoreListNode>()->empty() ? 1 : 0;
+            break;
+        default:
+            break;
+    }
+    type_info = value.getTypeInfo();
+    return type_info;
+}
+
+static bool qore_rt_build_aot_dispatch_key(QoreObject* object,
+        uint64_t* args, int nargs,
+        std::array<const QoreTypeInfo*,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
+        std::array<uint8_t,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_states,
+        const QoreTypeInfo*& receiver_type_info) {
+    if (!object || nargs < 0
+            || nargs > static_cast<int>(
+                QoreAOTMethodDispatchCacheEntry::MAX_ARGS)
+            || (nargs && !args)) {
+        return false;
+    }
+    receiver_type_info = qore_get_object_receiver_type_info(object);
+    for (int i = 0; i < nargs; ++i) {
+        const QoreTypeInfo* type_info = nullptr;
+        uint8_t state = 0;
+        if (!qore_rt_get_aot_dispatch_arg_key(fromBits(args[i]),
+                type_info, state)) {
+            return false;
+        }
+        arg_types[static_cast<size_t>(i)] = type_info;
+        arg_states[static_cast<size_t>(i)] = state;
+    }
+    return true;
+}
+
+static QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
+        QoreAOTCallTarget& target) {
+    static const bool enabled =
+        !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE");
+    if (!enabled) {
+        return nullptr;
+    }
+    QoreAOTMethodDispatchCache* cache =
+        target.method_dispatch_cache.load(std::memory_order_acquire);
+    if (cache) {
+        return cache;
+    }
+    std::unique_ptr<QoreAOTMethodDispatchCache> resolved(
+        new QoreAOTMethodDispatchCache);
+    QoreAOTMethodDispatchCache* expected = nullptr;
+    if (target.method_dispatch_cache.compare_exchange_strong(expected,
+            resolved.get(), std::memory_order_release,
+            std::memory_order_acquire)) {
+        return resolved.release();
+    }
+    return expected;
+}
+
+static const QoreAOTMethodDispatchCacheEntry*
+qore_rt_find_aot_method_dispatch_cache_entry(
+        QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
+        const QoreTypeInfo* receiver_type_info,
+        const qore_class_private* class_ctx, const QoreProgram* caller_program,
+        const QoreProgram* object_program,
+        const QoreParseOptions& parse_options, uint64_t dispatch_epoch,
+        const std::array<const QoreTypeInfo*,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
+        const std::array<uint8_t,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_states,
+        int nargs) {
+    if (!cache) {
+        return nullptr;
+    }
+    for (auto& slot : cache->entries) {
+        const QoreAOTMethodDispatchCacheEntry* entry =
+            slot.load(std::memory_order_acquire);
+        if (entry && entry->receiver_class == receiver_class
+                && entry->receiver_type_info == receiver_type_info
+                && entry->class_ctx == class_ctx
+                && entry->caller_program == caller_program
+                && entry->object_program == object_program
+                && entry->parse_options == parse_options
+                && entry->dispatch_epoch == dispatch_epoch
+                && entry->nargs == nargs) {
+            bool match = true;
+            for (int i = 0; i < nargs; ++i) {
+                size_t index = static_cast<size_t>(i);
+                if (entry->arg_types[index] != arg_types[index]
+                        || entry->arg_states[index] != arg_states[index]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return entry;
+            }
+        }
+    }
+    return nullptr;
+}
+
+static void qore_rt_add_aot_method_dispatch_cache_entry(
+        QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
+        const QoreTypeInfo* receiver_type_info,
+        const qore_class_private* class_ctx, const QoreProgram* caller_program,
+        const QoreProgram* object_program,
+        const QoreParseOptions& parse_options, uint64_t dispatch_epoch,
+        const std::array<const QoreTypeInfo*,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
+        const std::array<uint8_t,
+            QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_states,
+        int nargs, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant) {
+    if (!cache || !receiver_class || !method || !variant
+            || dispatch_epoch != qore_get_method_dispatch_epoch()) {
+        return;
+    }
+    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
+            receiver_type_info, class_ctx, caller_program, object_program,
+            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
+        return;
+    }
+    std::unique_ptr<QoreAOTMethodDispatchCacheEntry> entry(
+        new QoreAOTMethodDispatchCacheEntry);
+    entry->receiver_class = receiver_class;
+    entry->receiver_type_info = receiver_type_info;
+    entry->class_ctx = class_ctx;
+    entry->caller_program = caller_program;
+    entry->object_program = object_program;
+    entry->method = method;
+    entry->variant = variant;
+    entry->parse_options = parse_options;
+    entry->dispatch_epoch = dispatch_epoch;
+    entry->arg_types = arg_types;
+    entry->arg_states = arg_states;
+    entry->nargs = static_cast<uint8_t>(nargs);
+    std::lock_guard<std::mutex> lock(cache->write_mutex);
+    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
+            receiver_type_info, class_ctx, caller_program, object_program,
+            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
+        return;
+    }
+    for (auto& slot : cache->entries) {
+        const QoreAOTMethodDispatchCacheEntry* current =
+            slot.load(std::memory_order_relaxed);
+        if (!current || current->dispatch_epoch != dispatch_epoch) {
+            const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
+            cache->owned_entries.push_back(std::move(entry));
+            slot.store(stored, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+static uint64_t qore_rt_dispatch_aot_object_method_by_name(
+        QoreAOTCallTarget& target, QoreObject* object,
+        const char* method_name, uint64_t* args, uint64_t** arg_cleanups,
+        int nargs, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    assert(object && method_name);
+
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(
+            *object->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
+
+    std::array<const QoreTypeInfo*,
+        QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_types{};
+    std::array<uint8_t,
+        QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_states{};
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const QoreProgram* caller_program = nullptr;
+    const QoreProgram* object_program = nullptr;
+    QoreParseOptions parse_options;
+    uint64_t dispatch_epoch = 0;
+    QoreAOTMethodDispatchCache* cache = nullptr;
+    bool cacheable = false;
+    if (!explicit_type_param_instantiation) {
+        cache = qore_rt_get_aot_method_dispatch_cache(target);
+        if (cache) {
+            caller_program = getProgram();
+            object_program = object->getProgram();
+            parse_options = runtime_get_parse_options();
+            cacheable = qore_rt_build_aot_dispatch_key(object, args, nargs,
+                arg_types, arg_states, receiver_type_info);
+        }
+        if (cacheable) {
+            dispatch_epoch = qore_get_method_dispatch_epoch();
+            const QoreAOTMethodDispatchCacheEntry* entry =
+                qore_rt_find_aot_method_dispatch_cache_entry(cache,
+                    object->getClass(), receiver_type_info, class_ctx,
+                    caller_program, object_program, parse_options,
+                    dispatch_epoch, arg_types, arg_states, nargs);
+            if (entry) {
+                uint64_t result;
+                static const bool use_fast_entry = !std::getenv(
+                    "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+                if (use_fast_entry && !entry->method->isStatic()
+                        && try_dispatch_method_fast(object, entry->method,
+                            object->getClass(), entry->variant, args,
+                            arg_cleanups, nargs, xsink, result)) {
+                    return result;
+                }
+                ReferenceHolder<QoreListNode> arg_list(
+                    buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+                if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink)
+                        < 0) {
+                    return toBits(QoreValue());
+                }
+                return toBits(qore_method_private::evalTmpArgs(
+                    *entry->method, xsink, rc_get_current_ref(), object,
+                    *arg_list, class_ctx, entry->variant, receiver_type_info,
+                    explicit_type_param_instantiation));
+            }
+        }
+    }
+
+    ReferenceHolder<QoreListNode> arg_list(
+        buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (*xsink
+            || clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        return toBits(QoreValue());
+    }
+
+    const qore_class_private* object_class =
+        qore_class_private::get(*object->getClass());
+    // copy() is not an ordinary method call: evalMethod() creates the
+    // destination object before invoking the copy implementation.
+    if (!strcmp(method_name, "copy")) {
+        return toBits(object_class->evalMethod(object, method_name, *arg_list,
+            class_ctx, rc_get_current_ref(), xsink,
+            explicit_type_param_instantiation));
+    }
+    if (!cacheable) {
+        return toBits(object_class->evalMethod(object, method_name, *arg_list,
+            class_ctx, rc_get_current_ref(), xsink,
+            explicit_type_param_instantiation));
+    }
+    const QoreMethod* method = object_class->getMethodForEval(method_name,
+        object->getProgram(), class_ctx, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    if (!method) {
+        return toBits(object_class->evalMethod(object, method_name, *arg_list,
+            class_ctx, rc_get_current_ref(), xsink,
+            explicit_type_param_instantiation));
+    }
+
+    const AbstractQoreFunctionVariant* resolved_variant = nullptr;
+    QoreValue result = qore_method_private::evalTmpArgs(*method, xsink,
+        rc_get_current_ref(), object, *arg_list, class_ctx, nullptr,
+        receiver_type_info, explicit_type_param_instantiation,
+        &resolved_variant);
+    if (cacheable && resolved_variant && !*xsink) {
+        qore_rt_add_aot_method_dispatch_cache_entry(cache,
+            object->getClass(), receiver_type_info, class_ctx, caller_program,
+            object_program, parse_options, dispatch_epoch, arg_types,
+            arg_states, nargs, method, resolved_variant);
+    }
+    return toBits(result);
+}
+
+static bool qore_rt_aot_object_method_needs_runtime_dispatch(
+        const QoreAOTCallTarget& target, const QoreObject* object) {
+    return !target.method || target.is_pseudo
+        || (object->getClass() != target.qc
+            && object->getClass() != target.method->getClass());
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
 
     // Use pre-resolved method target to avoid per-call dynamic_cast
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     const QoreTypeParamInstantiation* explicit_inst = qore_rt_get_dot_eval_explicit_type_instantiation(ctx, slot);
+    QoreValue base = fromBits(base_bits);
+    if (base.getType() == NT_OBJECT) {
+        QoreObject* object = base.get<QoreObject>();
+        if (qore_rt_aot_object_method_needs_runtime_dispatch(target,
+                object)) {
+            const char* method_name = target.method_name
+                ? target.method_name
+                : target.method ? target.method->getName() : nullptr;
+            if (method_name) {
+                return qore_rt_dispatch_aot_object_method_by_name(target,
+                    object, method_name, args, nullptr, nargs, xsink,
+                    explicit_inst);
+            }
+        }
+    }
     if (target.method) {
         return target.is_pseudo
             ? qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, target.method, target.qc,
@@ -16029,7 +16335,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext*
     }
     // Pre-resolved with name but no method pointer — use name-based dispatch
     if (target.method_name) {
-        QoreValue base = fromBits(base_bits);
         return dot_eval_fallback_with_args(base, target.method_name, args, nullptr, nargs, xsink, explicit_inst);
     }
 
@@ -16041,13 +16346,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits, uint64_t* args,
         int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     if (!target.method || target.is_pseudo || base.getType() != NT_OBJECT) {
         return qore_rt_dot_eval_method_direct_aot(ctx, slot, base_bits, args, nargs, xsink);
     }
 
     QoreObject* object = base.get<QoreObject>();
+    if (qore_rt_aot_object_method_needs_runtime_dispatch(target, object)) {
+        const char* method_name = target.method_name
+            ? target.method_name : target.method->getName();
+        return qore_rt_dispatch_aot_object_method_by_name(target, object,
+            method_name, args, nullptr, nargs, xsink, nullptr);
+    }
     uint64_t result;
     if (try_dispatch_method_fast(object, target.method, target.qc,
             target.variant, args, nullptr, nargs, xsink, result)) {
@@ -16494,8 +16805,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(Qo
         int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
 
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     const QoreTypeParamInstantiation* explicit_inst = qore_rt_get_dot_eval_explicit_type_instantiation(ctx, slot);
+    QoreValue base = fromBits(base_bits);
+    if (base.getType() == NT_OBJECT) {
+        QoreObject* object = base.get<QoreObject>();
+        if (qore_rt_aot_object_method_needs_runtime_dispatch(target,
+                object)) {
+            const char* method_name = target.method_name
+                ? target.method_name
+                : target.method ? target.method->getName() : nullptr;
+            if (method_name) {
+                return qore_rt_dispatch_aot_object_method_by_name(target,
+                    object, method_name, args, arg_cleanups, nargs, xsink,
+                    explicit_inst);
+            }
+        }
+    }
     if (target.method) {
         return target.is_pseudo
             ? qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, target.method,
@@ -16504,7 +16830,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(Qo
                 target.qc, target.variant, args, arg_cleanups, nargs, xsink, explicit_inst);
     }
     if (target.method_name) {
-        QoreValue base = fromBits(base_bits);
         return dot_eval_fallback_with_args(base, target.method_name, args,
             arg_cleanups, nargs, xsink, explicit_inst);
     }
@@ -16516,45 +16841,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(Qo
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-
-    // Use pre-resolved method target to avoid per-call dynamic_cast
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
-    const QoreTypeParamInstantiation* explicit_inst = qore_rt_get_dot_eval_explicit_type_instantiation(ctx, slot);
-    if (target.method) {
-        return qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, target.method, target.qc,
-            target.variant, args, nullptr, nargs, xsink, explicit_inst);
-    }
-    if (target.method_name) {
-        QoreValue base = fromBits(base_bits);
-        return dot_eval_fallback_with_args(base, target.method_name, args, nullptr, nargs, xsink, explicit_inst);
-    }
-
-    return qore_rt_raise_aot_ast_fallback(ctx, slot, xsink,
-        "qore_rt_dot_eval_pseudo_method_direct_aot", "missing pre-resolved pseudo dot-eval target");
+    return qore_rt_dot_eval_method_direct_aot(ctx, slot, base_bits, args,
+        nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
-    const QoreTypeParamInstantiation* explicit_inst = qore_rt_get_dot_eval_explicit_type_instantiation(ctx, slot);
-    if (target.method) {
-        return qore_rt_dot_eval_pseudo_method_direct_impl(base_bits,
-            target.method, target.qc, target.variant, args, arg_cleanups,
-            nargs, xsink, explicit_inst);
-    }
-    if (target.method_name) {
-        QoreValue base = fromBits(base_bits);
-        return dot_eval_fallback_with_args(base, target.method_name, args,
-            arg_cleanups, nargs, xsink, explicit_inst);
-    }
-
-    return qore_rt_raise_aot_ast_fallback(ctx, slot, xsink,
-        "qore_rt_dot_eval_pseudo_method_direct_aot_consume_args",
-        "missing pre-resolved pseudo dot-eval target");
+    return qore_rt_dot_eval_method_direct_aot_consume_args(ctx, slot,
+        base_bits, args, arg_cleanups, nargs, xsink);
 }
 
 // --- Direct static method call (pre-evaluated args) ---
