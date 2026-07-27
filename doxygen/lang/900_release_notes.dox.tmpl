@@ -1812,6 +1812,13 @@ foreach string module_name in (registry.getProcessModules()) {
         the identity is available on the async path as well
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
+    - @ref salesforcerestdataproviderintro "SalesforceRestDataProvider" module
+      - declared \c SalesforcePubSubDataProvider as an optional @ref user_module_children "child module", so that
+        the Salesforce <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a>
+        event source in <a href="https://github.com/qoretechnologies/module-grpc">module-grpc</a> attaches itself as
+        the \c "pubsub" child when installed, without the consumer having to load it explicitly
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+
     - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
       - added @ref Schema::DataSchema "DataSchema", @ref Schema::DataSchemaLoader "DataSchemaLoader", and
         @ref Schema::MigrationExecutor "MigrationExecutor" classes for data-driven schema definitions and

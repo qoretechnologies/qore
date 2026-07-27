@@ -33,8 +33,15 @@
 %requires(reexport) DataProvider
 %requires(reexport) SalesforceRestClient
 
+# The Salesforce Pub/Sub API event source lives in module-grpc, because it is gRPC + Avro and this
+# module has no business depending on either.  It registers itself back into this module as the
+# "pubsub" child, which it can only do once this module has been published, so it is declared as a
+# child module rather than loaded with %requires: absent it changes nothing, and present but broken
+# it raises its own error instead of silently disappearing.
+%try-child-module SalesforcePubSubDataProvider
+
 module SalesforceRestDataProvider {
-    version = "2.0";
+    version = "2.1";
     desc = "user module providing a data provider API for Salesforce instances through the REST API";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -218,7 +225,29 @@ module SalesforceRestDataProvider {
     - @ref soql_soql_cop_funcs
     - @ref soql_op_funcs
 
+    @section salesforcerestdataprovider_events Salesforce Events
+
+    Salesforce platform events, Change Data Capture events and custom channels are delivered through the
+    <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a>, which is gRPC with
+    Apache Avro payloads.  That transport belongs in
+    <a href="https://github.com/qoretechnologies/module-grpc">module-grpc</a>, so this module declares
+    \c SalesforcePubSubDataProvider as a @ref user_module_children "child module" with
+    @ref try-child-module "%try-child-module" instead of implementing it.
+
+    When that module is installed, it attaches itself as the \c "pubsub" child of this provider, with one child
+    event provider per subscribable channel in the org, and registers its event action against this module's
+    application.  When it is not installed, nothing changes here.
+
+    Note that the event providers appear only under a
+    <a href="../../SalesforceRestClient/html/index.html#salesforcerestclientintro">SalesforceRestConnection</a>,
+    because dynamic children are exposed only when this provider was constructed from a connection.
+
     @section salesforcerestdataprovider_relnotes Release Notes
+
+    @subsection salesforcerestdataprovider_v2_1 SalesforceRestDataProvider v2.1
+    - declared \c SalesforcePubSubDataProvider as an optional child module, so that an installed Salesforce
+      Pub/Sub API event source attaches itself without the consumer having to load it explicitly
+      (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API
