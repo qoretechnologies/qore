@@ -230,6 +230,36 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
         SSL_library_init();
         ERR_load_crypto_strings();
 
+#ifdef HAVE_OPENSSL_INIT_CRYPTO
+        // Process the OpenSSL configuration file here, on the main thread, before any user code can
+        // create a TLS context.
+        //
+        // SSL_CTX_new() does this lazily otherwise, on whichever thread happens to create the first
+        // context, and a configuration file that this OpenSSL build cannot parse then makes that
+        // call return nullptr with an empty error queue on that thread: a TLS connection that fails
+        // for a reason the process cannot report.  (A file setting "config_diagnostics = 1" turns
+        // any unknown option in it into a hard error; the usual way to get one is a distribution
+        // config read by a differently patched OpenSSL build.)  Loading it here reports the reason
+        // once, at startup, and leaves the library able to create contexts on any thread.
+        // note that the call reports success even when the configuration file could not be
+        // processed, leaving the reason on the error queue, so both have to be checked
+        if (!OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG | OPENSSL_INIT_LOAD_SSL_STRINGS
+                | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr) || ERR_peek_error()) {
+            // Drain the queue as well as report it: entries left here belong to no operation, and
+            // the next OpenSSL call that inspects the queue would otherwise report them as its own
+            // failure.
+            fprintf(stderr, "warning: the OpenSSL configuration file could not be processed; the system TLS "
+                "configuration has not been applied:\n");
+            unsigned long e;
+            while ((e = ERR_get_error())) {
+                char buf[256];
+                ERR_error_string_n(e, buf, sizeof(buf));
+                fprintf(stderr, "warning:   %s\n", buf);
+            }
+            fflush(stderr);
+        }
+#endif
+
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
         // create locks
         for (int i = 0; i < CRYPTO_num_locks(); ++i)

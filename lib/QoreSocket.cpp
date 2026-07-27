@@ -5573,20 +5573,20 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     assert(!ctx);
     ctx = SSL_CTX_new(meth);
     if (!ctx) {
-        sslError(xsink, mname, "SSL_CTX_new");
+        sslError(xsink, mname, "SSL_CTX_new", true, SslCall::Setup);
         assert(*xsink);
         return -1;
     }
     if (cert) {
         if (!SSL_CTX_use_certificate(ctx, cert->getData())) {
-            sslError(xsink, mname, "SSL_CTX_use_certificate");
+            sslError(xsink, mname, "SSL_CTX_use_certificate", true, SslCall::Setup);
             assert(*xsink);
             return -1;
         }
         if (!cert->priv->chain.empty()) {
             for (auto& i : cert->priv->chain) {
                 if (!SSL_CTX_add_extra_chain_cert(ctx, X509_dup(i))) {
-                    sslError(xsink, mname, "SSL_CTX_add_extra_chain_cert");
+                    sslError(xsink, mname, "SSL_CTX_add_extra_chain_cert", true, SslCall::Setup);
                     assert(*xsink);
                     return -1;
                 }
@@ -5595,7 +5595,7 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     }
     if (pkey) {
         if (!SSL_CTX_use_PrivateKey(ctx, pkey->getData())) {
-            sslError(xsink, mname, "SSL_CTX_use_PrivateKey");
+            sslError(xsink, mname, "SSL_CTX_use_PrivateKey", true, SslCall::Setup);
             assert(*xsink);
             return -1;
         }
@@ -5603,7 +5603,7 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
 
     ssl = SSL_new(ctx);
     if (!ssl) {
-        sslError(xsink, mname, "SSL_new");
+        sslError(xsink, mname, "SSL_new", true, SslCall::Setup);
         assert(*xsink);
         return -1;
     }
@@ -5638,13 +5638,13 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
 #if defined(HAVE_SSL_SET_MAX_PROTO_VERSION) && defined(TLS1_3_VERSION)
     if (qore_library_options & QLO_MINIMUM_TLS_13) {
         if (!SSL_set_min_proto_version(ssl, TLS1_3_VERSION)) {
-            sslError(xsink, mname, "SSL_set_min_proto_version");
+            sslError(xsink, mname, "SSL_set_min_proto_version", true, SslCall::Setup);
             assert(*xsink);
             return -1;
         }
     } else if (qore_library_options & QLO_DISABLE_TLS_13) {
         if (!SSL_set_max_proto_version(ssl, TLS1_2_VERSION)) {
-            sslError(xsink, mname, "SSL_set_max_proto_version");
+            sslError(xsink, mname, "SSL_set_max_proto_version", true, SslCall::Setup);
             assert(*xsink);
             return -1;
         }
@@ -5668,7 +5668,7 @@ int SSLSocketHelper::setClient(ExceptionSink* xsink, const char* mname, const ch
         SSLSocketReferenceHelper ssrh(this);
         ERR_clear_error();
         if (!SSL_set_tlsext_host_name(ssl, sni_target_host)) {
-            sslError(xsink, mname, "SSL_set_tlsext_host_name");
+            sslError(xsink, mname, "SSL_set_tlsext_host_name", true, SslCall::Setup);
             assert(*xsink);
             return -1;
         }
@@ -9736,7 +9736,8 @@ DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
 }
 
 // returns true if an error was raised or the connection was closed, false if not
-bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const char* func, bool always_error) {
+bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const char* func, bool always_error,
+        SslCall call) {
     assert(refs > 1);
     assert(xsink);
 
@@ -9747,27 +9748,44 @@ bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const ch
 
     unsigned long e = ERR_get_error();
     if (!e) {
-        // Nothing in the OpenSSL error queue: the failure came from the transport rather than
-        // from TLS.  Reported with e = 0 so handleErrorIntern() can tell this apart from a real
-        // error code; it used to be reported as SSL_ERROR_ZERO_RETURN, which is a value from the
-        // SSL_get_error() enum and not something ERR_get_error() can ever return.
-        handleErrorIntern(xsink, 0, sockerr, mname, func, always_error);
+        // Nothing in the OpenSSL error queue.  For a transport call that means the failure came
+        // from the transport rather than from TLS; for a setup call it means only that the TLS
+        // library gave no reason.  Reported with e = 0 so handleErrorIntern() can tell this apart
+        // from a real error code; it used to be reported as SSL_ERROR_ZERO_RETURN, which is a
+        // value from the SSL_get_error() enum and not something ERR_get_error() can ever return.
+        handleErrorIntern(xsink, 0, sockerr, mname, func, always_error, call);
         return *xsink || !qs.isOpen();
     }
     do {
         //printd(5, "SSLSocketHelper::sslError() '%s' func: '%s' always_error: %d e: %lu\n", mname, func, always_error, e);
-        handleErrorIntern(xsink, e, sockerr, mname, func, always_error);
+        handleErrorIntern(xsink, e, sockerr, mname, func, always_error, call);
     } while ((e = ERR_get_error()));
 
     return *xsink || !qs.isOpen();
 }
 
 void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, int sockerr, const char* mname,
-        const char* func, bool always_error) {
+        const char* func, bool always_error, SslCall call) {
+    if (!e && call == SslCall::Setup) {
+        // A local call failed and queued nothing.  The socket is not involved: it must not be
+        // closed, and the peer must not be blamed.  SSL_CTX_new() reaching here means the TLS
+        // library could not be initialized — an OpenSSL configuration file that this build cannot
+        // parse does exactly that when the file sets "config_diagnostics = 1", and the failure
+        // then surfaces on whichever thread creates the first context rather than at startup.
+        if (always_error) {
+            SimpleRefHolder<QoreStringNode> errstr(new QoreStringNodeMaker("error in Socket::%s(): the %s() call "
+                "failed and the TLS library gave no reason; this normally means the TLS library could not be "
+                "initialized, for example because of an OpenSSL configuration file that this build cannot parse",
+                mname, func));
+            xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
+        }
+        return;
+    }
     if (!e) {
-        // The OpenSSL error queue was empty, so this is a transport-level failure and not a TLS
-        // protocol error.  SSL_OP_IGNORE_UNEXPECTED_EOF (set in SSLSocketHelper::setup()) makes a
-        // bare TCP FIN arrive here as well, with errno 0; a reset arrives with ECONNRESET.
+        // The OpenSSL error queue was empty for a call that touches the socket, so this is a
+        // transport-level failure and not a TLS protocol error.  SSL_OP_IGNORE_UNEXPECTED_EOF (set
+        // in SSLSocketHelper::setup()) makes a bare TCP FIN arrive here as well, with errno 0; a
+        // reset arrives with ECONNRESET.
         // NOTE: For HTTP/2 connections, don't auto-close here.  This could be a timeout or the end
         // of a read operation, not necessarily a connection close.  Let the HTTP/2 layer handle
         // connection lifecycle.

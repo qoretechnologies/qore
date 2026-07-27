@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** ssl-config-init.qtest
+
+    Regression test for TLS startup when the OpenSSL configuration file cannot be processed.
+
+    OpenSSL loads its configuration file lazily, inside the first SSL_CTX_new() call.  A file that
+    this OpenSSL build cannot parse makes that load fail, and when the file sets
+    "config_diagnostics = 1" the failure is hard: SSL_CTX_new() then returns nullptr on whichever
+    thread created the first context, leaving that thread's error queue empty.  Qore reported the
+    result as "the SSL_CTX_new() call could not be completed because the TLS/SSL connection was
+    terminated by the remote end", blaming a peer that had not been contacted yet, and only the
+    first TLS operation in the process failed — every later one worked.
+
+    Qore now processes the configuration file at startup, on the main thread, so the reason is
+    reported once and every thread can create a TLS context afterwards.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class SslConfigInitTest
+
+class SslConfigInitTest inherits QUnit::Test {
+    public {
+        #! An OpenSSL configuration file that no OpenSSL build can process
+        /** "config_diagnostics = 1" makes an unknown option a hard error rather than something
+            OpenSSL ignores, and no build accepts an arbitrary option name in the EVP alg section.
+        */
+        const BrokenConfig = "config_diagnostics = 1\n"
+            "openssl_conf = openssl_init\n"
+            "\n"
+            "[openssl_init]\n"
+            "alg_section = evp_properties\n"
+            "\n"
+            "[evp_properties]\n"
+            "qore-test-unknown-option = no\n";
+
+        #! Marks a successful TLS context creation in the child's output
+        const HandshakeMarker = "during the TLS handshake";
+    }
+
+    constructor() : Test("SslConfigInitTest", "1.0") {
+        addTestCase("an unprocessable OpenSSL config does not break TLS", \testBrokenConfigStillConnects());
+        addTestCase("a usable OpenSSL config produces no warning", \testGoodConfigIsSilent());
+        set_return_value(main());
+    }
+
+    #! Returns the qore binary running this test
+    private string qoreBin() {
+        *string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    #! Accepts one TCP connection and closes it without speaking TLS
+    /** The peer only has to get far enough for the client to need a TLS context; what it does with
+        the connection afterwards is irrelevant to what is being tested here.
+
+        @param listener the bound and listening socket
+        @param accepted the counter to decrement once the connection has been handled
+    */
+    private startDroppingPeer(Socket listener, Counter accepted) {
+        background sub () {
+            on_exit accepted.dec();
+            try {
+                *Socket conn = listener.accept(30s);
+                if (conn) {
+                    conn.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may have given up first; nothing to do
+            }
+        }();
+    }
+
+    #! Runs a child qore process that makes a TLS connection, and returns its combined output
+    /** @param openssl_conf the value to give the child in \c OPENSSL_CONF
+
+        @return the child's combined stdout and stderr
+    */
+    private string runTlsChild(string openssl_conf) {
+        Socket listener();
+        listener.bindINET("localhost", "0", True);
+        int port = listener.getSocketInfo().port;
+        listener.listen();
+        on_exit listener.close();
+
+        Counter accepted(1);
+        startDroppingPeer(listener, accepted);
+
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(sprintf("Socket s();\n"
+            "try {\n"
+            "    s.connectSSL(\"localhost:%d\", 30s);\n"
+            "    printf(\"CHILD: connected\\n\");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"CHILD: %%s: %%s\\n\", ex.err, ex.desc);\n"
+            "}\n", port));
+        tmp.file.close();
+
+        string out = backquote(sprintf("OPENSSL_CONF=%s %s %s 2>&1", shellQuote(openssl_conf),
+            shellQuote(qoreBin()), shellQuote(tmp.path)));
+        accepted.waitForZero(60s);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    testBrokenConfigStillConnects() {
+        TmpFile cfg(NOTHING, ".cnf");
+        cfg.file.write(BrokenConfig);
+        cfg.file.close();
+
+        string out = runTlsChild(cfg.path);
+
+        # the reason the config could not be used is reported once, at startup
+        assertRegex("OpenSSL configuration file could not be processed", out,
+            "an unprocessable OpenSSL config must be reported at startup");
+        assertRegex("unknown option", out, "the startup warning must carry the OpenSSL reason");
+
+        # the point of the test: creating the TLS context must still work, so the connection gets
+        # as far as the handshake instead of failing before any byte is sent
+        assertRegex(HandshakeMarker, out,
+            "the client must reach the TLS handshake with an unprocessable OpenSSL config");
+        assertFalse(out =~ /SSL_CTX_new/, "SSL_CTX_new() must not fail because of the config file");
+        assertFalse(out =~ /terminated by the remote end.*SSL_CTX_new/,
+            "a local context failure must never be reported as a peer disconnection");
+    }
+
+    testGoodConfigIsSilent() {
+        # /dev/null is a valid, empty configuration file
+        string out = runTlsChild("/dev/null");
+
+        assertFalse(out =~ /OpenSSL configuration file could not be processed/,
+            "a usable OpenSSL config must not produce a warning");
+        assertRegex(HandshakeMarker, out, "the client must reach the TLS handshake");
+    }
+}
