@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_code = "%modern
+
+final class ExactComposer {
+    static int staticIntLeaf(int value) {
+        return value * 3 + 1;
+    }
+
+    static int staticIntWrapper(int value) {
+        return ExactComposer::staticIntLeaf(value) + 2;
+    }
+
+    int methodIntLeaf(int value) {
+        return value * 3 + 1;
+    }
+
+    int methodIntWrapper(int value) {
+        return self.methodIntLeaf(value) + 2;
+    }
+
+    static float staticFloatLeaf(float value) {
+        return value * 1.25 + 0.5;
+    }
+
+    static float staticFloatWrapper(float value) {
+        return ExactComposer::staticFloatLeaf(value) + 0.25;
+    }
+
+    float methodFloatLeaf(float value) {
+        return value * 1.25 + 0.5;
+    }
+
+    float methodFloatWrapper(float value) {
+        return self.methodFloatLeaf(value) + 0.25;
+    }
+}
+
+int sub closureIntWrapper(int value) {
+    return (int sub (int arg) {
+        return arg * 3 + 1;
+    })(value) + 2;
+}
+
+float sub closureFloatWrapper(float value) {
+    return (float sub (float arg) {
+        return arg * 1.25 + 0.5;
+    })(value) + 0.25;
+}
+
+int sub capturedClosureInt(int value, int base) {
+    return (int sub (int arg) {
+        return arg * 3 + base;
+    })(value) + 2;
+}
+
+int sub referenceLeaf(reference<int> value) {
+    return ++value;
+}
+
+int sub referenceWrapper(reference<int> value) {
+    return referenceLeaf(\\value) + 2;
+}
+
+class VirtualComposer {
+    int leaf(int value) {
+        return value + 1;
+    }
+
+    int wrapper(int value) {
+        return self.leaf(value) + 2;
+    }
+}
+
+class OverrideComposer inherits VirtualComposer {
+    int leaf(int value) {
+        return value + 100;
+    }
+}
+";
+
+string consumer_code = "%modern
+
+int sub main() {
+    ExactComposer exact();
+    VirtualComposer polymorphic = new OverrideComposer();
+    *ExactComposer unset;
+    int invalid_receiver_caught;
+    try {
+        unset.methodIntWrapper(1);
+    } catch (hash<auto> ex) {
+        invalid_receiver_caught = 1;
+    }
+    int referenced = 3;
+    printf(\"%d:%d:%d:%.2f:%.2f:%.2f:%d:%d:%d:%d:%d\\n\",
+        ExactComposer::staticIntWrapper(4),
+        exact.methodIntWrapper(4), closureIntWrapper(4),
+        ExactComposer::staticFloatWrapper(4.0),
+        exact.methodFloatWrapper(4.0), closureFloatWrapper(4.0),
+        capturedClosureInt(4, 2), polymorphic.wrapper(3),
+        referenceWrapper(\\referenced), referenced,
+        invalid_receiver_caught);
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-call-kind-expression-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_code);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_code);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_code + consumer_code + "\nmain();\n");
+combined_file.close();
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+if (expected != "15:15:15:5.75:5.75:5.75:16:105:6:4:1\n") {
+    printf("unexpected AST output:\n%s", expected);
+    exit(2);
+}
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, provider_qo));
+if (provider_index
+            !~ /\"qore_path\": \"ExactComposer::staticIntWrapper\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"ExactComposer::methodIntWrapper\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"closureIntWrapper\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"ExactComposer::staticFloatWrapper\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"ExactComposer::methodFloatWrapper\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"closureFloatWrapper\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"capturedClosureInt\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/
+        || provider_index
+            !~ /\"qore_path\": \"referenceWrapper\(reference<int>\)\"[^\n]*\"int_expression_nodes\": \[\]/
+        || provider_index
+            !~ /\"qore_path\": \"VirtualComposer::wrapper\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/) {
+    printf("unexpected call-kind expression metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -c -L %s"
+        + " --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1"
+        + " QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1"
+        + " QORE_DISABLE_AOT_OBJECT_METHOD_SUMMARY_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)
+        || enabled_compile
+            !~ /imported exact object-method expression summary 'ExactComposer::methodIntWrapper'/
+        || enabled_compile
+            !~ /imported exact object-method expression summary 'ExactComposer::methodFloatWrapper'/
+        || disabled_compile =~ /imported exact object-method expression summary/) {
+    printf("unexpected call-kind consumer lowering:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+string enabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (enabled != expected || disabled != expected) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        expected, enabled, disabled);
+    exit(2);
+}

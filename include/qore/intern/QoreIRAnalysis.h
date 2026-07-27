@@ -137,6 +137,11 @@ bool qore_ir_compute_function_effect_summaries(
     const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
     std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries);
 
+//! Return true unless an exact user variant proves that every parameter is
+//! passed by value.
+DLLLOCAL bool qore_ir_variant_has_reference_params(
+    const AbstractQoreFunctionVariant* variant);
+
 //! Returns locals that cannot safely use native scalar storage because a load may
 //! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was
 //! cancelled. @p initially_assigned contains locals that are assigned on function

@@ -586,7 +586,7 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
     }
 }
 
-static bool qore_ir_variant_has_reference_params(
+bool qore_ir_variant_has_reference_params(
         const AbstractQoreFunctionVariant* variant) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;

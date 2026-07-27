@@ -6138,6 +6138,145 @@ static bool qore_aot_is_non_overridable_method_call(
     return method_variant && method_variant->isFinal();
 }
 
+struct AOTBoundedSummaryCall {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    size_t arg_offset = 0;
+    bool has_ref_args = true;
+};
+
+static const AbstractQoreFunctionVariant* qore_aot_get_created_closure_variant(
+        const QoreIRCreateClosureInstruction& create) {
+    const QoreClosureParseNode* closure = create.closure_node;
+    if (!closure) {
+        closure = dynamic_cast<const QoreClosureParseNode*>(
+            create.expr.getInternalNode());
+    }
+    const UserClosureFunction* function =
+        closure ? closure->getFunction() : nullptr;
+    return function ? function->first() : nullptr;
+}
+
+static bool qore_aot_collect_bounded_summary_closures(
+        const QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees,
+        std::unordered_map<uint32_t,
+            const AbstractQoreFunctionVariant*>& closures) {
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT bounded summary closure collection")) {
+                return false;
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            const auto* create =
+                static_cast<const QoreIRCreateClosureInstruction*>(
+                    inst_ptr.get());
+            const AbstractQoreFunctionVariant* variant =
+                qore_aot_get_created_closure_variant(*create);
+            auto callee = batch_callees.find(variant);
+            if (!variant || callee == batch_callees.end()
+                    || !callee->second.capture_locals.empty()
+                    || callee->second.implicit_self_method) {
+                continue;
+            }
+            closures.emplace(inst_ptr->result.id, variant);
+        }
+    }
+    if (closures.empty()) {
+        return true;
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT bounded summary closure use analysis")) {
+                return false;
+            }
+            if (!inst_ptr) {
+                continue;
+            }
+            qore_ir_visit_value_operands(*inst_ptr,
+                [&](QoreIRValue operand) {
+                    auto closure = closures.find(operand.id);
+                    if (closure == closures.end()) {
+                        return;
+                    }
+                    if (inst_ptr->opcode != QoreIROpcode::CallClosureDirect
+                            || inst_ptr->operands.empty()
+                            || inst_ptr->operands.front().id != operand.id) {
+                        closures.erase(closure);
+                    }
+                });
+        }
+    }
+    return true;
+}
+
+static bool qore_aot_get_bounded_summary_call(
+        const QoreIRInstruction& inst,
+        const std::unordered_map<uint32_t,
+            const AbstractQoreFunctionVariant*>& closures,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees,
+        AOTBoundedSummaryCall& result) {
+    result = {};
+    if (inst.opcode == QoreIROpcode::CallDirect) {
+        const auto& call =
+            static_cast<const QoreIRCallDirectInstruction&>(inst);
+        result.variant = call.variant;
+        if (!result.variant && call.expr.hasNode()) {
+            const auto* call_node = dynamic_cast<const FunctionCallNode*>(
+                call.expr.getInternalNode());
+            result.variant = call_node ? call_node->getVariant() : nullptr;
+        }
+        result.has_ref_args = call.has_ref_args;
+    } else if (inst.opcode == QoreIROpcode::CallStaticDirect) {
+        const auto& call =
+            static_cast<const QoreIRCallStaticDirectInstruction&>(inst);
+        result.variant = call.variant;
+        result.has_ref_args = call.has_ref_args;
+    } else if (inst.opcode == QoreIROpcode::CallMethodDirect) {
+        const auto& call =
+            static_cast<const QoreIRCallMethodDirectInstruction&>(inst);
+        if (!qore_aot_is_non_overridable_method_call(call)) {
+            return false;
+        }
+        result.variant = call.variant;
+        result.has_ref_args = call.has_ref_args;
+        auto callee = batch_callees.find(result.variant);
+        if (callee == batch_callees.end()
+                || !callee->second.implicit_self_method) {
+            return false;
+        }
+    } else if (inst.opcode == QoreIROpcode::CallClosureDirect) {
+        if (inst.operands.empty()) {
+            return false;
+        }
+        auto closure = closures.find(inst.operands.front().id);
+        if (closure == closures.end()) {
+            return false;
+        }
+        result.variant = closure->second;
+        result.arg_offset = 1;
+        result.has_ref_args =
+            qore_ir_variant_has_reference_params(result.variant);
+    } else {
+        return false;
+    }
+    auto callee = batch_callees.find(result.variant);
+    return result.variant && !result.has_ref_args
+        && callee != batch_callees.end()
+        && inst.operands.size() >= result.arg_offset
+        && inst.operands.size() - result.arg_offset
+            == callee->second.num_params;
+}
+
 static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         const UserSignature& sig, AOTStringExpressionInfo& result,
         const std::unordered_map<const AbstractQoreFunctionVariant*,
@@ -10184,6 +10323,14 @@ static bool qore_aot_collect_int_expression_summaries(
             params.emplace(param->second, param_info);
         }
 
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+            closure_values;
+        if (!qore_aot_collect_bounded_summary_closures(
+                *func, batch_callees, closure_values)) {
+            cancelled = true;
+            state = VisitState::Failed;
+            return false;
+        }
         AOTIntExpressionInfo expression;
         std::unordered_map<uint32_t, int> values;
         std::unordered_map<uint32_t, ExpressionParamInfo> boxed_values;
@@ -10219,7 +10366,10 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int>& block_locals,
                 bool allow_fallible_operations) -> bool {
             int result = -1;
-            if (inst->opcode == QoreIROpcode::LoadLocal) {
+            if (inst->opcode == QoreIROpcode::CreateClosure) {
+                return inst->result.isValid()
+                    && closure_values.count(inst->result.id);
+            } else if (inst->opcode == QoreIROpcode::LoadLocal) {
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
                 auto local = block_locals.find(load->local);
                 if (local != block_locals.end()) {
@@ -10501,14 +10651,18 @@ static bool qore_aot_collect_int_expression_summaries(
                         return false;
                     }
                     result = append_binary(expression, kind, lhs->second, rhs->second);
-                } else if (inst->opcode == QoreIROpcode::CallDirect) {
-                    const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
-                    auto nested = batch_callees.find(call->variant);
-                    if (call->has_ref_args || nested == batch_callees.end()
-                            || inst->operands.size() != nested->second.num_params
-                            || !derive(call->variant, depth + 1)) {
+                } else if (inst->opcode == QoreIROpcode::CallDirect
+                        || inst->opcode == QoreIROpcode::CallStaticDirect
+                        || inst->opcode == QoreIROpcode::CallMethodDirect
+                        || inst->opcode == QoreIROpcode::CallClosureDirect) {
+                    AOTBoundedSummaryCall call;
+                    if (!qore_aot_get_bounded_summary_call(
+                            *inst, closure_values, batch_callees, call)
+                            || !derive(call.variant, depth + 1)) {
                         return false;
                     }
+                    auto nested = batch_callees.find(call.variant);
+                    assert(nested != batch_callees.end());
                     if (!allow_fallible_operations && nested->second.int_expression
                             && std::any_of(nested->second.int_expression.nodes.begin(),
                                 nested->second.int_expression.nodes.end(),
@@ -10519,9 +10673,12 @@ static bool qore_aot_collect_int_expression_summaries(
                     }
                     std::vector<int> args;
                     std::vector<int8_t> boxed_args;
-                    args.reserve(inst->operands.size());
-                    boxed_args.reserve(inst->operands.size());
-                    for (const QoreIRValue& operand : inst->operands) {
+                    size_t nargs = inst->operands.size() - call.arg_offset;
+                    args.reserve(nargs);
+                    boxed_args.reserve(nargs);
+                    for (size_t i = call.arg_offset;
+                            i < inst->operands.size(); ++i) {
+                        const QoreIRValue& operand = inst->operands[i];
                         auto arg = block_values.find(operand.id);
                         if (arg != block_values.end()) {
                             args.push_back(arg->second);
@@ -11182,8 +11339,14 @@ static bool qore_aot_collect_float_expression_summaries(
         state = VisitState::Visiting;
         auto func_it = function_map.find(variant);
         const QoreIRFunction* func = func_it == function_map.end() ? nullptr : func_it->second;
+        BatchCalleeReturnKind proven_return_kind =
+            callee->second.return_kind;
+        if (proven_return_kind != BatchCalleeReturnKind::NativeFloat) {
+            proven_return_kind =
+                qore_ir_get_fast_entry_return_kind(variant, true);
+        }
         if (!func || func->blocks.empty() || func->blocks.size() > 8
-                || callee->second.return_kind != BatchCalleeReturnKind::NativeFloat
+                || proven_return_kind != BatchCalleeReturnKind::NativeFloat
                 || callee->second.num_params > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES
                 || callee->second.param_kinds.size() != callee->second.num_params
                 || callee->second.param_rejects_nothing.size() != callee->second.num_params
@@ -11236,6 +11399,14 @@ static bool qore_aot_collect_float_expression_summaries(
                 FloatExpressionParamInfo{static_cast<int8_t>(i), kind});
         }
 
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+            closure_values;
+        if (!qore_aot_collect_bounded_summary_closures(
+                *func, batch_callees, closure_values)) {
+            cancelled = true;
+            state = VisitState::Failed;
+            return false;
+        }
         AOTFloatExpressionInfo expression;
         auto is_ignored = [](QoreIROpcode opcode) {
             return opcode == QoreIROpcode::DebugBlock
@@ -11247,7 +11418,10 @@ static bool qore_aot_collect_float_expression_summaries(
                 std::unordered_map<uint32_t, int8_t>& hash_values,
                 bool allow_division) -> bool {
             int result = -1;
-            if (inst->opcode == QoreIROpcode::LoadLocal) {
+            if (inst->opcode == QoreIROpcode::CreateClosure) {
+                return inst->result.isValid()
+                    && closure_values.count(inst->result.id);
+            } else if (inst->opcode == QoreIROpcode::LoadLocal) {
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
                 auto param = params.find(load->local);
                 if (param == params.end()) {
@@ -11305,14 +11479,18 @@ static bool qore_aot_collect_float_expression_summaries(
                         return false;
                     }
                     result = append_binary(expression, kind, lhs->second, rhs->second);
-                } else if (inst->opcode == QoreIROpcode::CallDirect) {
-                    const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
-                    auto nested = batch_callees.find(call->variant);
-                    if (call->has_ref_args || nested == batch_callees.end()
-                            || inst->operands.size() != nested->second.num_params
-                            || !derive(call->variant, depth + 1)) {
+                } else if (inst->opcode == QoreIROpcode::CallDirect
+                        || inst->opcode == QoreIROpcode::CallStaticDirect
+                        || inst->opcode == QoreIROpcode::CallMethodDirect
+                        || inst->opcode == QoreIROpcode::CallClosureDirect) {
+                    AOTBoundedSummaryCall call;
+                    if (!qore_aot_get_bounded_summary_call(
+                            *inst, closure_values, batch_callees, call)
+                            || !derive(call.variant, depth + 1)) {
                         return false;
                     }
+                    auto nested = batch_callees.find(call.variant);
+                    assert(nested != batch_callees.end());
                     if (!allow_division
                             && ((nested->second.float_expression
                                     && std::any_of(
@@ -11332,9 +11510,12 @@ static bool qore_aot_collect_float_expression_summaries(
                     }
                     std::vector<int> args;
                     std::vector<int8_t> boxed_args;
-                    args.reserve(inst->operands.size());
-                    boxed_args.reserve(inst->operands.size());
-                    for (const QoreIRValue& operand : inst->operands) {
+                    size_t nargs = inst->operands.size() - call.arg_offset;
+                    args.reserve(nargs);
+                    boxed_args.reserve(nargs);
+                    for (size_t i = call.arg_offset;
+                            i < inst->operands.size(); ++i) {
+                        const QoreIRValue& operand = inst->operands[i];
                         auto arg = values.find(operand.id);
                         if (arg != values.end()) {
                             args.push_back(arg->second);
@@ -11445,6 +11626,9 @@ static bool qore_aot_collect_float_expression_summaries(
             return false;
         }
         callee->second.float_expression = std::move(expression);
+        callee->second.never_returns_nothing = true;
+        callee->second.return_kind = proven_return_kind;
+        callee->second.approach_b_eligible = true;
         state = VisitState::Success;
         return true;
     };
