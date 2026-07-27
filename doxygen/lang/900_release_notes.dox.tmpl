@@ -236,10 +236,10 @@
     - Unicode-aware case conversion (1-to-many uppercase mappings, fixed UTF-8 corruption bug)
 
     <i>Modules and integrations:</i>
-    - new builtin modules: @ref dataframeintro "dataframe", @ref i18nintro "i18n",
-      @ref jsonintro "json", @ref krb5intro "krb5", @ref linenoiseintro "linenoise",
-      @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
-      @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
+    - new builtin modules: @ref avrointro "avro", @ref dataframeintro "dataframe",
+      @ref i18nintro "i18n", @ref jsonintro "json", @ref krb5intro "krb5",
+      @ref linenoiseintro "linenoise", @ref mlintro "ml", @ref mongodbintro "mongodb",
+      @ref ocrintro "ocr", @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
@@ -1870,6 +1870,21 @@ foreach string module_name in (registry.getProcessModules()) {
 
     @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
 
+    - @ref avrointro "avro" module
+      - new builtin module implementing <a href="https://avro.apache.org">Apache Avro</a>: schema
+        parsing with a named-type registry, the binary datum codec in both directions, object
+        container files, and reader/writer schema resolution
+      - decodes a <i>bare datum</i> against a schema supplied out of band — the framing streaming
+        APIs such as the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Salesforce
+        Pub/Sub API</a> deliver — as well as self-describing object container files, with the
+        \c null and \c deflate codecs, over a file path, a \c binary value or a %Qore
+        @ref Qore::InputStream "InputStream" / @ref Qore::OutputStream "OutputStream"
+      - every logical type, including \c decimal converted exactly at arbitrary precision, and
+        Parsing Canonical Form with the CRC-64-AVRO fingerprint for content-addressed schema caches
+      - companion @ref avroutilintro "AvroUtil" module mapping Avro schemas to
+        @ref dataproviderintro "DataProvider" types
+
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
         string, bool, date) and null/missing-value support
@@ -1990,6 +2005,11 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref asyncsocketiointro "AsyncSocketIo" module
       - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+
+    - @ref avroutilintro "AvroUtil" module
+      - new module mapping @ref avrointro "avro" schemas to @ref dataproviderintro "DataProvider"
+        types, so Avro-described data can be exposed through the data provider API; the Avro
+        counterpart of the \c GrpcTypeHelper class in the \c GrpcDataProvider module
 
     - @ref awseventstreamintro "AwsEventStream" module
       - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming

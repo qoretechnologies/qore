@@ -1,0 +1,199 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_AvroFileReader.qpp defines the %Qore AvroFileReader class */
+/*
+    Qore avro module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "avro-module.h"
+#include "QC_AvroFileReader.h"
+#include "QC_AvroSchema.h"
+#include "AvroContainer.h"
+
+#include <qore/ReferenceHolder.h>
+
+// sets the private data of the object from the source, taking ownership of the source
+static void avro_setup_reader(QoreObject* self, AvroSource* src, ExceptionSink* xsink) {
+    if (!src) {
+        assert(*xsink);
+        return;
+    }
+    SimpleRefHolder<QoreAvroFileReader> reader(new QoreAvroFileReader(src, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_AVROFILEREADER, reader.release());
+}
+
+//! Reads an Avro object container file
+/** A container file is self-describing: its header carries the writer's schema and the codec
+    used for the data blocks, so no schema has to be supplied.  For data with no framing, where
+    the schema arrives out of band, use @ref Qore::Avro::AvroSchema::decode() instead.
+
+    %AvroFileReader is an @ref Qore::AbstractIterator "AbstractIterator", so it can be used
+    directly with @ref foreach "foreach", @ref map, @ref select and the other iterator operators.
+
+    @par Example:
+    @code{.py}
+%requires avro
+
+AvroFileReader reader("events.avro");
+printf("schema: %s\n", reader.getSchema().getName());
+map printf("%y\n", $1), reader;
+    @endcode
+
+    @note like all iterators, an %AvroFileReader may only be used in the thread that created it
+
+    @since %avro 1.0
+*/
+qclass AvroFileReader [arg=QoreAvroFileReader* reader; ns=Qore::Avro; vparent=AbstractIterator<auto>];
+
+//! Opens an Avro object container file on the filesystem
+/** @param path the path of the file to read
+
+    @throw FILE-OPEN2-ERROR the file cannot be opened
+    @throw AVRO-FILE-ERROR the file is not an Avro object container file, or its header is corrupt
+    @throw AVRO-SCHEMA-ERROR the schema embedded in the header is not valid
+    @throw AVRO-CODEC-ERROR the file uses a codec this module does not implement
+
+    @note this method is subject to @ref PO_NO_FILESYSTEM
+
+    @since %avro 1.0
+*/
+AvroFileReader::constructor(string path) [dom=FILESYSTEM] {
+    avro_setup_reader(self, avro_source_from_file(path->c_str(), xsink), xsink);
+}
+
+//! Reads an Avro object container file already held in memory
+/** @param data the complete container file
+
+    @throw AVRO-FILE-ERROR the data are not an Avro object container file, or the header is corrupt
+    @throw AVRO-SCHEMA-ERROR the schema embedded in the header is not valid
+    @throw AVRO-CODEC-ERROR the data use a codec this module does not implement
+
+    @since %avro 1.0
+*/
+AvroFileReader::constructor(binary data) {
+    avro_setup_reader(self, avro_source_from_binary(data), xsink);
+}
+
+//! Reads an Avro object container file from an input stream
+/** @param input_stream the stream to read the container file from; it is read incrementally, so
+        arbitrarily large files can be processed without holding them in memory
+
+    @throw AVRO-FILE-ERROR the stream does not carry an Avro object container file, or the header
+        is corrupt
+    @throw AVRO-SCHEMA-ERROR the schema embedded in the header is not valid
+    @throw AVRO-CODEC-ERROR the stream uses a codec this module does not implement
+
+    @par Example:
+    @code{.py}
+AvroFileReader reader(new FileInputStream("events.avro"));
+    @endcode
+
+    @since %avro 1.0
+*/
+AvroFileReader::constructor(Qore::InputStream[InputStream] input_stream) {
+    avro_setup_reader(self, avro_source_from_stream(input_stream.release()), xsink);
+}
+
+//! Returns the writer's schema, as embedded in the file header
+/** @return the schema every object in the file was written with
+
+    @since %avro 1.0
+*/
+AvroSchema AvroFileReader::getSchema() [flags=RET_VALUE_ONLY] {
+    AvroSchemaData* data = reader->getSchemaData();
+    ReferenceHolder<AvroSchemaData> holder(data, xsink);
+    return avro_make_schema_object(data, reader->getRoot());
+}
+
+//! Returns the file's header metadata
+/** @return every metadata entry in the header, including the reserved \c "avro.schema" and
+    \c "avro.codec" entries, with the raw bytes of each value
+
+    @since %avro 1.0
+*/
+hash<string, binary> AvroFileReader::getMetadata() [flags=CONSTANT] {
+    return reader->getMetadata();
+}
+
+//! Returns the name of the codec the file's data blocks use
+/** @return \c "null" or \c "deflate"
+
+    @since %avro 1.0
+*/
+string AvroFileReader::getCodec() [flags=CONSTANT] {
+    return reader->getCodec();
+}
+
+//! Returns the file's 16-byte sync marker
+/** @return the marker from the file header, which also follows every data block
+
+    @since %avro 1.0
+*/
+binary AvroFileReader::getSyncMarker() [flags=CONSTANT] {
+    return reader->getSyncMarker();
+}
+
+//! Advances to the next object in the file
+/** @return @ref True if an object is available, @ref False at the end of the file
+
+    @throw AVRO-FILE-ERROR the container framing is corrupt or the file is truncated
+    @throw AVRO-DECODE-ERROR an object does not match the file's schema
+    @throw AVRO-CODEC-ERROR a compressed block cannot be decompressed
+    @throw STREAM-THREAD-ERROR this method was called from a thread other than the one that
+        created the object
+
+    @note once iteration ends, whether at the end of the file or because of an error, it cannot be
+        restarted: container files are read forwards only
+
+    @since %avro 1.0
+*/
+bool AvroFileReader::next() {
+    return reader->next(xsink);
+}
+
+//! Returns the object the reader is currently pointing at
+/** @return the current object, decoded against the file's schema
+
+    @throw INVALID-ITERATOR the reader is not pointing at an object; call
+        @ref Qore::Avro::AvroFileReader::next() "next()" and check its return value first
+    @throw STREAM-THREAD-ERROR this method was called from a thread other than the one that
+        created the object
+
+    @since %avro 1.0
+*/
+auto AvroFileReader::getValue() [flags=RET_VALUE_ONLY] {
+    return reader->getValue(xsink);
+}
+
+//! Returns @ref True if the reader is pointing at an object
+/** @return @ref True if
+    @ref Qore::Avro::AvroFileReader::getValue() "getValue()" will return an object, @ref False
+    before the first @ref Qore::Avro::AvroFileReader::next() "next()" call and after iteration ends
+
+    @since %avro 1.0
+*/
+bool AvroFileReader::valid() [flags=CONSTANT] {
+    return reader->valid();
+}

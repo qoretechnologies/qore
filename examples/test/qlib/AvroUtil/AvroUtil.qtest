@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroUtil.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires AvroUtil
+%requires QUnit
+
+%exec-class AvroUtilTest
+
+#! tests the Avro schema to DataProvider type mapping
+class AvroUtilTest inherits QUnit::Test {
+    public {
+        const EventSchema = '{"type": "record", "name": "com.example.Event", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"},
+            {"name": "ratio", "type": "double"},
+            {"name": "flag", "type": "boolean"},
+            {"name": "digest", "type": {"type": "fixed", "name": "MD5", "size": 16}},
+            {"name": "blob", "type": "bytes"},
+            {"name": "amount", "type": {"type": "bytes", "logicalType": "decimal",
+                "precision": 10, "scale": 2}},
+            {"name": "when", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+            {"name": "elapsed", "type": {"type": "int", "logicalType": "time-millis"}},
+            {"name": "tags", "type": {"type": "array", "items": "string"}},
+            {"name": "attrs", "type": {"type": "map", "values": "long"}},
+            {"name": "suit", "type": {"type": "enum", "name": "Suit",
+                "symbols": ["SPADES", "HEARTS"]}},
+            {"name": "note", "type": ["null", "string"], "default": null},
+            {"name": "either", "type": ["int", "string"]},
+            {"name": "nothing_at_all", "type": "null"}
+        ]}';
+    }
+
+    constructor() : QUnit::Test("AvroUtil", "1.0") {
+        addTestCase("record mapping", \recordTest());
+        addTestCase("scalar mapping", \scalarTest());
+        addTestCase("container mapping", \containerTest());
+        addTestCase("union mapping", \unionTest());
+        addTestCase("enum allowed values", \enumTest());
+        addTestCase("defaults", \defaultTest());
+        addTestCase("recursion", \recursionTest());
+        addTestCase("field descriptions", \describeTest());
+        set_return_value(main());
+    }
+
+    recordTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+        assertEq("com.example.Event", t.getName());
+
+        # the DataProvider type has exactly the Avro record's fields, in schema order
+        assertEq(("id", "count", "ratio", "flag", "digest", "blob", "amount", "when", "elapsed",
+            "tags", "attrs", "suit", "note", "either", "nothing_at_all"), keys t.getFields());
+    }
+
+    scalarTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+
+        assertEq("string", t.getField("id").getType().getName());
+        assertEq("softint", t.getField("count").getType().getName());
+        assertEq("softfloat", t.getField("ratio").getType().getName());
+        assertEq("softbool", t.getField("flag").getType().getName());
+        assertEq("data", t.getField("digest").getType().getName());
+        assertEq("data", t.getField("blob").getType().getName());
+        assertEq("softnumber", t.getField("amount").getType().getName());
+        assertEq("softdate", t.getField("when").getType().getName());
+        # a time of day is a duration, which is also a Qore date
+        assertEq("softdate", t.getField("elapsed").getType().getName());
+        assertEq("nothing", t.getField("nothing_at_all").getType().getName());
+
+        # a bare primitive schema maps without a record around it
+        assertEq("softint", AvroTypeHelper::schemaToDataType(new AvroSchema('"int"'))
+            .getName());
+        assertEq("string", AvroTypeHelper::schemaToDataType(new AvroSchema('"string"'))
+            .getName());
+    }
+
+    containerTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+
+        # an array maps to a soft list over the element type
+        assertEq("softlist<string>", t.getField("tags").getType().getName());
+
+        # a map has no direct equivalent, so it becomes a hash with a default value type
+        HashDataType attrs = cast<HashDataType>(t.getField("attrs").getType());
+        assertEq("avro-map<long>", attrs.getName());
+        assertEq("softint", attrs.getDefaultOtherFieldType().getName());
+
+        # an array of records maps to a list of hash types
+        AvroSchema arr('{"type": "array", "items": {"type": "record", "name": "R",
+            "fields": [{"name": "a", "type": "int"}]}}');
+        AbstractDataProviderType at = AvroTypeHelper::schemaToDataType(arr);
+        assertEq("softlist<R>", at.getName());
+    }
+
+    unionTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+
+        # ["null", T] is the common nullable shape and maps to an optional T
+        AbstractDataField note = t.getField("note");
+        assertEq("*string", note.getType().getName());
+        assertFalse(note.isMandatory());
+
+        # any other union has no DataProvider equivalent
+        assertEq("auto", t.getField("either").getType().getName());
+
+        # a union of nothing but null
+        assertEq("nothing",
+            AvroTypeHelper::schemaToDataType(new AvroSchema(("null",))).getName());
+
+        # ["null", <record>] maps to the record type, still optional
+        AvroSchema nr('["null", {"type": "record", "name": "R2",
+            "fields": [{"name": "a", "type": "int"}]}]');
+        assertEq("R2", AvroTypeHelper::schemaToDataType(nr).getName());
+    }
+
+    enumTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+
+        AbstractDataField suit = t.getField("suit");
+        assertEq("string", suit.getType().getName());
+        # the Avro symbols become the field's allowed values
+        assertEq(("SPADES", "HEARTS"), map $1.value, suit.getAllowedValues());
+    }
+
+    defaultTest() {
+        AvroSchema schema('{"type": "record", "name": "D", "fields": [
+            {"name": "with_default", "type": "long", "default": 42},
+            {"name": "without", "type": "long"}
+        ]}');
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+        assertEq(42, t.getField("with_default").getDefaultValue());
+        assertNothing(t.getField("without").getDefaultValue());
+    }
+
+    recursionTest() {
+        # a self-referencing record must not expand forever
+        AvroSchema node('{"type": "record", "name": "Node", "fields": [
+            {"name": "value", "type": "int"},
+            {"name": "next", "type": ["null", "Node"], "default": null}
+        ]}');
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(node);
+        assertEq("Node", t.getName());
+        assertEq("softint", t.getField("value").getType().getName());
+        # the recursive reference degrades to an untyped hash rather than recursing
+        assertEq("hash<auto>", t.getField("next").getType().getName());
+
+        # mutual recursion terminates as well
+        AvroSchema mutual('{"type": "record", "name": "A", "fields": [
+            {"name": "b", "type": ["null", {"type": "record", "name": "B", "fields": [
+                {"name": "a", "type": ["null", "A"], "default": null}
+            ]}], "default": null}
+        ]}');
+        AbstractDataProviderType m = AvroTypeHelper::schemaToDataType(mutual);
+        assertEq("A", m.getName());
+        assertEq("B", m.getField("b").getType().getName());
+        assertEq("hash<auto>", m.getField("b").getType().getField("a").getType().getName());
+    }
+
+    describeTest() {
+        AvroSchema schema(EventSchema);
+        AbstractDataProviderType t = AvroTypeHelper::schemaToDataType(schema);
+        # a field's description names the Avro type, and its logical type where it has one
+        assertEq("Avro string", t.getField("id").getDescription());
+        assertEq("Avro long (timestamp-micros)", t.getField("when").getDescription());
+        # a nested named type inherits the enclosing namespace
+        assertEq("Avro com.example.Suit", t.getField("suit").getDescription());
+
+        assertEq("Avro string", AvroTypeHelper::describe(new AvroSchema('"string"')));
+        assertEq("Avro MD5", AvroTypeHelper::describe(
+            new AvroSchema('{"type": "fixed", "name": "MD5", "size": 16}')));
+    }
+}

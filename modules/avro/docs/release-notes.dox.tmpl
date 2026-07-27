@@ -1,0 +1,31 @@
+/** @page avrorelnotes avro Module Release Notes
+
+    @tableofcontents
+
+    @section avro_1_0 avro Module Version 1.0
+
+    Initial release, shipped with %Qore 3.0.
+
+    - Avro schema parsing from JSON text or from %Qore data, with a named-type registry supporting
+      recursive and re-referenced types, aliases, and field defaults
+    - binary datum encode and decode for every Avro type: \c null, \c boolean, \c int, \c long,
+      \c float, \c double, \c bytes, \c string, \c record, \c enum, \c array, \c map, \c union and
+      \c fixed
+    - every logical type: \c decimal (converted exactly at arbitrary precision), \c uuid, \c date,
+      \c time-millis, \c time-micros, \c timestamp-millis, \c timestamp-micros,
+      \c local-timestamp-millis, \c local-timestamp-micros and \c duration
+    - reader/writer schema resolution following the specification's reconciliation rules: field
+      addition and removal, defaults, reordering, aliases, numeric promotions,
+      \c string / \c bytes interchange, enum defaults and unions on either side
+    - object container files with the \c null and \c deflate codecs, over a file path, a \c binary
+      value, or a %Qore @ref Qore::InputStream "InputStream" / @ref Qore::OutputStream
+      "OutputStream"; @ref Qore::Avro::AvroFileReader "AvroFileReader" is an
+      @ref Qore::AbstractIterator "AbstractIterator"
+    - Parsing Canonical Form and the CRC-64-AVRO fingerprint for content-addressed schema caches
+    - the companion <a href="../../AvroUtil/html/index.html#avroutilintro">AvroUtil</a> user
+      module, mapping Avro schemas to
+      <a href="../../DataProvider/html/index.html#dataproviderintro">data provider</a> types
+    - sandbox-aware: filesystem access is tagged with the
+      @ref Qore::PO_NO_FILESYSTEM "FILESYSTEM" functional domain, and every unbounded encode and
+      decode loop is a cancellation point
+*/

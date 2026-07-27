@@ -1,0 +1,544 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_AvroSchema.qpp defines the %Qore AvroSchema class */
+/*
+    Qore avro module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "avro-module.h"
+#include "QC_AvroSchema.h"
+#include "AvroDecoder.h"
+#include "AvroEncoder.h"
+
+#include <qore/ReferenceHolder.h>
+
+QoreObject* avro_make_schema_object(AvroSchemaData* data, const AvroNode* node) {
+    data->ref();
+    QoreObject* obj = new QoreObject(QC_AVROSCHEMA, getProgram());
+    obj->setPrivate(CID_AVROSCHEMA, new QoreAvroSchema(data, node));
+    return obj;
+}
+
+//! A parsed Avro schema, and the encoder and decoder for data written with it
+/** An %AvroSchema is resolved completely when it is constructed and is immutable afterwards, so a
+    single object can be shared between threads and cached for as long as the schema is in use.
+    Parsing a schema is far more expensive than encoding or decoding one datum with it, so
+    applications that decode many data against a schema supplied out of band — the
+    <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Salesforce
+    Pub/Sub API</a> is the motivating case — should keep the %AvroSchema object and reuse it.
+
+    @par Example: decoding a bare datum against a schema supplied out of band
+    @code{.py}
+%requires avro
+
+AvroSchema schema('{"type": "record", "name": "Event", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long"},
+    {"name": "note", "type": ["null", "string"], "default": null}
+]}');
+
+hash<auto> event = schema.decode(payload);
+printf("%s: %d\n", event.id, event.count);
+    @endcode
+
+    @par Example: caching schemas by ID
+    @code{.py}
+hash<string, AvroSchema> cache;
+
+AvroSchema getSchema(string schema_id) {
+    if (!cache{schema_id}) {
+        cache{schema_id} = new AvroSchema(fetchSchemaJson(schema_id));
+    }
+    return cache{schema_id};
+}
+    @endcode
+
+    @note the object is read-only after construction and needs no external locking
+
+    @since %avro 1.0
+*/
+qclass AvroSchema [arg=QoreAvroSchema* schema; ns=Qore::Avro];
+
+//! Describes one field of an Avro record schema
+/** Returned by @ref Qore::Avro::AvroSchema::getFields() "AvroSchema::getFields()".
+
+    @since %avro 1.0
+*/
+hashdecl Qore::Avro::AvroFieldInfo {
+    //! the field name
+    string name;
+
+    //! the field's aliases, resolved to fullnames where the schema qualified them
+    list<string> aliases;
+
+    //! the field's type
+    Qore::Avro::AvroSchema type;
+
+    //! True if the field declares a default value
+    bool has_default;
+
+    //! the field's default converted to %Qore, or @ref nothing if the field declares no default
+    auto default_value;
+}
+
+//! Parses an Avro schema from its JSON representation
+/** @param schema_json the schema as JSON text; any Avro schema is accepted, including a bare
+    primitive type name such as \c "\"string\"" and a top-level union
+
+    @throw JSON-PARSE-ERROR the argument is not valid JSON
+    @throw AVRO-SCHEMA-ERROR the JSON document is not a valid Avro schema
+
+    @par Example:
+    @code{.py}
+AvroSchema schema('{"type": "array", "items": "long"}');
+    @endcode
+
+    @since %avro 1.0
+*/
+AvroSchema::constructor(string schema_json) {
+    TempEncodingHelper utf8(schema_json, QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
+    AvroSchemaData* data = AvroSchemaData::parseJson(**utf8, xsink);
+    if (!data) {
+        return;
+    }
+    // QoreAvroSchema takes over the reference returned by the parser
+    self->setPrivate(CID_AVROSCHEMA, new QoreAvroSchema(data, data->getRoot()));
+}
+
+//! Parses an Avro schema already represented as %Qore data
+/** Use this when the schema has already been parsed from JSON, or is generated programmatically.
+
+    @param schema_def the schema as a hash, exactly as the \c json module's \c parse_json()
+        function would produce it from the schema's JSON text
+
+    @throw AVRO-SCHEMA-ERROR the hash is not a valid Avro schema
+
+    @par Example:
+    @code{.py}
+AvroSchema schema({
+    "type": "record",
+    "name": "Point",
+    "fields": (
+        {"name": "x", "type": "double"},
+        {"name": "y", "type": "double"},
+    ),
+});
+    @endcode
+
+    @since %avro 1.0
+*/
+AvroSchema::constructor(hash<auto> schema_def) {
+    AvroSchemaData* data = AvroSchemaData::parseValue(const_cast<QoreHashNode*>(schema_def),
+        xsink);
+    if (!data) {
+        return;
+    }
+    self->setPrivate(CID_AVROSCHEMA, new QoreAvroSchema(data, data->getRoot()));
+}
+
+//! Parses a top-level Avro union schema represented as %Qore data
+/** @param schema_def the union's branches, each a schema in the same form
+        AvroSchema::constructor(hash<auto>) accepts
+
+    @throw AVRO-SCHEMA-ERROR the list is not a valid Avro union schema
+
+    @par Example:
+    @code{.py}
+AvroSchema schema(("null", "string"));
+    @endcode
+
+    @since %avro 1.0
+*/
+AvroSchema::constructor(list<auto> schema_def) {
+    AvroSchemaData* data = AvroSchemaData::parseValue(const_cast<QoreListNode*>(schema_def),
+        xsink);
+    if (!data) {
+        return;
+    }
+    self->setPrivate(CID_AVROSCHEMA, new QoreAvroSchema(data, data->getRoot()));
+}
+
+//! Returns the Avro type name of the schema
+/** @return one of \c "null", \c "boolean", \c "int", \c "long", \c "float", \c "double",
+    \c "bytes", \c "string", \c "record", \c "enum", \c "array", \c "map", \c "union" or
+    \c "fixed"
+
+    @since %avro 1.0
+*/
+string AvroSchema::getType() [flags=CONSTANT] {
+    return new QoreStringNode(avro_type_name(schema->getRoot()->type), QCS_UTF8);
+}
+
+//! Returns the logical type of the schema, if it has one
+/** @return one of \c "decimal", \c "uuid", \c "date", \c "time-millis", \c "time-micros",
+    \c "timestamp-millis", \c "timestamp-micros", \c "local-timestamp-millis",
+    \c "local-timestamp-micros" or \c "duration", or @ref nothing if the schema declares no
+    logical type or declares one that is not valid for its base type
+
+    @note the Avro specification requires an implementation to ignore a logical type it does not
+    recognise, or one that is invalid for its base type, and fall back to the base type; this
+    method reports what was actually applied, not what the schema text says
+
+    @since %avro 1.0
+*/
+*string AvroSchema::getLogicalType() [flags=CONSTANT] {
+    const char* lt = avro_logical_type_name(schema->getRoot()->logical);
+    return lt ? new QoreStringNode(lt, QCS_UTF8) : QoreValue();
+}
+
+//! Returns the fully-qualified name of a named type
+/** @return the fullname of a \c record, \c enum or \c fixed schema, or @ref nothing for any
+    other type
+
+    @since %avro 1.0
+*/
+*string AvroSchema::getName() [flags=CONSTANT] {
+    const AvroNode* n = schema->getRoot();
+    return n->fullname.empty() ? QoreValue() : new QoreStringNode(n->fullname.c_str(), QCS_UTF8);
+}
+
+//! Returns the namespace of a named type
+/** @return the namespace part of a named type's fullname, or @ref nothing if the type is not a
+    named type or is in the null namespace
+
+    @since %avro 1.0
+*/
+*string AvroSchema::getNamespace() [flags=CONSTANT] {
+    const AvroNode* n = schema->getRoot();
+    if (n->fullname.empty()) {
+        return QoreValue();
+    }
+    std::string ns = n->getNamespace();
+    return ns.empty() ? QoreValue() : new QoreStringNode(ns.c_str(), QCS_UTF8);
+}
+
+//! Returns the schema as JSON text
+/** @return the schema serialized back to JSON; for a handle rooted at a named type, just that
+    type's declaration
+
+    @throw JSON-SERIALIZATION-ERROR the schema cannot be serialized to JSON
+
+    @since %avro 1.0
+*/
+string AvroSchema::getJson() [flags=RET_VALUE_ONLY] {
+    return schema->getJson(xsink);
+}
+
+//! Returns the schema as %Qore data
+/** @return the schema as the hash, list or string it was parsed from
+
+    @since %avro 1.0
+*/
+auto AvroSchema::getHash() [flags=CONSTANT] {
+    return schema->getHash();
+}
+
+//! Returns the Avro Parsing Canonical Form of the schema
+/** The
+    <a href="https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas">Parsing
+    Canonical Form</a> strips everything that does not affect how data is read — documentation,
+    aliases, logical types, default values, attribute order and whitespace — and resolves every
+    name to its fullname.  Two schemas with the same canonical form read the same data.
+
+    @par Example:
+    @code{.py}
+AvroSchema a('{"type": "record", "name": "R", "doc": "one", "fields": [{"name": "f", "type": "int"}]}');
+AvroSchema b('{"type": "record", "name": "R", "fields": [{"name": "f", "type": "int"}]}');
+# True: the doc attribute does not change how data is read
+printf("%y\n", a.getCanonicalForm() == b.getCanonicalForm());
+    @endcode
+
+    @return the Parsing Canonical Form of the schema
+
+    @since %avro 1.0
+*/
+string AvroSchema::getCanonicalForm() [flags=CONSTANT] {
+    return schema->getCanonicalForm();
+}
+
+//! Returns the CRC-64-AVRO fingerprint of the schema's Parsing Canonical Form
+/** The 64-bit Rabin fingerprint defined by the Avro specification; use it as a cache key for
+    schemas fetched by ID.
+
+    @return the CRC-64-AVRO fingerprint of
+    @ref Qore::Avro::AvroSchema::getCanonicalForm() "getCanonicalForm()"
+
+    @note the value is signed, as in the specification's reference implementation
+
+    @since %avro 1.0
+*/
+int AvroSchema::getFingerprint() [flags=CONSTANT] {
+    return schema->getFingerprint();
+}
+
+//! Returns the fullnames of every named type in the schema, in definition order
+/** @return the fullname of every \c record, \c enum and \c fixed type the schema declares; each
+    can be resolved with @ref Qore::Avro::AvroSchema::getNamedType() "getNamedType()"
+
+    @since %avro 1.0
+*/
+list<string> AvroSchema::getNamedTypeNames() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& name : schema->getData()->getNamedTypeNames()) {
+        l->push(new QoreStringNode(name.c_str(), QCS_UTF8), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return l.release();
+}
+
+//! Returns a schema handle rooted at one of the schema's named types
+/** The returned object shares the parsed schema with this one, so it is cheap and keeps this
+    schema's data alive for as long as it exists.
+
+    @param fullname the fully-qualified name of the named type
+
+    @return an @ref Qore::Avro::AvroSchema "AvroSchema" for the named type, or @ref nothing if
+        the schema does not define a type with that name
+
+    @par Example:
+    @code{.py}
+*AvroSchema address = schema.getNamedType("com.example.Address");
+if (address) {
+    printf("%s\n", address.getCanonicalForm());
+}
+    @endcode
+
+    @since %avro 1.0
+*/
+*AvroSchema AvroSchema::getNamedType(string fullname) [flags=RET_VALUE_ONLY] {
+    const AvroNode* n = schema->getData()->findNamedType(fullname->c_str());
+    if (!n) {
+        return QoreValue();
+    }
+    return avro_make_schema_object(schema->getData(), n);
+}
+
+//! Decodes an Avro binary datum
+/** Decodes a <i>bare datum</i>: the data carry no framing, no schema and no length, only the
+    values packed in schema order.  For a self-describing object container file use
+    @ref Qore::Avro::AvroFileReader "AvroFileReader" instead.
+
+    @param data the Avro binary encoding of one datum
+    @param writer_schema if present, the schema the data were written with; this schema is then
+        the <i>reader</i> schema and the Avro specification's schema resolution rules are applied
+
+    @return the decoded value; see @ref avroschemaguide for the type mapping
+
+    @throw AVRO-DECODE-ERROR the data are truncated or do not match the schema
+    @throw AVRO-RESOLUTION-ERROR the writer and reader schemas cannot be reconciled
+
+    @note trailing bytes after the datum are ignored, since a bare datum carries no length; use
+        the container file format if the input must be validated as a whole
+
+    @par Example:
+    @code{.py}
+# decode with the schema the data were written with
+hash<auto> v = reader_schema.decode(data);
+
+# decode data written with an older schema
+hash<auto> v = reader_schema.decode(data, writer_schema);
+    @endcode
+
+    @since %avro 1.0
+*/
+auto AvroSchema::decode(binary data,
+        *AvroSchema[QoreAvroSchema] writer_schema) [flags=RET_VALUE_ONLY] {
+    AvroDecoder decoder(static_cast<const unsigned char*>(data->getPtr()), data->size());
+    if (writer_schema) {
+        return decoder.decodeResolved(writer_schema->getRoot(), schema->getRoot(), xsink);
+    }
+    return decoder.decode(schema->getRoot(), xsink);
+}
+
+//! Encodes a %Qore value as an Avro binary datum
+/** @param data the value to encode; see @ref avroschemaguide for the type mapping and for how a
+        union branch is chosen
+
+    @return the Avro binary encoding of the value, with no framing
+
+    @throw AVRO-ENCODE-ERROR the value cannot be represented by the schema
+
+    @par Example:
+    @code{.py}
+binary b = schema.encode({"id": "abc", "count": 7, "note": NOTHING});
+    @endcode
+
+    @since %avro 1.0
+*/
+binary AvroSchema::encode(auto data) [flags=RET_VALUE_ONLY] {
+    AvroEncoder encoder;
+    if (encoder.encode(schema->getRoot(), data, xsink)) {
+        return QoreValue();
+    }
+    return encoder.takeBinary();
+}
+
+//! Returns the branches of a union schema
+/** @return one @ref Qore::Avro::AvroSchema "AvroSchema" per branch, in schema order, or an empty
+    list if this schema is not a union
+
+    Named-type references are already resolved, so the returned handles can be walked without
+    resolving names.
+
+    @since %avro 1.0
+*/
+list<AvroSchema> AvroSchema::getBranches() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_AVROSCHEMA->getTypeInfo()), xsink);
+    for (const AvroNode* b : schema->getRoot()->branches) {
+        l->push(avro_make_schema_object(schema->getData(), b), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return l.release();
+}
+
+//! Returns the element type of an array schema or the value type of a map schema
+/** @return the item or value type, or @ref nothing if this schema is neither an \c array nor a
+    \c map
+
+    @since %avro 1.0
+*/
+*AvroSchema AvroSchema::getItemType() [flags=RET_VALUE_ONLY] {
+    const AvroNode* n = schema->getRoot();
+    if (n->type != AT_ARRAY && n->type != AT_MAP) {
+        return QoreValue();
+    }
+    return avro_make_schema_object(schema->getData(), n->items);
+}
+
+//! Returns the fields of a record schema
+/** @return one @ref Qore::Avro::AvroFieldInfo "AvroFieldInfo" hash per field, in schema order, or
+    an empty list if this schema is not a record
+
+    @par Example:
+    @code{.py}
+foreach hash<AvroFieldInfo> f in (schema.getFields()) {
+    printf("%s: %s%s\n", f.name, f.type.getType(), f.has_default ? " (has default)" : "");
+}
+    @endcode
+
+    @note the declared return type is \c list<auto> rather than
+    <tt>list<hash<AvroFieldInfo>></tt> only because @ref Qore::Avro::AvroFieldInfo "AvroFieldInfo"
+    has an @ref Qore::Avro::AvroSchema "AvroSchema" member: the two types would otherwise have to
+    be registered before each other. Every element is a
+    @ref Qore::Avro::AvroFieldInfo "AvroFieldInfo" hash, so declaring the loop variable as one —
+    as in the example above — restores full static typing.
+
+    @since %avro 1.0
+*/
+list<auto> AvroSchema::getFields() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(hashdeclAvroFieldInfo->getTypeInfo()), xsink);
+    for (const AvroField& f : schema->getRoot()->fields) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclAvroFieldInfo, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        h->setKeyValue("name", new QoreStringNode(f.name.c_str(), QCS_UTF8), xsink);
+        ReferenceHolder<QoreListNode> al(new QoreListNode(stringTypeInfo), xsink);
+        for (const std::string& a : f.aliases) {
+            al->push(new QoreStringNode(a.c_str(), QCS_UTF8), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        h->setKeyValue("aliases", al.release(), xsink);
+        h->setKeyValue("type", avro_make_schema_object(schema->getData(), f.type), xsink);
+        h->setKeyValue("has_default", f.has_default, xsink);
+        h->setKeyValue("default_value", f.default_value.refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        l->push(h.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return l.release();
+}
+
+//! Returns the symbols of an enum schema
+/** @return the symbols in schema order — their positions are the values encoded on the wire — or
+    an empty list if this schema is not an \c enum
+
+    @since %avro 1.0
+*/
+list<string> AvroSchema::getSymbols() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& s : schema->getRoot()->symbols) {
+        l->push(new QoreStringNode(s.c_str(), QCS_UTF8), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return l.release();
+}
+
+//! Returns the default symbol of an enum schema
+/** @return the symbol used when resolution encounters a writer symbol this enum does not declare,
+    or @ref nothing if this schema is not an \c enum or declares no default
+
+    @since %avro 1.0
+*/
+*string AvroSchema::getEnumDefault() [flags=CONSTANT] {
+    const AvroNode* n = schema->getRoot();
+    if (n->type != AT_ENUM || n->enum_default < 0) {
+        return QoreValue();
+    }
+    return new QoreStringNode(n->symbols[(size_t)n->enum_default].c_str(), QCS_UTF8);
+}
+
+//! Returns the size in bytes of a fixed schema
+/** @return the declared size, or 0 if this schema is not a \c fixed type
+
+    @since %avro 1.0
+*/
+int AvroSchema::getFixedSize() [flags=CONSTANT] {
+    return (int64)schema->getRoot()->fixed_size;
+}
+
+//! Returns the precision of a decimal schema
+/** @return the total number of significant digits, or 0 if this schema does not carry the
+    \c decimal logical type
+
+    @since %avro 1.0
+*/
+int AvroSchema::getPrecision() [flags=CONSTANT] {
+    const AvroNode* n = schema->getRoot();
+    return n->logical == ALT_DECIMAL ? (int64)n->precision : 0;
+}
+
+//! Returns the scale of a decimal schema
+/** @return the number of digits to the right of the decimal point, or 0 if this schema does not
+    carry the \c decimal logical type
+
+    @since %avro 1.0
+*/
+int AvroSchema::getScale() [flags=CONSTANT] {
+    const AvroNode* n = schema->getRoot();
+    return n->logical == ALT_DECIMAL ? (int64)n->scale : 0;
+}

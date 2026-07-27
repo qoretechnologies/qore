@@ -1,0 +1,179 @@
+/** @page avroschemaguide avro Schema and Type Guide
+
+    @tableofcontents
+
+    @section avroschemaguidetypes Type Mapping
+
+    |!Avro Type|!Decodes To|!Encodes From
+    |\c null|@ref nothing|@ref nothing or @ref null
+    |\c boolean|\c bool|\c bool
+    |\c int|\c int|\c int in the range [-2^31, 2^31)
+    |\c long|\c int|\c int
+    |\c float|\c float|\c float, \c int or \c number
+    |\c double|\c float|\c float, \c int or \c number
+    |\c bytes|\c binary|\c binary, or a \c string's bytes
+    |\c string|\c string (UTF-8)|\c string
+    |\c record|\c hash|\c hash
+    |\c enum|\c string (the symbol)|a \c string symbol or an \c int index
+    |\c array|\c list|\c list
+    |\c map|\c hash|\c hash
+    |\c union|the branch's value|see @ref avroschemaguideunion
+    |\c fixed|\c binary of exactly \c size bytes|\c binary of exactly \c size bytes
+
+    Decoding is strict: an \c int that does not fit in 32 bits, a \c string that is not valid
+    UTF-8, an out-of-range \c enum index or union branch index, a negative length and a truncated
+    value all raise \c AVRO-DECODE-ERROR rather than producing a corrupt value.
+
+    @section avroschemaguidelogical Logical Types
+
+    |!Logical Type|!Base Type|!Qore Value
+    |\c decimal|\c bytes or \c fixed|\c number, converted exactly; see @ref avroschemaguidedecimal
+    |\c uuid|\c string, or \c fixed[16]|\c string, or \c binary over \c fixed[16]
+    |\c date|\c int (days since 1970-01-01)|absolute \c date at UTC midnight
+    |\c time-millis|\c int (ms since midnight)|<b>relative</b> \c date (a duration)
+    |\c time-micros|\c long (µs since midnight)|<b>relative</b> \c date (a duration)
+    |\c timestamp-millis|\c long (ms since the epoch)|absolute \c date in UTC
+    |\c timestamp-micros|\c long (µs since the epoch)|absolute \c date in UTC
+    |\c local-timestamp-millis|\c long|absolute \c date in the <b>local</b> zone
+    |\c local-timestamp-micros|\c long|absolute \c date in the <b>local</b> zone
+    |\c duration|\c fixed[12] (3 × little-endian \c uint32)|relative \c date
+
+    \c time-millis and \c time-micros are a time of day with no date attached, and %Qore has no
+    time-only type; a relative date (\c PT13H45M30S) says exactly that and nothing more, where an
+    absolute date on 1970-01-01 would invent a date the data do not contain.
+
+    \c local-timestamp-millis and \c local-timestamp-micros are wall-clock readings with no zone.
+    %Qore dates always carry a zone, so they are materialised in the local zone — the only reading
+    under which formatting the value reproduces the written wall-clock time.
+
+    Encoding raises \c AVRO-ENCODE-ERROR rather than rounding: a value with microsecond precision
+    cannot be written to a millisecond logical type, and an absolute date cannot be written to
+    \c time-millis (or a relative one to \c timestamp-micros).
+
+    @note the specification requires an implementation to ignore a logical type it does not
+    recognise, or one that is invalid for its base type — a \c decimal whose \c scale exceeds its
+    \c precision, for instance — and fall back to the base type. This module does that;
+    @ref Qore::Avro::AvroSchema::getLogicalType() "getLogicalType()" reports what was actually
+    applied, not what the schema text says.
+
+    @section avroschemaguidedecimal Decimal
+
+    An Avro \c decimal is a \c bytes or \c fixed value holding a two's-complement big-endian
+    <i>unscaled integer</i>, with \c precision and \c scale in the schema. Precision commonly
+    exceeds 18 digits, so the unscaled value does not fit in a 64-bit integer; every conversion is
+    therefore routed through an exact decimal string, and \c decimal(38, 2) and beyond round-trip
+    exactly.
+
+    @code{.py}
+AvroSchema schema('{"type": "bytes", "logicalType": "decimal", "precision": 38, "scale": 10}');
+binary b = schema.encode(12345678901234567890.1234567890n);
+printf("%y\n", schema.decode(b));
+    @endcode
+
+    Encoding accepts a \c number, \c int, \c float or \c string. Nothing is silently rounded: a
+    value with more fractional digits than \c scale, or more significant digits than
+    \c precision, raises \c AVRO-ENCODE-ERROR.
+
+    @note %Qore's \c number is an arbitrary-precision <i>binary</i> floating-point type whose
+    precision is derived from the text it was built from, so two \c number values with identical
+    decimal representations can still compare unequal with \c == if they were built from strings
+    of different lengths — this is true of \c number generally and is not specific to Avro. The
+    guarantee this module makes is that the decoded value's decimal representation is identical
+    to the encoded one; compare decimals with \c toString() when an exact test is needed.
+
+    @section avroschemaguideunion Union Branch Selection
+
+    Decoding a union is unambiguous — the branch index is on the wire. Encoding is not: a %Qore
+    string offered to <tt>["string", "bytes"]</tt> could go either way. The module resolves this
+    with a fixed preference order rather than requiring callers to wrap values:
+
+    |!Qore Value|!Branch Preference
+    |@ref nothing / @ref null|\c null
+    |\c bool|\c boolean
+    |\c int|a \c decimal branch, then \c int (if the value fits in 32 bits), \c long, \c float, \c double
+    |\c float|a \c decimal branch, then \c double, \c float
+    |\c number|a \c decimal branch, then \c double, \c float
+    |\c string|\c enum (if the value is one of its symbols), then \c string, \c bytes
+    |\c binary|\c bytes, then \c fixed of exactly the right size
+    |absolute \c date|\c timestamp-micros, \c timestamp-millis, \c local-timestamp-micros, \
+        \c local-timestamp-millis, \c date
+    |relative \c date|\c duration, \c time-micros, \c time-millis
+    |\c list|\c array
+    |\c hash|the \c record branch it satisfies with the fewest unmatched keys, then \c map
+
+    Within a branch kind the first matching branch in schema order wins. If no branch accepts the
+    value, \c AVRO-ENCODE-ERROR is raised naming the value's type and every branch of the union.
+
+    The common <tt>["null", T]</tt> shape therefore needs no special handling at all:
+
+    @code{.py}
+AvroSchema schema(("null", "string"));
+schema.encode(NOTHING);     # the "null" branch
+schema.encode("a value");   # the "string" branch
+    @endcode
+
+    @section avroschemaguideresolution Reader/Writer Schema Resolution
+
+    Pass the writer's schema to @ref Qore::Avro::AvroSchema::decode() "decode()" to read data
+    written with a different — usually older — version of the schema. The object the method is
+    called on is the <i>reader</i> schema, and the result matches it:
+
+    @code{.py}
+hash<auto> v = reader_schema.decode(data, writer_schema);
+    @endcode
+
+    The specification's reconciliation rules are applied in full:
+
+    |!Situation|!Behaviour
+    |a writer field the reader does not declare|skipped without materialising a value
+    |a reader field the writer did not write|filled from the reader field's \c default; \
+        \c AVRO-RESOLUTION-ERROR if it has none
+    |fields in a different order|matched by name, and returned in <b>reader</b> order
+    |a renamed field|matched if the reader's field declares the writer's name in its \c aliases
+    |a renamed named type|matched by fullname, by a reader alias, or by unqualified name
+    |a writer enum symbol the reader does not declare|replaced by the reader enum's \c default \
+        symbol; \c AVRO-RESOLUTION-ERROR if it has none
+    |a widened numeric type|\c int → \c long / \c float / \c double, \c long → \c float / \
+        \c double, and \c float → \c double are all read
+    |\c string and \c bytes|interchangeable in both directions
+    |the writer's schema is a union|the branch on the wire is resolved against the reader's schema
+    |the reader's schema is a union|the first branch that matches the writer's schema is used
+
+    @section avroschemaguidecanonical Canonical Form and Fingerprints
+
+    @ref Qore::Avro::AvroSchema::getCanonicalForm() "getCanonicalForm()" returns the
+    <a href="https://avro.apache.org/docs/current/specification/#parsing-canonical-form-for-schemas">Parsing
+    Canonical Form</a>: everything that does not affect how data are read — documentation,
+    aliases, logical types, default values, attribute order and whitespace — is stripped, and
+    every name is resolved to its fullname.
+
+    @ref Qore::Avro::AvroSchema::getFingerprint() "getFingerprint()" returns the CRC-64-AVRO
+    (64-bit Rabin) fingerprint of that form, as a signed integer, matching the specification's
+    reference implementation. Use it as a cache key when the transport supplies no stable schema
+    ID.
+
+    @section avroschemaguidenamed Named Types
+
+    Records, enums and fixed types have names, and a name may be referenced anywhere later in the
+    schema — including from inside the type itself, which is how recursive structures such as
+    linked lists and trees are described:
+
+    @code{.py}
+AvroSchema schema('{
+    "type": "record",
+    "name": "Node",
+    "fields": [
+        {"name": "value", "type": "int"},
+        {"name": "next", "type": ["null", "Node"], "default": null}
+    ]
+}');
+    @endcode
+
+    @ref Qore::Avro::AvroSchema::getNamedTypeNames() "getNamedTypeNames()" lists every named type
+    in definition order, and @ref Qore::Avro::AvroSchema::getNamedType() "getNamedType()" returns
+    a schema handle rooted at one of them. The handle shares the parsed schema, so it is cheap and
+    keeps the parent alive for as long as it exists.
+
+    @note a datum, not just a schema, can drive recursion depth through a recursive type, so the
+    256-level nesting limit is enforced in all builds and is not a sandboxing option
+*/

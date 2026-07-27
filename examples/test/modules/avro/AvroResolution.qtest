@@ -1,0 +1,314 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroResolution.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires avro
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AvroResolutionTest
+
+#! tests reader/writer Avro schema resolution
+class AvroResolutionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AvroResolution", "1.0") {
+        addTestCase("identical schemas", \identicalTest());
+        addTestCase("added reader fields", \addedFieldTest());
+        addTestCase("removed reader fields", \removedFieldTest());
+        addTestCase("reordered fields", \reorderTest());
+        addTestCase("field aliases", \fieldAliasTest());
+        addTestCase("record name aliases", \recordAliasTest());
+        addTestCase("numeric promotions", \promotionTest());
+        addTestCase("string and bytes", \stringBytesTest());
+        addTestCase("enum resolution", \enumTest());
+        addTestCase("union combinations", \unionTest());
+        addTestCase("nested resolution", \nestedTest());
+        addTestCase("fixed resolution", \fixedTest());
+        addTestCase("resolution failures", \failureTest());
+        set_return_value(main());
+    }
+
+    identicalTest() {
+        AvroSchema s('{"type": "record", "name": "R", "fields": [
+            {"name": "a", "type": "int"}, {"name": "b", "type": "string"}]}');
+        hash<auto> v = {"a": 1, "b": "x"};
+        # passing the same schema as the writer must produce the same result as omitting it
+        assertEq(v, s.decode(s.encode(v), s));
+        assertEq(s.decode(s.encode(v)), s.decode(s.encode(v), s));
+    }
+
+    addedFieldTest() {
+        AvroSchema v1('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"}]}');
+        AvroSchema v2('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long", "default": 0},
+            {"name": "ratio", "type": "double", "default": 1.5},
+            {"name": "label", "type": "string", "default": ""},
+            {"name": "flag", "type": "boolean", "default": true},
+            {"name": "opt", "type": ["null", "string"], "default": null},
+            {"name": "tags", "type": {"type": "array", "items": "string"},
+                "default": ["a"]},
+            {"name": "attrs", "type": {"type": "map", "values": "int"},
+                "default": {"k": 1}},
+            {"name": "suit", "type": {"type": "enum", "name": "S", "symbols": ["A", "B"]},
+                "default": "B"}]}');
+
+        hash<auto> got = v2.decode(v1.encode({"id": "abc"}), v1);
+        assertEq("abc", got.id);
+        assertEq(0, got.count);
+        assertEq(1.5, got.ratio);
+        assertEq("", got.label);
+        assertEq(True, got.flag);
+        assertNothing(got.opt);
+        assertEq(("a",), got.tags);
+        assertEq({"k": 1}, got.attrs);
+        assertEq("B", got.suit);
+    }
+
+    removedFieldTest() {
+        AvroSchema v1('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "gone", "type": "int"},
+            {"name": "also_gone", "type": {"type": "array", "items": "string"}},
+            {"name": "keep", "type": "long"}]}');
+        AvroSchema v2('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "keep", "type": "long"}]}');
+
+        binary data = v1.encode({"id": "abc", "gone": 5, "also_gone": ("x", "y"), "keep": 9});
+        # the dropped fields must still be skipped on the wire, or "keep" would read garbage
+        assertEq({"id": "abc", "keep": 9}, v2.decode(data, v1));
+    }
+
+    reorderTest() {
+        AvroSchema w('{"type": "record", "name": "R", "fields": [
+            {"name": "a", "type": "int"},
+            {"name": "b", "type": "string"},
+            {"name": "c", "type": "long"}]}');
+        AvroSchema r('{"type": "record", "name": "R", "fields": [
+            {"name": "c", "type": "long"},
+            {"name": "a", "type": "int"},
+            {"name": "b", "type": "string"}]}');
+
+        hash<auto> got = r.decode(w.encode({"a": 1, "b": "x", "c": 2}), w);
+        assertEq({"a": 1, "b": "x", "c": 2}, got);
+        # the result is in reader field order, not writer order
+        assertEq(("c", "a", "b"), keys got);
+    }
+
+    fieldAliasTest() {
+        AvroSchema w('{"type": "record", "name": "R", "fields": [
+            {"name": "name", "type": "string"}]}');
+        AvroSchema r('{"type": "record", "name": "R", "fields": [
+            {"name": "label", "type": "string", "aliases": ["name"]}]}');
+        assertEq({"label": "x"}, r.decode(w.encode({"name": "x"}), w));
+
+        # a reader field with an alias that does not match anything falls back to its default
+        AvroSchema r2('{"type": "record", "name": "R", "fields": [
+            {"name": "label", "type": "string", "aliases": ["nope"], "default": "d"}]}');
+        assertEq({"label": "d"}, r2.decode(w.encode({"name": "x"}), w));
+    }
+
+    recordAliasTest() {
+        AvroSchema w('{"type": "record", "name": "a.Old", "fields": [
+            {"name": "v", "type": "int"}]}');
+        # matched by the reader's alias
+        AvroSchema r('{"type": "record", "name": "a.New", "aliases": ["a.Old"], "fields": [
+            {"name": "v", "type": "int"}]}');
+        assertEq({"v": 3}, r.decode(w.encode({"v": 3}), w));
+
+        # matched by unqualified name, as the specification's matching rule allows
+        AvroSchema r2('{"type": "record", "name": "b.Old", "fields": [
+            {"name": "v", "type": "int"}]}');
+        assertEq({"v": 3}, r2.decode(w.encode({"v": 3}), w));
+    }
+
+    promotionTest() {
+        AvroSchema i('"int"');
+        AvroSchema l('"long"');
+        AvroSchema f('"float"');
+        AvroSchema d('"double"');
+
+        # int -> long, float, double
+        assertEq(7, l.decode(i.encode(7), i));
+        assertEq(7.0, f.decode(i.encode(7), i));
+        assertEq(7.0, d.decode(i.encode(7), i));
+        # long -> float, double
+        assertEq(7.0, f.decode(l.encode(7), l));
+        assertEq(7.0, d.decode(l.encode(7), l));
+        # float -> double
+        assertEq(1.5, d.decode(f.encode(1.5), f));
+        # identical types still work
+        assertEq(7, i.decode(i.encode(7), i));
+        assertEq(1.5, d.decode(d.encode(1.5), d));
+
+        # a promotion inside a record field
+        AvroSchema w('{"type": "record", "name": "P", "fields": [
+            {"name": "n", "type": "int"}]}');
+        AvroSchema r('{"type": "record", "name": "P", "fields": [
+            {"name": "n", "type": "double"}]}');
+        assertEq({"n": 7.0}, r.decode(w.encode({"n": 7}), w));
+
+        # the reader's logical type governs the value it produces
+        AvroSchema plain('"long"');
+        AvroSchema ts('{"type": "long", "logicalType": "timestamp-micros"}');
+        assertEq(1970-01-01T00:00:01Z, ts.decode(plain.encode(1000000), plain));
+    }
+
+    stringBytesTest() {
+        AvroSchema s('"string"');
+        AvroSchema b('"bytes"');
+        assertEq(<6869>, b.decode(s.encode("hi"), s));
+        assertEq("hi", s.decode(b.encode(<6869>), b));
+        # bytes that are not valid UTF-8 cannot be promoted to a string
+        assertThrows("AVRO-DECODE-ERROR", "not valid UTF-8", \s.decode(), (b.encode(<ff>), b));
+    }
+
+    enumTest() {
+        AvroSchema w('{"type": "enum", "name": "S", "symbols": ["A", "B", "C"]}');
+        AvroSchema r('{"type": "enum", "name": "S", "symbols": ["A", "B"], "default": "A"}');
+
+        # a symbol both declare reads as itself
+        assertEq("B", r.decode(w.encode("B"), w));
+        # a symbol only the writer declares falls back to the reader's default
+        assertEq("A", r.decode(w.encode("C"), w));
+
+        # without a default the same input is an error
+        AvroSchema r2('{"type": "enum", "name": "S", "symbols": ["A", "B"]}');
+        assertEq("B", r2.decode(w.encode("B"), w));
+        assertThrows("AVRO-RESOLUTION-ERROR", "does not declare",
+            \r2.decode(), (w.encode("C"), w));
+    }
+
+    unionTest() {
+        AvroSchema u(("null", "string"));
+        AvroSchema s('"string"');
+        AvroSchema n('"null"');
+
+        # the writer's union, the reader's not: the selected branch is resolved
+        assertEq("hi", s.decode(u.encode("hi"), u));
+        # the reader's union, the writer's not: the first matching branch is used
+        assertEq("hi", u.decode(s.encode("hi"), s));
+        assertNothing(u.decode(n.encode(NOTHING), n));
+        # both unions
+        AvroSchema u2(("string", "null", "long"));
+        assertEq("hi", u2.decode(u.encode("hi"), u));
+        assertNothing(u2.decode(u.encode(NOTHING), u));
+
+        # a writer branch no reader branch matches is an error
+        AvroSchema wl(("null", "long"));
+        AvroSchema rs(("null", "string"));
+        assertThrows("AVRO-RESOLUTION-ERROR", "no branch of the reader's union",
+            \rs.decode(), (wl.encode(5), wl));
+
+        # the writer's branch does not match the reader's non-union schema
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \s.decode(), (u.encode(NOTHING), u));
+    }
+
+    nestedTest() {
+        AvroSchema w('{"type": "record", "name": "Outer", "fields": [
+            {"name": "items", "type": {"type": "array", "items": {"type": "record",
+                "name": "Inner", "fields": [{"name": "a", "type": "int"}]}}},
+            {"name": "m", "type": {"type": "map", "values": "int"}}]}');
+        AvroSchema r('{"type": "record", "name": "Outer", "fields": [
+            {"name": "items", "type": {"type": "array", "items": {"type": "record",
+                "name": "Inner", "fields": [
+                    {"name": "a", "type": "long"},
+                    {"name": "b", "type": "string", "default": "z"}]}}},
+            {"name": "m", "type": {"type": "map", "values": "double"}}]}');
+
+        hash<auto> v = {"items": ({"a": 1}, {"a": 2}), "m": {"k": 3}};
+        assertEq({
+            "items": ({"a": 1, "b": "z"}, {"a": 2, "b": "z"}),
+            "m": {"k": 3.0},
+        }, r.decode(w.encode(v), w));
+
+        # resolution also works through a recursive schema
+        AvroSchema wn('{"type": "record", "name": "Node", "fields": [
+            {"name": "value", "type": "int"},
+            {"name": "next", "type": ["null", "Node"], "default": null}]}');
+        AvroSchema rn('{"type": "record", "name": "Node", "fields": [
+            {"name": "value", "type": "long"},
+            {"name": "next", "type": ["null", "Node"], "default": null},
+            {"name": "tag", "type": "string", "default": "t"}]}');
+        hash<auto> nested = {"value": 1, "next": {"value": 2, "next": NOTHING}};
+        assertEq({
+            "value": 1,
+            "next": {"value": 2, "next": NOTHING, "tag": "t"},
+            "tag": "t",
+        }, rn.decode(wn.encode(nested), wn));
+    }
+
+    fixedTest() {
+        AvroSchema w('{"type": "fixed", "name": "F", "size": 4}');
+        AvroSchema r('{"type": "fixed", "name": "F", "size": 4}');
+        assertEq(<01020304>, r.decode(w.encode(<01020304>), w));
+
+        # a different size does not match, even with the same name
+        AvroSchema r2('{"type": "fixed", "name": "F", "size": 8}');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \r2.decode(), (w.encode(<01020304>), w));
+
+        # a different name does not match either
+        AvroSchema r3('{"type": "fixed", "name": "G", "size": 4}');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \r3.decode(), (w.encode(<01020304>), w));
+    }
+
+    failureTest() {
+        AvroSchema w('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"}]}');
+
+        # a reader field the writer never wrote and which has no default
+        AvroSchema r('{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "missing", "type": "int"}]}');
+        assertThrows("AVRO-RESOLUTION-ERROR", "has no default value",
+            \r.decode(), (w.encode({"id": "x"}), w));
+
+        # incompatible base types
+        AvroSchema si('"int"');
+        AvroSchema ss('"string"');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \ss.decode(), (si.encode(1), si));
+        # the promotions are one-way: long does not narrow to int
+        AvroSchema sl('"long"');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \si.decode(), (sl.encode(1), sl));
+        # nor double to float
+        AvroSchema sd('"double"');
+        AvroSchema sf('"float"');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \sf.decode(), (sd.encode(1.5), sd));
+
+        # records with different names do not match
+        AvroSchema r2('{"type": "record", "name": "Other", "fields": [
+            {"name": "id", "type": "string"}]}');
+        assertThrows("AVRO-RESOLUTION-ERROR", "cannot be read with reader type",
+            \r2.decode(), (w.encode({"id": "x"}), w));
+    }
+}

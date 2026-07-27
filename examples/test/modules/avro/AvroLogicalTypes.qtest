@@ -1,0 +1,320 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroLogicalTypes.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires avro
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AvroLogicalTypesTest
+
+#! tests every Avro logical type
+class AvroLogicalTypesTest inherits QUnit::Test {
+    public {
+        const Decimal10_2 = '{"type": "bytes", "logicalType": "decimal",
+            "precision": 10, "scale": 2}';
+        const Decimal38_10 = '{"type": "bytes", "logicalType": "decimal",
+            "precision": 38, "scale": 10}';
+        const DecimalFixed = '{"type": "fixed", "name": "Dec", "size": 16,
+            "logicalType": "decimal", "precision": 38, "scale": 2}';
+    }
+
+    constructor() : QUnit::Test("AvroLogicalTypes", "1.0") {
+        addTestCase("decimal vectors", \decimalVectorTest());
+        addTestCase("decimal round trip", \decimalRoundTripTest());
+        addTestCase("decimal fixed", \decimalFixedTest());
+        addTestCase("decimal precision limits", \decimalLimitTest());
+        addTestCase("date", \dateTest());
+        addTestCase("time", \timeTest());
+        addTestCase("timestamp", \timestampTest());
+        addTestCase("local timestamp", \localTimestampTest());
+        addTestCase("duration", \durationTest());
+        addTestCase("uuid", \uuidTest());
+        addTestCase("invalid logical types are ignored", \invalidLogicalTypeTest());
+        set_return_value(main());
+    }
+
+    decimalVectorTest() {
+        AvroSchema schema(Decimal10_2);
+        assertEq("bytes", schema.getType());
+        assertEq("decimal", schema.getLogicalType());
+        assertEq(10, schema.getPrecision());
+        assertEq(2, schema.getScale());
+
+        # 123.45 has unscaled value 12345 == 0x3039, encoded as bytes with a length prefix
+        assertEq(parse_hex_string("043039"), schema.encode(123.45n));
+        assertEq("123.45", schema.decode(parse_hex_string("043039")).toString());
+
+        # -1.05 has unscaled value -105 == 0x97 in one byte of two's complement
+        assertEq(parse_hex_string("0297"), schema.encode(-1.05n));
+        assertEq("-1.05", schema.decode(parse_hex_string("0297")).toString());
+
+        # a 38-digit value needs a big integer, not int64
+        assertEq(parse_hex_string("1a018ee90ff6c373e0ee4e3f0ad2"),
+            new AvroSchema(Decimal38_10).encode(12345678901234567890.1234567890n));
+    }
+
+    decimalRoundTripTest() {
+        AvroSchema schema(Decimal10_2);
+        # Qore's number is binary floating point whose precision depends on the source text, so
+        # decimals are compared by their exact decimal representation
+        foreach string v in (("0", "0.01", "-0.01", "1.00", "-1.05", "99999999.99",
+                "-99999999.99", "12345678.90")) {
+            number n = number(v);
+            string got = schema.decode(schema.encode(n)).toString();
+            assertEq(n.toString(), got, sprintf("round trip %y", v));
+        }
+
+        # a value that needs the full 38 digits of precision
+        AvroSchema wide(Decimal38_10);
+        foreach string v in (("12345678901234567890.1234567890",
+                "-12345678901234567890.1234567890", "0.0000000001", "-0.0000000001")) {
+            number n = number(v);
+            assertEq(n.toString(), wide.decode(wide.encode(n)).toString(),
+                sprintf("wide round trip %y", v));
+        }
+
+        # an int, a float and a string are all accepted; note that a Qore number renders
+        # without trailing fractional zeros, so 7 at scale 2 reads back as "7", not "7.00"
+        assertEq("7", schema.decode(schema.encode(7)).toString());
+        assertEq(parse_hex_string("04" + "02bc"), schema.encode(7));
+        assertEq("7.25", schema.decode(schema.encode(7.25)).toString());
+        assertEq("7.25", schema.decode(schema.encode("7.25")).toString());
+        # exponent notation is accepted
+        assertEq("150", schema.decode(schema.encode("1.5e2")).toString());
+        assertEq(parse_hex_string("04" + "3a98"), schema.encode("1.5e2"));
+        assertEq("0.02", schema.decode(schema.encode("2e-2")).toString());
+    }
+
+    decimalFixedTest() {
+        AvroSchema schema(DecimalFixed);
+        assertEq("fixed", schema.getType());
+        assertEq("decimal", schema.getLogicalType());
+        assertEq(16, schema.getFixedSize());
+
+        # a fixed decimal is sign-extended to exactly the declared size
+        binary enc = schema.encode(-1.05n);
+        assertEq(16, enc.size());
+        assertEq(parse_hex_string("ffffffffffffffffffffffffffffff97"), enc);
+        assertEq("-1.05", schema.decode(enc).toString());
+
+        binary pos = schema.encode(1.05n);
+        assertEq(16, pos.size());
+        assertEq(parse_hex_string("00000000000000000000000000000069"), pos);
+        assertEq("1.05", schema.decode(pos).toString());
+
+        assertEq("0", schema.decode(schema.encode(0n)).toString());
+    }
+
+    decimalLimitTest() {
+        AvroSchema schema(Decimal10_2);
+        # more fractional digits than the scale cannot be represented exactly
+        assertThrows("AVRO-ENCODE-ERROR", "cannot be represented exactly",
+            \schema.encode(), (1.234n,));
+        # trailing zeros beyond the scale are not a loss of precision
+        assertEq("1.2", schema.decode(schema.encode("1.2000")).toString());
+        assertEq(schema.encode("1.2"), schema.encode("1.2000"));
+        # more significant digits than the precision
+        assertThrows("AVRO-ENCODE-ERROR", "significant digits",
+            \schema.encode(), (123456789.01n,));
+        # a value that is not a decimal at all
+        assertThrows("AVRO-ENCODE-ERROR", "not a valid decimal value",
+            \schema.encode(), ("not a number",));
+
+        # a fixed decimal only accepts a precision its size can hold, and the largest value that
+        # precision allows always fits, so the precision check is what rejects oversized values
+        AvroSchema small('{"type": "fixed", "name": "S", "size": 1,
+            "logicalType": "decimal", "precision": 2, "scale": 0}');
+        assertEq(parse_hex_string("63"), small.encode(99n));
+        assertEq(parse_hex_string("9d"), small.encode(-99n));
+        assertThrows("AVRO-ENCODE-ERROR", "significant digits", \small.encode(), (100n,));
+    }
+
+    dateTest() {
+        AvroSchema schema('{"type": "int", "logicalType": "date"}');
+        assertEq("int", schema.getType());
+        assertEq("date", schema.getLogicalType());
+
+        # 2026-07-27 is day 20661 since the epoch; zigzag(20661) == 41322 == 0x02c2ea
+        assertEq(parse_hex_string("eac202"), schema.encode(2026-07-27Z));
+        assertEq(2026-07-27Z, schema.decode(parse_hex_string("eac202")));
+
+        assertEq(1970-01-01Z, schema.decode(schema.encode(1970-01-01Z)));
+        # dates before the epoch use floor division, not truncation toward zero
+        assertEq(1969-12-31Z, schema.decode(schema.encode(1969-12-31Z)));
+        assertEq(1900-01-01Z, schema.decode(schema.encode(1900-01-01Z)));
+    }
+
+    timeTest() {
+        AvroSchema ms('{"type": "int", "logicalType": "time-millis"}');
+        AvroSchema us('{"type": "long", "logicalType": "time-micros"}');
+        assertEq("time-millis", ms.getLogicalType());
+        assertEq("time-micros", us.getLogicalType());
+
+        # a time of day has no date, so it decodes to a relative date
+        assertEq(parse_hex_string("a0929e2f"), ms.encode(PT13H45M30S));
+        assertEq(PT13H45M30S, ms.decode(parse_hex_string("a0929e2f")));
+        assertEq(parse_hex_string("80d3cd83f102"), us.encode(PT13H45M30.123456S));
+        assertEq(PT13H45M30.123456S, us.decode(parse_hex_string("80d3cd83f102")));
+
+        assertEq(PT0S, ms.decode(ms.encode(PT0S)));
+        assertEq(PT23H59M59.999S, ms.decode(ms.encode(PT23H59M59.999S)));
+
+        # microsecond precision cannot be written to a millisecond logical type
+        assertThrows("AVRO-ENCODE-ERROR", "millisecond resolution",
+            \ms.encode(), (PT0.000001S,));
+        # an absolute date is not a time of day
+        assertThrows("AVRO-ENCODE-ERROR", "needs a relative",
+            \ms.encode(), (2026-07-27Z,));
+    }
+
+    timestampTest() {
+        AvroSchema ms('{"type": "long", "logicalType": "timestamp-millis"}');
+        AvroSchema us('{"type": "long", "logicalType": "timestamp-micros"}');
+
+        assertEq(parse_hex_string("80d384f8fde5ab06"), us.encode(2026-07-27T13:45:30.123456Z));
+        assertEq(2026-07-27T13:45:30.123456Z,
+            us.decode(parse_hex_string("80d384f8fde5ab06")));
+        assertEq(parse_hex_string("96c496bdf467"), ms.encode(2026-07-27T13:45:30.123Z));
+        assertEq(2026-07-27T13:45:30.123Z, ms.decode(parse_hex_string("96c496bdf467")));
+
+        # timestamps before the epoch keep a non-negative microsecond remainder
+        date before = 1969-12-31T23:59:59.750Z;
+        assertEq(before, ms.decode(ms.encode(before)));
+        assertEq(before, us.decode(us.encode(before)));
+        assertEq(1970-01-01T00:00:00Z, us.decode(us.encode(1970-01-01T00:00:00Z)));
+
+        assertThrows("AVRO-ENCODE-ERROR", "millisecond resolution",
+            \ms.encode(), (2026-07-27T13:45:30.123456Z,));
+        assertThrows("AVRO-ENCODE-ERROR", "needs an absolute",
+            \us.encode(), (PT1H,));
+    }
+
+    localTimestampTest() {
+        AvroSchema ms('{"type": "long", "logicalType": "local-timestamp-millis"}');
+        AvroSchema us('{"type": "long", "logicalType": "local-timestamp-micros"}');
+
+        # a local timestamp is a wall-clock reading: the round trip must reproduce the same
+        # wall-clock components, whatever the local zone is
+        date v = 2026-07-27T13:45:30.123456;
+        date back = us.decode(us.encode(v));
+        assertEq(v.format("YYYY-MM-DD HH:mm:SS.xx"), back.format("YYYY-MM-DD HH:mm:SS.xx"));
+
+        date vms = 2026-07-27T13:45:30.123;
+        assertEq(vms.format("YYYY-MM-DD HH:mm:SS.ms"),
+            ms.decode(ms.encode(vms)).format("YYYY-MM-DD HH:mm:SS.ms"));
+
+        # the encoded value is the wall clock as an offset from the epoch, so it differs from the
+        # UTC timestamp encoding whenever the local zone is not UTC
+        AvroSchema utc('{"type": "long", "logicalType": "timestamp-micros"}');
+        if (v.info().utc_secs_east) {
+            assertNeq(utc.encode(v), us.encode(v));
+        } else {
+            assertEq(utc.encode(v), us.encode(v));
+        }
+    }
+
+    durationTest() {
+        AvroSchema schema('{"type": "fixed", "name": "Dur", "size": 12,
+            "logicalType": "duration"}');
+        assertEq("fixed", schema.getType());
+        assertEq("duration", schema.getLogicalType());
+
+        # three little-endian unsigned 32-bit components: months, days, milliseconds; three
+        # hours is 10800000 ms == 0x00a4cb80, which is 80 cb a4 00 little-endian
+        assertEq(parse_hex_string("01000000" + "02000000" + "80cba400"), schema.encode(P1M2DT3H));
+        assertEq(P1M2DT3H,
+            schema.decode(parse_hex_string("01000000" + "02000000" + "80cba400")));
+
+        # the components are independent: days are not folded into months
+        assertEq(P90D, schema.decode(schema.encode(P90D)));
+        assertEq(P2Y, schema.decode(schema.encode(P2Y)));
+        assertEq(PT0.500S, schema.decode(schema.encode(PT0.500S)));
+        assertEq(P1Y2M3DT4H5M6.007S, schema.decode(schema.encode(P1Y2M3DT4H5M6.007S)));
+
+        # a duration holds milliseconds, not microseconds
+        assertThrows("AVRO-ENCODE-ERROR", "millisecond resolution",
+            \schema.encode(), (PT0.000001S,));
+        # negative components cannot be represented in unsigned fields
+        assertThrows("AVRO-ENCODE-ERROR", "unsigned 32-bit components",
+            \schema.encode(), (-P1D,));
+        # an absolute date is not a duration
+        assertThrows("AVRO-ENCODE-ERROR", "relative date",
+            \schema.encode(), (2026-07-27Z,));
+    }
+
+    uuidTest() {
+        AvroSchema schema('{"type": "string", "logicalType": "uuid"}');
+        assertEq("string", schema.getType());
+        assertEq("uuid", schema.getLogicalType());
+
+        string u = "12345678-1234-5678-1234-567812345678";
+        assertEq(parse_hex_string("48" + u.toBinary().toHex()), schema.encode(u));
+        assertEq(u, schema.decode(schema.encode(u)));
+
+        # Avro 1.12 also allows uuid over fixed[16], where the raw bytes are the value
+        AvroSchema fx('{"type": "fixed", "name": "U", "size": 16, "logicalType": "uuid"}');
+        assertEq("uuid", fx.getLogicalType());
+        binary raw = <12345678123456781234567812345678>;
+        assertEq(raw, fx.decode(fx.encode(raw)));
+
+        # over any other fixed size the logical type does not apply
+        AvroSchema bad('{"type": "fixed", "name": "U2", "size": 8, "logicalType": "uuid"}');
+        assertNothing(bad.getLogicalType());
+    }
+
+    invalidLogicalTypeTest() {
+        # the specification requires an unrecognised logical type to be ignored
+        AvroSchema unknown('{"type": "long", "logicalType": "not-a-real-type"}');
+        assertNothing(unknown.getLogicalType());
+        assertEq(7, unknown.decode(unknown.encode(7)));
+
+        # a logical type that is invalid for its base type is ignored too
+        AvroSchema wrong_base('{"type": "string", "logicalType": "date"}');
+        assertNothing(wrong_base.getLogicalType());
+        assertEq("x", wrong_base.decode(wrong_base.encode("x")));
+
+        # a decimal whose scale exceeds its precision is invalid and therefore ignored
+        AvroSchema bad_scale('{"type": "bytes", "logicalType": "decimal",
+            "precision": 2, "scale": 5}');
+        assertNothing(bad_scale.getLogicalType());
+        assertEq(<0102>, bad_scale.decode(bad_scale.encode(<0102>)));
+
+        # so is a decimal with no precision, or a non-positive one
+        assertNothing(new AvroSchema('{"type": "bytes", "logicalType": "decimal"}')
+            .getLogicalType());
+        assertNothing(new AvroSchema('{"type": "bytes", "logicalType": "decimal",
+            "precision": 0}').getLogicalType());
+
+        # a fixed decimal whose precision cannot fit in its size is invalid
+        assertNothing(new AvroSchema('{"type": "fixed", "name": "TooSmall", "size": 1,
+            "logicalType": "decimal", "precision": 5}').getLogicalType());
+
+        # a duration must be exactly 12 bytes
+        assertNothing(new AvroSchema('{"type": "fixed", "name": "D2", "size": 8,
+            "logicalType": "duration"}').getLogicalType());
+    }
+}

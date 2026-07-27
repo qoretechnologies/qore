@@ -1,0 +1,108 @@
+/** @page avrogettingstarted Getting Started with the avro Module
+
+    @tableofcontents
+
+    @section avrogettingstartedintro Overview
+
+    Everything in the module starts with an @ref Qore::Avro::AvroSchema "AvroSchema" object. It is
+    parsed once, is immutable afterwards, and is what encodes and decodes data.
+
+    @section avrogettingstartedparse Parsing a Schema
+
+    A schema is a JSON document. Pass it as text:
+
+    @code{.py}
+%requires avro
+
+AvroSchema schema('{
+    "type": "record",
+    "name": "com.example.Event",
+    "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "count", "type": "long"},
+        {"name": "note", "type": ["null", "string"], "default": null}
+    ]
+}');
+    @endcode
+
+    or as %Qore data, when it has already been parsed or is being generated programmatically:
+
+    @code{.py}
+AvroSchema schema({
+    "type": "record",
+    "name": "com.example.Event",
+    "fields": (
+        {"name": "id", "type": "string"},
+        {"name": "count", "type": "long"},
+        {"name": "note", "type": ("null", "string"), "default": NOTHING},
+    ),
+});
+    @endcode
+
+    Any Avro schema is accepted, not only records — a bare primitive name, an array, a map, or a
+    top-level union all work.
+
+    @section avrogettingstartedcodec Encoding and Decoding a Bare Datum
+
+    @code{.py}
+binary data = schema.encode({"id": "abc", "count": 7, "note": NOTHING});
+hash<auto> event = schema.decode(data);
+printf("%s: %d\n", event.id, event.count);
+    @endcode
+
+    A bare datum carries no length, so @ref Qore::Avro::AvroSchema::decode() "decode()" reads one
+    value and ignores anything after it. If the input must be validated as a whole, use a
+    container file.
+
+    @section avrogettingstartedreuse Reusing a Schema
+
+    Parsing a schema costs far more than encoding or decoding one datum with it, and an
+    %AvroSchema is immutable and thread-safe once constructed. Applications that decode a stream
+    of data against schemas fetched by ID should cache the parsed objects:
+
+    @code{.py}
+hash<string, AvroSchema> cache;
+
+AvroSchema getSchema(string schema_id) {
+    if (!cache{schema_id}) {
+        cache{schema_id} = new AvroSchema(fetchSchemaJson(schema_id));
+    }
+    return cache{schema_id};
+}
+
+hash<auto> decodeEvent(string schema_id, binary payload) {
+    return getSchema(schema_id).decode(payload);
+}
+    @endcode
+
+    When the transport gives no stable ID, key the cache on the schema's own identity instead:
+    @ref Qore::Avro::AvroSchema::getFingerprint() "getFingerprint()" returns the CRC-64-AVRO
+    fingerprint of the @ref Qore::Avro::AvroSchema::getCanonicalForm() "Parsing Canonical Form",
+    so two schemas that differ only in documentation, aliases, default values or whitespace share
+    one entry.
+
+    @section avrogettingstartedcontainer Reading and Writing Container Files
+
+    A container file needs no external schema — it carries its own:
+
+    @code{.py}
+{
+    AvroFileWriter writer("events.avro", schema, {"codec": "deflate"});
+    writer.write({"id": "a", "count": 1});
+    writer.write({"id": "b", "count": 2});
+}
+
+AvroFileReader reader("events.avro");
+map printf("%y\n", $1), reader;
+    @endcode
+
+    @ref Qore::Avro::AvroFileWriter "AvroFileWriter" buffers objects and writes them in blocks;
+    the last block is written by
+    @ref Qore::Avro::AvroFileWriter::close() "close()" or by destroying the object, which is why
+    the writer above is scoped.
+
+    @section avrogettingstartednext Next Steps
+
+    - @ref avrocookbook — a worked example for every type, logical type and framing
+    - @ref avroschemaguide — the type mapping, union branch selection and schema resolution rules
+*/

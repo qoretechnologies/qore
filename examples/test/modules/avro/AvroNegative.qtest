@@ -1,0 +1,468 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroNegative.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%requires avro
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AvroNegativeTest
+
+#! tests that invalid schemas and hostile or corrupt data are rejected rather than misread
+class AvroNegativeTest inherits QUnit::Test {
+    public {
+        const RecordSchema = '{"type": "record", "name": "E", "fields": [
+            {"name": "id", "type": "string"},
+            {"name": "count", "type": "long"}
+        ]}';
+
+        const NodeSchema = '{"type": "record", "name": "Node", "fields": [
+            {"name": "value", "type": "int"},
+            {"name": "next", "type": ["null", "Node"], "default": null}
+        ]}';
+    }
+
+    constructor() : QUnit::Test("AvroNegative", "1.0") {
+        addTestCase("invalid schemas", \invalidSchemaTest());
+        addTestCase("invalid names", \invalidNameTest());
+        addTestCase("invalid unions", \invalidUnionTest());
+        addTestCase("invalid defaults", \invalidDefaultTest());
+        addTestCase("truncated data", \truncatedTest());
+        addTestCase("out of range indexes", \rangeTest());
+        addTestCase("corrupt varints", \varintTest());
+        addTestCase("corrupt blocks", \blockTest());
+        addTestCase("invalid UTF-8", \utf8Test());
+        addTestCase("map keys", \mapKeyTest());
+        addTestCase("encode type errors", \encodeTypeTest());
+        addTestCase("nesting depth", \depthTest());
+        addTestCase("sandbox interrupt", \interruptTest());
+        addTestCase("filesystem domain", \filesystemDomainTest());
+        set_return_value(main());
+    }
+
+    invalidSchemaTest() {
+        # not JSON at all
+        assertThrows("JSON-PARSE-ERROR", sub () { new AvroSchema("not json"); });
+        # valid JSON that is not a schema
+        assertThrows("AVRO-SCHEMA-ERROR", "must be a JSON string, array or object",
+            sub () { new AvroSchema("42"); });
+        # an object with no type attribute
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'type'",
+            sub () { new AvroSchema('{"name": "R"}'); });
+        # a type name that is neither a primitive nor a defined named type
+        assertThrows("AVRO-SCHEMA-ERROR", "unknown Avro type",
+            sub () { new AvroSchema('"nosuchtype"'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "unknown Avro type",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": "Undefined"}]}'); });
+        # missing structural attributes
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'fields'",
+            sub () { new AvroSchema('{"type": "record", "name": "R"}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'items'",
+            sub () { new AvroSchema('{"type": "array"}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'values'",
+            sub () { new AvroSchema('{"type": "map"}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'symbols'",
+            sub () { new AvroSchema('{"type": "enum", "name": "E"}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "at least one symbol",
+            sub () { new AvroSchema('{"type": "enum", "name": "E", "symbols": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required integer 'size'",
+            sub () { new AvroSchema('{"type": "fixed", "name": "F"}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "invalid size",
+            sub () { new AvroSchema('{"type": "fixed", "name": "F", "size": -1}'); });
+        # a named type defined twice
+        assertThrows("AVRO-SCHEMA-ERROR", "defined more than once",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "a", "type": {"type": "fixed", "name": "F", "size": 1}},
+                {"name": "b", "type": {"type": "fixed", "name": "F", "size": 2}}]}'); });
+        # a field declared twice
+        assertThrows("AVRO-SCHEMA-ERROR", "declares field 'f' more than once",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": "int"}, {"name": "f", "type": "int"}]}'); });
+        # a symbol declared twice
+        assertThrows("AVRO-SCHEMA-ERROR", "more than once",
+            sub () { new AvroSchema('{"type": "enum", "name": "E",
+                "symbols": ["A", "A"]}'); });
+        # an enum default that is not one of its symbols
+        assertThrows("AVRO-SCHEMA-ERROR", "not one of its symbols",
+            sub () { new AvroSchema('{"type": "enum", "name": "E", "symbols": ["A"],
+                "default": "B"}'); });
+        # a field that is not an object, or has no name or type
+        assertThrows("AVRO-SCHEMA-ERROR", "must be an object",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": ["x"]}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing or invalid 'name'",
+            sub () { new AvroSchema('{"type": "record", "name": "R",
+                "fields": [{"type": "int"}]}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "missing the required 'type'",
+            sub () { new AvroSchema('{"type": "record", "name": "R",
+                "fields": [{"name": "f"}]}'); });
+    }
+
+    invalidNameTest() {
+        assertThrows("AVRO-SCHEMA-ERROR", "not a valid Avro name",
+            sub () { new AvroSchema('{"type": "record", "name": "1bad", "fields": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "not a valid Avro name",
+            sub () { new AvroSchema('{"type": "record", "name": "has-dash",
+                "fields": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "not a valid Avro fullname",
+            sub () { new AvroSchema('{"type": "record", "name": "a..b", "fields": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "not a valid Avro namespace",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "namespace": "1x",
+                "fields": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "not a valid symbol name",
+            sub () { new AvroSchema('{"type": "enum", "name": "E",
+                "symbols": ["with space"]}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "must be an array",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "aliases": "x",
+                "fields": []}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "must contain only strings",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "aliases": [1],
+                "fields": []}'); });
+    }
+
+    invalidUnionTest() {
+        assertThrows("AVRO-SCHEMA-ERROR", "at least one branch",
+            sub () { new AvroSchema("[]"); });
+        assertThrows("AVRO-SCHEMA-ERROR", "may not immediately contain another union",
+            sub () { new AvroSchema('["null", ["int", "string"]]'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "more than one branch of type 'string'",
+            sub () { new AvroSchema('["string", "string"]'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "more than one branch of type 'int'",
+            sub () { new AvroSchema('["int", {"type": "int"}]'); });
+
+        # two named types of the same kind but different names are allowed
+        AvroSchema ok('[
+            {"type": "fixed", "name": "F1", "size": 1},
+            {"type": "fixed", "name": "F2", "size": 2}
+        ]');
+        assertEq(2, ok.getBranches().size());
+    }
+
+    invalidDefaultTest() {
+        assertThrows("AVRO-SCHEMA-ERROR", "cannot be a default for Avro type 'int'",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": "int", "default": "x"}]}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "cannot be a default for Avro type 'string'",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": "string", "default": 1}]}'); });
+        assertThrows("AVRO-SCHEMA-ERROR", "not a symbol of enum",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": {"type": "enum", "name": "E", "symbols": ["A"]},
+                 "default": "Z"}]}'); });
+        # a bytes default whose code points exceed 255
+        assertThrows("AVRO-SCHEMA-ERROR", "out of the 0-255 range",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": "bytes", "default": "中"}]}'); });
+        # a fixed default of the wrong length
+        assertThrows("AVRO-SCHEMA-ERROR", "bytes long, but fixed type",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": {"type": "fixed", "name": "F", "size": 4},
+                 "default": "ab"}]}'); });
+        # a record default that omits a field with no default of its own
+        assertThrows("AVRO-SCHEMA-ERROR", "does not supply a value for field",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": {"type": "record", "name": "Inner", "fields": [
+                    {"name": "x", "type": "int"}]}, "default": {}}]}'); });
+        # a union default corresponds to the union's first branch
+        assertThrows("AVRO-SCHEMA-ERROR", "cannot be a default for Avro type 'null'",
+            sub () { new AvroSchema('{"type": "record", "name": "R", "fields": [
+                {"name": "f", "type": ["null", "int"], "default": 1}]}'); });
+    }
+
+    truncatedTest() {
+        AvroSchema schema(RecordSchema);
+        binary full = schema.encode({"id": "abc", "count": 7});
+
+        # truncating at every byte boundary must raise, never return a partial value
+        for (int i = 0; i < full.size(); ++i) {
+            assertThrows("AVRO-DECODE-ERROR", \schema.decode(), (full.substr(0, i),),
+                sprintf("truncated to %d of %d bytes", i, full.size()));
+        }
+        # the complete value still decodes
+        assertEq({"id": "abc", "count": 7}, schema.decode(full));
+
+        # a length prefix longer than the remaining input
+        AvroSchema s('"string"');
+        assertThrows("AVRO-DECODE-ERROR", "truncated", \s.decode(), (parse_hex_string("0a6162"),));
+        AvroSchema b('"bytes"');
+        # zigzag(0x14) is 10, so ten bytes are needed and none remain
+        assertThrows("AVRO-DECODE-ERROR", "truncated", \b.decode(), (parse_hex_string("14"),));
+        # a fixed value with too few bytes
+        AvroSchema f('{"type": "fixed", "name": "F", "size": 8}');
+        assertThrows("AVRO-DECODE-ERROR", "truncated", \f.decode(), (<0102>,));
+        # a float or double cut short
+        AvroSchema d('"double"');
+        assertThrows("AVRO-DECODE-ERROR", "truncated", \d.decode(), (<01020304>,));
+    }
+
+    rangeTest() {
+        # a union branch index beyond the last branch
+        AvroSchema u(("null", "string"));
+        assertThrows("AVRO-DECODE-ERROR", "out of range", \u.decode(), (parse_hex_string("04"),));
+        # a negative branch index
+        assertThrows("AVRO-DECODE-ERROR", "out of range", \u.decode(), (parse_hex_string("01"),));
+
+        # an enum index beyond the last symbol
+        AvroSchema e('{"type": "enum", "name": "E", "symbols": ["A", "B"]}');
+        assertThrows("AVRO-DECODE-ERROR", "out of range", \e.decode(), (parse_hex_string("06"),));
+        assertThrows("AVRO-DECODE-ERROR", "out of range", \e.decode(), (parse_hex_string("01"),));
+
+        # an "int" whose encoded value does not fit in 32 bits
+        AvroSchema i('"int"');
+        AvroSchema l('"long"');
+        assertThrows("AVRO-DECODE-ERROR", "outside the 32-bit range",
+            \i.decode(), (l.encode(2147483648),));
+
+        # a boolean byte other than 0 or 1
+        AvroSchema b('"boolean"');
+        assertThrows("AVRO-DECODE-ERROR", "invalid boolean value",
+            \b.decode(), (parse_hex_string("02"),));
+
+        # a negative length prefix
+        AvroSchema s('"string"');
+        assertThrows("AVRO-DECODE-ERROR", "negative length", \s.decode(), (parse_hex_string("03"),));
+    }
+
+    varintTest() {
+        AvroSchema l('"long"');
+        # a continuation bit that never terminates
+        assertThrows("AVRO-DECODE-ERROR", "truncated",
+            \l.decode(), (parse_hex_string("808080"),));
+        # eleven continuation bytes overflow 64 bits
+        assertThrows("AVRO-DECODE-ERROR", "overflows 64 bits",
+            \l.decode(), (parse_hex_string("8080808080808080808080"),));
+        # a tenth byte with more than one significant bit also overflows
+        assertThrows("AVRO-DECODE-ERROR", "overflows 64 bits",
+            \l.decode(), (parse_hex_string("ffffffffffffffffff7f"),));
+        # the largest representable value still decodes
+        assertEq(9223372036854775807, l.decode(parse_hex_string("feffffffffffffffff01")));
+    }
+
+    blockTest() {
+        AvroSchema a('{"type": "array", "items": "long"}');
+        # a block count larger than the bytes that remain cannot be valid
+        assertThrows("AVRO-DECODE-ERROR", "only 0 bytes remain",
+            \a.decode(), (parse_hex_string("fe01"),));
+        # a long-form block whose byte size exceeds the input
+        assertThrows("AVRO-DECODE-ERROR", "exceeds the",
+            \a.decode(), (parse_hex_string("01" + "fe01"),));
+        # a block count of INT64_MIN cannot be negated
+        assertThrows("AVRO-DECODE-ERROR", "overflows when negated",
+            \a.decode(), (parse_hex_string("ffffffffffffffffff01"),));
+
+        # an array of a zero-width element type is bounded by a fixed cap instead
+        AvroSchema n('{"type": "array", "items": "null"}');
+        assertEq(3, n.decode(parse_hex_string("0600")).size());
+        # AvroMaxZeroWidthElements is 1000000; zigzag(2000000) == 4000000 == 0x3d0900
+        assertThrows("AVRO-DECODE-ERROR", "zero-width element type",
+            \n.decode(), (parse_hex_string("80a4e80300"),));
+    }
+
+    utf8Test() {
+        AvroSchema s('"string"');
+        # a length prefix of 1 followed by a byte that cannot start a UTF-8 sequence
+        assertThrows("AVRO-DECODE-ERROR", "not valid UTF-8",
+            \s.decode(), (parse_hex_string("02ff"),));
+        # a truncated multi-byte sequence
+        assertThrows("AVRO-DECODE-ERROR", "not valid UTF-8",
+            \s.decode(), (parse_hex_string("02c3"),));
+        # valid multi-byte input is accepted
+        assertEq("é", s.decode(parse_hex_string("04c3a9")));
+    }
+
+    mapKeyTest() {
+        AvroSchema m('{"type": "map", "values": "int"}');
+        # a Qore hash key is NUL-terminated, so a map key with an embedded NUL would be silently
+        # truncated -- and two distinct keys could then collide and drop an entry
+        assertThrows("AVRO-DECODE-ERROR", "embedded NUL",
+            \m.decode(), (parse_hex_string("02" + "06" + "610062" + "02" + "00"),));
+        # the same key without the NUL is fine
+        assertEq({"ab": 1}, m.decode(parse_hex_string("02" + "04" + "6162" + "02" + "00")));
+    }
+
+    encodeTypeTest() {
+        AvroSchema i('"int"');
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \i.encode(), ("x",));
+        assertThrows("AVRO-ENCODE-ERROR", "outside the 32-bit range",
+            \i.encode(), (2147483648,));
+
+        AvroSchema s('"string"');
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \s.encode(), (1,));
+
+        AvroSchema b('"boolean"');
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \b.encode(), (1,));
+
+        AvroSchema n('"null"');
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \n.encode(), ("x",));
+
+        AvroSchema f('{"type": "fixed", "name": "F", "size": 4}');
+        assertThrows("AVRO-ENCODE-ERROR", "requires exactly 4 bytes", \f.encode(), (<0102>,));
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \f.encode(), ("abcd",));
+
+        AvroSchema e('{"type": "enum", "name": "E", "symbols": ["A", "B"]}');
+        assertThrows("AVRO-ENCODE-ERROR", "is not a symbol of enum", \e.encode(), ("Z",));
+        assertThrows("AVRO-ENCODE-ERROR", "out of range for enum", \e.encode(), (9,));
+
+        AvroSchema rec(RecordSchema);
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \rec.encode(), ("not a hash",));
+        assertThrows("AVRO-ENCODE-ERROR", "has no default value",
+            \rec.encode(), ({"id": "x"},));
+
+        AvroSchema arr('{"type": "array", "items": "int"}');
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \arr.encode(), ({"a": 1},));
+        assertThrows("AVRO-ENCODE-ERROR", "cannot encode a value of Qore type",
+            \arr.encode(), ((("x",),)));
+
+        # no union branch accepts the value
+        AvroSchema u(("null", "string"));
+        assertThrows("AVRO-ENCODE-ERROR", "no branch of the union accepts",
+            \u.encode(), (1,));
+    }
+
+    depthTest() {
+        # the schema parser rejects nesting beyond the limit
+        string deep = strmul('{"type": "array", "items": ', AvroMaxNestingDepth + 2)
+            + '"int"' + strmul("}", AvroMaxNestingDepth + 2);
+        assertThrows("AVRO-SCHEMA-ERROR", "maximum depth",
+            sub () { new AvroSchema(deep); });
+
+        # a schema right at the limit is accepted
+        string ok = strmul('{"type": "array", "items": ', AvroMaxNestingDepth - 1)
+            + '"int"' + strmul("}", AvroMaxNestingDepth - 1);
+        AvroSchema shallow(ok);
+        assertEq("array", shallow.getType());
+
+        # a recursive schema lets the *data* drive the depth, which is why the limit is not a
+        # sandboxing option: each level here is two bytes of input
+        AvroSchema node(NodeSchema);
+        binary bomb = parse_hex_string(strmul("0002", 400) + "0000");
+        assertThrows("AVRO-DECODE-ERROR", "maximum depth", \node.decode(), (bomb,));
+
+        # encoding a value nested beyond the limit is rejected too
+        hash<auto!> v = {"value": 0};
+        for (int i = 0; i < 400; ++i) {
+            hash<auto!> outer = {"value": 0};
+            outer.next = v;
+            v = outer;
+        }
+        assertThrows("AVRO-ENCODE-ERROR", "maximum depth", \node.encode(), (v,));
+    }
+
+    interruptTest() {
+        # the interrupt check runs every 100 iterations, so an array of 200 elements reaches one
+        # deterministically; a pre-requested interrupt then fires on the first check
+        AvroSchema arr('{"type": "array", "items": "long"}');
+        list<int> big = map $1, xrange(1, 200);
+        binary data = arr.encode(big);
+
+        string code = "
+%modern
+%requires avro
+
+auto sub decodeIt(binary data) {
+    AvroSchema arr('{\"type\": \"array\", \"items\": \"long\"}');
+    return arr.decode(data);
+}
+
+binary sub encodeIt(list<auto> l) {
+    AvroSchema arr('{\"type\": \"array\", \"items\": \"long\"}');
+    return arr.encode(l);
+}
+";
+        {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            SandboxManager sm();
+            p.setSandboxManager(sm);
+            p.parse(code, "avro-sandbox-test");
+            # with no interrupt requested the call succeeds
+            assertEq(big, p.callFunction("decodeIt", data));
+            sm.requestInterrupt();
+            assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("decodeIt", data));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            SandboxManager sm();
+            p.setSandboxManager(sm);
+            p.parse(code, "avro-sandbox-test");
+            assertEq(data, p.callFunction("encodeIt", big));
+            sm.requestInterrupt();
+            assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("encodeIt", big));
+        }
+    }
+
+    filesystemDomainTest() {
+        # the file-path constructors are tagged FILESYSTEM; the binary and stream forms are not,
+        # so they stay usable when the filesystem is off limits
+        string code = "
+%modern
+%requires avro
+
+nothing sub readFile(string path) {
+    AvroFileReader r(path);
+}
+
+nothing sub writeFile(string path, AvroSchema schema) {
+    AvroFileWriter w(path, schema);
+}
+
+auto sub readBinary(binary data) {
+    AvroFileReader r(data);
+    return map \$1, r;
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_FILESYSTEM);
+        assertThrows("PARSE-EXCEPTION", "parse options do not allow access to builtin method",
+            \p.parse(), (code, "avro-fs-test"));
+
+        # the same program without the file-path calls parses and runs
+        string safe = "
+%modern
+%requires avro
+
+auto sub readBinary(binary data) {
+    AvroFileReader r(data);
+    return map \$1, r;
+}
+";
+        Program p2(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_FILESYSTEM);
+        p2.parse(safe, "avro-fs-test");
+
+        AvroSchema schema(RecordSchema);
+        BinaryOutputStream os();
+        {
+            AvroFileWriter w(os, schema);
+            w.write({"id": "a", "count": 1});
+        }
+        assertEq(({"id": "a", "count": 1},), p2.callFunction("readBinary", os.getData()));
+    }
+}

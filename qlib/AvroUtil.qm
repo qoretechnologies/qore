@@ -1,0 +1,298 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AvroUtil.qm maps Avro schemas to DataProvider types
+
+/*  AvroUtil.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 3.0
+%modern
+
+%requires(reexport) avro
+%requires(reexport) DataProvider
+
+module AvroUtil {
+    version = "1.0";
+    desc = "maps Apache Avro schemas to DataProvider types";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage AvroUtil Module
+
+    @tableofcontents
+
+    @section avroutilintro AvroUtil Module Introduction
+
+    The %AvroUtil module maps an \c AvroSchema from the
+    <a href="../../avro/html/index.html#avrointro">avro</a> binary module to an
+    \c AbstractDataProviderType, so that Avro-described data can be exposed through the
+    <a href="../../DataProvider/html/index.html#dataproviderintro">DataProvider</a> API — request
+    and response types for a message stream, record types for a container file, and so on.
+
+    It is the Avro counterpart of \c GrpcTypeHelper in the \c GrpcDataProvider module, which does
+    the same job for Protocol Buffers.
+
+    @section avrorutilusage Usage
+
+    @code{.py}
+%requires AvroUtil
+
+AvroSchema schema('{"type": "record", "name": "Event", "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "count", "type": "long"},
+    {"name": "tags", "type": {"type": "array", "items": "string"}},
+    {"name": "note", "type": ["null", "string"], "default": null}
+]}');
+
+AbstractDataProviderType type = AvroTypeHelper::schemaToDataType(schema);
+foreach string name in (type.getFieldNames()) {
+    printf("%s: %s\n", name, type.getField(name).getType().getName());
+}
+    @endcode
+
+    @section avrorutilmapping Type Mapping
+
+    |!Avro Type|!DataProvider Type
+    |\c null|\c nothing
+    |\c boolean|\c softbool
+    |\c int, \c long|\c softint
+    |\c float, \c double|\c softfloat
+    |\c bytes, \c fixed|\c data
+    |\c string|\c string
+    |\c enum|\c string, with the symbols as allowed values
+    |\c record|a \c HashDataType with one field per Avro field
+    |\c array|a \c SoftListDataType over the element type
+    |\c map|a \c HashDataType with the value type as its default
+    |\c union|the sole non-\c null branch, made optional; otherwise \c auto
+    |\c decimal|\c softnumber
+    |\c uuid|\c string
+    |\c date, \c timestamp-millis, \c timestamp-micros, \c local-timestamp-*|\c date
+    |\c time-millis, \c time-micros, \c duration|\c date (a relative date, i.e. a duration)
+
+    A union of exactly one non-\c null branch — the ubiquitous <tt>["null", T]</tt> shape — maps
+    to \c T as an optional field, which is what makes an Avro record with nullable fields read
+    naturally through the DataProvider API. Any other union maps to \c auto, since the
+    DataProvider type system has no discriminated union.
+
+    Recursion is handled: a named type already being mapped further up the tree maps to \c auto
+    rather than expanding forever.
+
+    @section avrorutilrelnotes Release Notes
+
+    @subsection avroutil_1_0 AvroUtil v1.0
+    - initial release
+*/
+
+#! contains all public definitions in the AvroUtil module
+public namespace AvroUtil {
+#! maps Avro schemas to \c AbstractDataProviderType values
+public class AvroTypeHelper {
+    public {
+        #! Avro logical types that carry an absolute point in time
+        const AbsoluteDateLogicalTypes = {
+            "date": True,
+            "timestamp-millis": True,
+            "timestamp-micros": True,
+            "local-timestamp-millis": True,
+            "local-timestamp-micros": True,
+        };
+
+        #! Avro logical types that carry a duration
+        const RelativeDateLogicalTypes = {
+            "time-millis": True,
+            "time-micros": True,
+            "duration": True,
+        };
+    }
+
+    #! Converts an Avro schema to a DataProvider type
+    /** @param schema the Avro schema to convert
+        @param visited the fullnames of named types currently being converted, used to break
+        recursion; callers do not normally pass this
+
+        @return a type describing the schema; a \c record becomes a \c HashDataType,
+        everything else the type given in @ref avrorutilmapping
+
+        @par Example:
+        @code{.py}
+AbstractDataProviderType type = AvroTypeHelper::schemaToDataType(schema);
+        @endcode
+    */
+    static AbstractDataProviderType schemaToDataType(AvroSchema schema,
+            *hash<string, bool> visited) {
+        return AvroTypeHelper::schemaToDataTypeIntern(schema, visited ?? {}, False);
+    }
+
+    #! Converts an Avro record field to a DataProvider field
+    /** @param field the field description, as returned by \c AvroSchema::getFields()
+        @param visited the fullnames of named types currently being converted
+
+        @return a \c QoreDataField for the field; the field is optional if its Avro type is a
+        union with a \c null branch, and carries the Avro default value if the schema declares one
+    */
+    static QoreDataField fieldToDataField(hash<AvroFieldInfo> field, *hash<string, bool> visited) {
+        AbstractDataProviderType type = AvroTypeHelper::schemaToDataTypeIntern(field.type,
+            visited ?? {}, False);
+        QoreDataField rv(field.name, AvroTypeHelper::describe(field.type), type,
+            field.has_default ? field.default_value : NOTHING);
+        if (field.type.getType() == "enum") {
+            AvroTypeHelper::setEnumValues(rv, field.type);
+        }
+        return rv;
+    }
+
+    #! Returns a human-readable description of an Avro schema, for use as a field description
+    static string describe(AvroSchema schema) {
+        *string name = schema.getName();
+        *string logical = schema.getLogicalType();
+        string rv = sprintf("Avro %s", name ?? schema.getType());
+        if (logical) {
+            rv += sprintf(" (%s)", logical);
+        }
+        return rv;
+    }
+
+    #! Converts an Avro schema to a DataProvider type, tracking the named types being expanded
+    /** @param schema the Avro schema to convert
+        @param visited the fullnames of named types currently being converted
+        @param or_nothing if the type must also accept @ref nothing
+
+        @return the DataProvider type for the schema
+    */
+    private:internal static AbstractDataProviderType schemaToDataTypeIntern(AvroSchema schema,
+            hash<string, bool> visited, bool or_nothing) {
+        *string logical = schema.getLogicalType();
+        if (logical == "decimal") {
+            return AbstractDataProviderType::get(or_nothing ? SoftNumberOrNothingType
+                : SoftNumberType);
+        }
+        if (AbsoluteDateLogicalTypes{logical} || RelativeDateLogicalTypes{logical}) {
+            return AbstractDataProviderType::get(or_nothing ? SoftDateOrNothingType : SoftDateType);
+        }
+
+        switch (schema.getType()) {
+            case "null":
+                return AbstractDataProviderType::get(NothingType);
+
+            case "boolean":
+                return AbstractDataProviderType::get(or_nothing ? SoftBoolOrNothingType
+                    : SoftBoolType);
+
+            case "int":
+            case "long":
+                return AbstractDataProviderType::get(or_nothing ? SoftIntOrNothingType
+                    : SoftIntType);
+
+            case "float":
+            case "double":
+                return AbstractDataProviderType::get(or_nothing ? SoftFloatOrNothingType
+                    : SoftFloatType);
+
+            case "bytes":
+            case "fixed":
+                return AbstractDataProviderType::get(or_nothing ? DataOrNothingType : DataType);
+
+            case "string":
+            case "enum":
+                return AbstractDataProviderType::get(or_nothing ? StringOrNothingType : StringType);
+
+            case "array": {
+                AbstractDataProviderType element = AvroTypeHelper::schemaToDataTypeIntern(
+                    schema.getItemType(), visited, False);
+                return new SoftListDataType(element, or_nothing);
+            }
+
+            case "map": {
+                # the DataProvider type system has no "map of T", so a hash with a default value
+                # type is the closest equivalent
+                HashDataType rv(sprintf("avro-map<%s>", schema.getItemType().getType()));
+                rv.setDefaultOtherFieldType(AvroTypeHelper::schemaToDataTypeIntern(
+                    schema.getItemType(), visited, False));
+                return rv;
+            }
+
+            case "union":
+                return AvroTypeHelper::unionToDataType(schema, visited);
+
+            case "record":
+                return AvroTypeHelper::recordToDataType(schema, visited);
+        }
+
+        # unreachable: every Avro type is handled above
+        throw "AVRO-TYPE-ERROR", sprintf("unhandled Avro type %y", schema.getType());
+    }
+
+    #! Converts an Avro record schema to a HashDataType
+    private:internal static AbstractDataProviderType recordToDataType(AvroSchema schema,
+            hash<string, bool> visited) {
+        string name = schema.getName();
+        if (visited{name}) {
+            # a named type already being expanded further up the tree; expanding it again would
+            # not terminate
+            return AbstractDataProviderType::get(AutoHashType);
+        }
+        visited{name} = True;
+
+        HashDataType rv(name);
+        foreach hash<AvroFieldInfo> field in (schema.getFields()) {
+            rv.addField(AvroTypeHelper::fieldToDataField(field, visited));
+        }
+        return rv;
+    }
+
+    #! Converts an Avro union schema to a DataProvider type
+    /** <tt>["null", T]</tt> — by far the most common union — maps to \c T made optional. Any
+        other union maps to \c auto, since the DataProvider type system has no discriminated
+        union.
+    */
+    private:internal static AbstractDataProviderType unionToDataType(AvroSchema schema,
+            hash<string, bool> visited) {
+        list<AvroSchema> branches = schema.getBranches();
+        bool nullable = False;
+        *AvroSchema single;
+        foreach AvroSchema branch in (branches) {
+            if (branch.getType() == "null") {
+                nullable = True;
+                continue;
+            }
+            if (single) {
+                # more than one non-null branch
+                return AbstractDataProviderType::get(AutoType);
+            }
+            single = branch;
+        }
+        if (!single) {
+            # a union of nothing but "null"
+            return AbstractDataProviderType::get(NothingType);
+        }
+        return AvroTypeHelper::schemaToDataTypeIntern(single, visited, nullable);
+    }
+
+    #! Sets an enum field's allowed values from its Avro symbols
+    private:internal static setEnumValues(QoreDataField field, AvroSchema schema) {
+        field.setAllowedValues(map <AllowedValueInfo>{
+            "value": $1,
+            "desc": sprintf("Avro %s symbol %y", schema.getName(), $1),
+        }, schema.getSymbols());
+    }
+}
+}
