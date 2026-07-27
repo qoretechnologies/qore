@@ -2903,6 +2903,8 @@ add_subdirectory(examples/test/module-cpp-api)
 add_subdirectory(modules/astparser)
 # avro module
 add_subdirectory(modules/avro)
+# test module consuming the avro C++ API; built but never installed
+add_subdirectory(examples/test/modules/avro/cpp-api)
 # reflection module
 add_subdirectory(modules/reflection)
 # logger module

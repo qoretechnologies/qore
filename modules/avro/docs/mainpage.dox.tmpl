@@ -36,6 +36,9 @@
     - a companion <a href="../../AvroUtil/html/index.html#avroutilintro">AvroUtil</a> user
       module mapping Avro schemas to
       <a href="../../DataProvider/html/index.html#dataproviderintro">data provider</a> types
+    - a versioned C++ API for other binary modules, so a consumer that decodes many data against a
+      schema supplied out of band can do so without a %Qore-language call per datum; see
+      @ref avrocppapisec below
 
     @section avroclasses avro Module Classes
 
@@ -103,6 +106,22 @@ hash<auto> event = schema.decode(data);
     - every unbounded encode and decode loop is a cancellation point, so a long operation can be
       interrupted with @ref Qore::cancel_thread() or a
       @ref Qore::SandboxManager "SandboxManager" interrupt
+
+    @section avrocppapisec C++ API for Other Binary Modules
+
+    The schema parser and the binary codec are also published to other binary %Qore modules as a
+    versioned C++ API, so a consumer that decodes or encodes many data against a schema supplied
+    out of band &mdash; the Salesforce Pub/Sub API, for example, which sends bare data and answers
+    for the writer schema by ID &mdash; can do so from C++ without a %Qore-language call per datum.
+
+    The consumer includes only the installed <tt>&lt;qore/QoreAvroApi.h&gt;</tt> header, does not
+    link against this module, and resolves the API at run time, which loads the \c avro module on
+    demand.  A schema handle can be converted to and from a
+    @ref Qore::Avro::AvroSchema "AvroSchema" object, so a schema parsed on one side does not have
+    to be parsed again on the other.
+
+    See the \c "Avro C++ API" section of the %Qore library documentation for the API reference,
+    and \c "Developing Qore Modules" for the mechanism it is published through.
 
     @section avrolicense License
 

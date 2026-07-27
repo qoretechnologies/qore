@@ -57,6 +57,7 @@ set(AVRO_QPP_SRC
 # C++ source files
 set(AVRO_CPP_SRC
     src/avro-module.cpp
+    src/AvroCppApi.cpp
     src/AvroSchema.cpp
     src/AvroDecimal.cpp
     src/AvroDecoder.cpp

@@ -214,6 +214,27 @@ Qore-language module; an empty feature name; calls through the resolved struct w
 handle reference counting; and that the producer is loaded on demand without becoming a feature of
 the consuming Program.
 
+## First producer: the `avro` module
+
+`include/qore/QoreAvroApi.h` plus `modules/avro/src/AvroCppApi.cpp` publish `QoreAvroApi` version
+1.0 — schema parsing from JSON text or from Qore data, bare-datum decode with and without schema
+resolution, encode, the Parsing Canonical Form and its CRC-64-AVRO fingerprint, interior named
+types, and both directions of the bridge between an opaque handle and the Qore `AvroSchema`
+object. `QoreAvroSchemaHolder` in the same header is the scope guard consumers use to hold a
+handle exception-safely; there is no other way, since an opaque handle has no destructor the
+consumer can see.
+
+The `schema_object` / `schema_from_object` pair is what makes the API usable for #5365: a
+Pub/Sub event source decodes in C++ on the hot path but maps Avro types to DataProvider types with
+`AvroUtil`'s `AvroTypeHelper` in Qore, and without the bridge the same schema would have to be
+parsed twice, once on each side.
+
+`examples/test/modules/avro/cpp-api/` builds an `avrocppapi` consumer module — never installed,
+linked against neither libqore nor `avro`, including only the installed header — and
+`AvroCppApi.qtest` checks every member against the same operation performed through the
+`Qore::Avro::AvroSchema` class, so the two paths are proven to share one implementation rather
+than merely to agree with themselves.
+
 ## Relationship to the JSON codec in libqore
 
 #5366 moved the JSON codec out of `module-json` into `lib/QoreJson.cpp` because this mechanism did

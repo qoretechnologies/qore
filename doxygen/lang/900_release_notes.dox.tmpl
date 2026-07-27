@@ -1903,6 +1903,9 @@ foreach string module_name in (registry.getProcessModules()) {
         @ref Qore::InputStream "InputStream" / @ref Qore::OutputStream "OutputStream"
       - every logical type, including \c decimal converted exactly at arbitrary precision, and
         Parsing Canonical Form with the CRC-64-AVRO fingerprint for content-addressed schema caches
+      - the schema parser and codec are also published to other binary modules as a versioned C++
+        API through \c <qore/QoreAvroApi.h>, so a consumer that decodes many data against a schema
+        supplied out of band can do so from C++ without a %Qore-language call per datum
       - companion @ref avroutilintro "AvroUtil" module mapping Avro schemas to
         @ref dataproviderintro "DataProvider" types
 

@@ -166,5 +166,7 @@
     the C++ equivalent of the \c %%try-module directive.
 
     See @ref module_cpp_api for the entry point naming convention, the append-only and public-ABI-types-only rules,
-    the process for bumping the major version, and complete producer and consumer examples.
+    the process for bumping the major version, and complete producer and consumer examples.  The builtin \c avro
+    module publishes its schema parser and binary codec this way; see @ref avro_cpp_api for a real example of both
+    sides.
  */

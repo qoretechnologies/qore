@@ -68,8 +68,8 @@ struct QoreCppApiTestApi {
     //! returns the sum of the two arguments
     int64 (*add)(int64 a, int64 b);
 
-    //! returns \a str reversed; the caller owns the reference returned
-    /** @return the reversed string, or nullptr if an exception was raised
+    //! returns \a str reversed by character, or nullptr if an exception was raised
+    /** The caller owns the reference returned.
     */
     QoreStringNode* (*reverse)(const QoreString& str, ExceptionSink* xsink);
 

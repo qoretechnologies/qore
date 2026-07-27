@@ -26,29 +26,35 @@ which is why it cannot serve #5365.
 
 ## Decisions
 
-### 1. The schema object stays internal to the module; the reusable handle is Qore-level
+### 1. The schema representation stays internal; both the Qore handle and the C++ API are opaque
 
-No `include/qore/QoreAvro.h`, no exported C++ schema type.
-
-The reason to export one would be to let another binary module parse a schema once and decode many
-data against it. But the consumer that needs exactly that (#5365) lives in `module-grpc`, a
-separate repository that cannot include an in-tree module's private headers, and resolving C++
-symbols across separately `dlopen()`ed modules was explicitly rejected as fragile when the JSON
-codec was placed (see `design/json-module-migration.md`, decision 1). Exporting the type would
-therefore serve no consumer while permanently constraining the internal representation.
-
-The parse-once/decode-many requirement is met at the Qore level instead: an `AvroSchema` object
-**is** the resolved-schema handle. It is fully resolved at construction, immutable afterwards, and
-therefore safe to share between threads and cache indefinitely. A consumer keyed by schema ID
-caches `hash<string, AvroSchema>` and pays the JSON parse once per distinct schema.
+The reusable resolved-schema handle is the Qore-level `AvroSchema` object: it is fully resolved at
+construction, immutable afterwards, and therefore safe to share between threads and cache
+indefinitely. A consumer keyed by schema ID caches `hash<string, AvroSchema>` and pays the JSON
+parse once per distinct schema.
 
 For content-addressed caching the module also exposes the spec's own identity primitives —
 `AvroSchema::getCanonicalForm()` (Parsing Canonical Form) and `AvroSchema::getFingerprint()`
 (CRC-64-AVRO over it) — so two schemas that differ only in documentation, aliases, field order of
 the JSON text, or default values compare equal and share a cache entry.
 
-If an in-tree consumer ever appears, a public header can be added then without changing the
-Qore-visible API.
+**As originally written this decision also said "no `include/qore/QoreAvro.h`, no exported C++
+schema type", because the consumer that needs parse-once/decode-many from C++ (#5365) lives in
+`module-grpc`, a separate repository, and resolving C++ symbols across separately `dlopen()`ed
+modules had been rejected as fragile when the JSON codec was placed (see
+`design/json-module-migration.md`, decision 1).** #5371 removed that obstacle: the module now
+publishes `QoreAvroApi` through the module C++ API mechanism
+(`design/module-cpp-api.md`, `include/qore/QoreAvroApi.h`), so a consumer in another repository
+gets versioned, on-demand access with a clean exception on mismatch instead of a lazy-binding
+abort.
+
+What has *not* changed is that the schema representation stays internal. `QoreAvroSchemaRef` is an
+opaque handle with explicit `schema_ref` / `schema_deref` in the API struct; `AvroNode`,
+`AvroSchemaData` and `QoreAvroSchema` remain module-private and can be changed freely. The API
+struct also bridges both directions between a handle and the Qore `AvroSchema` object
+(`schema_object` / `schema_from_object`), so a schema parsed on one side can be used on the other
+without reparsing — which is what a Pub/Sub event source needs when it decodes in C++ but maps
+types with `AvroUtil`'s `AvroTypeHelper` in Qore.
 
 ### 2. The codec is hand-written; Apache `avro-cpp` is not vendored
 
