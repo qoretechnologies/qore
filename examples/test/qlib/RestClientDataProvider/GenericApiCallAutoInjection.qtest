@@ -62,6 +62,110 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A minimal REST-based data provider following the universal @c rest member convention
+/** Models the shape of every REST app in qlib: a shared base holds the REST client in a member named
+    @c "rest", and every provider in the app's tree inherits it. Used to verify that the framework injects
+    the @c __call__ child only at the root of the tree, and that resolving the reserved name never reaches
+    @ref getChildProviderImpl() (dynamic providers would turn that into a remote lookup for a child that
+    cannot exist).
+*/
+class TestRestAppDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Counts calls to getChildProviderImpl(), so tests can prove the reserved name is not delegated
+        int impl_calls = 0;
+
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "test-rest-app",
+            "display_name": "Test REST App",
+            "short_desc": "Test provider following the universal rest member convention",
+            "desc": "Test provider following the universal rest member convention",
+            "type": "TestRestAppDataProvider",
+            "supports_children": True,
+            "children_can_support_apis": True,
+        };
+    }
+
+    private {
+        #! The REST client object — the conventional member name the framework discovers reflectively
+        RestClient::AbstractRestClient rest;
+
+        #! Child provider names; a leaf declares none
+        *list<string> child_names;
+    }
+
+    constructor(RestClient::AbstractRestClient rest, *list<string> child_names) {
+        self.rest = rest;
+        self.child_names = child_names;
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return child_names;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        ++impl_calls;
+        if (child_names && inlist(name, child_names)) {
+            # the child inherits the same REST client member, exactly like every qlib app tree
+            return new TestRestAppDataProvider(rest, name == "sub" ? ("leaf",) : NOTHING);
+        }
+    }
+}
+
+#! A non-REST data provider whose child IS REST-based
+/** Verifies that suppression is propagated from the provider that actually exposes the generic API call
+    child, not from any parent: a REST subtree hanging off a non-REST parent still gets its own
+    @c __call__ child at the subtree root.
+*/
+class TestNonRestParentDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "test-non-rest-parent",
+            "display_name": "Test Non-REST Parent",
+            "short_desc": "Test provider with no REST client of its own",
+            "desc": "Test provider with no REST client of its own",
+            "type": "TestNonRestParentDataProvider",
+            "supports_children": True,
+        };
+    }
+
+    private {
+        #! deliberately NOT named "rest" or "conn": this provider must not be discovered as REST-capable
+        RestClient::AbstractRestClient client;
+    }
+
+    constructor(RestClient::AbstractRestClient client) {
+        self.client = client;
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("rest-child",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == "rest-child") {
+            return new TestRestAppDataProvider(client, ("sub",));
+        }
+    }
+}
+
 #! HTTP handler that always returns a specific status — used to verify expected_status / error_passthru
 class StatusHandler inherits AbstractHttpRequestHandler {
     private { int m_status; }
@@ -78,6 +182,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         # one shared provider instance — repeatedly creating fresh ones against the local
         # HttpServer can race the listener and produce spurious "Connection refused" errors
         *RestClientDataProvider m_provider;
+        *TestRestAppDataProvider m_rest_app;
         *AbstractDataProvider m_call_child;
     }
 
@@ -88,6 +193,15 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         addTestCase("__call__ child resolves and dispatches", \testCallChildDispatches());
         addTestCase("__call__ shows up in getChildProviderNames", \testCallChildInNames());
         addTestCase("getRestClientForGenericCall override returns rest", \testOverrideReturnsRest());
+        # the generic API call child is injected once per provider tree, at its root
+        addTestCase("__call__ is injected only at the tree root", \testCallChildOnlyAtTreeRoot());
+        addTestCase("__call__ does not nest inside itself", \testCallChildNotRecursive());
+        addTestCase("reserved name is not delegated to getChildProviderImpl",
+            \testReservedNameNotDelegatedToImpl());
+        addTestCase("disable_generic_api_call suppresses the __call__ child too",
+            \testAppOptOutSuppressesChild());
+        addTestCase("REST subtree under a non-REST parent gets its own __call__",
+            \testRestSubtreeUnderNonRestParent());
         addTestCase("apps without scheme do not get the action", \testNoSchemeNoAction());
         # positive REST detection: non-REST schemes must be silently rejected even when the app
         # author forgets to set disable_generic_api_call. This is the key behavioural difference
@@ -315,21 +429,141 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
     }
 
     testCallChildInNames() {
-        # construct a real RestClientDataProvider against the local HTTP server; its
-        # getChildProviderNames() should include __call__ via the framework auto-injection
-        RestClientDataProvider parent({"url": "http://localhost:" + port});
-        *list<string> kids = parent.getChildProviderNames();
+        # the root of a REST provider tree lists __call__ via the framework auto-injection
+        *list<string> kids = getRestApp().getChildProviderNames();
         assertTrue(exists kids);
         assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, kids),
             "__call__ should appear in getChildProviderNames()");
+        assertTrue(getRestApp().hasGenericApiCallChild(),
+            "a REST-capable root provider must expose the generic API call child");
     }
 
     testOverrideReturnsRest() {
         RestClientDataProvider parent({"url": "http://localhost:" + port});
         *object rc = parent.getRestClientForGenericCall();
-        assertTrue(exists rc, "RestClientDataProviderBase override must return the rest client");
+        assertTrue(exists rc, "reflective discovery must return the rest client");
         assertTrue(rc instanceof RestClient::AbstractRestClient,
             "returned client must be an AbstractRestClient subclass");
+    }
+
+    testCallChildOnlyAtTreeRoot() {
+        TestRestAppDataProvider root = getRestApp();
+        assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, root.getChildProviderNames()),
+            "the tree root must expose __call__");
+
+        # every descendant inherits the same `rest` member from the common base, but the generic API
+        # call child is built from the REST client alone and carries no parent context, so a per-node
+        # copy would be an exact duplicate of the root's child
+        AbstractDataProvider child = root.getChildProviderEx("sub");
+        assertFalse(child.hasGenericApiCallChild(), "a child provider must not expose __call__");
+        assertFalse(inlist(AbstractDataProvider::GenericApiCallChildName, child.getChildProviderNames() ?? ()),
+            "__call__ must not be listed on a child provider");
+        assertThrows("INVALID-CHILD-PROVIDER", \child.getChildProviderEx(),
+            AbstractDataProvider::GenericApiCallChildName);
+
+        # ...and suppression is inherited all the way down, not just one level
+        AbstractDataProvider leaf = child.getChildProviderEx("leaf");
+        assertFalse(leaf.hasGenericApiCallChild(), "suppression must propagate to grandchildren");
+        assertFalse(inlist(AbstractDataProvider::GenericApiCallChildName, leaf.getChildProviderNames() ?? ()),
+            "__call__ must not be listed on a grandchild provider");
+
+        # path resolution goes through getChildProviderEx(), so it must behave identically
+        assertThrows("INVALID-CHILD-PROVIDER", \root.getChildProviderPath(),
+            "sub/" + AbstractDataProvider::GenericApiCallChildName);
+    }
+
+    testCallChildNotRecursive() {
+        # the generic API call provider holds the REST client in the conventional `rest` member, so
+        # without explicit gating it would rediscover its own client and advertise an endless
+        # __call__ -> __call__ -> ... chain that no recursive tree walk could terminate
+        AbstractDataProvider call_child = getCallChild();
+        assertFalse(call_child.hasGenericApiCallChild(),
+            "the generic API call provider must not expose a generic API call child");
+        assertEq(NOTHING, call_child.getChildProviderNames(),
+            "the generic API call provider must have no children at all");
+        assertThrows("INVALID-CHILD-PROVIDER", \call_child.getChildProviderEx(),
+            AbstractDataProvider::GenericApiCallChildName);
+
+        # a directly-constructed instance must behave the same way (the framework marks children it
+        # builds, but user code can construct the provider itself)
+        GenericApiCallProvider direct(cast<RestClient::AbstractRestClient>(
+            getProvider().getRestClientForGenericCall()));
+        assertFalse(direct.hasGenericApiCallChild(),
+            "a directly-constructed generic API call provider must not nest either");
+    }
+
+    testReservedNameNotDelegatedToImpl() {
+        # "__call__" is reserved framework-wide, so the framework must resolve it itself; delegating it
+        # to the provider makes dynamic providers (those that resolve children with a remote lookup)
+        # issue a request for a child that cannot exist, producing a spurious 404 and error log entry
+        TestRestAppDataProvider root = getRestApp();
+        int before = root.impl_calls;
+        AbstractDataProvider call_child =
+            root.getChildProviderEx(AbstractDataProvider::GenericApiCallChildName);
+        assertEq("GenericApiCallProvider", call_child.className());
+        assertEq(before, root.impl_calls,
+            "resolving the reserved name must not call getChildProviderImpl()");
+
+        # the same holds for the non-throwing accessor
+        *AbstractDataProvider child = root.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        assertEq("GenericApiCallProvider", child.className());
+        assertEq(before, root.impl_calls,
+            "getChildProvider() must not delegate the reserved name either");
+
+        # ...but ordinary child names still go to the provider
+        root.getChildProviderEx("sub");
+        assertEq(before + 1, root.impl_calls, "ordinary child names must be delegated as before");
+
+        # the same holds where the child is NOT injected: the name is reserved framework-wide, so a
+        # dynamic provider must never turn a __call__ lookup into a remote request for a child that
+        # cannot exist, no matter where in the tree the lookup happens
+        TestRestAppDataProvider suppressed = cast<TestRestAppDataProvider>(root.getChildProviderEx("sub"));
+        assertFalse(suppressed.hasGenericApiCallChild());
+        int suppressed_before = suppressed.impl_calls;
+        assertThrows("INVALID-CHILD-PROVIDER", \suppressed.getChildProviderEx(),
+            AbstractDataProvider::GenericApiCallChildName);
+        assertEq(suppressed_before, suppressed.impl_calls,
+            "the reserved name must not be delegated on a suppressed provider either");
+        assertEq(NOTHING, suppressed.getChildProvider(AbstractDataProvider::GenericApiCallChildName));
+        assertEq(suppressed_before, suppressed.impl_calls,
+            "getChildProvider() must not delegate the reserved name on a suppressed provider either");
+    }
+
+    testAppOptOutSuppressesChild() {
+        # the GenericRest app sets disable_generic_api_call because its canonical /call action already
+        # provides this functionality; the runtime provider tree must agree with the action catalog
+        RestClientDataProvider parent = getProvider();
+        assertFalse(parent.hasGenericApiCallChild(),
+            "an opted-out app must not expose the generic API call child");
+        *list<string> kids = parent.getChildProviderNames();
+        assertTrue(inlist("call", kids), "the canonical /call child must still be present");
+        assertFalse(inlist(AbstractDataProvider::GenericApiCallChildName, kids),
+            "__call__ must not duplicate the canonical /call action");
+        assertThrows("INVALID-CHILD-PROVIDER", \parent.getChildProviderEx(),
+            AbstractDataProvider::GenericApiCallChildName);
+
+        # the opt-out is declared as an opt-out: the REST client is still reported truthfully
+        assertTrue(parent.getRestClientForGenericCall() instanceof RestClient::AbstractRestClient,
+            "opting out must not hide the provider's REST client from other callers");
+    }
+
+    testRestSubtreeUnderNonRestParent() {
+        # suppression comes from the provider that actually exposes the child, so a REST subtree
+        # hanging off a non-REST parent still gets its own __call__ at the subtree root
+        TestNonRestParentDataProvider root(cast<RestClient::AbstractRestClient>(
+            getProvider().getRestClientForGenericCall()));
+        assertFalse(root.hasGenericApiCallChild(),
+            "a provider with no discoverable REST client must not expose __call__");
+        assertFalse(inlist(AbstractDataProvider::GenericApiCallChildName, root.getChildProviderNames()),
+            "__call__ must not be listed on a non-REST provider");
+
+        AbstractDataProvider rest_child = root.getChildProviderEx("rest-child");
+        assertTrue(rest_child.hasGenericApiCallChild(),
+            "the root of a REST subtree must expose __call__ even below a non-REST parent");
+        assertTrue(inlist(AbstractDataProvider::GenericApiCallChildName, rest_child.getChildProviderNames()),
+            "__call__ must be listed at the REST subtree root");
+        assertFalse(rest_child.getChildProviderEx("sub").hasGenericApiCallChild(),
+            "and must not be repeated below it");
     }
 
     testCallChildDispatches() {
@@ -343,7 +577,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             "headers": {"Authorization": "Bearer test-fake-token"},
             "http_version": "1.1",
         };
-        RestClientDataProvider parent(opts);
+        TestRestAppDataProvider parent(new RestClientIo::RestClientIo(opts));
 
         AbstractDataProvider call_child = parent.getChildProviderEx(
             AbstractDataProvider::GenericApiCallChildName);
@@ -398,10 +632,25 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         return m_provider;
     }
 
+    #! Lazily constructs (once) a REST app provider tree backed by the same client as getProvider()
+    /** The GenericRest app itself opts out of the framework-injected child (its canonical \c /call action
+        already provides the same functionality), so the auto-injection tests run against a provider that
+        follows the same universal \c rest member convention as every other REST app in qlib.
+    */
+    private TestRestAppDataProvider getRestApp() {
+        if (!m_rest_app) {
+            *object rc = getProvider().getRestClientForGenericCall();
+            assertTrue(rc instanceof RestClient::AbstractRestClient,
+                "the test app must be backed by a real REST client");
+            m_rest_app = new TestRestAppDataProvider(cast<RestClient::AbstractRestClient>(rc), ("sub",));
+        }
+        return m_rest_app;
+    }
+
     #! Resolves the __call__ child for end-to-end dispatch tests
     private AbstractDataProvider getCallChild() {
         if (!m_call_child) {
-            m_call_child = getProvider().getChildProviderEx(AbstractDataProvider::GenericApiCallChildName);
+            m_call_child = getRestApp().getChildProviderEx(AbstractDataProvider::GenericApiCallChildName);
         }
         return m_call_child;
     }

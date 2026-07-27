@@ -1306,6 +1306,19 @@ if (errors) {
         @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "\"__call__\"",
         constructed lazily from the value returned by
         @ref DataProvider::AbstractDataProvider::getRestClientForGenericCall()
+      - the child is injected exactly once per provider tree, at its root, matching the \c "/__call__"
+        path the action is registered with; the child is built from the REST client alone and carries no
+        context from its parent, so a copy on every descendant provider (each of which normally inherits
+        the same \c rest member from a shared base class) would be an exact duplicate; see
+        @ref DataProvider::AbstractDataProvider::hasGenericApiCallChild() for the gating rules
+      - the reserved child name is always resolved by the framework and is never passed to
+        @ref DataProvider::AbstractDataProvider::getChildProviderImpl(), at any level of the tree, so
+        providers that resolve children with a remote lookup never issue a request for a child that
+        cannot exist
+      - providers belonging to an app that sets
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
+        declare the same opt-out at runtime by overriding
+        @ref DataProvider::AbstractDataProvider::hasGenericApiCallChildImpl()
       - REST-based data providers are auto-discovered via reflection: the default impl of
         @ref DataProvider::AbstractDataProvider::getRestClientForGenericCallImpl() walks the actual
         class hierarchy of @c self looking for either:

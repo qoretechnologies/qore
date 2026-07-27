@@ -89,13 +89,66 @@ publish a `__call__` child or a `make-api-call` action.
 ### Auto-injected `__call__` child
 
 The public `getChildProvider()` and `getChildProviderEx()` overlays on
-`AbstractDataProvider` intercept lookups of `__call__`: when a provider's own
-`getChildProviderImpl()` returns NOTHING for that name and a generic-call
-child builder is registered, the framework constructs the child by calling
-`cb_build_generic_api_call_child(rest_client)` and returns the result.
+`AbstractDataProvider` intercept lookups of `__call__`: when
+`hasGenericApiCallChild()` is true, the framework constructs the child by
+calling `cb_build_generic_api_call_child(rest_client)` and returns the result;
+otherwise the lookup fails as unknown. Either way the reserved name is **never**
+passed to the provider's own `getChildProviderImpl()`. The name is reserved
+framework-wide, so delegating it buys nothing and actively hurts: a dynamic
+provider (one that resolves children with a remote lookup — Salesforce
+SObjects, database tables, bucket listings) would issue a request for a child
+that cannot exist, producing a spurious 404 and an error log entry on every
+resolution, at any level of the tree.
 
 The `getChildProviderNames()` overlay similarly appends `__call__` to the
 provider's own list when `hasGenericApiCallChild()` is true.
+
+### Injection point: once per provider tree, at the root
+
+`__call__` is injected **only at the root of a provider tree**, matching the
+`"/__call__"` path the `make-api-call` action is registered with. Four
+conditions gate `hasGenericApiCallChild()`:
+
+1. the provider is not inside a subtree that already exposes the child
+2. a child builder has been registered
+3. the provider has not opted out via `hasGenericApiCallChildImpl()`
+4. `getRestClientForGenericCall()` returns a REST client
+
+Condition 1 is what makes the injection root-scoped. The reflective discovery
+in `getRestClientForGenericCallImpl()` matches *every* provider in an app's
+tree, not just the root, because the `rest` member (qlib) / `conn` member
+(module-v8) is declared on a shared provider base class that all descendants
+inherit — 6 to 65 subclasses per app. Those per-node copies carry no value:
+the child is built from the REST client alone and has no parent context, so
+`aftership/trackings/__call__` dispatches exactly like `aftership/__call__`.
+Worse, `GenericApiCallProvider` holds the client in a `rest` member itself, so
+unconstrained discovery makes every `__call__` advertise a `__call__` of its
+own — an infinitely deep tree that no recursive walk (UI browse, catalog
+crawl, `getChildProviderSummaryInfo()` recursion) can terminate.
+
+The framework therefore marks every child it hands out from
+`getChildProvider()` / `getChildProviderEx()` — and every child it builds in
+`buildGenericApiCallChild()` — as suppressed. A provider is a root by default:
+providers obtained from a factory, from a connection, or by direct
+construction all expose the child. Suppression propagates from the provider
+that actually exposes the child, so a REST subtree hanging off a non-REST
+parent still gets its own `__call__` at the subtree root. Testing the cheap
+flag before the reflective discovery also means no reflection is performed
+anywhere below a suppressed root.
+
+### Runtime side of the app opt-out
+
+An app that sets `disable_generic_api_call` suppresses the catalog action, but
+the runtime provider tree is a separate code path: a provider has no way to
+look up the app it belongs to, so the opt-out must be declared on both sides.
+Providers of an opted-out app override `hasGenericApiCallChildImpl()` to
+return `False` — `RestClientDataProviderBase` does this for the GenericRest
+app, so its canonical `/call` child is not shadowed by a duplicate `__call__`.
+
+Overriding `hasGenericApiCallChildImpl()` rather than
+`getRestClientForGenericCallImpl()` keeps `getRestClientForGenericCall()`
+truthful for any other caller: the opt-out is expressed as an opt-out, not by
+hiding the provider's REST client.
 
 ### Auto-registered `make-api-call` action
 
@@ -260,12 +313,18 @@ a member named `rest` (universal convention — see
 `AftershipDataProviderBase`, `LinearDataProviderBase`,
 `OpenAiDataProviderCommon`, every `*DataProviderBase.qc` and
 `*DataProviderCommon.qc`). Reflective discovery finds it automatically —
-**no per-provider override is needed**.
+**no per-provider override is needed**. Because the member is declared on the
+shared base, discovery matches every provider in the tree; the framework's
+suppression rule (see
+[Injection point](#injection-point-once-per-provider-tree-at-the-root))
+narrows that back down to the tree root.
 
 Providers that store the REST client under a different field name override
 `getRestClientForGenericCallImpl()` to return it. Providers that genuinely
 have no REST client (e.g., DB, FTP) opt out at the app level via
-`disable_generic_api_call: True`.
+`disable_generic_api_call: True`; providers of an app that opts out also
+override `hasGenericApiCallChildImpl()` to return `False` so the runtime tree
+matches the catalog.
 
 ### module-v8 TypeScript apps
 
@@ -274,6 +333,11 @@ TypeScript-defined app) holds an `AbstractConnection conn` rather than a
 direct REST client. The reflective default discovers `conn` and resolves
 the underlying REST client via `conn.get(False)`. **No per-app and no
 framework-side override is required.**
+
+`TypeScriptActionDataProviderBase` — the base for the per-action child
+providers — holds a `conn` member too, so discovery matches those as well;
+the root-only suppression rule is framework-side, so module-v8 needs no
+change for the child to appear exactly once per app there either.
 
 See `module-v8/design/generic-api-call-action.md` for the module-v8 side.
 
@@ -324,6 +388,17 @@ cover:
 - Framework hooks registered after module load
 - Auto-registration on REST-capable apps and skip for opted-out / no-scheme apps
 - `__call__` child resolves and dispatches through the underlying REST client
+- `__call__` is injected only at the tree root: children and grandchildren of a
+  REST-capable provider do not expose it, and neither does a path-resolved
+  descendant
+- `__call__` does not nest inside itself, whether framework-built or
+  constructed directly
+- resolving the reserved name never reaches `getChildProviderImpl()`, whether or
+  not the provider exposes the child
+- `disable_generic_api_call` suppresses the child as well as the action, while
+  `getRestClientForGenericCall()` keeps reporting the client
+- a REST subtree under a non-REST parent gets its own `__call__` at the subtree
+  root
 - Dynamic body retyping for all 8 body_type values
 - Per-body-type Content-Type and serialization (json / form / text / multipart)
 - `path_vars` substitution
