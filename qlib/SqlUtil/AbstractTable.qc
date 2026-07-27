@@ -88,9 +88,15 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** The following keys can be set for this option:
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables
               and foreign key relationships between tables
+            - \c deferrable: (@ref bool_type) if @ref True "True", constraint checks can be deferred until
+              transaction commit; unsupported drivers reject this option
+            - \c initially_deferred: (@ref bool_type) if @ref True "True", constraint checks are deferred by
+              default; requires \c deferrable to be @ref True "True"
         */
         const ForeignConstraintOptions = ConstraintOptions + {
             "table_cache": "Tables",
+            "deferrable": Type::Boolean,
+            "initially_deferred": Type::Boolean,
         };
 
         #! default trigger options
@@ -1488,8 +1494,10 @@ bool b = table.empty();
                 ch.target_columns = ch.columns;
 
             try {
+                hash<auto> fk_opt = opt.(getForeignConstraintOptions().keys())
+                    + (ch - ("columns", "table", "target_columns"));
                 addForeignConstraintUnlocked(cn, ch.columns, ch.table, ch.target_columns,
-                    opt.(getForeignConstraintOptions().keys()));
+                    fk_opt);
             } catch (hash<ExceptionInfo> ex) {
                 rethrow ex.err, sprintf("error setting up %s: %s", getDesc(), ex.desc), ex.arg;
             }
@@ -2600,6 +2608,15 @@ printf("%s;\n", sql);
         getColumnsUnlocked();
         # load constraints if needed, verify unique constraint name, validate/process options
         checkUniqueConstraintNameValidateOptions("FOREIGN-CONSTRAINT-ERROR", cname, getForeignConstraintOptions(), \opt);
+
+        if (opt.initially_deferred && !opt.deferrable) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("%s: foreign constraint %y: initially_deferred requires "
+                "deferrable", getDesc(), cname);
+        }
+        if (opt.deferrable && !supportsDeferrableForeignConstraintsImpl()) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("%s: database driver %y does not support deferrable foreign "
+                "constraints", getDesc(), ds.getDriverName());
+        }
 
         if (!cols)
             throw "FOREIGN-CONSTRAINT-ERROR", sprintf("%y: no column names passed to %s::addForeignConstraint()", getDesc(), self.className());
@@ -7414,6 +7431,24 @@ table.clear();
         return supportsPartitionsImpl();
     }
 
+    #! returns @ref True "True" if this table supports deferrable foreign constraints
+    /** @par Example:
+        @code{.py}
+if (table.supportsDeferrableForeignConstraints()) {
+    table.addForeignConstraint("fk_orders_accounts", "account_id", "accounts", "id",
+        {"deferrable": True, "initially_deferred": True});
+}
+        @endcode
+
+        @return @ref True "True" when the driver can create and introspect deferrable foreign constraints,
+            @ref False "False" otherwise
+
+        @since SqlUtil 3.0.0
+    */
+    bool supportsDeferrableForeignConstraints() {
+        return supportsDeferrableForeignConstraintsImpl();
+    }
+
     #! returns @ref True "True" if the driver supports the given portable partition method
     /** @param method \c "range", \c "list", or \c "hash"
         @param subpartition set to @ref True "True" to query support for the method below a parent partition
@@ -8799,6 +8834,10 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                     "columns": i.value.keys(),
                     "target_columns": i.value.target.columns.keys(),
                 };
+                if (i.value.deferrable) {
+                    fc.deferrable = True;
+                    fc.initially_deferred = i.value.initially_deferred;
+                }
                 rv.foreign_constraints{i.key} = fc;
             }
         }
@@ -11757,6 +11796,11 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns @ref True "True" if the database supports table partitioning
     private bool supportsPartitionsImpl() {
+        return False;
+    }
+
+    #! returns @ref True "True" if the database supports deferrable foreign constraints
+    private bool supportsDeferrableForeignConstraintsImpl() {
         return False;
     }
 
