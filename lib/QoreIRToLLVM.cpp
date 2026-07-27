@@ -19338,15 +19338,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         AOTAggregateProjectionKind::None) {
                 int16_t operand =
                     direct_inst->aot_aggregate_projection_operand;
-                if (operand <= 0
-                        || static_cast<size_t>(operand)
-                            >= inst->operands.size()) {
-                    error = "internal error: projected object aggregate"
-                        " operand is out of range";
-                    return false;
+                QoreIRValue projected_value =
+                    direct_inst->aot_object_scalar_projection_source;
+                if (!projected_value.isValid()) {
+                    if (operand <= 0
+                            || static_cast<size_t>(operand)
+                                >= inst->operands.size()) {
+                        error = "internal error: projected object aggregate"
+                            " operand is out of range";
+                        return false;
+                    }
+                    projected_value =
+                        inst->operands[static_cast<size_t>(operand)];
                 }
-                llvm::Value* projected = getVal(
-                    inst->operands[static_cast<size_t>(operand)].id, error);
+                llvm::Value* projected = getVal(projected_value.id, error);
                 if (!projected) {
                     return false;
                 }
@@ -19362,15 +19367,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         " operand has the wrong native type";
                     return false;
                 }
-                auto valid_helper = module.getOrInsertFunction(
-                    "qore_rt_check_valid_object_call_receiver",
-                    llvm::FunctionType::get(void_type,
-                        {i64_type, ptr_type}, false));
-                builder->CreateCall(valid_helper,
-                    {base_boxed, xsink_arg});
+                if (!direct_inst->aot_object_scalar_receiver_valid) {
+                    auto valid_helper = module.getOrInsertFunction(
+                        "qore_rt_check_valid_object_call_receiver",
+                        llvm::FunctionType::get(void_type,
+                            {i64_type, ptr_type}, false));
+                    builder->CreateCall(valid_helper,
+                        {base_boxed, xsink_arg});
+                }
                 values[inst->result.id] = projected;
                 releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
-                emitExceptionCheck(module, llvm_func, inst);
+                if (!direct_inst->aot_object_scalar_receiver_valid) {
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 return true;
             }
 

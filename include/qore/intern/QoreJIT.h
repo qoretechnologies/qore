@@ -451,6 +451,8 @@ struct BatchCalleeInfo {
     AOTContextIntInfo context_int;         //!< Importable affine captured-int expression
     AOTGlobalIntInfo global_int;           //!< Importable affine global-int expression
     std::string object_getter_member;     //!< Exact final-object getter member name
+    std::vector<std::string> object_constructor_members; //!< Members assigned from constructor parameters
+    std::vector<int8_t> object_constructor_params; //!< Constructor parameter for each assigned member
     std::string object_set_get_member;    //!< Exact guarded object member assignment-return name
     int8_t object_set_get_param = -1;     //!< Parameter assigned by object_set_get_member
     std::string object_compound_get_member; //!< Exact guarded object member compound-return name

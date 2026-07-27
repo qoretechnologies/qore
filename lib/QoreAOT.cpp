@@ -12018,6 +12018,133 @@ bool qore_ir_resolve_batch_function_summaries(
         member_name = load->member_name;
         return true;
     };
+    auto get_object_constructor_assignments = [](const QoreIRFunction* func,
+            const UserSignature* sig, std::vector<std::string>& members,
+            std::vector<int8_t>& params) -> bool {
+        if (!func || !sig || !sig->selfid || !sig->numParams()
+                || sig->numParams() > INT8_MAX || func->blocks.size() != 1
+                || func->blocks.front()->instructions.size() > 64) {
+            return false;
+        }
+
+        std::unordered_map<const LocalVar*, int8_t> local_sources;
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT object constructor parameter analysis")) {
+                return false;
+            }
+            auto param = func->param_local_vars.find(i);
+            if (param == func->param_local_vars.end() || !param->second
+                    || param->second->closureUse()
+                    || QoreTypeInfo::isReference(
+                        param->second->getTypeInfo())) {
+                return false;
+            }
+            local_sources.emplace(param->second, static_cast<int8_t>(i));
+        }
+
+        const auto* self = reinterpret_cast<const LocalVar*>(sig->selfid);
+        std::unordered_map<uint32_t, int8_t> value_sources;
+        std::vector<std::pair<std::string, int8_t>> assignments;
+        bool returned = false;
+        for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (!inst_ptr || inst_ptr->exception_target || returned) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            switch (inst->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::LoadLocal: {
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    auto source = local_sources.find(load->local);
+                    if (!inst->result.isValid()
+                            || source == local_sources.end()) {
+                        return false;
+                    }
+                    value_sources.emplace(
+                        inst->result.id, source->second);
+                    break;
+                }
+                case QoreIROpcode::StoreLocal: {
+                    const auto* store =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!store->local || store->local == self
+                            || store->local->closureUse() || store->weak
+                            || inst->operands.size() != 1) {
+                        return false;
+                    }
+                    auto source =
+                        value_sources.find(inst->operands[0].id);
+                    if (source == value_sources.end()
+                            || !local_sources.emplace(store->local,
+                                source->second).second) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathAssign: {
+                    const auto* assign =
+                        static_cast<const QoreIRLValuePathInstruction*>(inst);
+                    const std::string* member = nullptr;
+                    if (assign->path.size() == 1
+                            && assign->path[0].kind
+                                == LVPathStepKind::SelfMember) {
+                        member = &assign->path[0].name;
+                    } else if (assign->path.size() == 2
+                            && assign->path[0].kind
+                                == LVPathStepKind::LocalVar
+                            && assign->path[0].ref_ptr == self
+                            && assign->path[1].kind
+                                == LVPathStepKind::HashKeyConst) {
+                        member = &assign->path[1].name;
+                    }
+                    auto source = inst->operands.size() == 1
+                        ? value_sources.find(inst->operands[0].id)
+                        : value_sources.end();
+                    if (assign->weak || !member || member->empty()
+                            || source == value_sources.end()) {
+                        return false;
+                    }
+                    assignments.emplace_back(
+                        *member, source->second);
+                    break;
+                }
+                case QoreIROpcode::UninstantiateLocal: {
+                    const auto* cleanup =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!cleanup->local || cleanup->local == self
+                            || !local_sources.count(cleanup->local)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::ReturnNothing:
+                    returned = true;
+                    break;
+                default:
+                    return false;
+            }
+        }
+        if (!returned || assignments.empty()) {
+            return false;
+        }
+
+        for (auto assignment = assignments.rbegin();
+                assignment != assignments.rend(); ++assignment) {
+            if (std::find(members.begin(), members.end(),
+                    assignment->first) != members.end()) {
+                continue;
+            }
+            members.push_back(assignment->first);
+            params.push_back(assignment->second);
+        }
+        return true;
+    };
     auto get_object_set_get = [](const QoreIRFunction* func,
             const UserSignature* sig, std::string& member_name,
             int8_t& value_param, std::string& compound_member_name,
@@ -12220,6 +12347,11 @@ bool qore_ir_resolve_batch_function_summaries(
         if (callee_it->second.implicit_self_method) {
             get_object_getter(func, static_cast<int>(sig->numParams()),
                 callee_it->second.object_getter_member);
+        }
+        if (dynamic_cast<const ConstructorMethodVariant*>(variant)) {
+            get_object_constructor_assignments(func, sig,
+                callee_it->second.object_constructor_members,
+                callee_it->second.object_constructor_params);
         }
         const auto* method_variant =
             dynamic_cast<const MethodVariantBase*>(variant);
@@ -13237,6 +13369,367 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         functions, batch_callees);
 }
 
+static size_t projectAOTNonescapingObjectScalars(
+        QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    if (std::getenv(
+            "QORE_DISABLE_AOT_NONESCAPING_OBJECT_SCALAR_PROJECTION")
+            || func.has_opaque_ast_local_access) {
+        return 0;
+    }
+
+    struct InstructionPosition {
+        size_t block = 0;
+        size_t offset = 0;
+    };
+    struct LocalUsage {
+        std::vector<QoreIRLocalInstruction*> loads;
+        std::vector<QoreIRLocalInstruction*> stores;
+        bool unsafe = false;
+    };
+    auto get_path_local = [](const QoreIRInstruction* inst)
+            -> const LocalVar* {
+        switch (inst->opcode) {
+            case QoreIROpcode::LValuePathAssign:
+            case QoreIROpcode::LValuePathCompound:
+            case QoreIROpcode::LValuePathUnary:
+            case QoreIROpcode::LValuePathBinaryMut:
+            case QoreIROpcode::LValuePathTernary: {
+                const auto* path =
+                    static_cast<const QoreIRLValuePathInstruction*>(inst);
+                return !path->path.empty()
+                        && path->path.front().kind
+                            == LVPathStepKind::LocalVar
+                    ? reinterpret_cast<const LocalVar*>(
+                        path->path.front().ref_ptr)
+                    : nullptr;
+            }
+            default:
+                return nullptr;
+        }
+    };
+    std::unordered_map<uint32_t, std::vector<QoreIRInstruction*>> uses;
+    std::unordered_map<uint32_t, InstructionPosition> definitions;
+    std::unordered_map<const QoreIRInstruction*, InstructionPosition>
+        positions;
+    std::unordered_map<const LocalVar*, LocalUsage> local_usage;
+    size_t check_count = 0;
+    for (size_t block = 0; block < func.blocks.size(); ++block) {
+        for (size_t offset = 0;
+                offset < func.blocks[block]->instructions.size(); ++offset) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT nonescaping object use analysis")) {
+                return 0;
+            }
+            QoreIRInstruction* inst =
+                func.blocks[block]->instructions[offset].get();
+            positions.emplace(inst, InstructionPosition{block, offset});
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id,
+                    InstructionPosition{block, offset});
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                auto* load =
+                    static_cast<QoreIRLocalInstruction*>(inst);
+                if (load->local) {
+                    local_usage[load->local].loads.push_back(load);
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLocal) {
+                auto* store =
+                    static_cast<QoreIRLocalInstruction*>(inst);
+                if (store->local) {
+                    local_usage[store->local].stores.push_back(store);
+                }
+            } else if (inst->opcode != QoreIROpcode::UninstantiateLocal) {
+                if (const LocalVar* written =
+                        qore_ir_get_written_local(inst)) {
+                    local_usage[written].unsafe = true;
+                }
+                if (const LocalVar* path_local = get_path_local(inst)) {
+                    local_usage[path_local].unsafe = true;
+                }
+            }
+            if (!qore_ir_visit_value_operands(*inst,
+                    [&](QoreIRValue value) {
+                        uses[value.id].push_back(inst);
+                    }, &check_count,
+                    "AOT nonescaping object operand analysis")) {
+                return 0;
+            }
+        }
+    }
+
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return 0;
+    }
+    auto dominates = [&](const InstructionPosition& definition,
+            const InstructionPosition& use) {
+        return definition.block == use.block
+            ? definition.offset < use.offset
+            : cfg.dominates(definition.block, use.block);
+    };
+
+    struct Projection {
+        QoreIRDotEvalMethodDirectInstruction* call = nullptr;
+        QoreIRValue source;
+        QoreIRCallDirectInstruction::AOTAggregateProjectionKind kind =
+            QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
+        const QoreTypeInfo* type_info = nullptr;
+        QoreIRValueFacts previous_facts;
+    };
+    std::vector<Projection> projections;
+    std::unordered_set<QoreIRInstruction*> claimed_calls;
+
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT nonescaping object candidate analysis")) {
+                return 0;
+            }
+            if (inst_ptr->opcode != QoreIROpcode::NewObject
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            auto* object = static_cast<QoreIRNewObjectInstruction*>(
+                inst_ptr.get());
+            auto constructor = batch_callees.find(object->variant);
+            if (!object->qc || !object->variant
+                    || constructor == batch_callees.end()
+                    || constructor->second.object_constructor_members.empty()
+                    || constructor->second.object_constructor_members.size()
+                        != constructor->second
+                            .object_constructor_params.size()
+                    || object->operands.size()
+                        != constructor->second.num_params) {
+                continue;
+            }
+
+            auto object_uses = uses.find(object->result.id);
+            if (object_uses == uses.end()
+                    || object_uses->second.size() != 1
+                    || object_uses->second.front()->opcode
+                        != QoreIROpcode::StoreLocal) {
+                continue;
+            }
+            auto* store = static_cast<QoreIRLocalInstruction*>(
+                object_uses->second.front());
+            const LocalVar* local = store->local;
+            auto store_position = positions.find(store);
+            if (!local || store->weak || store->is_ref || store->is_closure
+                    || local->closureUse()
+                    || func.isAstVisibleLocal(
+                        reinterpret_cast<const void*>(local))
+                    || store->operands.size() != 1
+                    || store->operands.front().id != object->result.id
+                    || store_position == positions.end()) {
+                continue;
+            }
+
+            auto local_uses = local_usage.find(local);
+            if (local_uses == local_usage.end()
+                    || local_uses->second.unsafe
+                    || local_uses->second.stores.size() != 1
+                    || local_uses->second.stores.front() != store
+                    || local_uses->second.loads.empty()) {
+                continue;
+            }
+
+            bool valid_local = true;
+            std::vector<Projection> candidate_projections;
+            for (QoreIRLocalInstruction* load :
+                    local_uses->second.loads) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT nonescaping object getter analysis")) {
+                    return 0;
+                }
+                const QoreIRValueFacts* base_facts =
+                    func.getValueFacts(load->result);
+                auto load_uses = uses.find(load->result.id);
+                if (!load->result.isValid() || !base_facts
+                        || base_facts->assigned_state
+                            != QoreIRAssignedState::Assigned
+                        || !base_facts->never_nothing
+                        || QoreTypeInfo::getUniqueReturnClass(
+                            base_facts->type_info) != object->qc
+                        || load_uses == uses.end()
+                        || load_uses->second.size() != 1) {
+                    valid_local = false;
+                    break;
+                }
+                QoreIRInstruction* use = load_uses->second.front();
+                if (use->opcode != QoreIROpcode::DotEvalMethodDirect
+                        || use->exception_target || use->operands.size() != 1
+                        || use->operands.front().id != load->result.id) {
+                    valid_local = false;
+                    break;
+                }
+                auto* call =
+                    static_cast<QoreIRDotEvalMethodDirectInstruction*>(use);
+                auto getter = batch_callees.find(call->variant);
+                if (!call->method || !call->qc || call->pseudo
+                        || call->has_ref_args || call->qc != object->qc
+                        || call->method->getClass() != call->qc
+                        || call->aot_aggregate_projection
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::None
+                        || !isAOTNonOverridableMethodTarget(
+                            call->qc, call->variant)
+                        || getter == batch_callees.end()
+                        || getter->second.object_getter_member.empty()) {
+                    valid_local = false;
+                    break;
+                }
+
+                auto member = std::find(
+                    constructor->second.object_constructor_members.begin(),
+                    constructor->second.object_constructor_members.end(),
+                    getter->second.object_getter_member);
+                if (member
+                        == constructor->second
+                            .object_constructor_members.end()) {
+                    valid_local = false;
+                    break;
+                }
+                size_t member_index = static_cast<size_t>(std::distance(
+                    constructor->second.object_constructor_members.begin(),
+                    member));
+                int8_t param =
+                    constructor->second.object_constructor_params[
+                        member_index];
+                if (param < 0
+                        || static_cast<size_t>(param)
+                            >= object->operands.size()) {
+                    valid_local = false;
+                    break;
+                }
+                QoreIRValue source =
+                    object->operands[static_cast<size_t>(param)];
+                const QoreIRValueFacts* source_facts =
+                    func.getValueFacts(source);
+                auto source_definition = definitions.find(source.id);
+                auto call_position = positions.find(call);
+                if (!source_facts
+                        || source_facts->assigned_state
+                            != QoreIRAssignedState::Assigned
+                        || !source_facts->never_nothing
+                        || source_definition == definitions.end()
+                        || call_position == positions.end()
+                        || !dominates(source_definition->second,
+                            call_position->second)
+                        || !dominates(store_position->second,
+                            call_position->second)) {
+                    valid_local = false;
+                    break;
+                }
+
+                const qore_class_private* member_class = nullptr;
+                ClassAccess access;
+                const QoreMemberInfo* member_info =
+                    qore_class_private::get(*object->qc)->parseFindMember(
+                        getter->second.object_getter_member.c_str(),
+                        member_class, access);
+                const QoreTypeInfo* member_type =
+                    member_info ? member_info->getTypeInfo() : nullptr;
+                BatchCalleeReturnKind return_kind =
+                    qore_ir_get_fast_entry_return_kind(
+                        call->variant, true);
+                Projection projection;
+                projection.call = call;
+                projection.source = source;
+                projection.type_info = source_facts->type_info;
+                const QoreIRValueFacts* previous_facts =
+                    func.getValueFacts(call->result);
+                if (!previous_facts) {
+                    valid_local = false;
+                    break;
+                }
+                projection.previous_facts = *previous_facts;
+                if (return_kind == BatchCalleeReturnKind::NativeInt
+                        && source_facts->representation
+                            == QoreIRValueRepresentation::NativeInt
+                        && QoreTypeInfo::isType(member_type, NT_INT)
+                        && !QoreTypeInfo::getReturnEnum(member_type)) {
+                    projection.kind =
+                        QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeInt;
+                } else if (return_kind == BatchCalleeReturnKind::NativeFloat
+                        && source_facts->representation
+                            == QoreIRValueRepresentation::NativeFloat
+                        && QoreTypeInfo::isType(
+                            member_type, NT_FLOAT)) {
+                    projection.kind =
+                        QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeFloat;
+                } else {
+                    continue;
+                }
+                candidate_projections.push_back(projection);
+            }
+            if (!valid_local || candidate_projections.empty()) {
+                continue;
+            }
+            bool overlap = std::any_of(candidate_projections.begin(),
+                candidate_projections.end(), [&](const Projection& projection) {
+                    return claimed_calls.count(projection.call);
+                });
+            if (overlap) {
+                continue;
+            }
+            for (const Projection& projection : candidate_projections) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT nonescaping object projection collection")) {
+                    return 0;
+                }
+                claimed_calls.insert(projection.call);
+                projections.push_back(projection);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < projections.size(); ++i) {
+        if (!(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT nonescaping object projection commit")) {
+            for (size_t rollback = 0; rollback < i; ++rollback) {
+                const Projection& previous = projections[rollback];
+                previous.call->aot_aggregate_projection =
+                    QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::None;
+                previous.call->aot_aggregate_projection_operand = -1;
+                previous.call->aot_object_scalar_projection_source =
+                    QoreIRValue();
+                previous.call->aot_object_scalar_receiver_valid = false;
+                func.setValueFacts(previous.call->result,
+                    previous.previous_facts);
+            }
+            return 0;
+        }
+        const Projection& projection = projections[i];
+        projection.call->aot_aggregate_projection = projection.kind;
+        projection.call->aot_aggregate_projection_operand = -1;
+        projection.call->aot_object_scalar_projection_source =
+            projection.source;
+        projection.call->aot_object_scalar_receiver_valid = true;
+        QoreIRValueFacts facts;
+        facts.type_info = projection.type_info;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.never_nothing = true;
+        facts.representation = projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloat
+            ? QoreIRValueRepresentation::NativeFloat
+            : QoreIRValueRepresentation::NativeInt;
+        func.setValueFacts(projection.call->result, facts);
+    }
+    return projections.size();
+}
+
 static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
@@ -13641,10 +14134,13 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     continue;
                 }
                 const UserSignature* sig = uvb->getUserSignature();
+                bool constructor_variant =
+                    dynamic_cast<const ConstructorMethodVariant*>(variant);
                 bool fast_method_eligible = sig
                     && !sig->needsTypeParameterSubstitution()
                     && isAOTFastMethodCallEligible(variant);
                 if (!fast_method_eligible
+                        && !constructor_variant
                         && (!sig || !sig->needsTypeParameterSubstitution())) {
                     continue;
                 }
@@ -17294,6 +17790,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     func, projection_query, consumer_query,
                     &borrowed_aggregate_projections);
         }
+        size_t object_scalar_projections =
+            projectAOTNonescapingObjectScalars(
+                func, *aot_batch_callee_map);
         size_t boxed_return_calls = 0;
         if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
             QoreIRBoxedReturnParamQuery boxed_return_query =
@@ -17720,6 +18219,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
         if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
                 || aggregate_projections
+                || object_scalar_projections
                 || boxed_return_calls
                 || changed
                 || collection_consumers || string_consumers
@@ -17735,6 +18235,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " fresh-list-size-calls=%zu"
                 " fresh-hash-key-calls=%zu aggregate-projections=%zu"
                 " borrowed-aggregate-projections=%zu"
+                " object-scalar-projections=%zu"
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " collection-consumers=%zu"
@@ -17749,7 +18250,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 func.name.c_str(), exact_boxed_call_facts,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
-                boxed_return_calls, changed,
+                object_scalar_projections, boxed_return_calls, changed,
                 collection_consumers, string_consumers,
                 string_transform_consumers,
                 post_rewrite_rounds,

@@ -2469,6 +2469,9 @@ public:
     AOTAggregateProjectionKind aot_aggregate_projection =
         AOTAggregateProjectionKind::None;
     int16_t aot_aggregate_projection_operand = -1;
+    //! Transient scalar source for a proven nonescaping object getter.
+    QoreIRValue aot_object_scalar_projection_source;
+    bool aot_object_scalar_receiver_valid = false;
     //! Transient AOT-only scalar consumer of an exact case transformation.
     AOTStringTransformConsumerKind aot_string_transform_consumer =
         AOTStringTransformConsumerKind::None;
