@@ -200,6 +200,16 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         MultiplexedWsHandler mWsHandler();
         Logger mLogger;
 
+        #! How long the concurrency tests wait for all their background operations to finish
+        const OperationWait = 60s;
+
+        #! Client timeout for the streaming operations in @ref testHighConcurrency()
+        /** Must stay well below @ref OperationWait: a client whose timeout equals the wait can
+            consume the entire wait and then never record its result, which would surface as a
+            missing operation rather than as the timeout it really is.
+        */
+        const StreamTimeoutMs = 20000;
+
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
 BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
@@ -339,6 +349,30 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     globalTearDown() {
         delete mServer;
+    }
+
+    #! Returns the expected operation keys that never recorded a result
+    /** @ref Qore::Thread::Counter::waitForZero() "Counter::waitForZero()" reports a timeout in
+        its return value rather than throwing, so a background operation that is still running
+        when the wait expires would otherwise surface only as a short results list, with nothing
+        to say which operation stalled.
+
+        @param results the results list the background operations append to
+        @param lck the mutex guarding \a results
+        @param expected_keys every \c "<type>-<idx>" key that should have been recorded
+
+        @return the keys with no result, in the order given
+    */
+    private list<string> getMissingOps(list<hash<auto>> results, Mutex lck, list<string> expected_keys) {
+        hash<string, bool> seen;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            foreach hash<auto> r in (results) {
+                seen{sprintf("%s-%d", r.type, r.idx)} = True;
+            }
+        }
+        return map $1, expected_keys, !seen{$1};
     }
 
     private RestClient getRestClient(*int timeout_ms) {
@@ -747,7 +781,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }();
         }
 
-        cnt.waitForZero(60s);
+        int wait_rc = cnt.waitForZero(OperationWait);
+
+        list<string> expected_keys();
+        for (int i = 0; i < num_slow; ++i) {
+            expected_keys += sprintf("slow-%d", i);
+        }
+        for (int i = 0; i < num_fast; ++i) {
+            expected_keys += sprintf("fast-%d", num_slow + i);
+        }
+        assertEq(0, wait_rc, sprintf("all operations completed within %y; still running: %y",
+            OperationWait, getMissingOps(results, mx, expected_keys)));
 
         assertEq(total, results.size(), "all operations should complete");
 
@@ -1181,7 +1225,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             background sub () {
                 on_exit all_cnt.dec();
                 try {
-                    RestClient rc = getRestClient(60000);
+                    # the client timeout must stay well below the all_cnt wait below; a request
+                    # that runs to a timeout equal to that wait can never record its result, so
+                    # the assertion would report a missing operation instead of the timeout
+                    RestClient rc = getRestClient(StreamTimeoutMs);
                     on_exit delete rc;
                     hash<auto> resp = rc.get("/stream/8192");
                     mtx.lock();
@@ -1197,7 +1244,20 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }();
         }
 
-        all_cnt.waitForZero(60s);
+        int wait_rc = all_cnt.waitForZero(OperationWait);
+
+        list<string> expected_keys();
+        for (int i = 0; i < num_http; ++i) {
+            expected_keys += sprintf("http-%d", i);
+        }
+        for (int i = 0; i < num_ws; ++i) {
+            expected_keys += sprintf("ws-%d", i);
+        }
+        for (int i = 0; i < num_stream; ++i) {
+            expected_keys += sprintf("stream-%d", i);
+        }
+        assertEq(0, wait_rc, sprintf("all operations completed within %y; still running: %y",
+            OperationWait, getMissingOps(results, mtx, expected_keys)));
 
         int total_expected = num_http + num_ws + num_stream;
         assertEq(total_expected, results.size(), "all operations should complete");
