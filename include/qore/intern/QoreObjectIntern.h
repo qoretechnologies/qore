@@ -423,6 +423,11 @@ public:
             const qore_class_private* class_ctx, LValueHelper& lvh,
             bool for_remove, ExceptionSink* xsink);
 
+    DLLLOCAL int getLValueResolvedPrehashed(const char* key, size_t hash,
+            const QoreMemberInfo& info,
+            const qore_class_private* class_ctx, LValueHelper& lvh,
+            bool for_remove, ExceptionSink* xsink);
+
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 

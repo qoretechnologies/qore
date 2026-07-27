@@ -258,13 +258,29 @@ public:
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
-   DLLLOCAL HashMember* findCreateMember(const char* key) {
+    DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) {
+        assert(key);
+#ifdef HAVE_QORE_HASH_MAP
+        hm_hm_t::iterator i = hm.find(qore_prehashed_str{key, hash});
+#else
+        (void)hash;
+        hm_hm_t::iterator i = hm.find(key);
+#endif
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    DLLLOCAL HashMember* findCreateMember(const char* key) {
         // otherwise create the new hash entry
         HashMember* om = findMember(key);
         if (om)
             return om;
 
         return createMemberKnownAbsent(key);
+    }
+
+    DLLLOCAL HashMember* findCreateMemberPrehashed(const char* key, size_t hash) {
+        HashMember* om = findMemberPrehashed(key, hash);
+        return om ? om : createMemberKnownAbsent(key);
     }
 
     DLLLOCAL HashMember* createMemberKnownAbsent(const char* key) {

@@ -16215,11 +16215,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     ValueHolder value(xsink);
     {
         LValueHelper helper(xsink);
-        int rc = member_info
-            ? object_priv->getLValueResolved(member_name, *member_info,
-                class_ctx, helper, false, xsink)
-            : qore_object_private::getLValue(*object, member_name, helper,
-                class_ctx, false, xsink);
+        static const bool use_lvalue_prehash = !std::getenv(
+            "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        int rc = member_info && use_lvalue_prehash
+            ? object_priv->getLValueResolvedPrehashed(member_name,
+                descriptor->key_hash, *member_info, class_ctx, helper,
+                false, xsink)
+            : member_info
+                ? object_priv->getLValueResolved(member_name, *member_info,
+                    class_ctx, helper, false, xsink)
+                : qore_object_private::getLValue(*object, member_name,
+                    helper, class_ctx, false, xsink);
         if (rc) {
             return toBits(QoreValue());
         }
@@ -16285,11 +16291,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     ValueHolder value(xsink);
     {
         LValueHelper helper(xsink);
-        int rc = member_info
-            ? object_priv->getLValueResolved(member_name, *member_info,
-                class_ctx, helper, false, xsink)
-            : qore_object_private::getLValue(*object, member_name, helper,
-                class_ctx, false, xsink);
+        static const bool use_lvalue_prehash = !std::getenv(
+            "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        int rc = member_info && use_lvalue_prehash
+            ? object_priv->getLValueResolvedPrehashed(member_name,
+                descriptor->key_hash, *member_info, class_ctx, helper,
+                false, xsink)
+            : member_info
+                ? object_priv->getLValueResolved(member_name, *member_info,
+                    class_ctx, helper, false, xsink)
+                : qore_object_private::getLValue(*object, member_name,
+                    helper, class_ctx, false, xsink);
         if (rc) {
             return toBits(QoreValue());
         }

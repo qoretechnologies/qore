@@ -941,6 +941,14 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 int qore_object_private::getLValueResolved(const char* key,
         const QoreMemberInfo& info, const qore_class_private* class_ctx,
         LValueHelper& lvh, bool for_remove, ExceptionSink* xsink) {
+    return getLValueResolvedPrehashed(key, 0, info, class_ctx, lvh,
+        for_remove, xsink);
+}
+
+int qore_object_private::getLValueResolvedPrehashed(const char* key,
+        size_t hash, const QoreMemberInfo& info,
+        const qore_class_private* class_ctx, LValueHelper& lvh,
+        bool for_remove, ExceptionSink* xsink) {
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
@@ -958,9 +966,16 @@ int qore_object_private::getLValueResolved(const char* key,
 
     QoreHashNode* odata = member_class_ctx
         ? getCreateInternalData(member_class_ctx) : data;
-    HashMember* member = for_remove
-        ? odata->priv->findMember(key)
-        : odata->priv->findCreateMember(key);
+    HashMember* member;
+    if (hash) {
+        member = for_remove
+            ? odata->priv->findMemberPrehashed(key, hash)
+            : odata->priv->findCreateMemberPrehashed(key, hash);
+    } else {
+        member = for_remove
+            ? odata->priv->findMember(key)
+            : odata->priv->findCreateMember(key);
+    }
     if (!member) {
         return -1;
     }
