@@ -84,10 +84,6 @@ public class ModelRegistry {
         @since QoreModelRegistry 2.1 (\c backend_type dispatch)
     */
     constructor(hash<auto> options) {
-%ifdef NoJson
-        throw "ML-REGISTRY-ERROR", "the QoreModelRegistry module requires the json "
-            "module (module-json) to be installed; install it and try again";
-%endif
         backend = ModelRegistry::createBackend(options);
     }
 
@@ -120,7 +116,6 @@ public class ModelRegistry {
                 }
                 return new FilesystemBackend(options.path, options.tenant_id);
             }
-%ifndef NoJson
             case "database": {
                 if (!exists options.datasource) {
                     throw "ML-REGISTRY-ERROR",
@@ -135,7 +130,6 @@ public class ModelRegistry {
                 }
                 return new DatabaseBackend(options.datasource, db_opts);
             }
-%endif
             case "rest": {
                 if (!exists options.rest_client) {
                     throw "ML-REGISTRY-ERROR",
@@ -790,10 +784,6 @@ public class ModelRegistry {
         @since QoreModelRegistry 2.2
     */
     hash<auto> loadJsonArtifact(string name, *string version_id, string artifact_name) {
-%ifdef NoJson
-        throw "ML-REGISTRY-ERROR",
-            "the json module is required to load JSON model artifacts";
-%else
         binary data = loadNamedArtifact(name, version_id, artifact_name);
         try {
             return parse_json(data.toString());
@@ -802,7 +792,6 @@ public class ModelRegistry {
                 sprintf("could not parse JSON artifact '%s' for model '%s': %s",
                     artifact_name, name, ex.desc);
         }
-%endif
     }
 
     #! Loads the tokenizer.json artifact for a model package

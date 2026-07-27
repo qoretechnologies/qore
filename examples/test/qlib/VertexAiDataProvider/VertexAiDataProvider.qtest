@@ -19,9 +19,7 @@
 %requires VertexAiRestClient
 %requires VertexAiDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class VertexAiDataProviderTest
 
@@ -36,9 +34,7 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
         last_authorization = hdr."authorization" ?? "";
         string body_str = body ? (body.typeCode() == NT_BINARY
             ? body.toString("UTF-8") : body) : "";
-%ifndef NoJson
         try { last_body = parse_json(body_str); } catch () {}
-%endif
         # GCP token endpoint (used by GcpAuth) — accept with/without trailing /
         if (last_path =~ /\/token\/?$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
@@ -158,9 +154,6 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
     }
 
     static checkJson(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     private setupServer() {

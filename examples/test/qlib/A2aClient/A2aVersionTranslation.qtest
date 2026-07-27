@@ -1,0 +1,468 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires A2aClient
+%exec-class A2aVersionTranslationTest
+
+class A2aVersionTranslationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("A2aVersionTranslation test", "1.0") {
+        addTestCase("task state translation test", \taskStateTranslationTest());
+        addTestCase("role translation test", \roleTranslationTest());
+        addTestCase("method name translation test", \methodNameTranslationTest());
+        addTestCase("version detection test", \versionDetectionTest());
+        addTestCase("text part translation test", \textPartTranslationTest());
+        addTestCase("file part translation test", \filePartTranslationTest());
+        addTestCase("data part translation test", \dataPartTranslationTest());
+        addTestCase("mixed parts translation test", \mixedPartsTranslationTest());
+        addTestCase("parts passthrough test", \partsPassthroughTest());
+        addTestCase("message translation test", \messageTranslationTest());
+        addTestCase("task translation test", \taskTranslationTest());
+        addTestCase("agent card translation test", \agentCardTranslationTest());
+        addTestCase("sse event translation test", \sseEventTranslationTest());
+        addTestCase("send message params translation test", \sendMessageParamsTranslationTest());
+        addTestCase("round trip state test", \roundTripStateTest());
+        addTestCase("round trip role test", \roundTripRoleTest());
+        addTestCase("round trip method test", \roundTripMethodTest());
+        addTestCase("round trip parts test", \roundTripPartsTest());
+        addTestCase("edge cases test", \edgeCasesTest());
+
+        set_return_value(main());
+    }
+
+    taskStateTranslationTest() {
+        # v0.3 → v1.0
+        assertEq("TASK_STATE_SUBMITTED", a2aTranslateTaskStateToV10("pending"));
+        assertEq("TASK_STATE_WORKING", a2aTranslateTaskStateToV10("active"));
+        assertEq("TASK_STATE_INPUT_REQUIRED", a2aTranslateTaskStateToV10("input-required"));
+        assertEq("TASK_STATE_AUTH_REQUIRED", a2aTranslateTaskStateToV10("auth-required"));
+        assertEq("TASK_STATE_COMPLETED", a2aTranslateTaskStateToV10("completed"));
+        assertEq("TASK_STATE_FAILED", a2aTranslateTaskStateToV10("failed"));
+        assertEq("TASK_STATE_CANCELED", a2aTranslateTaskStateToV10("canceled"));
+        assertEq("TASK_STATE_REJECTED", a2aTranslateTaskStateToV10("rejected"));
+
+        # v1.0 → v0.3
+        assertEq("pending", a2aTranslateTaskStateToV03("TASK_STATE_SUBMITTED"));
+        assertEq("active", a2aTranslateTaskStateToV03("TASK_STATE_WORKING"));
+        assertEq("input-required", a2aTranslateTaskStateToV03("TASK_STATE_INPUT_REQUIRED"));
+        assertEq("auth-required", a2aTranslateTaskStateToV03("TASK_STATE_AUTH_REQUIRED"));
+        assertEq("completed", a2aTranslateTaskStateToV03("TASK_STATE_COMPLETED"));
+        assertEq("failed", a2aTranslateTaskStateToV03("TASK_STATE_FAILED"));
+        assertEq("canceled", a2aTranslateTaskStateToV03("TASK_STATE_CANCELED"));
+        assertEq("rejected", a2aTranslateTaskStateToV03("TASK_STATE_REJECTED"));
+
+        # UNSPECIFIED maps to pending
+        assertEq("pending", a2aTranslateTaskStateToV03("TASK_STATE_UNSPECIFIED"));
+    }
+
+    roleTranslationTest() {
+        # v0.3 → v1.0
+        assertEq("ROLE_USER", a2aTranslateRoleToV10("user"));
+        assertEq("ROLE_AGENT", a2aTranslateRoleToV10("agent"));
+
+        # v1.0 → v0.3
+        assertEq("user", a2aTranslateRoleToV03("ROLE_USER"));
+        assertEq("agent", a2aTranslateRoleToV03("ROLE_AGENT"));
+        assertEq("user", a2aTranslateRoleToV03("ROLE_UNSPECIFIED"));
+    }
+
+    methodNameTranslationTest() {
+        # v0.3 → v1.0 (all 11 methods)
+        assertEq("SendMessage", a2aTranslateMethodToV10("message/send"));
+        assertEq("SendStreamingMessage", a2aTranslateMethodToV10("message/stream"));
+        assertEq("GetTask", a2aTranslateMethodToV10("tasks/get"));
+        assertEq("CancelTask", a2aTranslateMethodToV10("tasks/cancel"));
+        assertEq("ListTasks", a2aTranslateMethodToV10("tasks/list"));
+        assertEq("SubscribeToTask", a2aTranslateMethodToV10("tasks/resubscribe"));
+        assertEq("CreateTaskPushNotificationConfig",
+            a2aTranslateMethodToV10("tasks/pushNotificationConfig/set"));
+        assertEq("GetTaskPushNotificationConfig",
+            a2aTranslateMethodToV10("tasks/pushNotificationConfig/get"));
+        assertEq("ListTaskPushNotificationConfigs",
+            a2aTranslateMethodToV10("tasks/pushNotificationConfig/list"));
+        assertEq("DeleteTaskPushNotificationConfig",
+            a2aTranslateMethodToV10("tasks/pushNotificationConfig/delete"));
+        assertEq("GetExtendedAgentCard",
+            a2aTranslateMethodToV10("agent/getAuthenticatedExtendedCard"));
+
+        # v1.0 → v0.3 (all 11 methods)
+        assertEq("message/send", a2aTranslateMethodToV03("SendMessage"));
+        assertEq("message/stream", a2aTranslateMethodToV03("SendStreamingMessage"));
+        assertEq("tasks/get", a2aTranslateMethodToV03("GetTask"));
+        assertEq("tasks/cancel", a2aTranslateMethodToV03("CancelTask"));
+        assertEq("tasks/list", a2aTranslateMethodToV03("ListTasks"));
+        assertEq("tasks/resubscribe", a2aTranslateMethodToV03("SubscribeToTask"));
+        assertEq("tasks/pushNotificationConfig/set",
+            a2aTranslateMethodToV03("CreateTaskPushNotificationConfig"));
+        assertEq("tasks/pushNotificationConfig/get",
+            a2aTranslateMethodToV03("GetTaskPushNotificationConfig"));
+        assertEq("tasks/pushNotificationConfig/list",
+            a2aTranslateMethodToV03("ListTaskPushNotificationConfigs"));
+        assertEq("tasks/pushNotificationConfig/delete",
+            a2aTranslateMethodToV03("DeleteTaskPushNotificationConfig"));
+        assertEq("agent/getAuthenticatedExtendedCard",
+            a2aTranslateMethodToV03("GetExtendedAgentCard"));
+    }
+
+    versionDetectionTest() {
+        # v1.0 PascalCase methods
+        assertEq("1.0", a2aDetectVersionFromMethod("SendMessage"));
+        assertEq("1.0", a2aDetectVersionFromMethod("GetTask"));
+        assertEq("1.0", a2aDetectVersionFromMethod("ListTasks"));
+        assertEq("1.0", a2aDetectVersionFromMethod("CancelTask"));
+
+        # v0.3 slash-separated methods
+        assertEq("0.3", a2aDetectVersionFromMethod("message/send"));
+        assertEq("0.3", a2aDetectVersionFromMethod("tasks/get"));
+        assertEq("0.3", a2aDetectVersionFromMethod("tasks/list"));
+
+        # Unknown method defaults to v0.3
+        assertEq("0.3", a2aDetectVersionFromMethod("unknown/method"));
+    }
+
+    textPartTranslationTest() {
+        # v0.3 → v1.0
+        list<hash<auto>> v03_parts = ({"type": "text", "text": "Hello"},);
+        list<hash<auto>> v10_parts = a2aTranslatePartsToV10(v03_parts);
+        assertEq(1, v10_parts.size());
+        assertEq("Hello", v10_parts[0].text);
+        assertFalse(v10_parts[0].hasKey("type"), "v1.0 text part should not have 'type'");
+
+        # v1.0 → v0.3
+        list<hash<auto>> back = a2aTranslatePartsToV03(v10_parts);
+        assertEq(1, back.size());
+        assertEq("text", back[0].type);
+        assertEq("Hello", back[0].text);
+
+        # With metadata
+        v03_parts = ({"type": "text", "text": "Hi", "metadata": {"key": "val"}},);
+        v10_parts = a2aTranslatePartsToV10(v03_parts);
+        assertEq("Hi", v10_parts[0].text);
+        assertEq("val", v10_parts[0].metadata.key);
+    }
+
+    filePartTranslationTest() {
+        # v0.3 → v1.0
+        list<hash<auto>> v03_parts = ({
+            "type": "file",
+            "file": {"uri": "https://example.com/doc.pdf", "mimeType": "application/pdf",
+                "name": "doc.pdf"},
+        },);
+        list<hash<auto>> v10_parts = a2aTranslatePartsToV10(v03_parts);
+        assertEq(1, v10_parts.size());
+        assertEq("https://example.com/doc.pdf", v10_parts[0].url);
+        assertEq("application/pdf", v10_parts[0].mediaType);
+        assertEq("doc.pdf", v10_parts[0].filename);
+        assertFalse(v10_parts[0].hasKey("type"), "v1.0 file part should not have 'type'");
+        assertFalse(v10_parts[0].hasKey("file"), "v1.0 file part should not have 'file' wrapper");
+
+        # v1.0 → v0.3
+        list<hash<auto>> back = a2aTranslatePartsToV03(v10_parts);
+        assertEq(1, back.size());
+        assertEq("file", back[0].type);
+        assertEq("https://example.com/doc.pdf", back[0].file.uri);
+        assertEq("application/pdf", back[0].file.mimeType);
+        assertEq("doc.pdf", back[0].file.name);
+
+        # Inline file with raw bytes
+        v10_parts = ({"raw": "SGVsbG8=", "mediaType": "text/plain", "filename": "hello.txt"},);
+        back = a2aTranslatePartsToV03(v10_parts);
+        assertEq("file", back[0].type);
+        assertEq("SGVsbG8=", back[0].file.bytes);
+        assertEq("text/plain", back[0].file.mimeType);
+    }
+
+    dataPartTranslationTest() {
+        # v0.3 → v1.0
+        list<hash<auto>> v03_parts = ({"type": "data", "data": {"key": "value", "num": 42}},);
+        list<hash<auto>> v10_parts = a2aTranslatePartsToV10(v03_parts);
+        assertEq(1, v10_parts.size());
+        assertEq("value", v10_parts[0].data.key);
+        assertEq(42, v10_parts[0].data.num);
+        assertFalse(v10_parts[0].hasKey("type"), "v1.0 data part should not have 'type'");
+
+        # v1.0 → v0.3
+        list<hash<auto>> back = a2aTranslatePartsToV03(v10_parts);
+        assertEq("data", back[0].type);
+        assertEq("value", back[0].data.key);
+    }
+
+    mixedPartsTranslationTest() {
+        list<hash<auto>> v03_parts = (
+            {"type": "text", "text": "See attached"},
+            {"type": "file", "file": {"uri": "https://example.com/f.txt", "mimeType": "text/plain"}},
+            {"type": "data", "data": {"count": 1}},
+        );
+        list<hash<auto>> v10_parts = a2aTranslatePartsToV10(v03_parts);
+        assertEq(3, v10_parts.size());
+        assertEq("See attached", v10_parts[0].text);
+        assertEq("https://example.com/f.txt", v10_parts[1].url);
+        assertEq(1, v10_parts[2].data.count);
+
+        list<hash<auto>> back = a2aTranslatePartsToV03(v10_parts);
+        assertEq(3, back.size());
+        assertEq("text", back[0].type);
+        assertEq("file", back[1].type);
+        assertEq("data", back[2].type);
+    }
+
+    partsPassthroughTest() {
+        # Already v0.3 parts passed to v0.3 translator should not be double-wrapped
+        list<hash<auto>> v03_parts = ({"type": "text", "text": "Hello"},);
+        list<hash<auto>> same = a2aTranslatePartsToV03(v03_parts);
+        assertEq("text", same[0].type);
+        assertEq("Hello", same[0].text);
+
+        # Already v1.0 parts passed to v1.0 translator should pass through
+        list<hash<auto>> v10_parts = ({"text": "Hello"},);
+        same = a2aTranslatePartsToV10(v10_parts);
+        assertEq("Hello", same[0].text);
+    }
+
+    messageTranslationTest() {
+        hash<auto> v03_msg = {
+            "role": "user",
+            "parts": ({"type": "text", "text": "Hello"},),
+            "messageId": "msg-1",
+            "timestamp": "2026-01-01T00:00:00Z",
+        };
+
+        # v0.3 → v1.0
+        hash<auto> v10_msg = a2aTranslateMessageToV10(v03_msg);
+        assertEq("ROLE_USER", v10_msg.role);
+        assertEq("Hello", v10_msg.parts[0].text);
+        assertFalse(v10_msg.parts[0].hasKey("type"));
+        assertEq("msg-1", v10_msg.messageId);
+        # timestamp removed in v1.0 messages
+        assertFalse(v10_msg.hasKey("timestamp"));
+
+        # v1.0 → v0.3
+        hash<auto> v03_back = a2aTranslateMessageToV03(v10_msg);
+        assertEq("user", v03_back.role);
+        assertEq("text", v03_back.parts[0].type);
+        assertEq("Hello", v03_back.parts[0].text);
+
+        # Agent message
+        hash<auto> v03_agent = {
+            "role": "agent",
+            "parts": ({"type": "text", "text": "Hi there"},),
+        };
+        hash<auto> v10_agent = a2aTranslateMessageToV10(v03_agent);
+        assertEq("ROLE_AGENT", v10_agent.role);
+    }
+
+    taskTranslationTest() {
+        hash<auto> v03_task = {
+            "id": "task-1",
+            "contextId": "ctx-1",
+            "status": {
+                "state": "completed",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "message": {
+                    "role": "agent",
+                    "parts": ({"type": "text", "text": "Done"},),
+                },
+            },
+            "history": (
+                {"role": "user", "parts": ({"type": "text", "text": "Do it"},)},
+                {"role": "agent", "parts": ({"type": "text", "text": "Done"},)},
+            ),
+        };
+
+        # v0.3 → v1.0
+        hash<auto> v10_task = a2aTranslateTaskToV10(v03_task);
+        assertEq("task-1", v10_task.id);
+        assertEq("ctx-1", v10_task.contextId);
+        assertEq("TASK_STATE_COMPLETED", v10_task.status.state);
+        assertEq("ROLE_AGENT", v10_task.status.message.role);
+        assertEq("Done", v10_task.status.message.parts[0].text);
+        assertEq(2, v10_task.history.size());
+        assertEq("ROLE_USER", v10_task.history[0].role);
+        assertEq("ROLE_AGENT", v10_task.history[1].role);
+
+        # v1.0 → v0.3
+        hash<auto> v03_back = a2aTranslateTaskToV03(v10_task);
+        assertEq("completed", v03_back.status.state);
+        assertEq("agent", v03_back.status.message.role);
+        assertEq("text", v03_back.status.message.parts[0].type);
+        assertEq("user", v03_back.history[0].role);
+    }
+
+    agentCardTranslationTest() {
+        hash<auto> v03_card = {
+            "name": "TestAgent",
+            "description": "A test agent",
+            "url": "http://localhost:8080",
+            "version": "1.0",
+            "capabilities": {
+                "streaming": True,
+                "pushNotifications": True,
+            },
+            "supportsAuthenticatedExtendedCard": True,
+            "skills": ({"id": "echo", "name": "Echo"},),
+            "security": ({"bearerAuth": ()},),
+        };
+
+        # v0.3 → v1.0
+        hash<auto> v10_card = a2aTranslateAgentCardToV10(v03_card);
+        assertEq("TestAgent", v10_card.name);
+        assertTrue(v10_card.supportedInterfaces.size() > 0, "Should have supportedInterfaces");
+        assertEq("http://localhost:8080", v10_card.supportedInterfaces[0].url);
+        assertEq("JSONRPC", v10_card.supportedInterfaces[0].protocolBinding);
+        assertEq("1.0", v10_card.supportedInterfaces[0].protocolVersion);
+        assertFalse(v10_card.hasKey("url"), "v1.0 card should not have top-level url");
+        assertTrue(v10_card.capabilities.extendedAgentCard, "extendedAgentCard should be set");
+        assertFalse(v10_card.hasKey("supportsAuthenticatedExtendedCard"));
+        assertTrue(v10_card.hasKey("securityRequirements"), "Should have securityRequirements");
+        assertFalse(v10_card.hasKey("security"), "Should not have 'security' key");
+
+        # v1.0 → v0.3
+        hash<auto> v03_back = a2aTranslateAgentCardToV03(v10_card);
+        assertEq("http://localhost:8080", v03_back.url);
+        assertFalse(v03_back.hasKey("supportedInterfaces"));
+        assertTrue(v03_back.supportsAuthenticatedExtendedCard);
+        assertTrue(v03_back.hasKey("security"));
+    }
+
+    sseEventTranslationTest() {
+        # v0.3 → v1.0: TaskStatusUpdateEvent
+        hash<auto> v03_data = {"id": "task-1", "state": "completed", "timestamp": "2026-01-01T00:00:00Z"};
+        hash<auto> v10_event = a2aTranslateSseEventToV10("TaskStatusUpdateEvent", v03_data);
+        assertTrue(v10_event.hasKey("statusUpdate"), "Should have statusUpdate discriminator");
+        assertEq("TASK_STATE_COMPLETED", v10_event.statusUpdate.state);
+        assertEq("task-1", v10_event.statusUpdate.taskId);
+        assertFalse(v10_event.statusUpdate.hasKey("id"), "Should not have 'id' (renamed to taskId)");
+
+        # v0.3 → v1.0: TaskArtifactUpdateEvent
+        hash<auto> v03_artifact = {"id": "task-2", "artifactId": "art-1", "name": "output.txt"};
+        v10_event = a2aTranslateSseEventToV10("TaskArtifactUpdateEvent", v03_artifact);
+        assertTrue(v10_event.hasKey("artifactUpdate"));
+        assertEq("task-2", v10_event.artifactUpdate.taskId);
+
+        # v0.3 → v1.0: TaskMessageUpdateEvent
+        hash<auto> v03_msg = {"id": "task-3", "parts": ({"type": "text", "text": "token"},),
+            "role": "agent"};
+        v10_event = a2aTranslateSseEventToV10("TaskMessageUpdateEvent", v03_msg);
+        assertTrue(v10_event.hasKey("message"));
+        assertEq("ROLE_AGENT", v10_event.message.role);
+        assertEq("token", v10_event.message.parts[0].text);
+
+        # v1.0 → v0.3
+        hash<auto> v10_status = {"statusUpdate": {"taskId": "task-1",
+            "state": "TASK_STATE_WORKING"}};
+        hash<auto> v03_result = a2aTranslateSseEventToV03(v10_status);
+        assertEq("TaskStatusUpdateEvent", v03_result.event_type);
+        assertEq("task-1", v03_result.data.id);
+        assertEq("active", v03_result.data.state);
+    }
+
+    sendMessageParamsTranslationTest() {
+        # v0.3 → v1.0
+        hash<auto> v03_params = {
+            "message": {
+                "role": "user",
+                "parts": ({"type": "text", "text": "Hello"},),
+            },
+            "contextId": "ctx-1",
+            "metadata": {"key": "val"},
+        };
+
+        hash<auto> v10_params = a2aTranslateSendMessageParamsToV10(v03_params);
+        assertEq("ROLE_USER", v10_params.message.role);
+        assertEq("ctx-1", v10_params.message.contextId, "contextId should be in message");
+        assertFalse(v10_params.hasKey("contextId"), "contextId should not be at top level");
+        assertTrue(v10_params.message.messageId.size() > 0, "messageId should be auto-generated");
+
+        # v1.0 → v0.3
+        hash<auto> v03_back = a2aTranslateSendMessageParamsToV03(v10_params);
+        assertEq("user", v03_back.message.role);
+        assertEq("ctx-1", v03_back.contextId, "contextId should be at top level");
+        assertFalse(v03_back.message.hasKey("contextId"), "contextId should not be in message");
+        assertEq("text", v03_back.message.parts[0].type);
+    }
+
+    roundTripStateTest() {
+        # Every v0.3 state → v1.0 → v0.3 round trip
+        foreach string v03_state in (keys A2aClient::A2aStateMapV03toV10) {
+            string v10 = a2aTranslateTaskStateToV10(v03_state);
+            string back = a2aTranslateTaskStateToV03(v10);
+            assertEq(v03_state, back, sprintf("Round trip failed for state: %y", v03_state));
+        }
+    }
+
+    roundTripRoleTest() {
+        foreach string v03_role in (keys A2aClient::A2aRoleMapV03toV10) {
+            string v10 = a2aTranslateRoleToV10(v03_role);
+            string back = a2aTranslateRoleToV03(v10);
+            assertEq(v03_role, back, sprintf("Round trip failed for role: %y", v03_role));
+        }
+    }
+
+    roundTripMethodTest() {
+        foreach string v03_method in (keys A2aClient::A2aMethodMapV03toV10) {
+            string v10 = a2aTranslateMethodToV10(v03_method);
+            string back = a2aTranslateMethodToV03(v10);
+            assertEq(v03_method, back, sprintf("Round trip failed for method: %y", v03_method));
+        }
+    }
+
+    roundTripPartsTest() {
+        # Text parts round trip
+        list<hash<auto>> v03 = ({"type": "text", "text": "Hello", "metadata": {"k": "v"}},);
+        list<hash<auto>> v10 = a2aTranslatePartsToV10(v03);
+        list<hash<auto>> back = a2aTranslatePartsToV03(v10);
+        assertEq("text", back[0].type);
+        assertEq("Hello", back[0].text);
+        assertEq("v", back[0].metadata.k);
+
+        # File parts round trip
+        v03 = ({"type": "file", "file": {"uri": "https://x.com/f", "mimeType": "text/plain",
+            "name": "f.txt"}},);
+        v10 = a2aTranslatePartsToV10(v03);
+        back = a2aTranslatePartsToV03(v10);
+        assertEq("file", back[0].type);
+        assertEq("https://x.com/f", back[0].file.uri);
+        assertEq("text/plain", back[0].file.mimeType);
+        assertEq("f.txt", back[0].file.name);
+
+        # Data parts round trip
+        v03 = ({"type": "data", "data": {"nested": {"deep": True}}},);
+        v10 = a2aTranslatePartsToV10(v03);
+        back = a2aTranslatePartsToV03(v10);
+        assertEq("data", back[0].type);
+        assertTrue(back[0].data.nested.deep);
+    }
+
+    edgeCasesTest() {
+        # Unknown state passes through
+        assertEq("unknown-state", a2aTranslateTaskStateToV10("unknown-state"));
+        assertEq("UNKNOWN_STATE", a2aTranslateTaskStateToV03("UNKNOWN_STATE"));
+
+        # Unknown role passes through
+        assertEq("system", a2aTranslateRoleToV10("system"));
+        assertEq("ROLE_SYSTEM", a2aTranslateRoleToV03("ROLE_SYSTEM"));
+
+        # Unknown method passes through
+        assertEq("custom/method", a2aTranslateMethodToV10("custom/method"));
+        assertEq("CustomMethod", a2aTranslateMethodToV03("CustomMethod"));
+
+        # Empty parts list
+        list<hash<auto>> empty_parts = ();
+        assertEq(0, a2aTranslatePartsToV10(empty_parts).size());
+        assertEq(0, a2aTranslatePartsToV03(empty_parts).size());
+
+        # Task with no history or artifacts
+        hash<auto> minimal_task = {
+            "id": "task-x",
+            "status": {"state": "pending"},
+        };
+        hash<auto> v10 = a2aTranslateTaskToV10(minimal_task);
+        assertEq("TASK_STATE_SUBMITTED", v10.status.state);
+        hash<auto> v03 = a2aTranslateTaskToV03(v10);
+        assertEq("pending", v03.status.state);
+    }
+}

@@ -53,13 +53,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
-
-%try-module json >= 1.11
-%define NoCbor
-%endtry
+%requires json
 
 module RestSchemaValidator {
     version = "2.5";
@@ -2096,18 +2090,12 @@ public namespace RestSchemaValidator {
         public {
             #! Data serialization support mapping codes to MIME types and de/serialization functions
             const SupportsCbor =
-%ifdef NoCbor
-                False
-%else
                 exists_function("make_cbor") && exists_function("parse_cbor")
-%endif
             ;
 
             const DataSerializationSupport =
-%ifndef NoJson
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: \make_json()}, keys MimeTypesJson)) +
-%endif
                 (SupportsCbor ? {MimeTypeCbor: get_call_reference("make_cbor")} : {}) +
             {
 %ifndef NoYaml
@@ -2196,10 +2184,8 @@ public namespace RestSchemaValidator {
                     "in": \mime_parse_form_urlencoded_string(),
                 ),
             } +
-%ifndef NoJson
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson)) +
-%endif
                 (SupportsCbor ? {MimeTypeCbor: {"code": "cbor", "in": get_call_reference("parse_cbor")}} : {}) +
             {
 %ifndef NoYaml
@@ -2786,12 +2772,8 @@ public namespace RestSchemaValidator {
             auto rv;
             switch (ser) {
                 case "json": {
-%ifdef NoJson
-                    throw "JSON-MODULE-MISSING", "Trying to parse a JSON schema, but the json module is unavailable";
-%else
                     rv = parse_json(str);
                     break;
-%endif
                 }
                 case "yaml": {
 %ifdef NoYaml

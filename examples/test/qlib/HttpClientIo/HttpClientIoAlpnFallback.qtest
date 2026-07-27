@@ -1,0 +1,456 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/1.1 fallback for HTTPS endpoints that do not negotiate HTTP/2 via ALPN.
+
+    Some TLS servers complete the handshake but never negotiate ALPN at all
+    (Salesforce's OAuth2 token endpoint is one), so the happy-eyeballs race
+    loses both legs: HTTP/3 has no QUIC listener and HTTP/2 gets a null ALPN
+    result.  HTTP/1.1 is then the only protocol the endpoint speaks, and these
+    tests pin down when the client is allowed to conclude that — and, just as
+    importantly, when it is not.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientIoAlpnFallbackTest
+
+#! Handler for the HTTP/2-capable reference server
+class SimpleGetHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! A raw TLS server with configurable ALPN behavior that speaks only HTTP/1.1
+/** With @c alpn set to @ref NOTHING the accepted socket never gets any ALPN
+    protocol list, so OpenSSL's selection callback answers
+    \c SSL_TLSEXT_ERR_NOACK and the client's negotiated protocol is null — the
+    exact behavior of the HTTPS endpoints this fallback exists for.
+
+    Every response carries \c "Connection: close", so each request needs a fresh
+    TCP connection and @ref getConnectionCount() is a direct measure of how many
+    connection attempts the client's protocol selection made.
+*/
+class AlpnTestServer {
+    public {
+        #! Timeout for reading a request header from an accepted connection
+        const RequestTimeout = 10s;
+    }
+
+    private {
+        Socket listener();
+        int port;
+
+        #! ALPN protocols to offer; NOTHING means ALPN is not negotiated at all
+        *softlist<string> alpn;
+
+        #! Guards the counters and the stopping flag
+        Mutex m();
+        int connection_count = 0;
+        int request_count = 0;
+        bool stopping = False;
+
+        #! Accept loop + one counter tick per in-flight connection handler
+        Counter running(1);
+        Counter handlers();
+    }
+
+    constructor(string cert_pem, string key_pem, *softlist<string> alpn) {
+        self.alpn = alpn;
+        listener.setCertificate(new SSLCertificate(cert_pem));
+        listener.setPrivateKey(new SSLPrivateKey(key_pem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        port = listener.getPort();
+        background serve();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    string getUrl() {
+        return "https://localhost:" + port;
+    }
+
+    #! Returns the number of TCP connections accepted so far
+    int getConnectionCount() {
+        AutoLock al(m);
+        return connection_count;
+    }
+
+    #! Returns the number of HTTP/1.1 requests served so far
+    int getRequestCount() {
+        AutoLock al(m);
+        return request_count;
+    }
+
+    #! Resets both counters
+    reset() {
+        AutoLock al(m);
+        connection_count = 0;
+        request_count = 0;
+    }
+
+    #! Stops the accept loop and waits for all connection handlers to finish
+    /** The accept loop is unblocked with a throwaway connection rather than a
+        timed wait, so teardown is deterministic.
+    */
+    stop() {
+        {
+            AutoLock al(m);
+            if (stopping) {
+                return;
+            }
+            stopping = True;
+        }
+        try {
+            Socket s();
+            s.connect("localhost:" + port);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the accept loop has already exited
+        }
+        running.waitForZero();
+        handlers.waitForZero();
+        try { listener.close(); } catch () {}
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket client;
+            try {
+                client = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    break;
+                }
+                ++connection_count;
+            }
+            handlers.inc();
+            background handleConnection(client);
+        }
+    }
+
+    private handleConnection(Socket client) {
+        on_exit handlers.dec();
+        try {
+            client.setNoDelay(True);
+            if (alpn) {
+                client.setAlpnProtocols(alpn);
+            }
+            client.upgradeServerToSSL();
+
+            # An HTTP/2 client closes the connection here (null ALPN), so this
+            # read failing is an expected outcome, not a test failure.
+            client.readHTTPHeader(RequestTimeout);
+            {
+                AutoLock al(m);
+                ++request_count;
+            }
+            string body = "OK";
+            client.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                "Content-Length: %d\r\nConnection: close\r\n\r\n%s", body.size(), body));
+        } catch (hash<ExceptionInfo> ex) {
+            # peer went away or refused the negotiated protocol
+        }
+        try { client.close(); } catch () {}
+    }
+}
+
+class HttpClientIoAlpnFallbackTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        #! HTTP/2-capable reference server (negotiates h2 via ALPN)
+        HttpServer mServer;
+        string mH2Url;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpClientIoAlpnFallbackTest", "1.0") {
+        addTestCase("alpn refusal falls back to HTTP/1.1", \alpnRefusalFallsBackToHttp1Test());
+        addTestCase("alpn refusal is cached", \alpnRefusalIsCachedTest());
+        addTestCase("explicit h2 is not downgraded", \explicitHttp2IsNotDowngradedTest());
+        addTestCase("explicit h1 skips the h2 probe", \explicitHttp1SkipsProbeTest());
+        addTestCase("only a definitive refusal pins h1", \definitiveRefusalRuleTest());
+        addTestCase("h2-capable server keeps using h2", \h2CapableServerKeepsUsingH2Test());
+        addTestCase("the h1 fallback is per host", \fallbackIsPerHostTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        LoggerLevel level = m_options.verbose > 2
+            ? LoggerLevel::getLevelDebug()
+            : LoggerLevel::getLevelInfo();
+        mLogger = new Logger("alpn-fallback-test", level);
+        if (m_options.verbose > 1) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        int ssl_port = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mH2Url = "https://127.0.0.1:" + ssl_port;
+        mServer.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            mServer.stop();
+        }
+    }
+
+    #! Returns a manager with the given protocol option
+    private HttpClientConnectionManager getManager(*string protocol) {
+        hash<HttpClientConnectionManagerOptions> opts = <HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        };
+        if (protocol) {
+            opts.protocol = protocol;
+        }
+        return new HttpClientConnectionManager(opts);
+    }
+
+    #! A server that ignores ALPN must still be reachable over HTTP/1.1
+    /** The request is served by a raw HTTP/1.1 server, so a 200 with the
+        expected body is itself proof that the client spoke HTTP/1.1: an HTTP/2
+        connection preface would never have been parsed as a request line.
+    */
+    alpnRefusalFallsBackToHttp1Test() {
+        AlpnTestServer server(CertPem, KeyPem);
+        on_exit server.stop();
+
+        {
+            HttpClientConnectionManager mgr = getManager();
+            HttpClientStreamHandle stream = mgr.acquireStream(server.getUrl());
+            hash<auto> resp = stream.request("GET", "/");
+            assertEq(200, resp.status_code, "request to a non-ALPN server succeeds");
+            assertEq("OK", resp.body, "response served over HTTP/1.1");
+        }
+
+        assertEq(1, server.getRequestCount(), "exactly one HTTP request reached the server");
+        # one connection for the H2 candidate (refused via ALPN) and one for the
+        # HTTP/1.1 fallback; the H3 candidate is UDP and never reaches the listener
+        assertEq(2, server.getConnectionCount(), "h2 attempt plus the h1 fallback");
+    }
+
+    #! The refusal is remembered, so later connections go straight to HTTP/1.1
+    alpnRefusalIsCachedTest() {
+        AlpnTestServer server(CertPem, KeyPem);
+        on_exit server.stop();
+
+        {
+            HttpClientConnectionManager mgr = getManager();
+            for (int i = 0; i < 3; ++i) {
+                HttpClientStreamHandle stream = mgr.acquireStream(server.getUrl());
+                hash<auto> resp = stream.request("GET", "/");
+                assertEq(200, resp.status_code, sprintf("request %d succeeds", i + 1));
+            }
+        }
+
+        assertEq(3, server.getRequestCount(), "all three requests reached the server");
+        # request 1 probes H2 and falls back (2 connections); requests 2 and 3
+        # read the cached fallback and connect once each.  Every response closes
+        # the connection, so none of them can be served from the pool.
+        assertEq(4, server.getConnectionCount(), "the h2 probe is not repeated per request");
+    }
+
+    #! An explicitly configured protocol must never be silently downgraded
+    explicitHttp2IsNotDowngradedTest() {
+        AlpnTestServer server(CertPem, KeyPem);
+        on_exit server.stop();
+
+        {
+            HttpClientConnectionManager mgr = getManager("h2");
+            assertThrows("HTTPCLIENT-CONNECT-ERROR", "HTTP2-ALPN-ERROR",
+                sub () {
+                    HttpClientStreamHandle stream = mgr.acquireStream(server.getUrl());
+                    stream.request("GET", "/");
+                }, NOTHING, "forced h2 against a non-ALPN server fails");
+        }
+
+        assertEq(0, server.getRequestCount(), "forced h2 never falls back to HTTP/1.1");
+        assertGt(0, server.getConnectionCount(), "the h2 attempt reached the server");
+    }
+
+    #! Forcing h1 connects directly, with no HTTP/2 probe at all
+    explicitHttp1SkipsProbeTest() {
+        AlpnTestServer server(CertPem, KeyPem);
+        on_exit server.stop();
+
+        {
+            HttpClientConnectionManager mgr = getManager("h1");
+            HttpClientStreamHandle stream = mgr.acquireStream(server.getUrl());
+            hash<auto> resp = stream.request("GET", "/");
+            assertEq(200, resp.status_code, "forced h1 request succeeds");
+        }
+
+        assertEq(1, server.getRequestCount(), "one request served");
+        assertEq(1, server.getConnectionCount(), "no h2 probe when h1 is forced");
+    }
+
+    #! Only a definitive ALPN refusal may be treated as "this host cannot do HTTP/2"
+    /** The HTTP/1.1 fallback is cached per host, so the rule that decides when
+        to cache it has to reject every error that describes the attempt rather
+        than the endpoint.  \c HTTP2-ABORT in particular is what a deliberately
+        closed connection reports — including the losing leg of a happy-eyeballs
+        race that HTTP/3 has just won, which must never pin the host to HTTP/1.1.
+    */
+    definitiveRefusalRuleTest() {
+        assertTrue(HttpClientConnectionManager::isDefinitiveH2AlpnRefusal({
+            "err": "HTTP2-ALPN-ERROR",
+            "desc": "HTTP/2 not negotiated via ALPN: got null",
+        }), "a null ALPN result is definitive");
+
+        list<string> transient_errors = (
+            "HTTP2-ABORT",
+            "HTTP2-EMPTY-READ",
+            "HTTP2-CONNECTION-CLOSED",
+            "HTTP2-CONNECT-ERROR",
+            "HTTP2-ERROR",
+            "HTTPCLIENT-CONNECT-ERROR",
+            "SOCKET-CONNECT-ERROR",
+        );
+        foreach string err in (transient_errors) {
+            assertFalse(HttpClientConnectionManager::isDefinitiveH2AlpnRefusal({"err": err}),
+                sprintf("%s must not pin the host to HTTP/1.1", err));
+        }
+
+        assertFalse(HttpClientConnectionManager::isDefinitiveH2AlpnRefusal(NOTHING),
+            "a missing error hash is not a refusal");
+        assertFalse(HttpClientConnectionManager::isDefinitiveH2AlpnRefusal({}),
+            "an empty error hash is not a refusal");
+    }
+
+    #! A server that does negotiate h2 must keep getting h2 on every request
+    h2CapableServerKeepsUsingH2Test() {
+        HttpClientConnectionManager mgr = getManager();
+
+        for (int i = 0; i < 3; ++i) {
+            HttpClientStreamHandle stream = mgr.acquireStream(mH2Url);
+            hash<auto> resp = stream.request("GET", "/simple");
+            assertEq(200, resp.status_code, sprintf("h2 request %d succeeds", i + 1));
+
+            list<hash<HttpClientConnectionInfo>> info = mgr.getConnectionInfo(mH2Url);
+            assertGt(0, info.size(), sprintf("request %d has a pooled connection", i + 1));
+            foreach hash<HttpClientConnectionInfo> ci in (info) {
+                assertNeq("h1", ci.protocol,
+                    sprintf("request %d must not be downgraded to HTTP/1.1", i + 1));
+            }
+        }
+    }
+
+    #! The fallback is remembered per host:port, not globally
+    fallbackIsPerHostTest() {
+        AlpnTestServer server(CertPem, KeyPem);
+        on_exit server.stop();
+
+        HttpClientConnectionManager mgr = getManager();
+
+        # fall back to HTTP/1.1 for the non-ALPN host
+        HttpClientStreamHandle s1 = mgr.acquireStream(server.getUrl());
+        assertEq(200, s1.request("GET", "/").status_code, "non-ALPN host served over HTTP/1.1");
+
+        # the ALPN-capable host on the same manager is unaffected
+        HttpClientStreamHandle s2 = mgr.acquireStream(mH2Url);
+        assertEq(200, s2.request("GET", "/simple").status_code, "h2 host still reachable");
+
+        list<hash<HttpClientConnectionInfo>> info = mgr.getConnectionInfo(mH2Url);
+        assertGt(0, info.size(), "h2 host has a pooled connection");
+        foreach hash<HttpClientConnectionInfo> ci in (info) {
+            assertNeq("h1", ci.protocol, "another host's fallback must not downgrade this one");
+        }
+    }
+}

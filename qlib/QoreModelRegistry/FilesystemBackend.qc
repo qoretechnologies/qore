@@ -112,9 +112,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
             }
 
             # Save metadata file
-%ifndef NoJson
             writeVersionMetadataFiles(model_dir, version_id, metadata);
-%endif
         } catch (hash<ExceptionInfo> ex) {
             # Clean up orphaned files on error
             if (is_file(artifact_file)) {
@@ -402,7 +400,6 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
 
     hash<ModelVersionInfo> getVersionManifest(string name, string version_id) {
         hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
-%ifndef NoJson
         string manifest_file = getVersionDir(getModelDir(name), version_id)
             + DirSep + "manifest.json";
         if (is_file(manifest_file)) {
@@ -418,7 +415,6 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
                 meta.tokenizer = cast<hash<TokenizerArtifactInfo>>(manifest.tokenizer);
             }
         }
-%endif
         return meta;
     }
 
@@ -498,12 +494,8 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         if (!is_file(index_file)) {
             index = {"versions": ()};
         } else {
-%ifndef NoJson
             string json_str = ReadOnlyFile::readTextFile(index_file);
             index = parse_json(json_str);
-%else
-            index = {"versions": ()};
-%endif
         }
 
         # Update cache — stat AFTER read to minimize TOCTOU window
@@ -522,11 +514,9 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
     */
     private nothing saveIndexUnlocked(string model_dir, hash<auto> index) {
         string index_file = model_dir + DirSep + "registry.json";
-%ifndef NoJson
         File f();
         f.open(index_file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(make_json(index, JGF_ADD_FORMATTING));
-%endif
 
         # Update cache with new data, mtime, and file size
         *hash<StatInfo> st = is_file(index_file) ? hstat(index_file) : NOTHING;
@@ -571,16 +561,13 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
             throw "ML-REGISTRY-ERROR",
                 sprintf("version '%s' not found", version_id);
         }
-%ifndef NoJson
         writeVersionMetadataFiles(model_dir, version_id, metadata);
-%endif
         saveIndexUnlocked(model_dir, index);
     }
 
     #! Private: writes metadata and package manifest files
     private nothing writeVersionMetadataFiles(string model_dir, string version_id,
             hash<ModelVersionInfo> metadata) {
-%ifndef NoJson
         string meta_file = model_dir + DirSep + "v_" + version_id + ".meta.json";
         {
             File f();
@@ -598,7 +585,6 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
             f.open(manifest_file, O_CREAT | O_WRONLY | O_TRUNC, 0644);
             f.write(make_json(metadata, JGF_ADD_FORMATTING));
         }
-%endif
     }
 
     #! Private: returns the package directory for a version

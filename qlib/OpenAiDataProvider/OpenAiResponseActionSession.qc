@@ -24,9 +24,7 @@
 
 %modern
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -255,13 +253,6 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
             *list<hash<auto>> annotations) {
         *string hint = format_hint ?? (metadata ? metadata.output_format : NOTHING);
         if (hint == "json") {
-%ifdef NoJson
-            return {
-                "type": "json",
-                "text": text,
-                "annotations": annotations,
-            };
-%else
             try {
                 return {
                     "type": "json",
@@ -271,7 +262,6 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
                 };
             } catch (hash<ExceptionInfo> ex) {
             }
-%endif
         }
         if (hint == "yaml") {
 %ifdef NoYaml

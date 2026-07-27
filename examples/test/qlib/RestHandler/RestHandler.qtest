@@ -25,13 +25,7 @@
 %define NoXml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
-
-%try-module json >= 1.12
-%define NoCbor
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -205,7 +199,6 @@ class MyRestHandler inherits RestHandler {
     }
 }
 
-%ifndef NoJson
 class SwaggerRestHandler inherits RestHandler {
     constructor(AbstractRestSchemaValidator validator) : RestHandler(NOTHING, validator) {
         addClass(new TestRestClass());
@@ -213,7 +206,6 @@ class SwaggerRestHandler inherits RestHandler {
         addClass(new B2543RestClass());
     }
 }
-%endif
 
 class DummyListenerInterface inherits HttpListenerInterface {
     addUserThreadContext(hash<auto> uctx) {}
@@ -227,9 +219,7 @@ public class RestHandlerTest inherits QUnit::Test {
         HttpServer mServer;
         RestClient mClient;
         MyRestHandler mHandler();
-%ifndef NoJson
         SwaggerRestHandler swaggerHandler(RestHandlerTest::getSwagger());
-%endif
         int port;
 
         const SimpleHashValue = ("a": "1");
@@ -250,12 +240,8 @@ public class RestHandlerTest inherits QUnit::Test {
 %ifndef NoYaml
             "yaml": AllYamlValues,
 %endif
-%ifndef NoJson
             "json": AllValues,
-%endif
-%ifndef NoCbor
             "cbor": AllValues,
-%endif
 %ifndef NoXml
             "rawxml": SimpleHashValue,
 %endif
@@ -405,9 +391,7 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     static SwaggerSchema getSwagger() {
-%ifndef NoJson
         return SwaggerLoader::fromString(make_json(TestSchema));
-%endif
     }
 
     globalSetUp() {
@@ -421,9 +405,7 @@ public class RestHandlerTest inherits QUnit::Test {
         };
         mServer = new HttpServer(http_opts);
         mServer.setHandler("rest-handler", "/test", MimeTypeHtml, mHandler, NOTHING, False);
-%ifndef NoJson
         mServer.setHandler("swagger-handler", "/swagger", MimeTypeJson, swaggerHandler, NOTHING, False);
-%endif
         mServer.setDefaultHandler("rest-handler", mHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
@@ -612,10 +594,6 @@ public class RestHandlerTest inherits QUnit::Test {
     serializationTest() {
 %ifdef NoYaml
 %ifdef NoXml
-%ifdef NoJson
-        # cannot test serialization with no binary modules present
-        testSkip("no serialization modules present");
-%endif
 %endif
 %endif
         mClient.setSerialization("auto");
@@ -699,9 +677,6 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     cborTest() {
-%ifdef NoCbor
-        testSkip("no CBOR support (json module >= 1.12 required)");
-%else
         mClient.setSerialization("cbor");
 
         {
@@ -730,14 +705,9 @@ public class RestHandlerTest inherits QUnit::Test {
             h = mClient.get("test?action=echo", HashValue, \info);
             assertEq(HashValue, h.body, "GET cbor nested hash");
         }
-%endif
     }
 
     swaggerTest() {
-%ifdef NoJson
-        # cannot test serialization with no binary modules present
-        testSkip("no json module present");
-%else
         # test direct interface (no Swagger validation performed); base path must be removed
         auto val = swaggerHandler.handleExternalRequest("GET", "/test?action=echo", LargerHashValue);
         assertEq(LargerHashValue, val);
@@ -795,7 +765,6 @@ public class RestHandlerTest inherits QUnit::Test {
             m.mapData({"action": "test", "a": "1"});
             assertEq(++cnt, TestRestClass::test_cnt);
         }
-%endif
     }
 
     urlTest() {
@@ -833,9 +802,6 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     issue2543() {
-%ifdef NoJson
-        testSkip("no json module present");
-%else
         SwaggerSchema schema = swaggerHandler.getRestSchemaValidator();
 
         # dummy HttpListenerInterface object
@@ -870,13 +836,9 @@ public class RestHandlerTest inherits QUnit::Test {
         # this would throw exception before fix
         auto result = swaggerHandler.handleRequest(listener, s, cx, hdr, body_str);
         assertEq(200, result."code");
-%endif
     }
 
     issue2893() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
 
         mClient.setSerialization("json");
         hash info;

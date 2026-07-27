@@ -79,6 +79,14 @@ ModuleManager MM;
 // when > 0, parseLoadModule should not try to acquire the mutex
 static thread_local int module_load_depth = 0;
 
+// parent modules queued for %try-child-module attachment when the outermost module load in this thread
+// completes; see design/parse-directive-try-child-module.md
+static thread_local std::vector<std::string> child_attach_queue;
+
+// modules whose children are currently being attached in this thread; prevents unbounded recursion when
+// modules declare each other as children
+static thread_local std::set<std::string> child_attach_set;
+
 static bool show_errors = false;
 
 // for detecting recursive user module dependencies
@@ -224,6 +232,52 @@ ModuleReExportHelper::~ModuleReExportHelper() {
     set_reexport(m, reexport);
 }
 
+const char* qore_child_module_status_string(ChildModuleStatus status) {
+    switch (status) {
+        case CMS_PENDING: return "pending";
+        case CMS_ATTACHED: return "attached";
+        case CMS_ABSENT: return "absent";
+        case CMS_SKIPPED: return "skipped";
+        case CMS_FAILED: return "failed";
+    }
+    assert(false);
+    return "unknown";
+}
+
+void qore_get_module_spec_name(const char* spec, QoreString& name) {
+    name.clear();
+    const char* p = strchrs(spec, "<>=");
+    if (p) {
+        name.concat(spec, p - spec);
+    } else {
+        name.concat(spec);
+    }
+    name.trim();
+}
+
+void QoreAbstractModule::setChildModules(const std::vector<std::string>& specs) {
+    for (const std::string& spec : specs) {
+        QoreString cname;
+        qore_get_module_spec_name(spec.c_str(), cname);
+        if (cname.empty()) {
+            continue;
+        }
+        // ignore duplicate declarations; the parser rejects duplicates in a single module, but the same
+        // module object can also receive declarations from a module description function
+        bool dup = false;
+        for (const ChildModuleInfo& c : children) {
+            if (c.name == cname.c_str()) {
+                dup = true;
+                break;
+            }
+        }
+        if (dup) {
+            continue;
+        }
+        children.push_back(ChildModuleInfo(spec.c_str(), cname.c_str()));
+    }
+}
+
 QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
@@ -246,6 +300,25 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
         for (name_vec_t::const_iterator i = rmod.begin(), e = rmod.end(); i != e; ++i)
             l->push(new QoreStringNode(*i), nullptr);
         ph->setKeyValueIntern("reexported-modules", l);
+    }
+    if (!children.empty()) {
+        // child modules declared with %try-child-module, keyed by feature name in declaration order
+        QoreHashNode* ch = new QoreHashNode(autoTypeInfo);
+        qore_hash_private* pch = qore_hash_private::get(*ch);
+        for (const ChildModuleInfo& c : children) {
+            QoreHashNode* ci = new QoreHashNode(autoTypeInfo);
+            qore_hash_private* pci = qore_hash_private::get(*ci);
+            pci->setKeyValueIntern("spec", new QoreStringNode(c.spec));
+            pci->setKeyValueIntern("status", new QoreStringNode(qore_child_module_status_string(c.status)));
+            if (!c.err.empty()) {
+                pci->setKeyValueIntern("err", new QoreStringNode(c.err));
+            }
+            if (!c.desc.empty()) {
+                pci->setKeyValueIntern("desc", new QoreStringNode(c.desc));
+            }
+            pch->setKeyValueIntern(c.name.c_str(), ci);
+        }
+        ph->setKeyValueIntern("child-modules", ch);
     }
     ph->setKeyValueIntern("injected", injected);
     ph->setKeyValueIntern("reinjected", reinjected);
@@ -306,6 +379,50 @@ void QoreModuleContext::commit() {
 
     mcfl.mcfl_t::clear();
     mcnl.mcnl_t::clear();
+}
+
+void qore_declare_child_module(const QoreProgramLocation* loc, const char* spec) {
+    QoreModuleDefContext* qmd = get_module_def_context();
+    if (!qmd) {
+        // AOT-compiled modules re-parse their embedded source at runtime with the module context name set;
+        // their child declarations arrive through the module description function instead, and the directive
+        // is stripped from the embedded source, so ignore it here rather than failing the module load
+        if (get_module_context_name()) {
+            return;
+        }
+        parse_error(*loc, "the %%try-child-module parse directive can only be used in a user module");
+        return;
+    }
+    qmd->addChild(loc, spec, get_module_context_name());
+}
+
+int QoreModuleDefContext::addChild(const QoreProgramLocation* loc, const char* spec, const char* mod_name) {
+    QoreString cname;
+    qore_get_module_spec_name(spec, cname);
+    if (cname.empty()) {
+        parse_error(*loc, "missing module name in the %%try-child-module declaration '%%try-child-module %s'",
+            spec);
+        return -1;
+    }
+
+    if (mod_name && !cname.compare(mod_name)) {
+        parse_error(*loc, "module '%s' cannot declare itself as a child module with %%try-child-module",
+            mod_name);
+        return -1;
+    }
+
+    for (const std::string& i : child_vec) {
+        QoreString iname;
+        qore_get_module_spec_name(i.c_str(), iname);
+        if (!iname.compare(cname.c_str())) {
+            parse_error(*loc, "child module '%s' has already been declared with %%try-child-module in this "
+                "module", cname.c_str());
+            return -1;
+        }
+    }
+
+    child_vec.push_back(spec);
+    return 0;
 }
 
 int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, QoreValue val) {
@@ -955,7 +1072,12 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         }
     }
 
-    // mirror qore_check_load_module_intern: merge the module's namespace into tpgm
+    // mirror qore_check_load_module_intern: attach child modules declared with %try-child-module, then
+    // merge the module's namespace into tpgm
+    if (queueChildModules(*mi, xsink, xsink, QP_WARN_MODULES)) {
+        return -1;
+    }
+
     {
         AutoUnlocker au(&mutex);
         mi->addToProgram(tpgm, xsink);
@@ -1043,7 +1165,8 @@ static void check_module_version(QoreAbstractModule* mi, mod_op_e op, version_li
 }
 
 static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, version_list_t* version,
-        QoreProgram* pgm, ExceptionSink& xsink, QoreThreadLock* unlock_lock = nullptr) {
+        QoreProgram* pgm, ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
+        QoreThreadLock* unlock_lock = nullptr) {
     if (xsink) {
         return -1;
     }
@@ -1055,6 +1178,12 @@ static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, ve
         if (xsink) {
             return -1;
         }
+    }
+
+    // attach any child modules declared with %try-child-module before the module is applied to the
+    // requesting Program, so that a child that is present but broken fails the load as a whole
+    if (QMM.queueChildModules(*mi, xsink, wsink, warning_mask)) {
+        return -1;
     }
 
     if (pgm) {
@@ -1109,7 +1238,8 @@ static const char* get_feature_from_path(QoreString& tmp) {
 
 QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, bool reexport, mod_op_e op, version_list_t* version, const char* src, QoreProgram* mpgm,
-        unsigned load_opt, int warning_mask, qore_binary_module_desc_t mod_desc_func) {
+        unsigned load_opt, int warning_mask, qore_binary_module_desc_t mod_desc_func, QoreProgram* path_pgm,
+        bool* not_found) {
     assert(!version || (version && op != MOD_OP_NONE));
 
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
@@ -1137,6 +1267,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     //printd(5, "QoreModuleManager::loadModuleIntern() name: '%s' path: '%s' reexport: %d pgm: %p\n", name,
     //    raw_path ? raw_path : "n/a", reexport, pgm);
     QoreThreadLock* unlock_lock = &mutex;
+
+    // Program used for parse option and module search path inheritance; when there is no target Program
+    // (child module loads made by attachChildModules()), the parent module's Program is used instead, so
+    // that a child is resolved against the same module search path as its parent
+    QoreProgram* ctx_pgm = pgm ? pgm : path_pgm;
 
     // check for special "qore" feature
     if (!raw_path && !strcmp(name, "qore")) {
@@ -1318,7 +1453,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         //    "injected: %d reinjected: %d\n", name, load_opt & QMLO_INJECT, load_opt & QMLO_REINJECT, mi,
         //    mi->getName(), mi->getFileName(), mi->isInjected(), mi->isReInjected());
 
-        int rc = qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock);
+        int rc = qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock);
         // make sure to add reexport info if the module should be reexported
         if (reexport && !xsink) {
             ModuleReExportHelper mrh(mi, true);
@@ -1346,13 +1481,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
         mi = loadUserModuleFromSource(xsink, wsink, raw_path ? raw_path : name, name, pgm, src, reexport,
             pholder.release(), warning_mask);
-        return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+        return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
     }
 
     // see if this is actually a path
     if (raw_path) {
         QoreString modulePath;
-        QoreProgram* p = pgm ? pgm : (load_opt & (QMLO_REINJECT | QMLO_PRIVATE) && mpgm ? mpgm : nullptr);
+        QoreProgram* p = ctx_pgm ? ctx_pgm : (load_opt & (QMLO_REINJECT | QMLO_PRIVATE) && mpgm ? mpgm : nullptr);
         if (!p) {
             p = getProgram();
         }
@@ -1384,10 +1519,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                         && qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path)) {
                     if (separated_path.size()) {
                         mi = loadSeparatedModule(xsink, wsink, separated_path.c_str(), name, pgm, reexport, nullptr,
-                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
                     } else {
                         mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
-                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
                     }
                     if (mi && !xsink) {
                         qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name, raw_path,
@@ -1409,13 +1544,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 return nullptr;
             }
             mi = loadSeparatedModule(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
         } else {
             mi = loadUserModuleFromPath(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
         }
 
-        return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+        return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
     }
 
     // otherwise, try to find module in the module path
@@ -1427,7 +1562,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     // paths LAST.  We collect raw pointers to avoid copying strings.  See
     // design/parse-directive-prepend-module-path.md "Search-path layering".
     std::vector<const std::string*> search_paths;
-    const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
+    const qore_program_private* priv_pgm = ctx_pgm ? qore_program_private::get(*ctx_pgm) : nullptr;
     if (priv_pgm) {
         for (const std::string& p : priv_pgm->prepended_module_paths) {
             search_paths.push_back(&p);
@@ -1462,13 +1597,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 found_source_path->sprintf(QORE_DIR_SEP_STR "%s.qm", name);
             }
             return loadSeparatedModule(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
         }
         if (found_source_path) {
             *found_source_path = source_path;
         }
         return loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
-            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
     };
 
     for (const std::string* path_ptr : search_paths) {
@@ -1514,7 +1649,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
-                    pgm, load_opt, mod_desc_func);
+                    ctx_pgm, load_opt, mod_desc_func);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -1537,7 +1672,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                         xsink.assimilate(binary_xsink);
                     }
                 }
-                return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
             }
         }
 
@@ -1567,7 +1702,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
-                    pgm, load_opt, mod_desc_func);
+                    ctx_pgm, load_opt, mod_desc_func);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -1590,7 +1725,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                         xsink.assimilate(binary_xsink);
                     }
                 }
-                return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
             }
         }
 
@@ -1605,8 +1740,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 q_normalize_path(str);
             }
             mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
-            return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
         }
 
         // check whether it is a module folder
@@ -1620,9 +1755,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
             //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
-            return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
         }
+    }
+
+    // the module does not exist in the module path; child module attachment uses this to tell an absent
+    // child module (not an error) from one that is present but cannot be loaded
+    if (not_found) {
+        *not_found = true;
     }
 
     QoreStringNode* desc = new QoreStringNodeMaker("feature '%s' is not builtin and no module with this name could "
@@ -1787,70 +1928,88 @@ QoreStringNode* ModuleManager::parseLoadModule(const char* name, QoreProgram* pg
     return loadModuleError(name, xsink);
 }
 
+//! Parses a module specification of the form "<feature>[<op> <version>]"
+/** @param spec the specification as given in the source
+    @param name the feature name is returned here
+    @param op the version operator is returned here, or MOD_OP_NONE if no version constraint was given
+    @param version the version is returned here; only valid if \a op is not MOD_OP_NONE
+    @param xsink exception sink
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_parse_module_spec(const char* spec, QoreString& name, mod_op_e& op, version_list_t& version,
+        ExceptionSink& xsink) {
+    op = MOD_OP_NONE;
+
+    char* p = strchrs(spec, "<>=");
+    if (!p) {
+        name = spec;
+        name.trim();
+        return 0;
+    }
+
+    name.set(spec, p - spec);
+    name.trim();
+
+    QoreString ops;
+    do {
+        if (!qore_isblank(*p)) {
+            ops.concat(*p);
+        }
+        ++p;
+    } while (*p == '<' || *p == '>' || *p == '=' || qore_isblank(*p));
+
+    // get version operator
+    if (!ops.compare("<")) {
+        op = MOD_OP_LT;
+    } else if (!ops.compare("<=")) {
+        op = MOD_OP_LE;
+    } else if (!ops.compare("=") || !ops.compare("==")) {
+        op = MOD_OP_EQ;
+    } else if (!ops.compare(">=")) {
+        op = MOD_OP_GE;
+    } else if (!ops.compare(">")) {
+        op = MOD_OP_GT;
+    } else {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(spec), "module '%s': cannot parse "
+            "module operator '%s'; expecting one of: '<', '<=', '=', '>=', or '>'", spec, ops.c_str());
+        return -1;
+    }
+
+    char ec = version.set(p);
+    if (ec) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(spec), "module '%s': only numeric "
+            "digits and '.' characters are allowed in module/feature version specifications, got '%c'", spec, ec);
+        return -1;
+    }
+
+    if (!version.size()) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(spec), "module '%s': empty version "
+            "specification given in feature/module request", spec);
+        return -1;
+    }
+
+    return 0;
+}
+
 int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, bool reexport) {
     //printd(5, "ModuleManager::parseLoadModule(name: %s, pgm: %p, reexport: %d)\n", name, pgm, reexport);
 
     assert(!xsink);
 
-    char* p = strchrs(name, "<>=");
+    QoreString str;
+    mod_op_e mo;
+    version_list_t iv;
+    if (qore_parse_module_spec(name, str, mo, iv, xsink)) {
+        return -1;
+    }
+
     QoreAbstractModule* mod = nullptr;
-    if (p) {
-        QoreString str(name, p - name);
-        str.trim();
-
-        QoreString op;
-        do {
-            if (!qore_isblank(*p)) {
-                op.concat(*p);
-            }
-            ++p;
-        } while (*p == '<' || *p == '>' || *p == '=' || qore_isblank(*p));
-
-        // get version operator
-        mod_op_e mo;
-
-        if (!op.compare("<")) {
-            mo = MOD_OP_LT;
-        } else if (!op.compare("<=")) {
-            mo = MOD_OP_LE;
-        } else if (!op.compare("=") || !op.compare("==")) {
-            mo = MOD_OP_EQ;
-        } else if (!op.compare(">=")) {
-            mo = MOD_OP_GE;
-        } else if (!op.compare(">")) {
-            mo = MOD_OP_GT;
-        } else {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': cannot parse "
-                "module operator '%s'; expecting one of: '<', '<=', '=', '>=', or '>'", name, op.c_str());
-            return -1;
-        }
-
-        version_list_t iv;
-        char ec = iv.set(p);
-        if (ec) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': only numeric "
-                "digits and '.' characters are allowed in module/feature version specifications, got '%c'", name, ec);
-            return -1;
-        }
-
-        if (!iv.size()) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': empty version "
-                "specification given in feature/module request", name);
-            return -1;
-        }
-
+    {
         OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
-        mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, &iv);
-        // If reexport directive is present, register module for reexport (module context is correct here)
-        if (reexport && mod && !xsink) {
-            ModuleReExportHelper mrh(mod, true);
-        }
-    } else {
-        OptLocker ol(&mutex);
-        // Load module; handle reexport flag separately to ensure correct module context
-        mod = loadModuleIntern(xsink, wsink, name, pgm, false);
+        mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, mo == MOD_OP_NONE ? nullptr : &iv);
         // If reexport directive is present, register module for reexport (module context is correct here)
         if (reexport && mod && !xsink) {
             ModuleReExportHelper mrh(mod, true);
@@ -1863,6 +2022,254 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     }
 
     return xsink ? -1 : 0;
+}
+
+ChildAttachHelper::ChildAttachHelper(QoreAbstractModule& mi, const std::string& name) : mi(mi), name(name) {
+    assert(!mi.children_attaching);
+    mi.children_attaching = true;
+    child_attach_set.insert(name);
+}
+
+ChildAttachHelper::~ChildAttachHelper() {
+    mi.children_attaching = false;
+    child_attach_set.erase(name);
+    // wake any thread waiting for this module's children to be attached
+    if (QMM.module_load_waiting) {
+        QMM.module_load_cond.broadcast();
+    }
+}
+
+//! Raises a warning for a child module declaration that could not be honored
+static void qore_warn_child_module_skipped(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
+        const char* mod_name, const ChildModuleInfo& c) {
+    if (!warning_mask) {
+        return;
+    }
+
+    QoreStringNode* warn_desc = new QoreStringNodeMaker("module '%s': child module '%s' declared with "
+        "%%try-child-module was not attached: %s", mod_name, c.name.c_str(), c.desc.c_str());
+
+    if (&xsink == &wsink) {
+        printe("warning: %s\n", warn_desc->c_str());
+        warn_desc->deref();
+        return;
+    }
+
+    wsink.raiseExceptionArg("MODULE-CHILD-SKIPPED", new QoreStringNode(c.name), warn_desc);
+}
+
+bool QoreModuleManager::hasUserModuleDependencyPath(const std::string& from, const std::string& to) {
+    strset_t seen;
+    std::vector<std::string> stack;
+    stack.push_back(from);
+    while (!stack.empty()) {
+        const std::string cur = stack.back();
+        stack.pop_back();
+        if (!seen.insert(cur).second) {
+            continue;
+        }
+        const strset_t* deps = md_map.getDeps(cur);
+        if (!deps) {
+            continue;
+        }
+        if (deps->find(to) != deps->end()) {
+            return true;
+        }
+        for (const std::string& d : *deps) {
+            stack.push_back(d);
+        }
+    }
+    return false;
+}
+
+int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
+        int warning_mask) {
+    if (!mi.hasChildModules()) {
+        return 0;
+    }
+
+    const std::string mname = mi.getName();
+
+    while (true) {
+        // a child that is present but broken fails every load of the parent, so that a "%requires <parent>"
+        // is deterministic for a given set of installed modules
+        for (const ChildModuleInfo& c : mi.children) {
+            if (c.status == CMS_FAILED) {
+                xsink.raiseExceptionArg(c.err.c_str(), new QoreStringNode(mi.getName()), "module '%s': child "
+                    "module '%s' declared with %%try-child-module is present but failed to load: %s",
+                    mi.getName(), c.name.c_str(), c.desc.c_str());
+                return -1;
+            }
+        }
+
+        if (mi.children_done) {
+            return 0;
+        }
+
+        // ignore re-entrant attaches in this thread; this happens when two modules declare each other as
+        // children, and when a child module requires its own parent
+        if (child_attach_set.find(mname) != child_attach_set.end()) {
+            return 0;
+        }
+
+        if (!mi.children_attaching) {
+            break;
+        }
+
+        // another thread is attaching this module's children; wait for it to finish so that this load does
+        // not return before the children have been registered.  No module-load reservation is held here (the
+        // attach runs after the parent's load has completed), so this wait cannot form a load cycle
+        ++module_load_waiting;
+        int wait_rc = module_load_cond.waitWithInterrupt(mutex, &xsink);
+        --module_load_waiting;
+        if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
+            return -1;
+        }
+    }
+
+    ChildAttachHelper cah(mi, mname);
+
+    // parse options and module search paths for child loads come from the parent module's Program, so that
+    // child resolution does not depend on which Program triggered the parent's load; AOT-compiled user
+    // modules are loaded as binary modules but have a module Program registered with the AOT runtime
+    QoreProgram* ppgm = mi.isUser()
+        ? static_cast<QoreUserModule&>(mi).getProgram()
+        : qore_aot_get_module_pgm(mi.getName());
+    const bool no_modules = ppgm && (ppgm->getParseOptions() & PO_NO_MODULES);
+
+    int rc = 0;
+    bool all_done = true;
+    for (ChildModuleInfo& c : mi.children) {
+        if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT) {
+            continue;
+        }
+
+        if (no_modules) {
+            // module loading is not allowed in the parent module's Program; degrade predictably and retry
+            // the attach if the module is loaded again in a context where modules are allowed
+            c.status = CMS_SKIPPED;
+            c.desc = "module loading is not allowed in the parent module's Program object (PO_NO_MODULES)";
+            all_done = false;
+            qore_warn_child_module_skipped(xsink, wsink, warning_mask, mi.getName(), c);
+            continue;
+        }
+
+        ExceptionSink cx;
+        QoreString cname;
+        mod_op_e op = MOD_OP_NONE;
+        version_list_t version;
+        bool not_found = false;
+        QoreAbstractModule* cmi = nullptr;
+        if (!qore_parse_module_spec(c.spec.c_str(), cname, op, version, cx)) {
+            printd(5, "QoreModuleManager::attachChildModules() '%s': attaching child '%s'\n", mi.getName(),
+                cname.c_str());
+            cmi = loadModuleIntern(cx, wsink, cname.c_str(), nullptr, false, op,
+                op == MOD_OP_NONE ? nullptr : &version, nullptr, nullptr, QMLO_NONE, warning_mask, nullptr,
+                ppgm, &not_found);
+        }
+
+        if (!cx) {
+            // a null module with no exception means that the child's load is already in progress in this
+            // thread (i.e. the child was loaded explicitly and pulled its parent in); it will complete
+            // normally, so it is attached in either case
+            c.status = CMS_ATTACHED;
+            // ensure that the parent is only deleted after the child, which holds references to the parent's
+            // classes; binary modules are not deleted by delUser() and must not be tracked here
+            if (cmi && cmi->isUser() && mi.isUser()) {
+                // do not record the edge if the parent must already be deleted before the child: that
+                // happens when modules declare each other as children, and a cycle in the dependency map
+                // would make module teardown impossible.  The existing edge, which comes from a %requires,
+                // reflects a real symbol dependency and is the one to keep
+                if (hasUserModuleDependencyPath(cmi->getName(), mi.getName())) {
+                    printd(5, "QoreModuleManager::attachChildModules() '%s': not adding a dependency on child "
+                        "'%s'; the child already depends on this module\n", mi.getName(), cmi->getName());
+                } else {
+                    setUserModuleDependency(mi.getName(), cmi->getName());
+                }
+            }
+            continue;
+        }
+
+        if (not_found) {
+            // the child is not installed: this is not an error
+            c.status = CMS_ABSENT;
+            cx.clear();
+            continue;
+        }
+
+        // the child is present but could not be loaded; record the error so that it is raised on every
+        // subsequent load of the parent as well
+        c.status = CMS_FAILED;
+        QoreStringValueHelper err(cx.getExceptionErr());
+        QoreStringValueHelper desc(cx.getExceptionDesc());
+        c.err = err->empty() ? "LOAD-MODULE-ERROR" : err->c_str();
+        c.desc = desc->c_str();
+
+        cx.appendLastDescription(" (while attaching child module \"%s\" declared by module \"%s\")",
+            c.name.c_str(), mi.getName());
+        xsink.assimilate(cx);
+        rc = -1;
+        break;
+    }
+
+    if (!rc && all_done) {
+        mi.children_done = true;
+    }
+
+    return rc;
+}
+
+int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
+        int warning_mask) {
+    if (mi.hasChildModules() && !mi.children_done) {
+        bool found = false;
+        for (const std::string& i : child_attach_queue) {
+            if (i == mi.getName()) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            child_attach_queue.push_back(mi.getName());
+        }
+    }
+
+    // Child modules are attached at the outermost module load boundary in this thread: a child parsed while
+    // an enclosing module load is still in progress cannot resolve that module's symbols, since the loader
+    // returns silently for a feature already reserved by this thread.  See
+    // design/parse-directive-try-child-module.md
+    if (module_load_depth > 0 || child_attach_queue.empty()) {
+        return 0;
+    }
+
+    // if the enclosing load already failed, record child statuses without adding to the caller's sink; any
+    // failure is raised the next time the parent module is loaded
+    const bool use_scratch = (bool)xsink;
+    ExceptionSink scratch;
+    // ensure that the scratch sink is empty on every exit path; a discarded sink would otherwise report the
+    // exception on the console when it is destroyed
+    ON_BLOCK_EXIT_OBJ(scratch, &ExceptionSink::clear);
+    ExceptionSink& sink = use_scratch ? scratch : xsink;
+
+    int rc = 0;
+    while (!child_attach_queue.empty()) {
+        const std::string name = child_attach_queue.front();
+        child_attach_queue.erase(child_attach_queue.begin());
+
+        QoreAbstractModule* pmi = findModuleUnlocked(name.c_str());
+        if (!pmi) {
+            continue;
+        }
+
+        if (attachChildModules(*pmi, sink, wsink, warning_mask)) {
+            // leave the rest of the queue in place; it is drained when the next module load completes, and
+            // any recorded failure is raised again when the parent module is loaded again
+            rc = use_scratch ? 0 : -1;
+            break;
+        }
+    }
+
+    return rc;
 }
 
 int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
@@ -2004,6 +2411,12 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
 
     const char* license = qmd.get("license");
     QoreString license_str(license ? license : "unknown");
+
+    // record any child modules declared with %try-child-module; they are attached after the module has been
+    // registered and published (see QoreModuleManager::attachChildModules())
+    if (!qmd.child_vec.empty()) {
+        mi->setChildModules(qmd.child_vec);
+    }
 
     // issue #4254 do not run any initialization code while holding the global module lock
     if (qmd.hasInit()) {
@@ -2604,6 +3017,12 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, mod_info,
         dlh ? dlh->release() : nullptr, info.release(), load_opt));
+    // record any child modules declared with %try-child-module; for AOT-compiled modules these are
+    // delivered by the module description function, since the directive cannot be processed again when the
+    // embedded source is parsed (see design/parse-directive-try-child-module.md)
+    if (!mod_info.child_modules.empty()) {
+        bmi->setChildModules(mod_info.child_modules);
+    }
     mi = bmi.get();
     QMM.addModule(bmi.release());
 

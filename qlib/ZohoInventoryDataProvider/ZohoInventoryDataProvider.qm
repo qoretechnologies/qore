@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ZohoInventoryRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module ZohoInventoryDataProvider {
     version = "1.0";

@@ -30,6 +30,16 @@ license; see each source file for the full text of the license
 Source Code Notices
 *******************
 
+the json binary module contains jsoncons source code (a header-only C++ library
+for JSON and JSON-like data formats, vendored in modules/json/third-party/jsoncons)
+under the following license:
+/*
+          Copyright Daniel Parker 2013 - 2020.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file modules/json/third-party/jsoncons/LICENSE or copy at
+          http://www.boost.org/LICENSE_1_0.txt)
+*/
+
 the qore library contains xxHash source code under the following license:
 /*
    xxHash - Fast Hash algorithm

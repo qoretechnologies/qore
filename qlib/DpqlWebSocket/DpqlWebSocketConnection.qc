@@ -97,17 +97,12 @@ public class DpqlWebSocketConnection inherits WebSocketHandler::WebSocketConnect
     */
     gotMessage(string msg) {
         hash<auto> request;
-%ifndef NoJson
         try {
             request = parse_json(msg);
         } catch (hash<ExceptionInfo> ex) {
             sendError(NOTHING, "JSON-PARSE-ERROR", sprintf("Invalid JSON: %s", ex.desc));
             return;
         }
-%else
-        sendError(NOTHING, "JSON-PARSE-ERROR", "json module not available");
-        return;
-%endif
 
         string type = request.type ?? "";
         *string id = request.id;
@@ -271,9 +266,7 @@ public class DpqlWebSocketConnection inherits WebSocketHandler::WebSocketConnect
 
     #! Sends a JSON message to the client
     private sendMessage(hash<auto> data) {
-%ifndef NoJson
         send(make_json(data));
-%endif
     }
 }
 

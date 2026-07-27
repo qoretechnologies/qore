@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmNestExt.qm - child module of TcmNestBase that requires the module that loaded the base module
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmNestBase
+%requires TcmNestOuter
+
+module TcmNestExt {
+    version = "1.0";
+    desc = "test child module requiring the outer module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmNestBase::add("ext:" + TcmNestOuter::hello());
+    };
+}

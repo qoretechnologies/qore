@@ -80,6 +80,7 @@ public class DataProvider {
             # provided by the jni module
             "accessread": "AccessDataProvider",
 
+            "a2aclient": "A2aClientDataProvider",
             "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
             "assemblyai": "AssemblyAiDataProvider",
@@ -186,7 +187,6 @@ public class DataProvider {
 
             "jotform": "JotformDataProvider",
 
-            # provided by the json module
             "fhirrest": "FhirRestDataProvider",
             "jsonread": "JsonFileDataProvider",
             "jsonwrite": "JsonFileDataProvider",
@@ -204,7 +204,6 @@ public class DataProvider {
 
             "linear": "LinearDataProvider",
 
-            # provided by the json module
             "mcpclient": "McpClientDataProvider",
 
             "ml": "DataProviderML",
@@ -223,7 +222,6 @@ public class DataProvider {
             # provided by the jni module
             "mqtt": "MqttDataProvider",
 
-            # provided by the json module
             "ndjson": "NdjsonDataProvider",
 
             # provided by the nats module

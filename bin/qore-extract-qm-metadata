@@ -43,32 +43,9 @@ if (!is_readable(source_file)) {
     exit(1);
 }
 
-string json;
-try {
-    hash<QoreApiMetadata::NamespaceInfo> metadata =
-        QoreApiMetadata::fromSourceFile(source_file);
-    json = QoreApiMetadata::toJson(metadata);
-} catch (hash<ExceptionInfo> ex) {
-    # JSON-NOT-AVAILABLE is thrown by the %ifdef NoJson stub in
-    # QoreApiMetadata::MetadataStore::toJson.  NoJson is set at
-    # QoreApiMetadata.qm's parse time when `%try-module json` fails, and
-    # that decision is baked into the AOT-compiled QoreApiMetadata.qmod.
-    # So this fires when the installed QoreApiMetadata.qmod was AOT-built
-    # at a time when the json module wasn't installed -- even if json is
-    # available now at runtime.  Fix: install module-json, then rebuild
-    # and reinstall qore so QoreApiMetadata.qmod is re-AOT'd with the
-    # json-backed branch.  Until then, write an empty stub so the build
-    # continues instead of breaking unrecoverably.
-    if (ex.err == "JSON-NOT-AVAILABLE") {
-        stderr.printf("%s: WARNING: QoreApiMetadata.qmod was AOT-compiled "
-            "without json support; writing empty metadata for %s "
-            "(install module-json and rebuild qore to fix)\n",
-            get_script_name(), source_file);
-        json = "{}\n";
-    } else {
-        rethrow;
-    }
-}
+hash<QoreApiMetadata::NamespaceInfo> metadata =
+    QoreApiMetadata::fromSourceFile(source_file);
+string json = QoreApiMetadata::toJson(metadata);
 
 if (ARGV[1]) {
     File f();

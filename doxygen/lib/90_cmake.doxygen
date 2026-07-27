@@ -140,7 +140,7 @@
     \c QORE_QDX_RUN plus platform and debug symbols); you can append additional
     symbols in the environment, for example:
     @code
-    QORE_DOC_DEFINES="NoJson,NoYaml" make docs
+    QORE_DOC_DEFINES="NoXml,NoYaml" make docs
     @endcode
 
 

@@ -81,9 +81,7 @@ module AzureDocumentIntelligenceRestClient {
     - the initial version of the %AzureDocumentIntelligenceRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! contains all public symbols of the AzureDocumentIntelligenceRestClient module
 public namespace AzureDocumentIntelligenceRestClient {

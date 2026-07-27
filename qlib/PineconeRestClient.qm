@@ -80,9 +80,7 @@ module PineconeRestClient {
     - the initial version of the %PineconeRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace PineconeRestClient {
 public class PineconeRestClientBase {

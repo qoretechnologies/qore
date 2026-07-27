@@ -1,0 +1,1555 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief defines JSON functions
+*/
+/*
+    lib/ql_json.qpp
+
+    Qore JSON (JavaScript QoreObject Notation) functions
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "qore-json-module.h"
+
+#include "ql_json.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <cmath>
+#include <cassert>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/pem.h>
+
+// RFC 4627 JSON specification
+// qore only supports JSON with UTF-8
+
+const TypedHashDecl* hashdeclJwtHeader = nullptr;
+const TypedHashDecl* hashdeclJwtClaims = nullptr;
+const TypedHashDecl* hashdeclJwtDecodeResult = nullptr;
+
+static const EVP_MD* jwt_get_md(const char* alg, bool& is_hmac, bool& is_rsa, ExceptionSink* xsink) {
+    is_hmac = false;
+    is_rsa = false;
+    if (!strcmp(alg, "HS256")) {
+        is_hmac = true;
+        return EVP_sha256();
+    }
+    if (!strcmp(alg, "HS384")) {
+        is_hmac = true;
+        return EVP_sha384();
+    }
+    if (!strcmp(alg, "HS512")) {
+        is_hmac = true;
+        return EVP_sha512();
+    }
+    if (!strcmp(alg, "RS256")) {
+        is_rsa = true;
+        return EVP_sha256();
+    }
+    if (!strcmp(alg, "RS384")) {
+        is_rsa = true;
+        return EVP_sha384();
+    }
+    if (!strcmp(alg, "RS512")) {
+        is_rsa = true;
+        return EVP_sha512();
+    }
+
+    xsink->raiseException("JWT-ERROR", "unsupported JWT algorithm: %s", alg);
+    return nullptr;
+}
+
+static BinaryNode* jwt_sign_hmac(const EVP_MD* md, const QoreString& key, const QoreString& input,
+        ExceptionSink* xsink) {
+    unsigned int len = 0;
+    unsigned char buf[EVP_MAX_MD_SIZE];
+    if (!HMAC(md, key.getBuffer(), key.size(), reinterpret_cast<const unsigned char*>(input.getBuffer()),
+        input.size(), buf, &len)) {
+        xsink->raiseException("JWT-ERROR", "HMAC signing failed");
+        return nullptr;
+    }
+    ReferenceHolder<BinaryNode> bin(new BinaryNode(), xsink);
+    bin->append(buf, len);
+    return bin.release();
+}
+
+static BinaryNode* jwt_sign_rsa(const EVP_MD* md, const QoreString& key, const QoreString& input,
+        ExceptionSink* xsink) {
+    BIO* bio = BIO_new_mem_buf(key.getBuffer(), key.size());
+    if (!bio) {
+        xsink->raiseException("JWT-ERROR", "failed to allocate key buffer");
+        return nullptr;
+    }
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!pkey) {
+        xsink->raiseException("JWT-ERROR", "failed to read RSA private key");
+        return nullptr;
+    }
+
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "failed to allocate digest context");
+        return nullptr;
+    }
+
+    if (EVP_DigestSignInit(ctx, nullptr, md, nullptr, pkey) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA signing init failed");
+        return nullptr;
+    }
+    if (EVP_DigestSignUpdate(ctx, input.getBuffer(), input.size()) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA signing update failed");
+        return nullptr;
+    }
+    size_t siglen = 0;
+    if (EVP_DigestSignFinal(ctx, nullptr, &siglen) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA signing final length failed");
+        return nullptr;
+    }
+    std::unique_ptr<unsigned char[]> sig(new unsigned char[siglen]);
+    if (EVP_DigestSignFinal(ctx, sig.get(), &siglen) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA signing failed");
+        return nullptr;
+    }
+
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+
+    ReferenceHolder<BinaryNode> bin(new BinaryNode(), xsink);
+    bin->append(sig.get(), siglen);
+    return bin.release();
+}
+
+static bool jwt_verify_hmac(const EVP_MD* md, const QoreString& key, const QoreString& input,
+        const BinaryNode* signature, ExceptionSink* xsink) {
+    ReferenceHolder<BinaryNode> expected(jwt_sign_hmac(md, key, input, xsink), xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (expected->size() != signature->size()) {
+        return false;
+    }
+    return CRYPTO_memcmp(expected->getPtr(), signature->getPtr(), signature->size()) == 0;
+}
+
+static bool jwt_verify_rsa(const EVP_MD* md, const QoreString& key, const QoreString& input,
+        const BinaryNode* signature, ExceptionSink* xsink) {
+    BIO* bio = BIO_new_mem_buf(key.getBuffer(), key.size());
+    if (!bio) {
+        xsink->raiseException("JWT-ERROR", "failed to allocate key buffer");
+        return false;
+    }
+    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!pkey) {
+        bio = BIO_new_mem_buf(key.getBuffer(), key.size());
+        if (!bio) {
+            xsink->raiseException("JWT-ERROR", "failed to allocate key buffer");
+            return false;
+        }
+        pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+    }
+    if (!pkey) {
+        xsink->raiseException("JWT-ERROR", "failed to read RSA public/private key");
+        return false;
+    }
+
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "failed to allocate digest context");
+        return false;
+    }
+    if (EVP_DigestVerifyInit(ctx, nullptr, md, nullptr, pkey) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA verify init failed");
+        return false;
+    }
+    if (EVP_DigestVerifyUpdate(ctx, input.getBuffer(), input.size()) != 1) {
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        xsink->raiseException("JWT-ERROR", "RSA verify update failed");
+        return false;
+    }
+    int rc = EVP_DigestVerifyFinal(ctx,
+        reinterpret_cast<const unsigned char*>(signature->getPtr()), signature->size());
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+    if (rc < 0) {
+        xsink->raiseException("JWT-ERROR", "RSA verify failed");
+        return false;
+    }
+    return rc == 1;
+}
+
+static QoreStringNode* jwt_b64url_encode_string(const QoreString& str) {
+    QoreStringNode* out = new QoreStringNode(QCS_UTF8);
+    out->concatBase64Url(str);
+    return out;
+}
+
+static QoreStringNode* jwt_b64url_decode_string(const QoreString& str, ExceptionSink* xsink) {
+    QoreStringNodeHolder tmp(new QoreStringNode(str.getBuffer(), str.size(), QCS_UTF8));
+    return tmp->parseBase64UrlToString(QCS_UTF8, xsink);
+}
+
+static BinaryNode* jwt_b64url_decode_binary(const QoreString& str, ExceptionSink* xsink) {
+    QoreString tmp(str.getBuffer(), str.size(), QCS_UTF8);
+    return tmp.parseBase64Url(xsink);
+}
+
+static QoreHashNode* jwt_build_payload_from_claims(const QoreHashNode* claims, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> payload(new QoreHashNode(autoTypeInfo), xsink);
+    if (!claims) {
+        xsink->raiseException("JWT-ERROR", "claims cannot be null");
+        return nullptr;
+    }
+    QoreValue v;
+    if (!(v = claims->getKeyValue("iss")).isNullOrNothing()) {
+        payload->setKeyValue("iss", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("sub")).isNullOrNothing()) {
+        payload->setKeyValue("sub", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("aud")).isNullOrNothing()) {
+        payload->setKeyValue("aud", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("exp")).isNullOrNothing()) {
+        payload->setKeyValue("exp", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("nbf")).isNullOrNothing()) {
+        payload->setKeyValue("nbf", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("iat")).isNullOrNothing()) {
+        payload->setKeyValue("iat", v.refSelf(), xsink);
+    }
+    if (!(v = claims->getKeyValue("jti")).isNullOrNothing()) {
+        payload->setKeyValue("jti", v.refSelf(), xsink);
+    }
+
+    QoreHashNode* extra = claims->getKeyValue("extra").get<QoreHashNode>();
+    if (extra) {
+        ConstHashIterator it(extra);
+        while (it.next()) {
+            if (payload->existsKey(it.getKey())) {
+                xsink->raiseException("JWT-ERROR", "duplicate claim key: %s", it.getKey());
+                return nullptr;
+            }
+            payload->setKeyValue(it.getKey(), it.get().refSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+    return payload.release();
+}
+
+static QoreHashNode* jwt_build_header_from_input(const QoreHashNode* header, const QoreString& alg,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+    out->setKeyValue("alg", new QoreStringNode(alg.c_str()), xsink);
+    out->setKeyValue("typ", new QoreStringNode("JWT"), xsink);
+
+    if (header) {
+        QoreValue v;
+        if (!(v = header->getKeyValue("typ")).isNullOrNothing()) {
+            out->setKeyValue("typ", v.refSelf(), xsink);
+        }
+        if (!(v = header->getKeyValue("kid")).isNullOrNothing()) {
+            out->setKeyValue("kid", v.refSelf(), xsink);
+        }
+        if (!(v = header->getKeyValue("cty")).isNullOrNothing()) {
+            out->setKeyValue("cty", v.refSelf(), xsink);
+        }
+        if (!(v = header->getKeyValue("crit")).isNullOrNothing()) {
+            out->setKeyValue("crit", v.refSelf(), xsink);
+        }
+        QoreHashNode* extra = header->getKeyValue("extra").get<QoreHashNode>();
+        if (extra) {
+            ConstHashIterator it(extra);
+            while (it.next()) {
+                if (out->existsKey(it.getKey())) {
+                    xsink->raiseException("JWT-ERROR", "duplicate header key: %s", it.getKey());
+                    return nullptr;
+                }
+                out->setKeyValue(it.getKey(), it.get().refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+    }
+    return out.release();
+}
+
+static QoreHashNode* jwt_extract_header(const QoreHashNode* header, ExceptionSink* xsink) {
+    assert(hashdeclJwtHeader);
+    if (!header) {
+        xsink->raiseException("JWT-ERROR", "JWT header must be a hash");
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> out(new QoreHashNode(hashdeclJwtHeader, xsink), xsink);
+    ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
+
+    ConstHashIterator it(header);
+    while (it.next()) {
+        const char* key = it.getKey();
+        QoreValue v = it.get();
+        if (!strcmp(key, "alg")) {
+            if (v.getType() != NT_STRING) {
+                xsink->raiseException("JWT-ERROR", "JWT header 'alg' must be a string");
+                return nullptr;
+            }
+            out->setKeyValue("alg", v.refSelf(), xsink);
+        } else if (!strcmp(key, "typ")) {
+            out->setKeyValue("typ", v.refSelf(), xsink);
+        } else if (!strcmp(key, "kid")) {
+            out->setKeyValue("kid", v.refSelf(), xsink);
+        } else if (!strcmp(key, "cty")) {
+            out->setKeyValue("cty", v.refSelf(), xsink);
+        } else if (!strcmp(key, "crit")) {
+            out->setKeyValue("crit", v.refSelf(), xsink);
+        } else {
+            extra->setKeyValue(key, v.refSelf(), xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (extra->size()) {
+        out->setKeyValue("extra", extra.release(), xsink);
+    }
+    return out.release();
+}
+
+static QoreHashNode* jwt_extract_claims(const QoreHashNode* payload, ExceptionSink* xsink) {
+    assert(hashdeclJwtClaims);
+    if (!payload) {
+        xsink->raiseException("JWT-ERROR", "JWT payload must be a hash");
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> out(new QoreHashNode(hashdeclJwtClaims, xsink), xsink);
+    ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
+
+    ConstHashIterator it(payload);
+    while (it.next()) {
+        const char* key = it.getKey();
+        QoreValue v = it.get();
+        if (!strcmp(key, "iss")) {
+            out->setKeyValue("iss", v.refSelf(), xsink);
+        } else if (!strcmp(key, "sub")) {
+            out->setKeyValue("sub", v.refSelf(), xsink);
+        } else if (!strcmp(key, "aud")) {
+            out->setKeyValue("aud", v.refSelf(), xsink);
+        } else if (!strcmp(key, "exp")) {
+            out->setKeyValue("exp", v.refSelf(), xsink);
+        } else if (!strcmp(key, "nbf")) {
+            out->setKeyValue("nbf", v.refSelf(), xsink);
+        } else if (!strcmp(key, "iat")) {
+            out->setKeyValue("iat", v.refSelf(), xsink);
+        } else if (!strcmp(key, "jti")) {
+            out->setKeyValue("jti", v.refSelf(), xsink);
+        } else {
+            extra->setKeyValue(key, v.refSelf(), xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    if (extra->size()) {
+        out->setKeyValue("extra", extra.release(), xsink);
+    }
+    return out.release();
+}
+
+
+QoreStringNode* make_jsonrpc_request_args(const std::string& version, const QoreListNode* args, QoreValue id,
+        unsigned offset, ExceptionSink* xsink) {
+    const QoreValue p0 = get_param_value(args, offset);
+    const QoreValue p1 = get_param_value(args, offset + 1);
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+
+    // write version key first
+    if (version == "1.0") {
+        str->concat("{\"method\": ");
+    } else {
+        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    }
+    if (json_serialize_value(**str, p0, -1, xsink)) {
+        return 0;
+    }
+
+    if (!id.isNullOrNothing()) {
+        str->concat(",\"id\":");
+        if (json_serialize_value(**str, id, -1, xsink)) {
+            return 0;
+        }
+    }
+
+    if (!p1.isNullOrNothing() || (version != "2.0")) {
+        // params key should come last
+        str->concat(",\"params\":");
+        if (!p1.isNullOrNothing()) {
+            if (json_serialize_value(**str, p1, -1, xsink)) {
+                return 0;
+            }
+        } else {
+            str->concat("null");
+        }
+    }
+    str->concat("}");
+    return str.release();
+}
+
+QoreStringNode* make_jsonrpc_request(const std::string& version, const QoreListNode* args, QoreValue id,
+        unsigned offset, ExceptionSink* xsink) {
+    const QoreValue p0 = get_param_value(args, offset);
+
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+
+    // write version key first
+    if (version == "1.0") {
+        str->concat("{\"method\":");
+    } else {
+        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    }
+    if (json_serialize_value(**str, p0, -1, xsink)) {
+        return 0;
+    }
+
+    if (!id.isNullOrNothing()) {
+        str->concat(",\"id\":");
+        if (json_serialize_value(**str, id, -1, xsink)) {
+            return 0;
+        }
+    }
+
+    bool has_args = num_args(args) > (offset + 1);
+    if (has_args || (version != "2.0")) {
+        // params key should come last
+        str->concat(",\"params\":");
+        if (has_args) {
+            if (json_serialize_list(**str, args, 0, xsink, offset + 1)) {
+                return 0;
+            }
+        } else {
+            str->concat("null");
+        }
+    }
+    str->concat("}");
+
+    return str.release();
+}
+
+
+// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"
+static QoreStringNode* make_jsonrpc_request(const QoreStringNode* method_name, const char* version_name,
+        const char* version, QoreValue id, QoreValue request_msg, int format, ExceptionSink* xsink) {
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+
+    bool fmt = format & JGF_ADD_FORMATTING;
+
+    // write version key first if present
+    if (version && *version) {
+        str->sprintf("{%s\"%s\":", fmt ? "\n  " : "", version_name);
+        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version, QCS_UTF8));
+        if (json_serialize_value(**str, *vstr, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+        str->concat(fmt ? ",\n  " : ",");
+    } else {
+        str->concat(fmt ? "{\n  " : "{");
+    }
+
+    str->concat("\"method\":");
+    if (json_serialize_value(**str, method_name, fmt ? 2 : -1, xsink)) {
+        return nullptr;
+    }
+
+    if (!id.isNullOrNothing()) {
+        str->sprintf(",%s\"id\":", fmt ? "\n  " : "");
+        if (json_serialize_value(**str, id, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+    }
+
+    if (!request_msg.isNullOrNothing() || (strcmp(version, "2.0"))) {
+        // params key should come last
+        str->sprintf(",%s\"params\":", fmt ? "\n  " : "");
+        if (json_serialize_value(**str, request_msg, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+    }
+
+    str->concat(fmt ? "\n}" : "}");
+    return str.release();
+}
+
+// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"
+static QoreStringNode* make_jsonrpc_response(ExceptionSink* xsink, const char* version_name, const char* version,
+        QoreValue id, QoreValue msg, const char* type = "result", int format = 0) {
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+
+    bool fmt = format & JGF_ADD_FORMATTING;
+
+    // write version key first if present
+    if (version && *version) {
+        str->sprintf("{%s\"%s\":", fmt ? "\n  " : "", version_name);
+        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version, QCS_UTF8));
+        if (json_serialize_value(**str, *vstr, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+        str->concat(fmt ? ",\n  " : ",");
+    } else {
+        str->concat(fmt ? "{\n  " : "{");
+    }
+
+    if (!id.isNullOrNothing()) {
+        str->concat("\"id\":");
+        if (json_serialize_value(**str, id, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+        str->concat(fmt ? ",\n  " : ",");
+    }
+
+    // result/error key should come last
+    str->sprintf("\"%s\":", type);
+    if (json_serialize_value(**str, msg, fmt ? 2 : -1, xsink)) {
+        return nullptr;
+    }
+
+    str->concat(fmt ? "\n}" : "}");
+    return str.release();
+}
+
+static QoreStringNode* make_jsonrpc11_error(int64 code, const QoreStringNode* error, QoreValue id,
+        QoreValue error_msg, int format, ExceptionSink* xsink) {
+    if (code < 100 || code > 999) {
+        xsink->raiseException("MAKE-JSONRPC11-ERROR-STRING-ERROR", "error code (first argument) must be between 100 "
+            "and 999 inclusive (value passed: " QLLD ")", code);
+        return nullptr;
+    }
+
+    if (error->empty()) {
+        xsink->raiseException("MAKE-JSONRPC11-ERROR-STRING-ERROR", "empty error message string passed as second "
+            "argument)");
+        return nullptr;
+    }
+
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+
+    bool fmt = format & JGF_ADD_FORMATTING;
+
+    str->concat(fmt ? "{\n  \"version\": \"1.1\",\n  " : "{\"version\":\"1.1\",");
+
+    // get optional "id" value
+    if (!id.isNullOrNothing()) {
+        str->concat(fmt ? "\"id\": " : "\"id\":");
+        if (json_serialize_value(**str, id, fmt ? 2 : -1, xsink)) {
+            return nullptr;
+        }
+        str->concat(fmt ? ",\n  " : ",");
+    }
+
+    if (fmt) {
+        str->sprintf("\"error\":\n  {\n    \"name\": \"JSONRPCError\",\n    \"code\": %d,\n    \"message\": \"",
+            (int)code);
+    } else {
+        str->sprintf("\"error\":{\"name\":\"JSONRPCError\",\"code\":%d,\"message\":\"", (int)code);
+    }
+    // concat here so character encodings can be automatically converted if necessary
+    str->concatEscape(error, '"', '\\', xsink);
+    if (*xsink)
+        return nullptr;
+
+    str->concat('\"');
+
+    // get optional "error" value
+    if (!error_msg.isNullOrNothing()) {
+        str->sprintf(",%s\"error\":", fmt ? "\n   " : "");
+        if (json_serialize_value(**str, error_msg, fmt ? 4 : -1, xsink)) {
+            return nullptr;
+        }
+    }
+    str->concat(fmt ? "\n  }\n}" : "}}");
+    return str.release();
+}
+
+/** @defgroup json_generation_constants JSON Generation Constants
+ */
+///@{
+namespace Qore::Json;
+
+//! no flags; standard JSON generation without whitespace formatting
+const JGF_NONE = JGF_NONE;
+
+//! use whitespace formatting including line breaks and indentation to make generated JSON more readable by humans
+const JGF_ADD_FORMATTING = JGF_ADD_FORMATTING;
+///@}
+
+/** @defgroup json_functions JSON Functions
+ */
+///@{
+namespace Qore::Json;
+
+//! Serializes qore data into a JSON string with optional whitespace formatting (line breaks and indentation)
+/** @par Example:
+    @code string json = make_json(data); @endcode
+
+    By default the string produced will be in UTF-8 encoding, but this can be overridden by the \a encoding argument
+
+    @param data the data to serialize to a JSON string
+    @param format optional formatting flags; see @ref json_generation_constants for more information
+    @param encoding an optional output encoding for the resulting JSON string; if this argument is not passed, then UTF-8 encoding is used by default
+
+    @return the JSON string corresponding to the arguments passed
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if an error occurs converting input strings to the target encoding
+
+    @note According to <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> JSON strings can only be in UTF-8, UTF-16, or UTF-32 encoding, but this function will allow any encoding to be used to generate JSON strings
+
+    @see @ref jsonserialization
+
+    @since json 1.5 as a replacement for deprecated camel-case makeJSONString() and makeFormattedJSONString()
+*/
+string make_json(auto data, *int format, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_UTF8;
+   return make_json(data, format & JGF_ADD_FORMATTING ? JGF_ADD_FORMATTING : JGF_NONE, qe, xsink);
+}
+
+//! Serializes qore data into a JSON string, without any line breaks
+/** By default the string produced will be in UTF-8 encoding, but this can be overridden by the second argument
+    @param data the data to serialize to a JSON string
+    @param encoding an optional output encoding for the resulting JSON string; if this argument is not passed, then UTF-8 encoding is used by default
+
+    @return the JSON string corresponding to the arguments passed, without any line breaks
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_json(); camel-case function names were deprecated in json 1.5
+
+    @see @ref jsonserialization
+*/
+string makeJSONString(auto data, *string encoding) [flags=RET_VALUE_ONLY,DEPRECATED] {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_UTF8;
+   return make_json(data, JGF_NONE, qe, xsink);
+}
+
+//! Serializes qore data into a JSON string, formatted with line breaks for easier readability
+/** By default the string produced will be in UTF-8 encoding, but this can be overridden by the second argument
+    @param data the data to serialize to a JSON string
+    @param encoding an optional output encoding for the resulting JSON string; if this argument is not passed, then UTF-8 encoding is used by default
+
+    @return the JSON string corresponding to the arguments passed, formatted with line breaks for easier readability
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_json(); camel-case function names were deprecated in json 1.5
+
+    @see @ref jsonserialization
+*/
+string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_UTF8;
+    return make_json(data, JGF_ADD_FORMATTING, qe, xsink);
+}
+
+//! Parses a JSON string and returns the corresponding %Qore data structure
+/** @param json_str the JSON string to parse
+
+    @return the %Qore data structure corresponding to the input string
+
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+
+    @par Example:
+    @code auto data = parse_json(json); @endcode
+
+    @see @ref jsonserialization
+
+    @since json 1.5 as a replacement for deprecated camel-case parseJSON()
+ */
+auto parse_json(string json_str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return parse_json(json_str, xsink);
+}
+
+//! This is a variant that is basically a noop, included for backwards-compatibility for functions that ignored type errors in the calling parameters
+/**
+ */
+nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
+}
+
+//! Parses a JSON string and returns the corresponding %Qore data structure
+/** @param json_str the JSON string to parse
+
+    @return the %Qore data structure corresponding to the input string
+
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+
+    @see @ref jsonserialization
+
+    @deprecated use parse_json(); camel-case function names were deprecated in json 1.5
+ */
+auto parseJSON(string json_str) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    return parse_json(json_str, xsink);
+}
+///@}
+
+/** @defgroup json_rpc_functions JSON-RPC Functions
+ */
+///@{
+namespace Qore::Json;
+//! Creates a JSON-RPC request string from the parameters passed, without any line breaks
+/** To follow JSON-RPC specifications, the generated string will always be in UTF-8 encoding
+    @param method_name the name of the JSON-RPC method to call
+    @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param request_msg the parameters for the message/message payload
+    @param format optional formatting flags; see @ref json_generation_constants for more information
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC request
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @par Example:
+    @code string json = make_jsonrpc_request("omq.system.help", "1.0", id, msg); @endcode
+
+    @since
+    - json 1.5 added this function as a replacement for deprecated camel-case makeJSONRPCRequestString() and makeFormattedJSONRPCRequestString()
+    - json 1.7 added support for JSON-RPC 2.0 and corrections for JSON-RPC 1.0 support
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string make_jsonrpc_request(string method_name, auto version, auto id, auto request_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+        if (**vstr != "1.0")
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id,
+                request_msg, format, xsink);
+    }
+
+    return make_jsonrpc_request(method_name, nullptr, nullptr, id, request_msg, format, xsink);
+}
+
+//! Creates a JSON-RPC request string from the parameters passed, without any line breaks
+/** To follow JSON-RPC specifications, the generated string will always be in UTF-8 encoding
+    @param method_name the name of the JSON-RPC method to call
+    @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param request_msg the parameters for the message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC request
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_request(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeJSONRPCRequestString(string method_name, auto version, auto id, auto request_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, request_msg, JGF_NONE, xsink);
+    }
+
+    return make_jsonrpc_request(method_name, nullptr, nullptr, id, request_msg, JGF_NONE, xsink);
+}
+
+//! Creates a JSON-RPC request string from the parameters passed, formatted with line breaks for easier readability
+/** To follow JSON-RPC specifications, the generated string will always be in UTF-8 encoding
+    @param method_name the name of the JSON-RPC method to call
+    @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"s
+    @param id the ID of the call
+    @param request_msg the parameters for the message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC request, formatted with line breaks for easier readability
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_request(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeFormattedJSONRPCRequestString(string method_name, auto version, auto id, auto request_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, request_msg, JGF_ADD_FORMATTING, xsink);
+    }
+
+    return make_jsonrpc_request(method_name, nullptr, nullptr, id, request_msg, JGF_ADD_FORMATTING, xsink);
+}
+
+//! Creates a JSON-RPC response string from the parameters passed, without any line breaks
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param response_msg the parameters for the message/message payload
+    @param format optional formatting flags; see @ref json_generation_constants for more information
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC response, without any line breaks
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @par Example:
+    @code string json = make_jsonrpc_response("1.0", id, msg); @endcode
+
+    @since
+    - json 1.5 added this function as a replacement for deprecated camel-case makeJSONRPCResponseString() and makeFormattedJSONRPCResponseString()
+    - json 1.7 added support for JSON-RPC 2.0 and corrections for JSON-RPC 1.0 support
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string make_jsonrpc_response(auto version, auto id, auto response_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", format);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", format);
+}
+
+//! Creates a JSON-RPC response string from the parameters passed, without any line breaks
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param response_msg the parameters for the message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC response, without any line breaks
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_response(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeJSONRPCResponseString(auto version, auto id, auto response_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", 0);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", 0);
+}
+
+//! Creates a JSON-RPC response string from the parameters passed, formatted with line breaks for easier readability
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param response_msg the parameters for the message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC response, formatted with line breaks for easier readability
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_response(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeFormattedJSONRPCResponseString(auto version, auto id, auto response_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", JGF_ADD_FORMATTING);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", JGF_ADD_FORMATTING);
+}
+
+//! Creates a generic JSON-RPC error response string from the parameters passed, without any line breaks
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+    @param format optional formatting flags; see @ref json_generation_constants for more information
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC error response, without any line breaks
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @par Example:
+    @code string json = make_jsonrpc_error("1.0", id, error); @endcode
+
+    @since
+    - json 1.5 added this function as a replacement for deprecated camel-case makeJSONRPCErrorString() and makeFormattedJSONRPCErrorString()
+    - json 1.7 added support for JSON-RPC 2.0 and corrections for JSON-RPC 1.0 support
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string make_jsonrpc_error(auto version, auto id, auto error_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", format);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", format);
+}
+
+//! Creates a generic JSON-RPC error response string from the parameters passed, without any line breaks
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC error response, without any line breaks
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_error(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", 0);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", 0);
+}
+
+//! Creates a generic JSON-RPC error response string from the parameters passed, formatted with line breaks for easier readability
+/** @param version the JSON-RPC version to include in the call under the \c "version" key (for JSON-RPC earlier than 2.0) or the \c "jsonrpc" key (for JSON-RPC equal to or greater than 2.0); will be converted to a string; if the resulting string is empty, the \c "version" key will not be sent; note that for strict JSON-RPC 1.0 compatibility this argument will not be serialized if passed as \c "1.0"
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC error response, formatted with line breaks for easier readability
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated use make_jsonrpc_error(); camel-case function names were deprecated in json 1.5
+
+    @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeFormattedJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    if (!version.isNullOrNothing()) {
+        QoreStringValueHelper vstr(version, QCS_UTF8, xsink);
+        if (*xsink)
+            return QoreValue();
+
+        if (**vstr != "1.0")
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", JGF_ADD_FORMATTING);
+    }
+
+    return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", JGF_ADD_FORMATTING);
+}
+
+//! Creates a JSON-RPC 1.1 error response string from the parameters passed, without any line breaks
+/** @param code the error code to return
+    @param error a string error message
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+    @param format optional formatting flags; see @ref json_generation_constants for more information
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC 1.1 error response, without any line breaks
+
+    @throw MAKE-JSONRPC11-ERROR-STRING-ERROR the error code is not between 100-999 or empty error message string
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @par Example:
+    @code string json = make_jsonrpc11_error(200, msg, id, error); @endcode
+
+    @since json 1.5 as a replacement for deprecated camel-case makeJSONRPC11ErrorString() and makeFormattedJSONRPC11ErrorString()
+
+    @deprecated do not use; support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string make_jsonrpc11_error(softint code, string error, auto id, auto error_msg, *int format) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    return make_jsonrpc11_error(code, error, id, error_msg, format, xsink);
+}
+
+//! Creates a JSON-RPC 1.1 error response string from the parameters passed, without any line breaks
+/** @param code the error code to return
+    @param error a string error message
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC 1.1 error response, without any line breaks
+
+    @throw MAKE-JSONRPC11-ERROR-STRING-ERROR the error code is not between 100-999 or empty error message string
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated do not use; camel-case function names were deprecated in json 1.5, and support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeJSONRPC11ErrorString(softint code, string error, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    return make_jsonrpc11_error(code, error, id, error_msg, 0, xsink);
+}
+
+//! Creates a JSON-RPC 1.1 error response string from the parameters passed, formatted with line breaks for easier readability
+/** @param code the error code to return
+    @param error a string error message
+    @param id the ID of the call
+    @param error_msg the parameters for the error response message/message payload
+
+    @return a JSON string in UTF-8 encoding representing the JSON-RPC 1.1 error response, formatted with line breaks for easier readability
+
+    @throw MAKE-JSONRPC11-ERROR-STRING-ERROR the error code is not between 100-999 or empty error message string
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+
+    @deprecated do not use; camel-case function names were deprecated in json 1.5, and support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
+
+    @see
+    - @ref jsonserialization
+    - @ref JSONRPC
+ */
+string makeFormattedJSONRPC11ErrorString(softint code, string error, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    return make_jsonrpc11_error(code, error, id, error_msg, JGF_ADD_FORMATTING, xsink);
+}
+///@}
+
+/** @defgroup json_pointer_functions JSON Pointer Functions (RFC 6901)
+ */
+///@{
+namespace Qore::Json;
+
+//! Retrieves a value from a data structure using a JSON Pointer (RFC 6901)
+/** @par Example:
+    @code{.py}
+    auto data = {"foo": {"bar": [1, 2, 3]}};
+    auto val = json_pointer_get(data, "/foo/bar/1");
+    # val = 2
+    @endcode
+
+    @param data the data structure to query
+    @param pointer the JSON Pointer string (e.g., "/foo/bar/0")
+
+    @return the value at the specified location, or NOTHING if not found
+
+    @throw JSON-POINTER-ERROR invalid pointer format or array index
+
+    @note This function follows RFC 6901 for JSON Pointer syntax:
+    - Pointers must start with "/" or be empty (empty returns the root)
+    - "~0" is used to escape "~"
+    - "~1" is used to escape "/"
+    - Array indices are specified as integers
+
+    @since json 1.10
+*/
+auto json_pointer_get(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (pointer->empty()) {
+        return data.refSelf();
+    }
+
+    const char* p = pointer->c_str();
+    if (*p != '/') {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
+            pointer->c_str());
+        return QoreValue();
+    }
+
+    QoreValue current = data;
+    QoreString token;
+    ++p;  // skip leading '/'
+
+    while (true) {
+        if (*p == '/' || !*p) {
+            // process token
+            qore_type_t t = current.getType();
+            if (t == NT_HASH) {
+                QoreHashNode* h = current.get<QoreHashNode>();
+                current = h->getKeyValue(token.c_str());
+            } else if (t == NT_LIST) {
+                // parse as array index
+                if (token.empty()) {
+                    xsink->raiseException("JSON-POINTER-ERROR", "empty array index in JSON Pointer");
+                    return QoreValue();
+                }
+                // check for leading zeros (not allowed except for "0")
+                if (token.size() > 1 && token[0] == '0') {
+                    xsink->raiseException("JSON-POINTER-ERROR", "leading zeros not allowed in array index: %s",
+                        token.c_str());
+                    return QoreValue();
+                }
+                char* endptr;
+                long idx = strtol(token.c_str(), &endptr, 10);
+                if (*endptr != '\0' || idx < 0) {
+                    xsink->raiseException("JSON-POINTER-ERROR", "invalid array index: %s", token.c_str());
+                    return QoreValue();
+                }
+                QoreListNode* l = current.get<QoreListNode>();
+                if (idx >= (long)l->size()) {
+                    return QoreValue();  // out of bounds, return NOTHING
+                }
+                current = l->retrieveEntry(idx);
+            } else {
+                return QoreValue();  // not a container, return NOTHING
+            }
+            token.clear();
+            if (!*p) break;
+        } else if (*p == '~') {
+            ++p;
+            if (*p == '0') {
+                token.concat('~');
+            } else if (*p == '1') {
+                token.concat('/');
+            } else {
+                xsink->raiseException("JSON-POINTER-ERROR", "invalid escape sequence '~%c' in JSON Pointer",
+                    *p ? *p : '?');
+                return QoreValue();
+            }
+        } else {
+            token.concat(*p);
+        }
+        ++p;
+    }
+
+    return current.refSelf();
+}
+
+//! Checks if a value exists at the specified JSON Pointer location
+/** @par Example:
+    @code{.py}
+    auto data = {"foo": {"bar": [1, 2, 3]}};
+    bool exists = json_pointer_exists(data, "/foo/bar/1");
+    # exists = True
+    @endcode
+
+    @param data the data structure to query
+    @param pointer the JSON Pointer string
+
+    @return True if a value exists at the location (even if the value is NOTHING), False otherwise
+
+    @throw JSON-POINTER-ERROR invalid pointer format
+
+    @since json 1.10
+*/
+bool json_pointer_exists(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (pointer->empty()) {
+        return true;
+    }
+
+    const char* p = pointer->c_str();
+    if (*p != '/') {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
+            pointer->c_str());
+        return QoreValue();
+    }
+
+    QoreValue current = data;
+    QoreString token;
+    ++p;  // skip leading '/'
+
+    while (true) {
+        if (*p == '/' || !*p) {
+            // process token
+            qore_type_t t = current.getType();
+            if (t == NT_HASH) {
+                QoreHashNode* h = current.get<QoreHashNode>();
+                if (!h->existsKey(token.c_str())) {
+                    return false;
+                }
+                current = h->getKeyValue(token.c_str());
+            } else if (t == NT_LIST) {
+                if (token.empty()) {
+                    return false;
+                }
+                if (token.size() > 1 && token[0] == '0') {
+                    xsink->raiseException("JSON-POINTER-ERROR", "leading zeros not allowed in array index: %s",
+                        token.c_str());
+                    return QoreValue();
+                }
+                char* endptr;
+                long idx = strtol(token.c_str(), &endptr, 10);
+                if (*endptr != '\0' || idx < 0) {
+                    return false;
+                }
+                QoreListNode* l = current.get<QoreListNode>();
+                if (idx >= (long)l->size()) {
+                    return false;
+                }
+                current = l->retrieveEntry(idx);
+            } else {
+                return false;
+            }
+            token.clear();
+            if (!*p) break;
+        } else if (*p == '~') {
+            ++p;
+            if (*p == '0') {
+                token.concat('~');
+            } else if (*p == '1') {
+                token.concat('/');
+            } else {
+                xsink->raiseException("JSON-POINTER-ERROR", "invalid escape sequence '~%c' in JSON Pointer",
+                    *p ? *p : '?');
+                return QoreValue();
+            }
+        } else {
+            token.concat(*p);
+        }
+        ++p;
+    }
+
+    return true;
+}
+
+//! Escapes a string for use as a JSON Pointer token
+/** @par Example:
+    @code{.py}
+    string escaped = json_pointer_escape("foo/bar~baz");
+    # escaped = "foo~1bar~0baz"
+    @endcode
+
+    @param token the string to escape
+
+    @return the escaped string suitable for use in a JSON Pointer
+
+    @since json 1.10
+*/
+string json_pointer_escape(string token) [flags=CONSTANT,NAMED_ARGS] {
+    QoreStringNode* str = new QoreStringNode;
+    const char* p = token->c_str();
+    while (*p) {
+        if (*p == '~') {
+            str->concat("~0");
+        } else if (*p == '/') {
+            str->concat("~1");
+        } else {
+            str->concat(*p);
+        }
+        ++p;
+    }
+    return str;
+}
+///@}
+
+/** @defgroup jwt_functions JWT Functions
+ */
+///@{
+namespace Qore::Json;
+
+//! Encodes JWT (JWS) tokens using HS* or RS* algorithms
+/** @param claims the JWT claims (use hash<JwtClaims> for type safety)
+    @param key the signing key (HMAC secret or RSA private key in PEM)
+    @param algorithm optional algorithm (default: "HS256")
+    @param header optional header parameters (use hash<JwtHeader> when provided)
+
+    @return the JWT token string
+
+    @par Example:
+    @code{.py}
+    %new-style
+    %strict-args
+    %require-types
+
+    hash<JwtClaims> claims = cast<hash<JwtClaims>>({
+        "sub": "123",
+        "exp": 1710000000,
+        "extra": {"role": "admin"}
+    });
+    hash<JwtHeader> header = cast<hash<JwtHeader>>({
+        "typ": "JWT",
+        "extra": {"kid": "key-1"}
+    });
+
+    string token = jwt_encode(claims, "secret", "HS256", header);
+    @endcode
+
+    @throw JWT-ERROR if encoding fails or the algorithm is unsupported
+
+    @since json 1.11
+*/
+string jwt_encode(hash<auto> claims, string key, *string algorithm, *hash<auto> header) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    assert(hashdeclJwtHeader);
+    assert(hashdeclJwtClaims);
+
+    ReferenceHolder<QoreHashNode> claims_cast(hashdeclJwtClaims->doRuntimeCast(claims, xsink), xsink);
+    if (*xsink) {
+        return 0;
+    }
+    ReferenceHolder<QoreHashNode> header_cast(xsink);
+    if (header) {
+        header_cast = hashdeclJwtHeader->doRuntimeCast(header, xsink);
+        if (*xsink) {
+            return 0;
+        }
+    }
+
+    QoreString alg_str(QCS_UTF8);
+    if (algorithm) {
+        alg_str.concat(algorithm->c_str());
+    } else {
+        alg_str.concat("HS256");
+    }
+
+    ReferenceHolder<QoreHashNode> header_hash(jwt_build_header_from_input(header_cast ? *header_cast : nullptr,
+        alg_str, xsink), xsink);
+    if (*xsink) {
+        return 0;
+    }
+    ReferenceHolder<QoreHashNode> payload_hash(jwt_build_payload_from_claims(*claims_cast, xsink), xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    QoreStringNodeHolder header_json(new QoreStringNode(QCS_UTF8));
+    if (json_serialize_value(**header_json, *header_hash, -1, xsink)) {
+        return 0;
+    }
+    QoreStringNodeHolder payload_json(new QoreStringNode(QCS_UTF8));
+    if (json_serialize_value(**payload_json, *payload_hash, -1, xsink)) {
+        return 0;
+    }
+
+    ReferenceHolder<QoreStringNode> header_b64(jwt_b64url_encode_string(*header_json), xsink);
+    ReferenceHolder<QoreStringNode> payload_b64(jwt_b64url_encode_string(*payload_json), xsink);
+
+    QoreString signing_input(QCS_UTF8);
+    signing_input.concat(header_b64->c_str());
+    signing_input.concat('.');
+    signing_input.concat(payload_b64->c_str());
+
+    bool is_hmac = false;
+    bool is_rsa = false;
+    const EVP_MD* md = jwt_get_md(alg_str.c_str(), is_hmac, is_rsa, xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    QoreString key_str(key->c_str(), QCS_UTF8);
+    ReferenceHolder<BinaryNode> signature(xsink);
+    if (is_hmac) {
+        signature = jwt_sign_hmac(md, key_str, signing_input, xsink);
+    } else if (is_rsa) {
+        signature = jwt_sign_rsa(md, key_str, signing_input, xsink);
+    }
+    if (*xsink || !signature) {
+        return 0;
+    }
+
+    QoreStringNodeHolder sig_b64(new QoreStringNode(QCS_UTF8));
+    BinaryNode* sig_bin = *signature;
+    sig_b64->concatBase64Url(*sig_bin);
+
+    QoreStringNodeHolder token(new QoreStringNode(QCS_UTF8));
+    token->concat(signing_input.c_str());
+    token->concat('.');
+    token->concat(sig_b64->c_str());
+    return token.release();
+}
+
+//! Decodes a JWT token and optionally verifies the signature
+/** @param token the JWT token string
+    @param key optional verification key (HMAC secret or RSA public key in PEM; private key is accepted as fallback)
+    @param verify_signature flag (default: True)
+
+    @return decoded header, claims, and signature verification info (hash<JwtDecodeResult>)
+
+    @par Example:
+    @code{.py}
+    hash<JwtDecodeResult> result = cast<hash<JwtDecodeResult>>(jwt_decode(token, "secret"));
+    if (!result.signature_valid) {
+        raise "JWT-ERROR", "signature validation failed";
+    }
+    printf("alg=%s sub=%s\n", result.alg, result.claims.sub);
+    @endcode
+
+    @throw JWT-ERROR if decoding fails or verification fails due to missing key/unsupported algorithm
+    @throw BASE64-PARSE-ERROR if any token segment is not valid base64url
+    @throw JSON-ERROR if decoded header or payload is not valid JSON
+
+    @since json 1.11
+*/
+hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    assert(hashdeclJwtDecodeResult);
+    assert(hashdeclJwtHeader);
+    assert(hashdeclJwtClaims);
+
+    std::string t(token->c_str());
+    size_t dot1 = t.find('.');
+    size_t dot2 = t.rfind('.');
+    if (dot1 == std::string::npos || dot2 == std::string::npos || dot1 == dot2) {
+        xsink->raiseException("JWT-ERROR", "invalid JWT format");
+        return QoreValue();
+    }
+
+    QoreString header_b64(t.substr(0, dot1).c_str(), QCS_UTF8);
+    QoreString payload_b64(t.substr(dot1 + 1, dot2 - dot1 - 1).c_str(), QCS_UTF8);
+    QoreString sig_b64(t.substr(dot2 + 1).c_str(), QCS_UTF8);
+
+    ReferenceHolder<QoreStringNode> header_json(jwt_b64url_decode_string(header_b64, xsink), xsink);
+    if (*xsink || !header_json) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreStringNode> payload_json(jwt_b64url_decode_string(payload_b64, xsink), xsink);
+    if (*xsink || !payload_json) {
+        return QoreValue();
+    }
+
+    ValueHolder header_val(parse_json(*header_json, xsink), xsink);
+    if (*xsink || !header_val) {
+        return QoreValue();
+    }
+    ValueHolder payload_val(parse_json(*payload_json, xsink), xsink);
+    if (*xsink || !payload_val) {
+        return QoreValue();
+    }
+
+    QoreValue header_qv = *header_val;
+    QoreValue payload_qv = *payload_val;
+    if (header_qv.getType() != NT_HASH || payload_qv.getType() != NT_HASH) {
+        xsink->raiseException("JWT-ERROR", "JWT header and payload must be JSON objects");
+        return QoreValue();
+    }
+    QoreHashNode* header_hash = header_qv.get<QoreHashNode>();
+    QoreHashNode* payload_hash = payload_qv.get<QoreHashNode>();
+    if (!header_hash || !payload_hash) {
+        xsink->raiseException("JWT-ERROR", "JWT header and payload must be JSON objects");
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> header(jwt_extract_header(header_hash, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreStringValueHelper alg_value(header->getKeyValue("alg"), QCS_UTF8, xsink);
+    if (*xsink || !alg_value->size()) {
+        xsink->raiseException("JWT-ERROR", "JWT header missing 'alg'");
+        return QoreValue();
+    }
+    QoreString alg_str(alg_value->c_str(), QCS_UTF8);
+
+    ReferenceHolder<QoreHashNode> claims(jwt_extract_claims(payload_hash, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<BinaryNode> signature(jwt_b64url_decode_binary(sig_b64, xsink), xsink);
+    if (*xsink || !signature) {
+        return QoreValue();
+    }
+
+    QoreString signing_input(QCS_UTF8);
+    signing_input.concat(header_b64.c_str());
+    signing_input.concat('.');
+    signing_input.concat(payload_b64.c_str());
+
+    bool signature_valid = false;
+    if (verify_signature) {
+        if (!key) {
+            xsink->raiseException("JWT-ERROR", "JWT verification key is required");
+            return QoreValue();
+        }
+        bool is_hmac = false;
+        bool is_rsa = false;
+        const EVP_MD* md = jwt_get_md(alg_str.c_str(), is_hmac, is_rsa, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        QoreString key_str(key->c_str(), QCS_UTF8);
+        if (is_hmac) {
+            signature_valid = jwt_verify_hmac(md, key_str, signing_input, *signature, xsink);
+        } else if (is_rsa) {
+            signature_valid = jwt_verify_rsa(md, key_str, signing_input, *signature, xsink);
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(hashdeclJwtDecodeResult, xsink), xsink);
+    result->setKeyValue("header", header.release(), xsink);
+    result->setKeyValue("claims", claims.release(), xsink);
+    result->setKeyValue("alg", new QoreStringNode(alg_str.c_str()), xsink);
+    result->setKeyValue("signing_input", new QoreStringNode(signing_input.c_str()), xsink);
+    result->setKeyValue("signature", signature.release(), xsink);
+    result->setKeyValue("signature_valid", signature_valid, xsink);
+    return result.release();
+}
+///@}

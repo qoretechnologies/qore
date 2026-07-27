@@ -1,9 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
@@ -12,9 +10,7 @@
 %requires Logger
 %requires HttpServerUtil
 %requires RestClient
-%ifndef NoJson
 %requires ZeyosRestClient
-%endif
 %requires HttpServerAsyncIo
 %requires HttpServer
 
@@ -26,25 +22,6 @@
 
 %exec-class ZeyosTest
 
-%ifdef NoJson
-class ZeyosRestClient {
-    constructor() {
-        remove argv;
-        throw "NO-MODULE";
-    }
-    auto methodGate() {
-        remove argv;
-    }
-    auto get() {
-        remove argv;
-    }
-}
-class ZeyosRestConnection inherits ZeyosRestClient {
-    auto methodGate() {
-        remove argv;
-    }
-}
-%endif
 
 
 class FakeZeyosRestHandler inherits AbstractHttpRequestHandler {
@@ -159,9 +136,6 @@ class ZeyosTest inherits QUnit::Test {
     }
 
     connectionTest() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
 
         string url = "http://user:pass@localhost:" + port;
         ZeyosRestConnection zeyosrc("test", "test", url, NOTHING, {"appsecret": "a", "instance": "x"});

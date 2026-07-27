@@ -13,9 +13,7 @@
 %requires RestClient
 %requires GraphQLClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class GraphQLClientTest
 
@@ -45,7 +43,6 @@ class TestGraphQLClient inherits RestClient::RestClient, GraphQLClient::GraphQLC
 */
 class StubGraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-%ifndef NoJson
         hash<auto> req = body.val() ? parse_json(body.toString()) : {};
         *string mode = req.variables.mode;
         hash<auto> envelope;
@@ -78,9 +75,6 @@ class StubGraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
             "body": make_json(envelope),
             "hdr": {"Content-Type": MimeTypeJson},
         };
-%else
-        return <HttpResponseInfo>{"code": 500, "body": "json module not available"};
-%endif
     }
 }
 
@@ -108,7 +102,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     globalSetUp() {
-%ifndef NoJson
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
@@ -117,7 +110,6 @@ class GraphQLClientTest inherits QUnit::Test {
         StubGraphQLHandler handler();
         mServer.setDefaultHandler("graphql", handler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-%endif
     }
 
     globalTearDown() {
@@ -194,9 +186,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     querySuccessTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         TestGraphQLClient c = getClient();
         hash<auto> resp = c.query("query { viewer { id } }", {"first": 10});
         assertEq("query { viewer { id } }", resp.body.data.echoQuery);
@@ -205,9 +194,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     errorRaisesTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         TestGraphQLClient c = getClient();
         try {
             c.query("query { viewer { id } }", {"mode": "error"});
@@ -221,9 +207,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     errorOptOutTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         TestGraphQLClient c = getClient();
         c.setRaiseGraphQLErrors(False);
         hash<auto> resp = c.query("query { viewer { id } }", {"mode": "error"});
@@ -232,9 +215,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     partialTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         # by default a partial result (data + errors) still raises
         TestGraphQLClient c = getClient();
         assertThrows("GRAPHQL-ERROR", "partial failure",
@@ -248,9 +228,6 @@ class GraphQLClientTest inherits QUnit::Test {
     }
 
     mutateTest() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         TestGraphQLClient c = getClient();
         hash<auto> resp = c.mutate("mutation { createIssue { id } }", {"title": "t"});
         assertEq("mutation { createIssue { id } }", resp.body.data.echoQuery);

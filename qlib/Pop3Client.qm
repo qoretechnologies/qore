@@ -31,9 +31,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 %requires(reexport) Logger
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern

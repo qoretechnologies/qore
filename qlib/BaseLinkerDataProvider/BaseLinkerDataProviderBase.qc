@@ -118,11 +118,7 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         # Serialize parameters as JSON (empty string if no params)
         string params_json = "";
         if (parameters) {
-%ifndef NoJson
             params_json = make_json(parameters);
-%else
-            throw "JSON-MODULE-MISSING", "json module is required for BaseLinker API calls";
-%endif
         }
 
         # Pre-escape '+' characters in the JSON string before URL-encoding.

@@ -301,11 +301,7 @@ public class AnthropicFileUploadDataProvider inherits AnthropicDataProviderCommo
                 if (status >= 400) {
                     throw "ANTHROPIC-FILE-ERROR", sprintf("HTTP %d: %s", status, raw.body);
                 }
-%ifndef NoJson
                 return parse_json(raw.body);
-%else
-                throw "ANTHROPIC-FILE-ERROR", "the json module is required to parse Anthropic API responses";
-%endif
             } catch (hash<ExceptionInfo> ex) {
                 if (retry(ex, \retries)) {
                     continue;

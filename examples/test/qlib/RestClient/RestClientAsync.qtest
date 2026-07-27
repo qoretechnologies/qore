@@ -18,9 +18,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RestClientAsyncTest
 
@@ -84,12 +82,8 @@ class AuthRetryHandler inherits AbstractHttpRequestHandler {
             return makeResponse(401, "Unauthorized", {"Content-Type": MimeTypeText});
         }
         # Subsequent requests succeed if they have an Authorization header
-%ifndef NoJson
         return makeResponse(200, make_json({"status": "ok", "request": request_count}),
             {"Content-Type": MimeTypeJson});
-%else
-        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
-%endif
     }
 
     int getRequestCount() {
@@ -106,15 +100,11 @@ class AuthRetryHandler inherits AbstractHttpRequestHandler {
 #! Mock OAuth2 token endpoint handler
 class MockTokenHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-%ifndef NoJson
         return makeResponse(200, make_json({
             "access_token": "new-token-" + get_random_string(8),
             "token_type": "Bearer",
             "expires_in": 3600,
         }), {"Content-Type": MimeTypeJson});
-%else
-        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
-%endif
     }
 }
 
@@ -129,11 +119,7 @@ class JsonDataHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-%ifndef NoJson
         return makeResponse(200, make_json(m_data), {"Content-Type": MimeTypeJson});
-%else
-        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
-%endif
     }
 }
 
@@ -203,9 +189,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncGetTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         # test async GET
@@ -219,9 +202,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncPostTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         hash<auto> send_data = {"name": "test", "value": 42};
@@ -233,9 +213,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncPutTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         hash<auto> send_data = {"name": "updated", "value": 99};
@@ -247,9 +224,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncDelTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         RestRequestPollOperation poller = rest.startPollDel("/api_json");
@@ -258,9 +232,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncPatchTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         hash<auto> send_data = {"name": "patched"};
@@ -271,9 +242,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncPollStateTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         # test the poll operation state machine transitions
@@ -288,9 +256,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncErrorTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         # test error response (404)
@@ -306,9 +271,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     concurrentAsyncTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest1({"url": "http://127.0.0.1:" + port, "data": "json"});
         RestClient rest2({"url": "http://127.0.0.1:" + port, "data": "json"});
         RestClient rest3({"url": "http://127.0.0.1:" + port, "data": "json"});
@@ -355,9 +317,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncRequestInfoTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
 
         # test that request info is populated
@@ -371,9 +330,6 @@ public class RestClientAsyncTest inherits QUnit::Test {
     }
 
     asyncOAuth2AuthRetryTest() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
         string token_url = "http://127.0.0.1:" + port + "/oauth2/token";
 
         # Create a RestClient with OAuth2 configuration and auto-refresh enabled

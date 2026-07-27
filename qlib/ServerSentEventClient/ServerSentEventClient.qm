@@ -45,9 +45,7 @@
 %requires HttpClientStreamingIo
 %requires AsyncApi >= 1.0
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 module ServerSentEventClient {
     version = "1.0";

@@ -120,12 +120,7 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
             plan_prompt, plan_schema);
         ++llm_calls;
 
-%ifndef NoJson
         hash<auto> plan = parse_json(plan_result.content);
-%else
-        hash<auto> plan = {};
-        throw "JSON-MODULE-MISSING", "json module is required for planning agent strategy";
-%endif
         list<hash<auto>> subtasks = plan.subtasks ?? ();
 
         # Limit to max_subtasks

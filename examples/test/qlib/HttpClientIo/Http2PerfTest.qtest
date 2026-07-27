@@ -15,9 +15,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires AsyncSocketIo
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class Http2PerfTest
 

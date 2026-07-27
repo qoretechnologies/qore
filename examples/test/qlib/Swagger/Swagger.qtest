@@ -4,9 +4,7 @@
 %modern
 
 # try importing JSON and YAML modules
-%try-module json
-%define NoJson
-%endtry
+%requires json
 %try-module yaml
 %define NoYaml
 %endtry
@@ -25,11 +23,7 @@
 %exec-class SwaggerTest
 
 string sub my_make_json(any v) {
-%ifndef NoJson
     return make_json(v);
-%else
-    return "";
-%endif
 }
 
 string sub my_make_yaml(any v) {
@@ -408,9 +402,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     checkModules() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif
@@ -783,9 +774,7 @@ public class SwaggerTest inherits QUnit::Test {
                 assertEq(200, res.code);
                 assertEq(MimeTypeJson, res.hdr."Content-Type");
                 assertEq(Type::String, res.body.type());
-%ifndef NoJson
                 assertEq(body + {"c": body.c.getEpochSeconds()}, parse_json(res.body));
-%endif
 
                 hash<RestResponseClientInfo> cres = so.parseResponse("get", "/test", res."code", res.body, res.hdr);
                 assertEq(200, cres.code);

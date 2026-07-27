@@ -3,9 +3,7 @@
 
 %modern
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util

@@ -1,0 +1,614 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JsonSaxTest
+
+#! Input stream that returns data in small fixed-size chunks
+/** Used to test streaming parser's ability to handle tokens split across chunks */
+class ChunkedInputStream inherits InputStream {
+    private {
+        string data;
+        int pos = 0;
+        int chunk_size;
+    }
+
+    constructor(string d, int size = 4) {
+        data = d;
+        chunk_size = size;
+    }
+
+    int peek() {
+        if (pos >= data.size()) {
+            return -1;
+        }
+        return ord(data[pos]);
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0) {
+            return NOTHING;
+        }
+        if (pos >= data.size()) {
+            return NOTHING;
+        }
+        int to_read = min(limit, chunk_size, data.size() - pos);
+        if (to_read <= 0) {
+            return NOTHING;
+        }
+        string chunk = data.substr(pos, to_read);
+        pos += to_read;
+        return binary(chunk);
+    }
+}
+
+#! Input stream that returns binary data in small fixed-size chunks
+class ChunkedBinaryInputStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+        int chunk_size;
+    }
+
+    constructor(binary d, int size = 4) {
+        data = d;
+        chunk_size = size;
+    }
+
+    int peek() {
+        if (pos >= data.size()) {
+            return -1;
+        }
+        return data[pos];
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0) {
+            return NOTHING;
+        }
+        if (pos >= data.size()) {
+            return NOTHING;
+        }
+        int to_read = min(limit, chunk_size, data.size() - pos);
+        if (to_read <= 0) {
+            return NOTHING;
+        }
+        binary chunk = data.substr(pos, to_read);
+        pos += to_read;
+        return chunk;
+    }
+}
+
+class JsonSaxTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const SimpleObject = '{"name": "Alice", "age": 30}';
+        const SimpleArray = '[1, 2, 3]';
+        const NestedStructure = '{"users": [{"name": "Alice"}, {"name": "Bob"}], "count": 2}';
+        const MixedValues = '{"str": "hello", "num": 42, "float": 3.14, "bool": true, "null": null}';
+        const EscapedStrings = "{\"text\": \"hello\\nworld\", \"unicode\": \"\\u0041\"}";
+    }
+
+    constructor() : Test("JsonSaxTest", "1.0", \ARGV) {
+        addTestCase("SAX parser basic object", \testBasicObject());
+        addTestCase("SAX parser basic array", \testBasicArray());
+        addTestCase("SAX parser nested structure", \testNestedStructure());
+        addTestCase("SAX parser mixed values", \testMixedValues());
+        addTestCase("SAX parser escaped strings", \testEscapedStrings());
+        addTestCase("SAX parser empty input", \testEmptyInput());
+        addTestCase("SAX parser error handling", \testErrorHandling());
+        addTestCase("SAX parser stream input", \testStreamInput());
+        addTestCase("SAX parser chunked stream", \testChunkedStream());
+        addTestCase("SAX parser stream UTF-8 BOM", \testStreamBom());
+        addTestCase("SAX parser stream encoding conversion", \testStreamEncodingConversion());
+        addTestCase("SAX parser stream encoding split", \testStreamEncodingSplit());
+        addTestCase("SAX parser chunked unicode escape", \testChunkedUnicodeEscape());
+        addTestCase("SAX parser chunked UTF-8 split", \testChunkedUtf8Split());
+        addTestCase("SAX parser large data", \testLargeData());
+        addTestCase("SAX event constants", \testEventConstants());
+        addTestCase("Depth limit consistency DOM vs SAX", \testDepthLimitConsistency());
+        addTestCase("SAX sandbox depth limit", \testSaxSandboxDepthLimit());
+        set_return_value(main());
+    }
+
+    testBasicObject() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parse(SimpleObject, sub(hash<auto> e) { push events, e; });
+        assertGe(5, events.size());
+        assertEq(JsonSaxObjectStart, events[0].type);
+        assertEq(JsonSaxObjectEnd, events[events.size() - 1].type);
+    }
+
+    testBasicArray() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parse(SimpleArray, sub(hash<auto> e) { push events, e; });
+        assertGe(5, events.size());
+        assertEq(JsonSaxArrayStart, events[0].type);
+        assertEq(JsonSaxArrayEnd, events[events.size() - 1].type);
+        int number_count = 0;
+        foreach hash<auto> e in (events) {
+            if (e.type == JsonSaxNumber) {
+                number_count++;
+            }
+        }
+        assertEq(3, number_count);
+    }
+
+    testNestedStructure() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parse(NestedStructure, sub(hash<auto> e) { push events, e; });
+
+        # Count object/array events
+        int object_starts = 0;
+        int object_ends = 0;
+        int array_starts = 0;
+        int array_ends = 0;
+
+        foreach hash<auto> e in (events) {
+            switch (e.type) {
+                case JsonSaxObjectStart: object_starts++; break;
+                case JsonSaxObjectEnd: object_ends++; break;
+                case JsonSaxArrayStart: array_starts++; break;
+                case JsonSaxArrayEnd: array_ends++; break;
+            }
+        }
+
+        assertEq(3, object_starts, "Should have 3 object starts");
+        assertEq(3, object_ends, "Should have 3 object ends");
+        assertEq(1, array_starts, "Should have 1 array start");
+        assertEq(1, array_ends, "Should have 1 array end");
+    }
+
+    testMixedValues() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parse(MixedValues, sub(hash<auto> e) { push events, e; });
+
+        # Check for different value types
+        bool has_string = False;
+        bool has_number = False;
+        bool has_boolean = False;
+        bool has_null = False;
+
+        foreach hash<auto> e in (events) {
+            switch (e.type) {
+                case JsonSaxString: has_string = True; break;
+                case JsonSaxNumber: has_number = True; break;
+                case JsonSaxBoolean: has_boolean = True; break;
+                case JsonSaxNull: has_null = True; break;
+            }
+        }
+
+        assertTrue(has_string, "Should have string value");
+        assertTrue(has_number, "Should have number value");
+        assertTrue(has_boolean, "Should have boolean value");
+        assertTrue(has_null, "Should have null value");
+    }
+
+    testEscapedStrings() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parse(EscapedStrings, sub(hash<auto> e) { push events, e; });
+
+        # Find string values
+        list<string> string_values = ();
+        foreach hash<auto> e in (events) {
+            if (e.type == JsonSaxString) {
+                push string_values, e.value;
+            }
+        }
+
+        assertGe(2, string_values.size());
+        # Check that newline was properly unescaped
+        assertRegex("\n", string_values[0]);
+        # Check that unicode was properly decoded
+        assertEq("A", string_values[1]);
+    }
+
+    testEmptyInput() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+
+        # Empty string should not throw and produce no events
+        parser.parse("", sub(hash<auto> e) { push events, e; });
+        assertEq(0, events.size());
+
+        # Whitespace only should also be fine
+        events = ();
+        parser.parse("   \n\t  ", sub(hash<auto> e) { push events, e; });
+        assertEq(0, events.size());
+    }
+
+    testErrorHandling() {
+        JsonSaxParser parser();
+
+        # Invalid JSON should throw
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse("{invalid}", sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"key": }', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"key": "unterminated}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            binary bad_unicode = <7b226b6579223a20225c753132227d>;
+            BinaryInputStream bis(bad_unicode);
+            parser.parseStream(bis, sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            binary bad_escape = <7b226b6579223a20225c78227d>;
+            BinaryInputStream bis(bad_escape);
+            parser.parseStream(bis, sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"key": 1.2.3}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"key": true} trailing', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"n": -}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"n": 1e}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"n": 1e+}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"n": .1}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse('{"n": 01}', sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            binary bad_v = <7b2273223a20225c76227d>;
+            BinaryInputStream bis(bad_v);
+            parser.parseStream(bis, sub(hash<auto> e) { });
+        });
+
+        assertThrows("JSON-SAX-PARSE-ERROR", sub() {
+            parser.parse("{\"s\": \"line1\nline2\"}", sub(hash<auto> e) { });
+        });
+    }
+
+    testStreamInput() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+
+        StringInputStream sis(SimpleObject);
+        parser.parseStream(sis, sub(hash<auto> e) { push events, e; });
+
+        assertGt(0, events.size());
+
+        # Verify first event is object start
+        assertEq(JsonSaxObjectStart, events[0].type);
+    }
+
+    #! Test streaming with small chunks that split tokens
+    /** This test verifies that the parser correctly handles tokens
+        split across chunk boundaries, which is essential for true
+        streaming behavior.
+    */
+    testChunkedStream() {
+        # Test data with various token types
+        string json = '{"name": "Alice Johnson", "age": 12345, "active": true, "data": null}';
+
+        # Use a custom stream that returns small chunks (simulates slow network)
+        ChunkedInputStream cis(json, 3);  # 3 bytes per chunk
+
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+        parser.parseStream(cis, sub(hash<auto> e) { push events, e; });
+
+        # Verify all events were received correctly
+        assertEq(JsonSaxObjectStart, events[0].type, "Object start");
+
+        # Find key events
+        list<string> found_keys = ();
+        list<auto> found_values = ();
+        foreach hash<auto> e in (events) {
+            if (e.type == JsonSaxKey) {
+                push found_keys, e.value;
+            } else if (e.type == JsonSaxString || e.type == JsonSaxNumber ||
+                       e.type == JsonSaxBoolean || e.type == JsonSaxNull) {
+                push found_values, e.value;
+            }
+        }
+
+        assertEq(("name", "age", "active", "data"), found_keys, "Keys should be parsed correctly");
+        assertEq("Alice Johnson", found_values[0], "String value should be complete");
+        assertEq(12345, found_values[1], "Number value should be complete");
+        assertEq(True, found_values[2], "Boolean should be parsed");
+
+        # Test with nested structure
+        string nested = '{"arr": [1, 2, 3], "obj": {"x": "test"}}';
+        ChunkedInputStream cis2(nested, 2);  # 2 bytes per chunk
+        events = ();
+        parser.parseStream(cis2, sub(hash<auto> e) { push events, e; });
+
+        # Count structure events
+        int array_starts = 0;
+        int array_ends = 0;
+        int obj_starts = 0;
+        int obj_ends = 0;
+        foreach hash<auto> e in (events) {
+            switch (e.type) {
+                case JsonSaxArrayStart: array_starts++; break;
+                case JsonSaxArrayEnd: array_ends++; break;
+                case JsonSaxObjectStart: obj_starts++; break;
+                case JsonSaxObjectEnd: obj_ends++; break;
+            }
+        }
+        assertEq(1, array_starts, "One array");
+        assertEq(1, array_ends, "Array closed");
+        assertEq(2, obj_starts, "Two objects");
+        assertEq(2, obj_ends, "Objects closed");
+
+        # Test number with exponent split across chunks
+        string exp_json = '{"n": 1.23e-4}';
+        ChunkedInputStream cis3(exp_json, 1);
+        events = ();
+        parser.parseStream(cis3, sub(hash<auto> e) { push events, e; });
+        float exp_value = 0;
+        foreach hash<auto> e in (events) {
+            if (e.type == JsonSaxNumber) {
+                exp_value = e.value;
+                break;
+            }
+        }
+        assertTrue(abs(exp_value - 0.000123) < 1e-12, "Exponent number should parse correctly");
+    }
+
+    testStreamBom() {
+        JsonSaxParser parser();
+        list<hash<auto>> events = ();
+
+        binary data = <EFBBBF> + binary('{"k": 1}');
+        BinaryInputStream bis(data);
+        parser.parseStream(bis, sub(hash<auto> e) { push events, e; });
+
+        assertGt(0, events.size());
+        assertEq(JsonSaxObjectStart, events[0].type);
+        assertEq(JsonSaxObjectEnd, events[events.size() - 1].type);
+    }
+
+    testStreamEncodingConversion() {
+        JsonSaxParser parser();
+        list<string> values = ();
+
+        binary data = binary('{"text":"caf') + <e9> + binary('"}');
+        BinaryInputStream bis(data);
+        parser.parseStream(bis, sub(hash<auto> e) {
+            if (e.type == JsonSaxString) {
+                push values, e.value;
+            }
+        }, "ISO-8859-1");
+
+        assertEq(1, values.size());
+        assertEq("café", values[0]);
+    }
+
+    testStreamEncodingSplit() {
+        JsonSaxParser parser();
+        list<string> values = ();
+
+        string utf16le_str = convert_encoding('{"s": "€"}', "UTF16LE");
+        binary utf16le = binary(utf16le_str);
+        ChunkedBinaryInputStream cis(utf16le, 1);
+        parser.parseStream(cis, sub(hash<auto> e) {
+            if (e.type == JsonSaxString) {
+                push values, e.value;
+            }
+        }, "UTF16LE");
+
+        assertEq(1, values.size());
+        assertEq("€", values[0]);
+    }
+
+    testChunkedUnicodeEscape() {
+        JsonSaxParser parser();
+        list<string> values = ();
+
+        binary json = <7b2275223a20225c7530303431227d>;
+        ChunkedBinaryInputStream cis(json, 1);
+        parser.parseStream(cis, sub(hash<auto> e) {
+            if (e.type == JsonSaxString) {
+                push values, e.value;
+            }
+        });
+
+        assertEq(1, values.size());
+        assertEq("A", values[0]);
+    }
+
+    testChunkedUtf8Split() {
+        JsonSaxParser parser();
+        list<string> values = ();
+
+        binary json = <7b2273223a2022e282ac227d>;
+        ChunkedBinaryInputStream cis(json, 1);
+        parser.parseStream(cis, sub(hash<auto> e) {
+            if (e.type == JsonSaxString) {
+                push values, e.value;
+            }
+        });
+
+        assertEq(1, values.size());
+        assertEq("€", values[0]);
+    }
+
+    testLargeData() {
+        # Create a large JSON array
+        list<hash<auto>> items = ();
+        for (int i = 0; i < 100; i++) {
+            push items, {"id": i, "value": sprintf("item-%d", i)};
+        }
+        string large_json = make_json(items);
+
+        JsonSaxParser parser();
+        int event_count = 0;
+        int number_count = 0;
+        int string_count = 0;
+
+        parser.parse(large_json, sub(hash<auto> e) {
+            event_count++;
+            if (e.type == JsonSaxNumber) {
+                number_count++;
+            } else if (e.type == JsonSaxString) {
+                string_count++;
+            }
+        });
+
+        # Should have many events
+        assertGt(100, event_count);
+        assertEq(100, number_count, "Should have 100 id numbers");
+        assertEq(100, string_count, "Should have 100 value strings");
+    }
+
+    testEventConstants() {
+        # Verify constants are defined
+        assertTrue(exists JsonSaxObjectStart);
+        assertTrue(exists JsonSaxObjectEnd);
+        assertTrue(exists JsonSaxArrayStart);
+        assertTrue(exists JsonSaxArrayEnd);
+        assertTrue(exists JsonSaxKey);
+        assertTrue(exists JsonSaxString);
+        assertTrue(exists JsonSaxNumber);
+        assertTrue(exists JsonSaxBoolean);
+        assertTrue(exists JsonSaxNull);
+
+        # Verify they are all different
+        hash<string, bool> seen();
+        list<int> constants = (
+            JsonSaxObjectStart,
+            JsonSaxObjectEnd,
+            JsonSaxArrayStart,
+            JsonSaxArrayEnd,
+            JsonSaxKey,
+            JsonSaxString,
+            JsonSaxNumber,
+            JsonSaxBoolean,
+            JsonSaxNull,
+        );
+
+        foreach int c in (constants) {
+            string key = sprintf("%d", c);
+            assertFalse(seen{key} ?? False, sprintf("Constant value %d should be unique", c));
+            seen{key} = True;
+        }
+    }
+
+    #! Test that SAX and DOM parsers have consistent depth limit behavior
+    /** Both parse_json() and JsonSaxParser should allow the same maximum nesting depth.
+        This test ensures no off-by-one errors between the two implementations.
+
+        Note: The sandbox depth limit (256) is only enforced when a sandbox manager is
+        active. Without a sandbox, unlimited depth is allowed. This test verifies
+        basic parsing behavior works for moderately nested structures.
+    */
+    testDepthLimitConsistency() {
+        # Test moderate nesting works for both
+        string json50 = makeNestedJson(50);
+
+        # DOM parser should handle it
+        auto dom_result = parse_json(json50);
+        assertTrue(exists dom_result, "DOM parser should handle 50 levels of nesting");
+
+        # SAX parser should handle it
+        JsonSaxParser parser();
+        int sax_max_depth = 0;
+        parser.parse(json50, sub(hash<auto> e) {
+            if (e.depth > sax_max_depth) {
+                sax_max_depth = e.depth;
+            }
+        });
+        assertEq(50, sax_max_depth, "SAX parser should report max depth of 50");
+
+        # Test that both parsers can handle the same structure
+        # (without sandbox, both should succeed for any depth)
+        string json100 = makeNestedJson(100);
+
+        dom_result = parse_json(json100);
+        assertTrue(exists dom_result, "DOM parser should handle 100 levels of nesting");
+
+        sax_max_depth = 0;
+        parser.parse(json100, sub(hash<auto> e) {
+            if (e.depth > sax_max_depth) {
+                sax_max_depth = e.depth;
+            }
+        });
+        assertEq(100, sax_max_depth, "SAX parser should report max depth of 100");
+    }
+
+    #! Helper to create deeply nested JSON string
+    private static string makeNestedJson(int depth) {
+        string open = "";
+        string close = "";
+        for (int i = 0; i < depth; i++) {
+            open += "{\"a\":";
+            close += "}";
+        }
+        return open + "1" + close;
+    }
+
+    #! Test that JsonSaxParser enforces depth limit when sandbox is active
+    testSaxSandboxDepthLimit() {
+        # Create JSON with exactly 256 levels of nesting (should succeed)
+        string json256 = makeNestedJson(256);
+        # Create JSON with 257 levels of nesting (should fail)
+        string json257 = makeNestedJson(257);
+
+        # Test in sandboxed program
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+int sub test(string json_str) {
+    JsonSaxParser parser();
+    int max_depth = 0;
+    parser.parse(json_str, sub(hash<auto> e) {
+        if (e.depth > max_depth) {
+            max_depth = e.depth;
+        }
+    });
+    return max_depth;
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 256 levels should succeed
+        auto result = p.callFunction("test", json256);
+        assertEq(256, result, "256 levels of nesting should be allowed in sandbox for SAX parser");
+
+        # 257 levels should fail with depth error
+        assertThrows("JSON-SAX-PARSE-ERROR", "depth", \p.callFunction(), ("test", json257));
+    }
+}

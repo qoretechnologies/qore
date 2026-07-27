@@ -1,0 +1,593 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires JsonLd
+%exec-class JsonLdTypesTest
+
+class JsonLdTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdTypes test", "1.0") {
+        addTestCase("keyword constants test", \keywordConstantsTest());
+        addTestCase("keyword lookup test", \keywordLookupTest());
+        addTestCase("content type constants test", \contentTypeConstantsTest());
+        addTestCase("xsd constants test", \xsdConstantsTest());
+        addTestCase("rdf constants test", \rdfConstantsTest());
+        addTestCase("profile constants test", \profileConstantsTest());
+        addTestCase("enum test", \enumTest());
+        addTestCase("hashdecl defaults test", \hashdeclDefaultsTest());
+        addTestCase("is keyword test", \isKeywordTest());
+        addTestCase("is keyword-like test", \isKeywordLikeTest());
+        addTestCase("is absolute IRI test", \isAbsoluteIriTest());
+        addTestCase("is relative IRI test", \isRelativeIriTest());
+        addTestCase("is blank node test", \isBlankNodeTest());
+        addTestCase("is compact IRI test", \isCompactIriTest());
+        addTestCase("resolve IRI test", \resolveIriTest());
+        addTestCase("remove dot segments test", \removeDotSegmentsTest());
+        addTestCase("is value object test", \isValueObjectTest());
+        addTestCase("is list object test", \isListObjectTest());
+        addTestCase("is graph object test", \isGraphObjectTest());
+        addTestCase("is node object test", \isNodeObjectTest());
+        addTestCase("as list test", \asListTest());
+        addTestCase("json ld clone test", \jsonLdCloneTest());
+        addTestCase("blank node generator test", \blankNodeGeneratorTest());
+        addTestCase("blank node generator clone test", \blankNodeGeneratorCloneTest());
+        addTestCase("error throwing test", \errorThrowingTest());
+        addTestCase("error codes test", \errorCodesTest());
+        addTestCase("term definition defaults test", \termDefinitionDefaultsTest());
+        addTestCase("active context defaults test", \activeContextDefaultsTest());
+        addTestCase("rdf hashdecl test", \rdfHashdeclTest());
+        addTestCase("valid container constants test", \validContainerConstantsTest());
+        set_return_value(main());
+    }
+
+    private keywordConstantsTest() {
+        assertEq("@base", JSONLD_BASE);
+        assertEq("@container", JSONLD_CONTAINER);
+        assertEq("@context", JSONLD_CONTEXT);
+        assertEq("@direction", JSONLD_DIRECTION);
+        assertEq("@graph", JSONLD_GRAPH);
+        assertEq("@id", JSONLD_ID);
+        assertEq("@import", JSONLD_IMPORT);
+        assertEq("@included", JSONLD_INCLUDED);
+        assertEq("@index", JSONLD_INDEX);
+        assertEq("@json", JSONLD_JSON);
+        assertEq("@language", JSONLD_LANGUAGE);
+        assertEq("@list", JSONLD_LIST);
+        assertEq("@nest", JSONLD_NEST);
+        assertEq("@none", JSONLD_NONE);
+        assertEq("@prefix", JSONLD_PREFIX);
+        assertEq("@propagate", JSONLD_PROPAGATE);
+        assertEq("@protected", JSONLD_PROTECTED);
+        assertEq("@reverse", JSONLD_REVERSE);
+        assertEq("@set", JSONLD_SET);
+        assertEq("@type", JSONLD_TYPE);
+        assertEq("@value", JSONLD_VALUE);
+        assertEq("@version", JSONLD_VERSION);
+        assertEq("@vocab", JSONLD_VOCAB);
+    }
+
+    private keywordLookupTest() {
+        # All 23 keywords should be in the lookup set
+        assertEq(23, JSONLD_KEYWORDS.size());
+        assertTrue(JSONLD_KEYWORDS."@context");
+        assertTrue(JSONLD_KEYWORDS."@id");
+        assertTrue(JSONLD_KEYWORDS."@type");
+        assertTrue(JSONLD_KEYWORDS."@value");
+        assertTrue(JSONLD_KEYWORDS."@graph");
+        assertTrue(JSONLD_KEYWORDS."@list");
+        assertTrue(JSONLD_KEYWORDS."@set");
+        assertTrue(JSONLD_KEYWORDS."@reverse");
+        assertTrue(JSONLD_KEYWORDS."@base");
+        assertTrue(JSONLD_KEYWORDS."@vocab");
+        assertTrue(JSONLD_KEYWORDS."@language");
+        assertTrue(JSONLD_KEYWORDS."@direction");
+        assertTrue(JSONLD_KEYWORDS."@container");
+        assertTrue(JSONLD_KEYWORDS."@index");
+        assertTrue(JSONLD_KEYWORDS."@nest");
+        assertTrue(JSONLD_KEYWORDS."@prefix");
+        assertTrue(JSONLD_KEYWORDS."@propagate");
+        assertTrue(JSONLD_KEYWORDS."@protected");
+        assertTrue(JSONLD_KEYWORDS."@import");
+        assertTrue(JSONLD_KEYWORDS."@included");
+        assertTrue(JSONLD_KEYWORDS."@json");
+        assertTrue(JSONLD_KEYWORDS."@none");
+        assertTrue(JSONLD_KEYWORDS."@version");
+
+        # Non-keywords should not be present
+        assertFalse(JSONLD_KEYWORDS."@foo" ?? False);
+        assertFalse(JSONLD_KEYWORDS."name" ?? False);
+    }
+
+    private contentTypeConstantsTest() {
+        assertEq("application/ld+json", MimeTypeJsonLd);
+        assertEq("application/json", MimeTypeJson);
+    }
+
+    private xsdConstantsTest() {
+        assertEq("http://www.w3.org/2001/XMLSchema#", XSD_NS);
+        assertEq("http://www.w3.org/2001/XMLSchema#boolean", XSD_BOOLEAN);
+        assertEq("http://www.w3.org/2001/XMLSchema#double", XSD_DOUBLE);
+        assertEq("http://www.w3.org/2001/XMLSchema#integer", XSD_INTEGER);
+        assertEq("http://www.w3.org/2001/XMLSchema#string", XSD_STRING);
+        # Verify all XSD types start with XSD_NS
+        assertTrue(XSD_BOOLEAN.find(XSD_NS) == 0);
+        assertTrue(XSD_DOUBLE.find(XSD_NS) == 0);
+        assertTrue(XSD_INTEGER.find(XSD_NS) == 0);
+        assertTrue(XSD_STRING.find(XSD_NS) == 0);
+    }
+
+    private rdfConstantsTest() {
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#", RDF_NS);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", RDF_TYPE);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#first", RDF_FIRST);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest", RDF_REST);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil", RDF_NIL);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#List", RDF_LIST);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString", RDF_LANGSTRING);
+        assertEq("http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON", RDF_JSON);
+        # Verify all RDF terms start with RDF_NS
+        assertTrue(RDF_TYPE.find(RDF_NS) == 0);
+        assertTrue(RDF_FIRST.find(RDF_NS) == 0);
+        assertTrue(RDF_REST.find(RDF_NS) == 0);
+        assertTrue(RDF_NIL.find(RDF_NS) == 0);
+    }
+
+    private profileConstantsTest() {
+        assertEq("http://www.w3.org/ns/json-ld#expanded", JSONLD_PROFILE_EXPANDED);
+        assertEq("http://www.w3.org/ns/json-ld#compacted", JSONLD_PROFILE_COMPACTED);
+        assertEq("http://www.w3.org/ns/json-ld#flattened", JSONLD_PROFILE_FLATTENED);
+        assertEq("http://www.w3.org/ns/json-ld#framed", JSONLD_PROFILE_FRAMED);
+        assertEq("http://www.w3.org/ns/json-ld#context", JSONLD_PROFILE_CONTEXT);
+    }
+
+    private enumTest() {
+        # Processing mode
+        assertEq("json-ld-1.0", JsonLdProcessingMode::JsonLd10);
+        assertEq("json-ld-1.1", JsonLdProcessingMode::JsonLd11);
+
+        # Document form
+        assertEq("expanded", JsonLdForm::Expanded);
+        assertEq("compacted", JsonLdForm::Compacted);
+        assertEq("flattened", JsonLdForm::Flattened);
+        assertEq("framed", JsonLdForm::Framed);
+
+        # RDF term type
+        assertEq("IRI", RdfTermType::Iri);
+        assertEq("blank node", RdfTermType::BlankNode);
+        assertEq("literal", RdfTermType::Literal);
+    }
+
+    private hashdeclDefaultsTest() {
+        hash<JsonLdOptions> opts();
+        assertTrue(opts.compactArrays);
+        assertTrue(opts.compactToRelative);
+        assertEq("json-ld-1.1", opts.processingMode);
+        assertFalse(opts.frameExpansion);
+        assertFalse(opts.ordered);
+        assertFalse(opts.produceGeneralizedRdf);
+        assertFalse(opts.useNativeTypes);
+        assertFalse(opts.useRdfType);
+        assertNothing(opts.base);
+        assertNothing(opts.documentLoader);
+        assertNothing(opts.expandContext);
+        assertNothing(opts.rdfDirection);
+        assertNothing(opts.embed);
+        assertNothing(opts.explicit_);
+        assertNothing(opts.omitDefault);
+        assertNothing(opts.omitGraph);
+        assertNothing(opts.requireAll);
+    }
+
+    private isKeywordTest() {
+        assertTrue(isJsonLdKeyword("@context"));
+        assertTrue(isJsonLdKeyword("@id"));
+        assertTrue(isJsonLdKeyword("@type"));
+        assertTrue(isJsonLdKeyword("@value"));
+        assertTrue(isJsonLdKeyword("@graph"));
+        assertTrue(isJsonLdKeyword("@list"));
+        assertTrue(isJsonLdKeyword("@set"));
+        assertTrue(isJsonLdKeyword("@reverse"));
+        assertTrue(isJsonLdKeyword("@base"));
+        assertTrue(isJsonLdKeyword("@vocab"));
+        assertTrue(isJsonLdKeyword("@language"));
+        assertTrue(isJsonLdKeyword("@version"));
+
+        assertFalse(isJsonLdKeyword("@foo"));
+        assertFalse(isJsonLdKeyword("name"));
+        assertFalse(isJsonLdKeyword(""));
+        assertFalse(isJsonLdKeyword("context"));
+        assertFalse(isJsonLdKeyword("@Context"));
+    }
+
+    private isKeywordLikeTest() {
+        assertTrue(isKeywordLike("@context"));
+        assertTrue(isKeywordLike("@foo"));
+        # @bar123 does NOT match W3C ABNF @1*ALPHA (digits not included)
+        assertFalse(isKeywordLike("@bar123"));
+        # @ alone does NOT match @1*ALPHA (requires at least one letter)
+        assertFalse(isKeywordLike("@"));
+
+        assertFalse(isKeywordLike("name"));
+        assertFalse(isKeywordLike(""));
+        assertFalse(isKeywordLike("foo@bar"));
+    }
+
+    private isAbsoluteIriTest() {
+        assertTrue(isAbsoluteIri("http://example.com"));
+        assertTrue(isAbsoluteIri("https://example.com/path"));
+        assertTrue(isAbsoluteIri("urn:isbn:0451450523"));
+        assertTrue(isAbsoluteIri("ftp://files.example.com"));
+        assertTrue(isAbsoluteIri("mailto:user@example.com"));
+        assertTrue(isAbsoluteIri("file:///tmp/test"));
+
+        assertFalse(isAbsoluteIri("example.com"));
+        assertFalse(isAbsoluteIri("/path/to/resource"));
+        assertFalse(isAbsoluteIri("relative"));
+        assertFalse(isAbsoluteIri("_:blank"));
+        assertFalse(isAbsoluteIri(""));
+    }
+
+    private isRelativeIriTest() {
+        assertTrue(isRelativeIri("path/to/resource"));
+        assertTrue(isRelativeIri("/absolute/path"));
+        assertTrue(isRelativeIri("relative"));
+        assertTrue(isRelativeIri(""));
+
+        assertFalse(isRelativeIri("http://example.com"));
+        assertFalse(isRelativeIri("_:blank"));
+    }
+
+    private isBlankNodeTest() {
+        assertTrue(isBlankNodeIdentifier("_:b0"));
+        assertTrue(isBlankNodeIdentifier("_:blank"));
+        assertTrue(isBlankNodeIdentifier("_:"));
+
+        assertFalse(isBlankNodeIdentifier("http://example.com"));
+        assertFalse(isBlankNodeIdentifier("blank"));
+        assertFalse(isBlankNodeIdentifier("_blank"));
+        assertFalse(isBlankNodeIdentifier(""));
+    }
+
+    private isCompactIriTest() {
+        assertTrue(isCompactIri("schema:name"));
+        assertTrue(isCompactIri("foaf:Person"));
+        assertTrue(isCompactIri("ex:resource"));
+        assertTrue(isCompactIri("dc:title"));
+
+        # Not compact IRIs
+        assertFalse(isCompactIri("@context"));
+        assertFalse(isCompactIri("_:blank"));
+        assertFalse(isCompactIri("http://example.com"));
+        assertFalse(isCompactIri("https://example.com/path"));
+        assertFalse(isCompactIri("no-colon"));
+        assertFalse(isCompactIri(""));
+    }
+
+    private resolveIriTest() {
+        # Absolute IRI stays as-is
+        assertEq("http://example.com/path", resolveIri("http://base.com/", "http://example.com/path"));
+
+        # Relative path resolution
+        assertEq("http://example.com/base/relative", resolveIri("http://example.com/base/doc", "relative"));
+
+        # Absolute path reference
+        assertEq("http://example.com/absolute", resolveIri("http://example.com/base/doc", "/absolute"));
+
+        # Fragment-only reference
+        assertEq("http://example.com/doc#frag", resolveIri("http://example.com/doc", "#frag"));
+
+        # Empty relative reference
+        assertEq("http://example.com/doc", resolveIri("http://example.com/doc", ""));
+
+        # Path with dot segments
+        assertEq("http://example.com/path", resolveIri("http://example.com/a/b/c", "../../path"));
+    }
+
+    private removeDotSegmentsTest() {
+        # Simple dot segments
+        assertEq("http://example.com/a/c", removeDotSegments("http://example.com/a/b/../c"));
+        assertEq("http://example.com/a/b/c", removeDotSegments("http://example.com/a/b/./c"));
+        assertEq("http://example.com/c", removeDotSegments("http://example.com/a/b/../../c"));
+
+        # No dot segments (should be unchanged)
+        assertEq("http://example.com/a/b/c", removeDotSegments("http://example.com/a/b/c"));
+    }
+
+    private isValueObjectTest() {
+        assertTrue(isValueObject({"@value": "test"}));
+        assertTrue(isValueObject({"@value": 42}));
+        assertTrue(isValueObject({"@value": "test", "@language": "en"}));
+
+        assertFalse(isValueObject({"@id": "test"}));
+        assertFalse(isValueObject("string"));
+        assertFalse(isValueObject(42));
+        assertFalse(isValueObject(NOTHING));
+        assertFalse(isValueObject(()));
+    }
+
+    private isListObjectTest() {
+        assertTrue(isListObject({"@list": (1, 2, 3)}));
+        assertTrue(isListObject({"@list": ()}));
+
+        assertFalse(isListObject({"@value": "test"}));
+        assertFalse(isListObject({"@set": (1, 2, 3)}));
+        assertFalse(isListObject("string"));
+        assertFalse(isListObject(NOTHING));
+    }
+
+    private isGraphObjectTest() {
+        assertTrue(isGraphObject({"@graph": ()}));
+        assertTrue(isGraphObject({"@graph": (), "@id": "test"}));
+        assertTrue(isGraphObject({"@graph": (), "@index": "idx"}));
+        assertTrue(isGraphObject({"@graph": (), "other": "prop"}));
+
+        assertFalse(isGraphObject({"@value": "test"}));
+        assertFalse(isGraphObject("string"));
+        assertFalse(isGraphObject(NOTHING));
+    }
+
+    private isNodeObjectTest() {
+        assertTrue(isNodeObject({"@id": "test"}));
+        assertTrue(isNodeObject({"@type": "Person"}));
+        assertTrue(isNodeObject({"name": "test"}));
+        assertTrue(isNodeObject({}));
+
+        assertFalse(isNodeObject({"@value": "test"}));
+        assertFalse(isNodeObject({"@list": ()}));
+        assertFalse(isNodeObject({"@set": ()}));
+        assertFalse(isNodeObject("string"));
+        assertFalse(isNodeObject(42));
+        assertFalse(isNodeObject(NOTHING));
+    }
+
+    private asListTest() {
+        # List stays as-is
+        assertEq((1, 2, 3), asList((1, 2, 3)));
+        assertEq((), asList(()));
+
+        # Scalar wraps in list
+        assertEq(("test",), asList("test"));
+        assertEq((42,), asList(42));
+        assertEq((True,), asList(True));
+
+        # Hash wraps in list
+        hash<auto> h = {"key": "val"};
+        assertEq((h,), asList(h));
+
+        # NOTHING returns empty list
+        assertEq((), asList(NOTHING));
+    }
+
+    private jsonLdCloneTest() {
+        # Scalar clone
+        assertEq("test", jsonLdClone("test"));
+        assertEq(42, jsonLdClone(42));
+
+        # Hash clone (deep)
+        hash<auto> original = {
+            "a": 1,
+            "b": {"c": 2, "d": (3, 4)},
+        };
+        hash<auto> cloned = jsonLdClone(original);
+        assertEq(original, cloned);
+
+        # List clone (deep)
+        list<auto> origList = (1, {"a": 2}, (3, 4));
+        list<auto> clonedList = jsonLdClone(origList);
+        assertEq(origList, clonedList);
+
+        # NOTHING clone
+        assertNothing(jsonLdClone(NOTHING));
+    }
+
+    private blankNodeGeneratorTest() {
+        JsonLdBlankNodeGenerator gen();
+
+        # Generate fresh IDs
+        assertEq("_:b0", gen.generate());
+        assertEq("_:b1", gen.generate());
+        assertEq("_:b2", gen.generate());
+
+        # Get ID for existing identifier (creates mapping)
+        assertEq("_:b3", gen.getId("_:old1"));
+        # Same identifier returns same mapping
+        assertEq("_:b3", gen.getId("_:old1"));
+
+        # Different identifier gets new mapping
+        assertEq("_:b4", gen.getId("_:old2"));
+
+        # Check hasId
+        assertTrue(gen.hasId("_:old1"));
+        assertTrue(gen.hasId("_:old2"));
+        assertFalse(gen.hasId("_:old3"));
+
+        # Check identifier map
+        hash<string, string> idMap = gen.getIdentifierMap();
+        assertEq("_:b3", idMap."_:old1");
+        assertEq("_:b4", idMap."_:old2");
+
+        # Check issued order
+        list<string> order = gen.getIssuedOrder();
+        assertEq(2, order.size());
+        assertEq("_:old1", order[0]);
+        assertEq("_:old2", order[1]);
+    }
+
+    private blankNodeGeneratorCloneTest() {
+        JsonLdBlankNodeGenerator gen("_:t");
+        gen.generate();
+        gen.getId("_:x");
+
+        JsonLdBlankNodeGenerator copy = gen.clone();
+
+        # Clone should have same state
+        assertTrue(copy.hasId("_:x"));
+        assertEq(gen.getIdentifierMap(), copy.getIdentifierMap());
+
+        # Clone generates independently
+        string origNext = gen.generate();
+        string copyNext = copy.generate();
+        assertEq(origNext, copyNext);
+    }
+
+    private errorThrowingTest() {
+        try {
+            throwJsonLdError(JSONLD_ERR_INVALID_ID_VALUE, "test error message");
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+            assertEq("test error message", ex.desc);
+            hash<JsonLdErrorInfo> info = ex.arg;
+            assertEq("invalid @id value", info.code);
+            assertEq("test error message", info.message);
+            assertNothing(info.details);
+        }
+
+        # With details
+        try {
+            throwJsonLdError(JSONLD_ERR_CYCLIC_IRI_MAPPING, "cyclic mapping found", {"term": "ex"});
+            assertFalse(True);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JSON-LD-ERROR", ex.err);
+            hash<JsonLdErrorInfo> info = ex.arg;
+            assertEq("cyclic IRI mapping", info.code);
+            assertEq("cyclic mapping found", info.message);
+            assertEq({"term": "ex"}, info.details);
+        }
+    }
+
+    private errorCodesTest() {
+        # Verify error code string values
+        assertEq("colliding keywords", JSONLD_ERR_COLLIDING_KEYWORDS);
+        assertEq("context overflow", JSONLD_ERR_CONTEXT_OVERFLOW);
+        assertEq("cyclic IRI mapping", JSONLD_ERR_CYCLIC_IRI_MAPPING);
+        assertEq("invalid @id value", JSONLD_ERR_INVALID_ID_VALUE);
+        assertEq("invalid @import value", JSONLD_ERR_INVALID_IMPORT_VALUE);
+        assertEq("invalid @included value", JSONLD_ERR_INVALID_INCLUDED_VALUE);
+        assertEq("invalid @index value", JSONLD_ERR_INVALID_INDEX_VALUE);
+        assertEq("invalid @nest value", JSONLD_ERR_INVALID_NEST_VALUE);
+        assertEq("invalid @prefix value", JSONLD_ERR_INVALID_PREFIX_VALUE);
+        assertEq("invalid @propagate value", JSONLD_ERR_INVALID_PROPAGATE_VALUE);
+        assertEq("invalid @protected value", JSONLD_ERR_INVALID_PROTECTED_VALUE);
+        assertEq("invalid @reverse value", JSONLD_ERR_INVALID_REVERSE_VALUE);
+        assertEq("invalid @version value", JSONLD_ERR_INVALID_VERSION_VALUE);
+        assertEq("invalid base IRI", JSONLD_ERR_INVALID_BASE_IRI);
+        assertEq("invalid base direction", JSONLD_ERR_INVALID_BASE_DIRECTION);
+        assertEq("invalid container mapping", JSONLD_ERR_INVALID_CONTAINER_MAPPING);
+        assertEq("invalid context entry", JSONLD_ERR_INVALID_CONTEXT_ENTRY);
+        assertEq("invalid context nullification", JSONLD_ERR_INVALID_CONTEXT_NULLIFICATION);
+        assertEq("invalid default language", JSONLD_ERR_INVALID_DEFAULT_LANGUAGE);
+        assertEq("invalid IRI mapping", JSONLD_ERR_INVALID_IRI_MAPPING);
+        assertEq("invalid JSON literal", JSONLD_ERR_INVALID_JSON_LITERAL);
+        assertEq("invalid keyword alias", JSONLD_ERR_INVALID_KEYWORD_ALIAS);
+        assertEq("invalid language map value", JSONLD_ERR_INVALID_LANGUAGE_MAP_VALUE);
+        assertEq("invalid language mapping", JSONLD_ERR_INVALID_LANGUAGE_MAPPING);
+        assertEq("invalid language-tagged string", JSONLD_ERR_INVALID_LANGUAGE_TAGGED_STRING);
+        assertEq("invalid language-tagged value", JSONLD_ERR_INVALID_LANGUAGE_TAGGED_VALUE);
+        assertEq("invalid local context", JSONLD_ERR_INVALID_LOCAL_CONTEXT);
+        assertEq("invalid remote context", JSONLD_ERR_INVALID_REMOTE_CONTEXT);
+        assertEq("invalid reverse property", JSONLD_ERR_INVALID_REVERSE_PROPERTY);
+        assertEq("invalid reverse property map", JSONLD_ERR_INVALID_REVERSE_PROPERTY_MAP);
+        assertEq("invalid reverse property value", JSONLD_ERR_INVALID_REVERSE_PROPERTY_VALUE);
+        assertEq("invalid scoped context", JSONLD_ERR_INVALID_SCOPED_CONTEXT);
+        assertEq("invalid set or list object", JSONLD_ERR_INVALID_SET_OR_LIST_OBJECT);
+        assertEq("invalid term definition", JSONLD_ERR_INVALID_TERM_DEFINITION);
+        assertEq("invalid type mapping", JSONLD_ERR_INVALID_TYPE_MAPPING);
+        assertEq("invalid type value", JSONLD_ERR_INVALID_TYPE_VALUE);
+        assertEq("invalid typed value", JSONLD_ERR_INVALID_TYPED_VALUE);
+        assertEq("invalid value object", JSONLD_ERR_INVALID_VALUE_OBJECT);
+        assertEq("invalid value object value", JSONLD_ERR_INVALID_VALUE_OBJECT_VALUE);
+        assertEq("invalid vocab mapping", JSONLD_ERR_INVALID_VOCAB_MAPPING);
+        assertEq("IRI confused with prefix", JSONLD_ERR_IRI_CONFUSED_WITH_PREFIX);
+        assertEq("keyword redefinition", JSONLD_ERR_KEYWORD_REDEFINITION);
+        assertEq("loading document failed", JSONLD_ERR_LOADING_DOCUMENT_FAILED);
+        assertEq("loading remote context failed", JSONLD_ERR_LOADING_REMOTE_CONTEXT_FAILED);
+        assertEq("multiple context link headers", JSONLD_ERR_MULTIPLE_CONTEXT_LINK_HEADERS);
+        assertEq("processing mode conflict", JSONLD_ERR_PROCESSING_MODE_CONFLICT);
+        assertEq("protected term redefinition", JSONLD_ERR_PROTECTED_TERM_REDEFINITION);
+    }
+
+    private termDefinitionDefaultsTest() {
+        hash<JsonLdTermDefinition> td();
+        assertNothing(td.iriMapping);
+        assertFalse(td.prefix);
+        assertFalse(td.protected_);
+        assertFalse(td.reverse);
+        assertNothing(td.baseUrl);
+        assertNothing(td.containerMapping);
+        assertNothing(td.localContext);
+        assertNothing(td.languageMapping);
+        assertFalse(td.hasLanguageMapping);
+        assertNothing(td.directionMapping);
+        assertFalse(td.hasDirectionMapping);
+        assertNothing(td.nestValue);
+        assertNothing(td.typeMapping);
+    }
+
+    private activeContextDefaultsTest() {
+        hash<JsonLdActiveContext> ctx();
+        assertEq({}, ctx.termDefinitions);
+        assertNothing(ctx.baseIri);
+        assertNothing(ctx.originalBaseIri);
+        assertNothing(ctx.inverseContext);
+        assertNothing(ctx.vocabularyMapping);
+        assertNothing(ctx.defaultLanguage);
+        assertNothing(ctx.defaultBaseDirection);
+        assertNothing(ctx.previousContext);
+    }
+
+    private rdfHashdeclTest() {
+        # RdfTerm
+        hash<RdfTerm> term = <RdfTerm>{
+            "termType": RdfTermType::Iri,
+            "value": "http://example.com/resource",
+        };
+        assertEq("IRI", term.termType);
+        assertEq("http://example.com/resource", term.value);
+        assertNothing(term.datatype);
+        assertNothing(term.language);
+
+        # RdfTerm with literal
+        hash<RdfTerm> literal = <RdfTerm>{
+            "termType": RdfTermType::Literal,
+            "value": "hello",
+            "datatype": XSD_STRING,
+            "language": "en",
+        };
+        assertEq("literal", literal.termType);
+        assertEq("hello", literal.value);
+        assertEq(XSD_STRING, literal.datatype);
+        assertEq("en", literal.language);
+
+        # RdfQuad
+        hash<RdfQuad> quad = <RdfQuad>{
+            "subject": <RdfTerm>{"termType": "IRI", "value": "http://example.com/s"},
+            "predicate": <RdfTerm>{"termType": "IRI", "value": "http://example.com/p"},
+            "object": <RdfTerm>{"termType": "literal", "value": "test"},
+        };
+        assertEq("http://example.com/s", quad.subject.value);
+        assertEq("http://example.com/p", quad.predicate.value);
+        assertEq("test", quad.object.value);
+        assertNothing(quad.graphName);
+
+        # RdfDataset
+        hash<RdfDataset> dataset();
+        assertEq((), dataset.defaultGraph);
+        assertEq({}, dataset.namedGraphs);
+    }
+
+    private validContainerConstantsTest() {
+        assertTrue(JSONLD_VALID_CONTAINERS."@graph");
+        assertTrue(JSONLD_VALID_CONTAINERS."@id");
+        assertTrue(JSONLD_VALID_CONTAINERS."@index");
+        assertTrue(JSONLD_VALID_CONTAINERS."@language");
+        assertTrue(JSONLD_VALID_CONTAINERS."@list");
+        assertTrue(JSONLD_VALID_CONTAINERS."@set");
+        assertTrue(JSONLD_VALID_CONTAINERS."@type");
+        assertEq(7, JSONLD_VALID_CONTAINERS.size());
+    }
+}

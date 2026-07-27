@@ -1,0 +1,348 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires A2aClient
+%requires A2aServerHandler
+%requires A2aClientDataProvider
+%exec-class A2aClientDataProviderTest
+
+class TestA2aServer inherits A2aServerHandler {
+    constructor(LoggerInterface logger) : A2aServerHandler(logger, {
+        "name": "DataProviderTestAgent",
+        "description": "A test A2A agent for DataProvider testing",
+        "url": "http://localhost",
+        "version": "2.0",
+        "capabilities": <A2aAgentCapabilities>{
+            "streaming": True,
+            "pushNotifications": False,
+        },
+        "skills": (<A2aAgentSkill>{
+            "id": "summarize",
+            "name": "Summarize",
+            "description": "Summarizes text",
+        },),
+    }) {
+        setMessageHandler(\handleMessage());
+    }
+
+    private auto handleMessage(hash<auto> task_info, hash<auto> msg) {
+        return {
+            "role": "agent",
+            "parts": ({"type": "text", "text": "Agent response via DataProvider"},),
+        };
+    }
+}
+
+class A2aClientDataProviderTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        TestA2aServer a2a_server;
+        HttpServer http;
+        int port;
+        string base_url;
+    }
+
+    constructor() : QUnit::Test("A2aClientDataProvider test", "1.0") {
+        addTestCase("factory test", \factoryTest());
+        addTestCase("provider hierarchy test", \providerHierarchyTest());
+        addTestCase("agent card get test", \agentCardGetTest());
+        addTestCase("send message test", \sendMessageTest());
+        addTestCase("task get test", \taskGetTest());
+        addTestCase("task cancel test", \taskCancelTest());
+        addTestCase("event provider test", \eventProviderTest());
+        addTestCase("list tasks test", \listTasksTest());
+        addTestCase("push notification providers test", \pushNotificationProvidersTest());
+        addTestCase("type verification test", \typeVerificationTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        a2a_server = new TestA2aServer(logger);
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http.setHandler("a2a-handler", "", MimeTypeJson, a2a_server);
+        http.setDefaultHandler("a2a-handler", a2a_server);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        base_url = sprintf("http://localhost:%d", port);
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    factoryTest() {
+        # Test factory info
+        A2aClientDataProviderFactory factory();
+        hash<auto> info = factory.getInfo();
+        assertEq("a2aclient", info.name, "Factory name should match");
+        assertTrue(info.children_can_support_apis, "Factory should support child APIs");
+    }
+
+    providerHierarchyTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Check root provider
+        assertEq("a2a", provider.getName(), "Root provider name");
+
+        # Check children
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(exists children, "Should have children");
+        assertTrue(children.size() >= 3, sprintf("Should have at least 3 children, got %d", children.size()));
+
+        # Verify specific children exist
+        *AbstractDataProvider agent_card = provider.getChildProvider("agent-card");
+        assertTrue(exists agent_card, "Should have agent-card child");
+
+        *AbstractDataProvider messages = provider.getChildProvider("messages");
+        assertTrue(exists messages, "Should have messages child");
+
+        *AbstractDataProvider tasks = provider.getChildProvider("tasks");
+        assertTrue(exists tasks, "Should have tasks child");
+
+        *AbstractDataProvider events = provider.getChildProvider("events");
+        assertTrue(exists events, "Should have events child");
+
+        # Check sub-children
+        *list<string> card_children = agent_card.getChildProviderNames();
+        assertTrue(card_children.contains("get"), "agent-card should have get child");
+        assertTrue(card_children.contains("get-extended"), "agent-card should have get-extended child");
+
+        *list<string> msg_children = messages.getChildProviderNames();
+        assertTrue(msg_children.contains("send"), "messages should have send child");
+
+        *list<string> task_children = tasks.getChildProviderNames();
+        assertTrue(task_children.contains("get"), "tasks should have get child");
+        assertTrue(task_children.contains("cancel"), "tasks should have cancel child");
+
+        # Check non-existent child
+        *AbstractDataProvider nonexistent = provider.getChildProvider("nonexistent");
+        assertFalse(exists nonexistent, "Should not have nonexistent child");
+
+        client.close();
+    }
+
+    agentCardGetTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Get agent card via data provider
+        AbstractDataProvider card_provider = provider.getChildProvider("agent-card").getChildProvider("get");
+        hash<auto> card = card_provider.doRequest({});
+
+        assertEq("DataProviderTestAgent", card.name, "Agent card name should match");
+        assertEq("2.0", card.version, "Agent card version should match");
+        assertTrue(exists card.skills, "Agent card should have skills");
+
+        client.close();
+    }
+
+    sendMessageTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Send message via data provider
+        AbstractDataProvider send_provider = provider.getChildProvider("messages").getChildProvider("send");
+        hash<auto> task = send_provider.doRequest({
+            "role": "user",
+            "parts": ({"type": "text", "text": "DataProvider test message"},),
+        });
+
+        assertTrue(exists task.id, "Task should have ID");
+        assertTrue(exists task.status, "Task should have status");
+        assertTrue(exists task.status.state, "Task status should have state");
+
+        client.close();
+    }
+
+    taskGetTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Create a task first
+        AbstractDataProvider send_provider = provider.getChildProvider("messages").getChildProvider("send");
+        hash<auto> task = send_provider.doRequest({
+            "role": "user",
+            "parts": ({"type": "text", "text": "Task get test"},),
+        });
+        string task_id = task.id;
+
+        # Get task via data provider
+        AbstractDataProvider get_provider = provider.getChildProvider("tasks").getChildProvider("get");
+        hash<auto> retrieved = get_provider.doRequest({"id": task_id});
+
+        assertEq(task_id, retrieved.id, "Retrieved task ID should match");
+        assertTrue(exists retrieved.status, "Retrieved task should have status");
+
+        client.close();
+    }
+
+    taskCancelTest() {
+        A2aClient::A2aClient client(base_url);
+
+        # Create a task directly on the server so we can control its state
+        hash<A2aTaskInfo> server_task = a2a_server.createTask();
+        a2a_server.updateTaskState(server_task.id, A2aTaskState::Active);
+
+        # Cancel via client
+        hash<auto> result = client.cancelTask(server_task.id);
+        assertEq(A2aTaskState::Canceled, result.status.state, "Task should be canceled");
+
+        client.close();
+    }
+
+    eventProviderTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Get event provider
+        AbstractDataProvider events_provider = provider.getChildProvider("events");
+        assertTrue(exists events_provider, "Should have events provider");
+
+        # Check provider info
+        hash<auto> info = events_provider.getInfo();
+        assertTrue(info.supports_observable, "Events provider should support observable");
+
+        # Get event types
+        hash<auto> event_types = events_provider.getEventTypes();
+        assertTrue(exists event_types{EVENT_A2A_CONNECTED}, "Should have connected event type");
+        assertTrue(exists event_types{EVENT_A2A_DISCONNECTED}, "Should have disconnected event type");
+        assertTrue(exists event_types{EVENT_A2A_TASK_STATUS_UPDATE}, "Should have task status update event type");
+
+        client.close();
+    }
+
+    listTasksTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Create some tasks
+        a2a_server.createTask("ctx-a");
+        a2a_server.createTask("ctx-a");
+        a2a_server.createTask("ctx-b");
+
+        # List all tasks via data provider
+        AbstractDataProvider list_provider = provider.getChildProvider("tasks").getChildProvider("list");
+        hash<auto> result = list_provider.doRequest({});
+        assertTrue(exists result.tasks, "Should have tasks list");
+        assertTrue(result.tasks.size() >= 3, sprintf("Should have at least 3 tasks, got %d", result.tasks.size()));
+
+        # List tasks filtered by context ID
+        result = list_provider.doRequest({"contextId": "ctx-a"});
+        assertTrue(exists result.tasks, "Should have filtered tasks list");
+        assertEq(2, result.tasks.size(), "Should have 2 tasks with ctx-a");
+
+        # List tasks with non-existent context
+        result = list_provider.doRequest({"contextId": "nonexistent"});
+        assertEq(0, result.tasks.size(), "Should have 0 tasks for non-existent context");
+
+        # Also test via client directly
+        result = client.listTasks({"contextId": "ctx-b"});
+        assertEq(1, result.tasks.size(), "Should have 1 task with ctx-b via client");
+
+        client.close();
+    }
+
+    pushNotificationProvidersTest() {
+        A2aClient::A2aClient client(base_url);
+        A2aClientDataProvider::A2aClientDataProvider provider(client);
+
+        # Verify push-notifications child exists
+        *AbstractDataProvider push_prov = provider.getChildProvider("push-notifications");
+        assertTrue(exists push_prov, "Should have push-notifications child");
+
+        # Verify sub-children
+        *list<string> children = push_prov.getChildProviderNames();
+        assertTrue(children.contains("set"), "push-notifications should have set child");
+        assertTrue(children.contains("get"), "push-notifications should have get child");
+        assertTrue(children.contains("list"), "push-notifications should have list child");
+        assertTrue(children.contains("delete"), "push-notifications should have delete child");
+
+        # Create a task first
+        hash<A2aTaskInfo> task = a2a_server.createTask();
+
+        # Set push notification config via data provider
+        AbstractDataProvider set_provider = push_prov.getChildProvider("set");
+        hash<auto> result = set_provider.doRequest({
+            "id": task.id,
+            "url": "http://example.com/webhook",
+            "token": "secret",
+        });
+        assertEq(task.id, result.id, "Set result should have task ID");
+        assertTrue(exists result.pushNotificationConfigId, "Set result should have config ID");
+        auto config_id = result.pushNotificationConfigId;
+
+        # List push configs via data provider
+        AbstractDataProvider list_provider = push_prov.getChildProvider("list");
+        result = list_provider.doRequest({"id": task.id});
+        assertEq(task.id, result.id, "List result should have task ID");
+        assertTrue(exists result.pushNotificationConfigs, "Should have configs list");
+        assertEq(1, result.pushNotificationConfigs.size(), "Should have 1 config");
+
+        # Get push config via data provider
+        AbstractDataProvider get_provider = push_prov.getChildProvider("get");
+        result = get_provider.doRequest({"id": task.id});
+        assertEq(task.id, result.id, "Get result should have task ID");
+
+        # Delete push config via data provider using the returned config ID
+        AbstractDataProvider del_provider = push_prov.getChildProvider("delete");
+        result = del_provider.doRequest({
+            "id": task.id,
+            "pushNotificationConfigId": config_id,
+        });
+        assertEq(task.id, result.id, "Delete result should have task ID");
+
+        client.close();
+    }
+
+    typeVerificationTest() {
+        # Verify request data types exist and have correct structure
+        assertTrue(exists A2aMessageSendRequestDataType, "Message send request type should exist");
+        assertTrue(exists A2aTaskGetRequestDataType, "Task get request type should exist");
+        assertTrue(exists A2aTaskCancelRequestDataType, "Task cancel request type should exist");
+        assertTrue(exists A2aAgentCardResultDataType, "Agent card result type should exist");
+        assertTrue(exists A2aTaskResultDataType, "Task result type should exist");
+        assertTrue(exists A2aEventDataType, "Event data type should exist");
+
+        # Verify field structure of message send request
+        *hash<string, AbstractDataField> fields = A2aMessageSendRequestDataType.getFields();
+        assertTrue(exists fields.role, "Message send request should have role field");
+        assertTrue(exists fields.parts, "Message send request should have parts field");
+
+        # Verify field structure of task get request
+        fields = A2aTaskGetRequestDataType.getFields();
+        assertTrue(exists fields.id, "Task get request should have id field");
+
+        # Verify field structure of agent card result
+        fields = A2aAgentCardResultDataType.getFields();
+        assertTrue(exists fields.name, "Agent card result should have name field");
+        assertTrue(exists fields.url, "Agent card result should have url field");
+
+        # Verify field structure of task result
+        fields = A2aTaskResultDataType.getFields();
+        assertTrue(exists fields.id, "Task result should have id field");
+        assertTrue(exists fields.status, "Task result should have status field");
+    }
+}

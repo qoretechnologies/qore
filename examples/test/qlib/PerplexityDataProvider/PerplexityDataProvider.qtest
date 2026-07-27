@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires PerplexityDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class PerplexityDataProviderTest
 
@@ -139,9 +137,7 @@ class StreamObserver inherits Observer {
 
 public class PerplexityDataProviderTest inherits QUnit::Test {
     public {
-%ifndef NoJson
         *PerplexityRestClient::PerplexityRestConnection rc;
-%endif
         Logger logger;
 
         # command-line options
@@ -180,13 +176,9 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private setupConnection() {
-%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.PERPLEXITY_CONNECTION;
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
@@ -201,21 +193,17 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
                 });
             }
         }
-%endif
     }
 
     connectionSchemeTest() {
         checkModule();
-%ifndef NoJson
         hash<auto> scheme = ConnectionSchemeCache::getScheme("perplexity");
         assertEq("Perplexity AI REST Connection", scheme.display_name);
         assertEq("apikey", scheme.required_options);
-%endif
     }
 
     dataTypeTest() {
         checkModule();
-%ifndef NoJson
         # Test chat completion request type
         PerplexityChatCompletionRequestType req_type();
         hash<string, AbstractDataField> fields = req_type.getFields();
@@ -289,12 +277,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("event"));
         assertTrue(fields.hasKey("raw_data"));
         assertTrue(fields.hasKey("error"));
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         hash<auto> fake_opts = {
             "apikey": "x",
         };
@@ -307,7 +293,6 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("simple-chat"));
         assertTrue(children.contains("stream-chat"));
         assertTrue(children.contains("search"));
-%endif
     }
 
     actionCatalogTest() {
@@ -348,7 +333,6 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
 
     multiChatTest() {
         checkModule();
-%ifndef NoJson
         FakePerplexityRestClient rest();
         PerplexityChatCompletionDataProvider prov(rest);
 
@@ -373,12 +357,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertEq("Hello! How can I help you?", resp.choices[0].message.content);
         assertEq(2, resp.citations.lsize());
         assertEq(30, resp.usage.total_tokens);
-%endif
     }
 
     simpleChatTest() {
         checkModule();
-%ifndef NoJson
         FakePerplexityRestClient rest();
         PerplexitySimpleChatCompletionDataProvider prov(rest);
 
@@ -399,12 +381,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertFalse(resp.hasKey("choices"));
         assertEq("Hello! How can I help you?", resp.choice.message.content);
         assertEq(2, resp.citations.lsize());
-%endif
     }
 
     searchTest() {
         checkModule();
-%ifndef NoJson
         FakePerplexityRestClient rest();
         rest.response_body = {
             "id": "search-test",
@@ -433,12 +413,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertEq(1, resp.results.lsize());
         assertEq("Test Result", resp.results[0].title);
         assertEq("https://example.com", resp.results[0].url);
-%endif
     }
 
     streamChatEventsTest() {
         checkModule();
-%ifndef NoJson
         FakePerplexityRestClient rest();
         rest.stream_events = (
             <SseMessageInfo>{
@@ -473,12 +451,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
 
         # Verify stream was called with stream=True
         assertTrue(rest.last_stream_request.stream);
-%endif
     }
 
     streamChatErrorTest() {
         checkModule();
-%ifndef NoJson
         FailingPerplexityRestClient rest();
         PerplexityChatStreamDataProvider prov(rest);
 
@@ -496,12 +472,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         observer.wait(1);
         assertEq("error", observer.events[0].type);
         assertEq("SSE-ERROR", observer.events[0].error.err);
-%endif
     }
 
     exampleEventDataTest() {
         checkModule();
-%ifndef NoJson
         # Test with fake REST client - getExampleEventDataImpl transforms to delta shape
         FakePerplexityRestClient rest();
         PerplexityChatStreamDataProvider prov(rest);
@@ -526,12 +500,10 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertTrue(fake.hasKey("type"));
         assertEq("sonar", fake.model);
         assertEq("delta", fake.type);
-%endif
     }
 
     liveTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no connection; set PERPLEXITY_API_KEY to run live tests");
         }
@@ -609,6 +581,5 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         }
         # Should have received at least content or done event
         assertTrue(has_content || has_done);
-%endif
     }
 }

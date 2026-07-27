@@ -12,9 +12,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class ParseToQoreValueTest
 

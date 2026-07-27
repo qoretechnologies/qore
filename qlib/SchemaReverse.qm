@@ -40,9 +40,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %modern
 
@@ -416,11 +414,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             @since SchemaReverse 1.2
         */
         string toJson() {
-%ifndef NoJson
             return make_json(toQore(), JGF_ADD_FORMATTING);
-%else
-            throw "SCHEMA-REVERSE-ERROR", "the json module is required for JSON output but is not available";
-%endif
         }
     } # class AbstractReverseObject
 
@@ -1065,11 +1059,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             @since SchemaReverse 1.2
         */
         string toJson(*hash<auto> filter) {
-%ifndef NoJson
             return make_json(toQore(filter), JGF_ADD_FORMATTING);
-%else
-            throw "SCHEMA-REVERSE-ERROR", "the json module is required for JSON output but is not available";
-%endif
         }
 
     } # class SchemaReverse

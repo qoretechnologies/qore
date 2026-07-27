@@ -33,9 +33,7 @@
 %requires RestClient
 %requires Mime
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires DeelRestClient
 %requires DeelDataProvider
@@ -119,9 +117,6 @@ public class DeelDataProviderTest inherits QUnit::Test {
 
     #! Check if json module is available
     private checkJson() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
     }
 
     #! Creates a DeelDataProvider for unit tests

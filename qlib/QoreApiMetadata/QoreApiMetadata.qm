@@ -30,9 +30,7 @@
 
 %requires astparser
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml

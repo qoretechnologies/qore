@@ -160,11 +160,7 @@ public class SimpleAgentStrategy inherits AbstractAgentStrategy {
                 } else if (dr.result.typeCode() == NT_STRING) {
                     result_content = dr.result;
                 } else {
-%ifndef NoJson
                     result_content = make_json(dr.result ?? {});
-%else
-                    result_content = sprintf("%y", dr.result ?? {});
-%endif
                 }
                 push messages, <QoreLlmUtils::ChatMessage>{
                     "role": "tool",

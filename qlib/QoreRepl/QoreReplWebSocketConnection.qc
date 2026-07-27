@@ -90,17 +90,12 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     */
     gotMessage(string msg) {
         hash<auto> request;
-%ifndef NoJson
         try {
             request = parse_json(msg);
         } catch (hash<ExceptionInfo> ex) {
             sendError(NOTHING, "JSON-PARSE-ERROR", sprintf("Invalid JSON: %s", ex.desc));
             return;
         }
-%else
-        sendError(NOTHING, "JSON-PARSE-ERROR", "JSON module not available");
-        return;
-%endif
 
         string type = request.type ?? "";
         *string id = request.id;
@@ -237,9 +232,7 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     /** @param data The data to send as JSON
     */
     private sendMessage(hash<auto> data) {
-%ifndef NoJson
         send(make_json(data));
-%endif
     }
 
     #! Sends output to the client

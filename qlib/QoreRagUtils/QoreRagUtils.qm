@@ -36,9 +36,7 @@
 # json is used by PgVectorRagProvider for jsonb payload marshalling; declare
 # as a try-module so the rest of QoreRagUtils still loads when json is
 # unavailable (PgVectorRagProvider will throw at construction time then)
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module QoreRagUtils {
     version = "1.0.0";

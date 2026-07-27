@@ -1,0 +1,472 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+# child programs do not inherit parent's restrictions
+%no-child-restrictions
+
+# make sure we have the right version of qore
+%requires qore >= 2.0
+
+# make sure we have the json module (which provides CBOR functions)
+%requires json
+
+%requires QUnit
+
+%exec-class CborTest
+
+class CborTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const TestHash = {
+            "key1": 1,
+            "key2": "hello world",
+            "key3": 3.14,
+            "list": (1, 2, 3),
+            "nested": ("a": 1, "b": ("c": 2)),
+            "bool_true": True,
+            "bool_false": False,
+            "null_val": NOTHING,
+        };
+    }
+
+    const SandboxParseCode = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(binary data) {
+    return parse_cbor(data);
+}
+";
+
+    constructor() : Test("CborTest", "1.0", \ARGV) {
+        addTestCase("basic types roundtrip", \testBasicTypes());
+        addTestCase("integer types", \testIntegerTypes());
+        addTestCase("float types", \testFloatTypes());
+        addTestCase("number types", \testNumberTypes());
+        addTestCase("string types", \testStringTypes());
+        addTestCase("binary data", \testBinaryData());
+        addTestCase("containers", \testContainers());
+        addTestCase("absolute dates", \testAbsoluteDates());
+        addTestCase("relative dates", \testRelativeDates());
+        addTestCase("boolean and null", \testBooleanAndNull());
+        addTestCase("hash roundtrip", \testHashRoundtrip());
+        addTestCase("nested structures", \testNestedStructures());
+        addTestCase("empty containers", \testEmptyContainers());
+        addTestCase("error cases", \testErrorCases());
+        addTestCase("cross-format verification", \testCrossFormat());
+        addTestCase("deeply nested structures", \testDeeplyNested());
+        addTestCase("sandbox depth limit make_cbor", \testSandboxDepthLimitMake());
+        addTestCase("sandbox depth limit parse_cbor", \testSandboxDepthLimitParse());
+        addTestCase("sandbox depth limit parse_cbor list", \testSandboxDepthLimitParseList());
+        addTestCase("sandbox parse recovers after depth abort", \testSandboxParseRecoversAfterAbort());
+        addTestCase("sandbox interrupt make_cbor", \testSandboxInterruptMake());
+        addTestCase("sandbox interrupt parse_cbor", \testSandboxInterruptParse());
+        set_return_value(main());
+    }
+
+    testBasicTypes() {
+        # int
+        assertEq(42, parse_cbor(make_cbor(42)));
+        # string
+        assertEq("hello", parse_cbor(make_cbor("hello")));
+        # float
+        assertEq(3.14, parse_cbor(make_cbor(3.14)));
+        # bool
+        assertEq(True, parse_cbor(make_cbor(True)));
+        assertEq(False, parse_cbor(make_cbor(False)));
+        # null
+        assertNothing(parse_cbor(make_cbor(NOTHING)));
+    }
+
+    testIntegerTypes() {
+        # zero
+        assertEq(0, parse_cbor(make_cbor(0)));
+        # positive
+        assertEq(1, parse_cbor(make_cbor(1)));
+        assertEq(255, parse_cbor(make_cbor(255)));
+        assertEq(256, parse_cbor(make_cbor(256)));
+        assertEq(65535, parse_cbor(make_cbor(65535)));
+        assertEq(65536, parse_cbor(make_cbor(65536)));
+        assertEq(2147483647, parse_cbor(make_cbor(2147483647)));
+        # large int64
+        assertEq(9223372036854775807, parse_cbor(make_cbor(9223372036854775807)));
+        # negative
+        assertEq(-1, parse_cbor(make_cbor(-1)));
+        assertEq(-256, parse_cbor(make_cbor(-256)));
+        assertEq(-65536, parse_cbor(make_cbor(-65536)));
+        assertEq(-2147483648, parse_cbor(make_cbor(-2147483648)));
+        # large negative int64
+        assertEq(-9223372036854775807, parse_cbor(make_cbor(-9223372036854775807)));
+    }
+
+    testFloatTypes() {
+        assertEq(0.0, parse_cbor(make_cbor(0.0)));
+        assertEq(1.5, parse_cbor(make_cbor(1.5)));
+        assertEq(-1.5, parse_cbor(make_cbor(-1.5)));
+        assertEq(1.0e10, parse_cbor(make_cbor(1.0e10)));
+        assertEq(1.0e-10, parse_cbor(make_cbor(1.0e-10)));
+    }
+
+    testNumberTypes() {
+        # arbitrary precision number
+        number n = 123456789.123456789n;
+        auto result = parse_cbor(make_cbor(n));
+        assertEq(NT_NUMBER, result.typeCode());
+        assertEq(n, result);
+
+        # large number - use string representation comparison since CBOR bigdec
+        # encoding may introduce tiny precision differences in the last digits
+        n = 99999999999999999999999999999999.99999999999n;
+        result = parse_cbor(make_cbor(n));
+        assertEq(NT_NUMBER, result.typeCode());
+        # compare string representation trimmed to original precision
+        string orig_str = n.toString();
+        string result_str = result.toString();
+        assertEq(orig_str.substr(0, 32), result_str.substr(0, 32),
+            "large number should preserve at least 32 significant digits");
+
+        # zero number
+        n = 0n;
+        result = parse_cbor(make_cbor(n));
+        assertEq(NT_NUMBER, result.typeCode());
+        assertEq(n, result);
+
+        # negative number
+        n = -123.456n;
+        result = parse_cbor(make_cbor(n));
+        assertEq(NT_NUMBER, result.typeCode());
+        assertEq(n, result);
+
+        # NaN number serializes as null
+        assertNothing(parse_cbor(make_cbor(@nan@n)));
+
+        # Inf number serializes as null
+        assertNothing(parse_cbor(make_cbor(@inf@n)));
+    }
+
+    testStringTypes() {
+        assertEq("", parse_cbor(make_cbor("")));
+        assertEq("hello", parse_cbor(make_cbor("hello")));
+        # unicode
+        assertEq("héllo wörld", parse_cbor(make_cbor("héllo wörld")));
+        # special characters
+        assertEq("line1\nline2\ttab", parse_cbor(make_cbor("line1\nline2\ttab")));
+        # simple string
+        assertEq("abc", parse_cbor(make_cbor("abc")));
+    }
+
+    testBinaryData() {
+        # empty binary
+        binary b = binary();
+        assertEq(b, parse_cbor(make_cbor(b)));
+        assertEq(NT_BINARY, parse_cbor(make_cbor(b)).typeCode());
+
+        # non-empty binary
+        b = <deadbeef>;
+        assertEq(b, parse_cbor(make_cbor(b)));
+        assertEq(NT_BINARY, parse_cbor(make_cbor(b)).typeCode());
+
+        # larger binary
+        b = <0102030405060708090a0b0c0d0e0f10>;
+        assertEq(b, parse_cbor(make_cbor(b)));
+    }
+
+    testContainers() {
+        # simple list
+        list<auto> l = (1, 2, 3);
+        assertEq(l, parse_cbor(make_cbor(l)));
+
+        # list with mixed types
+        l = (1, "two", 3.0, True, NOTHING);
+        assertEq(l, parse_cbor(make_cbor(l)));
+
+        # simple hash
+        hash<auto> h = {"a": 1, "b": 2};
+        assertEq(h, parse_cbor(make_cbor(h)));
+
+        # hash with mixed types
+        h = {"int": 1, "str": "hello", "float": 3.14, "bool": True, "null": NOTHING};
+        assertEq(h, parse_cbor(make_cbor(h)));
+    }
+
+    testAbsoluteDates() {
+        # UTC date
+        date d = 2026-03-10T12:30:45Z;
+        auto result = parse_cbor(make_cbor(d));
+        assertEq(NT_DATE, result.typeCode());
+        assertEq(d, result);
+
+        # date with microseconds
+        d = 2026-03-10T12:30:45.123456Z;
+        result = parse_cbor(make_cbor(d));
+        assertEq(NT_DATE, result.typeCode());
+        assertEq(d, result);
+
+        # date with timezone offset
+        d = 2026-03-10T12:30:45+05:00;
+        result = parse_cbor(make_cbor(d));
+        assertEq(NT_DATE, result.typeCode());
+        # the date should be equivalent (same epoch time)
+        assertEq(d.getEpochSeconds(), result.getEpochSeconds());
+    }
+
+    testRelativeDates() {
+        # duration with days
+        date d = P5D;
+        auto result = parse_cbor(make_cbor(d));
+        # relative dates round-trip as strings (no CBOR tag for durations)
+        assertEq(NT_STRING, result.typeCode());
+        assertEq("P5D", result);
+
+        # duration with time components
+        d = P1Y2M3DT4H5M6S;
+        result = parse_cbor(make_cbor(d));
+        assertEq(NT_STRING, result.typeCode());
+        assertEq("P1Y2M3DT4H5M6S", result);
+
+        # zero duration
+        d = P0D;
+        result = parse_cbor(make_cbor(d));
+        assertEq(NT_STRING, result.typeCode());
+        assertEq("P0D", result);
+    }
+
+    testBooleanAndNull() {
+        assertEq(True, parse_cbor(make_cbor(True)));
+        assertEq(False, parse_cbor(make_cbor(False)));
+        assertNothing(parse_cbor(make_cbor(NOTHING)));
+        assertNothing(parse_cbor(make_cbor(NULL)));
+    }
+
+    testHashRoundtrip() {
+        assertEq(TestHash, parse_cbor(make_cbor(TestHash)));
+    }
+
+    testNestedStructures() {
+        hash<auto> data = {
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "value": 42,
+                        "list": (1, (2, (3,)),),
+                    },
+                },
+            },
+        };
+        assertEq(data, parse_cbor(make_cbor(data)));
+    }
+
+    testEmptyContainers() {
+        # empty hash
+        hash<auto> h = {};
+        assertEq(h, parse_cbor(make_cbor(h)));
+
+        # empty list
+        list<auto> l = ();
+        assertEq(l, parse_cbor(make_cbor(l)));
+
+        # nested empty
+        h = {"empty_hash": {}, "empty_list": ()};
+        assertEq(h, parse_cbor(make_cbor(h)));
+    }
+
+    testErrorCases() {
+        # parse invalid CBOR
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto v = parse_cbor(<ff>); });
+
+        # serialize unsupported type (object)
+        assertThrows("CBOR-SERIALIZATION-ERROR", sub() { auto v = make_cbor(new Mutex()); });
+    }
+
+    testCrossFormat() {
+        # For JSON-compatible types, make_cbor/parse_cbor should produce equivalent results
+        # to make_json/parse_json
+        hash<auto> data = {
+            "int": 42,
+            "float": 3.14,
+            "string": "hello",
+            "bool": True,
+            "null": NOTHING,
+            "list": (1, 2, 3),
+            "nested": {"a": 1},
+        };
+
+        auto cbor_result = parse_cbor(make_cbor(data));
+        auto json_result = parse_json(make_json(data));
+        assertEq(json_result, cbor_result);
+    }
+
+    testDeeplyNested() {
+        # Build deeply nested structure using explicit construction
+        hash deepest = {"value": "deep"};
+        for (int i = 0; i < 50; ++i) {
+            deepest = {"nested": deepest};
+        }
+
+        auto result = parse_cbor(make_cbor(deepest));
+        # navigate to the deepest level
+        auto current = result;
+        for (int i = 0; i < 50; ++i) {
+            current = current{"nested"};
+        }
+        assertEq("deep", current{"value"});
+    }
+
+    testSandboxDepthLimitMake() {
+        # Build data with 257 levels of nesting (should fail in sandbox)
+        hash<auto> data257 = makeNestedHash(256);
+
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+binary sub test(auto data) {
+    return make_cbor(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 257 levels should fail with depth error
+        assertThrows("CBOR-SERIALIZATION-ERROR", "depth", \p.callFunction(), ("test", data257));
+    }
+
+    testSandboxDepthLimitParse() {
+        # Build CBOR with 257 levels outside sandbox
+        hash<auto> data257 = makeNestedHash(256);
+        binary cbor = make_cbor(data257);
+
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(binary data) {
+    return parse_cbor(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 257 levels should fail with depth error
+        assertThrows("CBOR-PARSE-ERROR", "depth", \p.callFunction(), ("test", cbor));
+    }
+
+    # Deeply-nested lists take the visit_begin_array()/visit_end_array() path, which unwinds
+    # separately from the object path; jsoncons still delivers the matching end callback after
+    # the depth limit refuses a container, so both need the same abort handling.
+    testSandboxDepthLimitParseList() {
+        auto data257 = makeNestedList(256);
+        binary cbor = make_cbor(data257);
+
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxParseCode, "sandbox-test");
+
+        assertThrows("CBOR-PARSE-ERROR", "depth", \p.callFunction(), ("test", cbor));
+    }
+
+    # A depth-limit abort must leave no partially-built value tree behind: the same sandboxed
+    # Program has to keep working afterwards.  Before the visitor tracked an explicit abort
+    # state this corrupted the heap instead of raising.
+    testSandboxParseRecoversAfterAbort() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxParseCode, "sandbox-test");
+
+        assertThrows("CBOR-PARSE-ERROR", "depth", \p.callFunction(),
+            ("test", make_cbor(makeNestedHash(256))));
+        # the same program must still parse ordinary data correctly afterwards
+        assertEq({"a": 1, "b": ("x", "y")},
+            p.callFunction("test", make_cbor({"a": 1, "b": ("x", "y")})));
+        # ... and must still enforce the limit on a second oversized document
+        assertThrows("CBOR-PARSE-ERROR", "depth", \p.callFunction(),
+            ("test", make_cbor(makeNestedList(256))));
+    }
+
+    testSandboxInterruptMake() {
+        # Create data with many elements to trigger interrupt check
+        list<int> largeList = ();
+        for (int i = 0; i < 200; i++) {
+            push largeList, i;
+        }
+
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+binary sub test(auto data) {
+    return make_cbor(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+
+        # Request interrupt before serializing
+        sm.requestInterrupt();
+
+        # Should fail with PROGRAM-INTERRUPTED error
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", largeList));
+    }
+
+    testSandboxInterruptParse() {
+        # Build large CBOR data
+        hash<auto> data = {};
+        for (int i = 0; i < 200; ++i) {
+            data{string(i)} = i;
+        }
+        binary cbor = make_cbor(data);
+
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(binary data) {
+    return parse_cbor(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+
+        # Request interrupt before parsing
+        sm.requestInterrupt();
+
+        # Should fail with PROGRAM-INTERRUPTED error
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", cbor));
+    }
+
+    # Helper to create nested hash with n+1 container levels
+    private static hash<auto> makeNestedHash(int depth) {
+        hash result = {"v": 1};
+        for (int i = 0; i < depth; ++i) {
+            result = {"n": result};
+        }
+        return result;
+    }
+
+    # Helper to create nested list with n+1 container levels
+    private static auto makeNestedList(int depth) {
+        auto result = (1,);
+        for (int i = 0; i < depth; ++i) {
+            result = (result,);
+        }
+        return result;
+    }
+}

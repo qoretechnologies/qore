@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmBrokenBase.qm - base module declaring a child module that cannot be parsed
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmBroken
+
+module TcmBrokenBase {
+    version = "1.0";
+    desc = "test base module with a broken child module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! base module providing an extension point
+public class TcmBrokenBase {
+    #! returns a fixed string
+    static string hello() {
+        return "hello";
+    }
+}

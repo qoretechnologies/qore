@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmBase.qm - base module declaring a present and an absent child module
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmExt
+%try-child-module TcmNoSuchChildModule
+
+module TcmBase {
+    version = "1.0";
+    desc = "test base module for %try-child-module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmBase::trace += "base-init";
+    };
+}
+
+#! base module providing an extension point
+public class TcmBase {
+    public {
+        #! trace of module events in the order in which they occurred
+        static list<string> trace;
+
+        #! children registered by extension modules
+        static hash<string, code> children;
+    }
+
+    #! registers a child provider
+    static registerChild(string name, code generator) {
+        children{name} = generator;
+        trace += "child:" + name;
+    }
+}

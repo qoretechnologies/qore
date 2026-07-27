@@ -1,0 +1,171 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file McpServerHandler.qm @brief MCP Server class definition for the HttpServer module
+
+/*  McpServerHandler.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires HttpServerUtil
+%requires ServerSentEventHandler
+%requires JsonRpcHandler
+%requires Logger
+%requires DataProvider
+%requires(reexport) McpClient
+%try-module uuid
+%define NoUuid
+%endtry
+
+%modern
+
+module McpServerHandler {
+    version = "1.0";
+    desc = "McpServerHandler module for use with the Qore HttpServer module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage McpServerHandler Module
+
+    @tableofcontents
+
+    @section mcpserverhandlerintro Introduction to the McpServerHandler Module
+
+    The %McpServerHandler module provides server-side support for the Model Context Protocol (MCP)
+    using the HttpServer module. It exposes tools, resources, prompts, and
+    notifications via JSON-RPC over HTTP and Server-Sent Events (SSE).
+
+    This module implements the full MCP 2025-11-25 protocol specification.
+
+    The following classes are provided by this module:
+    - @ref McpServerHandler::McpServerHandler "McpServerHandler"
+    - @ref McpServerHandler::McpServerConnection "McpServerConnection"
+
+    @subsection McpServer_intro_basic Basic server setup
+    @code{.py}
+    %requires McpServerHandler
+    %requires HttpServer
+
+    Logger logger("mcp-server", LoggerLevel::getLevelInfo());
+    McpServerHandler::McpServerHandler handler(logger);
+
+    # register a tool
+    handler.registerTool("echo", "Echo a message", NOTHING, sub (hash<auto> args) {
+        return {
+            "content": [ { "type": "text", "text": args.message } ],
+        };
+    });
+
+    # register a resource
+    handler.registerResource("file:///hello.txt", "Hello", "Simple text resource", "text/plain",
+        sub (hash<auto> cx, hash<auto> params) {
+            return { "contents": [ { "uri": params.uri, "text": "Hello from MCP" } ] };
+        });
+
+    # register a prompt
+    handler.registerPrompt("greeting", "Greeting prompt", (
+        { "name": "name", "description": "Name to greet", "required": True }
+    ), sub (hash<auto> cx, hash<auto> params) {
+        return {
+            "messages": [
+                { "role": "user", "content": [ { "type": "text", "text": "Hello " + params.arguments.name } ] }
+            ]
+        };
+    });
+
+    # start HTTP server
+    HttpServer http({"logger": logger});
+    http.setHandler("mcp", "", MimeTypeJson, handler);
+    http.setDefaultHandler("mcp", handler);
+    http.addListener({"service": 8080});
+    @endcode
+
+    @subsection McpServer_intro_notifications Notifications
+    The handler supports MCP notifications over SSE. Clients can open a GET request with an
+    \c Accept: \c text/event-stream header to receive notifications and streamed responses.
+
+    @subsection McpServer_intro_tasks Tasks API
+    The handler supports the MCP Tasks API for background task execution:
+    - \c tasks/get: Get task status by ID
+    - \c tasks/result: Block until task completes and return result
+    - \c tasks/cancel: Cancel a running task
+    - \c tasks/list: List all tasks for the session
+
+    To execute a tool call as a background task, include \c _meta.task: \c true in the request.
+
+    @subsection McpServer_intro_resources Resource Features
+    The handler supports:
+    - Resource subscriptions via \c resources/subscribe and \c resources/unsubscribe
+    - Resource templates via \c resources/templates/list
+    - Resource update notifications via \c notifications/resources/updated
+
+    @subsection McpServer_intro_progress Progress Notifications
+    The server can send progress notifications using the \c sendProgress() method.
+    Include \c _meta.progressToken in requests to enable progress tracking.
+
+    @subsection McpServer_intro_sampling Sampling and Elicitation
+    The server can request LLM completions from the client using \c requestSampling()
+    and user input using \c requestElicitationForm() (requires client capability support).
+
+    @section McpServerHandler_relnotes McpServerHandler Release Notes
+
+    @subsection McpServerHandler_1_0 McpServerHandler v1.0
+    - initial release
+    - full MCP 2025-11-25 protocol support:
+      - Tasks API (\c tasks/get, \c tasks/result, \c tasks/cancel, \c tasks/list)
+      - task-augmented tool calls using the standard \c params.task shape; the
+        legacy \c _meta.task parameter is also accepted for backwards
+        compatibility with older Qore clients
+      - caller idempotency via \c _meta.clientOperationId: repeating a
+        task-based \c tools/call with the same id returns the existing task
+        instead of creating a duplicate; the id is echoed back in the task
+        response and tracked (and cleaned up) per session
+      - \c tools/list advertises a tool's \c execution metadata (e.g.
+        \c taskSupport) when provided
+      - Resource subscriptions (\c resources/subscribe, \c resources/unsubscribe)
+      - Resource templates (\c resources/templates/list)
+      - Progress notifications (\c notifications/progress)
+      - Full request cancellation support
+      - Server-to-client sampling requests
+      - Server-to-client elicitation requests
+      - in-progress tasks survive SSE notification-stream disconnects: a routine
+        listener reconnect no longer cancels running work; explicit teardown
+        (HTTP \c DELETE / idle expiry) remains a fast, safe session removal and any
+        still-running background task unwinds cleanly without affecting teardown
+      - \c tasks/cancel now propagates cooperative cancellation to the running
+        tool call and preserves the task's terminal \c cancelled state even if
+        the tool returns after the cancel request
+    - new data structures: \c McpTaskStatus enum, \c McpTaskInfo, \c McpResourceSubscription,
+      \c McpResourceTemplateInfo, \c McpProgressInfo, \c McpPendingRequest, \c McpCancellationInfo
+*/
+
+#! the %McpServerHandler namespace holds all public definitions in the %McpServerHandler module
+public namespace McpServerHandler {
+#! Server name
+public const McpServerName = "QoreMcpServer";
+
+#! Server version
+public const McpServerVersion = "1.0";
+}

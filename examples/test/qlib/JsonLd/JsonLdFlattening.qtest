@@ -1,0 +1,379 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Logger
+%requires JsonLd
+%exec-class JsonLdFlatteningTest
+
+class JsonLdFlatteningTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonLdFlattening test", "1.0") {
+        addTestCase("flatten simple test", \flattenSimpleTest());
+        addTestCase("flatten nested test", \flattenNestedTest());
+        addTestCase("flatten multiple nodes test", \flattenMultipleNodesTest());
+        addTestCase("flatten blank nodes test", \flattenBlankNodesTest());
+        addTestCase("flatten with types test", \flattenWithTypesTest());
+        addTestCase("flatten list test", \flattenListTest());
+        addTestCase("flatten value objects test", \flattenValueObjectsTest());
+        addTestCase("frame basic test", \frameBasicTest());
+        addTestCase("frame by type test", \frameByTypeTest());
+        addTestCase("frame by id test", \frameByIdTest());
+        addTestCase("frame explicit test", \frameExplicitTest());
+        addTestCase("frame embed once test", \frameEmbedOnceTest());
+        addTestCase("frame require all test", \frameRequireAllTest());
+        set_return_value(main());
+    }
+
+    private list<auto> doExpand(auto input) {
+        hash<JsonLdOptions> opts();
+        JsonLdContext ctx_processor();
+        JsonLdExpansion expander(ctx_processor, opts);
+        hash<JsonLdActiveContext> active_ctx = JsonLdContext::newActiveContext();
+        auto result = expander.expand(active_ctx, NOTHING, input);
+        if (!exists result) {
+            return ();
+        }
+        if (result.typeCode() != NT_LIST) {
+            return (result,);
+        }
+        return result;
+    }
+
+    private flattenSimpleTest() {
+        list<auto> expanded = doExpand({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": "Person",
+            "name": "Jane",
+        });
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        assertTrue(exists result."@graph");
+        assertEq(1, result."@graph".size());
+        assertEq("http://example.com/1", result."@graph"[0]."@id");
+    }
+
+    private flattenNestedTest() {
+        list<auto> expanded = doExpand({
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "knows": {"@id": "http://schema.org/knows", "@type": "@id"},
+            },
+            "@id": "http://example.com/jane",
+            "@type": "Person",
+            "name": "Jane",
+            "knows": {
+                "@id": "http://example.com/john",
+                "@type": "Person",
+                "name": "John",
+            },
+        });
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        assertTrue(exists result."@graph");
+        # Should have 2 nodes: Jane and John
+        assertEq(2, result."@graph".size());
+
+        # Find Jane and John
+        *hash<auto> jane;
+        *hash<auto> john;
+        foreach hash<auto> node in (result."@graph") {
+            if (node."@id" == "http://example.com/jane") {
+                jane = node;
+            } else if (node."@id" == "http://example.com/john") {
+                john = node;
+            }
+        }
+
+        assertTrue(exists jane);
+        assertTrue(exists john);
+        # Jane's knows should now be a reference, not embedded
+        list<auto> knows_val = jane."http://schema.org/knows";
+        assertEq(1, knows_val.size());
+        assertEq("http://example.com/john", knows_val[0]."@id");
+    }
+
+    private flattenMultipleNodesTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Alice"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Bob"},),
+            },
+        );
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        assertEq(2, result."@graph".size());
+    }
+
+    private flattenBlankNodesTest() {
+        list<auto> expanded = doExpand({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@type": "Person",
+            "name": "Jane",
+            "knows": {
+                "@type": "Person",
+                "name": "Unknown",
+            },
+        });
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        # Should have 2 nodes: one with blank node ID, one nested reference
+        assertTrue(result."@graph".size() >= 2);
+
+        # All nodes should have @id
+        foreach hash<auto> node in (result."@graph") {
+            assertTrue(exists node."@id");
+        }
+    }
+
+    private flattenWithTypesTest() {
+        list<auto> expanded = doExpand({
+            "@context": {"@vocab": "http://schema.org/"},
+            "@id": "http://example.com/1",
+            "@type": ("Person", "Thing"),
+            "name": "Jane",
+        });
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        hash<auto> node = result."@graph"[0];
+        assertTrue(exists node."@type");
+        assertEq(2, node."@type".size());
+    }
+
+    private flattenListTest() {
+        list<auto> expanded = doExpand({
+            "@context": {
+                "@vocab": "http://schema.org/",
+                "children": {"@id": "http://schema.org/children", "@container": "@list"},
+            },
+            "@id": "http://example.com/parent",
+            "@type": "Person",
+            "children": ("Alice", "Bob"),
+        });
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        assertTrue(result."@graph".size() >= 1);
+        hash<auto> parent;
+        foreach hash<auto> node in (result."@graph") {
+            if (node."@id" == "http://example.com/parent") {
+                parent = node;
+                break;
+            }
+        }
+        assertTrue(exists parent);
+        assertTrue(exists parent."http://schema.org/children");
+    }
+
+    private flattenValueObjectsTest() {
+        list<auto> expanded = ({
+            "@id": "http://example.com/1",
+            "http://schema.org/name": (
+                {"@value": "Jane", "@language": "en"},
+                {"@value": "Jana", "@language": "de"},
+            ),
+        },);
+
+        JsonLdFlattening flattener();
+        hash<auto> result = flattener.flatten(expanded);
+
+        hash<auto> node = result."@graph"[0];
+        list<auto> names = node."http://schema.org/name";
+        assertEq(2, names.size());
+        assertTrue(isValueObject(names[0]));
+        assertTrue(isValueObject(names[1]));
+    }
+
+    private frameBasicTest() {
+        # Use pre-expanded data (no @graph wrapper) for framing
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Organization",),
+                "http://schema.org/name": ({"@value": "Acme"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdFraming framer(opts);
+
+        # Frame to get only nodes (empty frame = match all)
+        hash<auto> result = framer.frame(expanded, {});
+        assertTrue(exists result."@graph");
+        assertTrue(result."@graph".size() > 0);
+    }
+
+    private frameByTypeTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Organization",),
+                "http://schema.org/name": ({"@value": "Acme"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdFraming framer(opts);
+
+        # Frame by type
+        hash<auto> result = framer.frame(expanded, {
+            "@type": ("http://schema.org/Person",),
+        });
+
+        assertTrue(exists result."@graph");
+        assertEq(1, result."@graph".size());
+        assertEq("http://example.com/1", result."@graph"[0]."@id");
+    }
+
+    private frameByIdTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "John"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts();
+        JsonLdFraming framer(opts);
+
+        # Frame by @id
+        hash<auto> result = framer.frame(expanded, {
+            "@id": "http://example.com/2",
+        });
+
+        assertTrue(exists result."@graph");
+        assertEq(1, result."@graph".size());
+        assertEq("http://example.com/2", result."@graph"[0]."@id");
+    }
+
+    private frameExplicitTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+                "http://schema.org/email": ({"@value": "jane@example.com"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts = <JsonLdOptions>{
+            "explicit_": True,
+        };
+        JsonLdFraming framer(opts);
+
+        # Frame with explicit: only include @type and name
+        hash<auto> result = framer.frame(expanded, {
+            "@type": ("http://schema.org/Person",),
+            "http://schema.org/name": (),
+        });
+
+        assertTrue(exists result."@graph");
+        assertEq(1, result."@graph".size());
+        hash<auto> node = result."@graph"[0];
+        assertTrue(exists node."@id");
+        assertTrue(exists node."@type");
+        # In explicit mode, only framed properties are included
+        assertTrue(exists node."http://schema.org/name");
+        assertFalse(exists node."http://schema.org/email");
+    }
+
+    private frameEmbedOnceTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/jane",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+                "http://schema.org/knows": ({"@id": "http://example.com/john"},),
+            },
+            {
+                "@id": "http://example.com/john",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "John"},),
+                "http://schema.org/knows": ({"@id": "http://example.com/jane"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts = <JsonLdOptions>{
+            "embed": "@once",
+        };
+        JsonLdFraming framer(opts);
+
+        hash<auto> result = framer.frame(expanded, {
+            "@type": ("http://schema.org/Person",),
+        });
+
+        assertTrue(exists result."@graph");
+        # With @once embedding, nodes are embedded once then referenced
+        assertTrue(result."@graph".size() >= 1);
+    }
+
+    private frameRequireAllTest() {
+        list<auto> expanded = (
+            {
+                "@id": "http://example.com/1",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "Jane"},),
+                "http://schema.org/email": ({"@value": "jane@example.com"},),
+            },
+            {
+                "@id": "http://example.com/2",
+                "@type": ("http://schema.org/Person",),
+                "http://schema.org/name": ({"@value": "John"},),
+            },
+        );
+
+        hash<JsonLdOptions> opts = <JsonLdOptions>{
+            "requireAll": True,
+        };
+        JsonLdFraming framer(opts);
+
+        # Require both name and email
+        hash<auto> result = framer.frame(expanded, {
+            "@type": ("http://schema.org/Person",),
+            "http://schema.org/name": (),
+            "http://schema.org/email": (),
+        });
+
+        assertTrue(exists result."@graph");
+        # Only Jane has both properties
+        assertEq(1, result."@graph".size());
+        assertEq("http://example.com/1", result."@graph"[0]."@id");
+    }
+}

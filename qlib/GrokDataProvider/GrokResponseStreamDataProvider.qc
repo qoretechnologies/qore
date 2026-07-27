@@ -23,9 +23,7 @@
 */
 
 # for parsing response stream events
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! contains all public definitions in the GrokDataProvider module
 public namespace GrokDataProvider {
@@ -318,13 +316,6 @@ public class GrokResponseStreamDataProvider inherits GrokDataProviderCommon, Dat
         if (!evt."data") {
             return {"event": evt.event, "id": evt.id};
         }
-%ifdef NoJson
-        return {
-            "event": evt.event,
-            "id": evt.id,
-            "raw_data": evt."data",
-        };
-%else
         try {
             hash<auto> payload = parse_json(evt."data");
             if (evt.event) {
@@ -341,7 +332,6 @@ public class GrokResponseStreamDataProvider inherits GrokDataProviderCommon, Dat
                 "raw_data": evt."data",
             };
         }
-%endif
     }
 
     private handleContextSave(hash<auto> payload, hash<auto> ctx_info, *GrokConversationContextStore ctx_store,

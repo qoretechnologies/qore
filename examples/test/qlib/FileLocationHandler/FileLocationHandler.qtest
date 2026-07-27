@@ -22,9 +22,7 @@
 %define NoXml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -123,9 +121,7 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         static int verbose = 0;
 
         const RestMap = {
-%ifndef NoJson
             "json": True,
-%endif
 %ifndef NoXml
             "xml": True,
 %endif

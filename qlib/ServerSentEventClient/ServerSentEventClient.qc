@@ -63,9 +63,7 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
     public {
         #! Data serialization support
         const DataSerializationSupport = {
-%ifndef NoJson
             "json": True,
-%endif
             "none": True,
         };
 
@@ -775,10 +773,8 @@ sse.setEventQueue();
     #! Deserializes data received
     private auto deserializeData(string buf) {
         switch (serialization) {
-%ifndef NoJson
             case "json":
                 return parse_json(buf);
-%endif
             case "none":
                 return buf;
         }
@@ -1270,11 +1266,7 @@ sse.setEventQueue();
         *data send_body;
         if (exists eff_body) {
             if (serialization == "json" && eff_body.typeCode() != NT_STRING) {
-%ifndef NoJson
                 send_body = make_json(eff_body);
-%else
-                throw "SSE-CLIENT-ERROR", "the json module is required to serialize JSON request bodies";
-%endif
             } else {
                 send_body = eff_body;
             }

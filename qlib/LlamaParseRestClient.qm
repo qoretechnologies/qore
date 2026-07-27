@@ -88,9 +88,7 @@ module LlamaParseRestClient {
     - the initial version of the %LlamaParseRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace LlamaParseRestClient {
 public class LlamaParseRestClientBase {

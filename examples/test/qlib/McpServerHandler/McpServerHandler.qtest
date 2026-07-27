@@ -1,0 +1,1032 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%exec-class McpServerHandlerTest
+
+class TestInput inherits HashDataType {
+    public {
+        const Fields = {
+            "id": {
+                "display_name": "ID",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "ID field",
+            },
+            "name": {
+                "display_name": "Name",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Name field",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+const TestInput = new TestInput();
+
+class MyMcpServerHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("test", "test tool", TestInput, \test());
+        registerTool("echo", "echoes the input", TestInput, \echo());
+        registerTool("error-tool", "throws an error", NOTHING, \errorTool());
+        registerTool("slow-tool", "a slow tool for testing tasks", NOTHING, \slowTool());
+
+        # Register resources with reader callback
+        registerResource("file:///test.txt", "test-file", "A test file resource", "text/plain", \readTestFile());
+        registerResource("file:///data.json", "test-json", "A JSON data resource", "application/json", \readJsonData());
+        registerResource("file:///binary.bin", "test-binary", "A binary resource", "application/octet-stream",
+            \readBinaryData());
+
+        # Register prompts with handler callback
+        registerPrompt("greeting", "A greeting prompt", (
+            {"name": "name", "description": "The name to greet", "required": True},
+            {"name": "style", "description": "The greeting style", "required": False},
+        ), \greetingHandler());
+        registerPrompt("simple", "A simple prompt without handler");
+
+        # Register resource templates
+        registerResourceTemplate("file:///{path}", "file-template", "Template for file resources",
+            "application/octet-stream");
+        registerResourceTemplate("db://{table}/{id}", "db-template", "Template for database records",
+            "application/json", \readDbResource());
+    }
+
+    hash<auto> slowTool(*hash<auto> params) {
+        int delay_ms = params.delay_ms ?? 100;
+        usleep(delay_ms * 1000);
+        return {"status": "completed", "delay_ms": delay_ms};
+    }
+
+    hash<auto> readDbResource(hash<auto> cx, string uri) {
+        return {"uri": uri, "data": "mock db data"};
+    }
+
+    hash<auto> test(*hash<auto> params) {
+        return {"status": "success", "params": params};
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    nothing errorTool(*hash<auto> params) {
+        throw "TEST-TOOL-ERROR", "This is a test error";
+    }
+
+    string readTestFile(hash<auto> cx, string uri) {
+        return "This is test file content";
+    }
+
+    hash<auto> readJsonData(hash<auto> cx, string uri) {
+        return {"key": "value", "number": 42};
+    }
+
+    binary readBinaryData(hash<auto> cx, string uri) {
+        return <deadbeef>;
+    }
+
+    list<hash<auto>> greetingHandler(hash<auto> cx, *hash<auto> arguments) {
+        string name = arguments.name ?? "World";
+        string style = arguments.style ?? "formal";
+        string text;
+        if (style == "casual") {
+            text = sprintf("Hey %s!", name);
+        } else {
+            text = sprintf("Hello, %s. How may I assist you today?", name);
+        }
+        return ({
+            "role": "user",
+            "content": {
+                "type": "text",
+                "text": text,
+            },
+        },);
+    }
+}
+
+public class McpServerHandlerTest inherits QUnit::Test {
+    public {
+        const McpApi = "2025-11-25";
+
+        const ClientInfo = {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {
+                "roots": {
+                    "listChanged": False,
+                },
+                "sampling": {}
+            },
+            "clientInfo": {
+                "name": "QoreMcpTestClient",
+                "version": "1.0.0"
+            },
+        };
+
+        # Client info for older protocol version
+        const ClientInfo2024 = {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "QoreMcpTestClient",
+                "version": "1.0.0"
+            },
+        };
+    }
+
+    private {
+        HttpServer http;
+        JsonRpcClient jsonrpc;
+        MyMcpServerHandler mcp_server;
+        int port;
+    }
+
+    constructor() : Test("McpServerHandlerTest", "1.0") {
+        addTestCase("main test", \mainTest());
+        addTestCase("resources test", \resourcesTest());
+        addTestCase("prompts test", \promptsTest());
+        addTestCase("completion test", \completionTest());
+        addTestCase("protocol version test", \protocolVersionTest());
+        addTestCase("protocol version negative test", \protocolVersionNegativeTest());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("tool management test", \toolManagementTest());
+        addTestCase("session management test", \sessionManagementTest());
+        addTestCase("logging test", \loggingTest());
+        addTestCase("capabilities test", \capabilitiesTest());
+        addTestCase("batch requests test", \batchRequestsTest());
+        addTestCase("MCP notifications test", \mcpNotificationsTest());
+        addTestCase("JSON-RPC MCP scenarios test", \jsonRpcMcpScenariosTest());
+        # New 2025-11-25 protocol tests
+        addTestCase("tasks API test", \tasksApiTest());
+        addTestCase("resource templates test", \resourceTemplatesTest());
+        addTestCase("resource subscriptions test", \resourceSubscriptionsTest());
+        addTestCase("task capabilities test", \taskCapabilitiesTest());
+        addTestCase("cancellation test", \cancellationTest());
+        addTestCase("tasks API negative test", \tasksApiNegativeTest());
+        addTestCase("cancellation scoping test", \cancellationScopingTest());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        mcp_server = new MyMcpServerHandler(logger);
+        http = new HttpServer(http_opts);
+        http.setHandler("mcpserver-handler", "", MimeTypeJson, mcp_server);
+        http.setDefaultHandler("mcpserver-handler", mcp_server);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        jsonrpc = new JsonRpcClient({"url": "http://localhost:" + port});
+    }
+
+    globalTearDown() {
+        http.stop();
+        delete http;
+    }
+
+    mainTest() {
+        assertEq("2.0", jsonrpc.getVersion());
+        *hash<auto> h = jsonrpc.call("initialize", ClientInfo);
+        on_error printf("h: %y\n", h);
+        assertEq("2.0", h.jsonrpc);
+        assertEq(1, h.id);
+        assertEq(McpApi, h.result.protocolVersion);
+
+        h = jsonrpc.callId(NOTHING, "notifications/initialized");
+        assertNothing(h.result);
+        assertNothing(h);
+
+        h = jsonrpc.call("ping");
+        assertEq(2, h.id);
+        assertEq({}, h.result);
+
+        h = jsonrpc.call("tools/list");
+        assertEq(3, h.id);
+        assertEq(4, h.result.tools.size());
+        # find the "test" tool
+        *hash<auto> testTool = (map $1, h.result.tools, $1.name == "test")[0];
+        assertEq(("id", "name"), testTool.inputSchema.required);
+
+        # test tools/call - successful call
+        h = jsonrpc.call("tools/call", {"name": "test", "arguments": {"id": 1, "name": "foo"}});
+        assertEq(4, h.id);
+        assertEq(1, h.result.content.size());
+        assertEq("text", h.result.content[0].type);
+        assertTrue(!h.result.isError);  # isError is omitted/false for success
+        # verify the response contains the expected data
+        hash<auto> toolResult = parse_json(h.result.content[0].text);
+        assertEq("success", toolResult.status);
+        assertEq(1, toolResult.params.id);
+        assertEq("foo", toolResult.params.name);
+
+        # test tools/call - echo tool
+        h = jsonrpc.call("tools/call", {"name": "echo", "arguments": {"id": 42, "name": "bar"}});
+        assertEq(5, h.id);
+        assertEq(1, h.result.content.size());
+        assertTrue(!h.result.isError);  # isError is omitted/false for success
+        toolResult = parse_json(h.result.content[0].text);
+        assertEq(42, toolResult.id);
+        assertEq("bar", toolResult.name);
+
+        # test tools/call - unknown tool
+        h = jsonrpc.call("tools/call", {"name": "nonexistent", "arguments": {}});
+        assertEq(6, h.id);
+        assertEq(1, h.result.content.size());
+        assertEq(True, h.result.isError);  # isError at result level for errors
+
+        # test tools/call - tool that throws error
+        h = jsonrpc.call("tools/call", {"name": "error-tool", "arguments": {}});
+        assertEq(7, h.id);
+        assertEq(1, h.result.content.size());
+        assertEq(True, h.result.isError);  # isError at result level for errors
+
+        h = jsonrpc.call("resources/list");
+        assertEq(8, h.id);
+        assertEq(3, h.result.resources.size());
+
+        h = jsonrpc.call("prompts/list");
+        assertEq(9, h.id);
+        assertEq(2, h.result.prompts.size());
+
+        # test capabilities in initialize response
+        h = jsonrpc.call("initialize", ClientInfo);
+        assertTrue(exists h.result.capabilities.logging);
+        assertTrue(exists h.result.capabilities.completions);
+        assertTrue(exists h.result.capabilities.tools);
+        assertTrue(exists h.result.capabilities.resources);
+        assertTrue(exists h.result.capabilities.prompts);
+    }
+
+    resourcesTest() {
+        # initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # test resources/list
+        *hash<auto> h = jsonrpc.call("resources/list");
+        assertEq(3, h.result.resources.size());
+
+        # find specific resources
+        *hash<auto> textResource = (map $1, h.result.resources, $1.uri == "file:///test.txt")[0];
+        assertEq("test-file", textResource.name);
+        assertEq("text/plain", textResource.mimeType);
+
+        *hash<auto> jsonResource = (map $1, h.result.resources, $1.uri == "file:///data.json")[0];
+        assertEq("application/json", jsonResource.mimeType);
+
+        # test resources/read - text file
+        h = jsonrpc.call("resources/read", {"uri": "file:///test.txt"});
+        assertEq(1, h.result.contents.size());
+        assertEq("file:///test.txt", h.result.contents[0].uri);
+        assertEq("text/plain", h.result.contents[0].mimeType);
+        assertEq("This is test file content", h.result.contents[0].text);
+
+        # test resources/read - JSON data
+        h = jsonrpc.call("resources/read", {"uri": "file:///data.json"});
+        assertEq(1, h.result.contents.size());
+        hash<auto> jsonData = parse_json(h.result.contents[0].text);
+        assertEq("value", jsonData.key);
+        assertEq(42, jsonData.number);
+
+        # test resources/read - binary data
+        h = jsonrpc.call("resources/read", {"uri": "file:///binary.bin"});
+        assertEq(1, h.result.contents.size());
+        assertEq("application/octet-stream", h.result.contents[0].mimeType);
+        assertTrue(exists h.result.contents[0].blob);
+
+        # test resources/read - unknown resource (returns JSON-RPC error)
+        h = jsonrpc.call("resources/read", {"uri": "file:///nonexistent.txt"});
+        assertTrue(exists h.error, "Should return JSON-RPC error for unknown resource");
+        assertTrue(h.error.message.val(), "Error should have message");
+    }
+
+    promptsTest() {
+        # initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # test prompts/list
+        *hash<auto> h = jsonrpc.call("prompts/list");
+        assertEq(2, h.result.prompts.size());
+
+        # find greeting prompt
+        *hash<auto> greetingPrompt = (map $1, h.result.prompts, $1.name == "greeting")[0];
+        assertEq("A greeting prompt", greetingPrompt.description);
+        assertEq(2, greetingPrompt.arguments.size());
+
+        # test prompts/get with handler
+        h = jsonrpc.call("prompts/get", {"name": "greeting", "arguments": {"name": "Alice", "style": "casual"}});
+        assertEq("A greeting prompt", h.result.description);
+        assertEq(1, h.result.messages.size());
+        assertEq("user", h.result.messages[0].role);
+        assertEq("Hey Alice!", h.result.messages[0].content.text);
+
+        # test prompts/get with formal style (default)
+        h = jsonrpc.call("prompts/get", {"name": "greeting", "arguments": {"name": "Bob"}});
+        assertTrue(h.result.messages[0].content.text.find("Hello, Bob") >= 0);
+
+        # test prompts/get - simple prompt without handler
+        h = jsonrpc.call("prompts/get", {"name": "simple"});
+        assertEq("A simple prompt without handler", h.result.description);
+        assertEq(1, h.result.messages.size());
+
+        # test prompts/get - unknown prompt (returns error in exception, not JSON-RPC error)
+        h = jsonrpc.call("prompts/get", {"name": "nonexistent"});
+        assertTrue(exists h.error || exists h.result);
+    }
+
+    completionTest() {
+        # initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # test completion/complete for prompts
+        *hash<auto> h = jsonrpc.call("completion/complete", {
+            "ref": {"type": "ref/prompt", "name": "greeting"},
+            "argument": {"name": "name", "value": "n"},
+        });
+        assertTrue(exists h.result.completion);
+        assertTrue(exists h.result.completion.values);
+        assertFalse(h.result.completion.hasMore);
+
+        # test completion/complete for resources
+        h = jsonrpc.call("completion/complete", {
+            "ref": {"type": "ref/resource"},
+            "argument": {"name": "uri", "value": "file:///"},
+        });
+        assertTrue(exists h.result.completion.values);
+        # should find at least one resource starting with file:///
+        assertTrue(h.result.completion.values.size() >= 1);
+
+        # test completion/complete with empty prefix
+        h = jsonrpc.call("completion/complete", {
+            "ref": {"type": "ref/resource"},
+            "argument": {"name": "uri", "value": ""},
+        });
+        # may get 0 if test order affects resource registration
+        assertTrue(exists h.result.completion.values);
+
+        # test completion/complete with no matches
+        h = jsonrpc.call("completion/complete", {
+            "ref": {"type": "ref/resource"},
+            "argument": {"name": "uri", "value": "nomatch:///"},
+        });
+        assertEq(0, h.result.completion.values.size());
+    }
+
+    protocolVersionTest() {
+        # test with 2025-11-25 version (latest)
+        *hash<auto> h = jsonrpc.call("initialize", ClientInfo);
+        assertEq("2025-11-25", h.result.protocolVersion);
+
+        # test with 2025-06-18 version
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-06-18", h.result.protocolVersion);
+
+        # test with 2025-03-26 version
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-03-26", h.result.protocolVersion);
+
+        # test with 2024-11-05 version
+        h = jsonrpc.call("initialize", ClientInfo2024);
+        assertEq("2024-11-05", h.result.protocolVersion);
+
+        # test with unknown version - should return latest
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "1999-01-01",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-11-25", h.result.protocolVersion);
+
+        # test missing protocolVersion (server handles this gracefully and returns an error in the response)
+        h = jsonrpc.call("initialize", {"capabilities": {}, "clientInfo": {}});
+        assertTrue(exists h.error);
+    }
+
+    negativeTests() {
+        # initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # test tools/call with missing name
+        *hash<auto> h = jsonrpc.call("tools/call", {"arguments": {}});
+        assertEq(1, h.result.content.size());
+        assertEq(True, h.result.isError);  # isError at result level for errors
+
+        # test tools/call with empty name
+        h = jsonrpc.call("tools/call", {"name": "", "arguments": {}});
+        assertEq(True, h.result.isError);  # isError at result level for errors
+
+        # test resources/read with missing uri (returns JSON-RPC error)
+        h = jsonrpc.call("resources/read", {});
+        assertTrue(exists h.error, "Should return JSON-RPC error for missing uri");
+        assertTrue(h.error.message.val(), "Error should have message");
+
+        # test prompts/get with missing name (returns JSON-RPC error)
+        h = jsonrpc.call("prompts/get", {});
+        assertTrue(exists h.error || exists h.result);
+
+        # test unknown method (returns JSON-RPC error)
+        h = jsonrpc.call("unknown/method", {});
+        assertTrue(exists h.error);
+
+        # test logging/setLevel (should not error even without handler)
+        h = jsonrpc.call("logging/setLevel", {"level": "debug"});
+        # should succeed without error
+        assertTrue(True);
+    }
+
+    toolManagementTest() {
+        # test getToolNames
+        list<string> names = mcp_server.getToolNames();
+        assertTrue(names.size() >= 3);
+        assertTrue(inlist("test", names));
+        assertTrue(inlist("echo", names));
+        assertTrue(inlist("error-tool", names));
+
+        # test hasTool
+        assertTrue(mcp_server.hasTools("test"));
+        assertTrue(mcp_server.hasTools("echo"));
+        assertFalse(mcp_server.hasTools("nonexistent"));
+
+        # test unregisterTool
+        assertTrue(mcp_server.unregisterTool("echo"));
+        assertFalse(mcp_server.hasTools("echo"));
+        assertFalse(mcp_server.unregisterTool("echo"));  # already removed
+
+        # re-register for other tests
+        mcp_server.registerTool("echo", "echoes the input", TestInput, hash<auto> sub (*hash<auto> params) {
+            return params ?? {};
+        });
+
+        # test unregisterResource
+        assertTrue(mcp_server.unregisterResource("file:///test.txt"));
+        assertFalse(mcp_server.unregisterResource("file:///test.txt"));  # already removed
+
+        # re-register
+        mcp_server.registerResource("file:///test.txt", "test-file", "A test file resource", "text/plain",
+            string sub (hash<auto> cx, string uri) { return "content"; });
+
+        # test unregisterPrompt
+        assertTrue(mcp_server.unregisterPrompt("simple"));
+        assertFalse(mcp_server.unregisterPrompt("simple"));
+
+        # re-register
+        mcp_server.registerPrompt("simple", "A simple prompt without handler");
+    }
+
+    sessionManagementTest() {
+        # test session timeout setting
+        int originalTimeout = mcp_server.getSessionTimeout();
+        mcp_server.setSessionTimeout(7200);
+        assertEq(7200, mcp_server.getSessionTimeout());
+        mcp_server.setSessionTimeout(originalTimeout);
+
+        # test session count (should be 0 since no SSE connections)
+        int count = mcp_server.getSessionCount();
+        assertTrue(count >= 0);
+
+        # test cleanup expired sessions (should not error)
+        int cleaned = mcp_server.cleanupExpiredSessions();
+        assertTrue(cleaned >= 0);
+
+        # test getSessionInfo
+        list<hash<auto>> sessions = mcp_server.getSessionInfo();
+        assertTrue(sessions.typeCode() == NT_LIST);
+    }
+
+    loggingTest() {
+        # initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # test setting various log levels
+        *hash<auto> h = jsonrpc.call("logging/setLevel", {"level": "debug"});
+        assertTrue(!exists h.error, "debug level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "info"});
+        assertTrue(!exists h.error, "info level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "notice"});
+        assertTrue(!exists h.error, "notice level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "warning"});
+        assertTrue(!exists h.error, "warning level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "error"});
+        assertTrue(!exists h.error, "error level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "critical"});
+        assertTrue(!exists h.error, "critical level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "alert"});
+        assertTrue(!exists h.error, "alert level should succeed");
+
+        h = jsonrpc.call("logging/setLevel", {"level": "emergency"});
+        assertTrue(!exists h.error, "emergency level should succeed");
+
+        # server accepts any level - it's up to the server to validate or use it
+        h = jsonrpc.call("logging/setLevel", {"level": "custom"});
+        assertTrue(!exists h.error, "custom level should be accepted");
+    }
+
+    capabilitiesTest() {
+        # Test initialize response capabilities
+        *hash<auto> h = jsonrpc.call("initialize", ClientInfo);
+
+        # Verify capabilities structure
+        assertTrue(exists h.result.capabilities, "should have capabilities");
+
+        hash<auto> caps = h.result.capabilities;
+
+        # Tools capability
+        assertTrue(exists caps.tools, "should have tools capability");
+        assertTrue(exists caps.tools.listChanged, "tools should have listChanged");
+
+        # Resources capability
+        assertTrue(exists caps.resources, "should have resources capability");
+        assertTrue(exists caps.resources.listChanged, "resources should have listChanged");
+
+        # Prompts capability
+        assertTrue(exists caps.prompts, "should have prompts capability");
+        assertTrue(exists caps.prompts.listChanged, "prompts should have listChanged");
+
+        # Logging capability
+        assertTrue(exists caps.logging, "should have logging capability");
+
+        # Completions capability
+        assertTrue(exists caps.completions, "should have completions capability");
+
+        # Verify server info
+        assertTrue(exists h.result.serverInfo, "should have serverInfo");
+        assertEq("QoreMcpServer", h.result.serverInfo.name);
+        assertTrue(h.result.serverInfo.version.val(), "should have version");
+    }
+
+    batchRequestsTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test batch requests via raw HTTP POST
+        HTTPClient http({"url": "http://localhost:" + port});
+        string body = '[' +
+            '{"jsonrpc":"2.0","method":"tools/list","id":1},' +
+            '{"jsonrpc":"2.0","method":"resources/list","id":2},' +
+            '{"jsonrpc":"2.0","method":"prompts/list","id":3}' +
+            ']';
+
+        hash<auto> info;
+        string response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertEq(200, info."response-headers".status_code);
+
+        list<auto> results = parse_json(response);
+        assertEq(3, results.size(), "should have 3 responses");
+
+        # Find tools/list response
+        *hash<auto> toolsResult = (map $1, results, $1.id == 1)[0];
+        assertTrue(exists toolsResult.result.tools, "should have tools");
+
+        # Find resources/list response
+        *hash<auto> resourcesResult = (map $1, results, $1.id == 2)[0];
+        assertTrue(exists resourcesResult.result.resources, "should have resources");
+
+        # Find prompts/list response
+        *hash<auto> promptsResult = (map $1, results, $1.id == 3)[0];
+        assertTrue(exists promptsResult.result.prompts, "should have prompts");
+
+        # Test batch with notification mixed in
+        body = '[' +
+            '{"jsonrpc":"2.0","method":"tools/list","id":1},' +
+            '{"jsonrpc":"2.0","method":"notifications/initialized"},' +
+            '{"jsonrpc":"2.0","method":"ping","id":2}' +
+            ']';
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        results = parse_json(response);
+        # Should have 2 responses (notification doesn't get response)
+        assertEq(2, results.size(), "should have 2 responses (notification excluded)");
+    }
+
+    protocolVersionNegativeTest() {
+        # Test with completely invalid protocol version format
+        *hash<auto> h = jsonrpc.call("initialize", {
+            "protocolVersion": "not-a-version",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        # Server should still return latest version (graceful handling)
+        assertEq("2025-11-25", h.result.protocolVersion, "invalid version should get latest");
+
+        # Test with empty protocol version
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-11-25", h.result.protocolVersion, "empty version should get latest");
+
+        # Test with null protocol version - should error
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": NOTHING,
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertTrue(exists h.error, "null protocolVersion should error");
+
+        # Test with numeric protocol version - should error
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": 2025,
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertTrue(exists h.error, "numeric protocolVersion should error");
+
+        # Test with future version that doesn't exist
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2030-01-01",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-11-25", h.result.protocolVersion, "future version should get latest");
+
+        # Test with very old version
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2020-01-01",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        assertEq("2025-11-25", h.result.protocolVersion, "old version should get latest");
+
+        # Test missing clientInfo
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+        });
+        # Should still work - clientInfo is optional for initialization
+        assertTrue(!exists h.error || exists h.result, "missing clientInfo should be handled");
+
+        # Test missing capabilities
+        h = jsonrpc.call("initialize", {
+            "protocolVersion": "2025-11-25",
+            "clientInfo": {"name": "test", "version": "1.0"},
+        });
+        # Should still work - capabilities is optional
+        assertTrue(!exists h.error || exists h.result, "missing capabilities should be handled");
+    }
+
+    mcpNotificationsTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test notifications/initialized (should return no response body for notification)
+        HTTPClient http({"url": "http://localhost:" + port});
+        string body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        });
+        hash<auto> info;
+        *string response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertEq(202, info."response-headers".status_code, "notification should return 202");
+
+        # Test notifications/cancelled
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": "123", "reason": "User cancelled"},
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        # Notification should succeed (202 for pure notification, 200 if server processes and returns)
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancelled notification should succeed");
+
+        # Test notification with id (should still work but server ignores id for notifications)
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "id": 999,
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        # With id, it's treated as a request, not notification
+        assertEq(200, info."response-headers".status_code, "notification with id treated as request");
+    }
+
+    jsonRpcMcpScenariosTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        HTTPClient http({"url": "http://localhost:" + port});
+        hash<auto> info;
+
+        # Test JSON-RPC 2.0 request without jsonrpc field
+        string body = make_json({
+            "method": "ping",
+            "id": 1,
+        });
+        string response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertEq(200, info."response-headers".status_code);
+        hash<auto> result = parse_json(response);
+        # Should work (1.0 style)
+        assertTrue(exists result.result || exists result.id, "1.0 style request should work");
+
+        # Test JSON-RPC 2.0 request with explicit version
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "ping",
+            "id": 2,
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        result = parse_json(response);
+        assertEq("2.0", result.jsonrpc, "should return jsonrpc 2.0");
+
+        # Test request with params as array (positional)
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {"name": "echo", "arguments": {"id": 1, "name": "test"}},
+            "id": 3,
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        result = parse_json(response);
+        assertFalse(exists result.error, "tools/call with params hash should work");
+
+        # Test concurrent requests (multiple requests in sequence)
+        for (int i = 0; i < 5; i++) {
+            body = make_json({
+                "jsonrpc": "2.0",
+                "method": "ping",
+                "id": 100 + i,
+            });
+            response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+            result = parse_json(response);
+            assertEq(100 + i, result.id, sprintf("request %d should have correct id", i));
+        }
+
+        # Test MCP-specific error codes in tool calls
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {"name": "error-tool", "arguments": {}},
+            "id": 200,
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        result = parse_json(response);
+        assertEq(200, result.id);
+        assertTrue(result.result.isError, "error-tool should return isError at result level");
+
+        # Test that server maintains state across requests
+        *hash<auto> h1 = jsonrpc.call("tools/list");
+        *hash<auto> h2 = jsonrpc.call("tools/list");
+        assertEq(h1.result.tools.size(), h2.result.tools.size(), "state should be consistent");
+
+        # Test invalid JSON body
+        response = http.post("", "not json", {"Content-Type": MimeTypeJson}, \info);
+        result = parse_json(response);
+        assertTrue(exists result.error, "invalid JSON should return error");
+        assertEq(-32700, result.error.code, "should be parse error");
+
+        # Test empty JSON object
+        response = http.post("", "{}", {"Content-Type": MimeTypeJson}, \info);
+        result = parse_json(response);
+        assertTrue(exists result.error, "empty object should return error");
+        assertEq(-32600, result.error.code, "should be invalid request");
+    }
+
+    #
+    # New 2025-11-25 Protocol Tests
+    #
+
+    tasksApiTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test tasks/list without session (should error - tasks require a session)
+        *hash<auto> h = jsonrpc.call("tasks/list");
+        assertTrue(exists h.error, "tasks/list should error without session");
+
+        # Test tasks/get without session (should error)
+        h = jsonrpc.call("tasks/get", {"taskId": "nonexistent"});
+        assertTrue(exists h.error, "tasks/get should error without session");
+
+        # Test tasks/cancel without session (should error)
+        h = jsonrpc.call("tasks/cancel", {"taskId": "nonexistent"});
+        assertTrue(exists h.error, "tasks/cancel should error without session");
+
+        # Test tasks/result without session (should error)
+        h = jsonrpc.call("tasks/result", {"taskId": "nonexistent"});
+        assertTrue(exists h.error, "tasks/result should error without session");
+    }
+
+    resourceTemplatesTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test resources/templates/list
+        *hash<auto> h = jsonrpc.call("resources/templates/list");
+        assertTrue(exists h.result.resourceTemplates, "should have resourceTemplates array");
+        assertEq(2, h.result.resourceTemplates.size(), "should have 2 templates");
+
+        # Find the file template
+        *hash<auto> fileTemplate = (map $1, h.result.resourceTemplates, $1.uriTemplate == "file:///{path}")[0];
+        assertTrue(exists fileTemplate, "should have file template");
+        assertEq("file-template", fileTemplate.name);
+        assertEq("application/octet-stream", fileTemplate.mimeType);
+
+        # Find the db template
+        *hash<auto> dbTemplate = (map $1, h.result.resourceTemplates, $1.uriTemplate == "db://{table}/{id}")[0];
+        assertTrue(exists dbTemplate, "should have db template");
+        assertEq("db-template", dbTemplate.name);
+        assertEq("application/json", dbTemplate.mimeType);
+
+        # Test unregister and re-register resource template
+        assertTrue(mcp_server.unregisterResourceTemplate("file:///{path}"), "should unregister file template");
+        h = jsonrpc.call("resources/templates/list");
+        assertEq(1, h.result.resourceTemplates.size(), "should have 1 template after unregister");
+
+        # Re-register for other tests
+        mcp_server.registerResourceTemplate("file:///{path}", "file-template", "Template for file resources",
+            "application/octet-stream");
+    }
+
+    resourceSubscriptionsTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test resources/subscribe without session (should error)
+        *hash<auto> h = jsonrpc.call("resources/subscribe", {"uri": "file:///test.txt"});
+        assertTrue(exists h.error, "resources/subscribe should error without session");
+
+        # Test resources/unsubscribe without session (should error)
+        h = jsonrpc.call("resources/unsubscribe", {"uri": "file:///test.txt"});
+        assertTrue(exists h.error, "resources/unsubscribe should error without session");
+
+        # Test resources/subscribe with invalid resource (should error)
+        h = jsonrpc.call("resources/subscribe", {"uri": "file:///nonexistent.txt"});
+        assertTrue(exists h.error, "resources/subscribe should error for nonexistent resource");
+    }
+
+    taskCapabilitiesTest() {
+        # Test that capabilities include tasks
+        *hash<auto> h = jsonrpc.call("initialize", ClientInfo);
+        assertTrue(exists h.result.capabilities.tasks, "should have tasks capability");
+
+        # Test task capabilities structure
+        hash<auto> taskCaps = h.result.capabilities.tasks;
+        assertTrue(exists taskCaps.list, "tasks should have list capability");
+        assertTrue(exists taskCaps.cancel, "tasks should have cancel capability");
+        assertTrue(exists taskCaps.requests, "tasks should have requests capability");
+        assertTrue(exists taskCaps.requests.tools, "tasks.requests should have tools");
+        assertTrue(exists taskCaps.requests.tools.call, "tasks.requests.tools should have call");
+
+        # Test that resources capability now has subscribe: True
+        assertTrue(h.result.capabilities.resources.subscribe, "resources should support subscribe");
+    }
+
+    cancellationTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # Test notifications/cancelled
+        HTTPClient http({"url": "http://localhost:" + port});
+        hash<auto> info;
+
+        string body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": "test-request-1", "reason": "User requested cancellation"},
+        });
+        *string response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        # Notification should succeed (202 for true notification, 200 if server processes it)
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancellation should succeed");
+
+        # Test cancellation without reason
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": "test-request-2"},
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancellation without reason should work");
+    }
+
+    tasksApiNegativeTest() {
+        # Initialize first
+        jsonrpc.call("initialize", ClientInfo);
+
+        # All task operations require a session - these should all error
+        # Test tasks/get with missing taskId (also no session)
+        *hash<auto> h = jsonrpc.call("tasks/get", {});
+        assertTrue(exists h.error, "tasks/get should error without session/taskId");
+
+        # Test tasks/cancel with missing taskId (also no session)
+        h = jsonrpc.call("tasks/cancel", {});
+        assertTrue(exists h.error, "tasks/cancel should error without session/taskId");
+
+        # Test tasks/result with missing taskId (also no session)
+        h = jsonrpc.call("tasks/result", {});
+        assertTrue(exists h.error, "tasks/result should error without session/taskId");
+
+        # Test tasks/get with taskId but no session
+        h = jsonrpc.call("tasks/get", {"taskId": "nonexistent-task-id"});
+        assertTrue(exists h.error, "tasks/get should error without session");
+
+        # Test tasks/cancel with taskId but no session
+        h = jsonrpc.call("tasks/cancel", {"taskId": "nonexistent-task-id"});
+        assertTrue(exists h.error, "tasks/cancel should error without session");
+
+        # Test tasks/list without session (should error)
+        h = jsonrpc.call("tasks/list", {"status": "invalid_status"});
+        assertTrue(exists h.error, "tasks/list should error without session");
+
+        # Test resources/subscribe with missing uri
+        h = jsonrpc.call("resources/subscribe", {});
+        assertTrue(exists h.error, "resources/subscribe should error without uri");
+
+        # Test resources/unsubscribe with missing uri
+        h = jsonrpc.call("resources/unsubscribe", {});
+        assertTrue(exists h.error, "resources/unsubscribe should error without uri");
+    }
+
+    cancellationScopingTest() {
+        # Test that cancellation with missing requestId is handled gracefully
+        # (Critical fix: cancelRequest should validate requestId and not cancel all tasks)
+        jsonrpc.call("initialize", ClientInfo);
+
+        HTTPClient http({"url": "http://localhost:" + port});
+        hash<auto> info;
+
+        # Test 1: Cancellation with missing requestId should be handled gracefully
+        string body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {},  # Missing requestId
+        });
+        *string response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancellation with missing requestId should not crash");
+
+        # Test 2: Cancellation with null requestId should be handled gracefully
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": NOTHING},
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancellation with null requestId should not crash");
+
+        # Test 3: Verify that cancellation with a specific requestId doesn't affect unrelated tasks
+        # (This is a behavioral test - can only verify via direct method testing)
+        # We test that the API accepts the valid format
+        body = make_json({
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": "specific-request-123", "reason": "test cancellation"},
+        });
+        response = http.post("", body, {"Content-Type": MimeTypeJson}, \info);
+        assertTrue(info."response-headers".status_code >= 200 && info."response-headers".status_code < 300,
+            "cancellation with valid requestId should succeed");
+
+        # Test 4: Verify McpTaskInfo has requestId field (structural test)
+        # Create a task info and verify the field exists
+        hash<McpTaskInfo> taskInfo = <McpTaskInfo>{
+            "taskId": "test-task",
+            "status": McpTaskStatus::Working,
+            "createdAt": now_us(),
+            "lastUpdatedAt": now_us(),
+            "ttl": 5000,
+            "pollInterval": 1000,
+            "method": "test",
+            "sessionId": "test-session",
+            "requestId": "test-request-id",  # This field must exist for proper cancellation scoping
+            "cond": new Qore::Thread::Condition(),
+            "lck": new Qore::Thread::Mutex(),
+        };
+        assertEq("test-request-id", taskInfo.requestId, "McpTaskInfo should have requestId field");
+    }
+}

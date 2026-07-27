@@ -156,27 +156,6 @@ public class QoreApiMetadata {
         return SymbolMerger::merge(reflection_meta, ast_meta, doc_index);
     }
 
-%ifdef NoJson
-    #! Export metadata as JSON
-    /** @param metadata the NamespaceInfo tree to serialize
-        @return JSON string
-        @throws JSON-NOT-AVAILABLE when json module is not available
-    */
-    static string toJson(hash<NamespaceInfo> metadata) {
-        throw "JSON-NOT-AVAILABLE",
-            "the json module is required for JSON export";
-    }
-
-    #! Import metadata from JSON
-    /** @param json_str JSON string to parse
-        @return hash following NamespaceInfo structure
-        @throws JSON-NOT-AVAILABLE when json module is not available
-    */
-    static hash<auto> fromJson(string json_str) {
-        throw "JSON-NOT-AVAILABLE",
-            "the json module is required for JSON import";
-    }
-%else
     #! Export metadata as JSON
     /** @param metadata the NamespaceInfo tree to serialize
         @return JSON string with schema_version and data fields
@@ -200,7 +179,6 @@ public class QoreApiMetadata {
         QoreApiMetadata::checkSchemaVersion(envelope);
         return envelope.data;
     }
-%endif
 
 %ifdef NoYaml
     #! Export metadata as YAML

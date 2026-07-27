@@ -251,17 +251,6 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
             "required": ("is_injection", "confidence", "reason"),
         };
 
-%ifdef NoJson
-        if (getFailClosed()) {
-            hash<GuardrailResult> result = makeFailResult(
-                "LLM injection classification unavailable (json module missing, fail-closed)",
-                NOTHING,
-                {"detection_method": "fail_closed", "error": "json module not loaded"},
-            );
-            result.duration_ms = getElapsedMs(start);
-            return result;
-        }
-%else
         try {
             hash<QoreLlmUtils::LlmCompletionResult> llm_result =
                 llm.complete(system_prompt, text, output_schema);
@@ -294,7 +283,6 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
             }
             # LLM failure — fall through to pass
         }
-%endif
 
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);

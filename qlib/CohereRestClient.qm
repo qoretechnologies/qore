@@ -75,9 +75,7 @@ module CohereRestClient {
     - the initial version of the %CohereRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace CohereRestClient {
 public class CohereRestClientBase {
@@ -252,10 +250,6 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             throw "LLM-CONFIG-ERROR",
                 "Cohere provider requires 'api_key' in LlmBackendConfig";
         }
-%ifdef NoJson
-        throw "LLM-DEPENDENCY-ERROR",
-            "json module is required for Cohere LLM provider but is not available";
-%endif
     }
 
     string getMode() {

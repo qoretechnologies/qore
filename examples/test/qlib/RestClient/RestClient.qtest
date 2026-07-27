@@ -26,9 +26,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class Main
 
@@ -303,10 +301,8 @@ public class Main inherits QUnit::Test {
         testAssertionValue("/api_rpc", ret.body, VALUE_XMLRPC.output);
 %endif
 
-%ifndef NoJson
         ret = rest.get("/api_json");
         testAssertionValue("/api_json", ret.body, VALUE_JSON.output);
-%endif
 
 %ifndef NoYaml
         ret = rest.get("/api_yaml");
@@ -335,11 +331,9 @@ public class Main inherits QUnit::Test {
         testAssertionValue("/api_rpc", ret.body, VALUE_XMLRPC.output);
 %endif
 
-%ifndef NoJson
         rest.setSerialization("json");
         ret = rest.put("/api_json", VALUE_JSON.output);
         testAssertionValue("/api_json", ret.body, VALUE_JSON.output);
-%endif
 
 %ifndef NoYaml
         rest.setSerialization("yaml");

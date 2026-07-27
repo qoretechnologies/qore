@@ -1,0 +1,1096 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+# child programs do not inherit parent's restrictions
+%no-child-restrictions
+# test deprecated functions as well
+%disable-warning deprecated
+
+# make sure we have the right version of qore
+%requires qore >= 1.0
+
+# make sure we have the json module
+%requires json
+
+%requires QUnit
+
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
+%exec-class JsonTest
+
+class JsonTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const TestHash = {
+            "key1": 1,
+            "key2": "string-\"test-quotes\"",
+            "key3": 1.0391,
+            "list": (1, 2, 3, ("four": 4), 5.1, True, ("key1": "one", "key2": 2.1)),
+            "hash": ("test1": 123, "test2": 456),
+            "bool": True,
+            "time": now().format("YYYY-MM-DD HH:mm:SS"),
+            "key": "this & that",
+            "escapes": "lorem ipsum\ndolor\tsir amet",
+            "\"key\"": 1,
+            "null": NOTHING,
+            "arr": (NOTHING,),
+        };
+
+        const TestDate = 2018-03-10T05:17:18Z;
+    }
+
+    constructor() : Test("JsonTest", "1.0", \ARGV) {
+        addTestCase("formatting test", \formattingTest());
+        addTestCase("float rounding test", \floatRoundingTest());
+        addTestCase("scientific notation test", \scientificNotationTest());
+        addTestCase("issue 3135", \issue3135());
+        addTestCase("JsonTestCase", \jsonTestCase());
+        addTestCase("JSON-RPC TestCase", \jsonRpcTestCase());
+        addTestCase("JSON-RPC 1.1 TestCase", \jsonRpc11TestCase());
+        addTestCase("JsonDeprecatedTestCase", \jsonDeprecatedTestCase());
+        addTestCase("parse_json UTF-8/Unicode BOM skipping test", \parseJsonBom());
+        addTestCase("issue 2655", \issue2655());
+        addTestCase("JSON Pointer test", \jsonPointerTest());
+        addTestCase("named arguments for codecs", \namedArgumentCodecs());
+        addTestCase("deeply nested structures", \testDeeplyNested());
+        addTestCase("sandbox depth limit parse_json", \testSandboxDepthLimitParse());
+        addTestCase("sandbox depth limit make_json", \testSandboxDepthLimitMake());
+        addTestCase("sandbox interrupt parse_json", \testSandboxInterruptParse());
+        addTestCase("sandbox interrupt make_json", \testSandboxInterruptMake());
+        addTestCase("TOON scalar round trips", \toonScalars());
+        addTestCase("TOON hash round trips", \toonHashes());
+        addTestCase("TOON list round trips", \toonLists());
+        addTestCase("TOON tabular arrays", \toonTabular());
+        addTestCase("TOON DataFrame row interchange", \toonDataFrameInterop());
+        addTestCase("TOON determinism", \toonDeterminism());
+        addTestCase("TOON options", \toonOptions());
+        addTestCase("TOON data-model normalization", \toonDataModel());
+        addTestCase("TOON encoding (always UTF-8)", \toonEncoding());
+        addTestCase("TOON error handling", \toonErrors());
+        addTestCase("TOON upstream spec examples", \toonSpecExamples());
+        addTestCase("TOON full round-trip fixtures", \toonRoundTripFixtures());
+        addTestCase("TOON sandbox depth parse_toon", \toonSandboxDepthParse());
+        addTestCase("TOON sandbox depth make_toon", \toonSandboxDepthMake());
+        addTestCase("TOON sandbox interrupt parse_toon", \toonSandboxInterruptParse());
+        addTestCase("TOON sandbox interrupt make_toon", \toonSandboxInterruptMake());
+        addTestCase("TOON sandbox interrupt pre-check", \toonSandboxInterruptPreCheck());
+        set_return_value(main());
+    }
+
+    formattingTest() {
+        hash<auto> h = {
+            "contact": {
+                "email": "email@gmail.com",
+                "codes": (1, "two",),
+            },
+        };
+        string expected = "{\n  \"contact\": {\n    \"email\": \"email@gmail.com\",\n    \"codes\": [\n      1,\n"
+            "      \"two\"\n    ]\n  }\n}";
+        string json = make_json(h, JGF_ADD_FORMATTING);
+        assertEq(expected, json);
+        assertEq(h, parse_json(json));
+    }
+
+    namedArgumentCodecs() {
+        hash<auto> data = {"a": 1, "items": (1, 2)};
+        string json = make_json(data: data);
+        assertEq(data, parse_json(json_str: json));
+
+        binary cbor = make_cbor(data: data);
+        assertEq(data, parse_cbor(cbor_data: cbor));
+
+        string toon = make_toon(data: data, options: {"sort_keys": True});
+        assertEq(data, parse_toon(toon_str: toon, options: {"strict": True}));
+
+        assertEq(2, json_pointer_get(data: data, pointer: "/items/1"));
+        assertEq(True, json_pointer_exists(data: data, pointer: "/items"));
+        assertEq("a~1b~0c", json_pointer_escape(token: "a/b~c"));
+
+        string token = jwt_encode(claims: {"sub": "123"}, key: "secret", algorithm: "HS256");
+        hash<auto> decoded = jwt_decode(token: token, key: "secret", verify_signature: True);
+        assertEq("123", decoded.claims.sub);
+    }
+
+    floatRoundingTest() {
+        assertEq("1.1", trim(make_json(1.1)));
+        assertEq("1.2", trim(make_json(1.2)));
+        assertEq("1.3", trim(make_json(1.3)));
+        assertEq("250.1912", trim(make_json(250.1912)));
+    }
+
+    scientificNotationTest() {
+        # basic scientific notation
+        assertEq(30.0, parse_json("3E1"));
+        assertEq(30.0, parse_json("3e1"));
+        # scientific notation with explicit positive exponent
+        assertEq(30.0, parse_json("3e+1"));
+        assertEq(30.0, parse_json("3E+1"));
+        assertEq(3e+10, parse_json("3e+10"));
+        assertEq(3E+10, parse_json("3E+10"));
+        # scientific notation with negative exponent
+        assertEq(3e-10, parse_json("3e-10"));
+        assertEq(3E-10, parse_json("3E-10"));
+        assertEq(0.3, parse_json("3e-1"));
+        assertEq(0.3, parse_json("3E-1"));
+        # negative numbers with scientific notation
+        assertEq(-3e10, parse_json("-3e10"));
+        assertEq(-3e-10, parse_json("-3e-10"));
+        assertEq(-3e+10, parse_json("-3e+10"));
+        # floats with scientific notation
+        assertEq(3.14e2, parse_json("3.14e2"));
+        assertEq(3.14e-2, parse_json("3.14e-2"));
+        assertEq(3.14e+2, parse_json("3.14e+2"));
+        # error cases
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), "3e1e2");
+    }
+
+    issue3135() {
+        assertEq("\"PT1S250000u\"", make_json(1s + 250ms));
+        assertEq("\"P2M3DT10H14u\"", make_json(P2M3DT10H14u));
+        assertEq("\"P10Y4M200DT99H140S\"", make_json(P10Y4M200DT99H140S));
+
+        assertEq(PT1S250000u, date(parse_json("\"PT1S250000u\"")));
+        assertEq(P2M3DT10H14u, date(parse_json("\"P2M3DT10H14u\"")));
+        assertEq(P10Y4M200DT99H140S, date(parse_json("\"P10Y4M200DT99H140S\"")));
+    }
+
+    jsonTestCase() {
+        assertEqSoft(TestHash, parse_json(make_json(TestHash)));
+        assertEqSoft(TestHash, parse_json(make_json(TestHash, JGF_ADD_FORMATTING)));
+        # issue #3707
+        assertEq(30.0, parse_json("3E1"));
+        assertEq(30.0, parse_json("3e1"));
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), "3e1e2");
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), "3e1E2");
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), "3E1e2");
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), "3E1E2");
+    }
+
+    jsonRpcTestCase() {
+        int id = 512;
+        string method = "methodname";
+
+        hash jc = {
+            "id": id,
+            "method": method,
+            "params": TestHash,
+        };
+
+        # JSON-RPC 1.0 messages
+        assertEq(jc, parse_json(make_jsonrpc_request(method, NOTHING, id, TestHash)));
+        assertEq(jc, parse_json(make_jsonrpc_request(method, "1.0", id, TestHash)));
+        assertEq(jc, parse_json(make_jsonrpc_request(method, NOTHING, id, TestHash, JGF_ADD_FORMATTING)));
+        assertEq(jc, parse_json(make_jsonrpc_request(method, "1.0", id, TestHash, JGF_ADD_FORMATTING)));
+
+        hash jr = jc - ("method", "params") + ("result": TestHash);
+        assertEq(jr, parse_json(make_jsonrpc_response(NOTHING, id, TestHash)));
+        assertEq(jr, parse_json(make_jsonrpc_response("1.0", id, TestHash)));
+        assertEq(jr, parse_json(make_jsonrpc_response(NOTHING, id, TestHash, JGF_ADD_FORMATTING)));
+        assertEq(jr, parse_json(make_jsonrpc_response("1.0", id, TestHash, JGF_ADD_FORMATTING)));
+
+        # create error hash by modifying the result hash: delete "result" key and add "error" key
+        hash je = jr - "result" + ("error": TestHash);
+        assertEq(je, parse_json(make_jsonrpc_error(NOTHING, id, TestHash)));
+        assertEq(je, parse_json(make_jsonrpc_error("1.0", id, TestHash)));
+        assertEq(je, parse_json(make_jsonrpc_error(NOTHING, id, TestHash, JGF_ADD_FORMATTING)));
+        assertEq(je, parse_json(make_jsonrpc_error("1.0", id, TestHash, JGF_ADD_FORMATTING)));
+
+        jc."jsonrpc" = "2.0";
+
+        # JSON-RPC 2.0 messages
+        assertEq(jc, parse_json(make_jsonrpc_request(method, "2.0", id, TestHash)));
+        assertEq(jc, parse_json(make_jsonrpc_request(method, "2.0", id, TestHash, JGF_ADD_FORMATTING)));
+
+        jr = jc - ("method", "params") + ("result": TestHash);
+        assertEq(jr, parse_json(make_jsonrpc_response("2.0", id, TestHash)));
+        assertEq(jr, parse_json(make_jsonrpc_response("2.0", id, TestHash, JGF_ADD_FORMATTING)));
+
+        # create error hash by modifying the result hash: delete "result" key and add "error" key
+        je = jr - "result" + ("error": TestHash);
+        assertEq(je, parse_json(make_jsonrpc_error("2.0", id, TestHash)));
+        assertEq(je, parse_json(make_jsonrpc_error("2.0", id, TestHash, JGF_ADD_FORMATTING)));
+    }
+
+    jsonRpc11TestCase() {
+        string ver = "1.1";
+        int id = 512;
+        string method = "methodname";
+
+        hash jc = {
+            "version": ver,
+            "id": id,
+            "method": method,
+            "params": TestHash,
+        };
+
+        # non-standard, non-published JSON-RPC 1.1 messages
+        assertEq(jc, parse_json(make_jsonrpc_request(method, ver, id, TestHash)));
+        assertEq(jc, parse_json(make_jsonrpc_request(method, ver, id, TestHash, JGF_ADD_FORMATTING)));
+
+        # create result hash by modifying the call hash above: delete "method" and "params" keys and add "result" key
+        hash jr = jc - "method" - "params" + ("result": TestHash);
+        assertEq(jr, parse_json(make_jsonrpc_response(ver, id, TestHash)));
+        assertEq(jr, parse_json(make_jsonrpc_response(ver, id, TestHash, JGF_ADD_FORMATTING)));
+
+        # create error hash by modifying the result hash: delete "result" key and add "error" key
+        hash je = jr - "result" + ("error": TestHash);
+        assertEq(je, parse_json(make_jsonrpc_error(ver, id, TestHash)));
+        assertEq(je, parse_json(make_jsonrpc_error(ver, id, TestHash, JGF_ADD_FORMATTING)));
+    }
+
+    jsonDeprecatedTestCase() {
+        string jstr = makeJSONString(TestHash);
+        assertEq(True, TestHash == parseJSON(jstr));
+
+        string ver = "1.1";
+        int id = 512;
+        string method = "methodname";
+        string mess = "error description test";
+
+        hash jc = (
+            "version": ver,
+            "id": id,
+            "method": method,
+            "params": TestHash,
+            );
+
+        assertEq(jc, parseJSON(makeJSONRPCRequestString(method, ver, id, TestHash)));
+        assertEq(jc, parseJSON(makeFormattedJSONRPCRequestString(method, ver, id, TestHash)));
+
+        # create result hash by modifying the call hash above: delete "method" and "params" keys and add "result" key
+        hash jr = jc - "method" - "params" + ("result": TestHash);
+        assertEq(jr, parseJSON(makeJSONRPCResponseString(ver, id, TestHash)));
+        assertEq(jr, parseJSON(makeFormattedJSONRPCResponseString(ver, id, TestHash)));
+
+        # create error hash by modifying the result hash: delete "result" key and add "error" key
+        hash je = jr - "result" + ("error": TestHash);
+        assertEq(je, parseJSON(makeJSONRPCErrorString(ver, id, TestHash)));
+        assertEq(je, parseJSON(makeFormattedJSONRPCErrorString(ver, id, TestHash)));
+
+        # create JSON-RPC 1.1 error string
+        je = je + ("error": ("name": "JSONRPCError", "code": id, "message": mess, "error": TestHash));
+        assertEq(je, parse_json(make_jsonrpc11_error(id, mess, id, TestHash)));
+        assertEq(je, parse_json(make_jsonrpc11_error(id, mess, id, TestHash, JGF_ADD_FORMATTING)));
+        assertEq(je, parseJSON(makeJSONRPC11ErrorString(id, mess, id, TestHash)));
+        assertEq(je, parseJSON(makeFormattedJSONRPC11ErrorString(id, mess, id, TestHash)));
+    }
+
+    parseJsonBom() {
+        string data = make_json(TestHash);
+        binary b = binary(data);
+        string dataWithUtf8BOM = (<efbbbf> + b).toString("UTF-8");
+        string dataWithFEFFBOM = (<feff> + b).toString("UTF-8");
+        string dataWithFFFEBOM = (<fffe> + b).toString("UTF-8");
+
+        assertEqSoft(TestHash, parse_json(dataWithUtf8BOM));
+        assertEqSoft(TestHash, parse_json(dataWithFEFFBOM));
+        assertEqSoft(TestHash, parse_json(dataWithFFFEBOM));
+        assertEqSoft(TestHash, parseJSON(dataWithUtf8BOM));
+        assertEqSoft(TestHash, parseJSON(dataWithFEFFBOM));
+        assertEqSoft(TestHash, parseJSON(dataWithFFFEBOM));
+    }
+
+    issue2655() {
+        # the json module serializes all dates to the current time zone
+        TimeZone tz = TimeZone::get();
+        # get a string for the test date in this time zone
+        string datestr = tz.date(TestDate).format("YYYY-MM-DDTHH:mm:SS.usZ");
+        string json = make_json(TestDate);
+
+        # transform "Z" at the end into "+00:00" because that's the format that Qore generates
+        if (json[json.length()-2] == "Z") {
+            json = json.substr(0, json.length()-2) + "+00:00\"";
+        }
+
+        assertEq("\"" + datestr + "\"", json);
+    }
+
+    jsonPointerTest() {
+        # test data
+        hash<auto> data = {
+            "foo": {
+                "bar": (1, 2, 3),
+                "baz": "hello",
+            },
+            "a/b": "slash",
+            "c~d": "tilde",
+            "empty": "",
+            "null": NOTHING,
+        };
+
+        # json_pointer_get - basic usage
+        assertEq(data, json_pointer_get(data, ""));
+        assertEq(data.foo, json_pointer_get(data, "/foo"));
+        assertEq(data.foo.bar, json_pointer_get(data, "/foo/bar"));
+        assertEq(1, json_pointer_get(data, "/foo/bar/0"));
+        assertEq(2, json_pointer_get(data, "/foo/bar/1"));
+        assertEq(3, json_pointer_get(data, "/foo/bar/2"));
+        assertEq("hello", json_pointer_get(data, "/foo/baz"));
+        assertEq("", json_pointer_get(data, "/empty"));
+        assertEq(NOTHING, json_pointer_get(data, "/null"));
+
+        # json_pointer_get - escaped characters
+        assertEq("slash", json_pointer_get(data, "/a~1b"));
+        assertEq("tilde", json_pointer_get(data, "/c~0d"));
+
+        # json_pointer_get - non-existent paths
+        assertEq(NOTHING, json_pointer_get(data, "/nonexistent"));
+        assertEq(NOTHING, json_pointer_get(data, "/foo/nonexistent"));
+        assertEq(NOTHING, json_pointer_get(data, "/foo/bar/99"));
+
+        # json_pointer_exists
+        assertTrue(json_pointer_exists(data, ""));
+        assertTrue(json_pointer_exists(data, "/foo"));
+        assertTrue(json_pointer_exists(data, "/foo/bar"));
+        assertTrue(json_pointer_exists(data, "/foo/bar/0"));
+        assertTrue(json_pointer_exists(data, "/null"));
+        assertFalse(json_pointer_exists(data, "/nonexistent"));
+        assertFalse(json_pointer_exists(data, "/foo/bar/99"));
+
+        # json_pointer_escape
+        assertEq("foo", json_pointer_escape("foo"));
+        assertEq("a~1b", json_pointer_escape("a/b"));
+        assertEq("c~0d", json_pointer_escape("c~d"));
+        assertEq("a~1b~0c", json_pointer_escape("a/b~c"));
+
+        # error cases
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_get(), (data, "no-leading-slash"));
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_exists(), (data, "no-slash"));
+    }
+
+    #! Test parsing and serialization of deeply nested structures
+    /** Without a sandbox, arbitrary nesting depth is allowed.
+        This test verifies that moderate nesting works correctly for both
+        parse_json() and make_json().
+    */
+    testDeeplyNested() {
+        # Test round-trip for moderately nested structures
+        hash<auto> nested50 = makeNestedHash(50);
+        string json50 = make_json(nested50);
+        hash<auto> parsed50 = parse_json(json50);
+        assertEq(nested50, parsed50, "50-level nested structure should round-trip correctly");
+
+        hash<auto> nested100 = makeNestedHash(100);
+        string json100 = make_json(nested100);
+        hash<auto> parsed100 = parse_json(json100);
+        assertEq(nested100, parsed100, "100-level nested structure should round-trip correctly");
+
+        # Test with formatted output (more complex structure)
+        string formatted = make_json(nested50, JGF_ADD_FORMATTING);
+        hash<auto> parsedFormatted = parse_json(formatted);
+        assertEq(nested50, parsedFormatted, "Formatted 50-level nested structure should round-trip correctly");
+
+        # Test deeply nested arrays
+        list<auto> nestedList50 = makeNestedList(50);
+        string listJson = make_json(nestedList50);
+        list<auto> parsedList = parse_json(listJson);
+        assertEq(nestedList50, parsedList, "50-level nested list should round-trip correctly");
+    }
+
+    private static hash<auto> makeNestedHash(int depth) {
+        hash<auto> result = {"value": depth};
+        for (int i = depth - 1; i >= 0; i--) {
+            result = {"nested": result, "level": i};
+        }
+        return result;
+    }
+
+    private static list<auto> makeNestedList(int depth) {
+        list<auto> result = (depth,);
+        for (int i = depth - 1; i >= 0; i--) {
+            result = (result, i);
+        }
+        return result;
+    }
+
+    #! Test that parse_json enforces depth limit when sandbox is active
+    testSandboxDepthLimitParse() {
+        # Create JSON with exactly 256 levels of nesting (should succeed)
+        string json256 = makeNestedJsonString(256);
+        # Create JSON with 257 levels of nesting (should fail)
+        string json257 = makeNestedJsonString(257);
+
+        # Test in sandboxed program
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(string json_str) {
+    return parse_json(json_str);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 256 levels should succeed
+        auto result = p.callFunction("test", json256);
+        assertTrue(exists result, "256 levels of nesting should be allowed in sandbox");
+
+        # 257 levels should fail with depth error
+        assertThrows("JSON-PARSE-ERROR", "depth", \p.callFunction(), ("test", json257));
+    }
+
+    #! Test that make_json enforces depth limit when sandbox is active
+    testSandboxDepthLimitMake() {
+        # makeNestedHash(n) creates n+1 containers, so use 255 for 256 containers
+        # Create data with exactly 256 levels of nesting (should succeed)
+        hash<auto> data256 = makeNestedHash(255);
+        # Create data with 257 levels of nesting (should fail)
+        hash<auto> data257 = makeNestedHash(256);
+
+        # Test in sandboxed program
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+string sub test(auto data) {
+    return make_json(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+
+        # 256 levels should succeed
+        auto result = p.callFunction("test", data256);
+        assertTrue(exists result, "256 levels of nesting should be allowed in sandbox for make_json");
+
+        # 257 levels should fail with depth error
+        assertThrows("JSON-SERIALIZATION-ERROR", "depth", \p.callFunction(), ("test", data257));
+    }
+
+    #! Test that parse_json honors interrupt requests in sandbox mode
+    testSandboxInterruptParse() {
+        # Create JSON with many elements to trigger interrupt check (interval is 100)
+        string largeJson = makeLargeJsonArray(200);
+
+        # Test in sandboxed program with pre-requested interrupt
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(string json_str) {
+    return parse_json(json_str);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+
+        # Request interrupt before parsing - the interrupt check will catch it
+        sm.requestInterrupt();
+
+        # Should fail with PROGRAM-INTERRUPTED error
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", largeJson));
+    }
+
+    #! Test that make_json honors interrupt requests in sandbox mode
+    testSandboxInterruptMake() {
+        # Create data with many elements to trigger interrupt check (interval is 100)
+        list<int> largeList = ();
+        for (int i = 0; i < 200; i++) {
+            push largeList, i;
+        }
+
+        # Test in sandboxed program with pre-requested interrupt
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+string sub test(auto data) {
+    return make_json(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+
+        # Request interrupt before serializing - the interrupt check will catch it
+        sm.requestInterrupt();
+
+        # Should fail with PROGRAM-INTERRUPTED error
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", largeList));
+    }
+
+    #! Helper to create a large JSON array string
+    private static string makeLargeJsonArray(int count) {
+        list<string> items = ();
+        for (int i = 0; i < count; i++) {
+            push items, sprintf("%d", i);
+        }
+        return "[" + items.join(",") + "]";
+    }
+
+    #! Helper to create deeply nested JSON string
+    private static string makeNestedJsonString(int depth) {
+        string open = "";
+        string close = "";
+        for (int i = 0; i < depth; i++) {
+            open += "{\"a\":";
+            close += "}";
+        }
+        return open + "1" + close;
+    }
+
+    private static string ind(int n) {
+        string s = "";
+        for (int i = 0; i < n; ++i) {
+            s += "  ";
+        }
+        return s;
+    }
+
+    #! deeply nested TOON object string with `depth` nested objects
+    private static string makeNestedToonString(int depth) {
+        string s = "";
+        for (int i = 0; i < depth; ++i) {
+            s += ind(i) + "a:\n";
+        }
+        s += ind(depth) + "a: 1";
+        return s;
+    }
+
+    #! 1. basic scalar round trips
+    toonScalars() {
+        # strings
+        assertEq("hello", parse_toon(make_toon("hello")));
+        assertEq("hello world", parse_toon(make_toon("hello world")));
+        assertEq("Hello 世界 👋", parse_toon(make_toon("Hello 世界 👋")));
+        # strings that must be quoted to avoid ambiguity
+        assertEq("\"true\"", make_toon("true"));
+        assertEq("true", parse_toon(make_toon("true")));
+        assertEq("false", parse_toon(make_toon("false")));
+        assertEq("null", parse_toon(make_toon("null")));
+        assertEq("\"\"", make_toon(""));
+        assertEq("", parse_toon(make_toon("")));
+        assertEq("a:b", parse_toon(make_toon("a:b")));
+        assertEq("a, b", parse_toon(make_toon("a, b")));
+        assertEq("-x", parse_toon(make_toon("-x")));
+        assertEq(" x ", parse_toon(make_toon(" x ")));
+        assertEq("[x]", parse_toon(make_toon("[x]")));
+        # numeric-like strings must round-trip as strings
+        assertEq("05", parse_toon(make_toon("05")));
+        assertEq("3.14", parse_toon(make_toon("3.14")));
+        assertEq("-0", parse_toon(make_toon("-0")));
+        # quoted strings with escapes
+        string esc = "line1\nline2\ttab\"quote\"back\\slash\rcr";
+        assertEq(esc, parse_toon(make_toon(esc)));
+        # ints
+        assertEq(42, parse_toon(make_toon(42)));
+        assertEq(-7, parse_toon(make_toon(-7)));
+        assertEq(0, parse_toon(make_toon(0)));
+        # floats (canonical, no exponent)
+        assertEq("1.1", make_toon(1.1));
+        assertEq("250.1912", make_toon(250.1912));
+        assertEq(1.5, parse_toon(make_toon(1.5)));
+        # TOON canonical numbers have no exponent and drop a zero fractional
+        # part (§2), so 1e6 collapses to integer 1000000 - same as make_json()
+        assertEq(1000000, parse_toon(make_toon(1e6)));
+        assertEq(parse_json(make_json(1e6)), parse_toon(make_toon(1e6)));
+        assertEq("1000000", make_toon(1e6));
+        assertEq("0.000001", make_toon(1e-6));
+        assertEq(1e-6, parse_toon("0.000001"));
+        # booleans
+        assertEq(True, parse_toon(make_toon(True)));
+        assertEq(False, parse_toon(make_toon(False)));
+        assertEq("true", make_toon(True));
+        # null / NOTHING
+        assertEq("null", make_toon(NOTHING));
+        assertNothing(parse_toon(make_toon(NOTHING)));
+        assertNothing(parse_toon("null"));
+        # unquoted numeric token parsing rules
+        assertEq("05", parse_toon("v: 05").v);
+        assertEq(300.0, parse_toon("v: 3e2").v);
+        assertEq(0, parse_toon("v: -0").v);
+        assertEq(-1000.0, parse_toon("v: -1E+03").v);
+        # forbidden leading zeros are strings, incl. negative forms (§2/§4)
+        assertEq("-05", parse_toon("v: -05").v);
+        assertEq("-0001", parse_toon("v: -0001").v);
+        assertEq(-5, parse_toon("v: -5").v);
+        assertEq(-0.5, parse_toon("v: -0.5").v);
+        assertEq("-05", parse_toon(make_toon("-05")));
+    }
+
+    #! 2. hash round trips
+    toonHashes() {
+        hash<auto> simple = {"a": 1, "b": "x", "c": True};
+        assertEq(simple, parse_toon(make_toon(simple)));
+
+        hash<auto> nested = {"a": {"b": {"c": 1, "d": "deep"}}, "e": 2};
+        assertEq(nested, parse_toon(make_toon(nested)));
+
+        # empty hash at root -> empty document
+        assertEq("", make_toon({}));
+        assertEq({}, parse_toon(""));
+        assertEq({}, parse_toon(make_toon({})));
+
+        # empty nested hash
+        assertEq("a:", make_toon({"a": {}}));
+        assertEq({"a": {}}, parse_toon(make_toon({"a": {}})));
+
+        # keys requiring quoting / dotted keys (literal)
+        hash<auto> keyh = {
+            "my-key": 1,
+            "a.b": 2,
+            "x y": 3,
+            "normal_1": 4,
+            "a\"q": 5,
+            "a\nb": 6,
+            "": 7,
+        };
+        assertEq(keyh, parse_toon(make_toon(keyh)));
+        # dotted keys are literal (no path expansion)
+        assertEq({"user.name": "Ada"}, parse_toon("user.name: Ada"));
+    }
+
+    #! 3. list round trips
+    toonLists() {
+        assertEq("[3]: 1,2,3", make_toon((1, 2, 3)));
+        assertEq((1, 2, 3), parse_toon(make_toon((1, 2, 3))));
+        assertEq((1, "two", True, NOTHING, 2.5), parse_toon(make_toon((1, "two", True, NOTHING, 2.5))));
+
+        # empty list
+        assertEq("[0]:", make_toon(()));
+        assertEq((), parse_toon("[0]:"));
+        assertEq((), parse_toon(make_toon(())));
+
+        # nested list
+        assertEq(((1, 2), (3, 4)), parse_toon(make_toon(((1, 2), (3, 4)))));
+        assertEq((1, (2, 3), (4, (5, 6))), parse_toon(make_toon((1, (2, 3), (4, (5, 6))))));
+
+        # list inside hash
+        assertEq({"l": (1, 2, 3)}, parse_toon(make_toon({"l": (1, 2, 3)})));
+        assertEq({"l": ()}, parse_toon(make_toon({"l": ()})));
+
+        # list of strings requiring quoting
+        list<auto> sl = ("a,b", "c:d", "-e", "ok", "");
+        assertEq(sl, parse_toon(make_toon(sl)));
+    }
+
+    #! 4. tabular arrays
+    toonTabular() {
+        hash<auto> data = {
+            "users": ({"id": 1, "name": "Alice", "role": "admin"},
+                      {"id": 2, "name": "Bob", "role": "user"}),
+            "count": 2,
+        };
+        string toon = make_toon(data);
+        assertEq(True, toon =~ /users\[2\]\{id,name,role\}:/, "uniform objects use tabular form");
+        assertEq(data, parse_toon(toon));
+
+        # root tabular
+        list<auto> rows = ({"a": 1, "b": 2}, {"a": 3, "b": 4});
+        assertEq("[2]{a,b}:\n  1,2\n  3,4", make_toon(rows));
+        assertEq(rows, parse_toon(make_toon(rows)));
+
+        # parser accepts tabular TOON directly
+        assertEq({"users": ({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"})},
+                 parse_toon("users[2]{id,name}:\n  1,Alice\n  2,Bob"));
+
+        # single-row tabular
+        assertEq(({"a": 1},), parse_toon(make_toon(({"a": 1},))));
+
+        # row count mismatch rejected (declared 3, 2 rows)
+        assertThrows("TOON-PARSE-ERROR", "row count", \parse_toon(), ("x[3]{a}:\n  1\n  2",));
+        # column count mismatch rejected (1 cell, 2 fields)
+        assertThrows("TOON-PARSE-ERROR", "value count", \parse_toon(), ("x[1]{a,b}:\n  1",));
+
+        # non-uniform hashes fall back to non-tabular list form
+        list<auto> nonuniform = ({"a": 1}, {"a": 1, "b": 2});
+        string nt = make_toon(nonuniform);
+        assertEq(False, nt =~ /\{/, "non-uniform array must not use tabular form");
+        assertEq(nonuniform, parse_toon(nt));
+
+        # uniform keys but nested value -> not tabular
+        list<auto> nestedval = ({"a": 1, "b": (1, 2)}, {"a": 2, "b": (3, 4)});
+        string nv = make_toon(nestedval);
+        assertEq(False, nv =~ /\[2\]\{/, "array with nested values must not use tabular form");
+        assertEq(nestedval, parse_toon(nv));
+
+        # tabular cell containing a quoted colon (row disambiguation)
+        hash<auto> links = {"links": ({"id": 1, "url": "http://a:b"},
+                                      {"id": 2, "url": "https://example.com?q=a:b"})};
+        assertEq(links, parse_toon(make_toon(links)));
+
+        # tabular array as the first field of a list-item object (spec §10)
+        hash<auto> li = {
+            "items": ({
+                "users": ({"id": 1, "name": "Ada"}, {"id": 2, "name": "Bob"}),
+                "status": "active",
+            },),
+        };
+        string lit = make_toon(li);
+        assertEq("items[1]:\n  - users[2]{id,name}:\n      1,Ada\n      2,Bob\n    status: active", lit);
+        assertEq(li, parse_toon(lit));
+
+        # tabular field name requiring quoting
+        list<auto> qf = ({"a-b": 1, "c": 2}, {"a-b": 3, "c": 4});
+        assertEq(qf, parse_toon(make_toon(qf)));
+    }
+
+    #! 5. DataFrame row-list interchange
+    toonDataFrameInterop() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%else
+        list<hash<auto>> rows = (
+            {"id": 1, "name": "Ada", "active": True, "score": 95.5},
+            {"id": 2, "name": "Bob", "active": False, "score": 88.25},
+            {"id": 3, "name": "Cid", "active": True, "score": 91.75},
+        );
+
+        DataFrame::DataFrame df(rows);
+        string toon = make_toon(df.toRecords(), {"sort_keys": True});
+        assertEq("[3]{active,id,name,score}:\n  true,1,Ada,95.5\n  false,2,Bob,88.25\n  true,3,Cid,91.75",
+            toon);
+
+        list<hash<auto>> parsed = parse_toon(toon);
+        assertEq(rows, parsed);
+
+        DataFrame::DataFrame round_trip(parsed);
+        assertEq(rows, round_trip.toRecords());
+%endif
+    }
+
+    #! 6. determinism
+    toonDeterminism() {
+        # default preserves insertion order
+        assertEq("b: 2\na: 1", make_toon({"b": 2, "a": 1}));
+        # sort_keys produces lexical order
+        assertEq("a: 1\nb: 2", make_toon({"b": 2, "a": 1}, {"sort_keys": True}));
+
+        list<auto> rows = ({"b": 2, "a": 1}, {"b": 4, "a": 3});
+        assertEq("[2]{b,a}:\n  2,1\n  4,3", make_toon(rows));
+        assertEq("[2]{a,b}:\n  1,2\n  3,4", make_toon(rows, {"sort_keys": True}));
+        # both encodings round-trip to the same data
+        assertEq(rows, parse_toon(make_toon(rows)));
+        assertEq(rows, parse_toon(make_toon(rows, {"sort_keys": True})));
+    }
+
+    #! options
+    toonOptions() {
+        assertEq("a:\n    b: 1", make_toon({"a": {"b": 1}}, {"indent": 4}));
+        assertEq({"a": {"b": 1}}, parse_toon(make_toon({"a": {"b": 1}}, {"indent": 4}), {"indent": 4}));
+
+        list<auto> rows = ({"a": 1, "b": 2}, {"a": 3, "b": 4});
+        string expanded = make_toon(rows, {"tabular_arrays": False});
+        assertEq(False, expanded =~ /\{/, "tabular_arrays=False disables tabular form");
+        assertEq(rows, parse_toon(expanded));
+
+        # strict=False relaxes count enforcement
+        assertEq({"x": (1, 2, 3)}, parse_toon("x[5]: 1,2,3", {"strict": False}));
+        assertThrows("TOON-PARSE-ERROR", \parse_toon(), ("x[5]: 1,2,3",));
+
+        # invalid option types/values
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), (1, {"indent": "bad"}));
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), (1, {"indent": 0}));
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), (1, {"tabular_arrays": 1}));
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), (1, {"sort_keys": "x"}));
+        assertThrows("TOON-PARSE-ERROR", \parse_toon(), ("a: 1", {"strict": 1}));
+    }
+
+    #! data-model normalization (mirrors make_json())
+    toonDataModel() {
+        # dates: same normalization as make_json()
+        assertEq(parse_json(make_json(TestDate)), parse_toon(make_toon(TestDate)));
+        date dur = P2Y3M4DT5H6M7S;
+        assertEq(parse_json(make_json(dur)), parse_toon(make_toon(dur)));
+        # binary -> base64 string (same as make_json())
+        binary b = <48656c6c6f>;
+        assertEq(parse_json(make_json(b)), parse_toon(make_toon(b)));
+        # arbitrary-precision number
+        assertEq(3.14, parse_toon(make_toon(3.14n)));
+        assertEq(123, parse_toon(make_toon(123n)));
+        assertEq(parse_json(make_json(123456789012345678901234567890n)),
+                 parse_toon(make_toon(123456789012345678901234567890n)));
+        # non-ordinary number / float -> null
+        assertNothing(parse_toon(make_toon(@nan@n)));
+        assertNothing(parse_toon(make_toon(@nan@)));
+        assertNothing(parse_toon(make_toon(@inf@)));
+        assertEq("null", make_toon(@inf@));
+        # unsupported Qore values are rejected (as in make_json())
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), (new Mutex(),));
+        assertThrows("TOON-SERIALIZATION-ERROR", \make_toon(), ({"x": new Mutex()},));
+        # control char that standard TOON cannot represent
+        assertThrows("TOON-SERIALIZATION-ERROR", "control character", \make_toon(), ("a\x01b",));
+    }
+
+    #! TOON documents are always UTF-8 (TOON spec §1.2, §18.2)
+    toonEncoding() {
+        # make_toon() always produces UTF-8 regardless of input string encoding
+        string toon = make_toon({"name": convert_encoding("café", "ISO-8859-1")});
+        assertEq("UTF-8", toon.encoding());
+        assertEq("name: café", toon);
+
+        # parse_toon() transcodes non-UTF-8 input to UTF-8 so the result is
+        # correctly encoded (not raw bytes mis-tagged as UTF-8)
+        string latin1 = convert_encoding("name: café", "ISO-8859-1");
+        assertEq("ISO-8859-1", latin1.encoding());
+        auto pl = parse_toon(latin1);
+        assertEq("UTF-8", pl.name.encoding());
+        assertEq("café", pl.name);
+
+        # UTF-8 input round-trips unchanged, including in keys and tabular cells
+        hash<auto> h = {
+            "naïve": "résumé",
+            "emoji": "🎉",
+            "rows": ({"café": "süß"}, {"café": "naïve"}),
+        };
+        assertEq(h, parse_toon(make_toon(h)));
+        assertEq("UTF-8", make_toon(h).encoding());
+
+        # non-UTF-8 round trip via TOON yields UTF-8-encoded but equal data
+        auto rt = parse_toon(make_toon(convert_encoding("Bjørn", "ISO-8859-1")));
+        assertEq("Bjørn", rt);
+        assertEq("UTF-8", rt.encoding());
+    }
+
+    #! 6. error handling
+    toonErrors() {
+        # malformed indentation (strict)
+        assertThrows("TOON-PARSE-ERROR", "multiple", \parse_toon(), ("a:\n   b: 1",));
+        # tabs in indentation
+        assertThrows("TOON-PARSE-ERROR", "[Tt]ab", \parse_toon(), ("a:\n\tb: 1",));
+        # invalid escape sequence
+        assertThrows("TOON-PARSE-ERROR", "escape", \parse_toon(), ("x: \"ab\\q\"",));
+        # unterminated string
+        assertThrows("TOON-PARSE-ERROR", "[Uu]nterminated", \parse_toon(), ("x: \"ab",));
+        # missing colon after key
+        assertThrows("TOON-PARSE-ERROR", "colon", \parse_toon(), ("a: 1\nbar",));
+        # duplicate keys: last value wins (consistent with parse_json())
+        assertEq({"a": 2}, parse_toon("a: 1\na: 2"));
+        # malformed tabular header (missing closing brace)
+        assertThrows("TOON-PARSE-ERROR", \parse_toon(), ("x[2]{id,name:\n  1,a\n  2,b",));
+        # empty tabular field list
+        assertThrows("TOON-PARSE-ERROR", \parse_toon(), ("x[1]{}:\n  1",));
+        # list array item count mismatch
+        assertThrows("TOON-PARSE-ERROR", "item count", \parse_toon(), ("x[3]:\n  - 1\n  - 2",));
+        # inline array element count mismatch
+        assertThrows("TOON-PARSE-ERROR", "element count", \parse_toon(), ("x[2]: 1,2,3",));
+        # trailing content after a root array must be rejected (§5), like the
+        # object-root path
+        assertThrows("TOON-PARSE-ERROR", "unexpected content",
+            \parse_toon(), ("[1]: 1\nextra: 2",));
+        assertThrows("TOON-PARSE-ERROR", "unexpected content",
+            \parse_toon(), ("[1]:\n  - 1\nextra: 2",));
+        # blank line inside an array/tabular block in strict mode, including
+        # before the first row/item (§12, §14.4)
+        assertThrows("TOON-PARSE-ERROR", "blank line", \parse_toon(), ("x[1]{a}:\n\n  1",));
+        assertThrows("TOON-PARSE-ERROR", "blank line", \parse_toon(), ("x[2]{a}:\n  1\n\n  2",));
+        assertThrows("TOON-PARSE-ERROR", "blank line", \parse_toon(), ("x[1]:\n\n  - 1",));
+        assertThrows("TOON-PARSE-ERROR", "blank line", \parse_toon(), ("x[2]:\n  - 1\n\n  - 2",));
+        # non-strict mode tolerates blank lines inside blocks
+        assertEq({"x": ({"a": 1},)}, parse_toon("x[1]{a}:\n\n  1", {"strict": False}));
+        assertEq({"x": (1, 2)}, parse_toon("x[2]:\n  - 1\n\n  - 2", {"strict": False}));
+    }
+
+    #! 8. representative upstream-spec examples (TOON v3.0, Appendix A)
+    toonSpecExamples() {
+        assertEq({"id": 123, "name": "Ada", "active": True},
+                 parse_toon("id: 123\nname: Ada\nactive: true"));
+        assertEq({"user": {"id": 123, "name": "Ada"}},
+                 parse_toon("user:\n  id: 123\n  name: Ada"));
+        assertEq({"tags": ("admin", "ops", "dev")}, parse_toon("tags[3]: admin,ops,dev"));
+        assertEq({"pairs": ((1, 2), (3, 4))}, parse_toon("pairs[2]:\n  - [2]: 1,2\n  - [2]: 3,4"));
+        assertEq({"items": ({"sku": "A1", "qty": 2, "price": 9.99},
+                            {"sku": "B2", "qty": 1, "price": 14.5})},
+                 parse_toon("items[2]{sku,qty,price}:\n  A1,2,9.99\n  B2,1,14.5"));
+        assertEq({"items": (1, {"a": 1}, "text")},
+                 parse_toon("items[3]:\n  - 1\n  - a: 1\n  - text"));
+        assertEq({"items": ({"id": 1, "name": "First"},
+                            {"id": 2, "name": "Second", "extra": True})},
+                 parse_toon("items[2]:\n  - id: 1\n    name: First\n  - id: 2\n    name: Second\n    extra: true"));
+        assertEq({"items": ({"users": ({"id": 1, "name": "Ada"}, {"id": 2, "name": "Bob"}),
+                             "status": "active"},)},
+                 parse_toon("items[1]:\n  - users[2]{id,name}:\n      1,Ada\n      2,Bob\n    status: active"));
+        # quoted colons inside tabular cells
+        assertEq({"links": ({"id": 1, "url": "http://a:b"},
+                            {"id": 2, "url": "https://example.com?q=a:b"})},
+                 parse_toon("links[2]{id,url}:\n  1,\"http://a:b\"\n  2,\"https://example.com?q=a:b\""));
+        # edge cases
+        assertEq({"name": "", "tags": (), "version": "123", "enabled": "true"},
+                 parse_toon("name: \"\"\ntags[0]:\nversion: \"123\"\nenabled: \"true\""));
+        # delimiter variations: pipe and tab
+        assertEq({"tags": ("reading", "gaming", "coding")},
+                 parse_toon("tags[3|]: reading|gaming|coding"));
+        assertEq({"items": ({"sku": "A1", "name": "Widget"}, {"sku": "B2", "name": "Gadget"})},
+                 parse_toon("items[2\t]{sku\tname}:\n  A1\tWidget\n  B2\tGadget"));
+        # unicode
+        assertEq({"message": "Hello 世界 👋", "tags": ("🎉", "🎊", "🎈")},
+                 parse_toon("message: Hello 世界 👋\ntags[3]: 🎉,🎊,🎈"));
+        # root forms
+        assertEq("hello", parse_toon("hello"));
+        assertEq(42, parse_toon("42"));
+        assertEq(True, parse_toon("true"));
+        assertNothing(parse_toon("null"));
+        assertEq((1, 2, 3), parse_toon("[3]: 1,2,3"));
+        assertEq(({"a": 1, "b": 2}, {"a": 3, "b": 4}), parse_toon("[2]{a,b}:\n  1,2\n  3,4"));
+    }
+
+    #! 8. full round-trip fixtures
+    toonRoundTripFixtures() {
+        list<auto> fixtures = (
+            TestHash,
+            {"a": 1},
+            (1, 2, 3),
+            "scalar",
+            42,
+            3.14159,
+            True,
+            NOTHING,
+            {"nested": {"deep": {"list": (1, ("a", "b"), {"k": "v"})}}},
+            {"meta": {"a": 1}, "other": 2},
+            {"items": ({"meta": {"a": 1}, "other": 2},)},
+            ({"id": 1, "n": "x", "ok": True}, {"id": 2, "n": "y", "ok": False}),
+            {"tabular": ({"a-b": 1, "c d": 2}, {"a-b": 3, "c d": 4})},
+            makeNestedHash(30),
+            makeNestedList(30),
+            {"big": map $1, xrange(0, 60)},
+        );
+        foreach auto fx in (fixtures) {
+            assertEq(fx, parse_toon(make_toon(fx)), sprintf("default round trip: %s", fx.type()));
+            assertEq(fx, parse_toon(make_toon(fx, {"sort_keys": True})), "sort_keys round trip");
+            assertEq(fx, parse_toon(make_toon(fx, {"indent": 3}), {"indent": 3}), "indent=3 round trip");
+            assertEq(fx, parse_toon(make_toon(fx, {"tabular_arrays": False})), "no-tabular round trip");
+        }
+    }
+
+    #! 7. parse_toon depth limit mirrors parse_json()
+    toonSandboxDepthParse() {
+        string ok = makeNestedToonString(200);
+        string bad = makeNestedToonString(300);
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(string s) {
+    return parse_toon(s);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+        assertTrue(exists p.callFunction("test", ok), "200 nested levels allowed in sandbox");
+        assertThrows("TOON-PARSE-ERROR", "depth", \p.callFunction(), ("test", bad));
+    }
+
+    #! 7. make_toon depth limit mirrors make_json()
+    toonSandboxDepthMake() {
+        hash<auto> ok = makeNestedHash(200);
+        hash<auto> bad = makeNestedHash(300);
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+string sub test(auto data) {
+    return make_toon(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(code, "sandbox-test");
+        assertTrue(exists p.callFunction("test", ok), "200 nested levels allowed in sandbox");
+        assertThrows("TOON-SERIALIZATION-ERROR", "depth", \p.callFunction(), ("test", bad));
+    }
+
+    #! 7. parser cancellation for large TOON input
+    toonSandboxInterruptParse() {
+        list<string> items = ();
+        for (int i = 0; i < 400; ++i) {
+            push items, sprintf("%d", i);
+        }
+        string largeToon = "x[400]: " + items.join(",");
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub test(string s) {
+    return parse_toon(s);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+        sm.requestInterrupt();
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", largeToon));
+    }
+
+    #! 7. serializer cancellation for large Qore structures
+    toonSandboxInterruptMake() {
+        list<int> largeList = ();
+        for (int i = 0; i < 400; ++i) {
+            push largeList, i;
+        }
+        string code = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+string sub test(auto data) {
+    return make_toon(data);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-test");
+        sm.requestInterrupt();
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("test", largeList));
+    }
+
+    #! pre-operation cancellation check: a pre-requested interrupt must be
+    #! honored even for tiny inputs (fewer than the periodic-check interval),
+    #! per the cooperative-cancellation design (Pattern 1)
+    toonSandboxInterruptPreCheck() {
+        string pcode = "
+%new-style
+%require-types
+%strict-args
+%requires json
+
+auto sub tparse(string s) { return parse_toon(s); }
+string sub tmake(auto d) { return make_toon(d); }
+";
+        {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            SandboxManager sm();
+            p.setSandboxManager(sm);
+            p.parse(pcode, "sandbox-test");
+            sm.requestInterrupt();
+            # tiny input - no periodic check would ever fire; only the
+            # pre-operation check can catch this
+            assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("tparse", "a: 1"));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            SandboxManager sm();
+            p.setSandboxManager(sm);
+            p.parse(pcode, "sandbox-test");
+            sm.requestInterrupt();
+            assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("tmake", {"a": 1}));
+        }
+    }
+}

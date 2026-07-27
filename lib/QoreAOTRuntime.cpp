@@ -11999,6 +11999,22 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
             }
             // Replace with a comment to preserve line numbers
             result += "# [AOT: %requires stripped]\n";
+        } else if (p + 17 <= end && strncmp(p, "%try-child-module", 17) == 0) {
+            // Child module declarations are delivered by the module description function
+            // (qore_aot_fill_module_children()), so the directive must not be processed again when the
+            // embedded source is parsed; see design/parse-directive-try-child-module.md
+            p += 17;
+            const char* child_start = p;
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            std::string child(child_start, p - child_start);
+            if (p < end) {
+                ++p;  // skip the newline
+            }
+            result += "# [AOT: %try-child-module";
+            result += child;
+            result += " stripped]\n";
         } else if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
             // Start of %try-module block - extract module name and try to load it
             p += 11;
@@ -14366,6 +14382,21 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
     for (int i = 0; i < num_deps; ++i) {
         if (deps[i]) {
             mod_info->dependencies.push_back(deps[i]);
+        }
+    }
+}
+
+//! Delivers %try-child-module declarations from an AOT-compiled module's description function
+/** Called after qore_aot_fill_module_desc() and only when the module declares child modules; artifacts
+    compiled before child modules were supported never call this function.
+
+    @see design/parse-directive-try-child-module.md
+*/
+extern "C" DLLEXPORT void qore_aot_fill_module_children(QoreModuleInfo* mod_info, const char** children,
+        int num_children) {
+    for (int i = 0; i < num_children; ++i) {
+        if (children[i]) {
+            mod_info->child_modules.push_back(children[i]);
         }
     }
 }

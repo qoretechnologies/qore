@@ -1,0 +1,2283 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief defines TOON (Token-Oriented Object Notation) functions
+*/
+/*
+    ql_toon.qpp
+
+    Qore TOON (Token-Oriented Object Notation) functions
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+/*  Implementation notes
+
+    This module implements TOON (Token-Oriented Object Notation) version 3.0
+    (Working Draft, 2025-11-24); see https://github.com/toon-format/spec
+
+    Scope of this implementation (TOON Core Profile, §19):
+    - objects (indentation-based key nesting)
+    - primitive inline arrays
+    - arrays of arrays
+    - tabular arrays of uniform objects
+    - mixed/expanded arrays and objects-as-list-items
+    - comma, tab, and pipe delimiters (decoding); the encoder always uses the
+      comma document delimiter
+    - strict-mode validation (default) per §14
+
+    Not implemented in this release (all default to "off" in the spec):
+    - key folding / path expansion (§13.4): dotted keys are treated as single
+      literal keys, which is the spec default (keyFolding="off",
+      expandPaths="off")
+
+    Number/value model: TOON encodes the JSON data model.  Qore values outside
+    the strict JSON model are normalized exactly as make_json() does, so that
+    parse_toon(make_toon(x)) matches parse_json(make_json(x)):
+    - date  -> ISO-8601 string (absolute) / ISO-8601 duration (relative)
+    - binary -> base64 string
+    - number -> canonical decimal; non-ordinary (nan/inf) -> null
+    - float NaN/Inf -> null
+    Object and other non-data types are rejected with TOON-SERIALIZATION-ERROR,
+    exactly as make_json() rejects them.
+*/
+
+#include "qore-json-module.h"
+
+#include "ql_toon.h"
+
+#include <cmath>
+#include <cassert>
+#include <cctype>
+#include <cstring>
+#include <cstdlib>
+#include <string>
+#include <vector>
+#include <unordered_set>
+#include <algorithm>
+#include <utility>
+
+// Maximum TOON nesting depth (sandbox only) - same as JSON
+#define TOON_MAX_NESTING_DEPTH JSON_MAX_NESTING_DEPTH
+
+// Interrupt check interval (iterations between checks) - same as JSON
+#define TOON_INTERRUPT_CHECK_INTERVAL JSON_INTERRUPT_CHECK_INTERVAL
+
+//////////////////////////////////////////////////////////////////////////////
+// shared scalar helpers
+//////////////////////////////////////////////////////////////////////////////
+
+// returns true if the byte is ASCII whitespace relevant to leading/trailing checks
+static inline bool toon_is_ws(unsigned char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+// matches /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i over [s, s+len)
+static bool toon_match_number_re(const char* s, size_t len) {
+    size_t i = 0;
+    if (i < len && s[i] == '-') {
+        ++i;
+    }
+    size_t j = i;
+    while (i < len && isdigit(static_cast<unsigned char>(s[i]))) {
+        ++i;
+    }
+    if (i == j) {
+        return false;
+    }
+    if (i < len && s[i] == '.') {
+        ++i;
+        size_t k = i;
+        while (i < len && isdigit(static_cast<unsigned char>(s[i]))) {
+            ++i;
+        }
+        if (i == k) {
+            return false;
+        }
+    }
+    if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+        ++i;
+        if (i < len && (s[i] == '+' || s[i] == '-')) {
+            ++i;
+        }
+        size_t m = i;
+        while (i < len && isdigit(static_cast<unsigned char>(s[i]))) {
+            ++i;
+        }
+        if (i == m) {
+            return false;
+        }
+    }
+    return i == len;
+}
+
+// matches /^-?0\d+$/ - forbidden leading-zero integers such as "05" or
+// "-0001"; the TOON spec (§2/§4) requires these to be treated as strings,
+// not numbers, including the negative forms
+static bool toon_match_leading_zero(const char* s, size_t len) {
+    size_t i = 0;
+    if (i < len && s[i] == '-') {
+        ++i;
+    }
+    if (len - i < 2 || s[i] != '0') {
+        return false;
+    }
+    for (; i < len; ++i) {
+        if (!isdigit(static_cast<unsigned char>(s[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// does an unquoted string token look like a TOON number? (§7.2)
+static bool toon_is_numeric_like(const char* s, size_t len) {
+    return toon_match_number_re(s, len) || toon_match_leading_zero(s, len);
+}
+
+// decide whether a string value must be quoted on output (§7.2); the active
+// delimiter for the encoder is always comma.  Sets unrepr=true if the string
+// contains a control char that standard TOON cannot represent.
+static bool toon_string_needs_quote(const char* s, size_t len, bool& unrepr) {
+    unrepr = false;
+    if (len == 0) {
+        return true;
+    }
+    if (toon_is_ws(static_cast<unsigned char>(s[0])) || toon_is_ws(static_cast<unsigned char>(s[len - 1]))) {
+        return true;
+    }
+    if ((len == 4 && (!memcmp(s, "true", 4) || !memcmp(s, "null", 4)))
+        || (len == 5 && !memcmp(s, "false", 5))) {
+        return true;
+    }
+    if (toon_is_numeric_like(s, len)) {
+        return true;
+    }
+    if (s[0] == '-') {
+        return true;
+    }
+    bool quote = false;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        switch (c) {
+            case ':':
+            case '"':
+            case '\\':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case ',':
+            case '\n':
+            case '\r':
+            case '\t':
+                quote = true;
+                break;
+            default:
+                if (c < 0x20) {
+                    // control char other than \n \r \t: not representable in
+                    // standard TOON (only \\ \" \n \r \t escapes exist, §7.1)
+                    unrepr = true;
+                    quote = true;
+                }
+                break;
+        }
+    }
+    return quote;
+}
+
+// append a quoted, escaped TOON string (§7.1) for [s, s+len)
+static void toon_concat_quoted(QoreString& out, const char* s, size_t len) {
+    out.concat('"');
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        switch (c) {
+            case '\\': out.concat("\\\\", 2); break;
+            case '"': out.concat("\\\"", 2); break;
+            case '\n': out.concat("\\n", 2); break;
+            case '\r': out.concat("\\r", 2); break;
+            case '\t': out.concat("\\t", 2); break;
+            default: out.concat(static_cast<char>(c)); break;
+        }
+    }
+    out.concat('"');
+}
+
+// does an object key / field name require quoting? (§7.3)
+// unquoted keys must match ^[A-Za-z_][A-Za-z0-9_.]*$
+static bool toon_key_needs_quote(const char* s, size_t len) {
+    if (len == 0) {
+        return true;
+    }
+    unsigned char c0 = static_cast<unsigned char>(s[0]);
+    if (!(isalpha(c0) || c0 == '_')) {
+        return true;
+    }
+    for (size_t i = 1; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (!(isalnum(c) || c == '_' || c == '.')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// returns true if [s, s+n) is already in TOON canonical decimal form, so the
+// (allocation-heavy) rewrite below can be skipped - the common case for
+// integers and simple decimals
+static bool toon_number_is_canonical(const char* s, size_t n) {
+    if (!n) {
+        return false;
+    }
+    size_t i = 0;
+    bool neg = false;
+    if (s[i] == '-') {
+        neg = true;
+        if (++i == n) {
+            return false;
+        }
+    }
+    // integer part: a lone "0" or [1-9][0-9]*
+    if (s[i] == '0') {
+        ++i;
+        if (i < n && s[i] >= '0' && s[i] <= '9') {
+            return false;  // leading zero
+        }
+    } else if (s[i] >= '1' && s[i] <= '9') {
+        ++i;
+        while (i < n && s[i] >= '0' && s[i] <= '9') {
+            ++i;
+        }
+    } else {
+        return false;
+    }
+    bool has_frac = false;
+    if (i < n && s[i] == '.') {
+        ++i;
+        size_t fs = i;
+        while (i < n && s[i] >= '0' && s[i] <= '9') {
+            ++i;
+        }
+        if (i == fs || s[i - 1] == '0') {
+            return false;  // empty or trailing-zero fraction
+        }
+        has_frac = true;
+    }
+    if (i != n) {
+        return false;  // exponent or trailing junk
+    }
+    if (neg && !has_frac && n == 2 && s[1] == '0') {
+        return false;  // "-0"
+    }
+    return true;
+}
+
+// normalize a decimal numeric string in-place to TOON canonical form (§2):
+// no exponent, no leading zeros (except a single "0"), no trailing fractional
+// zeros, -0 -> 0
+static void toon_canonicalize_number(QoreString& qs) {
+    if (toon_number_is_canonical(qs.c_str(), qs.size())) {
+        return;
+    }
+    std::string s(qs.c_str(), qs.size());
+    bool neg = false;
+    size_t i = 0;
+    if (i < s.size() && (s[i] == '+' || s[i] == '-')) {
+        neg = (s[i] == '-');
+        ++i;
+    }
+    // mantissa / exponent split
+    std::string mant;
+    long exp = 0;
+    {
+        size_t epos = s.find_first_of("eE", i);
+        if (epos == std::string::npos) {
+            mant = s.substr(i);
+        } else {
+            mant = s.substr(i, epos - i);
+            exp = strtol(s.c_str() + epos + 1, nullptr, 10);
+        }
+    }
+    // mantissa int / frac split
+    std::string intpart, fracpart;
+    {
+        size_t dot = mant.find('.');
+        if (dot == std::string::npos) {
+            intpart = mant;
+        } else {
+            intpart = mant.substr(0, dot);
+            fracpart = mant.substr(dot + 1);
+        }
+    }
+    // combine all significant digits, decimal point after position pp
+    std::string digits = intpart + fracpart;
+    long pp = static_cast<long>(intpart.size()) + exp;
+    // strip non-digits defensively
+    {
+        std::string d;
+        for (char ch : digits) {
+            if (ch >= '0' && ch <= '9') {
+                d += ch;
+            }
+        }
+        digits.swap(d);
+    }
+    if (digits.empty()) {
+        digits = "0";
+        pp = 1;
+    }
+    std::string result;
+    if (pp <= 0) {
+        result = "0.";
+        result.append(static_cast<size_t>((-pp)), '0');
+        result += digits;
+    } else if (static_cast<size_t>(pp) >= digits.size()) {
+        result = digits;
+        result.append(static_cast<size_t>(pp) - digits.size(), '0');
+    } else {
+        result = digits.substr(0, static_cast<size_t>(pp)) + "." + digits.substr(static_cast<size_t>(pp));
+    }
+    // strip trailing fractional zeros
+    if (result.find('.') != std::string::npos) {
+        size_t last = result.find_last_not_of('0');
+        result.erase(last + 1);
+        if (!result.empty() && result.back() == '.') {
+            result.pop_back();
+        }
+    }
+    // strip leading zeros in the integer part (keep at least one digit)
+    {
+        size_t dot = result.find('.');
+        std::string ip = (dot == std::string::npos) ? result : result.substr(0, dot);
+        std::string rest = (dot == std::string::npos) ? std::string() : result.substr(dot);
+        size_t nz = ip.find_first_not_of('0');
+        if (nz == std::string::npos) {
+            ip = "0";
+        } else {
+            ip = ip.substr(nz);
+        }
+        result = ip + rest;
+    }
+    // -0 -> 0
+    bool all_zero = true;
+    for (char ch : result) {
+        if (ch != '0' && ch != '.') {
+            all_zero = false;
+            break;
+        }
+    }
+    if (all_zero) {
+        neg = false;
+        result = "0";
+    }
+    qs.clear();
+    if (neg) {
+        qs.concat('-');
+    }
+    qs.concat(result.c_str(), result.size());
+}
+
+// build the make_json()-compatible string representation of a date value
+static void toon_date_to_string(const DateTimeNode* date, QoreString& str) {
+#ifndef SECS_PER_MINUTE
+#define SECS_PER_MINUTE          60
+#endif
+#ifndef SECS_PER_HOUR
+#define SECS_PER_HOUR            (SECS_PER_MINUTE * 60)
+#endif
+    qore_tm info;
+    date->getInfo(currentTZ(), info);
+    if (date->isRelative()) {
+        str.concat('P');
+        if (date->hasValue()) {
+            if (info.year) {
+                str.sprintf("%dY", info.year);
+            }
+            if (info.month) {
+                str.sprintf("%dM", info.month);
+            }
+            if (info.day) {
+                str.sprintf("%dD", info.day);
+            }
+            bool has_t = false;
+            if (info.hour) {
+                str.sprintf("T%dH", info.hour);
+                has_t = true;
+            }
+            if (info.minute) {
+                if (!has_t) {
+                    str.concat('T');
+                    has_t = true;
+                }
+                str.sprintf("%dM", info.minute);
+            }
+            if (info.second) {
+                if (!has_t) {
+                    str.concat('T');
+                    has_t = true;
+                }
+                str.sprintf("%dS", info.second);
+            }
+            if (info.us) {
+                if (!has_t) {
+                    str.concat('T');
+                    has_t = true;
+                }
+                str.sprintf("%du", info.us);
+            }
+        } else {
+            str.concat("0D");
+        }
+    } else {
+        str.sprintf("%04d-%02d-%02dT%02d:%02d:%02d.%06d", info.year, info.month, info.day, info.hour,
+            info.minute, info.second, info.us);
+        if (!info.utc_secs_east) {
+            str.concat('Z');
+        } else {
+            str.concat(info.utc_secs_east < 0 ? '-' : '+');
+            int e = info.utc_secs_east < 0 ? -info.utc_secs_east : info.utc_secs_east;
+            int h = e / SECS_PER_HOUR;
+            int r = e % SECS_PER_HOUR;
+            int m = r / SECS_PER_MINUTE;
+            str.sprintf("%02d:%02d", h, m);
+            int sec = e - h * SECS_PER_HOUR - m * SECS_PER_MINUTE;
+            if (sec) {
+                str.sprintf(":%02d", sec);
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// serializer
+//////////////////////////////////////////////////////////////////////////////
+
+struct ToonEncCtx {
+    QoreString& out;
+    int indent;
+    bool tabular;
+    bool sort_keys;
+    QoreSandboxManager* sm;
+    ExceptionSink* xsink;
+    unsigned iteration;
+
+    DLLLOCAL ToonEncCtx(QoreString& o, int ind, bool tab, bool sk, QoreSandboxManager* s, ExceptionSink* xs)
+        : out(o), indent(ind), tabular(tab), sort_keys(sk), sm(s), xsink(xs), iteration(0) {
+    }
+
+    DLLLOCAL bool checkCancel(const char* op) {
+        // not gated on sm: qore_check_cancel() also honors per-thread
+        // cancel_thread() (THREAD-CANCELLED) and has its own zero-overhead
+        // fast path when nothing is active (cooperative-cancellation.md §5)
+        if ((++iteration % TOON_INTERRUPT_CHECK_INTERVAL) == 0) {
+            return qore_check_cancel(xsink, op);
+        }
+        return false;
+    }
+};
+
+static bool toon_is_primitive(const QoreValue& v) {
+    if (v.isNullOrNothing()) {
+        return true;
+    }
+    switch (v.getType()) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+        case NT_DATE:
+        case NT_BINARY:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void toon_indent(QoreString& out, int level, int indent) {
+    int n = level * indent;
+    if (n > 0) {
+        out.addch(' ', static_cast<unsigned>(n));
+    }
+}
+
+// append a single scalar token; returns -1 on error
+static int toon_emit_scalar(ToonEncCtx& c, const QoreValue& v) {
+    if (v.isNullOrNothing()) {
+        c.out.concat("null", 4);
+        return 0;
+    }
+    qore_type_t t = v.getType();
+    if (t == NT_BOOLEAN) {
+        c.out.concat(v.getAsBool() ? "true" : "false");
+        return 0;
+    }
+    if (t == NT_INT) {
+        c.out.sprintf("%lld", v.getAsBigInt());
+        return 0;
+    }
+    if (t == NT_FLOAT) {
+        double f = v.getAsFloat();
+        if (std::isnan(f) || std::isinf(f)) {
+            c.out.concat("null", 4);
+            return 0;
+        }
+        QoreString tmp;
+        tmp.sprintf("%.25g", f);
+        qore_apply_rounding_heuristic(tmp, 6, 8);
+        toon_canonicalize_number(tmp);
+        c.out.concat(tmp.c_str(), tmp.size());
+        return 0;
+    }
+    if (t == NT_NUMBER) {
+        const QoreNumberNode* n = v.get<const QoreNumberNode>();
+        if (!n->ordinary()) {
+            c.out.concat("null", 4);
+            return 0;
+        }
+        QoreString tmp;
+        n->getStringRepresentation(tmp);
+        toon_canonicalize_number(tmp);
+        c.out.concat(tmp.c_str(), tmp.size());
+        return 0;
+    }
+    if (t == NT_STRING) {
+        QoreStringValueHelper tmp(v, QCS_UTF8, c.xsink);
+        if (*c.xsink) {
+            return -1;
+        }
+        bool unrepr = false;
+        if (toon_string_needs_quote(tmp->c_str(), tmp->size(), unrepr)) {
+            if (unrepr) {
+                c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
+                    "cannot serialize string containing a control character that standard TOON cannot represent "
+                    "(only \\\\, \\\", \\n, \\r, \\t escapes are defined)");
+                return -1;
+            }
+            toon_concat_quoted(c.out, tmp->c_str(), tmp->size());
+        } else {
+            c.out.concat(tmp->c_str(), tmp->size());
+        }
+        return 0;
+    }
+    if (t == NT_DATE) {
+        QoreString ds(QCS_UTF8);
+        toon_date_to_string(v.get<const DateTimeNode>(), ds);
+        bool unrepr = false;
+        if (toon_string_needs_quote(ds.c_str(), ds.size(), unrepr)) {
+            toon_concat_quoted(c.out, ds.c_str(), ds.size());
+        } else {
+            c.out.concat(ds.c_str(), ds.size());
+        }
+        return 0;
+    }
+    if (t == NT_BINARY) {
+        QoreString bs(QCS_UTF8);
+        bs.concatBase64(v.get<const BinaryNode>());
+        bool unrepr = false;
+        if (toon_string_needs_quote(bs.c_str(), bs.size(), unrepr)) {
+            toon_concat_quoted(c.out, bs.c_str(), bs.size());
+        } else {
+            c.out.concat(bs.c_str(), bs.size());
+        }
+        return 0;
+    }
+    c.xsink->raiseException("TOON-SERIALIZATION-ERROR", "don't know how to serialize type '%s'",
+        v.getFullTypeName());
+    return -1;
+}
+
+static int toon_emit_key(ToonEncCtx& c, const char* k, size_t len) {
+    if (toon_key_needs_quote(k, len)) {
+        for (size_t i = 0; i < len; ++i) {
+            unsigned char ch = static_cast<unsigned char>(k[i]);
+            if (ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r') {
+                c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
+                    "cannot serialize object key containing a control character that standard TOON cannot represent");
+                return -1;
+            }
+        }
+        toon_concat_quoted(c.out, k, len);
+    } else {
+        c.out.concat(k, len);
+    }
+    return 0;
+}
+
+// ordered key list for a hash (encounter order, or sorted when sort_keys);
+// returns -1 if cancellation was requested during key collection
+static int toon_hash_keys(ToonEncCtx& c, const QoreHashNode* h, bool sort_keys,
+        std::vector<std::string>& keys) {
+    keys.reserve(h->size());
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        if (c.checkCancel("serializing TOON object")) {
+            return -1;
+        }
+        keys.push_back(hi.getKey());
+    }
+    if (sort_keys) {
+        std::sort(keys.begin(), keys.end());
+    }
+    return 0;
+}
+
+enum ToonArrayForm {
+    TAF_EMPTY,
+    TAF_INLINE_PRIMITIVE,
+    TAF_TABULAR,
+    TAF_EXPANDED,
+};
+
+// determine the encoding form for a list; on TAF_TABULAR, fields is filled
+// with the ordered field names.  On cancellation, sets c.xsink and returns
+// TAF_EXPANDED; callers MUST check *c.xsink after calling.
+static ToonArrayForm toon_array_form(ToonEncCtx& c, const QoreListNode* l, std::vector<std::string>& fields) {
+    size_t n = l->size();
+    if (!n) {
+        return TAF_EMPTY;
+    }
+    bool all_prim = true;
+    bool all_hash = true;
+    for (size_t i = 0; i < n; ++i) {
+        if (c.checkCancel("serializing TOON array")) {
+            return TAF_EXPANDED;
+        }
+        const QoreValue e = l->retrieveEntry(i);
+        if (!toon_is_primitive(e)) {
+            all_prim = false;
+        }
+        if (e.getType() != NT_HASH) {
+            all_hash = false;
+        }
+        if (!all_prim && !all_hash) {
+            break;
+        }
+    }
+    if (all_prim) {
+        return TAF_INLINE_PRIMITIVE;
+    }
+    if (c.tabular && all_hash) {
+        const QoreHashNode* first = l->retrieveEntry(0).get<const QoreHashNode>();
+        std::vector<std::string> f;
+        if (toon_hash_keys(c, first, c.sort_keys, f)) {
+            return TAF_EXPANDED;
+        }
+        if (!f.empty()) {
+            std::unordered_set<std::string> fset(f.begin(), f.end());
+            bool ok = (fset.size() == f.size());
+            for (size_t i = 0; ok && i < n; ++i) {
+                if (c.checkCancel("serializing TOON array")) {
+                    return TAF_EXPANDED;
+                }
+                const QoreHashNode* he = l->retrieveEntry(i).get<const QoreHashNode>();
+                if (static_cast<size_t>(he->size()) != f.size()) {
+                    ok = false;
+                    break;
+                }
+                ConstHashIterator hi(he);
+                while (hi.next()) {
+                    if (fset.find(hi.getKey()) == fset.end()) {
+                        ok = false;
+                        break;
+                    }
+                    if (!toon_is_primitive(hi.get())) {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if (ok) {
+                fields.swap(f);
+                return TAF_TABULAR;
+            }
+        }
+    }
+    return TAF_EXPANDED;
+}
+
+static int toon_emit_object(ToonEncCtx& c, const QoreHashNode* h, int depth);
+static int toon_emit_list_item(ToonEncCtx& c, const QoreValue& v, int depth);
+
+// emit an inline primitive array body: "v1,v2,..." (no surrounding header)
+static int toon_emit_inline_values(ToonEncCtx& c, const QoreListNode* l) {
+    size_t n = l->size();
+    for (size_t i = 0; i < n; ++i) {
+        if (c.checkCancel("serializing TOON array")) {
+            return -1;
+        }
+        if (i) {
+            c.out.concat(',');
+        }
+        if (toon_emit_scalar(c, l->retrieveEntry(i))) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// emit tabular rows at the given depth
+static int toon_emit_tabular_rows(ToonEncCtx& c, const QoreListNode* l, const std::vector<std::string>& fields,
+        int depth) {
+    size_t n = l->size();
+    for (size_t i = 0; i < n; ++i) {
+        if (c.checkCancel("serializing TOON tabular array")) {
+            return -1;
+        }
+        const QoreHashNode* he = l->retrieveEntry(i).get<const QoreHashNode>();
+        toon_indent(c.out, depth, c.indent);
+        for (size_t f = 0; f < fields.size(); ++f) {
+            if (f) {
+                c.out.concat(',');
+            }
+            if (toon_emit_scalar(c, he->getKeyValue(fields[f].c_str()))) {
+                return -1;
+            }
+        }
+        c.out.concat('\n');
+    }
+    return 0;
+}
+
+// emit the header part "[N]" / "[N]{f1,f2}" plus the trailing colon; the key
+// (if any) and indentation must already have been written by the caller
+static int toon_emit_array_header(ToonEncCtx& c, size_t n, ToonArrayForm form,
+        const std::vector<std::string>& fields) {
+    c.out.sprintf("[%lu]", static_cast<unsigned long>(n));
+    if (form == TAF_TABULAR) {
+        c.out.concat('{');
+        for (size_t f = 0; f < fields.size(); ++f) {
+            if (f) {
+                c.out.concat(',');
+            }
+            if (toon_emit_key(c, fields[f].c_str(), fields[f].size())) {
+                return -1;
+            }
+        }
+        c.out.concat('}');
+    }
+    c.out.concat(':');
+    return 0;
+}
+
+// emit a list (array) that appears as an object field value or at the document
+// root; the key (or nothing for root) and indentation are written here.
+// header_depth is the indentation level of the header line; body content goes
+// at header_depth + 1.
+static int toon_emit_array(ToonEncCtx& c, const char* key, size_t keylen, bool has_key,
+        const QoreListNode* l, int header_depth) {
+    if (c.sm && header_depth >= TOON_MAX_NESTING_DEPTH) {
+        c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
+            "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
+        return -1;
+    }
+    std::vector<std::string> fields;
+    ToonArrayForm form = toon_array_form(c, l, fields);
+    if (*c.xsink) {
+        return -1;
+    }
+    size_t n = l->size();
+
+    toon_indent(c.out, header_depth, c.indent);
+    if (has_key && toon_emit_key(c, key, keylen)) {
+        return -1;
+    }
+    if (toon_emit_array_header(c, n, form, fields)) {
+        return -1;
+    }
+
+    if (form == TAF_EMPTY) {
+        c.out.concat('\n');
+        return 0;
+    }
+    if (form == TAF_INLINE_PRIMITIVE) {
+        c.out.concat(' ');
+        if (toon_emit_inline_values(c, l)) {
+            return -1;
+        }
+        c.out.concat('\n');
+        return 0;
+    }
+    c.out.concat('\n');
+    if (form == TAF_TABULAR) {
+        return toon_emit_tabular_rows(c, l, fields, header_depth + 1);
+    }
+    // TAF_EXPANDED
+    for (size_t i = 0; i < n; ++i) {
+        if (c.checkCancel("serializing TOON array")) {
+            return -1;
+        }
+        if (toon_emit_list_item(c, l->retrieveEntry(i), header_depth + 1)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// emit a single object field "key: ..." at the given depth
+static int toon_emit_field(ToonEncCtx& c, const char* key, size_t keylen, const QoreValue& v, int depth) {
+    qore_type_t t = v.getType();
+    if (!v.isNullOrNothing() && t == NT_LIST) {
+        return toon_emit_array(c, key, keylen, true, v.get<const QoreListNode>(), depth);
+    }
+    if (!v.isNullOrNothing() && t == NT_HASH) {
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        toon_indent(c.out, depth, c.indent);
+        if (toon_emit_key(c, key, keylen)) {
+            return -1;
+        }
+        c.out.concat(':');
+        c.out.concat('\n');
+        if (!h->empty()) {
+            return toon_emit_object(c, h, depth + 1);
+        }
+        return 0;
+    }
+    // primitive
+    toon_indent(c.out, depth, c.indent);
+    if (toon_emit_key(c, key, keylen)) {
+        return -1;
+    }
+    c.out.concat(": ", 2);
+    if (toon_emit_scalar(c, v)) {
+        return -1;
+    }
+    c.out.concat('\n');
+    return 0;
+}
+
+// emit all fields of an object at the given depth (encounter or sorted order)
+static int toon_emit_object(ToonEncCtx& c, const QoreHashNode* h, int depth) {
+    if (c.sm && depth >= TOON_MAX_NESTING_DEPTH) {
+        c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
+            "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
+        return -1;
+    }
+    if (c.sort_keys) {
+        std::vector<std::string> keys;
+        if (toon_hash_keys(c, h, true, keys)) {
+            return -1;
+        }
+        for (size_t i = 0; i < keys.size(); ++i) {
+            if (c.checkCancel("serializing TOON object")) {
+                return -1;
+            }
+            if (toon_emit_field(c, keys[i].c_str(), keys[i].size(), h->getKeyValue(keys[i].c_str()), depth)) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        if (c.checkCancel("serializing TOON object")) {
+            return -1;
+        }
+        const char* k = hi.getKey();
+        if (toon_emit_field(c, k, strlen(k), hi.get(), depth)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// emit the fields of an object that appears as a list item, skipping the first
+// field (already written on the hyphen line), at the given depth
+static int toon_emit_listitem_rest(ToonEncCtx& c, const QoreHashNode* h,
+        const std::vector<std::string>& keys, int depth) {
+    for (size_t i = 1; i < keys.size(); ++i) {
+        if (c.checkCancel("serializing TOON object")) {
+            return -1;
+        }
+        if (toon_emit_field(c, keys[i].c_str(), keys[i].size(), h->getKeyValue(keys[i].c_str()), depth)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// emit a list item at the given depth (the "- " marker is written here)
+static int toon_emit_list_item(ToonEncCtx& c, const QoreValue& v, int depth) {
+    if (c.sm && depth >= TOON_MAX_NESTING_DEPTH) {
+        c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
+            "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
+        return -1;
+    }
+    qore_type_t t = v.isNullOrNothing() ? NT_NOTHING : v.getType();
+
+    if (t == NT_HASH) {
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        if (h->empty()) {
+            // empty object list item: a single "-"
+            toon_indent(c.out, depth, c.indent);
+            c.out.concat('-');
+            c.out.concat('\n');
+            return 0;
+        }
+        std::vector<std::string> keys;
+        if (toon_hash_keys(c, h, c.sort_keys, keys)) {
+            return -1;
+        }
+        const std::string& fk = keys[0];
+        QoreValue fv = h->getKeyValue(fk.c_str());
+
+        // first field is a tabular array? -> tabular header on the hyphen line,
+        // rows at depth+2, remaining fields at depth+1 (§10)
+        if (!fv.isNullOrNothing() && fv.getType() == NT_LIST) {
+            const QoreListNode* fl = fv.get<const QoreListNode>();
+            std::vector<std::string> tf;
+            ToonArrayForm ff = toon_array_form(c, fl, tf);
+            if (*c.xsink) {
+                return -1;
+            }
+            toon_indent(c.out, depth, c.indent);
+            c.out.concat("- ", 2);
+            if (toon_emit_key(c, fk.c_str(), fk.size())) {
+                return -1;
+            }
+            if (toon_emit_array_header(c, fl->size(), ff, tf)) {
+                return -1;
+            }
+            if (ff == TAF_EMPTY) {
+                c.out.concat('\n');
+            } else if (ff == TAF_INLINE_PRIMITIVE) {
+                c.out.concat(' ');
+                if (toon_emit_inline_values(c, fl)) {
+                    return -1;
+                }
+                c.out.concat('\n');
+            } else if (ff == TAF_TABULAR) {
+                c.out.concat('\n');
+                if (toon_emit_tabular_rows(c, fl, tf, depth + 2)) {
+                    return -1;
+                }
+            } else {
+                // expanded
+                c.out.concat('\n');
+                size_t fn = fl->size();
+                for (size_t i = 0; i < fn; ++i) {
+                    if (c.checkCancel("serializing TOON array")) {
+                        return -1;
+                    }
+                    if (toon_emit_list_item(c, fl->retrieveEntry(i), depth + 2)) {
+                        return -1;
+                    }
+                }
+            }
+            return toon_emit_listitem_rest(c, h, keys, depth + 1);
+        }
+
+        // first field is a non-empty nested object -> "- key:" then nested
+        // body at depth+2, remaining siblings at depth+1
+        if (!fv.isNullOrNothing() && fv.getType() == NT_HASH) {
+            const QoreHashNode* fh = fv.get<const QoreHashNode>();
+            toon_indent(c.out, depth, c.indent);
+            c.out.concat("- ", 2);
+            if (toon_emit_key(c, fk.c_str(), fk.size())) {
+                return -1;
+            }
+            c.out.concat(':');
+            c.out.concat('\n');
+            if (!fh->empty() && toon_emit_object(c, fh, depth + 2)) {
+                return -1;
+            }
+            return toon_emit_listitem_rest(c, h, keys, depth + 1);
+        }
+
+        // first field is a primitive -> "- key: value", siblings at depth+1
+        toon_indent(c.out, depth, c.indent);
+        c.out.concat("- ", 2);
+        if (toon_emit_key(c, fk.c_str(), fk.size())) {
+            return -1;
+        }
+        c.out.concat(": ", 2);
+        if (toon_emit_scalar(c, fv)) {
+            return -1;
+        }
+        c.out.concat('\n');
+        return toon_emit_listitem_rest(c, h, keys, depth + 1);
+    }
+
+    if (t == NT_LIST) {
+        // array as a list item: "- [..]..." with body at depth+2
+        const QoreListNode* fl = v.get<const QoreListNode>();
+        std::vector<std::string> tf;
+        ToonArrayForm ff = toon_array_form(c, fl, tf);
+        if (*c.xsink) {
+            return -1;
+        }
+        toon_indent(c.out, depth, c.indent);
+        c.out.concat("- ", 2);
+        if (toon_emit_array_header(c, fl->size(), ff, tf)) {
+            return -1;
+        }
+        if (ff == TAF_EMPTY) {
+            c.out.concat('\n');
+        } else if (ff == TAF_INLINE_PRIMITIVE) {
+            c.out.concat(' ');
+            if (toon_emit_inline_values(c, fl)) {
+                return -1;
+            }
+            c.out.concat('\n');
+        } else if (ff == TAF_TABULAR) {
+            c.out.concat('\n');
+            if (toon_emit_tabular_rows(c, fl, tf, depth + 2)) {
+                return -1;
+            }
+        } else {
+            c.out.concat('\n');
+            size_t fn = fl->size();
+            for (size_t i = 0; i < fn; ++i) {
+                if (c.checkCancel("serializing TOON array")) {
+                    return -1;
+                }
+                if (toon_emit_list_item(c, fl->retrieveEntry(i), depth + 2)) {
+                    return -1;
+                }
+            }
+        }
+        return 0;
+    }
+
+    // primitive list item
+    toon_indent(c.out, depth, c.indent);
+    c.out.concat("- ", 2);
+    if (toon_emit_scalar(c, v)) {
+        return -1;
+    }
+    c.out.concat('\n');
+    return 0;
+}
+
+// top-level document serialization
+static int toon_emit_document(ToonEncCtx& c, const QoreValue& data) {
+    if (!data.isNullOrNothing() && data.getType() == NT_HASH) {
+        const QoreHashNode* h = data.get<const QoreHashNode>();
+        if (h->empty()) {
+            // empty object at root -> empty document
+            return 0;
+        }
+        return toon_emit_object(c, h, 0);
+    }
+    if (!data.isNullOrNothing() && data.getType() == NT_LIST) {
+        return toon_emit_array(c, nullptr, 0, false, data.get<const QoreListNode>(), 0);
+    }
+    // single primitive root
+    if (toon_emit_scalar(c, data)) {
+        return -1;
+    }
+    c.out.concat('\n');
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// parser
+//////////////////////////////////////////////////////////////////////////////
+
+struct ToonLine {
+    int indent;            // leading space count
+    int depth;             // indent / indent_size
+    std::string content;   // line text after leading spaces, trailing CR removed
+    int line_no;           // 1-based
+    bool blank;            // only whitespace
+};
+
+struct ToonHeader {
+    std::string key;       // key prefix ("" for root array)
+    bool has_key;
+    long length;           // declared N
+    char delim;            // active delimiter: ',' '\t' or '|'
+    bool has_fields;
+    std::vector<std::string> fields;
+};
+
+class ToonParser {
+public:
+    DLLLOCAL ToonParser(const QoreString& src, bool strict, int indent_size, QoreSandboxManager* sm,
+            ExceptionSink* xsink)
+        : strict(strict), indent_size(indent_size), sm(sm), xsink(xsink), pos(0), iteration(0) {
+        buildLines(src);
+    }
+
+    DLLLOCAL QoreValue parse() {
+        // buildLines() (run in the ctor) may have raised a tab-indentation,
+        // indentation-multiple, or cancellation exception
+        if (*xsink) {
+            return QoreValue();
+        }
+        // find first / count of non-blank lines
+        size_t first = static_cast<size_t>(-1);
+        size_t count = 0;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (!lines[i].blank) {
+                if (first == static_cast<size_t>(-1)) {
+                    first = i;
+                }
+                ++count;
+            }
+        }
+        if (!count) {
+            // empty document -> empty object
+            return new QoreHashNode(autoTypeInfo);
+        }
+        if (lines[first].depth != 0) {
+            err(lines[first].line_no, "first non-blank line must not be indented");
+            return QoreValue();
+        }
+
+        const ToonLine& fl = lines[first];
+        // root array header?  (root header has no key: starts with '[')
+        if (!fl.content.empty() && fl.content[0] == '[') {
+            size_t p = 0;
+            ToonHeader hdr;
+            if (parseHeader(fl, p, hdr, false)) {
+                if (*xsink) {
+                    return QoreValue();
+                }
+                pos = first;
+                ValueHolder rv(parseArrayValue(hdr, fl, p, 0), xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                // any remaining non-blank line at depth 0 is an error
+                // (mirrors the object-root path)
+                skipBlank();
+                if (pos < lines.size()) {
+                    err(lines[pos].line_no, "unexpected content after document body");
+                    return QoreValue();
+                }
+                return rv.release();
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+
+        // single primitive?  (exactly one non-blank line that is neither an
+        // array header nor a key-value line, §5)
+        if (count == 1 && fl.content[0] != '['
+                && firstUnquoted(fl.content, ':') == std::string::npos) {
+            return parseScalar(fl.content.c_str(), fl.content.size(), fl.line_no);
+        }
+
+        // otherwise an object
+        pos = first;
+        ReferenceHolder<QoreHashNode> h(parseObject(0), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        // any remaining non-blank line at depth 0 is an error
+        skipBlank();
+        if (pos < lines.size()) {
+            err(lines[pos].line_no, "unexpected content after document body");
+            return QoreValue();
+        }
+        return h.release();
+    }
+
+private:
+    bool strict;
+    int indent_size;
+    QoreSandboxManager* sm;
+    ExceptionSink* xsink;
+    std::vector<ToonLine> lines;
+    size_t pos;
+    unsigned iteration;
+
+    DLLLOCAL void err(int line_no, const char* msg) {
+        if (!*xsink) {
+            xsink->raiseException("TOON-PARSE-ERROR", "line %d: %s", line_no, msg);
+        }
+    }
+
+    DLLLOCAL void errc(int line_no, int col, const char* msg) {
+        if (!*xsink) {
+            xsink->raiseException("TOON-PARSE-ERROR", "line %d, column %d: %s", line_no, col, msg);
+        }
+    }
+
+    DLLLOCAL bool checkCancel(const char* op) {
+        // not gated on sm: qore_check_cancel() also honors per-thread
+        // cancel_thread() (THREAD-CANCELLED) and has its own zero-overhead
+        // fast path when nothing is active (cooperative-cancellation.md §5)
+        if ((++iteration % TOON_INTERRUPT_CHECK_INTERVAL) == 0) {
+            return qore_check_cancel(xsink, op);
+        }
+        return false;
+    }
+
+    DLLLOCAL void buildLines(const QoreString& src) {
+        const char* p = src.c_str();
+        size_t sz = src.size();
+        const unsigned char* d = reinterpret_cast<const unsigned char*>(p);
+        size_t start = 0;
+        if (sz >= 3 && d[0] == 0xEF && d[1] == 0xBB && d[2] == 0xBF) {
+            start = 3;  // UTF-8 BOM
+        }
+        // reserve to avoid vector reallocation on large documents
+        {
+            size_t nl = 1;
+            for (size_t j = start; j < sz; ++j) {
+                if (p[j] == '\n') {
+                    ++nl;
+                }
+            }
+            lines.reserve(nl);
+        }
+        int line_no = 1;
+        size_t i = start;
+        size_t lstart = start;
+        bool tab_indent_error = false;
+        int tab_indent_line = 0;
+        while (i <= sz) {
+            // byte-based cancellation: this O(n) pre-pass runs before any
+            // other cancellation point, and a huge single-line document has
+            // no line boundaries to check on (sandboxing guide §3.2)
+            if (i != start && ((i - start) & 0xFFFF) == 0
+                    && qore_check_cancel(xsink, "scanning TOON document")) {
+                return;
+            }
+            if (i == sz || p[i] == '\n') {
+                size_t lend = i;
+                if (lend > lstart && p[lend - 1] == '\r') {
+                    --lend;
+                }
+                // measure leading spaces; reject tabs in indentation
+                size_t k = lstart;
+                int spaces = 0;
+                while (k < lend && p[k] == ' ') {
+                    ++spaces;
+                    ++k;
+                }
+                if (k < lend && p[k] == '\t' && !tab_indent_error) {
+                    tab_indent_error = true;
+                    tab_indent_line = line_no;
+                }
+                ToonLine tl;
+                tl.indent = spaces;
+                tl.line_no = line_no;
+                tl.content.assign(p + k, lend - k);
+                // blank if nothing but whitespace
+                bool blank = true;
+                for (size_t z = 0; z < tl.content.size(); ++z) {
+                    char ch = tl.content[z];
+                    if (ch != ' ' && ch != '\t' && ch != '\r') {
+                        blank = false;
+                        break;
+                    }
+                }
+                tl.blank = blank;
+                tl.depth = indent_size > 0 ? spaces / indent_size : 0;
+                lines.push_back(std::move(tl));
+                ++line_no;
+                lstart = i + 1;
+            }
+            ++i;
+        }
+        if (tab_indent_error) {
+            err(tab_indent_line, "tabs are not allowed in indentation");
+            return;
+        }
+        if (strict) {
+            for (size_t z = 0; z < lines.size(); ++z) {
+                if (!lines[z].blank && indent_size > 0 && (lines[z].indent % indent_size) != 0) {
+                    err(lines[z].line_no, "indentation must be an exact multiple of the indent width");
+                    return;
+                }
+            }
+        }
+    }
+
+    DLLLOCAL void skipBlank() {
+        while (pos < lines.size() && lines[pos].blank) {
+            ++pos;
+        }
+    }
+
+    // scan content for the first unquoted occurrence of ch; returns string::npos
+    // if not found; respects quoted strings (backslash escapes inside quotes)
+    DLLLOCAL static size_t firstUnquoted(const std::string& s, char ch, size_t from = 0) {
+        bool inq = false;
+        for (size_t i = from; i < s.size(); ++i) {
+            char c = s[i];
+            if (inq) {
+                if (c == '\\') {
+                    ++i;
+                    continue;
+                }
+                if (c == '"') {
+                    inq = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inq = true;
+                continue;
+            }
+            if (c == ch) {
+                return i;
+            }
+        }
+        return std::string::npos;
+    }
+
+    // parse a key starting at s[p]; advances p past the key; returns key text.
+    // sets ok=false if no valid key present
+    DLLLOCAL std::string parseKey(const std::string& s, size_t& p, int line_no, bool& ok) {
+        ok = true;
+        if (p < s.size() && s[p] == '"') {
+            std::string out;
+            ++p;
+            while (p < s.size()) {
+                char c = s[p];
+                if (c == '\\') {
+                    if (p + 1 >= s.size()) {
+                        errc(line_no, static_cast<int>(p) + 1, "unterminated string: missing closing quote");
+                        ok = false;
+                        return out;
+                    }
+                    char n = s[p + 1];
+                    switch (n) {
+                        case '\\': out += '\\'; break;
+                        case '"': out += '"'; break;
+                        case 'n': out += '\n'; break;
+                        case 'r': out += '\r'; break;
+                        case 't': out += '\t'; break;
+                        default:
+                            errc(line_no, static_cast<int>(p) + 1, "invalid escape sequence in quoted key");
+                            ok = false;
+                            return out;
+                    }
+                    p += 2;
+                    continue;
+                }
+                if (c == '"') {
+                    ++p;
+                    return out;
+                }
+                out += c;
+                ++p;
+            }
+            errc(line_no, static_cast<int>(p), "unterminated string: missing closing quote");
+            ok = false;
+            return out;
+        }
+        // unquoted key
+        size_t st = p;
+        if (p < s.size()) {
+            unsigned char c0 = static_cast<unsigned char>(s[p]);
+            if (isalpha(c0) || c0 == '_') {
+                ++p;
+                while (p < s.size()) {
+                    unsigned char c = static_cast<unsigned char>(s[p]);
+                    if (isalnum(c) || c == '_' || c == '.') {
+                        ++p;
+                    } else {
+                        break;
+                    }
+                }
+                return s.substr(st, p - st);
+            }
+        }
+        ok = false;
+        return std::string();
+    }
+
+    // parse an array header at s[p]; expects optional key already consumed.
+    // For root (has_key=false) the bracket starts at p.  Returns true on a
+    // valid header, false (no exception) if the line is not a header.
+    DLLLOCAL bool parseHeader(const ToonLine& l, size_t& p, ToonHeader& hdr, bool require_key) {
+        const std::string& s = l.content;
+        hdr.has_key = false;
+        hdr.has_fields = false;
+        hdr.delim = ',';
+        hdr.length = 0;
+        if (require_key) {
+            bool ok;
+            std::string k = parseKey(s, p, l.line_no, ok);
+            if (!ok) {
+                return false;
+            }
+            hdr.key = k;
+            hdr.has_key = true;
+        }
+        if (p >= s.size() || s[p] != '[') {
+            return false;
+        }
+        size_t q = p + 1;
+        size_t dstart = q;
+        while (q < s.size() && isdigit(static_cast<unsigned char>(s[q]))) {
+            ++q;
+        }
+        if (q == dstart) {
+            return false;  // no length digits
+        }
+        std::string nstr = s.substr(dstart, q - dstart);
+        if (q < s.size() && (s[q] == '\t' || s[q] == '|')) {
+            hdr.delim = s[q];
+            ++q;
+        }
+        if (q >= s.size() || s[q] != ']') {
+            return false;
+        }
+        ++q;
+        hdr.length = strtol(nstr.c_str(), nullptr, 10);
+        // optional whitespace, then optional fields segment, then ':'
+        while (q < s.size() && s[q] == ' ') {
+            ++q;
+        }
+        if (q < s.size() && s[q] == '{') {
+            ++q;
+            std::string fieldbuf;
+            // collect to matching '}' (respecting quotes)
+            bool inq = false;
+            size_t fend = std::string::npos;
+            for (size_t z = q; z < s.size(); ++z) {
+                char c = s[z];
+                if (inq) {
+                    if (c == '\\') {
+                        ++z;
+                        continue;
+                    }
+                    if (c == '"') {
+                        inq = false;
+                    }
+                    continue;
+                }
+                if (c == '"') {
+                    inq = true;
+                    continue;
+                }
+                if (c == '}') {
+                    fend = z;
+                    break;
+                }
+            }
+            if (fend == std::string::npos) {
+                errc(l.line_no, static_cast<int>(q), "unterminated tabular field list (missing '}')");
+                return false;
+            }
+            std::string fseg = s.substr(q, fend - q);
+            std::vector<std::string> raw;
+            splitDelimited(fseg, hdr.delim, raw);
+            for (size_t fi = 0; fi < raw.size(); ++fi) {
+                const std::string& rf = raw[fi];
+                size_t fp = 0;
+                bool ok;
+                std::string fk = parseKey(rf, fp, l.line_no, ok);
+                if (!ok || fp != rf.size()) {
+                    errc(l.line_no, static_cast<int>(q), "invalid tabular field name");
+                    return false;
+                }
+                hdr.fields.push_back(fk);
+            }
+            hdr.has_fields = true;
+            q = fend + 1;
+            while (q < s.size() && s[q] == ' ') {
+                ++q;
+            }
+        }
+        if (q >= s.size() || s[q] != ':') {
+            // non-whitespace content between bracket and colon: not a header
+            // (§6 / §14.2)
+            return false;
+        }
+        ++q;
+        p = q;
+        return true;
+    }
+
+    // split content by delimiter, honoring quotes; trims surrounding spaces;
+    // empty tokens are preserved as empty strings
+    DLLLOCAL static void splitDelimited(const std::string& s, char delim, std::vector<std::string>& out) {
+        std::string cur;
+        bool inq = false;
+        for (size_t i = 0; i < s.size(); ++i) {
+            char c = s[i];
+            if (inq) {
+                cur += c;
+                if (c == '\\' && i + 1 < s.size()) {
+                    cur += s[i + 1];
+                    ++i;
+                } else if (c == '"') {
+                    inq = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inq = true;
+                cur += c;
+                continue;
+            }
+            if (c == delim) {
+                out.push_back(trim(cur));
+                cur.clear();
+                continue;
+            }
+            cur += c;
+        }
+        out.push_back(trim(cur));
+    }
+
+    DLLLOCAL static std::string trim(const std::string& s) {
+        size_t a, b;
+        trimmedRange(s, 0, a, b);
+        return s.substr(a, b - a);
+    }
+
+    // compute the trimmed range [a, b) of s starting the scan at `from`,
+    // stripping ' ', '\t', '\r' from both ends - without allocating
+    DLLLOCAL static void trimmedRange(const std::string& s, size_t from, size_t& a, size_t& b) {
+        a = from;
+        b = s.size();
+        while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r')) {
+            ++a;
+        }
+        while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r')) {
+            --b;
+        }
+    }
+
+    // parse a scalar token (already delimiter-split & trimmed) -> Qore value
+    DLLLOCAL QoreValue parseScalar(const char* tok, size_t len, int line_no) {
+        if (len == 0) {
+            return new QoreStringNode("", QCS_UTF8);
+        }
+        if (tok[0] == '"') {
+            // must be a properly terminated quoted string with no trailing chars
+            std::string out;
+            size_t i = 1;
+            bool closed = false;
+            while (i < len) {
+                char c = tok[i];
+                if (c == '\\') {
+                    if (i + 1 >= len) {
+                        errc(line_no, static_cast<int>(i), "unterminated string: missing closing quote");
+                        return QoreValue();
+                    }
+                    char n = tok[i + 1];
+                    switch (n) {
+                        case '\\': out += '\\'; break;
+                        case '"': out += '"'; break;
+                        case 'n': out += '\n'; break;
+                        case 'r': out += '\r'; break;
+                        case 't': out += '\t'; break;
+                        default:
+                            errc(line_no, static_cast<int>(i), "invalid escape sequence in quoted string");
+                            return QoreValue();
+                    }
+                    i += 2;
+                    continue;
+                }
+                if (c == '"') {
+                    closed = true;
+                    ++i;
+                    break;
+                }
+                out += c;
+                ++i;
+            }
+            if (!closed) {
+                errc(line_no, static_cast<int>(len), "unterminated string: missing closing quote");
+                return QoreValue();
+            }
+            if (i != len) {
+                errc(line_no, static_cast<int>(i), "unexpected characters after closing quote");
+                return QoreValue();
+            }
+            return new QoreStringNode(out.c_str(), out.size(), QCS_UTF8);
+        }
+        // unquoted literals
+        if (len == 4 && !memcmp(tok, "true", 4)) {
+            return true;
+        }
+        if (len == 5 && !memcmp(tok, "false", 5)) {
+            return false;
+        }
+        if (len == 4 && !memcmp(tok, "null", 4)) {
+            return QoreValue();
+        }
+        // numeric?  accept decimal & exponent; reject forbidden leading zeros
+        if (toon_match_number_re(tok, len) && !toon_match_leading_zero(tok, len)) {
+            bool has_dot = false;
+            bool has_e = false;
+            for (size_t i = 0; i < len; ++i) {
+                if (tok[i] == '.') {
+                    has_dot = true;
+                } else if (tok[i] == 'e' || tok[i] == 'E') {
+                    has_e = true;
+                }
+            }
+            std::string t(tok, len);
+            if (has_dot || has_e) {
+                return q_strtod(t.c_str());
+            }
+            return static_cast<int64>(strtoll(t.c_str(), nullptr, 10));
+        }
+        // plain string
+        return new QoreStringNode(tok, len, QCS_UTF8);
+    }
+
+    DLLLOCAL QoreValue parseScalar(const std::string& s, int line_no) {
+        return parseScalar(s.c_str(), s.size(), line_no);
+    }
+
+    // row vs key-value disambiguation for tabular rows (§9.3): whichever of
+    // the active delimiter / unquoted colon appears first decides; no unquoted
+    // colon means a row.  Single pass (was two firstUnquoted() scans).
+    DLLLOCAL bool isTabularRow(const std::string& s, char delim) {
+        bool inq = false;
+        for (size_t i = 0; i < s.size(); ++i) {
+            char c = s[i];
+            if (inq) {
+                if (c == '\\') {
+                    ++i;
+                } else if (c == '"') {
+                    inq = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inq = true;
+            } else if (c == delim) {
+                return true;  // delimiter before any unquoted colon -> row
+            } else if (c == ':') {
+                return false;  // colon before any delimiter -> key-value line
+            }
+        }
+        return true;  // no unquoted colon -> row
+    }
+
+    // parse an array given its header; inline_src/p point at the text right
+    // after the header colon on the header line (for inline primitive arrays).
+    // header_depth is the depth of the header line; body at header_depth+1.
+    DLLLOCAL QoreValue parseArrayValue(const ToonHeader& hdr, const ToonLine& hline, size_t after_colon,
+            int header_depth) {
+        if (sm && header_depth >= TOON_MAX_NESTING_DEPTH) {
+            err(hline.line_no, "maximum nesting depth exceeded");
+            return QoreValue();
+        }
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+
+        // inline values present on the header line?
+        size_t ia, ib;
+        trimmedRange(hline.content, after_colon, ia, ib);
+        if (ia != ib) {
+            if (hdr.has_fields) {
+                err(hline.line_no, "tabular array header must not have inline values");
+                return QoreValue();
+            }
+            std::string inl = hline.content.substr(after_colon);
+            std::vector<std::string> toks;
+            splitDelimited(inl, hdr.delim, toks);
+            for (size_t i = 0; i < toks.size(); ++i) {
+                if (checkCancel("parsing TOON array")) {
+                    return QoreValue();
+                }
+                QoreValue v = parseScalar(toks[i], hline.line_no);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                l->push(v, xsink);
+            }
+            if (strict && static_cast<long>(l->size()) != hdr.length) {
+                err(hline.line_no, "inline array element count does not match declared length");
+                return QoreValue();
+            }
+            ++pos;  // consume header line
+            return l.release();
+        }
+
+        // header consumed; body (if any) is at header_depth + 1
+        ++pos;
+        int body_depth = header_depth + 1;
+
+        if (hdr.has_fields) {
+            // tabular rows
+            long rows = 0;
+            while (true) {
+                if (checkCancel("parsing TOON tabular array")) {
+                    return QoreValue();
+                }
+                if (pos >= lines.size()) {
+                    break;
+                }
+                const ToonLine& cl = lines[pos];
+                if (cl.blank) {
+                    // strict mode rejects a blank line anywhere inside the
+                    // block, including before the first row (§12, §14.4);
+                    // hasMoreAtDepth() confirms a row still follows so a
+                    // trailing blank before dedent is not flagged
+                    if (strict && hasMoreAtDepth(body_depth)) {
+                        err(cl.line_no, "blank line inside tabular array");
+                        return QoreValue();
+                    }
+                    ++pos;
+                    continue;
+                }
+                if (cl.depth != body_depth) {
+                    break;
+                }
+                if (!isTabularRow(cl.content, hdr.delim)) {
+                    break;  // a key-value sibling line ends the rows
+                }
+                std::vector<std::string> cells;
+                splitDelimited(cl.content, hdr.delim, cells);
+                if (strict && cells.size() != hdr.fields.size()) {
+                    err(cl.line_no, "tabular row value count does not match field count");
+                    return QoreValue();
+                }
+                ReferenceHolder<QoreHashNode> rh(new QoreHashNode(autoTypeInfo), xsink);
+                for (size_t f = 0; f < hdr.fields.size(); ++f) {
+                    QoreValue cv = (f < cells.size())
+                        ? parseScalar(cells[f], cl.line_no)
+                        : QoreValue(new QoreStringNode("", QCS_UTF8));
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    rh->setKeyValue(hdr.fields[f].c_str(), cv, xsink);
+                }
+                l->push(rh.release(), xsink);
+                ++rows;
+                ++pos;
+            }
+            if (strict && rows != hdr.length) {
+                err(hline.line_no, "tabular row count does not match declared length");
+                return QoreValue();
+            }
+            return l.release();
+        }
+
+        // expanded list of items
+        long items = 0;
+        while (true) {
+            if (checkCancel("parsing TOON array")) {
+                return QoreValue();
+            }
+            if (pos >= lines.size()) {
+                break;
+            }
+            const ToonLine& cl = lines[pos];
+            if (cl.blank) {
+                // strict mode rejects a blank line anywhere inside the block,
+                // including before the first item (§12, §14.4)
+                if (strict && hasMoreAtDepth(body_depth)) {
+                    err(cl.line_no, "blank line inside array");
+                    return QoreValue();
+                }
+                ++pos;
+                continue;
+            }
+            if (cl.depth != body_depth) {
+                break;
+            }
+            if (cl.content.empty() || cl.content[0] != '-') {
+                break;
+            }
+            QoreValue iv = parseListItem(body_depth);
+            if (*xsink) {
+                return QoreValue();
+            }
+            l->push(iv, xsink);
+            ++items;
+        }
+        if (strict && items != hdr.length) {
+            err(hline.line_no, "list array item count does not match declared length");
+            return QoreValue();
+        }
+        return l.release();
+    }
+
+    // is there at least one more non-blank line at >= the given depth before
+    // dedent (used for strict blank-line-inside-array detection)
+    DLLLOCAL bool hasMoreAtDepth(int depth) {
+        for (size_t i = pos + 1; i < lines.size(); ++i) {
+            if (lines[i].blank) {
+                continue;
+            }
+            return lines[i].depth >= depth;
+        }
+        return false;
+    }
+
+    // parse a list item line at item_depth (pos is on the "- ..." line)
+    DLLLOCAL QoreValue parseListItem(int item_depth) {
+        if (sm && item_depth >= TOON_MAX_NESTING_DEPTH) {
+            err(lines[pos].line_no, "maximum nesting depth exceeded");
+            return QoreValue();
+        }
+        const ToonLine& l = lines[pos];
+        const std::string& s = l.content;
+        // content begins with '-'
+        size_t p = 1;
+        if (p < s.size() && s[p] == ' ') {
+            ++p;
+        }
+        std::string rest = s.substr(p);
+        std::string restt = trim(rest);
+        if (restt.empty()) {
+            // empty object list item
+            ++pos;
+            return new QoreHashNode(autoTypeInfo);
+        }
+
+        // build a synthetic line for the remainder, anchored at item_depth so
+        // header/object parsing helpers work uniformly
+        ToonLine sub;
+        sub.indent = l.indent;
+        sub.depth = item_depth;
+        sub.line_no = l.line_no;
+        sub.blank = false;
+        sub.content = rest;
+
+        // array item: "- [..]..."
+        if (!rest.empty() && rest[0] == '[') {
+            ToonHeader hdr;
+            size_t hp = 0;
+            if (parseHeader(sub, hp, hdr, false)) {
+                return parseArrayValue(hdr, sub, hp, item_depth + 1);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+
+        // object whose first field is on the hyphen line, or a primitive
+        // does the remainder start with a key followed by header/colon?
+        {
+            bool ok;
+            size_t kp = 0;
+            std::string k = parseKey(rest, kp, l.line_no, ok);
+            if (ok) {
+                size_t after = kp;
+                while (after < rest.size() && rest[after] == ' ') {
+                    ++after;
+                }
+                if (after < rest.size() && rest[after] == '[') {
+                    // first field is an array (possibly tabular)
+                    ToonHeader hdr;
+                    size_t hp = 0;
+                    if (parseHeader(sub, hp, hdr, true)) {
+                        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+                        QoreValue av = parseArrayValue(hdr, sub, hp, item_depth + 1);
+                        if (*xsink) {
+                            return QoreValue();
+                        }
+                        h->setKeyValue(hdr.key.c_str(), av, xsink);
+                        // remaining sibling fields at item_depth + 1
+                        parseObjectInto(*h, item_depth + 1);
+                        if (*xsink) {
+                            return QoreValue();
+                        }
+                        return h.release();
+                    }
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+                if (after < rest.size() && rest[after] == ':') {
+                    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+                    size_t va, vb;
+                    trimmedRange(rest, after + 1, va, vb);
+                    if (va == vb) {
+                        // nested or empty object: nested body at item_depth + 2
+                        ++pos;
+                        if (pos < lines.size() && !nextStructuralBlankSkip()
+                                && lines[pos].depth == item_depth + 2 && !lines[pos].blank) {
+                            ReferenceHolder<QoreHashNode> sub2(parseObject(item_depth + 2), xsink);
+                            if (*xsink) {
+                                return QoreValue();
+                            }
+                            h->setKeyValue(k.c_str(), sub2.release(), xsink);
+                        } else {
+                            h->setKeyValue(k.c_str(), new QoreHashNode(autoTypeInfo), xsink);
+                        }
+                    } else {
+                        QoreValue pv = parseScalar(rest.c_str() + va, vb - va, l.line_no);
+                        if (*xsink) {
+                            return QoreValue();
+                        }
+                        h->setKeyValue(k.c_str(), pv, xsink);
+                        ++pos;
+                    }
+                    // remaining sibling fields at item_depth + 1
+                    parseObjectInto(*h, item_depth + 1);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    return h.release();
+                }
+            }
+        }
+
+        // primitive list item
+        ++pos;
+        return parseScalar(restt, l.line_no);
+    }
+
+    // skip blank lines for lookahead; returns true if it skipped to EOF
+    DLLLOCAL bool nextStructuralBlankSkip() {
+        while (pos < lines.size() && lines[pos].blank) {
+            ++pos;
+        }
+        return pos >= lines.size();
+    }
+
+    // parse an object at the given depth; returns a new QoreHashNode
+    DLLLOCAL QoreHashNode* parseObject(int depth) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        parseObjectInto(*h, depth);
+        if (*xsink) {
+            return nullptr;
+        }
+        return h.release();
+    }
+
+    // parse object fields at the given depth into an existing hash
+    DLLLOCAL void parseObjectInto(QoreHashNode* h, int depth) {
+        if (sm && depth >= TOON_MAX_NESTING_DEPTH) {
+            err(pos < lines.size() ? lines[pos].line_no : 0, "maximum nesting depth exceeded");
+            return;
+        }
+        while (true) {
+            if (checkCancel("parsing TOON object")) {
+                return;
+            }
+            while (pos < lines.size() && lines[pos].blank) {
+                ++pos;
+            }
+            if (pos >= lines.size()) {
+                return;
+            }
+            const ToonLine& l = lines[pos];
+            if (l.depth < depth) {
+                return;
+            }
+            if (l.depth > depth) {
+                err(l.line_no, "unexpected indentation");
+                return;
+            }
+            const std::string& s = l.content;
+            if (s.empty() || s[0] == '-') {
+                err(l.line_no, "expected an object key");
+                return;
+            }
+
+            // try array header first (key[..]...:)
+            {
+                ToonHeader hdr;
+                size_t hp = 0;
+                if (parseHeader(l, hp, hdr, true)) {
+                    QoreValue av = parseArrayValue(hdr, l, hp, depth);
+                    if (*xsink) {
+                        return;
+                    }
+                    h->setKeyValue(hdr.key.c_str(), av, xsink);
+                    continue;
+                }
+                if (*xsink) {
+                    return;
+                }
+            }
+
+            // key: value  /  key:
+            bool ok;
+            size_t p = 0;
+            std::string key = parseKey(s, p, l.line_no, ok);
+            size_t cpos;
+            if (ok) {
+                size_t after = p;
+                while (after < s.size() && s[after] == ' ') {
+                    ++after;
+                }
+                if (after < s.size() && s[after] == ':') {
+                    cpos = after;
+                } else {
+                    cpos = std::string::npos;
+                }
+            } else {
+                cpos = std::string::npos;
+            }
+            if (cpos == std::string::npos) {
+                // §6 fall-through: treat entire pre-colon content as a literal
+                // key if there is an unquoted colon
+                size_t uc = firstUnquoted(s, ':');
+                if (uc == std::string::npos) {
+                    err(l.line_no, "missing colon after key");
+                    return;
+                }
+                key = trim(s.substr(0, uc));
+                cpos = uc;
+            }
+            size_t va, vb;
+            trimmedRange(s, cpos + 1, va, vb);
+            if (va == vb) {
+                // nested or empty object (nested body at depth + 1)
+                ++pos;
+                size_t save = pos;
+                while (pos < lines.size() && lines[pos].blank) {
+                    ++pos;
+                }
+                if (pos < lines.size() && !lines[pos].blank && lines[pos].depth == depth + 1) {
+                    QoreHashNode* sub = parseObject(depth + 1);
+                    if (*xsink) {
+                        return;
+                    }
+                    h->setKeyValue(key.c_str(), sub, xsink);
+                } else if (pos < lines.size() && !lines[pos].blank && lines[pos].depth > depth + 1) {
+                    err(lines[pos].line_no, "unexpected indentation");
+                    return;
+                } else {
+                    pos = save;
+                    h->setKeyValue(key.c_str(), new QoreHashNode(autoTypeInfo), xsink);
+                }
+            } else {
+                QoreValue pv = parseScalar(s.c_str() + va, vb - va, l.line_no);
+                if (*xsink) {
+                    return;
+                }
+                h->setKeyValue(key.c_str(), pv, xsink);
+                ++pos;
+            }
+        }
+    }
+};
+
+/** @defgroup toon_functions TOON Functions
+ */
+///@{
+namespace Qore::Json;
+
+//! Serializes %Qore data into a TOON (Token-Oriented Object Notation) string
+/** @par Example:
+    @code{.py}
+string toon = make_toon(data);
+    @endcode
+
+    @par DataFrame and SQL Row Data Example:
+    @code{.py}
+%requires json
+%requires dataframe
+
+list<hash<auto>> rows = (
+    {"id": 1, "status": "active", "score": 95.5},
+    {"id": 2, "status": "pending", "score": 88.25},
+);
+DataFrame::DataFrame df(rows);
+
+# Serialize DataFrame rows as TOON tabular data.
+string toon = make_toon(df.toRecords(), {"sort_keys": True});
+
+# SQL and DataProvider row results with the same list<hash<auto>> shape can be
+# serialized the same way.
+string sql_toon = make_toon(rows, {"sort_keys": True});
+    @endcode
+
+    TOON is a line-oriented, indentation-based notation for the JSON data model
+    that is particularly compact for arrays of uniform objects (tabular form).
+    See the <a href="https://github.com/toon-format/spec">TOON specification</a>
+    (version 3.0).
+
+    TOON serializes plain Qore data, not objects. To exchange DataFrame data,
+    serialize row records with \c DataFrame::toRecords() and construct a new
+    \c DataFrame from the row list returned by \c parse_toon(). This keeps the
+    json module independent of dataframe, SQL, and DataProvider modules. For
+    dense or zero-copy columnar interchange, use DataFrame columnar APIs, Arrow,
+    Parquet, or DBI/BulkSqlUtil packed paths instead of TOON.
+
+    @param data the data to serialize to a TOON string
+    @param options an optional hash of serialization options:
+    - \c indent: (int, default \c 2) number of spaces per indentation level
+    - \c tabular_arrays: (bool, default \c True) when \c True, lists of uniform
+      objects (same key set, all primitive values) are serialized in TOON
+      tabular form
+    - \c sort_keys: (bool, default \c False) when \c True, object keys and
+      tabular field names are sorted lexically for deterministic output;
+      otherwise insertion order is preserved
+
+    @return the TOON string corresponding to the arguments passed (UTF-8
+    encoding, LF line endings, no trailing newline)
+
+    @throw TOON-SERIALIZATION-ERROR cannot serialize the value passed (ex:
+    object), the value contains a control character that standard TOON cannot
+    represent, an invalid option was passed, or the maximum nesting depth was
+    exceeded
+
+    @note Values outside the strict JSON data model are normalized exactly as
+    make_json() does, so that \c parse_toon(make_toon(x)) matches
+    \c parse_json(make_json(x)):
+    - absolute \c date values are serialized as ISO-8601 datetime strings
+    - relative \c date values are serialized as ISO-8601 duration strings
+    - \c binary values are serialized as base64 strings
+    - arbitrary-precision \c number values are serialized in canonical decimal
+      form; non-ordinary values (\c \@nan\@, \c \@inf\@) are serialized as
+      \c null
+    - \c NaN and \c Inf \c float values are serialized as \c null
+    - %Qore \c NOTHING and \c NULL are serialized as TOON \c null
+
+    @see parse_toon()
+
+    @since json 1.12
+*/
+string make_toon(auto data, *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // pre-operation cancellation check (cooperative-cancellation.md Pattern 1)
+    if (qore_check_cancel(xsink, "serializing TOON")) {
+        return QoreValue();
+    }
+    int indent = 2;
+    bool tabular = true;
+    bool sort_keys = false;
+    if (options) {
+        QoreValue v = options->getKeyValue("indent");
+        if (!v.isNothing()) {
+            if (v.getType() != NT_INT || v.getAsBigInt() < 1 || v.getAsBigInt() > 32) {
+                xsink->raiseException("TOON-SERIALIZATION-ERROR",
+                    "'indent' option must be an integer between 1 and 32");
+                return QoreValue();
+            }
+            indent = static_cast<int>(v.getAsBigInt());
+        }
+        v = options->getKeyValue("tabular_arrays");
+        if (!v.isNothing()) {
+            if (v.getType() != NT_BOOLEAN) {
+                xsink->raiseException("TOON-SERIALIZATION-ERROR",
+                    "'tabular_arrays' option must be a boolean");
+                return QoreValue();
+            }
+            tabular = v.getAsBool();
+        }
+        v = options->getKeyValue("sort_keys");
+        if (!v.isNothing()) {
+            if (v.getType() != NT_BOOLEAN) {
+                xsink->raiseException("TOON-SERIALIZATION-ERROR",
+                    "'sort_keys' option must be a boolean");
+                return QoreValue();
+            }
+            sort_keys = v.getAsBool();
+        }
+    }
+
+    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
+    QoreSandboxManagerHelper smh;
+    ToonEncCtx ctx(*(*str), indent, tabular, sort_keys, smh.get(), xsink);
+    if (toon_emit_document(ctx, data)) {
+        return QoreValue();
+    }
+    // no trailing newline (§12)
+    if (str->size() && str->c_str()[str->size() - 1] == '\n') {
+        str->terminate(str->size() - 1);
+    }
+    return str.release();
+}
+
+//! Parses a TOON (Token-Oriented Object Notation) string and returns the corresponding %Qore data structure
+/** @par Example:
+    @code{.py}
+auto data = parse_toon(toon_str);
+    @endcode
+
+    @par DataFrame Row Data Example:
+    @code{.py}
+%requires json
+%requires dataframe
+
+string toon = "[2]{id,status,score}:\n  1,active,95.5\n  2,pending,88.25";
+list<hash<auto>> rows = parse_toon(toon);
+DataFrame::DataFrame df(rows);
+    @endcode
+
+    @param toon_str the TOON string to parse
+    @param options an optional hash of parsing options:
+    - \c strict: (bool, default \c True) when \c True, enforce TOON strict-mode
+      validation per the specification: declared array/row counts must match,
+      tabular row widths must match the field count, indentation must be an
+      exact multiple of the indent width, and blank lines are not allowed
+      inside arrays/tabular blocks
+    - \c indent: (int, default \c 2) number of spaces per indentation level
+      used to compute nesting depth
+
+    @return the %Qore data structure corresponding to the input string; TOON
+    \c null is returned as %Qore \c NOTHING (consistent with parse_json() and
+    parse_cbor()). TOON tabular arrays are returned as \c list<hash<auto>>,
+    which can be passed to row-oriented SQL/DataProvider APIs or used to create
+    a \c DataFrame.
+
+    @throw TOON-PARSE-ERROR syntax error parsing the TOON string (with line and
+    column where available), or the maximum nesting depth was exceeded
+
+    @note
+    - TOON is always UTF-8 (TOON specification §1.2, §18.2); if \a toon_str is
+      not in UTF-8 encoding it is transcoded to UTF-8 before parsing, and all
+      returned strings are in UTF-8 encoding
+    - dotted keys (ex: \c user.name) are treated as single literal keys; key
+      folding / path expansion are not enabled (the TOON specification default)
+    - duplicate object keys follow last-value-wins semantics, consistent with
+      parse_json()
+    - tabs are not permitted in indentation
+    - unquoted numeric tokens without a fractional or exponent part are
+      returned as \c int, otherwise as \c float, consistent with parse_json()
+
+    @see make_toon()
+
+    @since json 1.12
+*/
+auto parse_toon(string toon_str, *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // pre-operation cancellation check (cooperative-cancellation.md Pattern 1)
+    if (qore_check_cancel(xsink, "parsing TOON")) {
+        return QoreValue();
+    }
+    bool strict = true;
+    int indent = 2;
+    if (options) {
+        QoreValue v = options->getKeyValue("strict");
+        if (!v.isNothing()) {
+            if (v.getType() != NT_BOOLEAN) {
+                xsink->raiseException("TOON-PARSE-ERROR", "'strict' option must be a boolean");
+                return QoreValue();
+            }
+            strict = v.getAsBool();
+        }
+        v = options->getKeyValue("indent");
+        if (!v.isNothing()) {
+            if (v.getType() != NT_INT || v.getAsBigInt() < 1 || v.getAsBigInt() > 32) {
+                xsink->raiseException("TOON-PARSE-ERROR",
+                    "'indent' option must be an integer between 1 and 32");
+                return QoreValue();
+            }
+            indent = static_cast<int>(v.getAsBigInt());
+        }
+    }
+
+    // TOON documents are always UTF-8 (TOON spec §1.2, §18.2); transcode the
+    // input to UTF-8 before parsing so that non-UTF-8 source strings produce
+    // correctly-encoded results
+    TempEncodingHelper utf8(toon_str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreSandboxManagerHelper smh;
+    ToonParser parser(**utf8, strict, indent, smh.get(), xsink);
+    QoreValue rv = parser.parse();
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv;
+}
+
+///@}

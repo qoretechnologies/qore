@@ -34,9 +34,7 @@
 %requires(reexport) GrokRestClient
 %requires RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module GrokDataProvider {
     version = "1.0";

@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmOrderBase.qm - base module declaring two child modules in a fixed order
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmOrder1
+%try-child-module TcmOrder2
+
+module TcmOrderBase {
+    version = "1.0";
+    desc = "test base module for child module ordering";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! base module recording the order in which child modules are attached
+public class TcmOrderBase {
+    public {
+        #! trace of child module initialization in the order in which it occurred
+        static list<string> trace;
+    }
+
+    #! adds an entry to the trace
+    static add(string entry) {
+        trace += entry;
+    }
+}

@@ -1,0 +1,486 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief defines the JsonRpcClient class
+*/
+/*
+    QC_JsonRpcClient.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2006 - 2019 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "qore-json-module.h"
+
+#include "QC_JsonRpcClient.h"
+
+#include <qore/ReferenceHolder.h>
+
+#include "ql_json.h"
+
+class HTTPInfoRefHelper {
+protected:
+    const ReferenceNode *ref;
+    ExceptionSink *xsink;
+    ReferenceHolder<QoreHashNode> info;
+
+public:
+    DLLLOCAL HTTPInfoRefHelper(const ReferenceNode* n_ref, QoreStringNode* msg, ExceptionSink* n_xsink) : ref(n_ref),
+            xsink(n_xsink), info(new QoreHashNode(autoTypeInfo), xsink) {
+        info->setKeyValue("request", msg, xsink);
+    }
+    DLLLOCAL ~HTTPInfoRefHelper() {
+        // we have to create a temporary ExceptionSink if there is
+        // an active exception, otherwise writing back the reference will fail
+        ExceptionSink *txsink = *xsink ? new ExceptionSink : xsink;
+
+        // write info hash to reference
+        QoreTypeSafeReferenceHelper rh(ref, txsink);
+        if (!rh)
+            return;
+
+        if (rh.assign(info.release()))
+            return;
+
+        if (txsink != xsink)
+            xsink->assimilate(txsink);
+    }
+    DLLLOCAL QoreHashNode *operator*() {
+        return *info;
+    }
+};
+
+QoreValue JsonRpcClient::call(QoreStringNode* msg, QoreHashNode* info, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> response(send("POST", 0, 0, *msg, true, info, xsink), xsink);
+    if (!response)
+        return QoreValue();
+
+    ValueHolder ans(response->takeKeyValue("body"), xsink);
+
+    if (!ans)
+        return QoreValue();
+
+    QoreValue ah = *ans;
+    if (info) {
+        info->setKeyValue("response", ans.release(), xsink);
+        info->setKeyValue("response_headers", response.release(), xsink);
+    }
+
+    if (ah.getType() != NT_STRING) {
+        xsink->raiseException("JSONRPCCLIENT-RESPONSE-ERROR", "undecoded binary response received from remote "
+            "server");
+        return QoreValue();
+    }
+
+    // parse JSON-RPC response
+    QoreStringNodeValueHelper str(ah);
+    return parse_json(*str, xsink);
+}
+
+//! The JsonRpcClient class provides easy access to JSON-RPC web services
+/** @deprecated Use the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module instead.
+    JsonRpcClientIo provides the same JSON-RPC call API with async I/O via
+    \c HttpClientIo::HttpClientConnectionManager, offering automatic HTTP protocol negotiation
+    (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.
+    This class uses synchronous blocking I/O limited to HTTP/1.x.
+
+    This class inherits all public methods of the HTTPClient class. The inherited HTTPClient methods are not listed in this section, see the documentation for the HTTPClient class for more information on methods provided by the parent class.  For a list of low-level JSON-RPC functions, see @ref JSONRPC.
+
+    This object supports the following JSON-RPC protocol versions:
+    - \c "2.0": the default; requests and responses will include the \c "jsonrpc" attribute assigned to the version number (this is true for any declared JSON-RPC protocol version >= 2)
+    - \c "1.0": can be explicitly set in the @ref Qore::Json::JsonRpcClient::constructor() "JsonRpcClient::constructor()" or by calling @ref Qore::Json::JsonRpcClient::setVersion() "JsonRpcClient::setVersion()"
+
+    @note other JSON-RPC protocol versions can be used; for example the unpublished \c "1.1" version can be used as well, but support for JSON-RPC 1.1 is deprecated; for any JSON-RPC protocol version > 1.0 and < 2.0, the \c "version" attribute is serialized with the declared protocol version number (unlike with 2.0 or above, where the \c "jsonrpc" attribute contains this value)
+
+    The JsonRpcClient class understands the following protocol schemes in addition to the protocol schemes supported by the HTTPClient class:
+
+    <b>JsonRpcClient Class Protocols</b>
+    |!Protocol|!Default Port|!SSL?|!Description
+    |\c jsonrpc|\c 80|No|Unencrypted JSON-RPC protocol over HTTP
+    |\c jsonrpcs|\c 443|Yes|JSON-RPC protocol over HTTP with SSL/TLS encryption
+
+    The JsonRpcClient supplies default values for HTTP headers as follows:
+
+    <b>JsonRpcClient Default, but Overridable Headers</b>
+    |!Header|!Default Value
+    |\c Accept|\c text/json
+    |\c Content-Type|\c application/json;charset=utf-8
+    |\c User-Agent|\c Qore-JSON-RPC-Client/1.7
+    |\c Connection|\c Keep-Alive
+
+    @note
+    - if no \c default_path is given in the constructor(), then \c "JSON" is used
+    - This class is not available with the \c PO_NO_NETWORK parse option.
+*/
+qclass JsonRpcClient [dom=NETWORK; arg=JsonRpcClient* client; ns=Qore::Json; vparent=HTTPClient];
+
+//! Creates the JsonRpcClient object with no arguments
+/** No connection is made because no connection parameters are set with this call; connection parameters must be set afterwards using the appropriate HTTPClient methods.
+
+    The JSON-RPC version is set to \c "2.0" by default with this variant of the constructor()
+
+    @par Example:
+    @code{.py}
+JsonRpcClient jrc();
+jrc.setURL("http://localhost:8080");@endcode
+*/
+JsonRpcClient::constructor() {
+   self->setPrivate(CID_JSONRPCCLIENT, new JsonRpcClient);
+}
+
+//! Creates the JsonRpcClient object based on the parameters passed
+/** By default the object will immediately attempt to establish a connection to the server
+    @param opts HTTPClient constructor options:
+    - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 30s)
+    - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL; if this option is not given and no path appears in the URL, then \c "JSON" is used instead
+    - \c default_port: The default port number to connect to if none is given in the URL
+    - \c http_version: Either \c '1.0' or \c '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
+    - \c protocols: A hash describing new protocols, the key is the protocol name and the value is either an integer giving the default port number or a hash with \c 'port' and \c 'ssl' keys giving the default port number and a boolean value to indicate that an SSL connection should be established
+    - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+    - \c proxy: The proxy URL for connecting through a proxy
+    - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 5m)
+    - \c url: A string giving the URL to connect to; if this option is not given and no path appears in the URL, then \c "JSON" is used instead
+    - \c version: A string giving the JSON-RPC protocol version; default: \c "2.0"
+    @param no_connect pass a boolean True value argument to suppress the automatic connection and establish a connection on demand with the first request
+
+    @see HTTPClient::constructor() and HTTPClient::connect() for information on possible exceptions
+
+    @par Example:
+    @code{.py}
+JsonRpcClient jrc(("url": "http://authuser:authpass@otherhost:8080/JSONRPC"));
+    @endcode
+
+    @since json 1.7 added support for the \c "version" option
+*/
+JsonRpcClient::constructor(hash opts, softbool no_connect = False) {
+   self->setPrivate(CID_JSONRPCCLIENT, new JsonRpcClient(opts, no_connect, xsink));
+}
+
+//! Throws an exception; copying JsonRpcClient objects is currently not supported
+/** @throw JSONRPCCLIENT-COPY-ERROR copying JsonRpcClient objects is currently not supported
+*/
+JsonRpcClient::copy() {
+   xsink->raiseException("JSONRPCCLIENT-COPY-ERROR", "copying JsonRpcClient objects is not yet supported.");
+}
+
+//! Calls a remote method using a single value after the method name for the method arguments and returns the response as qore data structure
+/** @param method The JSON-RPC method name to call
+    @param args An optional list of arguments (or single argument) for the method
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash<auto> result = jrc.callArgs("method.name", arg_list);
+    @endcode
+
+    @since json 1.7 this method calls with a hardcoded \c id value of 1
+*/
+hash<auto> JsonRpcClient::callArgs(string[doc] method, auto[doc] args) {
+    QoreValue id = client->getNextId();
+    // create the outgoing message in JSON-RPC call format
+    SimpleRefHolder<QoreStringNode> msg(make_jsonrpc_request_args(client->getVersionStr(), args, id, 0, xsink));
+    if (!msg) {
+        return QoreValue();
+    }
+
+    return client->call(*msg, 0, xsink);
+}
+
+//! Calls a remote method taking all arguments after the method name for the method arguments and returns the response as qore data structure
+/** @param method The JSON-RPC method name to call
+    @param ... the arguments to the call
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash<auto> result = jrc.call("method.name", arg1, arg2);
+    @endcode
+
+    @since json 1.7 this method calls with a hardcoded \c id value of 1
+*/
+hash<auto> JsonRpcClient::call(string[doc] method, ...) {
+    QoreValue id = client->getNextId();
+    // create the outgoing message in JSON-RPC call format
+    SimpleRefHolder<QoreStringNode> msg(make_jsonrpc_request(client->getVersionStr(), args, id, 0, xsink));
+    if (!msg) {
+        return QoreValue();
+    }
+
+    return client->call(*msg, 0, xsink);
+}
+
+//! Calls a remote method with a call ID, taking all arguments after the method name for the method arguments and returns the response as qore data structure
+/** @param id the \c id value for the call
+    @param method The JSON-RPC method name to call
+    @param ... the arguments to the call
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash result = jrc.callId(1, "method.name", arg1, arg2);
+    @endcode
+
+    @since json 1.7
+*/
+hash<auto> JsonRpcClient::callId(auto id, string[doc] method, ...) {
+    // create the outgoing message in JSON-RPC call format
+    SimpleRefHolder<QoreStringNode> msg(make_jsonrpc_request(client->getVersionStr(), args, id, 1, xsink));
+    if (!msg) {
+        return QoreValue();
+    }
+    client->setLastId(id);
+
+    return client->call(*msg, 0, xsink);
+}
+
+//! Calls a remote method using a single value after the method name for the method arguments and returns the response as qore data structure, accepts a reference to a hash as the first argument to give technical information about the call
+/** @param info a reference to a hash that provides the following keys on output giving technical information about the HTTP call:
+    - \c request: the literal outgoing request body sent
+    - \c request-uri: the first line of the HTTP request
+    - \c headers: a hash of HTTP headers in the outgoing request
+    - \c response-uri: the first line of the HTTP response
+    - \c response: the literal response body received from the server
+    - \c response_headers: a hash of headers received in the response
+    @param method The JSON-RPC method name to call
+    @param args An optional list of arguments (or single argument) for the method
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash info;
+hash result = jrc.callArgsWithInfo(\info, "method.name", arg_list, 2);
+    @endcode
+
+    @since json 1.7 this method calls with a hardcoded \c id value of 1
+*/
+hash<auto> JsonRpcClient::callArgsWithInfo(reference<auto> info, string[doc] method, auto[doc] args) {
+    QoreValue id = client->getNextId();
+    // create the outgoing message in JSON-RPC call format
+    QoreStringNode *msg = make_jsonrpc_request_args(client->getVersionStr(), args, id, 1, xsink);
+    if (!msg) {
+        return QoreValue();
+    }
+
+    HTTPInfoRefHelper irh(info, msg, xsink);
+
+    // send the message to the server and get the response as a JSON string
+    return client->call(msg, *irh, xsink);
+}
+
+//! Calls a remote method using a single value after the method name for the method arguments and returns the response as qore data structure, accepts a reference to a hash as the first argument to give technical information about the call
+/** @param info a reference to a hash that provides the following keys on output giving technical information about the HTTP call:
+    - \c request: the literal outgoing request body sent
+    - \c request-uri: the first line of the HTTP request
+    - \c headers: a hash of HTTP headers in the outgoing request
+    - \c response-uri: the first line of the HTTP response
+    - \c response: the literal response body received from the server
+    - \c response_headers: a hash of headers received in the response
+    @param id the \c id value for the call
+    @param method The JSON-RPC method name to call
+    @param args An optional list of arguments (or single argument) for the method
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash<auto> info;
+hash<auto> result = jrc.callIdArgsWithInfo(\info, 4, "method.name", arg_list, 2);
+    @endcode
+
+    @since json 1.7
+*/
+hash<auto> JsonRpcClient::callIdArgsWithInfo(reference<hash<auto>> info, auto id, string[doc] method, auto[doc] args) {
+    // create the outgoing message in JSON-RPC call format
+    QoreStringNode *msg = make_jsonrpc_request_args(client->getVersionStr(), args, id, 1, xsink);
+    if (!msg) {
+        return QoreValue();
+    }
+    client->setLastId(id);
+
+    HTTPInfoRefHelper irh(info, msg, xsink);
+
+    // send the message to the server and get the response as a JSON string
+    return client->call(msg, *irh, xsink);
+}
+
+//! Calls a remote method taking all arguments after the method name for the method arguments and returns the response as qore data structure, accepts a reference to a hash as the first argument to give technical information about the call
+/** @param info a reference to a hash that provides the following keys on output giving technical information about the HTTP call:
+    - \c request: the literal outgoing request body sent
+    - \c request-uri: the first line of the HTTP request
+    - \c headers: a hash of HTTP headers in the outgoing request
+    - \c response-uri: the first line of the HTTP response
+    - \c response: the literal response body received from the server
+    - \c response_headers: a hash of headers received in the response
+    @param method The JSON-RPC method name to call
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash<auto> info;
+hash<auto> result = jrc.callWithInfo(\info, "method.name", arg1, arg2);
+    @endcode
+
+    @since json 1.7 this method calls with a hardcoded \c id value of 1
+*/
+hash<auto> JsonRpcClient::callWithInfo(reference<hash<auto>> info, string[doc] method, ...) {
+    QoreValue id = client->getNextId();
+    // create the outgoing message in JSON-RPC call format
+    QoreStringNode *msg = make_jsonrpc_request(client->getVersionStr(), args, id, 1, xsink);
+    if (!msg) {
+        return QoreValue();
+    }
+
+    HTTPInfoRefHelper irh(info, msg, xsink);
+
+    // send the message to the server and get the response as a JSON string
+    return client->call(msg, *irh, xsink);
+}
+
+//! Calls a remote method taking all arguments after the method name for the method arguments and returns the response as qore data structure, accepts a reference to a hash as the first argument to give technical information about the call
+/** @param info a reference to a hash that provides the following keys on output giving technical information about the HTTP call:
+    - \c request: the literal outgoing request body sent
+    - \c request-uri: the first line of the HTTP request
+    - \c headers: a hash of HTTP headers in the outgoing request
+    - \c response-uri: the first line of the HTTP response
+    - \c response: the literal response body received from the server
+    - \c response_headers: a hash of headers received in the response
+    @param id the \c id value for the call
+    @param method The JSON-RPC method name to call
+
+    @return a data structure corresponding to the JSON data returned by the JSON-RPC server
+
+    @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
+    @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
+
+    @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @par Example:
+    @code{.py}
+hash<auto> info;
+hash<auto> result = jrc.callIdWithInfo(\info, 3, "method.name", arg1, arg2);
+    @endcode
+
+    @since the \c id parameter was added in json 1.7
+*/
+hash<auto> JsonRpcClient::callIdWithInfo(reference<hash<auto>> info, auto id, string[doc] method, ...) {
+    // create the outgoing message in JSON-RPC call format
+    QoreStringNode *msg = make_jsonrpc_request(client->getVersionStr(), args, id, 1, xsink);
+    if (!msg) {
+        return QoreValue();
+    }
+    client->setLastId(id);
+
+    HTTPInfoRefHelper irh(info, msg, xsink);
+
+    // send the message to the server and get the response as a JSON string
+    return client->call(msg, *irh, xsink);
+}
+
+//! clears the event queue for the JsonRpcClient object
+/** @par Example:
+    @code{.py}
+jrc.setEventQueue();
+    @endcode
+ */
+nothing JsonRpcClient::setEventQueue() {
+    client->setEventQueue(0, xsink);
+}
+
+//! sets the event queue for the JsonRpcClient object
+/** @param queue the Queue object to receive network events from the JsonRpcClient object
+    @par Example:
+    @code{.py}
+Queue queue();
+jrc.setEventQueue(queue);
+    @endcode
+ */
+nothing JsonRpcClient::setEventQueue(Queue[Queue] queue) {
+    // pass reference from QoreObject::getReferencedPrivateData() to function
+    client->setEventQueue(queue.release(), xsink);
+}
+
+//! Sets the JSON-RPC protocol version
+/** @param version the JSON-RPC protocol version
+
+    @since json 1.7
+ */
+nothing JsonRpcClient::setVersion(string version) {
+    TempEncodingHelper tstr(version, QCS_UTF8, xsink);
+    if (tstr) {
+        client->setVersion(tstr->c_str());
+    }
+}
+
+//! Returns the JSON-RPC protocol version
+/** @return the JSON-RPC protocol version
+
+    @since json 1.7
+ */
+string JsonRpcClient::getVersion() [flags=CONSTANT] {
+    QoreStringNode* str = new QoreStringNode(QCS_UTF8);
+    client->getVersion(*str);
+    return str;
+}

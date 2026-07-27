@@ -36,19 +36,7 @@
 
 # the json module is delivered separately from Qore; load it gracefully so deployments
 # without the json binary module can still load this module (JSON operations will throw)
-%try-module json >= 1.5
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 module GraphQLHandler {
     version = "1.0";

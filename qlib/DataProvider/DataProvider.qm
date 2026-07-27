@@ -41,9 +41,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module xml
 %define NoXml
@@ -61,9 +59,7 @@ module DataProvider {
 %ifndef NoYaml
         extra += YamlExpressionImplementations;
 %endif
-%ifndef NoJson
         extra += JsonExpressionImplementations;
-%endif
 %ifndef NoXml
         extra += XmlExpressionImplementations;
 %endif

@@ -31,9 +31,7 @@
 %requires DataProvider
 %requires AftershipDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class AftershipDataProviderTest
 

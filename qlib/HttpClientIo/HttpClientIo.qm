@@ -52,7 +52,8 @@ module HttpClientIo {
 
     Features:
     - **Protocol auto-selection**: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
-      preferring HTTP/3 when available
+      preferring HTTP/3 when available, and falling back to HTTP/1.1 for endpoints that
+      complete the TLS handshake but refuse HTTP/2 via ALPN
     - **HTTP/1.1 support**: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
     - **True multiplexing**: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
@@ -145,7 +146,10 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       for a fully non-blocking, immediately cancelable happy-eyeballs race
       (winner / error / protocol-cache semantics identical to the synchronous
       path) and @ref HttpClientConnectionManager::abandonAsyncHEForUrl() to
-      tear an in-flight race down with no leaked socket or stagger timer
+      tear an in-flight race down with no leaked socket or stagger timer.
+      When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
+      neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
+      failing; the result is cached per host and re-probed periodically
     - HTTP/1.1 serial request/response with keep-alive; the connection manager
       creates multiple connections for concurrent requests
     - Connection pooling with configurable limits, HTTP-proxy support,

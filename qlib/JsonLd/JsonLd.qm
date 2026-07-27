@@ -1,0 +1,100 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file JsonLd.qm @brief JSON-LD 1.1 Processing module
+
+/*  JsonLd.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires Logger
+
+%modern
+
+module JsonLd {
+    version = "1.0";
+    desc = "JSON-LD 1.1 processing module implementing W3C JSON-LD 1.1 algorithms";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage JsonLd Module
+
+    @tableofcontents
+
+    @section jsonldintro Introduction to the JsonLd Module
+
+    The %JsonLd module provides a complete implementation of the W3C JSON-LD 1.1 Processing
+    Algorithms and API specification, enabling Qore applications to work with JSON for Linked
+    Data.
+
+    JSON-LD extends JSON with linked data semantics including \c \@context for vocabulary
+    mapping, \c \@id for node identification, \c \@type for typing, and other keywords
+    that enable interoperability across systems using shared vocabularies.
+
+    @subsection jsonldfeatures Features
+
+    - Full W3C JSON-LD 1.1 compliance
+    - Expansion algorithm: expand compact IRIs to full IRIs
+    - Compaction algorithm: compact full IRIs using a context
+    - Flattening algorithm: flatten nested nodes into a flat \c \@graph array
+    - Framing algorithm: query-by-example graph matching
+    - RDF serialization: toRdf/fromRdf with N-Quads support
+    - Thread-safe context caching with TTL
+    - Pluggable document loaders (HTTP, file, caching)
+    - Structured W3C error codes
+
+    @subsection jsonldusage Basic Usage
+
+    @code
+    %requires JsonLd
+
+    # Create processor
+    JsonLdProcessor proc();
+
+    # Expand a JSON-LD document
+    list<auto> expanded = proc.expand({
+        "\@context": "http://schema.org/",
+        "\@type": "Person",
+        "name": "Jane Doe",
+    });
+
+    # Compact using a context
+    hash<auto> compacted = proc.compact(expanded, {"@context": "http://schema.org/"});
+    @endcode
+
+    @section jsonldrelnotes JsonLd Release Notes
+
+    @subsection jsonldv1_0 JsonLd v1.0
+    - initial release with full W3C JSON-LD 1.1 support
+    - expansion, compaction, flattening, framing algorithms
+    - toRdf/fromRdf with N-Quads serialization
+    - thread-safe context caching
+    - pluggable document loaders
+    - comprehensive W3C error codes
+*/
+
+#! the %JsonLd namespace holds all public definitions in the %JsonLd module
+public namespace JsonLd {
+}

@@ -128,10 +128,6 @@ public class EmbeddingModel {
             if (!config.url.val()) {
                 throw "EMBEDDING-CONFIG-ERROR", "url is required for HTTP mode";
             }
-%ifdef NoJson
-            throw "EMBEDDING-DEPENDENCY-ERROR",
-                "json module is required for HTTP mode but is not available";
-%endif
             url = config.url;
             model_name = config.model;
             api_key = config.api_key;

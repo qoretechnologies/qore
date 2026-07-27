@@ -1,0 +1,249 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JsonSchemaTest
+
+class JsonSchemaTest inherits QUnit::Test {
+    constructor() : Test("JsonSchemaTest", "1.0", \ARGV) {
+        addTestCase("String type", \testStringType());
+        addTestCase("Integer type", \testIntegerType());
+        addTestCase("Number type", \testNumberType());
+        addTestCase("Boolean type", \testBooleanType());
+        addTestCase("Null type", \testNullType());
+        addTestCase("Array type", \testArrayType());
+        addTestCase("Object type", \testObjectType());
+        addTestCase("Object properties", \testObjectProperties());
+        addTestCase("Required properties", \testRequiredProperties());
+        addTestCase("Enum validation", \testEnumValidation());
+        addTestCase("Numeric constraints", \testNumericConstraints());
+        addTestCase("String constraints", \testStringConstraints());
+        addTestCase("Schema from hash", \testSchemaFromHash());
+        addTestCase("Validation errors", \testValidationErrors());
+        addTestCase("Invalid schema", \testInvalidSchema());
+        addTestCase("Nested objects", \testNestedObjects());
+        addTestCase("Type safety", \testTypeSafety());
+        addTestCase("Sandbox load file", \testSandboxLoadFile());
+        addTestCase("functional domain restrictions", \testFunctionalDomains());
+        set_return_value(main());
+    }
+
+    testStringType() {
+        JsonSchema v('{"type": "string"}');
+        assertTrue(v.validate("hello"));
+        assertTrue(v.validate(""));
+        assertFalse(v.validate(42));
+        assertFalse(v.validate(True));
+        assertFalse(v.validate(NOTHING));
+    }
+
+    testIntegerType() {
+        JsonSchema v('{"type": "integer"}');
+        assertTrue(v.validate(42));
+        assertTrue(v.validate(0));
+        assertTrue(v.validate(-10));
+        assertFalse(v.validate(3.14));
+        assertFalse(v.validate("42"));
+    }
+
+    testNumberType() {
+        JsonSchema v('{"type": "number"}');
+        assertTrue(v.validate(42));
+        assertTrue(v.validate(3.14));
+        assertTrue(v.validate(-10.5));
+        assertFalse(v.validate("3.14"));
+    }
+
+    testBooleanType() {
+        JsonSchema v('{"type": "boolean"}');
+        assertTrue(v.validate(True));
+        assertTrue(v.validate(False));
+        assertFalse(v.validate(1));
+        assertFalse(v.validate("true"));
+    }
+
+    testNullType() {
+        JsonSchema v('{"type": "null"}');
+        assertTrue(v.validate(NOTHING));
+        assertFalse(v.validate(""));
+        assertFalse(v.validate(0));
+    }
+
+    testArrayType() {
+        JsonSchema v('{"type": "array"}');
+        assertTrue(v.validate(()));
+        assertTrue(v.validate((1, 2, 3)));
+        assertTrue(v.validate(("a", "b")));
+        assertFalse(v.validate("array"));
+        assertFalse(v.validate({}));
+    }
+
+    testObjectType() {
+        JsonSchema v('{"type": "object"}');
+        assertTrue(v.validate({}));
+        assertTrue(v.validate({"key": "value"}));
+        assertFalse(v.validate(()));
+        assertFalse(v.validate("object"));
+    }
+
+    testObjectProperties() {
+        JsonSchema v('{"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer", "minimum": 0}}, "required": ["name"]}');
+        assertTrue(v.validate({"name": "Alice", "age": 30}));
+        assertTrue(v.validate({"name": "Bob"}));
+        assertFalse(v.validate({"name": "Dave", "age": -5}));
+        assertFalse(v.validate({"name": "Eve", "age": "thirty"}));
+    }
+
+    testRequiredProperties() {
+        JsonSchema v('{"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}');
+        assertFalse(v.validate({"age": 25}));
+        assertFalse(v.validate({}));
+        assertTrue(v.validate({"name": "Test"}));
+    }
+
+    testEnumValidation() {
+        JsonSchema v('{"type": "string", "enum": ["red", "green", "blue"]}');
+        assertTrue(v.validate("red"));
+        assertTrue(v.validate("green"));
+        assertTrue(v.validate("blue"));
+        assertFalse(v.validate("yellow"));
+        assertFalse(v.validate("RED"));
+    }
+
+    testNumericConstraints() {
+        JsonSchema v('{"type": "integer", "minimum": 0, "maximum": 100}');
+        assertTrue(v.validate(0));
+        assertTrue(v.validate(50));
+        assertTrue(v.validate(100));
+        assertFalse(v.validate(-1));
+        assertFalse(v.validate(101));
+    }
+
+    testStringConstraints() {
+        JsonSchema v('{"type": "string", "minLength": 2, "maxLength": 5}');
+        assertTrue(v.validate("ab"));
+        assertTrue(v.validate("abc"));
+        assertTrue(v.validate("abcde"));
+        assertFalse(v.validate("a"));
+        assertFalse(v.validate("abcdef"));
+    }
+
+    testSchemaFromHash() {
+        hash<auto> schema = {"type": "string", "minLength": 1};
+        JsonSchema v(schema);
+        assertTrue(v.validate("hello"));
+        assertFalse(v.validate(""));
+    }
+
+    testValidationErrors() {
+        JsonSchema v('{"type": "string"}');
+        hash<JsonSchemaValidationResult> result = v.validateWithErrors(42);
+        assertFalse(result.valid);
+        assertTrue(result.errors.size() > 0);
+        hash<JsonSchemaValidationError> first_error = result.errors[0];
+        assertTrue(exists first_error.path);
+        assertTrue(exists first_error.message);
+        assertTrue(exists first_error.keyword);
+    }
+
+    testInvalidSchema() {
+        assertThrows("JSON-SCHEMA-ERROR", sub() {
+            new JsonSchema('{invalid json}');
+        });
+    }
+
+    testNestedObjects() {
+        JsonSchema v('{"type": "object", "properties": {"address": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}');
+        assertTrue(v.validate({"address": {"city": "Springfield"}}));
+        assertFalse(v.validate({"address": {"street": "123 Main St"}}));
+    }
+
+    testTypeSafety() {
+        JsonSchema v('{"type": "string"}');
+        hash<JsonSchemaValidationResult> result = v.validateWithErrors(42);
+        assertFalse(result.valid);
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            auto bad = "bad";
+            result.errors += bad;
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            auto bad_list = ("bad");
+            result.errors = bad_list;
+        });
+    }
+
+    #! Test JsonSchema::load() in sandbox mode exercises the fstat-based file size check
+    /** Note: The sandbox file size limit is 10MB (JSON_MAX_SCHEMA_FILE_SIZE).
+        Creating a 10MB+ file for unit tests would be wasteful, so this test verifies
+        that loading works correctly in sandbox mode with a small file.
+
+        The TOCTOU-safe fstat() check is used after the file is opened to ensure
+        the actual opened file's size is checked, not a potentially different file.
+    */
+    testSandboxLoadFile() {
+        # Create a temporary schema file
+        string tmpDir = ENV.TMPDIR ?? "/tmp";
+        string schemaPath = tmpDir + "/test_schema_" + string(getpid()) + ".json";
+        string schemaContent = '{"type": "object", "properties": {"name": {"type": "string"}}}';
+
+        # Write the schema file
+        File f();
+        f.open(schemaPath, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(schemaContent);
+        f.close();
+
+        on_exit {
+            unlink(schemaPath);
+        }
+
+        # Test loading in sandboxed program - exercises the fstat() check path
+        string code = sprintf("
+%%new-style
+%%require-types
+%%strict-args
+%%requires json
+
+auto sub test_load() {
+    JsonSchema schema = JsonSchema::load(\"%s\");
+    return schema.validate({\"name\": \"test\"});
+}
+", schemaPath);
+
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        SandboxManager sm();
+        # Allow access to the temp directory for the schema file
+        sm.setFilesystemSandboxRoot(tmpDir);
+        sm.addFilesystemAllowedPath(schemaPath, 0);  # 0 = read access
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-schema-test");
+
+        # Should succeed - file is small and allowed
+        auto result = p.callFunction("test_load");
+        assertTrue(result, "Schema should validate successfully in sandbox mode");
+    }
+    # The json module touches the filesystem (JsonSchema::load) and the network
+    # (JsonRpcClient), so both must be tagged with functional domains -- otherwise a Program
+    # created with PO_NO_FILESYSTEM / PO_NO_NETWORK could still reach them.  JsonRpcClient's
+    # own documentation has always claimed PO_NO_NETWORK applies to it; before the module
+    # moved into the Qore tree that claim was not actually enforced.
+    testFunctionalDomains() {
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", \domainProbe(),
+            (PO_NO_NETWORK, "JsonRpcClient c();"));
+        assertThrows("PARSE-EXCEPTION", \domainProbe(),
+            (PO_NO_FILESYSTEM, "JsonSchema::load(\"/nonexistent.json\");"));
+        # without the restriction the same source parses
+        domainProbe(PO_NEW_STYLE, "JsonRpcClient c();");
+        domainProbe(PO_NEW_STYLE, "JsonSchema::load(\"/nonexistent.json\");");
+    }
+
+    private domainProbe(int po, string body) {
+        Program p(PO_NEW_STYLE | po);
+        p.parse("%requires json\nsub probe() { " + body + " }", "domain-probe");
+    }
+
+}

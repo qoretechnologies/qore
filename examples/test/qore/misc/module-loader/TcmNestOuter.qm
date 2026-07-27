@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmNestOuter.qm - module requiring TcmNestBase; the child module requires this module in turn
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmNestBase
+
+module TcmNestOuter {
+    version = "1.0";
+    desc = "test module requiring the base module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmNestBase::add("outer");
+    };
+}
+
+#! class used by the child module
+public class TcmNestOuter {
+    #! returns a fixed string
+    static string hello() {
+        return "outer";
+    }
+}

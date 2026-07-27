@@ -237,9 +237,9 @@
 
     <i>Modules and integrations:</i>
     - new builtin modules: @ref dataframeintro "dataframe", @ref i18nintro "i18n",
-      @ref krb5intro "krb5", @ref linenoiseintro "linenoise", @ref mlintro "ml",
-      @ref mongodbintro "mongodb", @ref ocrintro "ocr", @ref protobufintro "protobuf",
-      @ref tokenizerintro "tokenizer"
+      @ref jsonintro "json", @ref krb5intro "krb5", @ref linenoiseintro "linenoise",
+      @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
+      @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
@@ -265,6 +265,9 @@
     - new @ref prepend-module-path "%prepend-module-path" and
       @ref append-module-path "%append-module-path" directives for per-program module search paths,
       including paths persisted in AOT binaries
+    - new @ref try-child-module "%try-child-module" directive letting a base module declare optional
+      @ref user_module_children "child modules" that extend it, loaded automatically once the base module
+      is fully published
     - \c qpp \c --metadata flag emits structured \c .meta.json files for builtin classes,
       methods, functions, constants, hashdecls, and enums
     - tree-sitter-based parser backend in the @ref astparserintro "astparser" module
@@ -758,6 +761,25 @@ int echoed = child.echo(value);
     See @ref prepend-module-path "%prepend-module-path",
     @ref append-module-path "%append-module-path", and
     @ref no-module-path-directives "%no-module-path-directives".
+    @endparblock
+
+    @par Child Modules for Extensible Base Modules
+    @parblock
+    The new @ref try-child-module "%try-child-module" parse directive lets a
+    @ref user_modules "user module" declare optional child modules that extend
+    it.  Declared children are loaded by the module loader after the declaring
+    module has been fully loaded, initialized, and published, so the child's
+    references to the parent resolve normally &mdash; which is not possible when
+    loading an extension from the parent's own \c init closure.
+
+    A child that is not installed is silently ignored; a child that is installed
+    but cannot be loaded raises the child's own error, so a broken extension can
+    no longer be confused with a missing one.  Attachment status for every
+    declared child is reported by get_module_hash() under the
+    \c "child-modules" key.
+
+    See @ref try-child-module "%try-child-module" and
+    @ref user_module_children "Child Modules" for details.
     @endparblock
 
     @par Native IR Lowering for context Statement
@@ -1876,6 +1898,19 @@ foreach string module_name in (registry.getProcessModules()) {
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool
 
+    - @ref jsonintro "json" module
+      - previously the external \c module-json repository, now built and installed with %Qore, so
+        JSON support is always present; the JSON parser and serializer themselves moved into the
+        library, and \c <qore/QoreJson.h> exports them as a public C++ API for use by other builtin
+        binary modules
+      - JSON, CBOR and TOON serialization, a SAX-style @ref Qore::Json::JsonSaxParser "JsonSaxParser",
+        JSON Schema validation via @ref Qore::Json::JsonSchema "JsonSchema", incremental output via
+        @ref Qore::Json::JsonStreamWriter "JsonStreamWriter", JWT signing and verification, and a
+        @ref Qore::Json::JsonRpcClient "JsonRpcClient"
+      - its 16 companion user modules ship with %Qore as well and are listed under
+        @ref qore_3_0_0_new_user_modules "New User Modules" below, so the MCP, A2A, FHIR, JSON-RPC,
+        NDJSON and JSON-LD connection schemes and data provider factories are always available
+
     - @ref krb5intro "krb5" module
       - new builtin module providing Kerberos 5 and GSSAPI primitives — credential caches, keytabs,
         principals, service tickets, GSSAPI contexts, S4U impersonation, and SPNEGO/HTTP Negotiate workflows
@@ -1922,6 +1957,18 @@ foreach string module_name in (registry.getProcessModules()) {
         alignment, and sliding-window overflow for long documents
 
     @subsection qore_3_0_0_new_user_modules New User Modules
+    - @ref a2aclientintro "A2aClient" module
+      - new module providing a client API for connecting to
+        <a href="https://a2a-protocol.org">A2A</a> (Agent-to-Agent) agents
+
+    - @ref a2aclientdataproviderintro "A2aClientDataProvider" module
+      - new module providing a data provider API for
+        <a href="https://a2a-protocol.org">A2A</a> agents
+
+    - @ref a2aserverhandlerintro "A2aServerHandler" module
+      - new module providing an <a href="https://a2a-protocol.org">A2A</a> server handler for use with the
+        @ref httpserverintro "HttpServer" module
+
     - @ref aftershipdataproviderintro "AftershipDataProvider" module
       - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
 
@@ -2115,6 +2162,14 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref exarestclientintro "ExaRestClient" module
       - new module providing a REST client for <a href="https://exa.ai">Exa</a>'s neural-search API
 
+    - @ref fhirrestclientintro "FhirRestClient" module
+      - new module providing a REST client for JSON-based
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
+
+    - @ref fhirrestdataproviderintro "FhirRestDataProvider" module
+      - new module providing a data provider API for JSON-based
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
+
     - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
       - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
 
@@ -2250,6 +2305,25 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref jotformrestclientintro "JotformRestClient" module
       - new module providing a REST client for the <a href="https://www.jotform.com/">JotForm</a> REST API
 
+    - @ref jsonfiledataproviderintro "JsonFileDataProvider" module
+      - new module providing JSON file read/write support and data provider integration
+
+    - @ref jsonldintro "JsonLd" module
+      - new module providing <a href="https://www.w3.org/TR/json-ld11/">JSON-LD 1.1</a> processing,
+        implementing the W3C expansion, compaction, flattening, framing and RDF serialization algorithms
+
+    - @ref jsonrpcclientiointro "JsonRpcClientIo" module
+      - new module providing a pure-%Qore <a href="https://www.jsonrpc.org/specification">JSON-RPC</a>
+        client with async I/O via the @ref httpclientiointro "HttpClientIo" module
+
+    - @ref jsonrpcconnectionintro "JsonRpcConnection" module
+      - new module providing <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> client connections
+
+    - @ref jsonrpchandlerintro "JsonRpcHandler" module
+      - new module providing infrastructure for implementing
+        <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> server-side services using the
+        @ref httpserverintro "HttpServer" module
+
     - @ref katanadataproviderintro "KatanaDataProvider" module
       - new module providing a data provider API for <a href="https://katanamrp.com/">Katana</a> Manufacturing ERP
 
@@ -2302,6 +2376,18 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for <a href="https://www.mailgun.com/">Mailgun</a>'s email API
 
+    - @ref mcpclientintro "McpClient" module
+      - new module providing a <a href="https://modelcontextprotocol.io">Model Context Protocol</a>
+        (MCP) client API for connecting to MCP servers
+
+    - @ref mcpclientdataproviderintro "McpClientDataProvider" module
+      - new module providing a data provider API for
+        <a href="https://modelcontextprotocol.io">MCP</a> servers
+
+    - @ref mcpserverhandlerintro "McpServerHandler" module
+      - new module providing an <a href="https://modelcontextprotocol.io">MCP</a> server handler for use
+        with the @ref httpserverintro "HttpServer" module
+
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for <a href="https://memcached.org/">Memcached</a> caching servers
 
@@ -2323,6 +2409,9 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref mongodbdataproviderintro "MongoDbDataProvider" module
       - new module providing a data provider API for <a href="https://www.mongodb.com/">MongoDB</a> servers
 
+    - @ref ndjsondataproviderintro "NdjsonDataProvider" module
+      - new module providing NDJSON (Newline Delimited JSON) support and data provider integration
+
     - @ref ollamadataproviderintro "OllamaDataProvider" module
       - new module providing a data provider API for <a href="https://ollama.com">Ollama</a> local-first LLM runtimes
 
@@ -2334,6 +2423,16 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref onedriverestclientintro "OneDriveRestClient" module
       - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
+
+    - @ref onerecordclientintro "OneRecordClient" module
+      - new module providing an
+        <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> client for air
+        cargo data sharing via REST/JSON-LD
+
+    - @ref onerecordserverhandlerintro "OneRecordServerHandler" module
+      - new module providing an
+        <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> server handler
+        for use with the @ref httpserverintro "HttpServer" module
 
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration

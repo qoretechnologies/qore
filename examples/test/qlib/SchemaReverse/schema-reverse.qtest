@@ -14,9 +14,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class Main
 
@@ -180,9 +178,6 @@ class Main inherits QUnit::Test {
     }
 
     testSchemaReverseToJson() {
-%ifdef NoJson
-        testSkip("json module not available");
-%else
         if (!m_ds) {
             testSkip("no DB connection");
         }
@@ -197,7 +192,6 @@ class Main inherits QUnit::Test {
         assertEq("hash", parsed.type(), "parsed JSON is a hash");
         assertTrue(parsed.hasKey("schema"), "parsed JSON has 'schema' key");
         assertEq("TestSchema", parsed.schema.name, "schema name matches");
-%endif
     }
 
     testSchemaReverseFullToQore() {

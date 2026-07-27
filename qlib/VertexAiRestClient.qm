@@ -34,9 +34,7 @@
 %requires QoreLlmTypes
 %requires QoreRagTypes
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module VertexAiRestClient {
     version = "1.0";

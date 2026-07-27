@@ -490,6 +490,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     /** Delegates to the C++ base class waitForReady() for the condition wait,
         then checks for errors (the C++ base returns False for both timeout
         and closed-with-error).
+
+        @throw HTTPCLIENT-CONNECT-ERROR the connection closed before becoming
+        ready; the underlying poll-operation error hash (\c err, \c desc) is
+        passed as the exception argument so callers can dispatch on the real
+        protocol-level error code (e.g. \c HTTP2-ALPN-ERROR) instead of parsing
+        it back out of the description string
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
@@ -498,7 +504,8 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
             throw "HTTPCLIENT-CONNECT-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"),
+                err;
         }
 
         return ready;

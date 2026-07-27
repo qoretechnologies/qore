@@ -33,9 +33,7 @@
 %requires RestClient
 %requires Mime
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires Cin7CoreRestClient
 %requires Cin7CoreDataProvider
@@ -116,9 +114,6 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
 
     #! Check if json module is available
     private checkJson() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
     }
 
     #! Creates a Cin7CoreDataProvider for unit tests

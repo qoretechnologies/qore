@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires JsonRpcClientIo
+%requires JsonRpcConnection
+%requires QUnit
+
+%exec-class JsonRpcClientTest
+
+class JsonRpcClientTest inherits QUnit::Test {
+    constructor() : Test("JsonRpcClient test", "1.0") {
+        addTestCase("JSON-RPC client test", \testJsonRpcClient());
+        addTestCase("JSON-RPC connection test", \testJsonRpcConnection());
+        addTestCase("Connection options test", \testConnectionOptions());
+        addTestCase("Connection scheme info test", \testConnectionSchemeInfo());
+        addTestCase("Connection hash constructor test", \testConnectionHashConstructor());
+        addTestCase("Connection negative tests", \testConnectionNegative());
+        addTestCase("Connection getAsync test", \testConnectionGetAsync());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testJsonRpcClient() {
+        JsonRpcClient client(("url": "http://localhost:80"), True);
+
+        assertEq(True, client instanceof JsonRpcClient);
+
+        # Test client version setting
+        client.setVersion("2.0");
+        assertEq("2.0", client.getVersion());
+
+        client.setVersion("1.0");
+        assertEq("1.0", client.getVersion());
+
+        client.setVersion("1.1");
+        assertEq("1.1", client.getVersion());
+    }
+
+    testJsonRpcConnection() {
+        string url = "jsonrpcs://localhost:8099/";
+        JsonRpcConnection conn("test", "test", url, {"monitor": False});
+        JsonRpcClient client = conn.get(False);
+        string yurl = url;
+        yurl =~ s/^jsonrpc/http/;
+        assertEq(yurl, client.getURL());
+
+        # issue #3321: check default timeouts
+        assertEq(45000, client.getTimeout());
+        assertEq(45000, client.getConnectTimeout());
+
+        # test default path
+        url = "jsonrpcs://localhost:8099";
+        conn = new JsonRpcConnection("test", "test", url, {"monitor": False});
+        client = conn.get(False);
+        yurl = url;
+        yurl =~ s/^jsonrpc/http/;
+        assertEq(yurl + "/JSON", client.getURL());
+
+        # issue #3696: test connection serialization
+        JsonRpcConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq(conn.url, conn2.url);
+
+        # Test both schemes
+        url = "jsonrpc://localhost:8080/api";
+        conn = new JsonRpcConnection("test-http", "HTTP test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq("http://localhost:8080/api", client.getURL());
+
+        url = "jsonrpcs://localhost:8443/api";
+        conn = new JsonRpcConnection("test-https", "HTTPS test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq("https://localhost:8443/api", client.getURL());
+    }
+
+    testConnectionOptions() {
+        # Test with custom timeouts
+        string url = "jsonrpc://localhost:8080/";
+        JsonRpcConnection conn("test", "test", url, {"monitor": False}, {
+            "timeout": 30000,
+            "connect_timeout": 10000,
+        });
+        JsonRpcClient client = conn.get(False);
+        assertEq(30000, client.getTimeout());
+        assertEq(10000, client.getConnectTimeout());
+
+        # Test connection type
+        assertEq("jsonrpc", conn.getType());
+    }
+
+    testConnectionSchemeInfo() {
+        # Test connection scheme info
+        hash<ConnectionSchemeInfo> scheme_info = JsonRpcConnection::ConnectionScheme;
+
+        # Verify scheme info structure
+        assertTrue(exists scheme_info.display_name, "should have display_name");
+        assertTrue(exists scheme_info.short_desc, "should have short_desc");
+        assertTrue(exists scheme_info.desc, "should have desc");
+        assertTrue(exists scheme_info.cls, "should have cls");
+        assertTrue(exists scheme_info.options, "should have options");
+        assertTrue(exists scheme_info.schemes, "should have schemes");
+        assertTrue(exists scheme_info.base_scheme_map, "should have base_scheme_map");
+
+        # Verify schemes
+        assertTrue(scheme_info.schemes.jsonrpc, "should support jsonrpc");
+        assertTrue(scheme_info.schemes.jsonrpcs, "should support jsonrpcs");
+
+        # Verify base scheme map
+        assertEq("jsonrpcs", scheme_info.base_scheme_map.https);
+        assertEq("jsonrpc", scheme_info.base_scheme_map.http);
+    }
+
+    testConnectionHashConstructor() {
+        # Test hash-based constructor
+        hash<auto> config = {
+            "name": "hash-test",
+            "display_name": "Hash Test Connection",
+            "short_desc": "Short description",
+            "desc": "Long description with markdown",
+            "url": "jsonrpc://localhost:9000/api",
+        };
+
+        JsonRpcConnection conn(config, {"monitor": False});
+        assertEq("jsonrpc", conn.getType());
+
+        JsonRpcClient client = conn.get(False);
+        assertEq("http://localhost:9000/api", client.getURL());
+    }
+
+    testConnectionNegative() {
+        # Test URL with credentials (should be handled properly)
+        string url = "jsonrpc://user:pass@localhost:8080/api";
+        JsonRpcConnection conn("auth-test", "Auth test", url, {"monitor": False});
+        JsonRpcClient client = conn.get(False);
+        # The URL should be properly formatted (credentials in URL are generally passed through)
+        assertTrue(client.getURL().val(), "URL should be set");
+
+        # Test URL with query string
+        url = "jsonrpc://localhost:8080/api?version=2.0";
+        conn = new JsonRpcConnection("query-test", "Query test", url, {"monitor": False});
+        client = conn.get(False);
+        assertTrue(client.getURL().find("version") >= 0 || client.getURL().find("api") >= 0,
+            "URL should contain path");
+
+        # Test URL without port
+        url = "jsonrpc://localhost/api";
+        conn = new JsonRpcConnection("no-port", "No port test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq("http://localhost/api", client.getURL());
+
+        # Test connection without monitor attribute
+        url = "jsonrpc://localhost:8080/";
+        conn = new JsonRpcConnection("no-monitor", "No monitor test", url, {}, {});
+        # Connection should still be creatable
+        assertEq("jsonrpc", conn.getType());
+
+        # Test URL with special characters in path
+        url = "jsonrpc://localhost:8080/api/v1/test";
+        conn = new JsonRpcConnection("path-test", "Path test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq("http://localhost:8080/api/v1/test", client.getURL());
+    }
+
+    testConnectionGetAsync() {
+        # getAsync() should return a JsonRpcClientIo object
+        string url = "jsonrpcs://localhost:8099/";
+        JsonRpcConnection conn("async-test", "async test", url, {"monitor": False});
+        auto async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof JsonRpcClientIo::JsonRpcClientIo,
+            "getAsync should return JsonRpcClientIo");
+        string yurl = url;
+        yurl =~ s/^jsonrpc/http/;
+        assertEq(yurl, async_client.getUrl(), "async client URL should be mapped");
+
+        # Test with non-SSL scheme
+        url = "jsonrpc://localhost:8080/api";
+        conn = new JsonRpcConnection("async-http", "async HTTP test", url, {"monitor": False});
+        async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof JsonRpcClientIo::JsonRpcClientIo,
+            "getAsync should return JsonRpcClientIo for non-SSL");
+        assertEq("http://localhost:8080/api", async_client.getUrl(),
+            "async client URL for non-SSL");
+    }
+}

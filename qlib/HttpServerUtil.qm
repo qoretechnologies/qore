@@ -29,9 +29,7 @@
 %requires FileLocationHandler
 %requires(reexport) HttpUtil
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %modern
 
@@ -1329,11 +1327,7 @@ public class AbstractAuthenticator {
         if (accept && accept =~ /text\/html/i) {
             return MimeTypeHtml;
         }
-%ifdef NoJson
-        return MimeTypeText;
-%else
         return MimeTypeJson;
-%endif
     }
 
     #! returns the response body for a 401 response with the given message and content type
@@ -1354,15 +1348,10 @@ public class AbstractAuthenticator {
     string format401Body(string msg, string content_type) {
         if (content_type == MimeTypeJson
                 || content_type =~ /^application\/json($|;)/i) {
-%ifdef NoJson
-            throw "JSON-MODULE-MISSING",
-                "cannot format a JSON 401 response because the json module is unavailable";
-%else
             return make_json({
                 "err": "AUTH-REQUIRED",
                 "desc": msg,
             });
-%endif
         }
         return msg;
     }

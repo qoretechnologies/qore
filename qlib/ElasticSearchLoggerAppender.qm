@@ -35,15 +35,7 @@
 %modern
 
 # requires json module for make_json()
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-# Stub functions when json module is not available
-auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
-auto sub parse_json(string val) { throw "JSON-ERROR", "the json module is required for this operation"; }
-%endif
+%requires json
 
 module ElasticSearchLoggerAppender {
     version = "1.0";
@@ -580,11 +572,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             if (pipeline) {
                 action.index.pipeline = pipeline;
             }
-%ifndef NoJson
             bulkBody += make_json(action) + "\n";
             # Document line
             bulkBody += make_json(doc) + "\n";
-%endif
         }
 
         try {
@@ -851,11 +841,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         if (response.typeCode() == NT_HASH) {
             return response;
         }
-%ifndef NoJson
         if (response.typeCode() == NT_STRING) {
             return parse_json(response);
         }
-%endif
         throw "ELASTICSEARCH-APPENDER-ERROR", "unsupported search response type";
     }
 

@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmVerBadBase.qm - base module declaring a child module with an impossible version constraint
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmVerChild >= 99.0
+
+module TcmVerBadBase {
+    version = "1.0";
+    desc = "test base module with a non-matching child module version";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! base module with a child module that cannot satisfy its version constraint
+public class TcmVerBadBase {
+    #! returns a fixed string
+    static string hello() {
+        return "hello";
+    }
+}

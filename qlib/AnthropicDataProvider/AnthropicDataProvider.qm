@@ -34,9 +34,7 @@
 %requires(reexport) AnthropicRestClient
 %requires RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module AnthropicDataProvider {
     version = "1.0";

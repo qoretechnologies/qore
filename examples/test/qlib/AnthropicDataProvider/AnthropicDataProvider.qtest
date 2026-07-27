@@ -10,9 +10,7 @@
 %requires DataProvider
 %requires AnthropicDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class AnthropicDataProviderTest
 
@@ -221,9 +219,7 @@ class StreamObserver inherits Observer {
 
 public class AnthropicDataProviderTest inherits QUnit::Test {
     public {
-%ifndef NoJson
         *AnthropicRestClient::AnthropicRestConnection rc;
-%endif
         Logger logger;
 
         # command-line options
@@ -275,14 +271,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         assertEq("anthropic", prov.getName());
@@ -292,7 +284,6 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(("batches", "count-tokens", "files", "messages", "models", "skills"),
             sort(select prov.getChildProviderNames(),
                 $1 != AbstractDataProvider::GenericApiCallChildName));
-%endif
     }
 
     actionCatalogTest() {
@@ -388,7 +379,6 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
 
     childProvidersTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
 
@@ -421,12 +411,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(("get", "list"),
             sort(select models.getChildProviderNames(),
                 $1 != AbstractDataProvider::GenericApiCallChildName));
-%endif
     }
 
     createMessageTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
@@ -448,12 +436,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("Hello! How can I help you?", resp.output_text);
         assertEq("msg_test123", resp.id);
         assertEq("end_turn", resp.stop_reason);
-%endif
     }
 
     createMessageWithToolsTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         rest.response_body = {
             "id": "msg_tool123",
@@ -499,12 +485,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(1, resp.tool_calls.lsize());
         assertEq("get_weather", resp.tool_calls[0].name);
         assertEq("San Francisco", resp.tool_calls[0].input.location);
-%endif
     }
 
     createMessageWithFileTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
@@ -593,12 +577,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         resp = create.doRequest(req);
         assertEq(NT_STRING, rest.last_request.messages[0].content.typeCode(),
             "plain text message should stay as string");
-%endif
     }
 
     conversationContextSaveTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         TestAnthropicConversationStore store();
@@ -632,12 +614,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("test-conv", store.last_load_key);
         # the request should have prepended the stored messages
         assertTrue(rest.last_request.messages.lsize() > 1);
-%endif
     }
 
     conversationCallbackStoreTest() {
         checkModule();
-%ifndef NoJson
         hash<auto> saved_data;
         string saved_key;
         AnthropicConversationContextStoreCallbacks store(
@@ -660,12 +640,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         create.doRequest(req);
         assertEq("cb-test", saved_key);
         assertEq(True, saved_data.messages.lsize() > 0);
-%endif
     }
 
     streamEventsTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         rest.stream_events = (
             <SseMessageInfo>{
@@ -721,12 +699,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
 
         # verify stream request had stream=True
         assertEq(True, rest.last_stream_request.stream);
-%endif
     }
 
     streamErrorTest() {
         checkModule();
-%ifndef NoJson
         FailingAnthropicRestClientIo rest();
         AnthropicMessageStreamDataProvider stream(rest);
         StreamObserver obs();
@@ -740,12 +716,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         obs.wait(1);
         assertEq("error", obs.events[0].type);
         assertEq(True, obs.events[0].error instanceof hash);
-%endif
     }
 
     countTokensTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         rest.response_body = {
             "input_tokens": 42,
@@ -759,12 +733,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("POST", rest.last_method);
         assertEq("messages/count_tokens", rest.last_path);
         assertEq(42, resp.input_tokens);
-%endif
     }
 
     modelsListTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider models = prov.getChildProvider("models").getChildProvider("list");
@@ -797,12 +769,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
             AnthropicDataProvider::AppName, "list-models"
         );
         assertEq(True, action.options.hasKey("limit"));
-%endif
     }
 
     actionSessionCreateTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         hash<auto> opts = {
             "restclient": rest,
@@ -817,12 +787,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("msg_test123", result.message_id);
         assertEq("assistant", result.role);
         assertEq("Hello! How can I help you?", result.output_text);
-%endif
     }
 
     actionSessionStreamTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         rest.stream_events = (
             <SseMessageInfo>{
@@ -848,23 +816,19 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         AnthropicMessageActionSession session(opts);
         hash<auto> stop_result = session.handleAction("anthropic-message-stop");
         assertEq("stopped", stop_result.status);
-%endif
     }
 
     actionSessionInvalidTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicMessageActionSession session({"restclient": rest});
         assertThrows("INVALID-ACTION", sub () {
             session.handleAction("invalid-action");
         });
-%endif
     }
 
     betaHeadersTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         rest.response_body = {
             "id": "skill_test",
@@ -899,12 +863,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq("DELETE", rest.last_method);
         assertEq("files/file_del", rest.last_path);
         assertEq("files-api-2025-04-14", rest.last_headers."anthropic-beta");
-%endif
     }
 
     filesPaginationTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider files_list = prov.getChildProvider("files").getChildProvider("list");
@@ -928,12 +890,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
             AnthropicDataProvider::AppName, "list-files"
         );
         assertEq(True, action.options.hasKey("limit"));
-%endif
     }
 
     skillsPaginationTest() {
         checkModule();
-%ifndef NoJson
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider skills_list = prov.getChildProvider("skills").getChildProvider("list");
@@ -958,12 +918,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq(True, action.options.hasKey("limit"));
         assertEq(True, action.options.hasKey("source"));
-%endif
     }
 
     exampleEventDataTest() {
         checkModule();
-%ifndef NoJson
         # the fake rest client returns a successful response, so getExampleEventDataImpl
         # returns the API response rather than falling back to fake data
         FakeAnthropicRestClientIo rest();
@@ -973,12 +931,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         # the fake client returns type="message" from restPost
         assertEq("message", example.type);
         assertEq("message_start", example.event);
-%endif
     }
 
     dataTypesTest() {
         checkModule();
-%ifndef NoJson
         # verify AnthropicJsonSchemaDataType fields
         AnthropicJsonSchemaDataType schema_type();
         hash<string, AbstractDataField> schema_fields = schema_type.getFields();
@@ -1076,23 +1032,19 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         AnthropicSkillResponseDataType skill_resp();
         hash<string, AbstractDataField> skill_fields = skill_resp.getFields();
         assertEq(True, skill_fields.hasKey("latest_version"));
-%endif
     }
 
     liveConnectionPingTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no ANTHROPIC_CONNECTION set");
         }
         hash<auto> ping_result = rc.ping(True);
         assertEq(True, ping_result.ok);
-%endif
     }
 
     liveCreateMessageTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no ANTHROPIC_CONNECTION set");
         }
@@ -1108,12 +1060,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertTrue(resp.output_text.val());
         assertTrue(resp.stop_reason.val());
         assertTrue(resp.usage.input_tokens > 0);
-%endif
     }
 
     liveModelsListTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no ANTHROPIC_CONNECTION set");
         }
@@ -1122,12 +1072,10 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         auto resp = models.doRequest(NOTHING);
         assertTrue(resp.lsize() > 0);
         assertTrue(resp[0].id.val());
-%endif
     }
 
     liveCountTokensTest() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no ANTHROPIC_CONNECTION set");
         }
@@ -1138,11 +1086,9 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
             "messages": ({"role": "user", "content": "Count my tokens"},),
         });
         assertTrue(resp.input_tokens > 0);
-%endif
     }
 
     private setupConnection() {
-%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.ANTHROPIC_CONNECTION;
         if (conn_name.val()) {
             AbstractConnection conn = get_connection(conn_name);
@@ -1150,6 +1096,5 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
                 rc = cast<AnthropicRestClient::AnthropicRestConnection>(conn);
             }
         }
-%endif
     }
 }

@@ -105,9 +105,7 @@ f.write(resp.body);
     - the initial version of the %DeepgramRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! the DeepgramRestClient namespace contains all the objects in the DeepgramRestClient module
 public namespace DeepgramRestClient {

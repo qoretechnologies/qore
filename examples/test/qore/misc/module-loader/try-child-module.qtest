@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests the %try-child-module parse directive: a base module declares optional child modules that extend it,
+# and the module loader attaches them once the base module has been fully loaded and published.
+#
+# See design/parse-directive-try-child-module.md and issue #5364.
+#
+# NOTE: module registration is global and permanent in a process, so each test case uses its own set of
+# fixture modules; a module can only be loaded (or fail to load) once per process.
+
+%modern
+
+# required for Program::loadApplyToUserModuleWarn() in the PO_NO_MODULES test case
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class TryChildModuleTest
+
+public class TryChildModuleTest inherits QUnit::Test {
+    private {
+        # absolute path to the directory holding the fixture modules
+        string dir;
+    }
+
+    constructor() : Test("Try child module test", "1.0") {
+        addTestCase("absent and present children", \basicTest());
+        addTestCase("child module attach order", \orderTest());
+        addTestCase("nested module load", \nestedTest());
+        addTestCase("child module loaded first", \childFirstTest());
+        addTestCase("mutual child declarations", \cycleTest());
+        addTestCase("broken child module", \brokenTest());
+        addTestCase("version constraints", \versionTest());
+        addTestCase("PO_NO_MODULES", \noModulesTest());
+        addTestCase("declaration errors", \declarationErrorTest());
+        addTestCase("AOT-compiled parent module", \aotTest());
+
+        dir = get_script_dir();
+        if (dir !~ /^\//) {
+            dir = getcwd() + "/" + dir;
+        }
+
+        set_return_value(main());
+    }
+
+    #! loads the given module into a new Program object using the fixture directory as the module path
+    /** @param mod the module to load
+        @param extra_code optional code parsed into the Program after the module has been loaded; used to
+        provide accessors for module state, which is otherwise not visible in this Program
+    */
+    private Program loadModule(string mod, *string extra_code) {
+        Program p(PO_NEW_STYLE);
+        p.parse(sprintf("%%prepend-module-path %y\n%%requires %s\n%s", dir, mod, extra_code ?? ""), mod);
+        return p;
+    }
+
+    #! returns the child module info for the given module
+    private *hash<auto> childInfo(string mod) {
+        hash<string, hash<auto>> mh = get_module_hash();
+        return mh{mod}."child-modules";
+    }
+
+    basicTest() {
+        Program p = loadModule("TcmBase",
+            "list<string> sub get_trace() { return TcmBase::trace; }\n"
+            "list<string> sub get_children() { return keys TcmBase::children; }\n");
+
+        # the child module's initialization code runs after the parent module has been initialized
+        assertEq(("base-init", "child:ext"), p.callFunction("get_trace"));
+        assertEq(("ext",), p.callFunction("get_children"));
+
+        # the child module's namespace is not imported into a Program that loads the parent module
+        assertThrows("PARSE-EXCEPTION", "TcmExtHelper", \loadModule(),
+            ("TcmBase", "string sub get_first() { return TcmExtHelper::firstTraceEntry(); }\n"));
+
+        *hash<auto> ci = childInfo("TcmBase");
+        assertEq(("TcmExt", "TcmNoSuchChildModule"), keys ci);
+        assertEq("attached", ci.TcmExt.status);
+        assertEq("TcmExt", ci.TcmExt.spec);
+
+        # a child module that is not installed is not an error and is reported as absent
+        assertEq("absent", ci.TcmNoSuchChildModule.status);
+        assertNothing(ci.TcmNoSuchChildModule.err);
+        assertNothing(ci.TcmNoSuchChildModule.desc);
+
+        # the child module was loaded and can be used by code that requires it explicitly
+        Program p2 = loadModule("TcmExt",
+            "string sub get_first() { return TcmExtHelper::firstTraceEntry(); }\n");
+        assertEq("base-init", p2.callFunction("get_first"));
+    }
+
+    orderTest() {
+        Program p = loadModule("TcmOrderBase",
+            "list<string> sub get_trace() { return TcmOrderBase::trace; }\n");
+
+        # children are attached in declaration order, and a child module's own children are attached before
+        # the next declaration in the parent
+        assertEq(("order1", "order1child", "order2"), p.callFunction("get_trace"));
+
+        assertEq("attached", childInfo("TcmOrderBase").TcmOrder1.status);
+        assertEq("attached", childInfo("TcmOrderBase").TcmOrder2.status);
+        assertEq("attached", childInfo("TcmOrder1").TcmOrder1Child.status);
+    }
+
+    nestedTest() {
+        # TcmNestOuter requires TcmNestBase, which declares TcmNestExt as a child module; TcmNestExt requires
+        # TcmNestOuter in turn.  The child module can only be parsed once the outermost module load has
+        # completed, so this fails unless child attachment is deferred to the outermost load boundary
+        Program p = loadModule("TcmNestOuter",
+            "list<string> sub get_trace() { return TcmNestBase::trace; }\n");
+
+        assertEq(("outer", "ext:outer"), p.callFunction("get_trace"));
+        assertEq("attached", childInfo("TcmNestBase").TcmNestExt.status);
+    }
+
+    childFirstTest() {
+        # loading the child module first pulls in the parent module, which then declares the child module
+        # that is already being loaded in this thread; the in-flight load must be left to complete
+        Program p = loadModule("TcmReExt", "list<string> sub get_trace() { return TcmReBase::trace; }\n");
+
+        assertEq(("base", "ext"), p.callFunction("get_trace"));
+        assertEq("attached", childInfo("TcmReBase").TcmReExt.status);
+    }
+
+    cycleTest() {
+        # TcmCycleA declares TcmCycleB as a child module, and TcmCycleB declares TcmCycleA in turn; both
+        # modules must load, and neither the attach nor module teardown may recurse
+        Program p = loadModule("TcmCycleA", "list<string> sub get_trace() { return TcmCycleA::trace; }\n");
+
+        assertEq(("a", "b"), p.callFunction("get_trace"));
+        assertEq("attached", childInfo("TcmCycleA").TcmCycleB.status);
+        assertEq("attached", childInfo("TcmCycleB").TcmCycleA.status);
+    }
+
+    brokenTest() {
+        # a child module that is present but cannot be loaded raises the child module's own error
+        try {
+            loadModule("TcmBrokenBase");
+            fail("loading a module with a broken child module must raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+            assertRegex("no_such_method", ex.desc);
+            assertRegex("while attaching child module \"TcmBroken\" declared by module \"TcmBrokenBase\"",
+                ex.desc);
+        }
+
+        *hash<auto> ci = childInfo("TcmBrokenBase");
+        assertEq("failed", ci.TcmBroken.status);
+        assertEq("PARSE-EXCEPTION", ci.TcmBroken.err);
+        assertRegex("no_such_method", ci.TcmBroken.desc);
+
+        # the failure is sticky: it is raised again on every load of the parent module, so that a broken
+        # extension cannot be confused with a missing one
+        try {
+            loadModule("TcmBrokenBase");
+            fail("a failed child module load must be raised again on the next load of the parent module");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+            assertRegex("child module 'TcmBroken' declared with %try-child-module is present but failed to "
+                "load", ex.desc);
+        }
+    }
+
+    versionTest() {
+        # a version constraint that the installed child module satisfies
+        Program p = loadModule("TcmVerOkBase",
+            "list<string> sub get_trace() { return TcmVerOkBase::trace; }\n");
+        assertEq(("ver-child",), p.callFunction("get_trace"));
+        assertEq("attached", childInfo("TcmVerOkBase").TcmVerChild.status);
+        assertEq("TcmVerChild >= 1.0", childInfo("TcmVerOkBase").TcmVerChild.spec);
+
+        # a child module that is installed but does not satisfy the version constraint is an error, not an
+        # absent child module
+        assertThrows("LOAD-MODULE-ERROR", "does not satisfy", \loadModule(), ("TcmVerBadBase",));
+        *hash<auto> ci = childInfo("TcmVerBadBase");
+        assertEq("failed", ci.TcmVerChild.status);
+        assertEq("LOAD-MODULE-ERROR", ci.TcmVerChild.err);
+    }
+
+    noModulesTest() {
+        # a module loaded into a Program container that cannot load modules must not load child modules
+        Program p(PO_NO_MODULES|PO_NEW_STYLE|PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> w = p.loadApplyToUserModuleWarn(dir + "/TcmNmBase.qm");
+
+        assertEq("MODULE-CHILD-SKIPPED", w.err);
+        assertRegex("PO_NO_MODULES", w.desc);
+
+        *hash<auto> ci = childInfo("TcmNmBase");
+        assertEq("skipped", ci.TcmNmExt.status);
+        assertRegex("PO_NO_MODULES", ci.TcmNmExt.desc);
+
+        # the child module was not loaded
+        hash<string, hash<auto>> mh = get_module_hash();
+        assertNothing(mh.TcmNmExt);
+    }
+
+    declarationErrorTest() {
+        # the directive is only valid in a user module
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "can only be used in a user module", \p.parse(),
+                ("%try-child-module Foo\n", "non-module"));
+        }
+
+        # the module name is required
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "missing argument", \p.parse(),
+                ("%try-child-module\n", "no-arg"));
+        }
+
+        # a module cannot declare itself as a child module
+        assertThrows("PARSE-EXCEPTION", "cannot declare itself as a child module", \loadModule(),
+            ("TcmSelf",));
+
+        # the same child module cannot be declared twice
+        assertThrows("PARSE-EXCEPTION", "already been declared", \loadModule(), ("TcmDup",));
+    }
+
+    aotTest() {
+        # a qlib module normally reaches deployments as an AOT-compiled binary module, so child module
+        # declarations must survive AOT compilation; they are delivered by the module description function
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qcc = dirname(qore_bin) + "/qcc";
+        if (!is_executable(qcc)) {
+            testSkip("no qcc found at " + qcc + "; cannot test AOT-compiled child module declarations");
+            return;
+        }
+
+        TmpDir tmp();
+
+        # the parent module is AOT-compiled; its source is removed afterwards so that only the binary
+        # artifact can be loaded
+        string base_src = tmp.path + "/AotTcmBase.qm";
+        File f();
+        f.open2(base_src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%try-child-module AotTcmExt
+%try-child-module AotTcmNoSuchChildModule
+
+module AotTcmBase {
+    version = \"1.0\";
+    desc = \"AOT test base module for %try-child-module\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public class AotTcmBase {
+    public {
+        static hash<string, code> children;
+    }
+
+    static registerChild(string name, code generator) {
+        children{name} = generator;
+    }
+}
+");
+        f.close();
+
+        # the child module is a source module
+        f.open2(tmp.path + "/AotTcmExt.qm", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires(reexport) AotTcmBase
+
+module AotTcmExt {
+    version = \"1.0\";
+    desc = \"AOT test child module for %try-child-module\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        AotTcmBase::registerChild(\"ext\", sub (string name) {});
+    };
+}
+");
+        f.close();
+
+        string qmod = tmp.path + "/AotTcmBase.qmod";
+        string cmd = sprintf("%s -m %s -o %s 2>&1", qcc, base_src, qmod);
+        string out = backquote(cmd);
+        if (!is_file(qmod)) {
+            testSkip("AOT compilation is not available in this build: " + out);
+            return;
+        }
+        unlink(base_src);
+
+        # run the check in a subprocess: the modules must be loaded in a process where they are not yet
+        # registered, and module registration is global and permanent
+        string script = tmp.path + "/aot-child.qr";
+        f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("%%modern
+%%prepend-module-path %y
+%%requires AotTcmBase
+
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"status: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmExt.status);
+printf(\"absent: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmNoSuchChildModule.status);
+printf(\"children: %%y\\n\", keys AotTcmBase::children);
+", tmp.path));
+        f.close();
+
+        out = backquote(sprintf("%s %s 2>&1", qore_bin, script));
+        assertRegex("status: attached", out);
+        assertRegex("absent: absent", out);
+        assertRegex("children: \\[\"ext\"\\]", out);
+    }
+}

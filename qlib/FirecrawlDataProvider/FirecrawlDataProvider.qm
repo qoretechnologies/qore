@@ -33,9 +33,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) FirecrawlRestClient
 %requires(reexport) RestClientIo
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module FirecrawlDataProvider {
     version = "1.0";

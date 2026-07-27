@@ -18,9 +18,7 @@
 %requires BedrockRestClient
 %requires BedrockDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class BedrockDataProviderTest
 
@@ -33,9 +31,7 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         last_path = cx.raw_path;
         string body_str = body ? (body.typeCode() == NT_BINARY
             ? body.toString("UTF-8") : body) : "";
-%ifndef NoJson
         try { last_body = parse_json(body_str); } catch () {}
-%endif
         if (last_path =~ /\/converse$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
                 "output": {"message": {"role": "assistant",
@@ -130,9 +126,6 @@ public class BedrockDataProviderTest inherits QUnit::Test {
     }
 
     static checkJson(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     private setupFakeServer() {

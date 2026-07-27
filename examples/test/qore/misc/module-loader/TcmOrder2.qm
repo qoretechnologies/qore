@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmOrder2.qm - second child module of TcmOrderBase
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmOrderBase
+
+module TcmOrder2 {
+    version = "1.0";
+    desc = "second test child module for child module ordering";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmOrderBase::add("order2");
+    };
+}

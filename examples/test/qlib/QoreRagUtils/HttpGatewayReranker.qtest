@@ -17,9 +17,7 @@
 %requires QoreRagUtils
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HttpGatewayRerankerTest
 
@@ -86,9 +84,6 @@ class HttpGatewayRerankerTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     private string url() {

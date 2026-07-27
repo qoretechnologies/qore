@@ -45,9 +45,7 @@
 %requires HttpServer
 %requires HttpClientIo
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HttpServerQuicMtlsTest
 
@@ -132,14 +130,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             });
         }
 
-%ifdef NoJson
-        printf("json module not available, skipping mTLS tests\n");
-%else
         addTestCase("mTLS with client cert", \testMtlsWithClientCert());
         addTestCase("get_remote_certs without client cert", \testGetRemoteCertsNoClientCert());
         addTestCase("SSL_VERIFY_FAIL_IF_NO_PEER_CERT rejects", \testVerifyFailIfNoPeerCert());
         addTestCase("client cert subject info", \testClientCertSubjectInfo());
-%endif
 
         set_return_value(main());
     }

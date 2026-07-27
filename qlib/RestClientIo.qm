@@ -44,13 +44,7 @@
 %define NoXml
 %endtry
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
-
-%try-module json >= 1.11
-%define NoCbor
-%endtry
+%requires json
 
 module RestClientIo {
     version = "1.0";
@@ -670,11 +664,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         public {
             #! Accept header list
             const SupportsCbor =
-%ifdef NoCbor
-                False
-%else
                 exists_function("make_cbor") && exists_function("parse_cbor")
-%endif
             ;
 
             const list<auto> AcceptList = (
@@ -684,9 +674,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 %ifndef NoXml
                 MimeTypeXml, MimeTypeXmlApp,
 %endif
-%ifndef NoJson
                 MimeTypeJsonRpc,
-%endif
                 MimeTypeFormUrlEncoded,
                 MimeTypeText,
                 MimeTypeOctetStream,
@@ -3488,7 +3476,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 if (resp_body.typeCode() == NT_BINARY) {
                     resp_body = resp_body.toString();
                 }
-%ifndef NoJson
                 if (resp_body.typeCode() == NT_STRING && raw.headers."content-type" =~ /json/i) {
                     try {
                         resp_body = parse_json(resp_body);
@@ -3496,7 +3483,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         # keep as string
                     }
                 }
-%endif
                 throw "OAUTH2-ERROR",
                     sprintf("OAuth2 token request failed with HTTP %d", raw.status_code),
                     {"status_code": raw.status_code, "body": resp_body, "headers": raw.headers};
@@ -3508,22 +3494,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 resp_body = resp_body.toString();
             }
             if (resp_body.typeCode() == NT_STRING) {
-%ifndef NoJson
                 if (raw.headers."content-type" =~ /json/i) {
                     return parse_json(resp_body);
                 }
-%endif
                 if (raw.headers."content-type" =~ /form-urlencoded/i) {
                     return parse_uri_query("?" + resp_body).params;
                 }
-%ifndef NoJson
                 # Default: try JSON
                 try {
                     return parse_json(resp_body);
                 } catch () {
                     # fall through
                 }
-%endif
             }
             throw "OAUTH2-ERROR", sprintf("Cannot parse OAuth2 token response with content-type %y",
                 raw.headers."content-type");
@@ -3765,9 +3747,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     "accept": MimeTypeText,
                 };
             } else if (c_location == "body-direct") {
-%ifndef NoJson
                 body_str = make_json(body);
-%endif
                 req_hdr = {
                     "content-type": MimeTypeJson,
                     "accept": MimeTypeJson,
@@ -3799,7 +3779,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             } else {
                 # body-direct: deserialize JSON and expect a raw string token
                 auto parsed;
-%ifndef NoJson
                 try {
                     parsed = parse_json(raw.body.toString());
                 } catch (hash<ExceptionInfo> ex) {
@@ -3807,7 +3786,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         sprintf("failed to parse custom token response body: %s: %s",
                             ex.err, ex.desc);
                 }
-%endif
                 if (parsed.typeCode() != NT_STRING) {
                     throw "REST-TOKEN-ERROR",
                         sprintf("custom token response body type expected to be \"string\"; "
@@ -5442,7 +5420,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         delete oauth2_notifier;
         delete oauth2_rcio;
 
-%ifndef NoJson
         int status_code = resp.status_code.toInt();
         if ((status_code / 100) == 2) {
             *string content_type = resp.headers."content-type";
@@ -5469,9 +5446,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d",
                 status_code);
         }
-%else
-        throw "REST-PING-ERROR", "cannot process OAuth2 token response without the json module";
-%endif
     }
 
     #! Checks connection readiness and either submits the ping or enters SPS_CONNECTING

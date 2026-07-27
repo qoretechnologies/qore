@@ -18,15 +18,11 @@
 
 %exec-class SewioWebSocketClientTest
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 class MyWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
-%ifndef NoJson
         map send(make_json($1)), SewioWebSocketClientTest::Data;
-%endif
     }
 }
 
@@ -79,9 +75,6 @@ class SewioWebSocketClientTest inherits QUnit::Test {
     }
 
     sewioWebSocketClientTests() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
 
         list l = ();
         Counter c(1);

@@ -25,21 +25,15 @@
 %requires WebSocketHandler
 %requires WebSocketClient
 %requires AsyncApi
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class WebSocketSameProcessEchoTest
 
 class EchoWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
     gotMessage(string msg) {
-%ifndef NoJson
         # Send valid JSON for clients with data="json" serialization
         send(make_json({"echo": msg}));
-%else
-        send("RESPONSE:" + msg);
-%endif
     }
     gotMessage(binary msg) { gotMessage(msg.toString("UTF-8")); }
 }
@@ -54,11 +48,7 @@ class EchoWsHandler inherits WebSocketHandler {
 class InvalidEchoWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
     gotMessage(string msg) {
-%ifndef NoJson
         send(make_json({"unexpected": msg}));
-%else
-        send("INVALID:" + msg);
-%endif
     }
     gotMessage(binary msg) { gotMessage(msg.toString("UTF-8")); }
 }
@@ -132,7 +122,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         set_return_value(main());
     }
 
-%ifndef NoJson
     private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
         return AsyncApi::AsyncApi3Loader::fromString(make_json({
             "asyncapi": "3.0.0",
@@ -216,7 +205,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             },
         }), True);
     }
-%endif
 
     private hash<auto> createServer(*WebSocketHandler handler) {
         Logger logger("test", m_options.verbose > 2
@@ -291,9 +279,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     # Observer-based delivery — matches the reproducer pattern
     testSameProcessEchoObserver() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         hash<auto> ctx = createServer();
         on_exit {
             HttpServer srv = ctx.server;
@@ -328,9 +313,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testAsyncApiSerializedValidation() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         hash<auto> ctx = createServer();
         on_exit {
             HttpServer srv = ctx.server;
@@ -373,9 +355,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testAsyncApiSerializedIncomingValidationFailure() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         InvalidEchoWsHandler handler();
         hash<auto> ctx = createServer(handler);
         on_exit {

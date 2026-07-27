@@ -7117,6 +7117,12 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
     @note This method does NOT acquire the socket lock, so it is safe to call from
     a handler thread while the I/O thread is running.
 
+    @note Unlike @ref sendHttp2StreamData() and @ref cancelHttp2Stream(), this method
+    genuinely blocks, so it stays illegal on the async I/O controller's I/O thread and in
+    a controller-owned \c continuePoll() worker and raises
+    \c SOCKET-SYNC-ON-IO-THREAD-ERROR there.  A worker that gets @ref HTTP2-FLOW-CONTROL
+    must surface the error to its caller instead of draining here.
+
     @param stream_id the HTTP/2 stream ID
     @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
 
@@ -7166,8 +7172,18 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     @param end_stream set to @ref True "True" to end the stream after sending
 
     @throw HTTP2-ERROR if no HTTP/2 session is active
+    @throw HTTP2-STREAM-RESET the peer reset the stream
     @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the
     caller should drain via @ref waitForHttp2StreamDrain() and retry
+
+    @note This method is safe to call from any thread, including the async I/O
+    controller's I/O thread and a controller-owned \c continuePoll() worker: the
+    underlying enqueue performs no socket I/O.  Off the I/O thread the call only
+    queues the frame and wakes the controller, which flushes on its next cycle;
+    ordinary threads additionally get a synchronous flush.\n
+    A \c continuePoll() worker that gets @ref HTTP2-FLOW-CONTROL cannot recover with
+    @ref waitForHttp2StreamDrain() — that method genuinely blocks and stays illegal
+    there — so it must surface the error to its caller.
 
     @since %Qore 3.0
 */
@@ -7398,6 +7414,11 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
     @param stream_id the stream ID to cancel
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
+
+    @note This method is safe to call from any thread, including the async I/O
+    controller's I/O thread and a controller-owned \c continuePoll() worker: submitting
+    \c RST_STREAM performs no socket I/O.  Off the I/O thread the call only queues the
+    frame and wakes the controller, which flushes it on its next cycle.
 
     @since %Qore 3.0
 */

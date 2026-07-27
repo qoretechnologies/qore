@@ -1,0 +1,16 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmDup.qm - module that declares the same child module twice; must not parse
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%try-child-module TcmExt
+%try-child-module TcmExt >= 1.0
+
+module TcmDup {
+    version = "1.0";
+    desc = "test module declaring the same child module twice";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}

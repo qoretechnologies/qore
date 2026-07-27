@@ -80,9 +80,7 @@ module OllamaRestClient {
     - the initial version of the %OllamaRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace OllamaRestClient {
 public class OllamaRestClientBase {

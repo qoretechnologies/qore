@@ -86,8 +86,54 @@ public:
     }
 };
 
+//! attach status of a child module declared with the %try-child-module parse directive
+/** @see design/parse-directive-try-child-module.md
+*/
+enum ChildModuleStatus : unsigned char {
+    CMS_PENDING = 0,    //!< the attach has not been attempted yet
+    CMS_ATTACHED,       //!< the child was loaded, or its load was already in progress in this thread
+    CMS_ABSENT,         //!< no module with this name could be found in the module path
+    CMS_SKIPPED,        //!< not attempted; module loading is not allowed in the parent module's Program
+    CMS_FAILED,         //!< the child is present but could not be loaded
+};
+
+//! a child module declared with the %try-child-module parse directive
+struct ChildModuleInfo {
+    //! the declaration as given; a feature name with an optional version constraint
+    std::string spec;
+    //! the child's feature name
+    std::string name;
+    //! the current attach status
+    ChildModuleStatus status = CMS_PENDING;
+    //! the exception error string; set only with CMS_FAILED
+    std::string err;
+    //! the exception description with CMS_FAILED, the reason with CMS_SKIPPED
+    std::string desc;
+
+    DLLLOCAL ChildModuleInfo(const char* spec, const char* name) : spec(spec), name(name) {
+    }
+};
+
+typedef std::vector<ChildModuleInfo> child_mod_vec_t;
+
+//! returns the string corresponding to the given child module status
+DLLLOCAL const char* qore_child_module_status_string(ChildModuleStatus status);
+
+//! records a child module declaration made with the %try-child-module parse directive
+/** called from the scanner; raises a parse exception if the directive is used outside a user module, if the
+    module declares itself as a child, or if the same child is declared twice
+
+    @param loc the location of the directive
+    @param spec the module specification; a feature name with an optional version constraint
+*/
+DLLLOCAL void qore_declare_child_module(const QoreProgramLocation* loc, const char* spec);
+
+//! returns the feature name in the given module specification (i.e. without any version constraint)
+DLLLOCAL void qore_get_module_spec_name(const char* spec, QoreString& name);
+
 class QoreAbstractModule {
     friend class QoreModuleManager;
+    friend class ChildAttachHelper;
 
 public:
     version_list_t version_list;
@@ -168,6 +214,20 @@ public:
         rmod.push_back(m);
     }
 
+    //! sets the child modules declared by this module with the %try-child-module parse directive
+    /** @param specs the child module specifications in declaration order
+
+        duplicate declarations are ignored; the module manager mutex must be held when calling this method
+    */
+    DLLLOCAL void setChildModules(const std::vector<std::string>& specs);
+
+    //! returns true if this module declares child modules with the %try-child-module parse directive
+    /** the module manager mutex must be held when calling this method
+    */
+    DLLLOCAL bool hasChildModules() const {
+        return !children.empty();
+    }
+
     DLLLOCAL void reexport(ExceptionSink& xsink, QoreProgram* pgm) const;
 
     DLLLOCAL void addToProgram(QoreProgram* pgm, ExceptionSink& xsink) const {
@@ -235,6 +295,18 @@ protected:
     // link to associated modules (originals with reinjection, etc)
     QoreAbstractModule* prev = nullptr,
         * next = nullptr;
+
+    // child modules declared with %try-child-module in declaration order; all access to this vector and to
+    // children_done is serialized by the module manager mutex
+    child_mod_vec_t children;
+
+    // true when every child declaration has reached a terminal status (attached, absent, or failed); false
+    // while any child is still pending or was skipped, in which case the attach is retried on the next load
+    bool children_done = false;
+
+    // true while a thread is attaching this module's children; other threads wait for it to complete so
+    // that a module load only returns once its children have been registered
+    bool children_attaching = false;
 
     bool priv : 1,
         injected : 1,
@@ -373,6 +445,18 @@ public:
         return map.find(n);
     }
 
+    //! returns true if \a r is a direct dependent of \a l
+    DLLLOCAL bool hasDep(const std::string& l, const std::string& r) const {
+        md_map_t::const_iterator i = map.find(l);
+        return i != map.end() && i->second.find(r) != i->second.end();
+    }
+
+    //! returns the dependents of \a l, or nullptr if there are none
+    DLLLOCAL const strset_t* getDeps(const std::string& l) const {
+        md_map_t::const_iterator i = map.find(l);
+        return i == map.end() ? nullptr : &i->second;
+    }
+
     DLLLOCAL md_map_t::iterator find(const std::string& n) {
         return map.find(n);
     }
@@ -425,6 +509,7 @@ struct DLHelper {
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
+    friend class ChildAttachHelper;
 
 public:
     DLLLOCAL QoreModuleManager() {
@@ -599,6 +684,37 @@ public:
 
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
 
+    //! Returns true if the module dependency map already has a path from \a from to \a to
+    /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
+        would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when
+        calling this method.
+    */
+    DLLLOCAL bool hasUserModuleDependencyPath(const std::string& from, const std::string& to);
+
+    //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
+    /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
+        mutex is released and reacquired while each child is loaded.  See
+        design/parse-directive-try-child-module.md for the contract implemented here.
+
+        @param mi the parent module
+        @param xsink exception sink; a child that is present but cannot be loaded raises here
+        @param wsink warning sink for skipped children
+        @param warning_mask the warning mask in effect for the load
+
+        @return 0 for OK (including for absent children), -1 if an exception was raised
+    */
+    DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
+            int warning_mask);
+
+    //! Queues \a mi for child module attachment at the outermost module load boundary in this thread
+    /** Must be called with the mutex held; if no module load encloses the current one, the queue is drained
+        immediately.
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int queueChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
+            int warning_mask);
+
 private:
     // not implemented
     DLLLOCAL QoreModuleManager(const QoreModuleManager&) = delete;
@@ -668,10 +784,18 @@ protected:
         return loadModuleIntern(xsink, xsink, name, pgm);
     }
 
+    //! Loads a module; the mutex must be held when calling this method
+    /** @param path_pgm the Program to use for parse option and module search path inheritance when no target
+        Program is given in \a pgm; used when attaching child modules, which are loaded without a target
+        Program but must resolve against the parent module's search path
+        @param not_found if not nullptr, set to true if the module could not be found in the module path; used
+        to distinguish an absent child module from a broken one
+    */
     DLLLOCAL QoreAbstractModule* loadModuleIntern(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
             QoreProgram* pgm, bool reexport = false, mod_op_e op = MOD_OP_NONE, version_list_t* version = nullptr,
             const char* src = nullptr, QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE,
-            int warning_mask = QP_WARN_MODULES, qore_binary_module_desc_t mod_desc_func = nullptr);
+            int warning_mask = QP_WARN_MODULES, qore_binary_module_desc_t mod_desc_func = nullptr,
+            QoreProgram* path_pgm = nullptr, bool* not_found = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
@@ -880,6 +1004,24 @@ protected:
 
     ExceptionSink& xsink;
     bool dup;
+};
+
+//! marks a module as having its child modules attached in the current thread
+/** the module manager mutex must be held for the lifetime of this object except while a child module is
+    being loaded; on destruction any thread waiting for the attach to complete is woken
+*/
+class ChildAttachHelper {
+public:
+    DLLLOCAL ChildAttachHelper(QoreAbstractModule& mi, const std::string& name);
+    DLLLOCAL ~ChildAttachHelper();
+
+private:
+    QoreAbstractModule& mi;
+    const std::string name;
+
+    // not implemented
+    ChildAttachHelper(const ChildAttachHelper&) = delete;
+    ChildAttachHelper& operator=(const ChildAttachHelper&) = delete;
 };
 
 class ModuleLoadMapHelper {

@@ -296,7 +296,6 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
         } else if (reranker_mode == "onnx") {
             registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
             if (copts.registry_model_name.val()) {
-%ifndef NoJson
                 QoreModelRegistry::ModelRegistry registry(registry_options);
                 hash<QoreModelRegistry::ModelVersionInfo> manifest =
                     registry.getVersionManifest(copts.registry_model_name,
@@ -328,9 +327,6 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                     copts.registry_tokenizer_artifact_name);
                 rconfig.tokenizer_config = tokenizer_package.tokenizer_json;
                 rconfig.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
-%else
-                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
-%endif
             } else {
                 if (!copts.reranker_model_path.val()) {
                     throw "CONSTRUCTOR-ERROR",
@@ -343,13 +339,8 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                         "registry_model_name is provided";
                 }
                 rconfig.model_path = copts.reranker_model_path;
-%ifndef NoJson
                 rconfig.tokenizer_config =
                     parse_json(FileLocationHandler::getTextFileFromLocation(copts.tokenizer_config_path));
-%else
-                throw "CONSTRUCTOR-ERROR",
-                    "json module is required for tokenizer config parsing";
-%endif
             }
             if (onnx_session_config) {
                 rconfig.session_config = onnx_session_config;

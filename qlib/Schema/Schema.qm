@@ -41,9 +41,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module Schema {
     version = "1.7.0";

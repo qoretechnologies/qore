@@ -28,9 +28,7 @@
 %requires QUnit
 %requires Logger
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
@@ -49,9 +47,6 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     private checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     constructor() : Test("QoreReplWebSocketTest", "1.0") {

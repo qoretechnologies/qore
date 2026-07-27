@@ -1,0 +1,584 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires json
+%requires Mime
+%requires DataProvider
+%requires McpServerHandler
+%requires McpClient
+%requires McpClientDataProvider
+%exec-class McpClientDataProviderTest
+
+class TestMcpServerHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("echo", "Echoes the input", NOTHING, \echoCallback());
+        registerTool("add", "Adds two numbers", NOTHING, \addCallback());
+        registerTool("error-tool", "Throws an error", NOTHING, \errorCallback());
+        registerTool("no-args-tool", "A tool with no arguments", NOTHING, \noArgsCallback());
+        registerResource("file:///test.txt", "Test File", "A test file", "text/plain", \readTestFile());
+        registerResource("file:///empty.txt", "Empty File", "An empty file", "text/plain", \readEmptyFile());
+        registerPrompt("greeting", "A greeting prompt", (
+            {"name": "name", "description": "The name to greet", "required": True},
+        ), \greetingHandler());
+        registerPrompt("simple", "A simple prompt without arguments");
+    }
+
+    hash<auto> echoCallback(*hash<auto> args) {
+        return args ?? {};
+    }
+
+    hash<auto> addCallback(*hash<auto> args) {
+        return {"result": (args.a ?? 0) + (args.b ?? 0)};
+    }
+
+    nothing errorCallback(*hash<auto> args) {
+        throw "TEST-ERROR", "This is a test error";
+    }
+
+    hash<auto> noArgsCallback(*hash<auto> args) {
+        return {"status": "ok"};
+    }
+
+    string readTestFile(hash<auto> cx, string uri) {
+        return "Hello, World!";
+    }
+
+    string readEmptyFile(hash<auto> cx, string uri) {
+        return "";
+    }
+
+    list<hash<auto>> greetingHandler(hash<auto> cx, *hash<auto> arguments) {
+        return ({
+            "role": "user",
+            "content": {
+                "type": "text",
+                "text": "Hello, " + (arguments.name ?? "World"),
+            },
+        },);
+    }
+}
+
+class McpClientDataProviderTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+        McpClientDataProvider provider;
+        McpClient client;
+        TestMcpServerHandler mcpServer;
+    }
+
+    constructor() : Test("McpClientDataProvider", "1.0") {
+        addTestCase("data provider factory test", \testFactory());
+        addTestCase("data provider children test", \testChildren());
+        addTestCase("tools provider test", \testToolsProvider());
+        addTestCase("resources provider test", \testResourcesProvider());
+        addTestCase("prompts provider test", \testPromptsProvider());
+        addTestCase("ping provider test", \testPingProvider());
+        addTestCase("completion provider test", \testCompletionProvider());
+        addTestCase("type definitions test", \testTypeDefinitions());
+        addTestCase("metadata and enums test", \testMetadataAndEnums());
+        addTestCase("notification events test", \testNotificationEvents());
+        addTestCase("negative tests", \testNegative());
+        addTestCase("corner case tests", \testCornerCases());
+        addTestCase("provider info test", \testProviderInfo());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+
+        mcpServer = new TestMcpServerHandler(logger);
+        server = new HttpServer(http_opts);
+        server.setHandler("mcp", "", MimeTypeJson, mcpServer);
+        server.setDefaultHandler("mcp", mcpServer);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Create MCP client and initialize
+        string url = sprintf("http://localhost:%d/mcp", port);
+        client = new McpClient(url);
+        client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
+
+        # Create data provider
+        provider = new McpClientDataProvider(client);
+    }
+
+    globalTearDown() {
+        delete provider;
+        if (client) {
+            client.close();
+        }
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testFactory() {
+        # Test factory creation
+        McpClientDataProviderFactory factory();
+        assertEq("mcpclient", factory.getInfo().name);
+
+        # Test factory getClass
+        Class cls = factory.getClass();
+        assertEq("McpClientDataProvider", cls.getName());
+    }
+
+    testChildren() {
+        # Test root provider children
+        list<string> children = provider.getChildProviderNames();
+        assertTrue(children.contains("tools"));
+        assertTrue(children.contains("resources"));
+        assertTrue(children.contains("prompts"));
+        assertTrue(children.contains("completion"));
+        assertTrue(children.contains("ping"));
+        assertTrue(children.contains("events"));
+
+        # Test getting child providers
+        assertTrue(exists provider.getChildProvider("tools"));
+        assertTrue(exists provider.getChildProvider("resources"));
+        assertTrue(exists provider.getChildProvider("prompts"));
+        assertTrue(exists provider.getChildProvider("completion"));
+        assertTrue(exists provider.getChildProvider("ping"));
+
+        # Test tools children
+        AbstractDataProvider tools = provider.getChildProvider("tools");
+        list<string> toolsChildren = tools.getChildProviderNames();
+        assertTrue(toolsChildren.contains("list"));
+        assertTrue(toolsChildren.contains("call"));
+
+        # Test resources children
+        AbstractDataProvider resources = provider.getChildProvider("resources");
+        list<string> resourcesChildren = resources.getChildProviderNames();
+        assertTrue(resourcesChildren.contains("list"));
+        assertTrue(resourcesChildren.contains("read"));
+
+        # Test prompts children
+        AbstractDataProvider prompts = provider.getChildProvider("prompts");
+        list<string> promptsChildren = prompts.getChildProviderNames();
+        assertTrue(promptsChildren.contains("list"));
+        assertTrue(promptsChildren.contains("get"));
+    }
+
+    testToolsProvider() {
+        # Test list tools
+        AbstractDataProvider listProvider = provider.getChildProvider("tools").getChildProvider("list");
+        hash<auto> listResult = listProvider.doRequest({});
+        assertEq(Type::List, listResult.tools.type());
+        assertEq(4, listResult.tools.size());
+
+        # Find the echo tool
+        *hash<auto> echoTool = (map $1, listResult.tools, $1.name == "echo")[0];
+        assertTrue(exists echoTool);
+        assertEq("echo", echoTool.name);
+        assertEq("Echoes the input", echoTool.description);
+
+        # Test call tool
+        AbstractDataProvider callProvider = provider.getChildProvider("tools").getChildProvider("call");
+        hash<auto> callResult = callProvider.doRequest({
+            "name": "echo",
+            "arguments": {"message": "Hello, DataProvider!"},
+        });
+        assertEq(Type::List, callResult.content.type());
+
+        # Test call tool with add
+        hash<auto> addResult = callProvider.doRequest({
+            "name": "add",
+            "arguments": {"a": 5, "b": 3},
+        });
+        assertEq(Type::List, addResult.content.type());
+    }
+
+    testResourcesProvider() {
+        # Test list resources
+        AbstractDataProvider listProvider = provider.getChildProvider("resources").getChildProvider("list");
+        hash<auto> listResult = listProvider.doRequest({});
+        assertEq(Type::List, listResult.resources.type());
+        assertEq(2, listResult.resources.size());
+        # Find test.txt resource
+        *hash<auto> testResource = (map $1, listResult.resources, $1.uri == "file:///test.txt")[0];
+        assertTrue(exists testResource);
+
+        # Test read resource
+        AbstractDataProvider readProvider = provider.getChildProvider("resources").getChildProvider("read");
+        hash<auto> readResult = readProvider.doRequest({
+            "uri": "file:///test.txt",
+        });
+        assertEq(Type::List, readResult.contents.type());
+        assertEq("Hello, World!", readResult.contents[0].text);
+    }
+
+    testPromptsProvider() {
+        # Test list prompts
+        AbstractDataProvider listProvider = provider.getChildProvider("prompts").getChildProvider("list");
+        hash<auto> listResult = listProvider.doRequest({});
+        assertEq(Type::List, listResult.prompts.type());
+        assertEq(2, listResult.prompts.size());
+        # Find greeting prompt
+        *hash<auto> greetingPrompt = (map $1, listResult.prompts, $1.name == "greeting")[0];
+        assertTrue(exists greetingPrompt);
+
+        # Test get prompt
+        AbstractDataProvider getProvider = provider.getChildProvider("prompts").getChildProvider("get");
+        hash<auto> getResult = getProvider.doRequest({
+            "name": "greeting",
+            "arguments": {"name": "World"},
+        });
+        assertEq(Type::List, getResult.messages.type());
+        assertEq("Hello, World", getResult.messages[0].content.text);
+    }
+
+    testPingProvider() {
+        # Test ping
+        AbstractDataProvider pingProvider = provider.getChildProvider("ping");
+        hash<auto> pingResult = pingProvider.doRequest({});
+        assertEq(Type::Hash, pingResult.type());
+    }
+
+    testTypeDefinitions() {
+        # Test that type definitions exist and have correct structure
+        assertTrue(exists McpContentItemDataType);
+        assertTrue(exists McpToolResultDataType);
+        assertTrue(exists McpToolInfoDataType);
+        assertTrue(exists McpResourceInfoDataType);
+        assertTrue(exists McpPromptInfoDataType);
+        assertTrue(exists McpToolCallRequestDataType);
+        assertTrue(exists McpResourceReadRequestDataType);
+        assertTrue(exists McpPromptGetRequestDataType);
+        assertTrue(exists McpCompletionRequestDataType);
+        assertTrue(exists McpCompletionResultDataType);
+
+        # Test that types have expected fields
+        hash<auto> contentFields = McpContentItemDataType.getFields();
+        assertTrue(contentFields.hasKey("type"));
+        assertTrue(contentFields.hasKey("text"));
+        assertTrue(contentFields.hasKey("mimeType"));
+
+        hash<auto> toolInfoFields = McpToolInfoDataType.getFields();
+        assertTrue(toolInfoFields.hasKey("name"));
+        assertTrue(toolInfoFields.hasKey("description"));
+        assertTrue(toolInfoFields.hasKey("inputSchema"));
+    }
+
+    testMetadataAndEnums() {
+        # Verify enums map to expected values
+        assertEq("ref/prompt", McpCompletionRefType::Prompt);
+        assertEq("ref/resource", McpCompletionRefType::Resource);
+        assertEq("text", McpContentItemType::Text);
+        assertEq("image", McpContentItemType::Image);
+        assertEq("resource", McpContentItemType::Resource);
+        assertEq("user", McpPromptMessageRole::User);
+        assertEq("assistant", McpPromptMessageRole::Assistant);
+
+        # Completion request ref_type allowed values
+        AbstractDataField refTypeField = McpCompletionRequestDataType.getField("ref_type");
+        list<hash<AllowedValueInfo>> refAllowed = refTypeField.getAllowedValues();
+        assertEq(2, refAllowed.size());
+        list<string> refValues = map $1.value, refAllowed;
+        assertTrue(refValues.contains(McpCompletionRefType::Prompt));
+        assertTrue(refValues.contains(McpCompletionRefType::Resource));
+        foreach auto av in (refAllowed) {
+            assertTrue(av.display_name.val());
+            assertTrue(av.desc.val());
+        }
+
+        # Content item type allowed values
+        AbstractDataField contentTypeField = McpContentItemDataType.getField("type");
+        list<hash<AllowedValueInfo>> contentAllowed = contentTypeField.getAllowedValues();
+        assertEq(3, contentAllowed.size());
+        list<string> contentValues = map $1.value, contentAllowed;
+        assertTrue(contentValues.contains(McpContentItemType::Text));
+        assertTrue(contentValues.contains(McpContentItemType::Image));
+        assertTrue(contentValues.contains(McpContentItemType::Resource));
+
+        # Prompt message role allowed values
+        AbstractDataField roleField = McpPromptMessageDataType.getField("role");
+        list<hash<AllowedValueInfo>> roleAllowed = roleField.getAllowedValues();
+        assertEq(2, roleAllowed.size());
+        list<string> roleValues = map $1.value, roleAllowed;
+        assertTrue(roleValues.contains(McpPromptMessageRole::User));
+        assertTrue(roleValues.contains(McpPromptMessageRole::Assistant));
+
+        # Constructor options include client_name/client_version with descriptions
+        hash<auto> opts = McpClientDataProviderBase::ConstructorOptions;
+        assertTrue(opts.hasKey("client_name"));
+        assertTrue(opts.client_name.display_name.val());
+        assertTrue(opts.client_name.short_desc.val());
+        assertTrue(opts.client_name.desc.val());
+        assertTrue(opts.hasKey("client_version"));
+        assertTrue(opts.client_version.display_name.val());
+        assertTrue(opts.client_version.short_desc.val());
+        assertTrue(opts.client_version.desc.val());
+    }
+
+    testCompletionProvider() {
+        # Test completion provider
+        AbstractDataProvider completionProvider = provider.getChildProvider("completion");
+        assertTrue(exists completionProvider);
+        assertEq("completion", completionProvider.getName());
+
+        # Test completion for prompt argument
+        hash<auto> result = completionProvider.doRequest({
+            "ref_type": "ref/prompt",
+            "ref_name": "greeting",
+            "argument_name": "name",
+            "argument_value": "A",
+        });
+        assertTrue(exists result.values);
+        assertEq(Type::List, result.values.type());
+    }
+
+    testNotificationEvents() {
+        McpNotificationEventDataProvider eventsProvider =
+            cast<McpNotificationEventDataProvider>(provider.getChildProvider("events"));
+        assertTrue(exists eventsProvider);
+        hash<auto> info = eventsProvider.getInfo();
+        assertTrue(info.supports_observable ?? False);
+
+        hash<auto> eventTypes = eventsProvider.getEventTypes();
+        assertTrue(eventTypes.hasKey(McpClientDataProvider::EVENT_MCP_CONNECTED));
+        assertTrue(eventTypes.hasKey(McpClientDataProvider::EVENT_MCP_LOG_MESSAGE));
+
+        McpEventObserver observer();
+        eventsProvider.registerObserver(observer, McpClientDataProvider::EVENT_MCP_CONNECTED,
+            McpClientDataProvider::EVENT_MCP_LOG_MESSAGE);
+        eventsProvider.observersReady();
+
+        observer.waitForEvent(McpClientDataProvider::EVENT_MCP_CONNECTED);
+
+        ThreadPool tp();
+        tp.submit(sub () {
+            mcpServer.sendLogMessage("info", "test-logger", "test message");
+        });
+        tp.stopWait();
+        observer.waitForEvent(McpClientDataProvider::EVENT_MCP_LOG_MESSAGE);
+
+        hash<auto> logEvent = observer.getLastEvent(McpClientDataProvider::EVENT_MCP_LOG_MESSAGE);
+        assertEq(McpClientDataProvider::EVENT_MCP_LOG_MESSAGE, logEvent.event);
+        assertEq("info", logEvent.level);
+        assertEq("test-logger", logEvent.logger);
+        assertEq("test message", logEvent.data);
+
+        eventsProvider.stopEvents();
+    }
+
+    testNegative() {
+        # Test calling unknown tool - throws exception with error info
+        AbstractDataProvider callProvider = provider.getChildProvider("tools").getChildProvider("call");
+        bool gotException = False;
+        try {
+            callProvider.doRequest({
+                "name": "nonexistent-tool",
+                "arguments": {},
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            gotException = True;
+            assertEq("MCP-ERROR", ex.err);
+            assertTrue(ex.arg.isError);  # isError is at result level per MCP spec
+        }
+        assertTrue(gotException, "Calling unknown tool should throw exception");
+
+        # Test calling tool that throws error
+        gotException = False;
+        try {
+            callProvider.doRequest({
+                "name": "error-tool",
+                "arguments": {},
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            gotException = True;
+            assertEq("MCP-ERROR", ex.err);
+            assertTrue(ex.arg.isError);  # isError is at result level per MCP spec
+        }
+        assertTrue(gotException, "Calling error tool should throw exception");
+
+        # Test reading unknown resource - should throw exception
+        AbstractDataProvider readProvider = provider.getChildProvider("resources").getChildProvider("read");
+        gotException = False;
+        try {
+            readProvider.doRequest({"uri": "file:///nonexistent.txt"});
+        } catch (hash<ExceptionInfo> ex) {
+            gotException = True;
+        }
+        assertTrue(gotException, "Reading unknown resource should throw exception");
+
+        # Test getting unknown prompt - should throw exception
+        AbstractDataProvider getProvider = provider.getChildProvider("prompts").getChildProvider("get");
+        gotException = False;
+        try {
+            getProvider.doRequest({"name": "nonexistent-prompt"});
+        } catch (hash<ExceptionInfo> ex) {
+            gotException = True;
+        }
+        assertTrue(gotException, "Getting unknown prompt should throw exception");
+
+        # Test getting unknown child provider
+        *AbstractDataProvider unknownChild = provider.getChildProvider("unknown");
+        assertNothing(unknownChild, "Unknown child provider should return NOTHING");
+
+        # Test tools provider unknown child
+        AbstractDataProvider toolsProvider = provider.getChildProvider("tools");
+        unknownChild = toolsProvider.getChildProvider("unknown");
+        assertNothing(unknownChild, "Unknown tools child should return NOTHING");
+    }
+
+    testCornerCases() {
+        # Test tool with no arguments
+        AbstractDataProvider callProvider = provider.getChildProvider("tools").getChildProvider("call");
+        hash<auto> result = callProvider.doRequest({
+            "name": "no-args-tool",
+        });
+        assertEq(Type::List, result.content.type());
+        assertTrue(!result.isError);  # isError is at result level per MCP spec
+
+        # Test tool with empty arguments
+        result = callProvider.doRequest({
+            "name": "no-args-tool",
+            "arguments": {},
+        });
+        assertTrue(!result.isError);  # isError is at result level per MCP spec
+
+        # Test reading empty file resource
+        AbstractDataProvider readProvider = provider.getChildProvider("resources").getChildProvider("read");
+        hash<auto> readResult = readProvider.doRequest({
+            "uri": "file:///empty.txt",
+        });
+        assertEq(Type::List, readResult.contents.type());
+        assertEq("", readResult.contents[0].text);
+
+        # Test prompt with no arguments (simple prompt)
+        AbstractDataProvider getProvider = provider.getChildProvider("prompts").getChildProvider("get");
+        hash<auto> getResult = getProvider.doRequest({
+            "name": "simple",
+        });
+        assertEq(Type::List, getResult.messages.type());
+
+        # Test prompt with empty arguments hash
+        getResult = getProvider.doRequest({
+            "name": "greeting",
+            "arguments": {},
+        });
+        assertEq(Type::List, getResult.messages.type());
+        # Should use default "World" when name not provided
+        assertTrue(getResult.messages[0].content.text.find("World") >= 0);
+
+        # Test list operations return empty lists when no items (would need separate test server)
+        # This tests that list operations work with non-empty lists
+        AbstractDataProvider listProvider = provider.getChildProvider("tools").getChildProvider("list");
+        hash<auto> listResult = listProvider.doRequest({});
+        assertTrue(listResult.tools.size() > 0);
+
+        listProvider = provider.getChildProvider("resources").getChildProvider("list");
+        listResult = listProvider.doRequest({});
+        assertTrue(listResult.resources.size() > 0);
+
+        listProvider = provider.getChildProvider("prompts").getChildProvider("list");
+        listResult = listProvider.doRequest({});
+        assertTrue(listResult.prompts.size() > 0);
+    }
+
+    testProviderInfo() {
+        # Test root provider info
+        hash<auto> info = provider.getInfo();
+        assertEq("mcp", info.name);
+        assertTrue(info.supports_children);
+
+        # Test factory info
+        McpClientDataProviderFactory factory();
+        hash<auto> factoryInfo = factory.getInfo();
+        assertEq("mcpclient", factoryInfo.name);
+        assertTrue(factoryInfo.children_can_support_apis);
+
+        # Test tools provider info
+        AbstractDataProvider toolsProvider = provider.getChildProvider("tools");
+        info = toolsProvider.getInfo();
+        assertEq("tools", info.name);
+        assertTrue(info.supports_children);
+
+        # Test tools/list provider info
+        AbstractDataProvider listProvider = toolsProvider.getChildProvider("list");
+        info = listProvider.getInfo();
+        assertEq("list", info.name);
+        assertTrue(info.supports_request);
+
+        # Test tools/call provider info
+        AbstractDataProvider callProvider = toolsProvider.getChildProvider("call");
+        info = callProvider.getInfo();
+        assertEq("call", info.name);
+        assertTrue(info.supports_request);
+
+        # Test ping provider info
+        AbstractDataProvider pingProvider = provider.getChildProvider("ping");
+        info = pingProvider.getInfo();
+        assertEq("ping", info.name);
+        assertTrue(info.supports_request);
+
+        # Test completion provider info
+        AbstractDataProvider completionProvider = provider.getChildProvider("completion");
+        info = completionProvider.getInfo();
+        assertEq("completion", info.name);
+        assertTrue(info.supports_request);
+
+        # Test events provider info
+        AbstractDataProvider eventsProvider = provider.getChildProvider("events");
+        info = eventsProvider.getInfo();
+        assertEq("events", eventsProvider.getName());
+        assertTrue(info.supports_observable ?? False);
+    }
+}
+
+class McpEventObserver inherits Observer {
+    public {
+        hash<string, list<hash<auto>>> events();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        list<hash<auto>> current = events{event_id} ?? ();
+        current += data_;
+        events{event_id} = current;
+        cond.broadcast();
+    }
+
+    waitForEvent(string event_id) {
+        date start = now_us();
+        while (True) {
+            m.lock();
+            bool ready = (events{event_id} && events{event_id}.size() > 0);
+            m.unlock();
+            if (ready) {
+                return;
+            }
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", sprintf("timeout waiting for event %s", event_id);
+            }
+            sleep(100ms);
+        }
+    }
+
+    hash<auto> getLastEvent(string event_id) {
+        m.lock();
+        on_exit m.unlock();
+
+        return events{event_id}[events{event_id}.size() - 1];
+    }
+}

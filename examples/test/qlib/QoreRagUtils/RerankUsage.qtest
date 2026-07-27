@@ -22,9 +22,7 @@
 %requires VoyageRestClient
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %ifdef NoJson
 auto sub make_json(auto val) {

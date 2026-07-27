@@ -47,9 +47,7 @@
 
 %requires linenoise
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QdpCmd
 
@@ -2245,11 +2243,7 @@ class QdpCmd {
                 error("YAML mapper file requested but yaml module is not available");
 %endif
             } else if (spec =~ /\.json$/i) {
-%ifndef NoJson
                 mapv = parse_json(content);
-%else
-                error("JSON mapper file requested but json module is not available");
-%endif
             } else {
                 mapv = parse_to_qore_value(content);
             }
@@ -2729,11 +2723,7 @@ class QdpCmd {
     static showVersion() {
         printf("%s version %s\n", get_script_name(), Version);
         printf("Qore %s\n", Qore::VersionString);
-%ifndef NoJson
         printf("JSON I/O: supported\n");
-%else
-        printf("JSON I/O: not available (json module not installed)\n");
-%endif
 %ifndef NoYaml
         printf("YAML I/O: supported\n");
 %else
@@ -2752,11 +2742,7 @@ class QdpCmd {
     #! Output data in the requested format (JSON, YAML, or Qore)
     static output(auto data) {
         if (opts.json) {
-%ifndef NoJson
             printf("%s\n", make_json(data, JGF_ADD_FORMATTING));
-%else
-            error("JSON output requested but json module is not available");
-%endif
         } else if (opts.yaml) {
 %ifndef NoYaml
             printf("%s", make_yaml(data, YAML::BlockStyle));
@@ -2771,11 +2757,7 @@ class QdpCmd {
     #! Parse input value according to the current format (JSON, YAML, or Qore)
     static auto parseInputValue(string text) {
         if (opts.json) {
-%ifndef NoJson
             return parse_json(text);
-%else
-            error("JSON input requested but json module is not available");
-%endif
         }
         if (opts.yaml) {
 %ifndef NoYaml
@@ -3234,15 +3216,9 @@ class InputHelper {
                 delete opts.yaml;
                 break;
             case "json":
-%ifndef NoJson
                 input_format = "json";
                 opts.json = True;
                 delete opts.yaml;
-%else
-                printf("%s: JSON format not available (json module not installed)\n",
-                    QdpCmd::color.error("ERROR"));
-                return;
-%endif
                 break;
             case "yaml":
 %ifndef NoYaml
@@ -3681,9 +3657,7 @@ class InputHelper {
         if (str =~ /^\/format\s+/) {
             string prefix = trim(str.substr(7));
             list<string> formats = ("qore",);
-%ifndef NoJson
             formats += "json";
-%endif
 %ifndef NoYaml
             formats += "yaml";
 %endif

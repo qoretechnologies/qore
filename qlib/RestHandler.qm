@@ -72,7 +72,7 @@ module RestHandler {
 
     The @ref RestHandler::RestHandler "RestHandler" class uses any of the following modules if the modules are
     available when the RestHandler module is initialized:
-    - <a href="https://github.com/qoretechnologies/module-json">json</a>: provides automatic support for JSON payload
+    - <a href="../../modules/json/html/index.html#jsonintro">json</a>: provides automatic support for JSON payload
       de/serialization
     - <a href="https://github.com/qoretechnologies/module-xml">xml</a>: provides automatic support for XML-RPC payload
       de/serialization
@@ -83,7 +83,7 @@ module RestHandler {
     <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a> with
     \c "Content-Type: application/x-www-form-urlencoded".
 
-    For standard REST web service development, the <a href="https://github.com/qoretechnologies/module-json">json</a>
+    For standard REST web service development, the <a href="../../modules/json/html/index.html#jsonintro">json</a>
     module will be required to support JSON serialization.
 
     The @ref RestHandler::RestHandler "RestHandler" class will automatically deserialize request bodies if the

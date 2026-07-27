@@ -32,9 +32,7 @@
 
 %requires RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %try-module imagemagick
 %define NoImageMagick

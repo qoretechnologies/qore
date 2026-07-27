@@ -32,9 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) TableauRestClient
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 module TableauDataProvider {
     version = "1.0";

@@ -22,9 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 #! contains all public definitions in the AnthropicDataProvider module
 public namespace AnthropicDataProvider {

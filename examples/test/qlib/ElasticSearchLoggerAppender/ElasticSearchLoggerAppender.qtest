@@ -11,9 +11,7 @@
 %requires RestClientIo
 %requires ElasticSearchLoggerAppender
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class ElasticSearchLoggerAppenderTest
 
@@ -116,9 +114,6 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     }
 
     static checkModule(Test test) {
-%ifdef NoJson
-        test.testSkip("no json module");
-%endif
     }
 
     constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {

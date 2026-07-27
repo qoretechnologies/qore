@@ -33,9 +33,7 @@
 %requires RestClient
 %requires Mime
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires WooCommerceRestClient
 %requires WooCommerceDataProvider
@@ -135,9 +133,6 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
 
     #! Check if json module is available
     private checkJson() {
-%ifdef NoJson
-        testSkip("no json module present");
-%endif
     }
 
     #! Creates a WooCommerceDataProvider for unit tests

@@ -88,9 +88,7 @@ hash<AgentResult> result = agent.execute(<AgentContext>{
     - the initial version of the %TavilyRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace TavilyRestClient {
 public class TavilyRestClientBase {

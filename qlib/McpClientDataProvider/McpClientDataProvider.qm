@@ -1,0 +1,246 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore McpClientDataProvider module definition
+
+/*  McpClientDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires(reexport) ConnectionProvider
+%requires(reexport) McpClient
+
+%modern
+
+module McpClientDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for MCP servers";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \Priv::priv_init();
+}
+
+/** @mainpage McpClientDataProvider Module
+
+    @tableofcontents
+
+    @section mcpclientdataproviderintro Introduction to the McpClientDataProvider Module
+
+    The %McpClientDataProvider module provides a data provider API for
+    MCP (Model Context Protocol) servers, enabling integration with AI tools, resources, and prompts.
+
+    The following classes are provided by this module:
+    - Core providers:
+      - @ref McpClientDataProvider::McpClientDataProvider "McpClientDataProvider"
+      - @ref McpClientDataProvider::McpClientDataProviderBase "McpClientDataProviderBase"
+      - @ref McpClientDataProvider::McpClientDataProviderFactory "McpClientDataProviderFactory"
+    - Functional providers:
+      - @ref McpClientDataProvider::McpToolsDataProvider "McpToolsDataProvider"
+      - @ref McpClientDataProvider::McpToolsListDataProvider "McpToolsListDataProvider"
+      - @ref McpClientDataProvider::McpToolCallDataProvider "McpToolCallDataProvider"
+      - @ref McpClientDataProvider::McpResourcesDataProvider "McpResourcesDataProvider"
+      - @ref McpClientDataProvider::McpResourcesListDataProvider "McpResourcesListDataProvider"
+      - @ref McpClientDataProvider::McpResourceReadDataProvider "McpResourceReadDataProvider"
+      - @ref McpClientDataProvider::McpPromptsDataProvider "McpPromptsDataProvider"
+      - @ref McpClientDataProvider::McpPromptsListDataProvider "McpPromptsListDataProvider"
+      - @ref McpClientDataProvider::McpPromptGetDataProvider "McpPromptGetDataProvider"
+      - @ref McpClientDataProvider::McpCompletionDataProvider "McpCompletionDataProvider"
+      - @ref McpClientDataProvider::McpPingDataProvider "McpPingDataProvider"
+    - Event provider:
+      - @ref McpClientDataProvider::McpNotificationEventDataProvider "McpNotificationEventDataProvider"
+    - Data types:
+      - @ref McpClientDataProvider::McpToolInfoDataType "McpToolInfoDataType"
+      - @ref McpClientDataProvider::McpToolResultDataType "McpToolResultDataType"
+      - @ref McpClientDataProvider::McpResourceInfoDataType "McpResourceInfoDataType"
+      - @ref McpClientDataProvider::McpResourceContentDataType "McpResourceContentDataType"
+      - @ref McpClientDataProvider::McpPromptInfoDataType "McpPromptInfoDataType"
+      - @ref McpClientDataProvider::McpPromptArgumentDataType "McpPromptArgumentDataType"
+      - @ref McpClientDataProvider::McpPromptMessageDataType "McpPromptMessageDataType"
+      - @ref McpClientDataProvider::McpPromptResultDataType "McpPromptResultDataType"
+      - @ref McpClientDataProvider::McpContentItemDataType "McpContentItemDataType"
+      - @ref McpClientDataProvider::McpNotificationEventDataType "McpNotificationEventDataType"
+      - @ref McpClientDataProvider::McpToolCallRequestDataType "McpToolCallRequestDataType"
+      - @ref McpClientDataProvider::McpResourceReadRequestDataType "McpResourceReadRequestDataType"
+      - @ref McpClientDataProvider::McpPromptGetRequestDataType "McpPromptGetRequestDataType"
+      - @ref McpClientDataProvider::McpCompletionRequestDataType "McpCompletionRequestDataType"
+      - @ref McpClientDataProvider::McpCompletionResultDataType "McpCompletionResultDataType"
+      - @ref McpClientDataProvider::McpPingResultDataType "McpPingResultDataType"
+      - @ref McpClientDataProvider::McpToolsListResultDataType "McpToolsListResultDataType"
+      - @ref McpClientDataProvider::McpResourcesListResultDataType "McpResourcesListResultDataType"
+      - @ref McpClientDataProvider::McpPromptsListResultDataType "McpPromptsListResultDataType"
+
+    @section mcpclientdataproviderevents MCP notifications
+
+    Use the event data provider to observe server notifications via the DataProvider observer API.
+
+    @code{.py}
+    McpClientDataProvider provider({"url": "mcp://localhost:8080"});
+    auto events = provider.getChildProvider("events");
+
+    class EventObserver inherits Observer {
+        update(string event_id, hash<auto> data_) {
+            printf("MCP event %s: %y\n", event_id, data_);
+        }
+    }
+
+    EventObserver obs();
+    events.registerObserver(obs, McpClientDataProvider::EVENT_MCP_LOG_MESSAGE);
+    events.observersReady();
+    @endcode
+
+    @section mcpclientdataprovider_relnotes Release Notes
+
+    @subsection mcpclientdataprovider_v1_0 McpClientDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the McpClientDataProvider module
+public namespace McpClientDataProvider {
+    #! Application name
+    public const AppName = "MCP";
+
+    # NOTE: MCP enums (McpVersion, McpLogLevel, McpCompletionRefType) are imported
+    # from McpClient module which is re-exported by this module
+
+    #! MCP content item types
+    public enum McpContentItemType : string {
+        #! Text content
+        Text = "text",
+        #! Image content with base64 data
+        Image = "image",
+        #! Resource reference
+        Resource = "resource",
+    }
+
+    #! MCP prompt message roles
+    public enum McpPromptMessageRole : string {
+        #! Message from the user
+        User = "user",
+        #! Message from the assistant
+        Assistant = "assistant",
+    }
+
+    #! MCP logo
+    public const McpLogo = "<svg fill=\"white\" fill-rule=\"evenodd\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z\"></path><path d=\"M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z\"></path></svg>";
+}
+
+# private namespace for the module
+namespace Priv {
+    sub priv_init() {
+        # Register the data provider factory
+        DataProvider::registerFactory(new McpClientDataProviderFactory());
+
+        # Register the app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": McpClientDataProvider::AppName,
+            "display_name": "MCP Server",
+            "short_desc": "Model Context Protocol server",
+            "desc": "Connect to MCP servers for AI tool, resource, and prompt integration",
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::ApiIntegration,),
+            "scheme": "mcp",
+            "logo": McpClientDataProvider::McpLogo,
+            "logo_file_name": "mcp-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # Register actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/tools/call",
+            "action": "call-tool",
+            "display_name": "Call Tool",
+            "short_desc": "Execute an MCP tool",
+            "desc": "Execute an MCP tool with the provided arguments and return the result",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/tools/list",
+            "action": "list-tools",
+            "display_name": "List Tools",
+            "short_desc": "List available MCP tools",
+            "desc": "List all tools available on the MCP server",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/resources/read",
+            "action": "read-resource",
+            "display_name": "Read Resource",
+            "short_desc": "Read an MCP resource",
+            "desc": "Read content from an MCP resource by URI",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/resources/list",
+            "action": "list-resources",
+            "display_name": "List Resources",
+            "short_desc": "List available MCP resources",
+            "desc": "List all resources available on the MCP server",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/prompts/get",
+            "action": "get-prompt",
+            "display_name": "Get Prompt",
+            "short_desc": "Get an MCP prompt",
+            "desc": "Get a prompt template from the MCP server with arguments",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/prompts/list",
+            "action": "list-prompts",
+            "display_name": "List Prompts",
+            "short_desc": "List available MCP prompts",
+            "desc": "List all prompts available on the MCP server",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/completion",
+            "action": "complete",
+            "display_name": "Get Completion",
+            "short_desc": "Get autocompletion suggestions",
+            "desc": "Get autocompletion suggestions for prompts or resources",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": McpClientDataProvider::AppName,
+            "path": "/ping",
+            "action": "ping",
+            "display_name": "Ping Server",
+            "short_desc": "Check server connectivity",
+            "desc": "Ping the MCP server to verify connectivity",
+            "action_code": DPAT_API,
+        });
+    }
+}

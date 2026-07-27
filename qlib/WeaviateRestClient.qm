@@ -71,9 +71,7 @@ module WeaviateRestClient {
     - the initial version of the %WeaviateRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 public namespace WeaviateRestClient {
 public class WeaviateRestClientBase {

@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmExt.qm - extension module attached as a child of TcmBase
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmBase
+
+module TcmExt {
+    version = "1.0";
+    desc = "test extension module for %try-child-module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmBase::registerChild("ext", sub (string name) {});
+    };
+}
+
+#! class that can only be parsed if the parent module is published
+public class TcmExtHelper {
+    #! returns the first entry in the parent module's trace
+    static string firstTraceEntry() {
+        return TcmBase::trace[0];
+    }
+}

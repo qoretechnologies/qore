@@ -109,10 +109,6 @@ public class OnnxProfileTools {
         available, or the trace cannot be parsed
     */
     static hash<OnnxProfileSummary> summarizeProfile(string profile_path, int top_limit = 20) {
-%ifdef NoJson
-        throw "QORE-ONNX-TOOLS-ERROR",
-            "the json module is required to summarize ONNX Runtime profiles";
-%else
         if (!profile_path.val()) {
             throw "QORE-ONNX-TOOLS-ERROR", "profile_path must not be empty";
         }
@@ -172,10 +168,8 @@ public class OnnxProfileTools {
         result.operator_names = sort(map $1.name, result.operators);
         result.provider_names = sort(map $1.name, result.providers);
         return result;
-%endif
     }
 
-%ifndef NoJson
     private static nothing recordAggregate(reference<hash<auto!>> groups, string name,
             string kind, int duration_us, *int ts, string category, *string op_name = NOTHING,
             *string provider = NOTHING) {
@@ -257,7 +251,6 @@ public class OnnxProfileTools {
         name =~ s/_kernel_time$//;
         return name.val() ? name : "unknown";
     }
-%endif
 }
 
 } # namespace QoreOnnxTools

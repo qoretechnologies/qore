@@ -1,0 +1,201 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OneRecordServerHandler.qm @brief ONE Record Server handler for the HttpServer module
+
+/*  OneRecordServerHandler.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Mime
+%requires Util
+%requires HttpServerUtil
+%requires Logger
+%requires JsonLd
+%requires(reexport) OneRecordClient
+%try-module uuid
+%define NoUuid
+%endtry
+
+%modern
+
+module OneRecordServerHandler {
+    version = "1.0";
+    desc = "OneRecordServerHandler module for use with the Qore HttpServer module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage OneRecordServerHandler Module
+
+    @tableofcontents
+
+    @section onerecordserverhandlerintro Introduction to the OneRecordServerHandler Module
+
+    The %OneRecordServerHandler module provides server-side support for the IATA ONE Record
+    standard (API v2.2.0) using the HttpServer module. It enables applications to serve as
+    ONE Record nodes, managing logistics objects, change requests, events, subscriptions,
+    and access delegations via REST APIs with JSON-LD payloads.
+
+    This module implements a decentralized data sharing architecture where each participant
+    maintains their own server and data sovereignty is preserved.
+
+    The following classes are provided by this module:
+    - @ref OneRecordServerHandler::OneRecordServerHandler "OneRecordServerHandler"
+    - @ref OneRecordServerHandler::AbstractOneRecordStorage "AbstractOneRecordStorage"
+    - @ref OneRecordServerHandler::InMemoryOneRecordStorage "InMemoryOneRecordStorage"
+    - @ref OneRecordServerHandler::AbstractOneRecordAuthorizer "AbstractOneRecordAuthorizer"
+    - @ref OneRecordServerHandler::PermissiveOneRecordAuthorizer "PermissiveOneRecordAuthorizer"
+
+    @subsection onerecordserverhandlerbasic Basic Server Setup
+    @code{.py}
+    %requires OneRecordServerHandler
+    %requires HttpServer
+
+    Logger logger("1r-server", LoggerLevel::getLevelInfo());
+    InMemoryOneRecordStorage storage();
+    PermissiveOneRecordAuthorizer authorizer();
+
+    OneRecordServerHandler handler(logger, "http://localhost:8080", storage, authorizer);
+
+    hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+        "logger": logger,
+    };
+    HttpServer http(http_opts);
+    http.setHandler("1r", "", MimeTypeOneRecord, handler);
+    http.setDefaultHandler("1r", handler);
+    http.addListener(<HttpListenerOptionInfo>{"service": 8080});
+    @endcode
+
+    @subsection onerecordserverhandlercargonode Running as a Cargo Data Node
+
+    This example shows an airline running a ONE Record server to share shipment data with
+    forwarders and ground handlers — the core ONE Record architecture pattern.
+
+    @code{.py}
+    %requires OneRecordServerHandler
+    %requires HttpServer
+
+    # Set up server with custom base URL matching the public endpoint
+    Logger logger("airline-1r", LoggerLevel::getLevelInfo());
+    InMemoryOneRecordStorage storage();
+    PermissiveOneRecordAuthorizer authorizer("https://airline.example.com/org/airline-xyz");
+
+    OneRecordServerHandler handler(logger, "https://1r.airline.example.com",
+        storage, authorizer);
+
+    # Configure server info for discovery
+    handler.setServerInfo(<OneRecordServerInfo>{
+        "serverEndpoint": "https://1r.airline.example.com",
+        "dataHolder": {"\\@id": "https://airline.example.com/org/airline-xyz",
+                       "\\@type": "cargo:Company"},
+    });
+
+    # Start HTTPS server
+    hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{"logger": logger};
+    HttpServer http(opts);
+    http.setHandler("1r", "", MimeTypeOneRecord, handler);
+    http.setDefaultHandler("1r", handler);
+    http.addListener(<HttpListenerOptionInfo>{
+        "service": 443,
+        "ssl_cert_path": "/etc/ssl/certs/1r.airline.example.com.pem",
+        "ssl_key_path": "/etc/ssl/private/1r.airline.example.com.key",
+    });
+    @endcode
+
+    @subsection onerecordserverhandlernotifications Handling Notifications
+
+    Register a callback to process incoming notifications from other ONE Record nodes.
+
+    @code{.py}
+    # Register a notification handler for incoming webhook notifications
+    handler.setNotificationHandler(sub (hash<auto> notification) {
+        string event_type = notification."api:hasEventType"."\\@id";
+        string topic = notification."api:hasTopic";
+
+        printf("Received notification: %s for %s\\n", event_type, topic);
+
+        # Process based on event type
+        switch (event_type) {
+            case "api:LOGISTICS_OBJECT_UPDATED":
+                # A logistics object we subscribed to was updated
+                printf("Object updated: %s\\n", topic);
+                break;
+            case "api:CHANGE_REQUEST_ACCEPTED":
+                # Our change request was accepted
+                printf("Change accepted for: %s\\n", topic);
+                break;
+        }
+    });
+    @endcode
+
+    @subsection onerecordserverhandlercustomstorage Custom Storage Backend
+
+    Implement the @ref AbstractOneRecordStorage interface to persist data in a database.
+
+    @code{.py}
+    class PostgresOneRecordStorage inherits AbstractOneRecordStorage {
+        private {
+            Datasource ds;
+        }
+
+        constructor(Datasource ds) {
+            self.ds = ds;
+        }
+
+        string createLogisticsObject(hash<auto> data, string type, string created_by) {
+            string id = UUID::get();
+            ds.exec("INSERT INTO logistics_objects (id, type, revision, data, created_by) "
+                    "VALUES (%v, %v, 1, %v, %v)", id, type, make_json(data), created_by);
+            ds.commit();
+            return id;
+        }
+
+        # ... implement remaining abstract methods ...
+    }
+    @endcode
+
+    @section onerecordserverhandlerrelnotes OneRecordServerHandler Release Notes
+
+    @subsection onerecordserverhandlerv1_0 OneRecordServerHandler v1.0
+    - initial release with IATA ONE Record API v2.2.0 support
+    - REST handler with full URL routing for all API endpoints
+    - pluggable storage backend (abstract interface + in-memory implementation)
+    - pluggable authorization (abstract interface + permissive implementation)
+    - logistics object CRUD with revision tracking and optimistic concurrency
+    - change request lifecycle (submit, accept, reject, revoke) with atomic application
+    - logistics events (immutable event records per object)
+    - subscriptions with webhook notification delivery via bounded thread pool
+    - access delegations and verification requests
+    - audit trail with per-object change history
+    - notification receive handler with callback mechanism
+    - JSON-LD integration via the JsonLd module
+*/
+
+#! the %OneRecordServerHandler namespace holds all public definitions in the %OneRecordServerHandler module
+public namespace OneRecordServerHandler {
+#! Server name
+public const OneRecordServerName = "QoreOneRecordServer";
+
+#! Server version
+public const OneRecordServerVersion = "1.0";
+}

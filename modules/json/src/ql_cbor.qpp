@@ -1,0 +1,738 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file
+    @brief defines CBOR functions
+*/
+/*
+    ql_cbor.qpp
+
+    Qore CBOR (Concise Binary Object Representation) functions
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "qore-json-module.h"
+
+#include "ql_cbor.h"
+
+#include <cmath>
+#include <cassert>
+#include <vector>
+#include <string>
+#include <cinttypes>
+
+#include <jsoncons_ext/cbor/cbor.hpp>
+
+// Maximum CBOR nesting depth (sandbox only) - same as JSON
+#define CBOR_MAX_NESTING_DEPTH JSON_MAX_NESTING_DEPTH
+
+// Interrupt check interval (iterations between checks) - same as JSON
+#define CBOR_INTERRUPT_CHECK_INTERVAL JSON_INTERRUPT_CHECK_INTERVAL
+
+using namespace jsoncons;
+using namespace jsoncons::cbor;
+
+// forward declaration
+static int do_cbor_value(
+    basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>>& encoder,
+    QoreValue v,
+    int depth,
+    QoreSandboxManager* sm,
+    ExceptionSink* xsink);
+
+static int do_cbor_list(
+    basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>>& encoder,
+    const QoreListNode* l,
+    int depth,
+    QoreSandboxManager* sm,
+    ExceptionSink* xsink) {
+    size_t len = l->size();
+    encoder.begin_array(len);
+
+    unsigned iteration = 0;
+    for (size_t i = 0; i < len; ++i) {
+        if (sm && (++iteration % CBOR_INTERRUPT_CHECK_INTERVAL) == 0) {
+            if (qore_check_cancel(xsink, "serializing CBOR array")) {
+                return -1;
+            }
+        }
+        if (do_cbor_value(encoder, l->retrieveEntry(i), depth + 1, sm, xsink)) {
+            return -1;
+        }
+    }
+
+    encoder.end_array();
+    return 0;
+}
+
+static int do_cbor_hash(
+    basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>>& encoder,
+    const QoreHashNode* h,
+    int depth,
+    QoreSandboxManager* sm,
+    ExceptionSink* xsink) {
+    size_t len = h->size();
+    encoder.begin_object(len);
+
+    ConstHashIterator hi(h);
+    unsigned iteration = 0;
+    while (hi.next()) {
+        if (sm && (++iteration % CBOR_INTERRUPT_CHECK_INTERVAL) == 0) {
+            if (qore_check_cancel(xsink, "serializing CBOR object")) {
+                return -1;
+            }
+        }
+        const char* key = hi.getKey();
+        encoder.key(jsoncons::string_view(key));
+        if (do_cbor_value(encoder, hi.get(), depth + 1, sm, xsink)) {
+            return -1;
+        }
+    }
+
+    encoder.end_object();
+    return 0;
+}
+
+static int do_cbor_value(
+    basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>>& encoder,
+    QoreValue v,
+    int depth,
+    QoreSandboxManager* sm,
+    ExceptionSink* xsink) {
+    if (v.isNullOrNothing()) {
+        encoder.null_value();
+        return 0;
+    }
+
+    qore_type_t vtype = v.getType();
+
+    if (vtype == NT_LIST) {
+        if (sm && depth >= CBOR_MAX_NESTING_DEPTH) {
+            xsink->raiseException("CBOR-SERIALIZATION-ERROR",
+                "maximum nesting depth (%d) exceeded during serialization",
+                CBOR_MAX_NESTING_DEPTH);
+            return -1;
+        }
+        return do_cbor_list(encoder, v.get<const QoreListNode>(), depth, sm, xsink);
+    }
+
+    if (vtype == NT_HASH) {
+        if (sm && depth >= CBOR_MAX_NESTING_DEPTH) {
+            xsink->raiseException("CBOR-SERIALIZATION-ERROR",
+                "maximum nesting depth (%d) exceeded during serialization",
+                CBOR_MAX_NESTING_DEPTH);
+            return -1;
+        }
+        return do_cbor_hash(encoder, v.get<const QoreHashNode>(), depth, sm, xsink);
+    }
+
+    if (vtype == NT_STRING) {
+        QoreStringValueHelper str(v);
+        encoder.string_value(jsoncons::string_view(str->c_str(), str->size()));
+        return 0;
+    }
+
+    if (vtype == NT_INT) {
+        int64_t val = v.getAsBigInt();
+        if (val >= 0) {
+            encoder.uint64_value(static_cast<uint64_t>(val));
+        } else {
+            encoder.int64_value(val);
+        }
+        return 0;
+    }
+
+    if (vtype == NT_FLOAT) {
+        double f = v.getAsFloat();
+        // serialize NaN and Inf as null (same as JSON behavior)
+        if (std::isnan(f) || std::isinf(f)) {
+            encoder.null_value();
+        } else {
+            encoder.double_value(f);
+        }
+        return 0;
+    }
+
+    if (vtype == NT_NUMBER) {
+        const QoreNumberNode* n = v.get<const QoreNumberNode>();
+        if (!n->ordinary()) {
+            encoder.null_value();
+        } else {
+            // Use bigdec semantic tag for arbitrary precision
+            QoreString numstr;
+            n->getStringRepresentation(numstr);
+            encoder.string_value(jsoncons::string_view(numstr.c_str(), numstr.size()),
+                semantic_tag::bigdec);
+        }
+        return 0;
+    }
+
+    if (vtype == NT_BOOLEAN) {
+        encoder.bool_value(v.getAsBool());
+        return 0;
+    }
+
+    if (vtype == NT_DATE) {
+        const DateTimeNode* date = v.get<const DateTimeNode>();
+        if (date->isRelative()) {
+            // Relative dates (durations) are serialized as ISO 8601 duration strings
+            QoreString durstr;
+            durstr.concat('P');
+            qore_tm info;
+            date->getInfo(info);
+
+            if (date->hasValue()) {
+                if (info.year) {
+                    durstr.sprintf("%dY", info.year);
+                }
+                if (info.month) {
+                    durstr.sprintf("%dM", info.month);
+                }
+                if (info.day) {
+                    durstr.sprintf("%dD", info.day);
+                }
+
+                bool has_t = false;
+                if (info.hour) {
+                    durstr.sprintf("T%dH", info.hour);
+                    has_t = true;
+                }
+                if (info.minute) {
+                    if (!has_t) {
+                        durstr.concat('T');
+                        has_t = true;
+                    }
+                    durstr.sprintf("%dM", info.minute);
+                }
+                if (info.second) {
+                    if (!has_t) {
+                        durstr.concat('T');
+                        has_t = true;
+                    }
+                    durstr.sprintf("%dS", info.second);
+                }
+                if (info.us) {
+                    if (!has_t) {
+                        durstr.concat('T');
+                        has_t = true;
+                    }
+                    durstr.sprintf("%du", info.us);
+                }
+            } else {
+                durstr.concat("0D");
+            }
+
+            encoder.string_value(jsoncons::string_view(durstr.c_str(), durstr.size()));
+        } else {
+            // Absolute dates use CBOR tag 0 (datetime) with ISO 8601 string
+            qore_tm info;
+            date->getInfo(currentTZ(), info);
+
+            QoreString dtstr;
+            dtstr.sprintf("%04d-%02d-%02dT%02d:%02d:%02d", info.year, info.month, info.day,
+                info.hour, info.minute, info.second);
+            if (info.us) {
+                dtstr.sprintf(".%06d", info.us);
+            }
+            if (!info.utc_secs_east) {
+                dtstr.concat('Z');
+            } else {
+                dtstr.concat(info.utc_secs_east < 0 ? '-' : '+');
+                int secs = info.utc_secs_east < 0 ? -info.utc_secs_east : info.utc_secs_east;
+                int h = secs / 3600;
+                int r = secs % 3600;
+                int m = r / 60;
+                dtstr.sprintf("%02d:%02d", h, m);
+                int s = secs - h * 3600 - m * 60;
+                if (s) {
+                    dtstr.sprintf(":%02d", s);
+                }
+            }
+
+            encoder.string_value(jsoncons::string_view(dtstr.c_str(), dtstr.size()),
+                semantic_tag::datetime);
+        }
+        return 0;
+    }
+
+    if (vtype == NT_BINARY) {
+        const BinaryNode* b = v.get<const BinaryNode>();
+        encoder.byte_string_value(byte_string_view(
+            reinterpret_cast<const uint8_t*>(b->getPtr()), b->size()));
+        return 0;
+    }
+
+    xsink->raiseException("CBOR-SERIALIZATION-ERROR",
+        "don't know how to serialize type '%s'", v.getFullTypeName());
+    return -1;
+}
+
+// Stack entry for building Qore value trees from CBOR
+struct CborStackEntry {
+    enum Type { ROOT, ARRAY, OBJECT };
+    Type type;
+    QoreListNode* list;
+    QoreHashNode* hash;
+    std::string pending_key;
+    bool has_key;
+
+    CborStackEntry(Type t)
+        : type(t),
+          list(t == ARRAY ? new QoreListNode(autoTypeInfo) : nullptr),
+          hash(t == OBJECT ? new QoreHashNode(autoTypeInfo) : nullptr),
+          has_key(false) {
+    }
+
+    // Clean up if the entry is destroyed without releasing
+    ~CborStackEntry() {
+        if (list) {
+            list->deref(nullptr);
+        }
+        if (hash) {
+            hash->deref(nullptr);
+        }
+    }
+
+    // Move constructor
+    CborStackEntry(CborStackEntry&& other) noexcept
+        : type(other.type), list(other.list), hash(other.hash),
+          pending_key(std::move(other.pending_key)), has_key(other.has_key) {
+        other.list = nullptr;
+        other.hash = nullptr;
+    }
+
+    // No copy
+    CborStackEntry(const CborStackEntry&) = delete;
+    CborStackEntry& operator=(const CborStackEntry&) = delete;
+    CborStackEntry& operator=(CborStackEntry&&) = delete;
+
+    QoreListNode* releaseList() {
+        QoreListNode* rv = list;
+        list = nullptr;
+        return rv;
+    }
+
+    QoreHashNode* releaseHash() {
+        QoreHashNode* rv = hash;
+        hash = nullptr;
+        return rv;
+    }
+};
+
+// Visitor class for building Qore values from CBOR data
+class CborToQoreVisitor : public jsoncons::basic_json_visitor<char> {
+public:
+    using string_view_type = jsoncons::basic_json_visitor<char>::string_view_type;
+
+    CborToQoreVisitor(ExceptionSink* xs, QoreSandboxManager* sm)
+        : xsink(xs), sandbox_mgr(sm), result(xs), depth(0), iteration(0), aborted(false) {
+    }
+
+    QoreValue getResult() {
+        if (aborted) {
+            assert(*xsink);
+            return QoreValue();
+        }
+        if (stack.empty()) {
+            return result.release();
+        }
+        xsink->raiseException("CBOR-PARSE-ERROR", "unexpected end of CBOR data");
+        return QoreValue();
+    }
+
+private:
+    ExceptionSink* xsink;
+    QoreSandboxManager* sandbox_mgr;
+    std::vector<CborStackEntry> stack;
+    ValueHolder result;
+    int depth;
+    unsigned iteration;
+    // Set once this visitor has raised an exception or refused a container.  jsoncons does not
+    // guarantee that returning false from a visit_begin_*() callback ends the parse immediately:
+    // jsoncons 1.x still delivers the matching visit_end_*() callback, which would otherwise
+    // index an empty container stack.  Every callback below is a no-op once this is set.
+    bool aborted;
+
+    // Aborts the parse; always returns false so callers can `return abort();`
+    bool abort() {
+        aborted = true;
+        return false;
+    }
+
+    // Takes ownership of \a val in all cases.  Returns false (and aborts) if the value cannot
+    // be placed, so malformed input can never leave the container stack inconsistent.
+    bool addValue(QoreValue val) {
+        if (stack.empty()) {
+            result = val;
+            return true;
+        }
+
+        CborStackEntry& top = stack.back();
+        if (top.type == CborStackEntry::ARRAY) {
+            top.list->push(val, xsink);
+        } else if (top.type == CborStackEntry::OBJECT) {
+            if (!top.has_key) {
+                val.discard(xsink);
+                xsink->raiseException("CBOR-PARSE-ERROR", "CBOR object value with no preceding key");
+                return abort();
+            }
+            top.hash->setKeyValue(top.pending_key.c_str(), val, xsink);
+            top.has_key = false;
+        } else {
+            val.discard(xsink);
+            xsink->raiseException("CBOR-PARSE-ERROR", "unexpected CBOR value outside of any container");
+            return abort();
+        }
+        return true;
+    }
+
+    bool checkInterrupt() {
+        if (sandbox_mgr && (++iteration % CBOR_INTERRUPT_CHECK_INTERVAL) == 0) {
+            if (qore_check_cancel(xsink, "parsing CBOR data")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // visitor overrides
+    void visit_flush() override {}
+
+    bool visit_begin_object(semantic_tag /*tag*/,
+                          const ser_context& /*context*/,
+                          std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (sandbox_mgr && depth >= CBOR_MAX_NESTING_DEPTH) {
+            xsink->raiseException("CBOR-PARSE-ERROR",
+                "maximum nesting depth (%d) exceeded during parsing",
+                CBOR_MAX_NESTING_DEPTH);
+            return abort();
+        }
+        ++depth;
+        stack.emplace_back(CborStackEntry::OBJECT);
+        return true;
+    }
+
+    bool visit_end_object(const ser_context& /*context*/,
+                        std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (stack.empty() || stack.back().type != CborStackEntry::OBJECT) {
+            xsink->raiseException("CBOR-PARSE-ERROR", "unbalanced CBOR object end marker");
+            return abort();
+        }
+        --depth;
+        QoreHashNode* h = stack.back().releaseHash();
+        stack.pop_back();
+        return addValue(h);
+    }
+
+    bool visit_begin_array(semantic_tag /*tag*/,
+                         const ser_context& /*context*/,
+                         std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (sandbox_mgr && depth >= CBOR_MAX_NESTING_DEPTH) {
+            xsink->raiseException("CBOR-PARSE-ERROR",
+                "maximum nesting depth (%d) exceeded during parsing",
+                CBOR_MAX_NESTING_DEPTH);
+            return abort();
+        }
+        ++depth;
+        stack.emplace_back(CborStackEntry::ARRAY);
+        return true;
+    }
+
+    bool visit_end_array(const ser_context& /*context*/,
+                       std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (stack.empty() || stack.back().type != CborStackEntry::ARRAY) {
+            xsink->raiseException("CBOR-PARSE-ERROR", "unbalanced CBOR array end marker");
+            return abort();
+        }
+        --depth;
+        QoreListNode* l = stack.back().releaseList();
+        stack.pop_back();
+        return addValue(l);
+    }
+
+    bool visit_key(const string_view_type& name,
+                 const ser_context& /*context*/,
+                 std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        if (stack.empty() || stack.back().type != CborStackEntry::OBJECT) {
+            xsink->raiseException("CBOR-PARSE-ERROR", "CBOR key outside of an object");
+            return abort();
+        }
+        stack.back().pending_key.assign(name.data(), name.size());
+        stack.back().has_key = true;
+        return true;
+    }
+
+    bool visit_null(semantic_tag /*tag*/,
+                  const ser_context& /*context*/,
+                  std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        return addValue(QoreValue());
+    }
+
+    bool visit_bool(bool value,
+                  semantic_tag /*tag*/,
+                  const ser_context& /*context*/,
+                  std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        return addValue(value);
+    }
+
+    bool visit_string(const string_view_type& value,
+                    semantic_tag tag,
+                    const ser_context& /*context*/,
+                    std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        if (tag == semantic_tag::datetime) {
+            // CBOR tag 0: parse ISO 8601 datetime string
+            QoreString dtstr(value.data(), value.size(), QCS_UTF8);
+            SimpleRefHolder<DateTimeNode> dt(new DateTimeNode(dtstr.c_str()));
+            return addValue(dt.release());
+        } else if (tag == semantic_tag::bigdec) {
+            // CBOR tag 4: decimal fraction - the reader converts to a string representation
+            QoreString numstr(value.data(), value.size(), QCS_UTF8);
+            QoreNumberNode* n = new QoreNumberNode(numstr.c_str());
+            return addValue(n);
+        } else if (tag == semantic_tag::bigint) {
+            // CBOR tag 2/3: bignum - represented as a string by jsoncons
+            QoreString numstr(value.data(), value.size(), QCS_UTF8);
+            QoreNumberNode* n = new QoreNumberNode(numstr.c_str());
+            return addValue(n);
+        } else {
+            QoreStringNode* str = new QoreStringNode(value.data(), value.size(), QCS_UTF8);
+            return addValue(str);
+        }
+        return true;
+    }
+
+    bool visit_byte_string(const byte_string_view& value,
+                          semantic_tag /*tag*/,
+                          const ser_context& /*context*/,
+                          std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        BinaryNode* b = new BinaryNode();
+        if (value.size()) {
+            b->append(value.data(), value.size());
+        }
+        return addValue(b);
+    }
+
+    bool visit_uint64(uint64_t value,
+                    semantic_tag tag,
+                    const ser_context& /*context*/,
+                    std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        if (tag == semantic_tag::epoch_second) {
+            // CBOR tag 1: epoch seconds
+            int64_t epoch = static_cast<int64_t>(value);
+            return addValue(DateTimeNode::makeAbsolute(currentTZ(), epoch, 0));
+        } else if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            // Value exceeds int64 range, use QoreNumberNode
+            QoreString numstr;
+            numstr.sprintf("%" PRIu64, value);
+            QoreNumberNode* n = new QoreNumberNode(numstr.c_str());
+            return addValue(n);
+        } else {
+            return addValue(static_cast<int64_t>(value));
+        }
+        return true;
+    }
+
+    bool visit_int64(int64_t value,
+                   semantic_tag tag,
+                   const ser_context& /*context*/,
+                   std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        if (tag == semantic_tag::epoch_second) {
+            // CBOR tag 1: epoch seconds
+            return addValue(DateTimeNode::makeAbsolute(currentTZ(), value, 0));
+        } else {
+            return addValue(value);
+        }
+        return true;
+    }
+
+    bool visit_double(double value,
+                    semantic_tag tag,
+                    const ser_context& /*context*/,
+                    std::error_code& /*ec*/) override {
+        if (aborted) {
+            return false;
+        }
+        if (checkInterrupt()) {
+            return abort();
+        }
+        if (tag == semantic_tag::epoch_second) {
+            // CBOR tag 1: epoch seconds as float
+            int64_t secs = static_cast<int64_t>(value);
+            int us = static_cast<int>((value - secs) * 1000000);
+            return addValue(DateTimeNode::makeAbsolute(currentTZ(), secs, us));
+        } else {
+            return addValue(value);
+        }
+        return true;
+    }
+};
+
+/** @defgroup cbor_functions CBOR Functions
+ */
+///@{
+namespace Qore::Json;
+
+//! Serializes qore data into a CBOR (Concise Binary Object Representation) binary value
+/** @par Example:
+    @code binary cbor = make_cbor(data); @endcode
+
+    @param data the data to serialize to a CBOR binary value
+
+    @return the CBOR binary value corresponding to the arguments passed
+
+    @throw CBOR-SERIALIZATION-ERROR cannot serialize value passed (ex: object), or maximum nesting depth exceeded
+
+    @note
+    - Absolute dates are serialized with CBOR tag 0 (ISO 8601 datetime string)
+    - Relative dates are serialized as ISO 8601 duration strings without a tag
+    - Arbitrary-precision numbers (\c number type) are serialized with CBOR tag 4 (decimal fraction)
+    - Binary values are serialized as CBOR byte strings
+    - NaN and Inf float/number values are serialized as CBOR null
+    - Qore \c NOTHING and \c NULL are serialized as CBOR null
+
+    @see parse_cbor()
+
+    @since json 1.11
+*/
+binary make_cbor(auto data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    std::vector<uint8_t> buf;
+    bytes_sink<std::vector<uint8_t>> sink(buf);
+    basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>> encoder(std::move(sink));
+
+    QoreSandboxManagerHelper smh;
+    if (do_cbor_value(encoder, data, 0, smh.get(), xsink)) {
+        return QoreValue();
+    }
+    encoder.flush();
+
+    SimpleRefHolder<BinaryNode> bn(new BinaryNode());
+    if (!buf.empty()) {
+        bn->append(buf.data(), buf.size());
+    }
+    return bn.release();
+}
+
+//! Parses a CBOR binary value and returns the corresponding Qore data structure
+/** @par Example:
+    @code auto data = parse_cbor(cbor_data); @endcode
+
+    @param cbor_data the CBOR binary data to parse
+
+    @return the Qore data structure corresponding to the input binary data
+
+    @throw CBOR-PARSE-ERROR error parsing CBOR data, or maximum nesting depth exceeded
+
+    @note
+    - CBOR tag 0 (datetime string) is deserialized to a Qore \c date value
+    - CBOR tag 1 (epoch seconds) is deserialized to a Qore \c date value
+    - CBOR tag 2/3 (bignum) is deserialized to a Qore \c number value
+    - CBOR tag 4 (decimal fraction) is deserialized to a Qore \c number value
+    - CBOR byte strings are deserialized to Qore \c binary values
+    - CBOR null/undefined are deserialized to Qore \c NOTHING
+    - CBOR unsigned integers exceeding \c int64 range are deserialized to Qore \c number values
+
+    @see make_cbor()
+
+    @since json 1.11
+*/
+auto parse_cbor(binary cbor_data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreSandboxManagerHelper smh;
+    CborToQoreVisitor visitor(xsink, smh.get());
+
+    try {
+        const uint8_t* ptr = reinterpret_cast<const uint8_t*>(cbor_data->getPtr());
+        size_t sz = cbor_data->size();
+        byte_string_view bsv(ptr, sz);
+        bytes_source source(bsv);
+        basic_cbor_reader<bytes_source> reader(std::move(source), visitor);
+        reader.read();
+    } catch (const jsoncons::ser_error& e) {
+        if (!*xsink) {
+            xsink->raiseException("CBOR-PARSE-ERROR", "CBOR parsing error at position %zu: %s",
+                e.column(), e.what());
+        }
+        return QoreValue();
+    } catch (const std::exception& e) {
+        if (!*xsink) {
+            xsink->raiseException("CBOR-PARSE-ERROR", "CBOR parsing error: %s", e.what());
+        }
+        return QoreValue();
+    }
+
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return visitor.getResult();
+}
+
+///@}

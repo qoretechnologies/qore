@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires OpenAiDataProvider
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class OpenAiDataProviderTest
 
@@ -140,9 +138,7 @@ class StreamObserver inherits Observer {
 
 public class OpenAiDataProviderTest inherits QUnit::Test {
     public {
-%ifndef NoJson
         OpenAiRestConnection rc;
-%endif
         Logger logger;
 
         # command-line options
@@ -183,21 +179,16 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         hash<auto> fake_opts = {
             "token": "x",
         };
         OpenAiRestConnection rc("test", "test", NOTHING, NOTHING, fake_opts);
         OpenAiDataProvider prov(rc.getAsync(True));
         assertEq("openai", prov.getName());
-%endif
     }
 
     actionCatalogTest() {
@@ -212,7 +203,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 
     test() {
         checkModule();
-%ifndef NoJson
         if (!rc) {
             testSkip("no connection");
         }
@@ -220,7 +210,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = new OpenAiDataProvider(rc.getAsync());
         prov = prov.getChildProvider("models");
         assertGt(0, prov.getChildProviderNames().size());
-%endif
     }
 
     private *OpenAiModelCreateResponseDataProvider makeResponseProvider(reference<FakeOpenAiRestClient> rest) {
@@ -230,7 +219,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 
     responseInputMappingTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest;
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
 
@@ -342,12 +330,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         resp = prov.doRequest(req);
         assertEq("json_schema", rest.last_request.text.format.type);
         assertEq("TestSchema", rest.last_request.text.format.json_schema.name);
-%endif
     }
 
     responseInputValidationTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest;
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
 
@@ -466,12 +452,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             },
         };
         assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_schema_req,));
-%endif
     }
 
     responseInputEdgeCasesTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest;
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
 
@@ -673,12 +657,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         };
         resp = prov.doRequest(req);
         assertEq("standalone", resp.output_text);
-%endif
     }
 
     responseConversationContextSaveTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest;
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
         TestConversationStore store();
@@ -704,12 +686,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("resp_test", resp.conversation_context.previous_response_id);
         assertEq("user-ctx-1", store.last_save_key);
         assertEq("resp_test", store.last_saved.previous_response_id);
-%endif
     }
 
     responseConversationCallbackStoreTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest;
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
         hash<auto> saved;
@@ -745,12 +725,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("cb-1", saved_key);
         assertEq("resp_test", saved{"cb-1"}.previous_response_id);
         assertEq("resp_test", resp.conversation_context.previous_response_id);
-%endif
     }
 
     responseStreamEventsTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest();
         OpenAiResponseStreamDataProvider prov(rest);
         TestConversationStore store();
@@ -798,12 +776,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("done", observer.events[2].type);
         assertEq(True, rest.last_stream_request.stream);
         assertEq("resp_stream", store.last_saved.previous_response_id);
-%endif
     }
 
     responseStreamErrorTest() {
         checkModule();
-%ifndef NoJson
         FailingOpenAiRestClient rest();
         OpenAiResponseStreamDataProvider prov(rest);
         StreamObserver observer();
@@ -829,12 +805,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         observer.wait(1);
         assertEq("error", observer.events[0].type);
         assertEq("SSE-ERROR", observer.events[0].error.err);
-%endif
     }
 
     responseActionCreateTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest();
         rest.response_body = {
             "id": "resp_action",
@@ -875,12 +849,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("assistant", result.output[0].role);
         assertEq("text", result.output[0].content[0].type);
         assertEq("hello", result.output[0].content[0].text);
-%endif
     }
 
     responseActionStreamTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest();
         rest.stream_events = (
             <SseMessageInfo>{
@@ -939,12 +911,10 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 
         hash<auto> stop_result = session.handleAction("openai-response-stop", {});
         assertEq("stopped", stop_result.status);
-%endif
     }
 
     responseActionInvalidArgsTest() {
         checkModule();
-%ifndef NoJson
         FakeOpenAiRestClient rest();
         OpenAiResponseActionSession session({
             "restclient": rest,
@@ -972,7 +942,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             assertEq("INVALID-REQUEST", ex.err);
         }
         assertTrue(caught, "Should reject missing model");
-%endif
     }
 
     private usageIntern() {
@@ -985,7 +954,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.OPENAI_CONNECTION;
         if (!conn_name.val()) {
             error("missing -c,--connection option or OPENAI_CONNECTION environment variable");
@@ -996,6 +964,5 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             error("connection %y is type %y; expecting \"OpenAiRestConnection\"", conn_name, conn.className());
         }
         rc = conn;
-%endif
     }
 }

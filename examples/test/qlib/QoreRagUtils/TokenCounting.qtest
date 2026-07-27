@@ -10,9 +10,7 @@
 %requires QoreRagUtils
 %requires QUnit
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class TokenCountingTest
 
@@ -79,9 +77,6 @@ public class TokenCountingTest inherits QUnit::Test {
     }
 
     private *object makeCounter() {
-%ifdef NoJson
-        testSkip("json module not available");
-%endif
         try {
             return new QoreTokenizerUtils::TokenCounter(TokenizerConfig);
         } catch (hash<ExceptionInfo> ex) {

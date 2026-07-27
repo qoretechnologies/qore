@@ -1,0 +1,506 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires JsonRpcHandler
+%requires JsonRpcClientIo
+%exec-class JsonRpcClientIoTest
+
+class TestJsonRpcHandler inherits JsonRpcHandler {
+    public {
+        const ApiMethods = (
+            {
+                "name": "^system\\.echo$",
+                "text": "system.echo",
+                "function": \TestJsonRpcHandler::echo(),
+                "help": "echos the argument",
+                "logopt": 0,
+            }, {
+                "name": "^system\\.notify$",
+                "text": "system.notify",
+                "function": \TestJsonRpcHandler::notifyMethod(),
+                "help": "notification handler",
+                "logopt": 0,
+            }, {
+                "name": "^system\\.error$",
+                "text": "system.error",
+                "function": \TestJsonRpcHandler::error(),
+                "help": "throws an error",
+                "logopt": 0,
+            }, {
+                "name": "^system\\.add$",
+                "text": "system.add",
+                "function": \TestJsonRpcHandler::add(),
+                "help": "adds two numbers",
+                "logopt": 0,
+            },
+        );
+    }
+
+    constructor() : JsonRpcHandler(new PermissiveAuthenticator(), ApiMethods) {
+    }
+
+    static auto echo(auto arg) {
+        return arg;
+    }
+
+    static nothing notifyMethod(auto arg) {
+    }
+
+    static nothing error(auto arg) {
+        throw "TEST-ERROR", arg;
+    }
+
+    static int add(int a, int b) {
+        return a + b;
+    }
+}
+
+public class JsonRpcClientIoTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        JsonRpcClientIo::JsonRpcClientIo client;
+        TestJsonRpcHandler handler();
+        int port;
+    }
+
+    public {
+        const SimpleHashValue = {"a": 1};
+        const LargerHashValue = {"a": 1, "b": "two"};
+        const HashValue = {"a": (1, "two")};
+        const ListValue = (1, "two", 3.1);
+        const AllValues = (1, "two", ListValue, SimpleHashValue, LargerHashValue, HashValue);
+    }
+
+    constructor() : Test("JsonRpcClientIo test", "1.0") {
+        addTestCase("basic call test", \testBasicCall());
+        addTestCase("callArgs test", \testCallArgs());
+        addTestCase("callId test", \testCallId());
+        addTestCase("callWithInfo test", \testCallWithInfo());
+        addTestCase("callArgsWithInfo test", \testCallArgsWithInfo());
+        addTestCase("callIdWithInfo test", \testCallIdWithInfo());
+        addTestCase("callIdArgsWithInfo test", \testCallIdArgsWithInfo());
+        addTestCase("JSON-RPC 2.0 test", \testJsonRpc2_0());
+        addTestCase("JSON-RPC 1.0 test", \testJsonRpc1_0());
+        addTestCase("JSON-RPC 1.1 test", \testJsonRpc1_1());
+        addTestCase("version management test", \testVersionManagement());
+        addTestCase("notification test", \testNotification());
+        addTestCase("error handling test", \testErrorHandling());
+        addTestCase("connection provider test", \testConnectionProvider());
+        addTestCase("connection hash constructor test", \testConnectionHashConstructor());
+        addTestCase("connection scheme info test", \testConnectionSchemeInfo());
+        addTestCase("connection serialization test", \testConnectionSerialization());
+        addTestCase("legacy constructor test", \testLegacyConstructor());
+        addTestCase("URL scheme mapping test", \testUrlSchemeMapping());
+        addTestCase("default path test", \testDefaultPath());
+        addTestCase("constructor negative test", \testConstructorNegative());
+        addTestCase("close and reuse test", \testCloseAndReuse());
+        addTestCase("multi-arg varargs test", \testMultiArgVarargs());
+        addTestCase("custom headers test", \testCustomHeaders());
+        addTestCase("JSON-RPC error message test", \testErrorMessage());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new TestAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setHandler("jsonrpc-handler", "", MimeTypeJson, handler);
+        server.setDefaultHandler("jsonrpc-handler", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        client = new JsonRpcClientIo::JsonRpcClientIo("http://localhost:" + port + "/JSON");
+    }
+
+    globalTearDown() {
+        client.close();
+        server.stop();
+        delete server;
+    }
+
+    testBasicCall() {
+        # Test basic call with single arg
+        hash<auto> h = client.call("system.echo", "hello");
+        assertEq("2.0", h.jsonrpc, "should be JSON-RPC 2.0");
+        assertEq("hello", h.result, "should echo back the argument");
+
+        # Test call with no args
+        h = client.call("system.echo");
+        assertEq(NOTHING, h.result, "no args should return nothing");
+
+        # Test call with hash arg
+        h = client.call("system.echo", SimpleHashValue);
+        assertEq(SimpleHashValue, h.result, "should echo back hash");
+
+        # Test call with list arg
+        h = client.call("system.echo", ListValue);
+        assertEq(ListValue, h.result, "should echo back list");
+    }
+
+    testCallArgs() {
+        # Test callArgs with single arg
+        hash<auto> h = client.callArgs("system.echo", "hello");
+        assertEq("hello", h.result, "callArgs should echo back argument");
+
+        # Test callArgs with list as multiple positional params -- use system.add which takes two ints
+        h = client.callArgs("system.add", (3, 4));
+        assertEq(7, h.result, "callArgs with list should expand as positional params");
+
+        # Test callArgs with hash
+        h = client.callArgs("system.echo", SimpleHashValue);
+        assertEq(SimpleHashValue, h.result, "callArgs should echo back hash");
+
+        # Test callArgs with no args
+        h = client.callArgs("system.echo");
+        assertEq(NOTHING, h.result, "callArgs with no args should return nothing");
+    }
+
+    testCallId() {
+        # Test callId with explicit integer ID
+        hash<auto> h = client.callId(42, "system.echo", "test");
+        assertEq(42, h.id, "should use explicit ID");
+        assertEq("test", h.result, "should echo back the argument");
+
+        # Test callId with string ID
+        h = client.callId("my-id", "system.echo", "test2");
+        assertEq("my-id", h.id, "should use string ID");
+        assertEq("test2", h.result, "should echo back the argument");
+    }
+
+    testCallWithInfo() {
+        hash<auto> info;
+        hash<auto> h = client.callWithInfo(\info, "system.echo", "info-test");
+
+        assertEq("info-test", h.result, "should echo back the argument");
+
+        # Verify info hash is populated
+        assertTrue(info.request.val(), "info.request should be set");
+        assertTrue(info.request.find("system.echo") >= 0, "request should contain method name");
+        assertTrue(info.request_headers instanceof hash, "info.request_headers should be a hash");
+        assertEq("application/json;charset=utf-8", info.request_headers."Content-Type",
+            "should have Content-Type header");
+        assertEq(200, info.response_code, "info.response_code should be 200");
+        assertTrue(info.response.val(), "info.response should be set");
+        assertTrue(info.response_headers instanceof hash, "info.response_headers should be a hash");
+    }
+
+    testCallArgsWithInfo() {
+        hash<auto> info;
+        hash<auto> h = client.callArgsWithInfo(\info, "system.echo", "args-info-test");
+
+        assertEq("args-info-test", h.result, "should echo back the argument");
+        assertTrue(info.request.val(), "info.request should be set");
+        assertEq(200, info.response_code, "info.response_code should be 200");
+    }
+
+    testCallIdWithInfo() {
+        hash<auto> info;
+        hash<auto> h = client.callIdWithInfo(\info, 99, "system.echo", "id-info-test");
+
+        assertEq(99, h.id, "should use explicit ID");
+        assertEq("id-info-test", h.result, "should echo back the argument");
+        assertTrue(info.request.val(), "info.request should be set");
+        assertTrue(info.request.find("\"id\":99") >= 0 || info.request.find("\"id\": 99") >= 0,
+            "request should contain the explicit ID");
+        assertEq(200, info.response_code, "info.response_code should be 200");
+    }
+
+    testCallIdArgsWithInfo() {
+        hash<auto> info;
+        hash<auto> h = client.callIdArgsWithInfo(\info, 77, "system.echo", "id-args-test");
+
+        assertEq(77, h.id, "should use explicit ID");
+        assertEq("id-args-test", h.result, "should echo back the argument");
+        assertTrue(info.request.val(), "info.request should be set");
+        assertEq(200, info.response_code, "info.response_code should be 200");
+    }
+
+    testJsonRpc2_0() {
+        client.setVersion("2.0");
+        foreach auto v in (AllValues) {
+            hash<auto> h = client.call("system.echo", v);
+            assertEq("2.0", h.jsonrpc, v.type() + " jsonrpc version");
+            assertEq(NOTHING, h.version, v.type() + " should not have version key");
+            assertEq(3, h.size(), v.type() + " response size");
+            assertEq(v, h.result, v.type() + " value");
+        }
+    }
+
+    testJsonRpc1_0() {
+        client.setVersion("1.0");
+        foreach auto v in (AllValues) {
+            hash<auto> h = client.call("system.echo", v);
+            assertEq(NOTHING, h.jsonrpc, v.type() + " should not have jsonrpc key");
+            assertEq(NOTHING, h.version, v.type() + " should not have version key");
+            assertEq(2, h.size(), v.type() + " response size");
+            assertEq(v, h.result, v.type() + " value");
+        }
+        # Restore default version
+        client.setVersion("2.0");
+    }
+
+    testJsonRpc1_1() {
+        client.setVersion("1.1");
+        foreach auto v in (AllValues) {
+            hash<auto> h = client.call("system.echo", v);
+            assertEq(NOTHING, h.jsonrpc, v.type() + " should not have jsonrpc key");
+            assertEq("1.1", h.version, v.type() + " version");
+            assertEq(3, h.size(), v.type() + " response size");
+            assertEq(v, h.result, v.type() + " value");
+        }
+        # Restore default version
+        client.setVersion("2.0");
+    }
+
+    testVersionManagement() {
+        # Default version
+        assertEq("2.0", client.getVersion(), "default version should be 2.0");
+
+        # Set and get version
+        client.setVersion("1.0");
+        assertEq("1.0", client.getVersion(), "should get 1.0 after set");
+
+        client.setVersion("1.1");
+        assertEq("1.1", client.getVersion(), "should get 1.1 after set");
+
+        client.setVersion("2.0");
+        assertEq("2.0", client.getVersion(), "should get 2.0 after set");
+    }
+
+    testNotification() {
+        client.setVersion("2.0");
+
+        # Notification should not throw (server returns 202 with no body)
+        client.notify("system.notify", "test-notification");
+
+        # notifyArgs variant
+        client.notifyArgs("system.notify", "test-notify-args");
+
+        # Notification with non-2.0 version should throw
+        client.setVersion("1.0");
+        assertThrows("JSONRPCCLIENTIO-VERSION-ERROR", \client.notify(), ("system.notify", "test"));
+        assertThrows("JSONRPCCLIENTIO-VERSION-ERROR", \client.notifyArgs(), ("system.notify", "test"));
+
+        # Restore version
+        client.setVersion("2.0");
+    }
+
+    testErrorHandling() {
+        client.setVersion("2.0");
+
+        # Test JSON-RPC error response (server returns error in JSON-RPC format)
+        hash<auto> h = client.call("system.error", "test error message");
+        assertTrue(exists h.error, "should have error in response");
+        assertEq(JsonRpcHandler::JRE_InternalError, h.error.code, "should be internal error code");
+    }
+
+    testConnectionProvider() {
+        string url = "jsonrpcios://localhost:" + port + "/JSON";
+        JsonRpcIoConnection conn("test", "test connection", url, {"monitor": False});
+        JsonRpcClientIo::JsonRpcClientIo conn_client = conn.get(False);
+
+        assertEq("jsonrpcio", conn.getType(), "connection type should be jsonrpcio");
+        assertEq("https://localhost:" + port + "/JSON", conn_client.getUrl(),
+            "URL should be mapped to https");
+
+        # Test with non-SSL scheme
+        url = "jsonrpcio://localhost:" + port + "/JSON";
+        conn = new JsonRpcIoConnection("test-http", "HTTP test", url, {"monitor": False});
+        conn_client = conn.get(False);
+        assertEq("http://localhost:" + port + "/JSON", conn_client.getUrl(),
+            "URL should be mapped to http");
+
+        # Test that the connected client works
+        hash<auto> h = conn_client.call("system.echo", "connection-test");
+        assertEq("connection-test", h.result, "connected client should work");
+    }
+
+    testConnectionHashConstructor() {
+        hash<auto> config = {
+            "name": "hash-test",
+            "display_name": "Hash Test Connection",
+            "short_desc": "Short description",
+            "desc": "Long description",
+            "url": "jsonrpcio://localhost:" + port + "/JSON",
+        };
+
+        JsonRpcIoConnection conn(config, {"monitor": False});
+        assertEq("jsonrpcio", conn.getType(), "connection type from hash constructor");
+
+        JsonRpcClientIo::JsonRpcClientIo conn_client = conn.get(False);
+        hash<auto> h = conn_client.call("system.echo", "hash-ctor-test");
+        assertEq("hash-ctor-test", h.result, "client from hash constructor should work");
+    }
+
+    testConnectionSchemeInfo() {
+        hash<ConnectionSchemeInfo> scheme_info = JsonRpcIoConnection::ConnectionScheme;
+
+        assertTrue(exists scheme_info.display_name, "should have display_name");
+        assertTrue(exists scheme_info.short_desc, "should have short_desc");
+        assertTrue(exists scheme_info.desc, "should have desc");
+        assertTrue(exists scheme_info.cls, "should have cls");
+        assertTrue(exists scheme_info.options, "should have options");
+        assertTrue(exists scheme_info.schemes, "should have schemes");
+        assertTrue(exists scheme_info.base_scheme_map, "should have base_scheme_map");
+
+        # Verify schemes
+        assertTrue(scheme_info.schemes.jsonrpcio, "should support jsonrpcio");
+        assertTrue(scheme_info.schemes.jsonrpcios, "should support jsonrpcios");
+
+        # Verify base scheme map
+        assertEq("jsonrpcios", scheme_info.base_scheme_map.https, "https -> jsonrpcios");
+        assertEq("jsonrpcio", scheme_info.base_scheme_map.http, "http -> jsonrpcio");
+
+        # Verify version option exists
+        assertTrue(exists scheme_info.options.version, "should have version option");
+        assertEq("2.0", scheme_info.options.version.default_value, "version default should be 2.0");
+    }
+
+    testConnectionSerialization() {
+        string url = "jsonrpcio://localhost:" + port + "/JSON";
+        JsonRpcIoConnection conn("serialize-test", "test", url, {"monitor": False});
+
+        # Test serialization round-trip
+        JsonRpcIoConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq(conn.url, conn2.url, "URL should survive serialization");
+        assertEq("jsonrpcio", conn2.getType(), "type should survive serialization");
+    }
+
+    testLegacyConstructor() {
+        # Test hash-based constructor (legacy compatible)
+        auto legacy_client = new JsonRpcClientIo::JsonRpcClientIo(
+            {"url": "http://localhost:" + port, "timeout": 30000});
+        hash<auto> h = legacy_client.call("system.echo", "legacy-test");
+        assertEq("legacy-test", h.result, "legacy constructor should work");
+        legacy_client.close();
+
+        # Test with version option
+        legacy_client = new JsonRpcClientIo::JsonRpcClientIo(
+            {"url": "http://localhost:" + port, "version": "1.1"});
+        assertEq("1.1", legacy_client.getVersion(), "legacy constructor should accept version");
+        legacy_client.close();
+    }
+
+    testUrlSchemeMapping() {
+        # Test that jsonrpc:// and jsonrpcs:// schemes are mapped
+        auto jrpc_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "jsonrpc://localhost:" + port + "/JSON");
+        assertEq("http://localhost:" + port + "/JSON", jrpc_client.getUrl(),
+            "jsonrpc:// should map to http://");
+        hash<auto> h = jrpc_client.call("system.echo", "scheme-test");
+        assertEq("scheme-test", h.result, "jsonrpc:// client should work");
+        jrpc_client.close();
+
+        # Test jsonrpcio:// scheme
+        jrpc_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "jsonrpcio://localhost:" + port + "/JSON");
+        assertEq("http://localhost:" + port + "/JSON", jrpc_client.getUrl(),
+            "jsonrpcio:// should map to http://");
+        jrpc_client.close();
+    }
+
+    testDefaultPath() {
+        # URL without path should get /JSON appended
+        auto path_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "http://localhost:" + port);
+        assertTrue(path_client.getUrl().find("/JSON") >= 0, "should have /JSON in URL");
+        path_client.close();
+
+        # URL with custom path
+        path_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "http://localhost:" + port + "/custom");
+        assertEq("http://localhost:" + port + "/custom", path_client.getUrl(),
+            "should preserve custom path");
+        path_client.close();
+
+        # Custom default_path option
+        path_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "http://localhost:" + port, {"default_path": "RPC"});
+        assertTrue(path_client.getUrl().find("/RPC") >= 0, "should use custom default_path");
+        path_client.close();
+    }
+
+    testConstructorNegative() {
+        # Missing URL in hash constructor
+        assertThrows("JSONRPCCLIENTIO-ERROR", sub () {
+            new JsonRpcClientIo::JsonRpcClientIo({});
+        });
+
+        # Empty URL in hash constructor
+        assertThrows("JSONRPCCLIENTIO-ERROR", sub () {
+            new JsonRpcClientIo::JsonRpcClientIo({"url": ""});
+        });
+    }
+
+    testCloseAndReuse() {
+        # Create a client, use it, close it, then use it again
+        auto reuse_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "http://localhost:" + port + "/JSON");
+        hash<auto> h = reuse_client.call("system.echo", "before-close");
+        assertEq("before-close", h.result, "call before close should work");
+
+        reuse_client.close();
+
+        h = reuse_client.call("system.echo", "after-close");
+        assertEq("after-close", h.result, "call after close should work (reconnect on demand)");
+        reuse_client.close();
+    }
+
+    testMultiArgVarargs() {
+        # Test call() with multiple varargs expanding to positional params
+        hash<auto> h = client.call("system.add", 10, 20);
+        assertEq(30, h.result, "call with multiple varargs should work");
+
+        # Test callId with multiple varargs
+        h = client.callId(100, "system.add", 5, 7);
+        assertEq(100, h.id, "callId should use explicit ID");
+        assertEq(12, h.result, "callId with multiple varargs should work");
+    }
+
+    testCustomHeaders() {
+        # Test that custom headers option is accepted and doesn't break requests
+        auto hdr_client = new JsonRpcClientIo::JsonRpcClientIo(
+            "http://localhost:" + port + "/JSON",
+            {"headers": {"X-Custom-Header": "test-value"}});
+        hash<auto> h = hdr_client.call("system.echo", "header-test");
+        assertEq("header-test", h.result, "client with custom headers should work");
+        hdr_client.close();
+    }
+
+    testErrorMessage() {
+        # Test JSON-RPC error response includes error message
+        hash<auto> h = client.call("system.error", "detailed error info");
+        assertTrue(exists h.error, "should have error in response");
+        assertEq(JsonRpcHandler::JRE_InternalError, h.error.code, "should be internal error code");
+        assertTrue(h.error.message.val(), "error message should not be empty");
+        assertTrue(h.error.message.find("TEST-ERROR") >= 0, "error message should include exception name");
+    }
+}
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

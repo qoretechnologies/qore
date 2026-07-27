@@ -1,0 +1,379 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+%requires JsonFileDataProvider
+%exec-class JsonFileDataProviderTest
+
+class JsonFileDataProviderTest inherits QUnit::Test {
+    public {}
+
+    private {
+        const JsonArray = '[
+  {"name": "Alice", "age": 30},
+  {"name": "Bob", "age": 25},
+  {"name": "Charlie", "age": 35}
+]';
+
+        const ExpectedRecords = (
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25},
+            {"name": "Charlie", "age": 35},
+        );
+
+        const JsonSingleObject = '{"name": "Alice", "age": 30}';
+
+        const JsonMixedArray = '[
+  {"type": "object"},
+  "string value",
+  42,
+  true,
+  null,
+  [1, 2, 3]
+]';
+
+        const JsonCompact = '[{"id":1},{"id":2},{"id":3}]';
+    }
+
+    constructor() : Test("JsonFileDataProviderTest", "1.0", \ARGV) {
+        addTestCase("read JSON array from data", \testReadArrayFromData());
+        addTestCase("read JSON single object from data", \testReadSingleObject());
+        addTestCase("read JSON mixed array from data", \testReadMixedArray());
+        addTestCase("read JSON from path", \testReadFromPath());
+        addTestCase("read JSON from stream", \testReadFromStream());
+        addTestCase("read compact JSON", \testReadCompact());
+        addTestCase("write and read roundtrip", \testWriteReadRoundtrip());
+        addTestCase("write pretty print", \testWritePrettyPrint());
+        addTestCase("write compact", \testWriteCompact());
+        addTestCase("write to stream", \testWriteToStream());
+        addTestCase("write getData()", \testWriteGetData());
+        addTestCase("write commit on destroy", \testWriteCommitOnDestroy());
+        addTestCase("read factory", \testReadFactory());
+        addTestCase("write factory", \testWriteFactory());
+        addTestCase("actions registered", \testActionsRegistered());
+        addTestCase("negative: invalid JSON", \testNegativeInvalidJson());
+        addTestCase("negative: empty input", \testNegativeEmptyInput());
+        addTestCase("negative: no input source", \testNegativeNoInputSource());
+        addTestCase("negative: conflicting options", \testNegativeConflictingOptions());
+        addTestCase("negative: write conflicting options", \testNegativeWriteConflictingOptions());
+        addTestCase("read non-existent file", \testReadNonExistentFile());
+        addTestCase("scalar JSON value", \testScalarJsonValue());
+        addTestCase("empty array", \testEmptyArray());
+        set_return_value(main());
+    }
+
+    testReadArrayFromData() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": JsonArray});
+        assertEq("jsonread", provider.getName());
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+        assertEq(ExpectedRecords[1], results[1]);
+        assertEq(ExpectedRecords[2], results[2]);
+    }
+
+    testReadSingleObject() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": JsonSingleObject});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(1, results.size());
+        assertEq({"name": "Alice", "age": 30}, results[0]);
+    }
+
+    testReadMixedArray() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": JsonMixedArray});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(6, results.size());
+        assertEq({"type": "object"}, results[0]);
+        assertEq({"value": "string value"}, results[1]);
+        assertEq({"value": 42}, results[2]);
+        assertEq({"value": True}, results[3]);
+        assertEq({"value": NOTHING}, results[4]);
+        assertEq({"value": (1, 2, 3)}, results[5]);
+    }
+
+    testReadFromPath() {
+        string tmp_path = tmp_location() + "/json_test_read_" + get_random_string(8) + ".json";
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(JsonArray);
+        }
+
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"path": tmp_path});
+        assertEq(tmp_path, provider.getName());
+        assertRegex("JSON file data provider for file:", provider.getDesc());
+
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+    }
+
+    testReadFromStream() {
+        StringInputStream sis(JsonArray);
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"stream": sis});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+    }
+
+    testReadCompact() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": JsonCompact});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq({"id": 1}, results[0]);
+        assertEq({"id": 2}, results[1]);
+        assertEq({"id": 3}, results[2]);
+    }
+
+    testWriteReadRoundtrip() {
+        string tmp_path = tmp_location() + "/json_test_write_" + get_random_string(8) + ".json";
+
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        # Write
+        {
+            JsonFileDataProvider::JsonFileWriteDataProvider writer({"path": tmp_path});
+            foreach hash<auto> rec in (ExpectedRecords) {
+                writer.createRecord(rec);
+            }
+            writer.commit();
+        }
+
+        # Read back
+        JsonFileDataProvider::JsonFileReadDataProvider reader({"path": tmp_path});
+        auto iter = reader.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+        assertEq(ExpectedRecords[0], results[0]);
+        assertEq(ExpectedRecords[1], results[1]);
+        assertEq(ExpectedRecords[2], results[2]);
+    }
+
+    testWritePrettyPrint() {
+        JsonFileDataProvider::JsonFileWriteDataProvider writer({"pretty_print": True});
+        writer.createRecord({"id": 1});
+        writer.createRecord({"id": 2});
+        binary data = writer.getData();
+        string json_str = data.toString("UTF-8");
+        # Pretty-printed JSON should contain newlines and indentation
+        assertRegex("\n", json_str);
+        assertRegex("  ", json_str);
+        # Verify it parses back correctly
+        auto parsed = parse_json(json_str);
+        assertEq(2, parsed.size());
+        assertEq(1, parsed[0].id);
+        assertEq(2, parsed[1].id);
+    }
+
+    testWriteCompact() {
+        JsonFileDataProvider::JsonFileWriteDataProvider writer({"pretty_print": False});
+        writer.createRecord({"id": 1});
+        writer.createRecord({"id": 2});
+        binary data = writer.getData();
+        string json_str = data.toString("UTF-8");
+        # Compact JSON should start with [{ on the same line
+        assertEq(True, json_str =~ /^\[\{/);
+        # Verify it parses back correctly
+        auto parsed = parse_json(json_str);
+        assertEq(2, parsed.size());
+    }
+
+    testWriteToStream() {
+        StringOutputStream sos();
+        {
+            JsonFileDataProvider::JsonFileWriteDataProvider writer({
+                "stream": sos,
+                "pretty_print": False,
+            });
+            writer.createRecord({"name": "test"});
+            writer.commit();
+        }
+        # Read the stream content - data was written as binary
+        # Use the provider's getData() to verify the content
+        JsonFileDataProvider::JsonFileWriteDataProvider writer2({"pretty_print": False});
+        writer2.createRecord({"name": "test"});
+        binary data = writer2.getData();
+        string json_str = data.toString("UTF-8");
+        auto parsed = parse_json(json_str);
+        assertEq(1, parsed.size());
+        assertEq("test", parsed[0].name);
+    }
+
+    testWriteGetData() {
+        JsonFileDataProvider::JsonFileWriteDataProvider writer({"pretty_print": False});
+        writer.createRecord({"a": 1});
+        writer.createRecord({"b": 2});
+        binary data = writer.getData();
+        assertEq("binary", data.type());
+        string json_str = data.toString("UTF-8");
+        auto parsed = parse_json(json_str);
+        assertEq(2, parsed.size());
+        assertEq(1, parsed[0].a);
+        assertEq(2, parsed[1].b);
+    }
+
+    testWriteCommitOnDestroy() {
+        string tmp_path = tmp_location() + "/json_test_destroy_" + get_random_string(8) + ".json";
+
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        # Write without explicit commit - destructor should commit
+        {
+            JsonFileDataProvider::JsonFileWriteDataProvider writer({"path": tmp_path});
+            writer.createRecord({"id": 1});
+        }
+
+        # Read back
+        string content = File::readTextFile(tmp_path);
+        auto parsed = parse_json(content);
+        assertEq(1, parsed.size());
+        assertEq(1, parsed[0].id);
+    }
+
+    testReadFactory() {
+        JsonFileDataProvider::JsonFileReadDataProviderFactory factory();
+        hash<auto> info = factory.getInfo();
+        assertEq("jsonread", info.name);
+
+        # Create provider through factory using example
+        StringInputStream sis(JsonArray);
+        auto provider = factory.getProviderFromExample(sis);
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(3, results.size());
+    }
+
+    testWriteFactory() {
+        JsonFileDataProvider::JsonFileWriteDataProviderFactory factory();
+        hash<auto> info = factory.getInfo();
+        assertEq("jsonwrite", info.name);
+    }
+
+    testActionsRegistered() {
+        # Verify app is registered
+        *hash<auto> app = DataProviderActionCatalog::getApp(JsonFileDataProvider::AppName);
+        assertEq(True, exists app);
+        assertEq("JSON Files", app.display_name);
+
+        # Verify actions are registered
+        *list<hash<auto>> actions = DataProviderActionCatalog::getActions(JsonFileDataProvider::AppName);
+        assertEq(True, exists actions);
+        assertGt(0, actions.size());
+
+        # Check for specific action names
+        list<string> action_names = map $1.action, actions;
+        assertEq(True, inlist("read", action_names));
+        assertEq(True, inlist("read-data", action_names));
+        assertEq(True, inlist("write", action_names));
+        assertEq(True, inlist("write-data", action_names));
+    }
+
+    testNegativeInvalidJson() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": "{invalid json"});
+        assertThrows("JSON-PARSE-ERROR", \provider.searchRecords());
+    }
+
+    testNegativeEmptyInput() {
+        StringInputStream sis("");
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"stream": sis});
+        assertThrows("JSON-FILE-READ-ERROR", \provider.searchRecords());
+    }
+
+    testNegativeNoInputSource() {
+        assertThrows("JSON-FILE-READ-ERROR", sub() {
+            new JsonFileDataProvider::JsonFileReadDataProvider({});
+        });
+    }
+
+    testNegativeConflictingOptions() {
+        assertThrows("JSON-FILE-READ-ERROR", sub() {
+            new JsonFileDataProvider::JsonFileReadDataProvider({
+                "path": "/tmp/test.json",
+                "data": "{}",
+            });
+        });
+    }
+
+    testNegativeWriteConflictingOptions() {
+        StringOutputStream sos();
+        assertThrows("JSON-FILE-WRITE-ERROR", sub() {
+            new JsonFileDataProvider::JsonFileWriteDataProvider({
+                "path": "/tmp/test.json",
+                "stream": sos,
+            });
+        });
+    }
+
+    testReadNonExistentFile() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({
+            "path": "/tmp/nonexistent_json_file_" + get_random_string(16) + ".json",
+        });
+        assertThrows("FILE-OPEN2-ERROR", \provider.searchRecords());
+    }
+
+    testScalarJsonValue() {
+        # A scalar JSON value should be wrapped in {"value": val}
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": "42"});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(1, results.size());
+        assertEq({"value": 42}, results[0]);
+    }
+
+    testEmptyArray() {
+        JsonFileDataProvider::JsonFileReadDataProvider provider({"data": "[]"});
+        auto iter = provider.searchRecords();
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(0, results.size());
+    }
+}

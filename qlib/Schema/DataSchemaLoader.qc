@@ -77,11 +77,7 @@ public class DataSchemaLoader {
             throw "DATA-SCHEMA-ERROR", "cannot load .ysm file: the yaml module is not available";
 %endif
         } else if (file_path =~ /\.jsm$/i) {
-%ifndef NoJson
             raw = DataSchemaLoader::loadJsonFile(file_path);
-%else
-            throw "DATA-SCHEMA-ERROR", "cannot load .jsm file: the json module is not available";
-%endif
         } else {
             throw "DATA-SCHEMA-ERROR", sprintf("unsupported file extension in %y; expected .ysm or .jsm",
                 file_path);
@@ -125,7 +121,6 @@ public class DataSchemaLoader {
         }
 
         # Full JSON Schema validation if available
-%ifndef NoJson
         try {
             Qore::Json::JsonSchema js(DataSchemaJsonSchema);
             hash<auto> result = js.validateWithErrors(raw);
@@ -139,7 +134,6 @@ public class DataSchemaLoader {
             }
             # JsonSchema not available or other error — fall through to basic validation
         }
-%endif
 
         # Validate tables have columns
         if (raw.tables) {
@@ -484,7 +478,6 @@ public class DataSchemaLoader {
     }
 %endif
 
-%ifndef NoJson
     #! Loads a JSON file and returns the parsed hash
     static hash<auto> loadJsonFile(string file_path) {
         string content = ReadOnlyFile::readTextFile(file_path);
@@ -495,7 +488,6 @@ public class DataSchemaLoader {
         }
         return parsed;
     }
-%endif
 
     #! Evaluates DPQL expressions in reference data values
     /** Walks the reference data rows and evaluates any DPQL expression hashes

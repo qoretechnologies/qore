@@ -32,9 +32,7 @@
 %requires TallyDataProvider
 %requires uuid
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class TallyDataProviderTest
 
@@ -123,14 +121,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
     }
 
     checkModule() {
-%ifdef NoJson
-        testSkip("no json module");
-%endif
     }
 
     sanityTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         TallyDataProvider::TallyDataProvider prov(rest);
         assertEq("tally", prov.getName());
@@ -161,7 +155,6 @@ public class TallyDataProviderTest inherits QUnit::Test {
         # webhook events
         assertTrue(inlist("webhook-events", children), "has webhook-events child");
         assertTrue(inlist("retry-webhook-event", children), "has retry-webhook-event child");
-%endif
     }
 
     actionCatalogTest() {
@@ -385,7 +378,6 @@ public class TallyDataProviderTest inherits QUnit::Test {
 
     getFormTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "form123",
@@ -405,12 +397,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("form123", resp.id);
         assertEq("Test Form", resp.name);
         assertEq("PUBLISHED", resp.status);
-%endif
     }
 
     createFormTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "newform456",
@@ -437,12 +427,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("INPUT_TEXT", rest.last_request.blocks[1].type, "user block follows FORM_TITLE");
         assertFalse(exists rest.last_request.title, "title field removed from request body");
         assertEq("newform456", resp.id);
-%endif
     }
 
     deleteFormTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -453,12 +441,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("forms/form789", rest.last_path);
         assertEq("deleted", resp.status);
         assertEq("form789", resp.id);
-%endif
     }
 
     searchFormsTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "items": (
@@ -482,12 +468,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("f1", recs[0].id);
         assertEq("f2", recs[1].id);
         assertTrue(rest.last_path.regex("forms\\?.*limit=50"));
-%endif
     }
 
     searchSubmissionsTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "submissions": (
@@ -508,12 +492,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq(1, recs.lsize());
         assertEq("s1", recs[0].id);
         assertTrue(rest.last_path.regex("forms/f1/submissions"));
-%endif
     }
 
     getSubmissionTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "submission": {
@@ -533,12 +515,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("forms/f1/submissions/s1", rest.last_path);
         assertEq("s1", resp.id);
         assertEq(1, resp.responses.lsize());
-%endif
     }
 
     updateFormTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "form123",
@@ -564,12 +544,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("PUBLISHED", rest.last_request.status);
         assertEq("form123", resp.id);
         assertEq("Updated Form", resp.name);
-%endif
     }
 
     deleteSubmissionTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -581,12 +559,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("deleted", resp.status);
         assertEq("f1", resp.form_id);
         assertEq("s1", resp.submission_id);
-%endif
     }
 
     searchQuestionsTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "questions": (
@@ -628,12 +604,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("Your Name", recs[0].title);
         assertEq("q2", recs[1].id);
         assertTrue(rest.last_path.regex("forms/f1/questions"));
-%endif
     }
 
     createWebhookTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "wh1",
@@ -656,12 +630,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("f1", rest.last_request.formId);
         assertEq("wh1", resp.id);
         assertEq(True, resp.isEnabled);
-%endif
     }
 
     updateWebhookTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -697,12 +669,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("webhooks/wh1", rest.last_path);
         assertFalse(rest.last_request.hasKey("id"), "id stripped from second PATCH body");
         assertEq(True, rest.last_request.isEnabled);
-%endif
     }
 
     searchWebhooksTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "webhooks": (
@@ -741,12 +711,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("wh2", recs[1].id);
         assertEq(False, recs[1].isEnabled);
         assertTrue(rest.last_path.regex("webhooks\\?.*limit=25"));
-%endif
     }
 
     searchWebhookEventsTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "events": (
@@ -776,12 +744,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("evt1", recs[0].id);
         assertEq("FAILED", recs[0].deliveryStatus);
         assertTrue(rest.last_path.regex("webhooks/wh1/events"));
-%endif
     }
 
     retryWebhookEventTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -796,12 +762,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("retried", resp.status);
         assertEq("wh1", resp.webhook_id);
         assertEq("evt1", resp.event_id);
-%endif
     }
 
     createWorkspaceTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "ws1",
@@ -821,12 +785,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("Marketing", rest.last_request.name);
         assertEq("ws1", resp.id);
         assertEq("Marketing", resp.name);
-%endif
     }
 
     getWorkspaceTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "ws1",
@@ -844,12 +806,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("ws1", resp.id);
         assertEq("Marketing", resp.name);
         assertEq(1, resp.members.lsize());
-%endif
     }
 
     updateWorkspaceTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -863,12 +823,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("Marketing v2", rest.last_request.name);
         assertEq("updated", resp.status);
         assertEq("ws1", resp.id);
-%endif
     }
 
     deleteWorkspaceTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {};
         TallyDataProvider::TallyDataProvider prov(rest);
@@ -879,12 +837,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("workspaces/ws1", rest.last_path);
         assertEq("deleted", resp.status);
         assertEq("ws1", resp.id);
-%endif
     }
 
     searchWorkspacesTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "items": (
@@ -908,12 +864,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("ws1", recs[0].id);
         assertEq("Sales", recs[1].name);
         assertTrue(rest.last_path.regex("workspaces"));
-%endif
     }
 
     getCurrentUserTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         rest.response_body = {
             "id": "user1",
@@ -940,12 +894,10 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("test@example.com", resp.email);
         assertEq("org1", resp.organizationId);
         assertEq("PRO", resp.subscriptionPlan);
-%endif
     }
 
     exampleEventDataTest() {
         checkModule();
-%ifndef NoJson
         FakeTallyRestClientIo rest();
         # simulate no real data available (empty response)
         rest.response_body = {};
@@ -965,25 +917,21 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertTrue(example.responses[0].hasKey("questionId"), "response has questionId");
         assertTrue(example.responses[0].hasKey("answer"), "response has answer");
         assertTrue(example.responses[0].hasKey("formattedAnswer"), "response has formattedAnswer");
-%endif
     }
 
     liveConnectionPingTest() {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
-%ifndef NoJson
         AbstractConnection conn = get_connection(m_options.conn);
         hash<PingInfo> ping_result = conn.ping(True);
         assertEq(True, ping_result.ok, "connection ping succeeds");
-%endif
     }
 
     liveGetCurrentUserTest() {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
-%ifndef NoJson
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
         AbstractDataProvider dp = prov.getChildProvider("get-current-user");
@@ -995,14 +943,12 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertTrue(resp.hasKey("lastName"), "user has lastName");
         assertTrue(resp.hasKey("fullName"), "user has fullName");
         assertTrue(resp.hasKey("organizationId"), "user has organizationId");
-%endif
     }
 
     liveSearchFormsTest() {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
-%ifndef NoJson
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
         AbstractDataProvider dp = prov.getChildProvider("forms");
@@ -1018,14 +964,12 @@ public class TallyDataProviderTest inherits QUnit::Test {
             assertTrue(recs[0].hasKey("name"), "form record has name");
             assertTrue(recs[0].hasKey("status"), "form record has status");
         }
-%endif
     }
 
     liveFormCrudTest() {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
-%ifndef NoJson
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
 
@@ -1090,14 +1034,12 @@ public class TallyDataProviderTest inherits QUnit::Test {
             questions += it.getValue();
         }
         assertTrue(questions.lsize() >= 0, "questions endpoint returns results");
-%endif
     }
 
     liveWebhookCrudTest() {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
-%ifndef NoJson
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
 
@@ -1173,6 +1115,5 @@ public class TallyDataProviderTest inherits QUnit::Test {
         }
         assertTrue(updated_wh.val(), "updated webhook found in list");
         assertEq(False, updated_wh.isEnabled, "webhook isEnabled updated to False");
-%endif
     }
 }

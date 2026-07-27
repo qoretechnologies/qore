@@ -173,9 +173,6 @@ public class SearchIndexBulkUtil {
         @throw *-BULK-ERROR invalid operation or missing JSON support
     */
     static public string formatOperations(list<hash<auto>> operations, string error_prefix) {
-%ifdef NoJson
-        throw error_prefix, "the json module >= 1.11 is required for bulk operations";
-%else
         NdjsonDataProvider::NdjsonStringWriter writer();
 
         foreach hash<auto> op in (operations) {
@@ -235,7 +232,6 @@ public class SearchIndexBulkUtil {
         }
 
         return writer.getString();
-%endif
     }
 
     #! Formats column-oriented record buffers as newline-delimited JSON
@@ -247,9 +243,6 @@ public class SearchIndexBulkUtil {
         @throw *-BULK-ERROR missing JSON support
     */
     static public string formatRecordBuffer(hash<auto> records, string index, string action, string error_prefix) {
-%ifdef NoJson
-        throw error_prefix, "the json module >= 1.11 is required for bulk operations";
-%else
         if (!records) {
             return "";
         }
@@ -284,7 +277,6 @@ public class SearchIndexBulkUtil {
         }
 
         return writer.getString();
-%endif
     }
 }
 }

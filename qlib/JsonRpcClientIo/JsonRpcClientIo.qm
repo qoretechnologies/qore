@@ -1,0 +1,105 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file JsonRpcClientIo.qm @brief Pure-Qore JSON-RPC client module with async I/O
+
+/*  JsonRpcClientIo.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+%requires json
+%requires Util
+%requires Logger
+%requires HttpClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+%modern
+
+module JsonRpcClientIo {
+    version = "1.0";
+    desc = "Pure-Qore JSON-RPC client module with async I/O via HttpClientIo";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("jsonrpcio", JsonRpcIoConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("jsonrpcios", JsonRpcIoConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage JsonRpcClientIo Module
+
+    @tableofcontents
+
+    @section jsonrpcclientiointro Introduction to the JsonRpcClientIo Module
+
+    The %JsonRpcClientIo module provides a pure-Qore JSON-RPC client implementation using async I/O
+    via \c HttpClientIo::HttpClientConnectionManager with automatic protocol negotiation
+    (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1) and connection pooling.
+
+    This module is the async I/O replacement for the native C++
+    @ref Qore::Json::JsonRpcClient "JsonRpcClient" class, providing the same JSON-RPC call API
+    but with modern async networking.
+
+    To use this module, use \c "%requires JsonRpcClientIo" in your code.
+
+    All the public symbols in the module are defined in the JsonRpcClientIo namespace.
+
+    The module provides the following classes:
+    - @ref JsonRpcClientIo::JsonRpcClientIo "JsonRpcClientIo" - the main JSON-RPC client class
+    - @ref JsonRpcClientIo::JsonRpcIoConnection "JsonRpcIoConnection" - connection provider for the
+      ConnectionProvider framework
+
+    @subsection jsonrpcclientio_features Features
+
+    - Full JSON-RPC 1.0, 1.1, and 2.0 protocol support
+    - Async I/O via \c HttpClientIo::HttpClientConnectionManager with automatic
+      protocol negotiation (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1) and connection pooling
+    - API-compatible with the native @ref Qore::Json::JsonRpcClient "JsonRpcClient" class
+    - JSON-RPC 2.0 notification support (fire-and-forget, no response expected)
+    - Debug info variants for all call methods
+    - ConnectionProvider integration with \c jsonrpcio:// and \c jsonrpcios:// URL schemes
+
+    @subsection jsonrpcclientio_usage Usage Example
+
+    @code{.py}
+%modern
+%requires JsonRpcClientIo
+
+JsonRpcClientIo client("http://localhost:8080/JSON");
+hash<auto> result = client.call("system.listMethods");
+printf("methods: %N\n", result);
+client.close();
+    @endcode
+
+    @section jsonrpcclientio_relnotes Release History
+
+    @subsection jsonrpcclientio_v1_0 JsonRpcClientIo v1.0
+    - initial release with full JSON-RPC 1.0/1.1/2.0 support over async I/O
+*/
+
+#! the JsonRpcClientIo namespace holds all public definitions in the JsonRpcClientIo module
+public namespace JsonRpcClientIo {
+    #! Default JSON-RPC version
+    public const DefaultJsonRpcVersion = "2.0";
+
+    #! Default URL path
+    public const DefaultJsonRpcPath = "JSON";
+}

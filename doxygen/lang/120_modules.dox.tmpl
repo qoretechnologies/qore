@@ -41,6 +41,13 @@ ModuleName/
 
     <b>Modules Provided With %Qore</b>
     |!Type|!Module|!Description
+    |user|<a href="../../modules/A2aClient/html/index.html#a2aclientintro">A2aClient</a>|Provides a client API for connecting to \
+        <a href="https://a2a-protocol.org">A2A</a> (Agent-to-Agent) agents
+    |user|<a href="../../modules/A2aClientDataProvider/html/index.html#a2aclientdataproviderintro">A2aClientDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="https://a2a-protocol.org">A2A</a> agents
+    |user|<a href="../../modules/A2aServerHandler/html/index.html#a2aserverhandlerintro">A2aServerHandler</a>|Provides an <a href="https://a2a-protocol.org">A2A</a> server handler for use with the \
+        <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
     |user|<a href="../../modules/AftershipDataProvider/html/index.html#aftershipdataproviderintro">AftershipDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Aftership tracking and returns services
     |user|<a href="../../modules/AftershipRestClient/html/index.html#aftershiprestclientintro">AftershipRestClient</a>|providing APIs for \
@@ -241,6 +248,11 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Exa (Metaphor) neural-search services (search/find-similar/contents)
     |user|<a href="../../modules/ExaRestClient/html/index.html#exarestclientintro">ExaRestClient</a>|providing APIs for \
         communicating with Exa neural-search REST APIs (registers an `exa://` connection scheme and exports agent-tool helpers in `ExaAgentTools` for plugging into @ref qoreagentstrategiesintro "QoreAgentStrategies")
+    |user|<a href="../../modules/FhirRestClient/html/index.html#fhirrestclientintro">FhirRestClient</a>|Provides a REST client for JSON-based \
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
+    |user|<a href="../../modules/FhirRestDataProvider/html/index.html#fhirrestdataproviderintro">FhirRestDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for JSON-based \
+        <a href="https://hl7.org/fhir/">FHIR</a> healthcare interoperability servers
     |user|<a href="../../modules/FileDataProvider/html/index.html#filedataproviderintro">FileDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for the local filesystem
     |user|<a href="../../modules/FileLocationHandler/html/index.html#filelocationhandlerintro">FileLocationHandler</a>|Provides an API for \
@@ -414,6 +426,20 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for JotForm form and submission management
     |user|<a href="../../modules/JotformRestClient/html/index.html#jotformrestclientintro">JotformRestClient</a>|Provides APIs for \
         communicating with the JotForm REST API
+    |binary|<a href="../../modules/json/html/index.html#jsonintro">json</a>|Provides JSON, <a href="https://cbor.io">CBOR</a> and TOON serialization and deserialization, a SAX-style parser, \
+        <a href="https://json-schema.org">JSON Schema</a> validation, incremental stream writing, <a href="https://jwt.io">JWT</a> signing and verification, \
+        and a <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> client
+    |user|<a href="../../modules/JsonFileDataProvider/html/index.html#jsonfiledataproviderintro">JsonFileDataProvider</a>|Provides JSON file read/write support and \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration
+    |user|<a href="../../modules/JsonLd/html/index.html#jsonldintro">JsonLd</a>|Provides <a href="https://www.w3.org/TR/json-ld11/">JSON-LD 1.1</a> processing implementing the \
+        W3C JSON-LD 1.1 expansion, compaction, flattening, framing and RDF serialization algorithms
+    |user|<a href="../../modules/JsonRpcClientIo/html/index.html#jsonrpcclientiointro">JsonRpcClientIo</a>|Provides a pure-%Qore \
+        <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> client with async I/O via the \
+        <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module
+    |user|<a href="../../modules/JsonRpcConnection/html/index.html#jsonrpcconnectionintro">JsonRpcConnection</a>|Provides <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> client connections
+    |user|<a href="../../modules/JsonRpcHandler/html/index.html#jsonrpchandlerintro">JsonRpcHandler</a>|Provides infrastructure for implementing \
+        <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> server-side services using the \
+        <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
     |user|<a href="../../modules/KatanaDataProvider/html/index.html#katanadataproviderintro">KatanaDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Katana Manufacturing ERP \
         including products, materials, variants, manufacturing orders, sales orders, purchase orders, customers, suppliers, \
@@ -430,6 +456,11 @@ ModuleName/
         marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases
     |user|<a href="../../modules/KitRestClient/html/index.html#kitrestclientintro">KitRestClient</a>|Provides APIs for \
         communicating with <a href="https://kit.com">Kit</a>'s REST API with OAuth2 and API key authentication
+    |binary|<a href="../../modules/krb5/html/index.html#krb5intro">krb5</a>|Provides Kerberos 5 and GSSAPI \
+        support including client/acceptor contexts, credential caches, keytabs, and principal management, also \
+        provides the following user module:\n\
+        - <a href="../../modules/Krb5Util/html/index.html#krb5utilintro">Krb5Util</a>: \
+            provides utility APIs for Kerberos 5 and GSSAPI operations
     |user|<a href="../../modules/LemlistDataProvider/html/index.html#lemlistdataproviderintro">LemlistDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Lemlist sales outreach \
         and email campaign management including campaigns, leads, activities, tasks, contacts, and webhooks
@@ -464,6 +495,13 @@ ModuleName/
     |user|<a href="../../modules/Mapper/html/index.html#mapperintro">Mapper</a>|Provides data mapping classes and iterators
     |user|<a href="../../modules/MapperUtil/html/index.html#mapperutilintro">MapperUtil</a>|Provides common definitions for data \
         mapping APIs
+    |user|<a href="../../modules/McpClient/html/index.html#mcpclientintro">McpClient</a>|Provides a \
+        <a href="https://modelcontextprotocol.io">Model Context Protocol</a> (MCP) client API for connecting to MCP servers
+    |user|<a href="../../modules/McpClientDataProvider/html/index.html#mcpclientdataproviderintro">McpClientDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="https://modelcontextprotocol.io">MCP</a> servers
+    |user|<a href="../../modules/McpServerHandler/html/index.html#mcpserverhandlerintro">McpServerHandler</a>|Provides an <a href="https://modelcontextprotocol.io">MCP</a> server handler for use with the \
+        <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
     |user|<a href="../../modules/MemcachedDataProvider/html/index.html#memcacheddataproviderintro">MemcachedDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Memcached caching servers
     |user|<a href="../../modules/MewsRestClient/html/index.html#mewsrestclientintro">MewsRestClient</a>|providing APIs for \
@@ -502,6 +540,8 @@ ModuleName/
         API for working with MySQL database objects; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with MySQL databases for \
         automated schema management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/NdjsonDataProvider/html/index.html#ndjsondataproviderintro">NdjsonDataProvider</a>|Provides NDJSON (Newline Delimited JSON) support and \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration
     |user|<a href="../../modules/NetSuiteRestClient/html/index.html#netsuiterestclientintro">NetSuiteRestClient</a>|providing APIs for \
         communicating with Oracle NetSuite cloud REST APIs
     |binary|<a href="../../modules/ocr/html/index.html#ocrintro">ocr</a>|Provides text extraction from images \
@@ -521,6 +561,11 @@ ModuleName/
         cloud file storage via Microsoft Graph
     |user|<a href="../../modules/OneDriveRestClient/html/index.html#onedriverestclientintro">OneDriveRestClient</a>|Provides APIs for \
         communicating with Microsoft OneDrive REST APIs via Microsoft Graph
+    |user|<a href="../../modules/OneRecordClient/html/index.html#onerecordclientintro">OneRecordClient</a>|Provides an <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> client \
+        for air cargo data sharing via REST/JSON-LD
+    |user|<a href="../../modules/OneRecordServerHandler/html/index.html#onerecordserverhandlerintro">OneRecordServerHandler</a>|Provides an <a href="https://www.iata.org/en/programs/cargo/e/one-record/">IATA ONE Record</a> server \
+        handler for use with the \
+        <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
     |user|<a href="../../modules/OpenAiDataProvider/html/index.html#openaidataproviderintro">OpenAiDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for OpenAI cloud services
     |user|<a href="../../modules/OpenAiRestClient/html/index.html#openairestclientintro">OpenAiRestClient</a>|providing APIs for \
@@ -959,49 +1004,6 @@ ModuleName/
             provides a data provider API for reading Visio documents\n\
         - <a href="https://github.com/qoretechnologies/module-jni">WordDataProvider</a>: \
             provides a data provider API for reading and writing Word documents
-    |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n\
-        - <a href="https://github.com/qoretechnologies/module-json">A2aClient</a>: \
-            provides a client API for connecting to A2A (Agent-to-Agent) agents\n\
-        - <a href="https://github.com/qoretechnologies/module-json">A2aClientDataProvider</a>: \
-            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
-            for A2A agents\n\
-        - <a href="https://github.com/qoretechnologies/module-json">A2aServerHandler</a>: \
-            provides an A2A server handler for use with the \
-            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
-        - <a href="https://github.com/qoretechnologies/module-json">JsonFileDataProvider</a>: \
-            provides JSON file read/write support and \
-            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration\n\
-        - <a href="https://github.com/qoretechnologies/module-json">JsonLd</a>: \
-            provides JSON-LD 1.1 processing (W3C JSON-LD 1.1 algorithms)\n\
-        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcClientIo</a>: \
-            provides a pure-%Qore JSON-RPC client with async I/O via the \
-            <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module\n\
-        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcConnection</a>: \
-            provides JSON-RPC client connections\n\
-        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcHandler</a>: \
-            provides infrastructure for implementing JSON-RPC server-side services using the \
-            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
-        - <a href="https://github.com/qoretechnologies/module-json">McpClient</a>: \
-            provides a Model Context Protocol (MCP) client API for connecting to MCP servers\n\
-        - <a href="https://github.com/qoretechnologies/module-json">McpClientDataProvider</a>: \
-            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
-            for MCP servers\n\
-        - <a href="https://github.com/qoretechnologies/module-json">McpServerHandler</a>: \
-            provides an MCP server handler for use with the \
-            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
-        - <a href="https://github.com/qoretechnologies/module-json">NdjsonDataProvider</a>: \
-            provides NDJSON (Newline Delimited JSON) support and \
-            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration\n\
-        - <a href="https://github.com/qoretechnologies/module-json">OneRecordClient</a>: \
-            provides an IATA ONE Record client for air cargo data sharing via REST/JSON-LD\n\
-        - <a href="https://github.com/qoretechnologies/module-json">OneRecordServerHandler</a>: \
-            provides an IATA ONE Record server handler for use with the \
-            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
-    |binary|<a href="../../modules/krb5/html/index.html#krb5intro">krb5</a>|Provides Kerberos 5 and GSSAPI \
-        support including client/acceptor contexts, credential caches, keytabs, and principal management, also \
-        provides the following user module:\n\
-        - <a href="../../modules/Krb5Util/html/index.html#krb5utilintro">Krb5Util</a>: \
-            provides utility APIs for Kerberos 5 and GSSAPI operations
     |binary|<a href="https://github.com/qoretechnologies/module-magic">magic</a>|Provides file type detection using \
         magic numbers via <a href="https://www.darwinsys.com/file/">libmagic</a>, providing MIME type and encoding \
         identification for files and in-memory data buffers
@@ -1328,6 +1330,81 @@ public namespace MyNamespace {
     allowed in the importing @ref Qore::Program "Program", however that functionality will not be available in that
     case).  User module @ref Qore::Program "Program" objects have a functional domain attribute set on the
     @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.
+
+    @subsection user_module_children Child Modules
+
+    A user module can declare optional <b>child modules</b> that extend it with the
+    @ref try-child-module "%try-child-module" parse directive.  A child module is a separate module that depends on
+    the declaring module (normally with <tt>%requires(reexport)</tt>) and registers itself with it when loaded; the
+    declaration lets the module loader activate such an extension automatically instead of requiring every solution
+    that uses the base module to know the extension's name and load it explicitly.
+
+    @code{.py}
+# in the base module
+%modern
+%try-child-module MyBaseExtension
+
+module MyBase {
+    version = "1.0";
+    desc = "base module";
+    author = "Foobar Industries, inc";
+    license = "MIT";
+}
+
+public class MyBase {
+    public {
+        static hash<string, code> children;
+    }
+
+    static registerChild(string name, code generator) {
+        children{name} = generator;
+    }
+}
+    @endcode
+
+    @code{.py}
+# in the extension module
+%modern
+%requires(reexport) MyBase
+
+module MyBaseExtension {
+    version = "1.0";
+    desc = "extension for MyBase";
+    author = "Foobar Industries, inc";
+    license = "MIT";
+    init = sub () {
+        MyBase::registerChild("ext", sub (string name) { ... });
+    };
+}
+    @endcode
+
+    The dependency direction is unchanged: the extension depends on the base module, which is what allows a
+    proprietary module to extend an open one.  Only the activation is declarative.
+
+    Child modules are attached <b>after</b> the declaring module has been completely loaded, initialized, and
+    published, so the child's references to the parent resolve normally.  This is why the extension cannot simply be
+    loaded from the parent's \c init closure: while that closure runs, the module's own feature is still registered as
+    being loaded, so the parent's classes are not yet visible to any module loaded from it.
+
+    A child module's namespace is <b>not</b> imported into any @ref Qore::Program "Program" object; only its
+    initialization code runs.  Code that needs the child's classes must load the child explicitly.
+
+    Attachment status can be queried with get_module_hash(), which reports each declared child module under the
+    \c "child-modules" key of the declaring module's entry:
+    @code{.py}
+printf("%N\n", get_module_hash().MyBase."child-modules");
+# {MyBaseExtension: {spec: "MyBaseExtension", status: "attached"}}
+    @endcode
+
+    The following statuses are reported:
+    |!Status|!Description
+    |\c "attached"|the child module was loaded
+    |\c "absent"|the child module is not installed; this is not an error
+    |\c "failed"|the child module is installed but could not be loaded; the error is reported in the \c "err" and \c "desc" keys and is raised on every load of the parent module
+    |\c "skipped"|the child module was not loaded because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
+    |\c "pending"|the attachment has not been attempted yet
+
+    @since %Qore 3.0
 
     @subsection User Module Example
 

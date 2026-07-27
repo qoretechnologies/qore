@@ -10077,7 +10077,65 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
     return static_cast<int32_t>(qore_socket_exec_http2_enqueue_int(this, poller, "submitHttp2Request", xsink));
 }
 
+//! Returns the socket's HTTP/2 session, if any
+static Http2SessionPtr qore_socket_get_h2_session(QoreSocket* s) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    AutoLocker al(priv->h2_session_lock);
+    return priv->h2_session;
+}
+
+//! Enqueues HTTP/2 DATA directly on the session from the async I/O execution path
+/** The QoreSocket layer mirrors QoreSocketObject; see
+    qore_socket_object_send_http2_stream_data_direct() in QoreSocketObject.cpp for the full
+    rationale.  Only the wake helper differs (this layer identifies the socket by
+    qore_socket_private pointer hash rather than by pollable object).
+
+    @return 0 on success, -1 with an exception raised on error
+*/
+static int qore_socket_send_http2_stream_data_direct(QoreSocket* s, bool on_io_thread, int32_t stream_id,
+        const BinaryNode* data, bool end_stream, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+    int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (*xsink || rv < 0) {
+        return -1;
+    }
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
+        return -1;
+    }
+    if (!on_io_thread) {
+        qore_socket_wake_async_controller(qore_socket_private::get(*s));
+    }
+    return 0;
+}
+
 void QoreSocket::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
+    // Fast path off the blocking controller facade; Http2Session::submitRstStream() is a pure,
+    // mutex-protected nghttp2 enqueue with no socket I/O, so it is safe from the I/O thread and
+    // from a controller-owned continuePoll worker, while the facade is not
+    bool on_io_thread = qore_on_async_io_thread();
+    if (on_io_thread || qore_in_async_io_continue_poll_worker()) {
+        Http2SessionPtr h2 = qore_socket_get_h2_session(this);
+        if (!h2) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+            return;
+        }
+        if (h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink) < 0 || *xsink) {
+            return;
+        }
+        if (!on_io_thread) {
+            qore_socket_wake_async_controller(priv);
+        }
+        return;
+    }
+
     qore_socket_exec_http2_enqueue_int(this,
         new QoreSocketControllerHttp2EnqueuePollOperation(this,
             QoreSocketControllerHttp2EnqueuePollOperation::Action::Cancel, stream_id),
@@ -10090,6 +10148,13 @@ void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
 
 int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
+    // see qore_socket_send_http2_stream_data_direct(); ordinary threads keep the facade
+    bool on_io_thread = qore_on_async_io_thread();
+    if (on_io_thread || qore_in_async_io_continue_poll_worker()) {
+        return qore_socket_send_http2_stream_data_direct(this, on_io_thread, stream_id, data, end_stream,
+            xsink);
+    }
+
     return static_cast<int>(qore_socket_exec_http2_enqueue_int(this,
         new QoreSocketControllerHttp2EnqueuePollOperation(this, stream_id, data, end_stream),
         "sendHttp2StreamData", xsink));

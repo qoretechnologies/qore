@@ -32,9 +32,7 @@
 %requires ConnectionProvider
 %requires RestClient
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %requires KeapRestClient
 %requires KeapDataProvider

@@ -15,9 +15,7 @@
 %requires Util
 %requires QUnit
 
-%try-module json
-%define NO_JSON
-%endtry
+%requires json
 
 %exec-class QoreTokenizerUtilsTest
 
@@ -37,10 +35,6 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
             printf("SKIP: tokenizer test data not found at %s\n", tokenizer_path);
             return;
         }
-%ifdef NO_JSON
-        printf("SKIP: json module not available\n");
-        return;
-%endif
         tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_path));
 
         addTestCase("DocumentChunker basic chunking", \chunkerBasicTest());

@@ -326,6 +326,32 @@
               ]
             },
             {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "%try-reexport-module"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "module_spec"
+                }
+              ]
+            },
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "%try-child-module"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "module_spec"
+                }
+              ]
+            },
+            {
               "type": "STRING",
               "value": "%endtry"
             },
@@ -469,6 +495,19 @@
                 {
                   "type": "STRING",
                   "value": "%append-module-path"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "string"
+                }
+              ]
+            },
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "%prepend-module-path"
                 },
                 {
                   "type": "SYMBOL",

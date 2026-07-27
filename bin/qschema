@@ -36,9 +36,7 @@
 %define NoYaml
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class QSchemaMain
 
@@ -646,12 +644,6 @@ class QSchemaMain {
             exportError("MODULE-ERROR", "the \"yaml\" module is required for YAML output but is not available");
         }
 %endif
-%ifdef NoJson
-        if (format == "json") {
-            exportError("MODULE-ERROR", "the \"json\" module is required for JSON output but is not available");
-        }
-%endif
-
         *hash<auto> filter;
         foreach string key in (keys ExportObjectTypes) {
             if (exists opts{key}) {

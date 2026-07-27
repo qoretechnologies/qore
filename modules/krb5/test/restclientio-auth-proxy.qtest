@@ -22,9 +22,7 @@
 %requires ../../../qlib/RestClientIo.qm
 %requires krb5
 
-%try-module json >= 1.5
-%define NoJson
-%endtry
+%requires json
 
 %exec-class RestClientIoKrb5AuthProxyIntegrationTest
 
@@ -180,16 +178,13 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
     }
 
     testSyncRestClientNegotiate() {
-%ifndef NoJson
         RestClient rest(getClientOptions());
         hash<auto> response = rest.get("/api/restclient");
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclient");
-%endif
     }
 
     testPollRestClientNegotiate() {
-%ifndef NoJson
         RestClient rest(getClientOptions());
         Qore::AbstractPollOperation op = rest.startPollGet("/api/restclient-poll");
         *hash<ExceptionInfo> ex = drivePingOp(op);
@@ -199,32 +194,26 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<auto> response = op.getOutput();
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclient-poll");
-%endif
     }
 
     testSyncRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         hash<RestClient::RestResponseInfo> response = rest.restGet("/api/restclientio");
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio");
-%endif
     }
 
     testAsyncRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         RestClientIo::RestFuture f = rest.restGetAsync("/api/restclientio-async");
         hash<RestClient::RestResponseInfo> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio-async");
-%endif
     }
 
     testSseRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         SseStreamReader reader = rest.restSseReader("GET",
@@ -235,11 +224,9 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         assertTrue(exists evt, "Negotiate-enabled RestClientIo SSE reader should receive an event");
         assertEq("auth", evt.event);
         assertAuthenticatedBody(parse_json(evt.data), "/api/restclientio-sse");
-%endif
     }
 
     testSseObservableRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
@@ -261,11 +248,9 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         assertEq("auth", observer.events[1].data.event);
         assertAuthenticatedBody(parse_json(observer.events[1].data.data),
             "/api/restclientio-sse");
-%endif
     }
 
     testNotifierAsyncRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         EventNotifier notifier();
@@ -277,11 +262,9 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<auto> response = result.future.get();
         assertEq(200, response.status_code);
         assertAuthenticatedBody(parse_json(response.body.toString()), "/api/restclientio-notifier");
-%endif
     }
 
     testCancellableAsyncRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         HttpClientIo::HttpCancellableFuture f = rest.restDoRequestCancellableAsync("GET",
@@ -289,11 +272,9 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<auto> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(parse_json(response.body.toString()), "/api/restclientio-cancellable");
-%endif
     }
 
     testSignedAsyncRestClientIoNegotiate() {
-%ifndef NoJson
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         code signer = auto sub (hash<auto> info) {
@@ -304,11 +285,9 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<RestClient::RestResponseInfo> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio-signed");
-%endif
     }
 
     testPingNegotiate() {
-%ifndef NoJson
         hash<auto> opts = getClientOptions() - "url" + {
             "ping_method": "GET",
             "ping_path": "/api/ping",
@@ -323,6 +302,5 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         assertFalse(exists ex, "Negotiate-enabled ping should authenticate through the external auth proxy");
         assertTrue(op.goalReached());
         assertBackendSawAuthenticatedRequest("/api/ping");
-%endif
     }
 }

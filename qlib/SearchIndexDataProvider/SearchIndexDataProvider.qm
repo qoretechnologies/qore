@@ -29,13 +29,9 @@
 %requires(reexport) DataProvider
 %requires(reexport) RestClientIo
 
-%try-module json >= 1.11
-%define NoJson
-%endtry
+%requires json
 
-%ifndef NoJson
 %requires NdjsonDataProvider
-%endif
 
 module SearchIndexDataProvider {
     version = "1.0";

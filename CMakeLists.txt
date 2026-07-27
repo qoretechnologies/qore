@@ -1102,6 +1102,7 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     set(_SAVE_NG2_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
     set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
     set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_NG2_ENABLE_DOC ${ENABLE_DOC})
     set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
     set(_QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED)
     set(_QORE_NGHTTP2_DISABLED_FIND_PACKAGES Jansson Libevent Jemalloc)
@@ -1118,6 +1119,11 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
     set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    # nghttp2's doc/CMakeLists.txt declares sphinx targets named after the output format,
+    # one of which is `json` -- which collides with our builtin json module target (CMake
+    # target names are global).  We do not build nghttp2's docs, so turn the subdirectory
+    # off entirely rather than patching its sources.
+    set(ENABLE_DOC OFF CACHE BOOL "" FORCE)
     # Static lib linked into libqore.so needs -fPIC
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
@@ -1152,6 +1158,11 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
         set(ENABLE_LIB_ONLY ${_SAVE_NG2_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
     else()
         unset(ENABLE_LIB_ONLY CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_ENABLE_DOC)
+        set(ENABLE_DOC ${_SAVE_NG2_ENABLE_DOC} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_DOC CACHE)
     endif()
     if (DEFINED _SAVE_NG2_PIC)
         set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_NG2_PIC} CACHE BOOL "" FORCE)
@@ -1647,6 +1658,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSSLPrivateKey.cpp
     lib/QoreSocketObject.cpp
     lib/QoreCondition.cpp
+    lib/QoreJson.cpp
     lib/QoreQueue.cpp
     lib/QoreQueueHelper.cpp
     lib/QoreRegex.cpp
@@ -1992,6 +2004,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreJson.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueueHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
@@ -2584,6 +2597,19 @@ if (ADDRESS_SANITIZER)
     target_link_options(qore-ir-phase0-smoke PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# JSON C++ API smoke test.  Unlike the IR smoke targets above this deliberately links
+# only libqore and includes only installed public headers -- it verifies the
+# include/qore/QoreJson.h contract exactly as a builtin binary module (ex: avro) consumes
+# it, with no json module loaded and no Qore-language code involved.
+add_executable(qore-json-cpp-api-smoke EXCLUDE_FROM_ALL
+    examples/test/json/json_cpp_api.cpp)
+add_dependencies(qore-json-cpp-api-smoke libqore)
+target_include_directories(qore-json-cpp-api-smoke PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-json-cpp-api-smoke PRIVATE libqore)
+
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
@@ -2914,6 +2940,8 @@ add_subdirectory(modules/logger_bin)
 add_subdirectory(modules/linenoise)
 # i18n module
 add_subdirectory(modules/i18n)
+# json module
+add_subdirectory(modules/json)
 # krb5 module
 add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)
@@ -3002,18 +3030,17 @@ set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
 # and then sorted alphabetically inside the groups
 
 # metadata extraction for qlib modules (uses build-tree qore + astparser)
-# QM metadata extraction requires the json binary module (via QoreApiMetadata).
-# On a fresh build json will not be installed yet; re-run cmake after
-# installing the json module to enable QM metadata extraction.
-#
-# The installed json module must also match the module API version of the
-# qore being built here, otherwise the build-tree qore would fail to load
-# it at build time and qore-extract-qm-metadata would break.
+# QM metadata extraction needs the json binary module (via QoreApiMetadata), which is built
+# from this tree -- see modules/json.  It is listed in QORE_QM_METADATA_MODULE_DIRS below so
+# the build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
+# before any metadata scan runs.  Metadata extraction is therefore unconditional; it no longer
+# depends on a compatible qore+json pair already being installed on the build host.
 set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/astparser
+    ${CMAKE_BINARY_DIR}/modules/json
     ${CMAKE_BINARY_DIR}/modules/reflection
     ${CMAKE_BINARY_DIR}/modules/logger_bin
     ${CMAKE_BINARY_DIR}/modules/linenoise
@@ -3053,62 +3080,23 @@ set(QORE_QM_METADATA_ENV
     "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser json reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
 endforeach()
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 
-# extract the source's module API version from include/qore/ModuleManager.h
-file(STRINGS "${CMAKE_SOURCE_DIR}/include/qore/ModuleManager.h" _mm_lines
-    REGEX "^#define[ \t]+QORE_MODULE_API_(MAJOR|MINOR)[ \t]+[0-9]+")
-set(_src_api_major "")
-set(_src_api_minor "")
-foreach(_line ${_mm_lines})
-    if(_line MATCHES "QORE_MODULE_API_MAJOR[ \t]+([0-9]+)")
-        set(_src_api_major ${CMAKE_MATCH_1})
-    elseif(_line MATCHES "QORE_MODULE_API_MINOR[ \t]+([0-9]+)")
-        set(_src_api_minor ${CMAKE_MATCH_1})
-    endif()
-endforeach()
-unset(_mm_lines)
+# QM metadata extraction is unconditional: json is built from this tree and is guaranteed to
+# exist before any metadata scan runs (QORE_QM_METADATA_DEPENDS above).  This replaces a probe
+# that ran an *installed* qore against an *installed* json and compared its module API against
+# this source tree, silently disabling metadata for the whole build on any mismatch -- a
+# bootstrap cycle that made a from-scratch build unable to produce metadata at all.
+set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
 
+# An installed qore is still used below to probe *external* binary modules whose availability
+# changes qlib AOT output; that probe degrades gracefully when qore is not installed yet.
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
-if(_qore_exe)
-    # Query installed json's api_major.api_minor via installed qore.  If the
-    # load fails (json missing or itself ABI-incompatible with installed qore)
-    # the exit code is non-zero and OUTPUT is empty.
-    execute_process(
-        COMMAND ${_qore_exe} -l json -ne
-            "printf(\"%d.%d\", get_module_hash().json.api_major, get_module_hash().json.api_minor);"
-        RESULT_VARIABLE _qore_json_rc
-        OUTPUT_VARIABLE _installed_json_api
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    if(NOT _qore_json_rc EQUAL 0)
-        message(STATUS "json module not available; QM metadata extraction disabled"
-            " (re-run cmake after installing json)")
-    elseif(NOT "${_src_api_major}" STREQUAL "" AND NOT "${_src_api_minor}" STREQUAL ""
-            AND NOT "${_installed_json_api}" STREQUAL "${_src_api_major}.${_src_api_minor}")
-        message(STATUS "installed json module API ${_installed_json_api} does not"
-            " match source module API ${_src_api_major}.${_src_api_minor};"
-            " QM metadata extraction disabled (rebuild + reinstall the json module"
-            " against this qore source tree, then re-run cmake)")
-    else()
-        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
-        message(STATUS "json module available (API ${_installed_json_api});"
-            " QM metadata extraction enabled")
-    endif()
-    unset(_qore_json_rc)
-    unset(_installed_json_api)
-else()
-    message(STATUS "qore not installed; QM metadata extraction disabled"
-        " (re-run cmake after installing qore and json)")
-endif()
-unset(_src_api_major)
-unset(_src_api_minor)
 
 # Probe external binary modules whose availability at AOT-compile time
 # changes qlib qmod output (via %try-module / %ifdef No<Name> branches in
@@ -3121,7 +3109,7 @@ unset(_src_api_minor)
 # `configure_file ... COPYONLY` only touches the destination when the
 # content changes -- so qmods don't rebuild on every cmake run, only
 # when the probe set actually changes.
-set(_qore_aot_probe_modules json yaml xml uuid msgpack process imagemagick sysconf oracle)
+set(_qore_aot_probe_modules yaml xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
 if(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
@@ -3502,6 +3490,25 @@ qore_user_module("qlib/ClickFunnelsDataProvider" "clickfunnels-logo.svg")
 qore_user_module("qlib/UnbounceDataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "unleashed-logo.svg")
 qore_user_module("qlib/KatanaDataProvider" "katana-logo.svg")
+
+# modules migrated from module-json (issue #5366); build order is derived from each module's
+# own %requires directives by qore_finalize_user_module_dependencies() below
+qore_user_module("qlib/A2aClient")
+qore_user_module("qlib/A2aClientDataProvider" "a2a-logo.svg")
+qore_user_module("qlib/A2aServerHandler")
+qore_user_module("qlib/FhirRestClient")
+qore_user_module("qlib/FhirRestDataProvider" "fhir-logo.svg")
+qore_user_module("qlib/JsonFileDataProvider" "json-file-logo.svg")
+qore_user_module("qlib/JsonLd")
+qore_user_module("qlib/JsonRpcClientIo")
+qore_user_module("qlib/JsonRpcConnection.qm")
+qore_user_module("qlib/JsonRpcHandler.qm")
+qore_user_module("qlib/McpClient")
+qore_user_module("qlib/McpClientDataProvider")
+qore_user_module("qlib/McpServerHandler")
+qore_user_module("qlib/NdjsonDataProvider")
+qore_user_module("qlib/OneRecordClient")
+qore_user_module("qlib/OneRecordServerHandler")
 
 qore_finalize_user_module_dependencies()
 

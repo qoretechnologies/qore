@@ -60,6 +60,11 @@ Depends: libqore20 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Recommends: qore (= ${binary:Version})
+# the json binary module and its 16 user modules were delivered separately as
+# qore-json-module up to and including json 1.12; they ship with Qore as of 3.0
+Provides: qore-json-module
+Replaces: qore-json-module (<< 1.13)
+Breaks: qore-json-module (<< 1.13)
 Description: Standard library modules for Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface

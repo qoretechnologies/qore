@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%exec-class McpServerHandlerTypeGraphTest
+
+#! Registers tools whose input types are not trees
+class TypeGraphMcpServerHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger, AbstractDataProviderType dag, AbstractDataProviderType cyclic)
+            : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("dag-tool", "a tool whose input type shares subtypes", dag, \noop());
+        registerTool("cyclic-tool", "a tool whose input type is self-referencing", cyclic, \noop());
+    }
+
+    auto noop(auto arg) {
+        return arg;
+    }
+
+    #! Returns the input schema published for the given tool
+    *hash<auto> getToolInputSchema(string name) {
+        return tmap{name}.input;
+    }
+}
+
+#! Tests that building a tool's input schema is bounded in time and memory
+/** A tool's input type is traversed as a graph of live type objects, not a tree: a type object reachable from more
+    than one parent must be described once, not once per path to it, otherwise building the schema is exponential
+    in the depth of the type graph.
+*/
+public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
+    public {
+        #! Depth of the shared-subtype DAG; each level references the same child type object 3 times
+        /** A traversal that re-describes shared subtypes performs 3 ** 14 (4,782,969) leaf expansions, which
+            neither completes in reasonable time nor fits in memory; describing each distinct type object once
+            performs 15 of them
+        */
+        const Depth = 14;
+
+        #! Upper bound on schema generation; the unbounded implementation needs many minutes and many GB here
+        const MaxSchemaTime = 30s;
+    }
+
+    constructor() : Test("McpServerHandlerTypeGraphTest", "1.0") {
+        addTestCase("shared subtypes do not blow up the input schema", \sharedSubtypeSchemaTest());
+        addTestCase("self-referencing input types terminate", \cyclicSchemaTest());
+
+        set_return_value(main());
+    }
+
+    #! Returns a logger that discards output
+    private LoggerInterface getLogger() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        return logger;
+    }
+
+    #! Builds an acyclic type DAG where every level shares the same child type object 3 times
+    private AbstractDataProviderType getSharedSubtypeDag(int depth) {
+        HashDataType leaf();
+        leaf.addField(new QoreDataField("str", "a string field", StringType));
+
+        AbstractDataProviderType rv = leaf;
+        for (int i = 0; i < depth; ++i) {
+            HashDataType t();
+            # all three fields reference the *same* child type object
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            rv = t;
+        }
+        return rv;
+    }
+
+    #! A self-referencing input type
+    private AbstractDataProviderType getCyclicType() {
+        HashDataType rv();
+        rv.addField(new QoreDataField("self", "self-referencing field", rv));
+        rv.addField(new QoreDataField("str", "a string field", StringType));
+        return rv;
+    }
+
+    sharedSubtypeSchemaTest() {
+        AbstractDataProviderType dag = getSharedSubtypeDag(Depth);
+
+        date start = now_us();
+        TypeGraphMcpServerHandler handler(getLogger(), dag, getCyclicType());
+        date elapsed = now_us() - start;
+
+        assertLt(MaxSchemaTime, elapsed, "building a tool input schema must not re-describe shared subtypes");
+
+        # the schema is intact: Depth levels of "a"/"b"/"c" above the leaf
+        *hash<auto> schema = handler.getToolInputSchema("dag-tool");
+        assertEq("object", schema.type, "input schema is an object");
+        hash<auto> node = schema;
+        for (int i = 0; i < Depth; ++i) {
+            assertEq(("a", "b", "c"), sort(keys node.properties), sprintf("level %d properties", i));
+            node = node.properties.a;
+        }
+        assertEq(("str",), keys node.properties, "leaf properties");
+        assertEq("string", node.properties.str.type, "leaf property type");
+    }
+
+    cyclicSchemaTest() {
+        date start = now_us();
+        TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(3), getCyclicType());
+        date elapsed = now_us() - start;
+
+        assertLt(MaxSchemaTime, elapsed, "building a self-referencing tool input schema must terminate");
+
+        *hash<auto> schema = handler.getToolInputSchema("cyclic-tool");
+        assertEq("string", schema.properties.str.type, "non-recursive property is described");
+        # the cycle is truncated with an opaque object rather than followed
+        assertEq("object", schema.properties.self.type, "the cycle is described as an opaque object");
+        assertNothing(schema.properties.self.properties, "the cycle is truncated rather than followed");
+    }
+}

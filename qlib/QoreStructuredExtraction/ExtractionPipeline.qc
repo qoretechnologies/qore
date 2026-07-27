@@ -428,13 +428,8 @@ public class ExtractionPipeline {
             prompt += "\nExamples:\n\n";
             int idx = 1;
             foreach hash<auto> example in (schema.examples) {
-%ifndef NoJson
                 prompt += sprintf("Example %d:\nInput: %s\nOutput: %s\n\n",
                     idx, example.input, make_json(example.output));
-%else
-                prompt += sprintf("Example %d:\nInput: %s\nOutput: %y\n\n",
-                    idx, example.input, example.output);
-%endif
                 ++idx;
             }
         }
@@ -467,16 +462,12 @@ public class ExtractionPipeline {
         }
         cleaned = trim(cleaned);
 
-%ifndef NoJson
         auto parsed = parse_json(cleaned);
         if (parsed.typeCode() != NT_HASH) {
             throw "EXTRACTION-PARSE-ERROR",
                 sprintf("expected JSON object but got %s", parsed.type());
         }
         return parsed;
-%else
-        throw "JSON-MODULE-MISSING", "json module is required for structured extraction parsing";
-%endif
     }
 
     #! Validates extracted data against the schema

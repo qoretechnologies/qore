@@ -189,6 +189,11 @@ public:
     const QoreProgramLocation* init_loc = nullptr,
         * del_loc = nullptr;
 
+    //! child module specifications declared with %try-child-module, in declaration order
+    /** @see design/parse-directive-try-child-module.md
+    */
+    std::vector<std::string> child_vec;
+
     DLLLOCAL QoreModuleDefContext() {
     }
 
@@ -204,6 +209,15 @@ public:
     strmap_t vmap;
 
     DLLLOCAL int set(const QoreProgramLocation* loc, const char* key, QoreValue val);
+
+    //! Records a child module declared with %try-child-module in this module
+    /** @param loc the location of the directive
+        @param spec the module specification (feature name with an optional version constraint)
+        @param mod_name the name of the module being defined, if known
+
+        @return 0 for OK, -1 if a parse error was raised
+    */
+    DLLLOCAL int addChild(const QoreProgramLocation* loc, const char* spec, const char* mod_name);
 
     DLLLOCAL const char* get(const char* str) const {
         strmap_t::const_iterator i = vmap.find(str);

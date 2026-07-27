@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmReExt.qm - child module of TcmReBase, loaded explicitly in the child-first test
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmReBase
+
+module TcmReExt {
+    version = "1.0";
+    desc = "test child module for child-first loading";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        TcmReBase::add("ext");
+    };
+}

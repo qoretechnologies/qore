@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TcmBroken.qm - child module with a parse error; must be reported, not ignored
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TcmBrokenBase
+
+module TcmBroken {
+    version = "1.0";
+    desc = "test child module that cannot be parsed";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! class with a call that cannot be resolved
+public class TcmBrokenChild {
+    #! calls a method that does not exist in the parent module
+    static string hello() {
+        return TcmBrokenBase::no_such_method();
+    }
+}

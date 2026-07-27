@@ -105,19 +105,7 @@ stream.close();
     - the initial version of the %GeminiRestClient module
 */
 
-%try-module json
-%define NoJson
-%endtry
-
-%ifdef NoJson
-auto sub make_json(auto val, *int flags) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-
-auto sub parse_json(string val) {
-    throw "JSON-ERROR", "the json module is required for this operation";
-}
-%endif
+%requires json
 
 #! the GeminiRestClient namespace contains all the objects in the GeminiRestClient module
 public namespace GeminiRestClient {
@@ -309,14 +297,10 @@ public class GeminiResponseSseStream {
             }
             return body;
         }
-%ifdef NoJson
-        throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
         return make_json(body);
-%endif
     }
 
     private setupDecompression() {
@@ -437,9 +421,6 @@ public class GeminiResponseSseStreamIo {
         # Serialize body to JSON
         *data payload;
         if (exists body) {
-%ifdef NoJson
-            throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%else
             if (body.typeCode() != NT_STRING) {
                 if (!headers."Content-Type") {
                     headers."Content-Type" = "application/json";
@@ -451,7 +432,6 @@ public class GeminiResponseSseStreamIo {
                 }
                 payload = body;
             }
-%endif
         }
 
         # Build full path: /v1beta/models/{model}:streamGenerateContent?alt=sse
@@ -703,10 +683,6 @@ public class GeminiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProv
             throw "LLM-CONFIG-ERROR",
                 "api_key is required for \"gemini\" mode";
         }
-%ifdef NoJson
-        throw "LLM-DEPENDENCY-ERROR",
-            "json module is required for Gemini mode but is not available";
-%endif
     }
 
     string getMode() {
