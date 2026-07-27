@@ -89,6 +89,7 @@ class AbstractRestClientTest inherits QUnit::Test {
     constructor() : Test("AbstractRestClientTest", "1.0") {
         addTestCase("RestResponseInfo hashdecl", \testRestResponseInfo());
         addTestCase("AbstractRestClient conformance", \testAbstractRestClientConformance());
+        addTestCase("copyWithUrl preserves the subclass", \testCopyWithUrlPreservesClass());
         addTestCase("restGet", \testRestGet());
         addTestCase("restHead", \testRestHead());
         addTestCase("restOptions", \testRestOptions());
@@ -264,5 +265,33 @@ class AbstractRestClientTest inherits QUnit::Test {
 
         # The client should be disconnected
         assertEq(False, client.isConnected());
+    }
+    testCopyWithUrlPreservesClass() {
+        # copyWithUrl() used to end in `new RestClient(opts, True)`, so copying any subclass
+        # silently produced a generic client and discarded whatever the subclass adds.  For
+        # AwsRestClient, whose signRequest() applies AWS SigV4 signing, that meant the copy's
+        # requests went out unsigned.  The copy must be an instance of the object's own class.
+        TestSubclassRestClient parent({"url": "http://localhost:8099"}, True);
+        object child = parent.copyWithUrl("http://localhost:8098");
+
+        assertTrue(child instanceof TestSubclassRestClient, "the copy keeps the subclass");
+        assertEq("subclass", cast<TestSubclassRestClient>(child).subclassMarker(),
+            "the subclass's own behaviour survives the copy");
+        assertEq("http://localhost:8098", cast<RestClient::RestClient>(child).getUrl());
+    }
+
+}
+
+#! A RestClient subclass used to prove that copyWithUrl() preserves the runtime class
+/** Stands in for any client that adds behaviour to the base -- AwsRestClient's SigV4 request
+    signing, for example -- all of which was silently discarded when a copy was constructed as a
+    plain RestClient.
+*/
+class TestSubclassRestClient inherits RestClient::RestClient {
+    constructor(*hash<auto> opts, *softbool do_not_connect) : RestClient(opts, do_not_connect) {
+    }
+
+    string subclassMarker() {
+        return "subclass";
     }
 }

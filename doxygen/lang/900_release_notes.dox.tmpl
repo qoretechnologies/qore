@@ -1798,6 +1798,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
         for @ref RestClient::RestClient "RestClient" instances, built on
         @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+      - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a generic
+        client when called on a subclass, which discarded whatever the subclass adds &mdash;
+        @ref AwsRestClient::AwsRestClient "AwsRestClient" lost its AWS SigV4 request signing, so the copy's
+        requests went out unsigned.  The copy is now constructed from the object's own class through the new
+        @ref RestClient::RestClient::copySelf() "copySelf()" hook, which also fixes the equivalent defect in
+        @ref restclientio_intro "RestClientIo"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     - @ref salesforcerestclientintro "SalesforceRestClient" module
       - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",

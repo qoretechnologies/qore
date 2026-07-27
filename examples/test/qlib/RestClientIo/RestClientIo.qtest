@@ -649,6 +649,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("copyWithUrl returns sibling instance with new URL",
             \testCopyWithUrl());
         addTestCase("copyWithUrl inherits token from parent", \testCopyWithUrlInheritsToken());
+        addTestCase("copyWithUrl preserves the subclass", \testCopyWithUrlPreservesClass());
         addTestCase("getConstructorOptions returns original caller opts",
             \testGetConstructorOptions());
         addTestCase("restDoRawRequest sends pre-serialized body as-is",
@@ -3897,6 +3898,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
     }
 
+    testCopyWithUrlPreservesClass() {
+        # copyWithUrl() used to end in `new RestClientIo(opts, mgr)`, so copying any subclass
+        # silently produced a generic client and discarded whatever the subclass adds -- for a
+        # client that customizes authentication that means requests going out unauthenticated.
+        # The copy must be an instance of the object's own class.
+        TestSubclassRestClientIo parent({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit parent.close();
+
+        string new_url = sprintf("https://127.0.0.1:%d", port);
+        object child = parent.copyWithUrl(new_url);
+        on_exit cast<RestClientIo::RestClientIo>(child).close();
+
+        assertTrue(child instanceof TestSubclassRestClientIo, "the copy keeps the subclass");
+        assertEq("subclass", cast<TestSubclassRestClientIo>(child).subclassMarker(),
+            "the subclass's own behaviour survives the copy");
+        assertEq(new_url, cast<RestClientIo::RestClientIo>(child).getUrl());
+
+        # the copy shares the parent's connection manager, so pooled connections are reused
+        assertEq(parent.getConnectionManager(),
+            cast<RestClientIo::RestClientIo>(child).getConnectionManager());
+    }
+
     testCopyWithUrlInheritsToken() {
         # Parent acquires a token, then copyWithUrl produces a child that
         # inherits the token — the child should send Authorization: Bearer <token>
@@ -4179,5 +4208,20 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     private handlePingTimeout(string name, date delta) {
         PollingConnectionMonitor::handlePingTimeout(name, delta);
         msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
+#! A RestClientIo subclass used to prove that copyWithUrl() preserves the runtime class
+/** Stands in for any client that adds behaviour to the base -- request signing, extra headers,
+    an OAuth2 hook -- all of which were silently discarded when a copy was constructed as a plain
+    RestClientIo.
+*/
+class TestSubclassRestClientIo inherits RestClientIo::RestClientIo {
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+        : RestClientIo(opts, shared_mgr) {
+    }
+
+    string subclassMarker() {
+        return "subclass";
     }
 }
