@@ -9262,6 +9262,31 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     dbg_last_line_slot = nullptr;
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
+    bool track_on_block_exit_scope = true;
+    const char* disable_obe_free_fast_path = aot_mode
+        ? std::getenv("QORE_DISABLE_AOT_OBE_FREE_FAST_PATH")
+        : std::getenv("QORE_DISABLE_JIT_OBE_FREE_FAST_PATH");
+    if (!disable_obe_free_fast_path) {
+        size_t scanned = 0;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (++scanned % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "LLVM on-block-exit scope analysis")) {
+                    error = "cancelled during LLVM on-block-exit scope analysis";
+                    return false;
+                }
+                if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                    has_on_block_exit_handlers = true;
+                    break;
+                }
+            }
+            if (has_on_block_exit_handlers) {
+                break;
+            }
+        }
+        track_on_block_exit_scope = has_on_block_exit_handlers;
+    }
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
     catch_entry_blocks.clear();
@@ -9311,9 +9336,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
         // Save on_block_exit handler count at function entry so we can
         // execute handlers registered during this function at exit.
-        auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
-                llvm::FunctionType::get(i64_type, {}, false));
-        obe_saved_count = builder->CreateCall(obe_count_fn, {});
+        if (track_on_block_exit_scope) {
+            auto obe_count_fn = module.getOrInsertFunction(
+                    "qore_rt_get_on_block_exit_count",
+                    llvm::FunctionType::get(i64_type, {}, false));
+            obe_saved_count = builder->CreateCall(obe_count_fn, {});
+        }
 
         // Save the catch-scope stack depth at entry for functions containing
         // catch blocks.  The shared exception-exit paths pop back to this
