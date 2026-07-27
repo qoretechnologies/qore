@@ -577,6 +577,75 @@ class SalesforceTest inherits QUnit::Test {
         assertEq("https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
             t.getIdServiceUrl());
         assertEq("00Dxx0000001gPLEAY", t.getOrgId());
+
+        # the async client shares the same org identity accessors; a Pub/Sub subscription reads
+        # "instanceurl" and "tenantid" from here, so they must be available without the blocking
+        # client
+        SalesforceRestClientIo io({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            # RestClientIo validates OAuth2 options in the constructor, unlike the blocking client
+            "oauth2_redirect_url": "https://localhost/callback",
+            "token": "an-access-token",
+            "instance_url": "https://acme.my.salesforce.com",
+            "id_service_url": "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+        });
+        assertEq("https://acme.my.salesforce.com", io.getInstanceUrl());
+        assertEq("00Dxx0000001gPLEAY", io.getOrgId());
+
+        # an async client that has a token but has not yet seen an OAuth2 login response
+        # reports no org identity; the values arrive with the response, not with the token
+        SalesforceRestClientIo io2({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": "https://localhost/callback",
+            "token": "an-access-token",
+            "url": "https://login.salesforce.com",
+        });
+        assertNothing(io2.getInstanceUrl());
+        assertNothing(io2.getIdServiceUrl());
+        assertNothing(io2.getOrgId());
+
+        # the OAuth2 login response is what actually carries the org identity on the async path:
+        # RestClientIo stores only the generic fields, so without the override in
+        # SalesforceRestClientIo the instance URL and identity service URL would be discarded
+        TestSalesforceRestClientIo hook({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": "https://localhost/callback",
+            "token": "an-access-token",
+            "url": "https://login.salesforce.com",
+        });
+        assertNothing(hook.getInstanceUrl());
+        hook.testGotOAuth2LoginInfo({
+            "token_type": "Bearer",
+            "access_token": "new-token",
+            "instance_url": "https://acme.my.salesforce.com",
+            "id": "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+        });
+        assertEq("https://acme.my.salesforce.com", hook.getInstanceUrl());
+        assertEq("https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+            hook.getIdServiceUrl());
+        assertEq("00Dxx0000001gPLEAY", hook.getOrgId());
+
+        # a refresh that moves the org to another instance is followed; Salesforce can migrate an
+        # org, and a long-lived subscription must not keep sending the stale instance URL
+        hook.testGotOAuth2LoginInfo({
+            "token_type": "Bearer",
+            "access_token": "refreshed-token",
+            "instance_url": "https://acme--new.my.salesforce.com",
+            "id": "https://login.salesforce.com/id/00Dxx0000001gPLEAY/005xx000001SvogAAC",
+        });
+        assertEq("https://acme--new.my.salesforce.com", hook.getInstanceUrl());
+        assertEq("00Dxx0000001gPLEAY", hook.getOrgId(), "org ID is stable across a refresh");
+
+        # a response with no Salesforce fields leaves the captured identity alone
+        hook.testGotOAuth2LoginInfo({
+            "token_type": "Bearer",
+            "access_token": "plain-token",
+        });
+        assertEq("https://acme--new.my.salesforce.com", hook.getInstanceUrl());
+        assertEq("00Dxx0000001gPLEAY", hook.getOrgId());
     }
 
     soqlOperatorUnitTests() {
@@ -785,5 +854,19 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     private handlePingTimeout(string name, date delta) {
         PollingConnectionMonitor::handlePingTimeout(name, delta);
         msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
+#! Exposes the protected OAuth2 login hook so the org-identity capture can be tested directly
+/** SalesforceRestClientIo overrides gotOAuth2LoginInfo() to capture the Salesforce-specific
+    \c instance_url and \c id fields that RestClientIo would otherwise discard; every token
+    acquisition -- initial login, refresh, and externally-supplied token -- funnels through it.
+*/
+class TestSalesforceRestClientIo inherits SalesforceRestClientIo {
+    constructor(hash<auto> opts) : SalesforceRestClientIo(opts) {
+    }
+
+    hash<auto> testGotOAuth2LoginInfo(hash<auto> h) {
+        return gotOAuth2LoginInfo(h);
     }
 }

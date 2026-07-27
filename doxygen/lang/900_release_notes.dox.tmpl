@@ -1800,12 +1800,16 @@ foreach string module_name in (registry.getProcessModules()) {
         @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
 
     - @ref salesforcerestclientintro "SalesforceRestClient" module
-      - added @ref SalesforceRestClient::SalesforceRestClient::getInstanceUrl() "SalesforceRestClient::getInstanceUrl()",
-        @ref SalesforceRestClient::SalesforceRestClient::getIdServiceUrl() "SalesforceRestClient::getIdServiceUrl()"
-        and @ref SalesforceRestClient::SalesforceRestClient::getOrgId() "SalesforceRestClient::getOrgId()", so that
-        APIs outside the REST client can identify the authenticated org &mdash; the
-        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a> needs both as
-        call metadata
+      - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
+        @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
+        @ref SalesforceRestClient::SalesforceRestClientBase::getOrgId() "getOrgId()", so that APIs outside the REST
+        client can identify the authenticated org &mdash; the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub API</a> identifies the
+        org through call metadata rather than through the endpoint, which is a single global host
+        (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+      - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" now captures the org identity from
+        the OAuth2 token response, which @ref RestClientIo::RestClientIo "RestClientIo" would otherwise discard, so
+        the identity is available on the async path as well
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module

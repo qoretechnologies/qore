@@ -147,10 +147,17 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
-    - added @ref SalesforceRestClient::SalesforceRestClient::getInstanceUrl() "SalesforceRestClient::getInstanceUrl()",
-      @ref SalesforceRestClient::SalesforceRestClient::getIdServiceUrl() "SalesforceRestClient::getIdServiceUrl()" and
-      @ref SalesforceRestClient::SalesforceRestClient::getOrgId() "SalesforceRestClient::getOrgId()", so that APIs
-      outside the REST client can identify the authenticated org
+    - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
+      @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
+      @ref SalesforceRestClient::SalesforceRestClientBase::getOrgId() "getOrgId()", so that APIs outside the REST
+      client can identify the authenticated org; they are declared on
+      @ref SalesforceRestClient::SalesforceRestClientBase "SalesforceRestClientBase", so the blocking and async
+      clients share one implementation
+      (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+    - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" now captures the org identity from
+      the OAuth2 token response; <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> stores only the generic OAuth2 fields,
+      so the Salesforce-specific \c instance_url and \c id fields were previously discarded on the async path.  A
+      refresh that moves the org to another instance is followed
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection salesforcerestclientv2_0_1 SalesforceRestClient v2.0.1
@@ -274,6 +281,22 @@ public const BulkJobContentTypes = {
 
 #! Common base class for SalesforceRestClient functionality
 public class SalesforceRestClientBase {
+    private {
+        #! The instance URL; the org's API host, returned by the OAuth2 login as \c instance_url
+        /** Declared here rather than in @ref SalesforceRestClient::SalesforceRestClient
+            "SalesforceRestClient" so that the async client shares one implementation of the org
+            identity accessors below.
+
+            @since %SalesforceRestClient 2.1
+        */
+        string instance_url;
+
+        #! The identity service URL; returned by the OAuth2 login as \c id
+        /** @since %SalesforceRestClient 2.1
+        */
+        string id_service_url;
+    }
+
     public {
         #! defaults for direct member values
         const Defaults = {
@@ -343,6 +366,58 @@ public class SalesforceRestClientBase {
     #! returns a date string in GMT for use in Salesforce.com requests
     static string getGmtDate(date d) {
         return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
+
+    #! Returns the Salesforce instance URL for the authenticated org
+    /** The instance URL identifies the org's API host and is returned by the OAuth2 login as
+        \c instance_url; it is not the login URL.  APIs outside the REST client need it, in
+        particular the
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
+        API</a>, which sends it as the \c instanceurl call metadata header.
+
+        @return the instance URL, or @ref nothing if no login has been performed yet
+
+        @par Example:
+        @code{.py}
+*string instance_url = sfrest.getInstanceUrl();
+        @endcode
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getInstanceUrl() {
+        return instance_url.val() ? instance_url : NOTHING;
+    }
+
+    #! Returns the identity service URL for the authenticated user
+    /** Returned by the OAuth2 login as \c id; see
+        @ref getOrgId() "getOrgId()" for the org ID it encodes.
+
+        @return the identity service URL, or @ref nothing if no login has been performed yet
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getIdServiceUrl() {
+        return id_service_url.val() ? id_service_url : NOTHING;
+    }
+
+    #! Returns the 18-character org ID (tenant ID) for the authenticated org
+    /** The org ID is not returned as a field of its own by the OAuth2 login; it is the
+        second-to-last path element of the identity service URL, which the login returns as
+        \c id.  The
+        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
+        API</a> sends it as the \c tenantid call metadata header.
+
+        @return the org ID, or @ref nothing if no login has been performed yet
+
+        @par Example:
+        @code{.py}
+*string org_id = sfrest.getOrgId();
+        @endcode
+
+        @since %SalesforceRestClient 2.1
+    */
+    *string getOrgId() {
+        return SalesforceRestClientBase::getOrgId(id_service_url);
     }
 
     #! Returns the org ID (tenant ID) encoded in an identity service URL
@@ -459,12 +534,6 @@ public class SalesforceRestClient inherits RestClient::RestClient, SalesforceRes
 
         #! Salesforce.com REST API version currently in use
         string api_used;
-
-        #! The instance URL
-        string instance_url;
-
-        #! The identity service URL
-        string id_service_url;
 
         #! hash of APIs retrieved from GET /services/data; keyed by API version string; values: \c "label", \c "url"
         hash<string, hash<auto>> api_hash;
@@ -1145,58 +1214,6 @@ sfrest.logout();
         };
     }
 
-    #! Returns the Salesforce instance URL for the authenticated org
-    /** The instance URL identifies the org's API host and is returned by the OAuth2 login as
-        \c instance_url; it is not the login URL.  APIs outside the REST client need it, in
-        particular the
-        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
-        API</a>, which sends it as the \c instanceurl call metadata header.
-
-        @return the instance URL, or @ref nothing if no login has been performed yet
-
-        @par Example:
-        @code{.py}
-*string instance_url = sfrest.getInstanceUrl();
-        @endcode
-
-        @since %SalesforceRestClient 2.1
-    */
-    *string getInstanceUrl() {
-        return instance_url.val() ? instance_url : NOTHING;
-    }
-
-    #! Returns the identity service URL for the authenticated user
-    /** Returned by the OAuth2 login as \c id; see
-        @ref getOrgId() "getOrgId()" for the org ID it encodes.
-
-        @return the identity service URL, or @ref nothing if no login has been performed yet
-
-        @since %SalesforceRestClient 2.1
-    */
-    *string getIdServiceUrl() {
-        return id_service_url.val() ? id_service_url : NOTHING;
-    }
-
-    #! Returns the 18-character org ID (tenant ID) for the authenticated org
-    /** The org ID is not returned as a field of its own by the OAuth2 login; it is the
-        second-to-last path element of the identity service URL, which the login returns as
-        \c id.  The
-        <a href="https://developer.salesforce.com/docs/platform/pub-sub-api/overview">Pub/Sub
-        API</a> sends it as the \c tenantid call metadata header.
-
-        @return the org ID, or @ref nothing if no login has been performed yet
-
-        @par Example:
-        @code{.py}
-*string org_id = sfrest.getOrgId();
-        @endcode
-
-        @since %SalesforceRestClient 2.1
-    */
-    *string getOrgId() {
-        return SalesforceRestClientBase::getOrgId(id_service_url);
-    }
-
     #! Checks the API and sets the final URL
     /** @since %SalesforceRestClient 2.0
     */
@@ -1700,6 +1717,43 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(SalesforceRestClientBase::getOptions(opts), shared_mgr) {
+        # a client built from stored connection options knows the org before it logs in
+        if (opts.instance_url) {
+            instance_url = opts.instance_url;
+        }
+        if (opts.id_service_url) {
+            id_service_url = opts.id_service_url;
+        }
+    }
+
+    #! Captures the Salesforce org identity from an OAuth2 token response
+    /** <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> stores only the generic OAuth2 fields, so
+        the Salesforce-specific \c instance_url and \c id fields would otherwise be discarded and
+        the org identity would be unavailable on the async path.  Every token acquisition funnels
+        through this method -- the initial login, a refresh, and an externally-supplied token -- so
+        a refreshed \c instance_url is picked up as well; Salesforce can move an org between
+        instances, and a long-lived subscription must follow it.
+
+        @param h the parsed OAuth2 token response hash
+
+        @return the token response hash
+
+        @note this captures the org identity only; unlike
+        @ref SalesforceRestClient::SalesforceRestClient "SalesforceRestClient" it does not retarget
+        the client at the instance URL or perform API version discovery, because
+        <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> does not expose URL retargeting.  Use the
+        blocking client for REST calls against the org host.
+
+        @since %SalesforceRestClient 2.1
+    */
+    private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+        if (h.instance_url.val() && h.instance_url != instance_url) {
+            instance_url = h.instance_url;
+        }
+        if (h.id.val() && h.id != id_service_url) {
+            id_service_url = h.id;
+        }
+        return RestClientIo::gotOAuth2LoginInfo(h);
     }
 }
 }
