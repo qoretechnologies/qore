@@ -185,19 +185,19 @@ string facts_disabled_output = is_file(facts_disabled)
         libqore_dir, facts_disabled)) : "";
 string facts_enabled_measure = is_file(facts_enabled)
     ? backquote(sprintf(
-        "nm -u %s | grep ' qore_rt_int_to_string_measure$'",
+        "nm -u %s | grep 'qore_rt_int_to_string_measure$'",
         facts_enabled)) : "";
 string facts_enabled_materialize = is_file(facts_enabled)
     ? backquote(sprintf(
-        "nm -u %s | grep ' qore_rt_int_to_string$'",
+        "nm -u %s | grep 'qore_rt_int_to_string$'",
         facts_enabled)) : "";
 string facts_disabled_measure = is_file(facts_disabled)
     ? backquote(sprintf(
-        "nm -u %s | grep ' qore_rt_int_to_string_measure$'",
+        "nm -u %s | grep 'qore_rt_int_to_string_measure$'",
         facts_disabled)) : "";
 string facts_disabled_materialize = is_file(facts_disabled)
     ? backquote(sprintf(
-        "nm -u %s | grep ' qore_rt_int_to_string$'",
+        "nm -u %s | grep 'qore_rt_int_to_string$'",
         facts_disabled)) : "";
 if (!is_file(facts_enabled) || !is_file(facts_disabled)
         || facts_enabled_output != facts_ast

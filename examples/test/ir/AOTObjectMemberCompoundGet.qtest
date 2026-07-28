@@ -239,8 +239,8 @@ if (!is_file(disabled_exe)) {
     exit(2);
 }
 
-string enabled_symbols = backquote(sprintf("nm -D %s 2>&1", enabled_exe));
-string disabled_symbols = backquote(sprintf("nm -D %s 2>&1", disabled_exe));
+string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
+string disabled_symbols = backquote(sprintf("nm -u %s 2>&1", disabled_exe));
 if (!enabled_symbols.regex("qore_rt_object_member_compound_get_aot")
         || disabled_symbols.regex("qore_rt_object_member_compound_get_aot")) {
     printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s",

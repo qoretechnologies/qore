@@ -147,7 +147,7 @@ string sub runAot(string suffix, string env) {
         exit(2);
     }
     aot_symbol_outputs{suffix} =
-        backquote(sprintf("nm -D %s 2>&1", exe));
+        backquote(sprintf("nm -u %s 2>&1", exe));
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 

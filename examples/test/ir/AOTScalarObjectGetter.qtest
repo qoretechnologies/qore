@@ -147,7 +147,7 @@ string aot_no_prehash = backquote(sprintf(
 string aot_no_descriptor = backquote(sprintf(
     "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE=1 %s %s 2>&1",
     env, aot_exe));
-string symbols = backquote(sprintf("nm -D %s 2>&1", aot_exe));
+string symbols = backquote(sprintf("nm -u %s 2>&1", aot_exe));
 if (!symbols.regex("qore_rt_load_object_getter_int_aot")
         || !symbols.regex("qore_rt_load_object_getter_float_aot")
         || !symbols.regex("qore_rt_load_object_getter_bool_aot")

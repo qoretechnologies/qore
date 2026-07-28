@@ -233,10 +233,10 @@ if (!is_file(native_disabled_exe)) {
     exit(2);
 }
 
-string enabled_symbols = backquote(sprintf("nm -D %s 2>&1", enabled_exe));
-string disabled_symbols = backquote(sprintf("nm -D %s 2>&1", disabled_exe));
+string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
+string disabled_symbols = backquote(sprintf("nm -u %s 2>&1", disabled_exe));
 string native_disabled_symbols = backquote(sprintf(
-    "nm -D %s 2>&1", native_disabled_exe));
+    "nm -u %s 2>&1", native_disabled_exe));
 if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
         || !enabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
         || !enabled_symbols.regex("qore_rt_object_member_set_get_float_aot")

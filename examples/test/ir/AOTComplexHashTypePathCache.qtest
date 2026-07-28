@@ -115,8 +115,8 @@ if (!is_file(checked_exe)) {
     exit(2);
 }
 
-string enabled_symbols = backquote(sprintf("nm -D %s 2>&1", enabled_exe));
-string checked_symbols = backquote(sprintf("nm -D %s 2>&1", checked_exe));
+string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
+string checked_symbols = backquote(sprintf("nm -u %s 2>&1", checked_exe));
 if (!enabled_symbols.regex(
         "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")
         || !enabled_symbols.regex(
