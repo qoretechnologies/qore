@@ -69,6 +69,7 @@ module Util {
     - @ref Util::get_bit_string()
     - @ref Util::get_byte_size()
     - @ref Util::get_exception_string()
+    - @ref Util::get_free_port()
     - @ref Util::get_marketing_byte_size()
     - @ref Util::get_random_string()
     - @ref Util::glob_to_regex()
@@ -105,6 +106,8 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - added @ref Util::get_free_port() "get_free_port()" so that code needing a port where nothing is listening,
+      or a port to start a server on, does not have to hard-code one
     - fixed @ref Util::parse_uri_query() "parse_uri_query()" to split URI query strings before URL-decoding
       keys and values, so encoded separators such as \c "%26", \c "%3D", and \c "%3B" inside values are handled
       correctly
@@ -1573,6 +1576,47 @@ public string sub make_uri_query(hash<UriQueryInfo> h, string arg_separator = ";
             (map sprintf("%s=%s", key, encode_url(string($1), True)), ph.value);
     }
     return h.method + "?" + str;
+}
+
+#! function that returns a TCP port number that was unused at the time of the call
+/** @par Example:
+    @code{.py}
+int port = get_free_port();
+    @endcode
+
+    Asks the operating system for an ephemeral port by binding port \c 0 and releasing it again.  Intended for
+    tests and tools that need a port where nothing is listening, or a port to start a server on, without
+    hard-coding one; a hard-coded port encodes an assumption about the machine that cannot be verified, and a
+    commonly-used port such as \c 8080 is occupied on many developer machines.
+
+    @param iface the interface to bind while reserving the port; the default reserves a loopback port, which is
+    what tests normally want.  Use an IPv6 address in brackets (ex: \c "[::1]") to reserve an IPv6 port
+
+    @return a port number that was not in use at the time of the call
+
+    @throw GET-FREE-PORT-ERROR the socket could not be bound on the given interface
+
+    @note
+    - The port is only guaranteed to have been free at the moment of the call; nothing holds it afterwards, so
+      it can in principle be taken by another process before the caller uses it.
+    - Do not try to close that window by keeping the socket bound without listening on it: a connect to a
+      bound-but-not-listening socket is not refused promptly on all platforms (Darwin in particular), so
+      negative connection tests written that way fail there.
+    - Requires network access; this function cannot be called in a @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK"
+      @ref Qore::Program "Program".
+
+    @since Util 3.0
+*/
+public int sub get_free_port(string iface = "localhost") {
+    Socket sock();
+    # close the socket before returning so that the port is free for the caller to use
+    on_exit sock.close();
+    # Socket::bind() reports failure with a non-zero return value rather than an exception; without this check
+    # the getSocketInfo() call below fails with an unrelated SOCKET-NOT-OPEN
+    if (sock.bind(iface + ":0")) {
+        throw "GET-FREE-PORT-ERROR", sprintf("cannot bind an ephemeral port on %y: %s", iface, strerror());
+    }
+    return sock.getSocketInfo().port;
 }
 
 #! function that returns a random string
