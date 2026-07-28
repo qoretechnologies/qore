@@ -33,7 +33,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
-%requires AsyncApi
+%requires ../../../../qlib/AsyncApi.qm
 
 %exec-class AsyncApiGeneratorTest
 
@@ -923,6 +923,7 @@ trailing code";
     - hash_auto (hash<auto>): a hash<auto> field
     - list_str (list<string>): a list of strings
     - typed_hash (hash<EventInfo>): a typed hash reference
+    - business-process (*list<int>): a hyphenated JSON property name
 
     @ENDASYNCAPI
 */";
@@ -938,6 +939,13 @@ trailing code";
         assertEq("TestMessage", msg.name, "Message name should match");
 
         hash<auto> props = msg.schema.properties;
+
+        assertTrue(props.hasKey("business-process"),
+            "hyphenated JSON property names are preserved");
+        assertEq("array", props{"business-process"}.type,
+            "hyphenated field list type");
+        assertEq("integer", props{"business-process"}.items.type,
+            "hyphenated field list item type");
 
         # Check string field
         assertTrue(props.hasKey("str_field"), "Should have str_field");
