@@ -5894,7 +5894,7 @@ void UserVariantBase::attemptJITCompilation() const {
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
-        if (!getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+        if (statements && !getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
             compile_ir.reset(lowerIRFunction(
                 cached_ir->getDisplayName().c_str(), cached_ir->name,
                 nullptr, nullptr, false, false));

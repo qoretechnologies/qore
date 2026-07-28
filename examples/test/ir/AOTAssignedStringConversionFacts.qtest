@@ -104,20 +104,20 @@ if (enabled_output != ast || disabled_output != ast
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled));
 int enabled_fallback_calls = int(backquote(sprintf(
-    "objdump -d %s | grep -c"
-        + " 'call.*<qore_rt_call_direct_aot_consume_args@plt>'",
+    "objdump -d %s | grep -Ec"
+        + " '(call|blx?).*<qore_rt_call_direct_aot_consume_args@plt>'",
     enabled)));
 int disabled_fallback_calls = int(backquote(sprintf(
-    "objdump -d %s | grep -c"
-        + " 'call.*<qore_rt_call_direct_aot_consume_args@plt>'",
+    "objdump -d %s | grep -Ec"
+        + " '(call|blx?).*<qore_rt_call_direct_aot_consume_args@plt>'",
     disabled)));
 int enabled_cleanup_calls = int(backquote(sprintf(
-    "objdump -d %s | grep -c"
-        + " 'call.*<qore_rt_clear_arg_cleanups@plt>'",
+    "objdump -d %s | grep -Ec"
+        + " '(call|blx?).*<qore_rt_clear_arg_cleanups@plt>'",
     enabled)));
 int disabled_cleanup_calls = int(backquote(sprintf(
-    "objdump -d %s | grep -c"
-        + " 'call.*<qore_rt_clear_arg_cleanups@plt>'",
+    "objdump -d %s | grep -Ec"
+        + " '(call|blx?).*<qore_rt_clear_arg_cleanups@plt>'",
     cleanup_disabled)));
 if (enabled_fallback_calls >= disabled_fallback_calls
         || enabled_cleanup_calls >= disabled_cleanup_calls) {
