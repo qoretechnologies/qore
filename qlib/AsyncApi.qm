@@ -2550,8 +2550,10 @@ public class AsyncApiSchemaTokenizer {
         }
 
         foreach string line in (lines) {
-            # Use Qore identifier pattern for field names
-            auto field_match = (line =~ x/^(\s*)-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            # Message payloads describe JSON objects, so property names are
+            # not limited to Qore identifiers. Match the complete token before
+            # the type declaration (for example "business-process").
+            auto field_match = (line =~ x/^(\s*)-\s+([^\s(]+)\s+\(([^)]+)\)(?::\s*(.*))?/);
             if (field_match.typeCode() != NT_LIST || !field_match[1] || !field_match[2]) {
                 continue;
             }

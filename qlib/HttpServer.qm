@@ -5348,9 +5348,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     #! Returns a masked copy of the request path without changing handler-visible path semantics
     private string maskRequestPath(string raw_path) {
-        string path = raw_path;
+        # Mask sensitive query values before URL decoding so an encoded '&' in
+        # a token cannot become a separator and expose the rest of the value.
+        string path = mask_sensitive_url_query_values(raw_path);
         try {
-            path = decode_url(raw_path);
+            path = decode_url(path);
         } catch () {
             # Keep log masking best-effort; request validation happens on the handler-visible path.
         }

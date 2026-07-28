@@ -131,6 +131,8 @@ module HttpServerUtil {
     @subsection httputil1_6 HttpServerUtil 1.6
     - documented that request paths have URL decoding applied only to the resource path; the query string remains
       percent-encoded until parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()"
+    - added @ref HttpServer::mask_sensitive_url_query_values() "mask_sensitive_url_query_values()" so HTTP server
+      diagnostics can log request targets without exposing authentication secrets in query parameters
 
     @subsection httputil1_5 HttpServerUtil 1.5
     - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
@@ -832,6 +834,74 @@ public string sub http_get_url_from_bind(softstring bind, *string host) {
 */
 public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
     return Util::parse_uri_query(path);
+}
+
+#! returns a copy of a URI request target with sensitive query values masked
+/** Authentication tokens sometimes have to be supplied in a WebSocket request
+    target because browser WebSocket APIs cannot set arbitrary HTTP headers.
+    This function masks the values of standard authentication query parameters
+    while preserving the resource path, parameter names, separators, and all
+    non-sensitive values for useful diagnostics.
+
+    Matching is case-insensitive. The following parameter names are masked:
+    \c token, \c qorus-token, \c access_token, \c id_token,
+    \c refresh_token, \c api_key, \c password, \c passwd, and
+    \c client_secret. Hyphens can be used in place of underscores.
+
+    @param path the raw or decoded URI request target
+    @return the request target with sensitive query values replaced by
+        \c "<masked>"
+
+    @since HttpServerUtil 1.6
+*/
+public string sub mask_sensitive_url_query_values(string path) {
+    int query_start = path.find("?");
+    if (query_start == -1) {
+        return path;
+    }
+
+    int query_end = path.find("#", query_start + 1);
+    if (query_end == -1) {
+        query_end = path.size();
+    }
+
+    list<string> rv = (path.substr(0, query_start + 1),);
+    int pos = query_start + 1;
+    while (pos < query_end) {
+        int separator = pos;
+        while (separator < query_end && path[separator] != "&" && path[separator] != ";") {
+            ++separator;
+        }
+
+        string parameter = path.substr(pos, separator - pos);
+        int equals = parameter.find("=");
+        bool sensitive = False;
+        if (equals > 0) {
+            string name = parameter.substr(0, equals);
+            try {
+                name = decode_url(name).lwr();
+            } catch () {
+                # Invalid URL encoding is validated by the request parser; log
+                # masking remains best-effort without changing request state.
+            }
+            sensitive = name == "token" || name == "qorus-token" || name == "qorus_token"
+                || name == "access-token" || name == "access_token" || name == "id-token"
+                || name == "id_token" || name == "refresh-token" || name == "refresh_token"
+                || name == "api-key" || name == "api_key" || name == "password"
+                || name == "passwd" || name == "client-secret" || name == "client_secret";
+        }
+        push rv, sensitive ? parameter.substr(0, equals + 1) + "<masked>" : parameter;
+
+        if (separator < query_end) {
+            push rv, path.substr(separator, 1);
+        }
+        pos = separator + 1;
+    }
+
+    if (query_end < path.size()) {
+        push rv, path.substr(query_end);
+    }
+    return rv.join("");
 }
 
 #! helper function for setting HTTP response headers
