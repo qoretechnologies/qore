@@ -1744,6 +1744,13 @@ foreach string module_name in (registry.getProcessModules()) {
         Vertex AI Gemini-on-Vertex pathway can reuse them without forcing a
         \c GeminiRestClient import; behavior is unchanged
 
+    - @ref gmaildataproviderintro "GmailDataProvider" module
+      - added the \c trash-message and \c delete-message actions, so a consumer can clear a source
+        message itself once it has finished processing it, instead of having the watch delete every
+        matched message as soon as its event is raised
+      - attachment watch events carry the \c message_id of the source message, so a consumer can
+        address the message the attachment came from
+
     - @ref grokrestclientintro "GrokRestClient" module
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin

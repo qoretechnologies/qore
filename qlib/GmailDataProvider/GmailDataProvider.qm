@@ -36,7 +36,7 @@
 %requires MailMessage
 
 module GmailDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing a data provider API for Gmail REST cloud services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -196,8 +196,15 @@ module GmailDataProvider {
                 },
                 "delete_messages": <ActionOptionInfo>{
                     "display_name": "Delete Messages?",
-                    "short_desc": "Delete messages matched?",
-                    "desc": "Delete messages matched?",
+                    "short_desc": "Permanently delete each matched message after raising its event?",
+                    "desc": "Permanently delete each matched message after raising its event?\n\n"
+                        "**The message is deleted as soon as its event has been raised, whatever the event "
+                        "consumer then does with it.** A consumer that fails, times out, or is restarted "
+                        "mid-processing has already lost the only copy of the message, and a Gmail delete "
+                        "cannot be undone.\n\n"
+                        "For any workload that must not lose the source message, leave this option unset "
+                        "and use the `delete-message` or `trash-message` action from the consumer once "
+                        "processing has succeeded, with the `message_id` the event carries",
                     "type": AbstractDataProviderTypeMap."bool",
                 },
                 "poll_interval": <ActionOptionInfo>{
@@ -257,9 +264,17 @@ module GmailDataProvider {
                 },
                 "delete_messages": <ActionOptionInfo>{
                     "display_name": "Delete Messages?",
-                    "short_desc": "Delete messages matched?",
-                    "desc": "Delete messages matched? Note that all matched messages will be deleted, even if no "
-                        "attachments match the attachment criteria",
+                    "short_desc": "Permanently delete each matched message after raising its events?",
+                    "desc": "Permanently delete each matched message after raising its events? Every matched "
+                        "message is deleted, even one whose attachments all failed the attachment "
+                        "criteria and therefore raised no event at all.\n\n"
+                        "**The message is deleted as soon as its events have been raised, whatever the event "
+                        "consumer then does with them.** A consumer that fails, times out, or is restarted "
+                        "mid-processing has already lost the only copy of the attachment, and a Gmail delete "
+                        "cannot be undone.\n\n"
+                        "For any workload that must not lose the source message, leave this option unset "
+                        "and use the `delete-message` or `trash-message` action from the consumer once "
+                        "processing has succeeded, with the `message_id` each attachment event carries",
                     "type": AbstractDataProviderTypeMap."bool",
                 },
                 "ignore_case": <ActionOptionInfo>{
@@ -285,6 +300,65 @@ module GmailDataProvider {
                 },
             },
             "output_type": GmailAttachmentEventDataType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/messages/trash",
+            "action": "trash-message",
+            "display_name": "Move a Message to the Trash",
+            "short_desc": "Move a message to the trash, where it can still be recovered",
+            "desc": "Moves a message to the trash. The message leaves the mailbox but is recoverable "
+                "until Gmail purges the trash, which makes this the safe way to clear a message a "
+                "workflow has finished with.\n\n"
+                "Use this action from the consumer of a `watch` or `watch-attachment` event, with the "
+                "`message_id` the event carries, once processing has succeeded. Deleting from the watch "
+                "itself with `delete_messages` destroys the message as soon as the event is raised, "
+                "whether or not the consumer went on to succeed",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The ID of the message to move to the trash",
+                    "desc": "The ID of the message to move to the trash; watch events carry this value "
+                        "as `message_id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "18c6b13f059fc0bd",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    "users/messages/trash");
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/messages/delete",
+            "action": "delete-message",
+            "display_name": "Delete a Message",
+            "short_desc": "Permanently delete a message; this cannot be undone",
+            "desc": "Permanently deletes a message. **This cannot be undone**: the message does not go to "
+                "the trash and no copy remains, so use `trash-message` unless the message must be "
+                "destroyed immediately.\n\n"
+                "Use this action from the consumer of a `watch` or `watch-attachment` event, with the "
+                "`message_id` the event carries, once processing has succeeded. Deleting from the watch "
+                "itself with `delete_messages` destroys the message as soon as the event is raised, "
+                "whether or not the consumer went on to succeed.\n\n"
+                "The Gmail API returns no content for this call",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The ID of the message to delete permanently",
+                    "desc": "The ID of the message to delete permanently; watch events carry this value "
+                        "as `message_id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "18c6b13f059fc0bd",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GmailDataProvider::AppName,
@@ -328,6 +402,13 @@ module GmailDataProvider {
 
 
     @section gmaildataprovider_relnotes Release Notes
+
+    @subsection gmaildataprovider_v1_1 GmailDataProvider v1.1
+    - added the \c trash-message and \c delete-message actions, so a consumer can clear a source message
+      itself once it has finished processing it
+    - attachment watch events carry the \c message_id of the source message, so a consumer can address it
+    - documented that the \c delete_messages watch option deletes each matched message as soon as its
+      event has been raised, whatever the consumer then does with it
 
     @subsection gmaildataprovider_v1_0 GmailDataProvider v1.0
     - initial release of the module

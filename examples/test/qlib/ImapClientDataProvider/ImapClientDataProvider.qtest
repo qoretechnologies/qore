@@ -578,6 +578,23 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
                 sprintf("action %y does not set cls, which conflicts with a scheme-based app",
                     ai.action));
         }
+
+        # a watch that deletes what it reports must say that the deletion follows the event, not the
+        # consumer's success: a consumer that fails after delivery has already lost the message
+        foreach string name in (("watch", "watch-attachment")) {
+            hash<auto> opt = by_action{name}.options.delete_messages;
+            assertTrue(exists opt, sprintf("%y exposes the deletion option", name));
+            assertRegex("consumer", opt.desc,
+                sprintf("%y documents what a failing consumer loses", name));
+            assertRegex("uid", opt.desc,
+                sprintf("%y points at the event identity a consumer deletes with", name));
+        }
+
+        # ... and the actions that identity is used with must exist
+        foreach string name in (("set-flags", "move-messages")) {
+            assertTrue(exists by_action{name}.options.uids,
+                sprintf("action %y takes message UIDs", name));
+        }
     }
 
     #! Every action path must resolve to a child of the root provider

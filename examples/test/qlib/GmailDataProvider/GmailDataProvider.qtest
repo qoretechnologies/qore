@@ -34,6 +34,9 @@ public class GmailDataProviderTest inherits QUnit::Test {
         addTestCase("gmail test", \gmailTest());
         addTestCase("gmail watch poll interval from data context", \gmailWatchPollIntervalFromDataContextTest());
         addTestCase("gmail watch poll interval default", \gmailWatchPollIntervalDefaultTest());
+        addTestCase("gmail message clearing actions", \gmailMessageClearingActionTest());
+        addTestCase("gmail attachment events address their source message",
+            \gmailAttachmentEventSourceMessageTest());
 
         try {
             setupConnection();
@@ -92,6 +95,51 @@ public class GmailDataProviderTest inherits QUnit::Test {
             "q": "in:inbox",
         ));
         assertEq(120, provider.getPollIntervalSeconds());
+    }
+
+    #! A consumer must be able to clear a source message once it has processed it
+    /** Deleting from the watch itself destroys the message as soon as its event is raised, whether or not
+        the consumer went on to succeed, so a safe pattern needs first-class actions that take the message
+        ID the event carries.
+    */
+    gmailMessageClearingActionTest() {
+        hash<DataProviderActionInfo> trash = DataProviderActionCatalog::getAppAction(
+            GmailDataProvider::AppName, "trash-message"
+        );
+        assertEq("/messages/trash", trash.path);
+        assertEq(DPAT_API, trash.action_code);
+        assertEq(True, trash.options.hasKey("id"), "the trash action takes a message ID");
+        assertTrue(trash.options.id.required, "the message ID is required");
+
+        hash<DataProviderActionInfo> del = DataProviderActionCatalog::getAppAction(
+            GmailDataProvider::AppName, "delete-message"
+        );
+        assertEq("/messages/delete", del.path);
+        assertEq(DPAT_API, del.action_code);
+        assertEq(True, del.options.hasKey("id"), "the delete action takes a message ID");
+        assertTrue(del.options.id.required, "the message ID is required");
+        # the Gmail API returns no content for a permanent delete
+        assertEq(NOTHING, del.get_output_type);
+
+        # the watch options must say that their deletion is not gated on consumer success
+        hash<DataProviderActionInfo> watch = DataProviderActionCatalog::getAppAction(
+            GmailDataProvider::AppName, "watch"
+        );
+        assertTrue(watch.options.delete_messages.desc.find("consumer") >= 0,
+            "the watch deletion option describes what happens to a failing consumer");
+        hash<DataProviderActionInfo> watch_att = DataProviderActionCatalog::getAppAction(
+            GmailDataProvider::AppName, "watch-attachment"
+        );
+        assertTrue(watch_att.options.delete_messages.desc.find("consumer") >= 0,
+            "the attachment watch deletion option describes the same");
+    }
+
+    #! Every attachment event must identify the message it came from
+    gmailAttachmentEventSourceMessageTest() {
+        assertTrue(GmailAttachmentEventDataType.getFields().hasKey("message_id"),
+            "an attachment event declares the ID of its source message");
+        assertEq("*string", GmailAttachmentEventDataType.getFields().message_id.getType().getName(),
+            "the source message ID is optional so a future producer cannot break the watch loop");
     }
 
     private usageIntern() {
