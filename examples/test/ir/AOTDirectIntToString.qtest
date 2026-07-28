@@ -147,3 +147,70 @@ if (!is_file(measure_enabled) || !is_file(measure_disabled)
         measure_enabled_undefined, measure_disabled_undefined);
     exit(2);
 }
+
+string facts_source = root + "/facts.qr";
+string facts_enabled = root + "/facts-enabled";
+string facts_disabled = root + "/facts-disabled";
+File facts_file();
+facts_file.open2(facts_source, O_WRONLY | O_CREAT | O_TRUNC);
+facts_file.write("%modern
+int sub main() {
+    int total = 0;
+    for (int i = 1; i <= 10; ++i) {
+        total += string(i).size();
+        total += string(-i).length();
+    }
+    printf(\"%d\\n\", total);
+    return 0;
+}
+main();
+");
+facts_file.close();
+string facts_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, facts_source));
+string facts_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, facts_enabled, facts_source));
+string facts_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, facts_disabled, facts_source));
+string facts_enabled_output = is_file(facts_enabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, facts_enabled)) : "";
+string facts_disabled_output = is_file(facts_disabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, facts_disabled)) : "";
+string facts_enabled_measure = is_file(facts_enabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep ' qore_rt_int_to_string_measure$'",
+        facts_enabled)) : "";
+string facts_enabled_materialize = is_file(facts_enabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep ' qore_rt_int_to_string$'",
+        facts_enabled)) : "";
+string facts_disabled_measure = is_file(facts_disabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep ' qore_rt_int_to_string_measure$'",
+        facts_disabled)) : "";
+string facts_disabled_materialize = is_file(facts_disabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep ' qore_rt_int_to_string$'",
+        facts_disabled)) : "";
+if (!is_file(facts_enabled) || !is_file(facts_disabled)
+        || facts_enabled_output != facts_ast
+        || facts_disabled_output != facts_ast
+        || !facts_enabled_measure || facts_enabled_materialize
+        || !facts_disabled_measure || !facts_disabled_materialize) {
+    printf("unexpected read-only fact preservation:\nenabled compile:\n%s"
+        + "disabled compile:\n%senabled output:\n%sdisabled output:\n%s"
+        + "AST output:\n%senabled measure:\n%senabled materialize:\n%s"
+        + "disabled measure:\n%sdisabled materialize:\n%s",
+        facts_enabled_compile, facts_disabled_compile,
+        facts_enabled_output, facts_disabled_output, facts_ast,
+        facts_enabled_measure, facts_enabled_materialize,
+        facts_disabled_measure, facts_disabled_materialize);
+    exit(2);
+}

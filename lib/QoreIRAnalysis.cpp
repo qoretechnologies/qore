@@ -1888,6 +1888,14 @@ static bool qore_ir_is_hoistable_read_only_query(
     }
 }
 
+static bool qore_ir_preserves_read_only_pseudo_facts(
+        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+    return !std::getenv(
+            "QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION")
+        && inst.opcode == QoreIROpcode::DotEvalMethodDirect
+        && qore_ir_is_hoistable_read_only_query(func, inst);
+}
+
 struct QoreIRScalarUse {
     const QoreIRInstruction* inst = nullptr;
     size_t block_id = 0;
@@ -7268,7 +7276,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             known.clear();
             return true;
         }
-        if (!direct_call
+        bool read_only_pseudo =
+            qore_ir_preserves_read_only_pseudo_facts(func, *inst);
+        if (!direct_call && !read_only_pseudo
                 && qore_ir_instruction_may_invalidate_caller_caches(
                     func, inst)) {
             const LocalVar* written = qore_ir_get_written_local(inst);
@@ -7508,7 +7518,9 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             known.clear();
             return true;
         }
-        if (!direct_call
+        bool read_only_pseudo =
+            qore_ir_preserves_read_only_pseudo_facts(func, *inst);
+        if (!direct_call && !read_only_pseudo
                 && qore_ir_instruction_may_invalidate_caller_caches(
                     func, inst)) {
             const LocalVar* written = qore_ir_get_written_local(inst);
@@ -7908,7 +7920,9 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             known.clear();
             return true;
         }
-        if (!direct_call
+        bool read_only_pseudo =
+            qore_ir_preserves_read_only_pseudo_facts(func, *inst);
+        if (!direct_call && !read_only_pseudo
                 && qore_ir_instruction_may_invalidate_caller_caches(
                     func, inst)) {
             const LocalVar* written = qore_ir_get_written_local(inst);
@@ -11929,6 +11943,8 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             if (direct_call && (!callee || has_ref_args)) {
                 local_facts.clear();
             } else if (!direct_call
+                    && !qore_ir_preserves_read_only_pseudo_facts(
+                        func, *inst)
                     && qore_ir_instruction_may_invalidate_caller_caches(
                         func, inst)) {
                 const LocalVar* written = qore_ir_get_written_local(inst);
