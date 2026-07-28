@@ -23,18 +23,17 @@ public class SalesforceRestDataProviderTest inherits QUnit::Test {
             "create", "find_single", "find", "update", "upsert", "delete",
         );
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProviderActionCatalog::getActions("Salesforce");
-        hash<string, bool> found;
-        for (int i = 0; i < actions.size(); ++i) {
-            hash<DataProviderActionInfo> action = actions[i];
-            assertTrue(action.data_dependent_options,
-                sprintf("action %y has data_dependent_options", action.action));
-            found{action.action} = True;
+        # NOTE: the action catalog is global and open to other modules; getActions() also loads any
+        # installed module registering actions against this app (ex: SalesforcePubSubDataProvider in
+        # module-grpc registers "pubsub-event" here), so only this module's own actions are checked
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions("Salesforce")) {
+            action_map{action.action} = action;
         }
-        for (int i = 0; i < expected_actions.size(); ++i) {
-            assertTrue(found{expected_actions[i]},
-                sprintf("action %y is registered", expected_actions[i]));
+        foreach string action_name in (expected_actions) {
+            assertTrue(action_map.hasKey(action_name), sprintf("action %y is registered", action_name));
+            assertTrue(action_map{action_name}.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action_name));
         }
     }
 }
