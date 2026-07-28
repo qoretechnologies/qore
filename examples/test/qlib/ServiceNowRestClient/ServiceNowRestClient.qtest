@@ -575,7 +575,20 @@ class ServiceNowTest inherits QUnit::Test {
     }
 
     connectionTest() {
-        string url = "snrests://localhost:8080";
+        # The ping below is a negative test and requires a port that refuses connections.  A hard-coded port
+        # cannot provide that - port 8080 in particular is in use on many developer machines, and connecting to
+        # whatever is listening there produces an unrelated error (an SSL handshake failure against a plain HTTP
+        # server, for example) instead of the connection failure the test is checking for.
+        #
+        # Bind a port without listening on it instead: the kernel answers connects to a bound-but-not-listening
+        # socket with ECONNREFUSED, and holding the binding for the duration of the test guarantees that no other
+        # process can take the port in between.  This is deterministic; picking a free port and releasing it
+        # would leave a window for someone else to bind it.
+        Socket refuser();
+        refuser.bind("localhost:0");
+        on_exit refuser.close();
+        string url = sprintf("snrests://localhost:%d", refuser.getSocketInfo().port);
+
         ServiceNowRestConnection swsc("test", "test", url, {}, {
             "oauth2_grant_type": "password",
             "oauth2_client_id": "x",
@@ -614,8 +627,8 @@ class ServiceNowTest inherits QUnit::Test {
             "username": "x",
             "password": "x",
         });
-        assertEq("https://localhost:8080/oauth_auth.do?scope=&redirect_uri=auto&client_id=x&response_type=code",
-            swsc.getAuthorizationCodeRequest());
+        assertEq(sprintf("https://localhost:%d/oauth_auth.do?scope=&redirect_uri=auto&client_id=x&"
+            "response_type=code", refuser.getSocketInfo().port), swsc.getAuthorizationCodeRequest());
     }
 }
 

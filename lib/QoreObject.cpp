@@ -653,10 +653,13 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
                 return;
             }
 
-            // check type compatibility and perform type translations, if any
+            // check type compatibility and perform type translations, if any; the outcome must reflect only this
+            // type check (see ScopedTypeCheckSink), otherwise a caller with a long-lived sink has the merge
+            // silently abandoned partway through
             ValueHolder qv(hi.getReferenced(), xsink);
-            QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, xsink);
-            if (*xsink) {
+            ScopedTypeCheckSink ts(xsink);
+            QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts);
+            if (ts.raised()) {
                 return;
             }
 
