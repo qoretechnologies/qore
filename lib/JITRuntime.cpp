@@ -15477,8 +15477,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // so it must establish the callee frame itself, like qore_rt_call_method_fast().
     ThreadFrameBoundaryHelper tfbh(true);
 
-    // Push self object onto the method call stack (for runtime_get_stack_object())
-    ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));
+    // Inherited methods can be synthesized on a derived class to satisfy an
+    // abstract sibling slot. Use the class where the executable variant body
+    // was defined so private:internal member access has the correct context.
+    ObjectSubstitutionHelper osh(o, METHV_const(variant)->getClassPriv());
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
