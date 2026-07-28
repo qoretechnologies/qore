@@ -1077,9 +1077,14 @@ public:
         return (bool)om;
     }
 
-    DLLLOCAL void assign(QoreValue v, ExceptionSink* xsink);
+    //! assigns the value to the key; returns 0 for OK, -1 if THIS assignment failed
+    /** the return value reflects only this assignment; it is not derived from the state of \a xsink, which may
+        already hold an unrelated exception when a caller reuses a long-lived sink
+    */
+    DLLLOCAL int assign(QoreValue v, ExceptionSink* xsink);
 
-    DLLLOCAL void assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink);
+    //! assigns the value to the key; returns 0 for OK, -1 if THIS assignment failed (see the overload above)
+    DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
     DLLLOCAL QoreValue swap(QoreValue v) {
         return swapImpl(v);

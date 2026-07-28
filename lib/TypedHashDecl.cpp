@@ -829,9 +829,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             bool exists;
             ValueHolder val(hi->getReferencedKeyValueIntern(i.first, exists), xsink);
             if (exists) {
-                // check types
-                QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, xsink);
-                if (*xsink) {
+                // the outcome must reflect only this type check; see ScopedTypeCheckSink.  Without this a caller
+                // reusing a long-lived sink gets an unpopulated hashdecl with no failure of its own
+                ScopedTypeCheckSink ts(xsink);
+                QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts);
+                if (ts.raised()) {
                     return -1;
                 }
                 qore_hash_private* h_priv = qore_hash_private::get(*h);
@@ -871,8 +873,10 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             // acceptInputComplexList/Hash creates a copy and discards the original, not just
             // explicit filter maps
             val.ensureReferencedValue();
-            QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, xsink);
-            if (*xsink) {
+            // see the acceptInputKey() call above
+            ScopedTypeCheckSink ts(xsink);
+            QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, *ts);
+            if (ts.raised()) {
                 return -1;
             }
 

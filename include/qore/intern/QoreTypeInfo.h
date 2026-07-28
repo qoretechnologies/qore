@@ -39,6 +39,7 @@
 #include <utility>
 #include <functional>
 #include <atomic>
+#include <memory>
 
 #include "qore/intern/QoreTypeSpec.h"
 
@@ -4100,6 +4101,74 @@ DLLLOCAL const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLo
 
 //! Returns true if @a ti is an AOT deferred type import placeholder.
 DLLLOCAL bool qore_type_info_is_aot_deferred(const QoreTypeInfo* ti);
+
+//! Selects the ExceptionSink to use for a type-acceptance call so that the call's own outcome can be determined
+/** The type-acceptance calls (QoreTypeInfo::acceptInputKey(), acceptInputMember(), acceptAssignment(), ...) return
+    \c void and report failure only through the sink, so callers must test the sink afterwards to find out whether
+    the value was accepted.  That test is wrong whenever the sink already holds an unrelated exception on entry -
+    and C++ callers that reuse a long-lived sink (ex: the async I/O thread, which uses one sink for an entire
+    event-loop iteration) routinely present one.  Such a caller then reads its own successful assignment as a
+    failure and silently drops the value: partially-populated hashdecls and typed lists with missing elements,
+    with no error reported anywhere.
+
+    This helper hands back the caller's sink unchanged when it is clean - the common case, with no allocation -
+    and a temporary sink when it is not; the temporary is assimilated into the caller's sink on destruction, so
+    a real failure still reaches the caller in the usual way.
+
+    @code
+    ScopedTypeCheckSink ts(xsink);
+    QoreTypeInfo::acceptInputKey(ti, key, *val, *ts);
+    if (ts.raised()) {
+        (*ts)->appendLastDescription(" (while assigning to '%s')", name);
+        return -1;
+    }
+    @endcode
+
+    @since %Qore 3.0
+*/
+class ScopedTypeCheckSink {
+public:
+    //! Creates the helper for a type-acceptance call reporting into \a xs
+    /** @param xs the caller's sink; may be nullptr, in which case no failure can be reported at all (as before)
+    */
+    DLLLOCAL ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
+        // only allocate on the slow path: with a clean sink, any exception raised below is unambiguously ours
+        if (xs && *xs) {
+            tmp.reset(new ExceptionSink);
+        }
+    }
+
+    DLLLOCAL ~ScopedTypeCheckSink() {
+        if (tmp) {
+            assert(xsink);
+            // assimilate() empties tmp, so ~ExceptionSink() has nothing left to report
+            xsink->assimilate(*tmp);
+        }
+    }
+
+    ScopedTypeCheckSink(const ScopedTypeCheckSink&) = delete;
+    ScopedTypeCheckSink& operator=(const ScopedTypeCheckSink&) = delete;
+
+    //! Returns the sink to pass to the type-acceptance call
+    /** @return the sink to use; nullptr only when the caller passed nullptr
+    */
+    DLLLOCAL ExceptionSink* operator*() const {
+        return tmp ? tmp.get() : xsink;
+    }
+
+    //! Returns @ref true "true" if the type-acceptance call raised an exception
+    /** @return true if this call failed; unaffected by any exception the caller's sink held on entry
+    */
+    DLLLOCAL bool raised() const {
+        ExceptionSink* xs = tmp ? tmp.get() : xsink;
+        return xs && *xs;
+    }
+
+private:
+    ExceptionSink* xsink;
+    //! only allocated when the caller's sink already held an exception on entry
+    std::unique_ptr<ExceptionSink> tmp;
+};
 
 #include "qore/intern/QoreParseTypeInfo.h"
 

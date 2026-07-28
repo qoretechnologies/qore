@@ -1269,8 +1269,22 @@ private:
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
 
     //! Build a result hash
-    DLLLOCAL static QoreHashNode* buildResultHash(PollInfo& pinfo, bool canceled,
+    /** @note not static: a failure to populate the hash is logged through the controller's logger
+    */
+    DLLLOCAL QoreHashNode* buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink);
+
+    //! Logs and clears any exception left in a long-lived ExceptionSink
+    /** The I/O thread reuses a single ExceptionSink for an entire loop iteration.  An exception left pending in
+        it by one operation would otherwise stay there for the rest of the iteration, where it is both invisible
+        (nothing reports it) and harmful: typed-hash key assignment and several other helpers report failure
+        through the sink and cannot distinguish a pre-existing exception from their own.  Call this at phase
+        boundaries so a stray exception is reported once and cannot leak into unrelated work.
+
+        @param phase a short description of the phase that raised the exception, used in the log message
+        @param xsink the sink to drain; may be nullptr or empty, in which case this is a no-op
+    */
+    DLLLOCAL void logAndClearStrayException(const char* phase, ExceptionSink* xsink) const;
 
     //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,

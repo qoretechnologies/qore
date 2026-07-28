@@ -106,6 +106,14 @@ public hashdecl DefaultChild inherits DefaultBase {
 
 *string sub str_test() {}
 
+#! Class with typed members, for the object member merge path
+class TypedMembers {
+    public {
+        int i = 0;
+        string str = "";
+    }
+}
+
 class HashDeclTest inherits QUnit::Test {
     constructor() : QUnit::Test("HashDecl test", "1.0") {
         addTestCase("issue 3654", \issue3654());
@@ -117,7 +125,75 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("complex type defaults", \testComplexTypeDefaults());
         addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
         addTestCase("typed hash cast with overrides", \testTypedHashCastWithOverrides());
+        addTestCase("typed container runtime assignment", \testTypedContainerRuntimeAssignment());
         set_return_value(main());
+    }
+
+    #! Runtime type checking of typed-container assignment
+    /** The type-acceptance calls behind hashdecl key assignment, complex hash/list element assignment and
+        hashdecl initialization report failure only through the ExceptionSink, so they must report the outcome
+        of the assignment itself and nothing else.  Getting this wrong drops values silently, so cover both
+        outcomes: an accepted value must actually be stored, and a rejected one must still raise.
+    */
+    testTypedContainerRuntimeAssignment() {
+        # hashdecl key assignment: the value must be stored, not silently dropped
+        hash<Container> c();
+        c.i = auto_value(42);
+        c.str = auto_value("stored");
+        assertEq(42, c.i, "hashdecl int key assigned at runtime");
+        assertEq("stored", c.str, "hashdecl string key assigned at runtime");
+
+        # ... and a value of the wrong type must still be rejected
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            hash<Container> bad();
+            bad.i = auto_value(new Mutex());
+        }, NOTHING, "hashdecl key rejects an incompatible value");
+
+        # hashdecl initialization from an init hash
+        hash<Container> init = cast<hash<Container>>(auto_value({"i": 7, "str": "init"}));
+        assertEq(7, init.i, "hashdecl initialized from an init hash");
+        assertEq("init", init.str, "hashdecl string initialized from an init hash");
+
+        # complex hash element assignment
+        hash<string, int> ch();
+        ch.one = auto_value(1);
+        ch.two = auto_value(2);
+        assertEq({"one": 1, "two": 2}, ch, "complex hash elements assigned at runtime");
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            hash<string, int> bad();
+            bad.x = auto_value(new Mutex());
+        }, NOTHING, "complex hash element rejects an incompatible value");
+
+        # complex list element assignment
+        list<string> sl();
+        sl += auto_value("a");
+        sl += auto_value("b");
+        assertEq(("a", "b"), sl, "complex list elements assigned at runtime");
+
+        # ... including the conversion branch, where the value's type does not already match the element type
+        list<softstring> fl();
+        fl += auto_value(5);
+        assertEq(("5",), fl, "complex list element converted at runtime");
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            list<int> bad();
+            bad += auto_value(1);
+            bad += auto_value(new Mutex());
+        }, NOTHING, "complex list element rejects an incompatible value");
+
+        # object member merge: every member of the merged hash must be applied
+        TypedMembers tm();
+        tm += {"i": auto_value(11), "str": auto_value("merged")};
+        assertEq(11, tm.i, "object int member merged");
+        assertEq("merged", tm.str, "object string member merged");
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            TypedMembers bad();
+            bad += {"i": auto_value(new Mutex())};
+        }, NOTHING, "object member merge rejects an incompatible value");
+    }
+
+    #! Returns the argument with its type erased, to defer type checking to runtime
+    static auto auto_value(auto v) {
+        return v;
     }
 
     issue3654() {

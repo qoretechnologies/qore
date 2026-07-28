@@ -245,9 +245,12 @@ public:
         @param value the value to assign to the key, must be already referenced for the assignment
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return 0 for OK, -1 if a Qore-language exception was thrown
+        @return 0 for OK, -1 if the assignment itself failed (an unknown hashdecl key or an incompatible value
+        type); the return value reflects only this assignment and is not derived from the state of \a xsink, which
+        may already hold an unrelated exception when the caller reuses a long-lived sink
 
-        @note the assignment is made even if an exception occurs when dereferencing the old value
+        @note the assignment is made even if an exception occurs when dereferencing the old value; such an
+        exception is added to \a xsink but does not make this method return -1
 
         @since %Qore 0.8.13
     */
@@ -259,9 +262,12 @@ public:
         @param value the value to assign to the key, must be already referenced for the assignment
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return 0 for OK, -1 if a Qore-language exception was thrown
+        @return 0 for OK, -1 if the assignment itself failed (an unknown hashdecl key or an incompatible value
+        type); the return value reflects only this assignment and is not derived from the state of \a xsink, which
+        may already hold an unrelated exception when the caller reuses a long-lived sink
 
-        @note the assignment is made even if an exception occurs when dereferencing the old value
+        @note the assignment is made even if an exception occurs when dereferencing the old value; such an
+        exception is added to \a xsink but does not make this method return -1
 
         @since %Qore 0.8.13
     */

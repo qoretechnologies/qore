@@ -525,18 +525,29 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 if (hash_xsink) {
                     xsink->assimilate(hash_xsink);
                 } else {
+                    // assign through the temporary sink as well; see buildResultHash() for why the caller's
+                    // (long-lived) sink must not be used for typed-hash key assignment
+                    int rc = 0;
                     if (cmd.submit_sock_obj) {
-                        r->setKeyValue("sock",
-                            cmd.submit_sock_obj->refSelf(), xsink);
+                        rc |= r->setKeyValue("sock",
+                            cmd.submit_sock_obj->refSelf(), &hash_xsink);
                     }
                     if (cmd.submit_spop_obj) {
-                        r->setKeyValue("spop",
-                            cmd.submit_spop_obj->refSelf(), xsink);
+                        rc |= r->setKeyValue("spop",
+                            cmd.submit_spop_obj->refSelf(), &hash_xsink);
                     }
-                    r->setKeyValue("canceled", true, xsink);
+                    rc |= r->setKeyValue("canceled", true, &hash_xsink);
                     if (cmd.submit_other) {
-                        r->setKeyValue("other",
-                            cmd.submit_other->refSelf(), xsink);
+                        rc |= r->setKeyValue("other",
+                            cmd.submit_other->refSelf(), &hash_xsink);
+                    }
+                    if (rc) {
+                        QoreStringValueHelper err(hash_xsink.getExceptionErr());
+                        QoreStringValueHelper desc(hash_xsink.getExceptionDesc());
+                        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to populate the canceled result "
+                            "hash for an abandoned command (owner: '%s'): %s: %s", cmd.owner.c_str(),
+                            *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+                        hash_xsink.clear();
                     }
                     result = r.release();
                 }
@@ -1434,6 +1445,26 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // competing with the main cleanup thread's module destruction.
         if (async_item.pgm) {
             async_item.pgm->depDeref();
+        }
+
+        // The worker's ExceptionSink is long-lived (one per worker thread, cleared only when the worker
+        // exits), while the derefs above can run arbitrary Qore destructors that raise into it.  An
+        // exception left pending here would stay for every subsequent work item, where it is invisible and
+        // can be mistaken for a failure by any helper that reports through the sink.  Report it once and
+        // clear it so each work item starts from a clean sink.
+        if (*xsink) {
+            QoreStringValueHelper err(xsink->getExceptionErr());
+            QoreStringValueHelper desc(xsink->getExceptionDesc());
+            if (ctrl) {
+                ctrl->log(QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::workerLoop() discarding an exception "
+                    "left pending by %s cleanup: %s: %s", getDispatchTypeName(async_item.type),
+                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            } else {
+                fprintf(stderr, "QoreCallDispatcher::workerLoop() discarding an exception left pending by "
+                    "%s cleanup: %s: %s\n", getDispatchTypeName(async_item.type),
+                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            }
+            xsink->clear();
         }
     }
 }
@@ -3940,6 +3971,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         if (processCommands(t, xsink)) {
             break;  // Quit command received
         }
+        // An exception left pending here (ex: an object destructor run while a canceled command's PollInfo is
+        // cleaned up) would otherwise persist for the rest of this iteration, where helpers that report failure
+        // through the sink - typed-hash key assignment above all - cannot tell it apart from their own failure
+        logAndClearStrayException("command processing", xsink);
 
         // Snapshot THIS THREAD'S submit_seq AFTER processCommands drained the
         // cmdq: this is the number of submits actually delivered to this thread
@@ -4243,6 +4278,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
+        // Phase 1 registers/unregisters fds with the EventLoop, which raises EVENT-LOOP-ERROR when a socket has
+        // been closed concurrently; drain it here so it cannot corrupt Phase 3's result hashes
+        logAndClearStrayException("the Phase 1 snapshot", xsink);
+
         // --- PHASE 2: continuePoll outside lock ---
         // Pure C++ poll operations run directly on the I/O thread via
         // spop_base->continuePoll(). Qore-language poll operations and C++
@@ -4482,12 +4521,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             poll_results.push_back(std::move(result));
         }
 
+        // Phase 2 collects per-operation exceptions into each PollResult's ex_hash; anything left in the shared
+        // sink belongs to no operation and must not follow us into Phase 3's result-hash construction
+        logAndClearStrayException("a Phase 2 continuePoll()", xsink);
+
         // --- PHASE 3: Update cache (I/O-thread-only) + deferred delivery ---
         std::vector<DeferredDelivery> deferred_deliveries;
         bool do_autostop = false;
 
         {
             for (auto& result : poll_results) {
+                // one operation's teardown (socket close, PollInfo cleanup, Qore destructors) must not leave an
+                // exception pending for the operations processed after it in this same batch
+                logAndClearStrayException("a completed operation's teardown", xsink);
                 auto it = t.cache.find(result.key);
                 if (it == t.cache.end()) {
                     // Operation was canceled during Phase 2
@@ -6227,9 +6273,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         // The locked cmdq check below decides whether a command arrived while
         // we were processing or acknowledging the current batch.
         t.notifier->acknowledge(xsink);
-        if (*xsink) {
-            xsink->clear();
-        }
+        // this clear also catches anything left pending by the command batch above; report it rather than
+        // discarding it silently - a stray exception here is what silently corrupted result hashes before
+        logAndClearStrayException("a command or the notifier acknowledge", xsink);
 
         // Check if new commands arrived during processing/acknowledge.  This
         // must use the same mutex as producers; otherwise we can drain the
@@ -7075,29 +7121,56 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
     }
 }
 
+void AsyncIoControllerPriv::logAndClearStrayException(const char* phase, ExceptionSink* xsink) const {
+    if (!xsink || !*xsink) {
+        return;
+    }
+    QoreStringValueHelper err(xsink->getExceptionErr());
+    QoreStringValueHelper desc(xsink->getExceptionDesc());
+    log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: discarding an exception left pending by %s: %s: %s", phase,
+        *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+    xsink->clear();
+}
+
 QoreHashNode* AsyncIoControllerPriv::buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink) {
-    // use a temporary ExceptionSink for hash construction to avoid interference from pre-existing exceptions
+    // use a temporary ExceptionSink for hash construction AND for every key assignment; the caller's sink is a
+    // long-lived one (the I/O thread reuses a single sink for an entire loop iteration), so it can already hold
+    // an unrelated exception on entry.  Key assignment must never be silently skipped here: a partially
+    // populated result reaches onComplete() as a completion with no "sock"/"canceled"/"ex", which the Qore-level
+    // callbacks read as a successful completion of nothing at all - the connection is then simply dropped
     ExceptionSink hash_xsink;
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(hashdeclSocketPollResultInfo, &hash_xsink), xsink);
     if (hash_xsink) {
         xsink->assimilate(hash_xsink);
         return nullptr;
     }
+    int rc = 0;
     if (pinfo.sock_obj) {
-        result->setKeyValue("sock", pinfo.sock_obj->refSelf(), xsink);
+        rc |= result->setKeyValue("sock", pinfo.sock_obj->refSelf(), &hash_xsink);
     }
     if (pinfo.spop_obj) {
-        result->setKeyValue("spop", pinfo.spop_obj->refSelf(), xsink);
+        rc |= result->setKeyValue("spop", pinfo.spop_obj->refSelf(), &hash_xsink);
     }
     if (canceled) {
-        result->setKeyValue("canceled", true, xsink);
+        rc |= result->setKeyValue("canceled", true, &hash_xsink);
     }
     if (ex_hash) {
-        result->setKeyValue("ex", ex_hash->refSelf(), xsink);
+        rc |= result->setKeyValue("ex", ex_hash->refSelf(), &hash_xsink);
     }
     if (pinfo.other) {
-        result->setKeyValue("other", pinfo.other->refSelf(), xsink);
+        rc |= result->setKeyValue("other", pinfo.other->refSelf(), &hash_xsink);
     }
+    if (rc) {
+        // must not happen: the member types are fixed and the values always match them.  Report it rather than
+        // delivering a malformed completion silently; the result is still returned so that the deliver-exactly-once
+        // invariant holds and any waiter is released
+        QoreStringValueHelper err(hash_xsink.getExceptionErr());
+        QoreStringValueHelper desc(hash_xsink.getExceptionDesc());
+        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to populate the result hash for an operation "
+            "(owner: '%s'): %s: %s; delivering an incomplete completion", pinfo.owner.c_str(),
+            *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+    }
+    hash_xsink.clear();
     return result.release();
 }

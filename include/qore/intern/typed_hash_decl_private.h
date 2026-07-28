@@ -242,12 +242,17 @@ public:
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
         const HashDeclMemberInfo* mem = findMember(key);
         if (!mem) {
-            xsink->raiseException("HASHDECL-KEY-ERROR", "cannot assign unknown key '%s' to hashdecl '%s'", key, name.c_str());
+            if (xsink) {
+                xsink->raiseException("HASHDECL-KEY-ERROR", "cannot assign unknown key '%s' to hashdecl '%s'", key,
+                    name.c_str());
+            }
             return -1;
         }
-        QoreTypeInfo::acceptInputKey(mem->getTypeInfo(), key, *val, xsink);
-        if (*xsink) {
-            xsink->appendLastDescription(" (while assigning to hashdecl '%s')", name.c_str());
+        // the outcome must reflect only this type check; see ScopedTypeCheckSink
+        ScopedTypeCheckSink ts(xsink);
+        QoreTypeInfo::acceptInputKey(mem->getTypeInfo(), key, *val, *ts);
+        if (ts.raised()) {
+            (*ts)->appendLastDescription(" (while assigning to hashdecl '%s')", name.c_str());
             return -1;
         }
         return 0;

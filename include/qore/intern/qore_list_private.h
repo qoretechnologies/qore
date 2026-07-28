@@ -212,10 +212,13 @@ struct qore_list_private {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
             if (QoreTypeInfo::hasType(vti) && !QoreTypeInfo::superSetOf(vti, holder->getTypeInfo())) {
                 QoreValue v(holder.release());
-                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, xsink);
+                // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
+                // with a long-lived sink silently drops elements after an unrelated error
+                ScopedTypeCheckSink ts(xsink);
+                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts);
                 holder = v;
-                if (xsink && *xsink) {
-                    xsink->appendLastDescription(" (while converting types for list<%s> subtype)",
+                if (ts.raised()) {
+                    (*ts)->appendLastDescription(" (while converting types for list<%s> subtype)",
                         QoreTypeInfo::getName(vti));
                     return -1;
                 }
@@ -232,11 +235,13 @@ struct qore_list_private {
         switch (holder->getType()) {
             case NT_LIST:
             case NT_HASH: {
+                // the outcome must reflect only this strip (the deref of the old value); see checkVal() above
+                ScopedTypeCheckSink ts(xsink);
                 {
-                    ValueHolder v(holder.release(), xsink);
+                    ValueHolder v(holder.release(), *ts);
                     holder = copy_strip_complex_types(*v);
                 }
-                return xsink && *xsink ? -1 : 0;
+                return ts.raised() ? -1 : 0;
             }
             default:
                 break;

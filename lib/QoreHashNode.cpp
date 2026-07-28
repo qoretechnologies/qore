@@ -601,8 +601,9 @@ void QoreHashNode::removeKey(const QoreString* key, ExceptionSink* xsink) {
 int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* xsink) {
     assert(reference_count() == 1);
     hash_assignment_priv ha(*priv, key);
-    ha.assign(value, xsink);
-    return xsink && *xsink ? -1 : 0;
+    // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
+    // whenever the caller's sink already held an unrelated exception
+    return ha.assign(value, xsink);
 }
 
 int QoreHashNode::setKeyValue(const QoreString& key, QoreValue value, ExceptionSink* xsink) {
@@ -994,9 +995,8 @@ int HashIterator::assign(QoreValue val, ExceptionSink* xsink) {
     assert(h->is_unique());
 
     hash_assignment_priv ha(*h->priv, *(priv->i));
-    ha.assign(val, xsink);
-
-    return *xsink ? -1 : 0;
+    // report the outcome of THIS assignment; see QoreHashNode::setKeyValue()
+    return ha.assign(val, xsink);
 }
 
 QoreValue HashIterator::removeKeyValue() {
@@ -1245,19 +1245,20 @@ QoreValue hash_assignment_priv::swapImpl(QoreValue v) {
     return old;
 }
 
-void hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
+int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
         if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
-            return;
+            return -1;
         }
     } else if (h.complexTypeInfo) {
+        // the outcome must reflect only this type check; see ScopedTypeCheckSink.  This also allows the function
+        // to be called with xsink = nullptr without dereferencing it
+        ScopedTypeCheckSink ts(xsink);
         QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
-            *val, xsink);
-        // allow this function to be called with xsink = nullptr, otherwise the *xsink will assert
-        // anyway if there is an exception it would dump core when the exception is raised
-        if (xsink && *xsink) {
-            return;
+            *val, *ts);
+        if (ts.raised()) {
+            return -1;
         }
     } else {
         // perform type stripping
@@ -1266,21 +1267,22 @@ void hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
     }
 
     swapImpl(val.release()).discard(xsink);
+    return 0;
 }
 
-void hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink) {
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
         if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
-            return;
+            return -1;
         }
     } else if (h.complexTypeInfo) {
+        // see the same block in the overload above
+        ScopedTypeCheckSink ts(xsink);
         QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
-            *val, xsink);
-        // allow this function to be called with xsink = nullptr, otherwise the *xsink will assert
-        // anyway if there is an exception it would dump core when the exception is raised
-        if (xsink && *xsink) {
-            return;
+            *val, *ts);
+        if (ts.raised()) {
+            return -1;
         }
     } else {
         // perform type stripping
@@ -1289,6 +1291,7 @@ void hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSi
     }
 
     sdh.deref(swapImpl(val.release()));
+    return 0;
 }
 
 QoreValue hash_assignment_priv::getImpl() const {
