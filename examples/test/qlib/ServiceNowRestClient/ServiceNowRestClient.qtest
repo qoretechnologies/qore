@@ -575,19 +575,26 @@ class ServiceNowTest inherits QUnit::Test {
     }
 
     connectionTest() {
-        # The ping below is a negative test and requires a port that refuses connections.  A hard-coded port
+        # The ping below is a negative test and requires a port where nothing is listening.  A hard-coded port
         # cannot provide that - port 8080 in particular is in use on many developer machines, and connecting to
         # whatever is listening there produces an unrelated error (an SSL handshake failure against a plain HTTP
         # server, for example) instead of the connection failure the test is checking for.
         #
-        # Bind a port without listening on it instead: the kernel answers connects to a bound-but-not-listening
-        # socket with ECONNREFUSED, and holding the binding for the duration of the test guarantees that no other
-        # process can take the port in between.  This is deterministic; picking a free port and releasing it
-        # would leave a window for someone else to bind it.
-        Socket refuser();
-        refuser.bind("localhost:0");
-        on_exit refuser.close();
-        string url = sprintf("snrests://localhost:%d", refuser.getSocketInfo().port);
+        # Ask the kernel for an unused ephemeral port and release it again.  Holding the socket bound without
+        # listening was tried first and is not portable: on Darwin a connect to a bound-but-not-listening socket
+        # is not refused promptly, so the ping produced an unexpected error after several seconds.  Binding and
+        # releasing leaves the same "nothing is listening here" condition on every platform.
+        int port;
+        {
+            Socket probe();
+            probe.bind("localhost:0");
+            port = probe.getSocketInfo().port;
+            probe.close();
+        }
+        # a platform that does not report the bound ephemeral port would silently turn this into a test of some
+        # other port, so check it rather than letting the ping fail for an unrelated reason
+        assertGt(0, port, "an ephemeral port was reserved for the negative ping test");
+        string url = sprintf("snrests://localhost:%d", port);
 
         ServiceNowRestConnection swsc("test", "test", url, {}, {
             "oauth2_grant_type": "password",
@@ -607,9 +614,13 @@ class ServiceNowTest inherits QUnit::Test {
         hash<PingInfo> ping = swsc.ping();
         assertEq("test", ping.name);
         assertFalse(ping.ok);
+        # report the error that was actually raised; "Expected: True, Actual: False" alone gives a failure on a
+        # platform whose connect fails differently no way of saying which error it produced
         assertTrue(ping.ex.err == "SOCKET-SSL-ERROR" || ping.ex.err == "SOCKET-CONNECT-ERROR"
             || ping.ex.err == "QOREADDRINFO-GETINFO-ERROR" || ping.ex.err == "SOCKET-TIMEOUT"
-            || ping.ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ping.ex.err == "HTTPCLIENT-TIMEOUT");
+            || ping.ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ping.ex.err == "HTTPCLIENT-TIMEOUT",
+            sprintf("ping to unused port %d failed with a connection error (got %y: %y)", port, ping.ex.err,
+                ping.ex.desc));
 
         assertThrows("CONNECTION-OPTION-ERROR", sub () {
             ServiceNowRestConnection swsc1("test", "test", url, {"monitor": True}, {"x": 1});
@@ -628,7 +639,7 @@ class ServiceNowTest inherits QUnit::Test {
             "password": "x",
         });
         assertEq(sprintf("https://localhost:%d/oauth_auth.do?scope=&redirect_uri=auto&client_id=x&"
-            "response_type=code", refuser.getSocketInfo().port), swsc.getAuthorizationCodeRequest());
+            "response_type=code", port), swsc.getAuthorizationCodeRequest());
     }
 }
 
