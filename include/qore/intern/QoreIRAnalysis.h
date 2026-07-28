@@ -340,6 +340,15 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
 //! consumer is string size() or length().
 size_t qore_ir_fuse_native_int_string_measure_consumers(QoreIRFunction& func);
 
+using QoreIRObjectIntStringMeasureQuery = std::function<bool(
+    const QoreIRDotEvalMethodDirectInstruction*, int8_t&)>;
+
+//! Fuse an exact explicit-receiver string(int-param) method with a sole
+//! size() or length() consumer.
+size_t qore_ir_fuse_object_int_string_measure_consumers(
+    QoreIRFunction& func,
+    const QoreIRObjectIntStringMeasureQuery& is_supported);
+
 //! Fuse exact string case transformations with supported sole consumers.
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
 

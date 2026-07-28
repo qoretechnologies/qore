@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-explicit-object-string-measure-"
+    + string(getpid());
+mkdir(root);
+
+string hot_source = root + "/hot.qr";
+string hot_enabled = root + "/hot-enabled";
+string hot_fusion_disabled = root + "/hot-fusion-disabled";
+string hot_facts_disabled = root + "/hot-facts-disabled";
+File hot_file();
+hot_file.open2(hot_source, O_WRONLY | O_CREAT | O_TRUNC);
+hot_file.write("%modern
+final class Formatter {
+    string format(int value) {
+        return string(value);
+    }
+}
+
+int sub main() {
+    Formatter formatter();
+    int total = 0;
+    for (int i = 1; i <= 20; ++i) {
+        total += formatter.format(i).length();
+    }
+    printf(\"%d\\n\", total);
+    return 0;
+}
+
+main();
+");
+hot_file.close();
+
+string hot_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, hot_source));
+string hot_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, hot_enabled, hot_source));
+string hot_fusion_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_AOT_OBJECT_INT_STRING_MEASURE_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, hot_fusion_disabled, hot_source));
+string hot_facts_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, hot_facts_disabled, hot_source));
+if (!is_file(hot_enabled) || !is_file(hot_fusion_disabled)
+        || !is_file(hot_facts_disabled)) {
+    printf("compile failed:\nenabled:\n%sfusion disabled:\n%s"
+        + "facts disabled:\n%s", hot_enabled_compile,
+        hot_fusion_disabled_compile, hot_facts_disabled_compile);
+    exit(2);
+}
+
+string hot_enabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_enabled));
+string hot_fusion_disabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_fusion_disabled));
+string hot_facts_disabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_facts_disabled));
+if (hot_enabled_output != hot_ast
+        || hot_fusion_disabled_output != hot_ast
+        || hot_facts_disabled_output != hot_ast) {
+    printf("hot output mismatch:\nast:\n%senabled:\n%s"
+        + "fusion disabled:\n%sfacts disabled:\n%s",
+        hot_ast, hot_enabled_output, hot_fusion_disabled_output,
+        hot_facts_disabled_output);
+    exit(2);
+}
+
+string hot_enabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", hot_enabled));
+string hot_fusion_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", hot_fusion_disabled));
+string hot_facts_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", hot_facts_disabled));
+if (hot_enabled_undefined !~ /qore_rt_check_valid_object_call_receiver/
+        || hot_enabled_undefined !~ /qore_rt_int_to_string_measure/
+        || hot_enabled_undefined =~ /qore_rt_dot_eval_object_method_direct_aot/
+        || hot_fusion_disabled_undefined
+            !~ /qore_rt_dot_eval_object_method_direct_aot/
+        || hot_fusion_disabled_undefined =~ /qore_rt_int_to_string_measure/
+        || hot_facts_disabled_undefined
+            !~ /qore_rt_dot_eval_object_method_direct_aot/
+        || hot_facts_disabled_undefined =~ /qore_rt_int_to_string_measure/) {
+    printf("unexpected lowering:\nenabled:\n%sfusion disabled:\n%s"
+        + "facts disabled:\n%s", hot_enabled_undefined,
+        hot_fusion_disabled_undefined, hot_facts_disabled_undefined);
+    exit(2);
+}
+
+string safety_source = root + "/safety.qr";
+string safety_enabled = root + "/safety-enabled";
+string safety_disabled = root + "/safety-disabled";
+File safety_file();
+safety_file.open2(safety_source, O_WRONLY | O_CREAT | O_TRUNC);
+safety_file.write("%modern
+final class Formatter {
+    string format(int value) {
+        return string(value);
+    }
+}
+
+class BaseFormatter {
+    string format(int value) {
+        return string(value);
+    }
+}
+
+class OverrideFormatter inherits BaseFormatter {
+    string format(int value) {
+        return \"override\";
+    }
+}
+
+final class ReferenceFormatter {
+    string format(reference<int> value) {
+        ++value;
+        return string(value);
+    }
+}
+
+int sub main() {
+    Formatter formatter();
+    Formatter alias = formatter;
+    delete formatter;
+    string deleted_error;
+    try {
+        alias.format(1).length();
+    } catch (hash<ExceptionInfo> ex) {
+        deleted_error = ex.err;
+    }
+
+    int unassigned;
+    bool unassigned_rejected;
+    Formatter assigned();
+    try {
+        assigned.format(unassigned).length();
+    } catch (hash<ExceptionInfo> ex) {
+        unassigned_rejected = True;
+    }
+
+    BaseFormatter overridden = new OverrideFormatter();
+    int value = 9;
+    ReferenceFormatter reference_formatter();
+    printf(\"%s:%d:%d:%d:%d\\n\", deleted_error, unassigned_rejected,
+        overridden.format(123).length(),
+        reference_formatter.format(\\value).length(), value);
+    return 0;
+}
+
+main();
+");
+safety_file.close();
+
+string safety_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, safety_source));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string output = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, safety_source));
+    if (output != safety_ast) {
+        printf("safety output mismatch in %s:\nast:\n%sactual:\n%s",
+            mode, safety_ast, output);
+        exit(2);
+    }
+}
+
+string safety_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, safety_enabled, safety_source));
+string safety_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_AOT_OBJECT_INT_STRING_MEASURE_FUSION=1"
+        + " QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, safety_disabled, safety_source));
+string safety_enabled_output = is_file(safety_enabled)
+    ? backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, safety_enabled)) : "";
+string safety_disabled_output = is_file(safety_disabled)
+    ? backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, safety_disabled)) : "";
+if (!is_file(safety_enabled) || !is_file(safety_disabled)
+        || safety_enabled_output != safety_ast
+        || safety_disabled_output != safety_ast) {
+    printf("safety AOT mismatch:\nenabled compile:\n%s"
+        + "disabled compile:\n%senabled:\n%sdisabled:\n%sast:\n%s",
+        safety_enabled_compile, safety_disabled_compile,
+        safety_enabled_output, safety_disabled_output, safety_ast);
+    exit(2);
+}

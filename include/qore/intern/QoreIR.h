@@ -2473,6 +2473,9 @@ public:
     //! Transient scalar source for a proven nonescaping object getter.
     QoreIRValue aot_object_scalar_projection_source;
     bool aot_object_scalar_receiver_valid = false;
+    //! Transient parameter index for an exact receiver-independent
+    //! string(int-param).size()/length() composition.
+    int8_t aot_object_int_string_measure_param = -1;
     //! Transient AOT-only scalar consumer of an exact case transformation.
     AOTStringTransformConsumerKind aot_string_transform_consumer =
         AOTStringTransformConsumerKind::None;

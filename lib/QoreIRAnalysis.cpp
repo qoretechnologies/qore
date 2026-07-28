@@ -647,6 +647,19 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
             has_ref_args = call->has_ref_args;
             return call->variant;
         }
+        case QoreIROpcode::DotEvalMethodDirect: {
+            const auto* call =
+                static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            return call->pseudo ? nullptr : call->variant;
+        }
+        case QoreIROpcode::InvokeDotEvalMethodDirect: {
+            const auto* call =
+                static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(
+                    inst);
+            has_ref_args = call->has_ref_args;
+            return call->pseudo ? nullptr : call->variant;
+        }
         case QoreIROpcode::CallClosureDirect: {
             const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
             has_ref_args = call->has_ref_args;
@@ -7271,7 +7284,13 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             || inst->opcode == QoreIROpcode::CallStaticDirect
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
-            || inst->opcode == QoreIROpcode::CallClosureDirect;
+            || inst->opcode == QoreIROpcode::CallClosureDirect
+            || (!std::getenv(
+                    "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
+                && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst->opcode
+                        == QoreIROpcode::InvokeDotEvalMethodDirect)
+                && callee);
         if (direct_call && (!callee || has_ref_args)) {
             known.clear();
             return true;
@@ -7513,7 +7532,13 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             || inst->opcode == QoreIROpcode::CallStaticDirect
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
-            || inst->opcode == QoreIROpcode::CallClosureDirect;
+            || inst->opcode == QoreIROpcode::CallClosureDirect
+            || (!std::getenv(
+                    "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
+                && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst->opcode
+                        == QoreIROpcode::InvokeDotEvalMethodDirect)
+                && callee);
         if (direct_call && (!callee || has_ref_args)) {
             known.clear();
             return true;
@@ -7915,7 +7940,13 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             || inst->opcode == QoreIROpcode::CallStaticDirect
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
-            || inst->opcode == QoreIROpcode::CallClosureDirect;
+            || inst->opcode == QoreIROpcode::CallClosureDirect
+            || (!std::getenv(
+                    "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
+                && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst->opcode
+                        == QoreIROpcode::InvokeDotEvalMethodDirect)
+                && callee);
         if (direct_call && (!callee || has_ref_args)) {
             known.clear();
             return true;
@@ -12692,6 +12723,10 @@ size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
     };
     std::vector<Fusion> fusions;
     for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR object integer string measurement block analysis")) {
+            return 0;
+        }
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR collection predicate analysis")) {
@@ -12894,6 +12929,10 @@ size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
         ++applied;
     }
     for (const auto& block : func.blocks) {
+        // Applied rewrites must remove their obsolete consumers even when
+        // cancellation is observed during cleanup.
+        (void)qore_ir_analysis_cancelled(check_count,
+            "IR object integer string measurement block cleanup");
         auto& instructions = block->instructions;
         instructions.erase(std::remove_if(
             instructions.begin(), instructions.end(),
@@ -14296,6 +14335,149 @@ size_t qore_ir_fuse_native_int_string_measure_consumers(
             [&](const std::unique_ptr<QoreIRInstruction>& inst) {
                 (void)qore_ir_analysis_cancelled(check_count,
                     "IR integer string measurement cleanup");
+                return eliminated.count(inst.get());
+            }), instructions.end());
+    }
+    return eliminated.size();
+}
+
+size_t qore_ir_fuse_object_int_string_measure_consumers(
+        QoreIRFunction& func,
+        const QoreIRObjectIntStringMeasureQuery& is_supported) {
+    if (!is_supported) {
+        return 0;
+    }
+    size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    struct Fusion {
+        QoreIRDotEvalMethodDirectInstruction* producer = nullptr;
+        QoreIRInstruction* consumer = nullptr;
+        QoreIRValue result;
+        int8_t param = -1;
+    };
+    std::vector<Fusion> fusions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR object integer string measurement analysis")) {
+                return 0;
+            }
+            if (!inst_ptr
+                    || inst_ptr->opcode
+                        != QoreIROpcode::DotEvalMethodDirect
+                    || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()
+                    || inst_ptr->operands.size() < 2
+                    || !qore_ir_is_non_overridable_method_call(*inst_ptr)) {
+                continue;
+            }
+            auto* producer =
+                static_cast<QoreIRDotEvalMethodDirectInstruction*>(
+                    inst_ptr.get());
+            if (producer->pseudo || producer->has_ref_args
+                    || producer->aot_object_int_string_measure_param >= 0) {
+                continue;
+            }
+            const QoreIRValueFacts* base_facts =
+                func.getValueFacts(producer->operands[0]);
+            if (!base_facts
+                    || base_facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !base_facts->never_nothing
+                    || base_facts->representation
+                        != QoreIRValueRepresentation::Boxed
+                    || !producer->qc
+                    || QoreTypeInfo::getUniqueReturnClass(
+                        base_facts->type_info) != producer->qc) {
+                continue;
+            }
+            auto use = uses.find(producer->result.id);
+            if (use == uses.end() || use->second.size() != 1
+                    || !use->second.front().inst) {
+                continue;
+            }
+            auto* consumer = const_cast<QoreIRInstruction*>(
+                use->second.front().inst);
+            if (consumer->opcode != QoreIROpcode::DotEvalMethodDirect
+                    || consumer->exception_target
+                    || !consumer->result.isValid()
+                    || consumer->operands.size() != 1
+                    || consumer->operands[0].id != producer->result.id) {
+                continue;
+            }
+            const auto* method =
+                static_cast<const QoreIRDotEvalMethodDirectInstruction*>(
+                    consumer);
+            if (!method->pseudo || method->has_ref_args || !method->qc
+                    || strcmp(method->qc->getName(), "<string>")) {
+                continue;
+            }
+            QoreIRIntrinsic intrinsic = method->intrinsic;
+            if (intrinsic == QoreIRIntrinsic::None) {
+                intrinsic = qore_ir_resolve_pseudo_intrinsic(
+                    method->method, method->qc,
+                    method->fallback_method_name);
+            }
+            if (intrinsic != QoreIRIntrinsic::Size
+                    && intrinsic != QoreIRIntrinsic::StringStrlen
+                    && intrinsic != QoreIRIntrinsic::StringLength) {
+                continue;
+            }
+            int8_t param = -1;
+            if (!is_supported(producer, param) || param < 0
+                    || static_cast<size_t>(param + 1)
+                        >= producer->operands.size()) {
+                continue;
+            }
+            const QoreIRValueFacts* param_facts =
+                func.getValueFacts(producer->operands[
+                    static_cast<size_t>(param + 1)]);
+            if (!param_facts
+                    || param_facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !param_facts->never_nothing
+                    || param_facts->representation
+                        != QoreIRValueRepresentation::NativeInt) {
+                continue;
+            }
+            fusions.push_back({
+                producer, consumer, consumer->result, param,
+            });
+        }
+    }
+    if (fusions.empty()) {
+        return 0;
+    }
+
+    std::unordered_set<QoreIRInstruction*> eliminated;
+    for (const Fusion& fusion : fusions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR object integer string measurement rewrite")) {
+            break;
+        }
+        fusion.producer->aot_object_int_string_measure_param =
+            fusion.param;
+        fusion.producer->result = fusion.result;
+        QoreIRValueFacts facts;
+        facts.type_info = bigIntTypeInfo;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation = QoreIRValueRepresentation::NativeInt;
+        facts.ownership = QoreIRValueOwnership::ReferenceFree;
+        facts.never_nothing = true;
+        func.setValueFacts(fusion.result, facts);
+        eliminated.insert(fusion.consumer);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(
+            instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                (void)qore_ir_analysis_cancelled(check_count,
+                    "IR object integer string measurement cleanup");
                 return eliminated.count(inst.get());
             }), instructions.end());
     }

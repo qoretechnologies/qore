@@ -19410,6 +19410,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
+            if (direct_inst->aot_object_int_string_measure_param >= 0) {
+                size_t operand = static_cast<size_t>(
+                    direct_inst->aot_object_int_string_measure_param) + 1;
+                if (operand >= inst->operands.size()) {
+                    error = "object integer string measurement parameter"
+                        " is out of range";
+                    return false;
+                }
+                llvm::Value* input =
+                    getVal(inst->operands[operand].id, error);
+                if (!input) {
+                    return false;
+                }
+                if (input->getType() != i64_type
+                        || nanboxed_values.count(
+                            inst->operands[operand].id)) {
+                    error = "object integer string measurement requires"
+                        " a native integer";
+                    return false;
+                }
+                auto check_receiver = module.getOrInsertFunction(
+                    "qore_rt_check_valid_object_call_receiver",
+                    llvm::FunctionType::get(
+                        void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(
+                    check_receiver, {base_boxed, xsink_arg});
+                auto measure = module.getOrInsertFunction(
+                    "qore_rt_int_to_string_measure",
+                    llvm::FunctionType::get(
+                        i64_type, {i64_type}, false));
+                values[inst->result.id] =
+                    builder->CreateCall(measure, {input});
+                releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+
             int nargs = static_cast<int>(inst->operands.size()) - 1;
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_summary_callee = nullptr;

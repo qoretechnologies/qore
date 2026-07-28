@@ -18220,6 +18220,53 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int_string_measure_consumers =
                 qore_ir_fuse_native_int_string_measure_consumers(func);
         }
+        size_t object_int_string_measure_consumers = 0;
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_OBJECT_INT_STRING_MEASURE_FUSION")) {
+            QoreIRObjectIntStringMeasureQuery query =
+                [&](const QoreIRDotEvalMethodDirectInstruction* call,
+                        int8_t& param) {
+                    if (!call || call->operands.empty()
+                            || !call->variant || !call->method
+                            || !call->qc || call->pseudo
+                            || call->has_ref_args) {
+                        return false;
+                    }
+                    auto info = aot_batch_callee_map->find(call->variant);
+                    if (info == aot_batch_callee_map->end()
+                            || !info->second.approach_b_eligible
+                            || !info->second.implicit_self_method
+                            || info->second.string_op.kind
+                                != AOTStringOpKind::IntToString
+                            || info->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                            || call->operands.size() - 1
+                                != info->second.num_params
+                            || info->second.param_kinds.size()
+                                != info->second.num_params
+                            || info->second.param_rejects_nothing.size()
+                                != info->second.num_params
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                call->variant, call->expr, func,
+                                call->operands, 1,
+                                static_cast<int>(
+                                    call->operands.size() - 1), true)) {
+                        return false;
+                    }
+                    param = info->second.string_op.base_param;
+                    return param >= 0
+                        && static_cast<size_t>(param)
+                            < info->second.param_kinds.size()
+                        && info->second.param_kinds[
+                            static_cast<size_t>(param)]
+                            == BatchCalleeParamKind::NativeInt
+                        && info->second.param_rejects_nothing[
+                            static_cast<size_t>(param)];
+                };
+            object_int_string_measure_consumers =
+                qore_ir_fuse_object_int_string_measure_consumers(
+                    func, query);
+        }
         QoreIRStringProducerQuery string_producer_query;
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
             string_producer_query =
@@ -18430,6 +18477,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || changed
                 || collection_consumers || string_consumers
                 || int_string_measure_consumers
+                || object_int_string_measure_consumers
                 || string_transform_consumers
                 || cross_block_boxed_facts
                 || boxed_specializations
@@ -18448,6 +18496,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " collection-consumers=%zu"
                 " string-consumers=%zu"
                 " int-string-measure-consumers=%zu"
+                " object-int-string-measure-consumers=%zu"
                 " string-transform-consumers=%zu"
                 " post-rewrite-rounds=%zu"
                 " cross-block-boxed-facts=%zu"
@@ -18461,6 +18510,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 object_scalar_projections, boxed_return_calls, changed,
                 collection_consumers, string_consumers,
                 int_string_measure_consumers,
+                object_int_string_measure_consumers,
                 string_transform_consumers,
                 post_rewrite_rounds,
                 cross_block_boxed_facts,
