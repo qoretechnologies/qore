@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-assigned-string-conversion-facts-"
+    + string(getpid());
+mkdir(root);
+string source = root + "/test.qr";
+string enabled = root + "/enabled";
+string disabled = root + "/disabled";
+string cleanup_disabled = root + "/cleanup-disabled";
+
+File source_file();
+source_file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write("%modern
+int sub consume(string value) {
+    return value.length();
+}
+
+final class Consumer {
+    int consume(string value) {
+        return value.length();
+    }
+}
+
+int sub main() {
+    int unassigned;
+    Consumer consumer();
+    printf(\"%d:%d:%d:%d:%d:%d\\n\",
+        consume(string(unassigned)),
+        consume(string(NOTHING)),
+        consume(string(\"\")),
+        consume(string(12345)),
+        consume(string(True)),
+        consumer.consume(string(6789)));
+    return 0;
+}
+
+main();
+");
+source_file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string output = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source));
+    if (output != ast) {
+        printf("output mismatch in %s:\nast:\n%sactual:\n%s",
+            mode, ast, output);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, source));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, source));
+string cleanup_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " QORE_DISABLE_AOT_SINGLE_ARG_CLEANUP_INLINE=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, cleanup_disabled, source));
+if (!is_file(enabled) || !is_file(disabled)
+        || !is_file(cleanup_disabled)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s"
+        + "cleanup disabled:\n%s",
+        enabled_compile, disabled_compile, cleanup_disabled_compile);
+    exit(2);
+}
+
+string enabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled));
+string disabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled));
+string cleanup_disabled_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cleanup_disabled));
+if (enabled_output != ast || disabled_output != ast
+        || cleanup_disabled_output != ast) {
+    printf("AOT output mismatch:\nast:\n%senabled:\n%sdisabled:\n%s"
+        + "cleanup disabled:\n%s",
+        ast, enabled_output, disabled_output, cleanup_disabled_output);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled));
+int enabled_fallback_calls = int(backquote(sprintf(
+    "objdump -d %s | grep -c"
+        + " 'call.*<qore_rt_call_direct_aot_consume_args@plt>'",
+    enabled)));
+int disabled_fallback_calls = int(backquote(sprintf(
+    "objdump -d %s | grep -c"
+        + " 'call.*<qore_rt_call_direct_aot_consume_args@plt>'",
+    disabled)));
+int enabled_cleanup_calls = int(backquote(sprintf(
+    "objdump -d %s | grep -c"
+        + " 'call.*<qore_rt_clear_arg_cleanups@plt>'",
+    enabled)));
+int disabled_cleanup_calls = int(backquote(sprintf(
+    "objdump -d %s | grep -c"
+        + " 'call.*<qore_rt_clear_arg_cleanups@plt>'",
+    cleanup_disabled)));
+if (enabled_fallback_calls >= disabled_fallback_calls
+        || enabled_cleanup_calls >= disabled_cleanup_calls) {
+    printf("unexpected call lowering:\nenabled fallback calls: %d\n"
+        + "disabled fallback calls: %d\nenabled cleanup calls: %d\n"
+        + "disabled cleanup calls: %d\nenabled:\n%sdisabled:\n%s",
+        enabled_fallback_calls, disabled_fallback_calls,
+        enabled_cleanup_calls, disabled_cleanup_calls,
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}

@@ -215,6 +215,17 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::ToBool:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
             break;
+        case QoreIROpcode::ToString:
+            if (!getenv("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
+                QoreIRValueFacts facts;
+                facts.type_info = stringTypeInfo;
+                facts.assigned_state = QoreIRAssignedState::Assigned;
+                facts.representation = QoreIRValueRepresentation::Boxed;
+                facts.ownership = QoreIRValueOwnership::Owned;
+                facts.never_nothing = true;
+                func->setValueFacts(value, facts);
+            }
+            break;
         default:
             break;
     }

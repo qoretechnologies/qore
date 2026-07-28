@@ -1328,6 +1328,11 @@ private:
             llvm::Function* llvm_func, int nargs, bool& has_cleanup,
             int borrowed_prefix = 0);
 
+    // Clear ownership slots after a direct fast-entry call.
+    void emitArgCleanupClear(llvm::Module& module,
+            llvm::Value* arg_cleanups, int nargs,
+            bool callee_proven_nothrow);
+
     // Returns true if a local can be lazily reloaded from the runtime stack.
     bool canReloadLocalFromRuntime(const void* key, bool honor_reload_exempt = true) const;
 

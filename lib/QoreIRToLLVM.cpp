@@ -4410,6 +4410,31 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
     return cleanup_array;
 }
 
+void QoreIRToLLVM::emitArgCleanupClear(llvm::Module& module,
+        llvm::Value* arg_cleanups, int nargs, bool callee_proven_nothrow) {
+    if (nargs == 1 && callee_proven_nothrow
+            && !std::getenv("QORE_DISABLE_AOT_SINGLE_ARG_CLEANUP_INLINE")) {
+        llvm::Value* cleanup_slot = builder->CreateLoad(
+            ptr_type, arg_cleanups);
+        llvm::Value* cleanup_value = builder->CreateLoad(
+            i64_type, cleanup_slot);
+        builder->CreateStore(
+            llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_slot);
+        auto decref = module.getOrInsertFunction(
+            "qore_rt_decref",
+            llvm::FunctionType::get(
+                void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref, {cleanup_value, xsink_arg});
+        return;
+    }
+    auto clear_helper = module.getOrInsertFunction(
+        "qore_rt_clear_arg_cleanups",
+        llvm::FunctionType::get(
+            void_type, {ptr_type, i32_type, ptr_type}, false));
+    builder->CreateCall(clear_helper, {arg_cleanups,
+        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+}
+
 void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func,
         bool honor_reload_exempt, bool eager) {
     // Phase 4: Skip entirely if all locals are invisible to AST callbacks,
@@ -7784,18 +7809,15 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     }
     call_args.push_back(callee_ctx);
     call_args.push_back(xsink_arg);
+    bool summary_nothrow = false;
     llvm::Value* fast_result = emitAOTImportedSummary(callee_info, call_args,
-        callee_ctx, module, fast_fn);
+        callee_ctx, module, fast_fn, &summary_nothrow);
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
     }
     if (has_arg_cleanups) {
-        auto clear_helper = module.getOrInsertFunction(
-                "qore_rt_clear_arg_cleanups",
-                llvm::FunctionType::get(void_type,
-                    {ptr_type, i32_type, ptr_type}, false));
-        builder->CreateCall(clear_helper, {arg_cleanups,
-                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        emitArgCleanupClear(
+            module, arg_cleanups, nargs, summary_nothrow);
     }
     builder->CreateBr(merge_bb);
     fast_bb = builder->GetInsertBlock();
@@ -18241,12 +18263,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = !(summary_nothrow && !has_arg_cleanups);
                 call_return_kind = aot_approach_b_callee->return_kind;
                 if (has_arg_cleanups) {
-                    auto clear_helper = module.getOrInsertFunction(
-                            "qore_rt_clear_arg_cleanups",
-                            llvm::FunctionType::get(void_type,
-                                {ptr_type, i32_type, ptr_type}, false));
-                    builder->CreateCall(clear_helper, {arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    emitArgCleanupClear(
+                        module, arg_cleanups, nargs, summary_nothrow);
                 }
                 call_may_modify_runtime_locals = false;
             } else if (fused_string_consumer
@@ -19211,12 +19229,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_effect_info = aot_static_batch_callee;
                 }
                 if (has_arg_cleanups) {
-                    auto clear_helper = module.getOrInsertFunction(
-                            "qore_rt_clear_arg_cleanups",
-                            llvm::FunctionType::get(void_type,
-                                {ptr_type, i32_type, ptr_type}, false));
-                    builder->CreateCall(clear_helper, {arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    emitArgCleanupClear(
+                        module, arg_cleanups, nargs, summary_nothrow);
                 }
             } else if (aot_static_batch_callee) {
                 QoreValue expr_val = direct_inst->expr;
