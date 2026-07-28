@@ -60,7 +60,6 @@ public class KeapDataProvider inherits KeapDataProviderBase {
             "campaigns": Class::forName("KeapCampaignsDataProvider"),
             "affiliates": Class::forName("KeapAffiliatesDataProvider"),
             # Action providers
-            "execute-api-call": Class::forName("KeapExecuteApiCallDataProvider"),
             # Events container
             "events": Class::forName("KeapEventsDataProvider"),
         };

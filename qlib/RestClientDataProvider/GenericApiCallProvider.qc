@@ -129,6 +129,20 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         LoggerWrapper::setLogger(logger);
     }
 
+    #! The generic API call provider never nests inside itself
+    /** This class holds the REST client in the conventional @c rest member, so the framework's reflective
+        discovery would otherwise match it and advertise an endless
+        @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "__call__" chain. The framework
+        also marks children it builds, so this override only matters for instances created directly.
+
+        @return @ref False
+
+        @since RestClientDataProvider 2.4
+    */
+    private bool hasGenericApiCallChildImpl() {
+        return False;
+    }
+
     #! Makes a request and returns the response
     /** @param req the request info — see @ref GenericApiCallRequestDataType
         @param request_options the request options after processing by validateRequestOptions()

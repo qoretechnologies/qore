@@ -319,7 +319,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("mark-contact-person-primary"));
         assertTrue(children.contains("mark-item-active"));
         assertTrue(children.contains("mark-shipment-delivered"));
-        assertTrue(children.contains("api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
 
         # Verify events provider exists
         assertTrue(children.contains("events"));
@@ -582,8 +582,8 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertTrue(actions.size() > 0);
 
-        # Verify action count (10 DPAT_FIND + 44 DPAT_API + 8 DPAT_EVENT = 62)
-        assertEq(62, actions.size());
+        # Verify action count (10 DPAT_FIND + 43 DPAT_API + 8 DPAT_EVENT = 61)
+        assertEq(61, actions.size());
 
         # Get action names
         list<string> actionNames = map $1.action, actions;
@@ -661,8 +661,11 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("list-shipment-orders"));
         assertTrue(actionNames.contains("mark-shipment-delivered"));
 
-        # Verify api-call action
-        assertTrue(actionNames.contains("api-call"));
+        # Verify the framework-injected generic API call action is registered for the app (it is
+        # filtered out of `actions` above, so check the catalog directly)
+        assertTrue(exists DataProviderActionCatalog::getAppAction(ZohoInventoryDataProvider::AppName,
+            AbstractDataProvider::GenericApiCallActionName),
+            "the framework-injected generic API call action must be registered");
 
         # Verify trigger actions
         assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_CONTACT));

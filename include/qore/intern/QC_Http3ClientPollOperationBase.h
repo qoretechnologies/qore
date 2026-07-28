@@ -196,13 +196,15 @@ public:
 
         @param stream_id    the QUIC stream ID to upgrade
         @param msg_queue    Queue for typed frame hash delivery (ref transferred)
+        @param initial      optional already-consumed response item whose body
+                            bytes are fed to the decoder before the drain
         @param xsink        exception sink (raises HTTPCLIENT-STREAM-CLOSED if
                             the stream is not found or already complete)
 
         @since %Qore 3.0
     */
     DLLLOCAL void installFrameState(int64_t stream_id, Queue* msg_queue,
-        ExceptionSink* xsink);
+        QoreValue initial, ExceptionSink* xsink);
 
     //! Installs an SSE parser on an active ChannelAction stream
     DLLLOCAL void installSseState(int64_t stream_id, Queue* queue,

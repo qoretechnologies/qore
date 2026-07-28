@@ -1339,6 +1339,16 @@ private:
     std::string odcid_registered_;
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
+#ifdef DEBUG
+    //! test hook: withhold outbound packets until this timestamp (0 = disabled)
+    /** Set by submitConnectResponse() when \c QORE_QUIC_DEFER_CONNECT_RESPONSE_MS is in the
+        environment, and cleared by the first sendStreamData() on the tunnel.  It makes the
+        extended-CONNECT response and the first tunnel bytes leave in one write cycle — and
+        therefore reach the peer in one datagram — so a regression test can deterministically
+        drive the coalesced headers+body delivery path that a loaded machine hits by chance.
+    */
+    ngtcp2_tstamp connect_response_hold_until_ = 0;
+#endif
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)
     //! Number of streams currently dispatched to handler threads.
     /** Incremented when a stream's @c dispatched flag transitions to true

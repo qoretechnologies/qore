@@ -818,52 +818,6 @@ module BigCommerceDataProvider {
             },
         });
 
-        # ========== EXECUTE API CALL ==========
-
-        # API Request
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BigCommerceDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "Other",
-            "display_name": "Make an API Call",
-            "short_desc": "Make a custom API call",
-            "desc": "Make a custom API call to the BigCommerce API",
-            "action_code": DPAT_API,
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "The HTTP method",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The HTTP method to use",
-                    "example_value": "GET",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "desc": "Retrieve data"},
-                        <AllowedValueInfo>{"value": "POST", "desc": "Create data"},
-                        <AllowedValueInfo>{"value": "PUT", "desc": "Update data"},
-                        <AllowedValueInfo>{"value": "DELETE", "desc": "Delete data"},
-                    ),
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "The API path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "desc": "The API path relative to the store URL "
-                        "(e.g., `v3/catalog/products` or `v2/orders`)",
-                    "example_value": "v3/catalog/summary",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Request body (JSON)",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Request body for POST/PUT requests",
-                },
-            },
-            "output_type": AbstractDataProviderTypeMap."hash",
-        });
-
         # ========== TRIGGERS ==========
 
         # Watch Abandoned Cart

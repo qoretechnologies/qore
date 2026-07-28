@@ -220,9 +220,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
     #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
     /** @param stream_id the QUIC stream ID
         @param msg_queue Queue to receive typed frame hashes
+        @param initial_body optional body bytes already consumed before
+        installing the frame state
     */
-    installFrameState(int stream_id, Queue msg_queue) {
-        poll_op.installFrameState(stream_id, msg_queue);
+    installFrameState(int stream_id, Queue msg_queue, *data initial_body) {
+        poll_op.installFrameState(stream_id, msg_queue, initial_body);
     }
 
     #! Installs an SSE parser on an existing streaming request

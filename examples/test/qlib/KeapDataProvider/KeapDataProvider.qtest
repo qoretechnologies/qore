@@ -208,7 +208,7 @@ public class KeapDataProviderTest inherits QUnit::Test {
         assertEq(True, inlist("opportunities", children), "opportunities child exists");
         assertEq(True, inlist("tags", children), "tags child exists");
         assertEq(True, inlist("events", children), "events child exists");
-        assertEq(True, inlist("execute-api-call", children), "execute-api-call child exists");
+        assertEq(True, inlist(AbstractDataProvider::GenericApiCallChildName, children), "generic API call child exists");
 
         # Verify child providers can be created
         AbstractDataProvider contacts = provider.getChildProvider("contacts");
@@ -403,13 +403,15 @@ public class KeapDataProviderTest inherits QUnit::Test {
         });
         assertEq(True, True, "tag removed from contact");
 
-        # Test execute-api-call
-        AbstractDataProvider api_dp = provider.getChildProvider("execute-api-call");
+        # Test the framework-injected generic API call child
+        AbstractDataProvider api_dp = provider.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
         hash<auto> api_result = api_dp.doRequest({
             "method": "GET",
-            "path": "contacts?limit=1",
+            "path": "contacts",
+            "query_args": {"limit": 1},
         });
-        assertEq(True, api_result instanceof hash, "execute-api-call returned hash");
+        assertEq(200, api_result.status, "generic API call should succeed");
+        assertEq(True, api_result.body instanceof hash, "generic API call returned a hash body");
 
         # Test list tasks
         AbstractDataProvider tasks_dp = provider.getChildProvider("tasks");

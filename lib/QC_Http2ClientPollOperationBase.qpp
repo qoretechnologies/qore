@@ -1363,7 +1363,8 @@ void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const Binar
 }
 
 void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* msg_queue,
-        ExceptionSink* xsink) {
+        QoreValue initial, ExceptionSink* xsink) {
+    ValueHolder initial_holder(initial, xsink);
     // Build send callback bound to this connection's socket + stream_id.
     // The callback runs on the I/O thread inside the ChannelAction's
     // execute() path (feedData -> auto-pong / close-echo) — nghttp2's
@@ -1419,7 +1420,7 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
         ch_action->ref();
     }
 
-    ch_action->installFrameState(std::move(frame_state), xsink);
+    ch_action->installFrameState(std::move(frame_state), initial_holder.release(), xsink);
     ch_action->deref(xsink);
 }
 
@@ -1999,6 +2000,9 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
     @param stream_id the H2 stream ID returned by submitRequestStreaming()
     @param message_queue the Queue that will receive typed frame hashes
            ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
+    @param initial_body optional body bytes already consumed by the caller
+           (the stream handle defers the body of a coalesced headers+body
+           event to the next read); fed to the decoder before the drain
 
     @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
            complete
@@ -2007,10 +2011,19 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
     @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
-        Queue[Queue] message_queue) [flags=NAMED_ARGS] {
+        Queue[Queue] message_queue, *data initial_body) [flags=NAMED_ARGS] {
+    QoreValue initial;
+    if (initial_body) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("body", initial_body->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        initial = h.release();
+    }
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
     Queue* queue_ptr = message_queue.release();
-    priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr, xsink);
+    priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr, initial, xsink);
 }
 
 //! Installs an SSE parser on an active ChannelAction stream

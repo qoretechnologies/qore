@@ -117,6 +117,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         addTestCase("drop table options", \testDropTableOptions());
         addTestCase("stats preferences unsupported", \testStatsPreferencesUnsupported());
         addTestCase("create constraints SQL", \testCreateConstraintsSql());
+        addTestCase("deferrable foreign constraints unsupported", \testDeferrableForeignConstraintsUnsupported());
         addTestCase("temporary tables", \testTempTable());
 
         set_return_value(main());
@@ -402,6 +403,31 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
 
         *list<auto> sql = table.getCreateConstraintsSql();
         assertEq(NOTHING, sql);
+    }
+
+    testDeferrableForeignConstraintsUnsupported() {
+        if (!table) { testSkip("no DB connection"); }
+
+        Sqlite3Table probe(ds, "sqlite3_dfk_probe");
+        probe.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "parent_id": {"qore_type": "integer"},
+            },
+        });
+        assertFalse(probe.supportsDeferrableForeignConstraints(),
+            "SQLite does not advertise ALTER-based deferrable foreign constraints");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "does not support deferrable foreign constraints", sub () {
+            probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
+                {"deferrable": True});
+        });
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "initially_deferred requires deferrable", sub () {
+            probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
+                {"initially_deferred": True});
+        });
+        assertFalse(probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
+            {"deferrable": False}) =~ /deferrable/i,
+            "explicit portable defaults preserve existing SQL");
     }
 
     # --- Pattern matching tests ---

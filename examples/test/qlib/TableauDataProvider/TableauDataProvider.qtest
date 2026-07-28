@@ -204,7 +204,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("projects"));
         assertTrue(children.contains("users"));
         assertTrue(children.contains("extract-refresh-tasks"));
-        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
         assertTrue(children.contains("events"));
 
         # Check datasources child provider
@@ -414,8 +414,8 @@ public class TableauDataProviderTest inherits QUnit::Test {
             prov.getChildProviderEx("nonexistent");
         });
 
-        # Test execute-api-call has request support
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        # Test the framework-injected generic API call child has request support
+        AbstractDataProvider apiCall = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
         hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
         assertTrue(apiCallInfo.supports_request);
     }
@@ -465,8 +465,8 @@ public class TableauDataProviderTest inherits QUnit::Test {
         # Test 6: List extract refresh tasks
         testListExtractRefreshTasks();
 
-        # Test 7: Execute API call
-        testExecuteApiCall();
+        # Test the framework-injected generic API call
+        testGenericApiCall();
 
         # Cleanup
         cleanup();
@@ -614,18 +614,19 @@ public class TableauDataProviderTest inherits QUnit::Test {
     }
 
     #! Test execute API call
-    private testExecuteApiCall() {
+    private testGenericApiCall() {
         TableauDataProvider::TableauDataProvider prov(client);
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        AbstractDataProvider apiCall = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
 
         hash<auto> result = apiCall.doRequest({
             "method": "GET",
             "path": "projects",
         });
 
-        assertTrue(result.hasKey("projects"), "API call should return projects");
+        assertEq(200, result.status, "API call should succeed");
+        assertTrue(result.body.hasKey("projects"), "API call should return projects");
         if (m_options.verbose) {
-            printf("Execute API call returned %d keys\n", result.size());
+            printf("Generic API call returned %d keys\n", result.body.size());
         }
     }
 

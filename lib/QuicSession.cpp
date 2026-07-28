@@ -1643,6 +1643,19 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 
     QuicTimerWriteResult result;
 
+#ifdef DEBUG
+    // test hook: hold the extended-CONNECT response back so it coalesces with the first
+    // tunnel write — see connect_response_hold_until_
+    if (connect_response_hold_until_) {
+        ngtcp2_tstamp hold_now = timestamp();
+        if (hold_now < connect_response_hold_until_) {
+            result.next_expiry = connect_response_hold_until_;
+            return result;
+        }
+        connect_response_hold_until_ = 0;
+    }
+#endif
+
     // Check and handle timer expiry (matches curl's pattern: handle once,
     // then re-check after writePacketsLocked flushes the result).
     ngtcp2_tstamp expiry = getExpiryLocked();
@@ -2399,6 +2412,9 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " len=%d eof=%d pending=%d deferred=%d\n",
         stream_id, (int)len, end_stream, (int)sbd.data.size(), sbd.deferred);
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    connect_response_hold_until_ = 0;
+#endif
     return 0;
 }
 
@@ -2589,6 +2605,12 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     }
 
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    if (const char* hold_ms = getenv("QORE_QUIC_DEFER_CONNECT_RESPONSE_MS")) {
+        connect_response_hold_until_ = timestamp()
+            + static_cast<ngtcp2_tstamp>(atoi(hold_ms)) * 1000 * 1000;
+    }
+#endif
     updateKeepAliveAfterStreamStateChangeLocked();
     return 0;
 }

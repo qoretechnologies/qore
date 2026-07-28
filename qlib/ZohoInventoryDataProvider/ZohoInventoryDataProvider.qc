@@ -102,7 +102,6 @@ public class ZohoInventoryDataProvider inherits ZohoInventoryDataProviderBase {
             "mark-contact-person-primary": Class::forName("ZohoInventoryMarkContactPersonPrimaryDataProvider"),
             "mark-item-active": Class::forName("ZohoInventoryMarkItemActiveDataProvider"),
             "mark-shipment-delivered": Class::forName("ZohoInventoryMarkShipmentDeliveredDataProvider"),
-            "api-call": Class::forName("ZohoInventoryApiCallDataProvider"),
         };
     }
 

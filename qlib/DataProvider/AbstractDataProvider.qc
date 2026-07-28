@@ -2116,6 +2116,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         /** @since DataProvider 3.3
         */
         *AbstractDebugInfoCollector debug_collector;
+
+        #! Flag: an ancestor provider already exposes the framework-injected generic API call child
+        /** Set by @ref getChildProvider() and @ref getChildProviderEx() on every child handed out by a
+            provider that itself exposes the @ref GenericApiCallChildName "__call__" child (or that has
+            already inherited this flag), so that the generic API call provider appears exactly once, at
+            the root of the provider tree.
+
+            Without this flag the reflective REST-client discovery in
+            @ref getRestClientForGenericCallImpl() matches every descendant provider as well, since the
+            @ref GenericApiCallRestMemberName "rest" (or
+            @ref GenericApiCallConnectionMemberName "conn") member is normally declared on a shared
+            provider base class inherited by every provider in the app's tree. The resulting per-node
+            copies are exact duplicates — the generic API call child is built from the REST client alone
+            and carries no context from its parent — and the generic API call provider would even
+            rediscover its own client member and advertise an infinitely-nested \c __call__ chain.
+
+            @since DataProvider 3.5
+        */
+        bool generic_api_call_suppressed = False;
     }
 
     #! Creates the data provider
@@ -4296,9 +4315,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
 
-        @note If this provider exposes a non-NOTHING value via @ref getRestClientForGenericCall(), the
-        framework-injected @ref GenericApiCallChildName "__call__" child is appended to the list automatically
-        (unless the provider's own @ref getChildProviderNamesImpl() already includes it).
+        @note If @ref hasGenericApiCallChild() returns @ref True, the framework-injected
+        @ref GenericApiCallChildName "__call__" child is appended to the list automatically (unless the
+        provider's own @ref getChildProviderNamesImpl() already includes it). The generic API call child
+        is injected only at the root of the provider tree; see @ref hasGenericApiCallChild() for the
+        gating rules.
     */
     *list<string> getChildProviderNames() {
         *list<string> rv = getChildProviderNamesImpl();
@@ -4317,21 +4338,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-CHILD-PROVIDER unknown child provider
 
-        @note If \a name is @ref GenericApiCallChildName "__call__" and this provider exposes a non-NOTHING
-        value via @ref getRestClientForGenericCall() and a generic API call child builder has been registered
-        (via @ref setGenericApiCallChildBuilder()), the framework constructs the child automatically rather
-        than calling @ref getChildProviderImpl(). The provider's own @ref getChildProviderImpl() takes
-        precedence if it returns a non-NOTHING value for the reserved name.
+        @note \a name is never passed to @ref getChildProviderImpl() when it is
+        @ref GenericApiCallChildName "__call__": the name is reserved framework-wide, so the framework
+        builds the child itself when @ref hasGenericApiCallChild() returns @ref True and returns
+        @ref NOTHING otherwise. Delegating the reserved name would make providers that resolve children
+        dynamically issue a remote request for a child that cannot exist.
+
+        @note Children returned by this method never expose the framework-injected
+        @ref GenericApiCallChildName "__call__" child themselves if this provider (or an ancestor of it)
+        already does; see @ref hasGenericApiCallChild().
 
         @see getChildProviderEx()
     */
     *AbstractDataProvider getChildProvider(string name) {
-        *AbstractDataProvider child = getChildProviderImpl(name);
-        if (!child && name == GenericApiCallChildName) {
-            child = buildGenericApiCallChild();
-        }
-        if (child && logger && !child.logger) {
-            child.setLogger(logger);
+        *AbstractDataProvider child = resolveChildProvider(name);
+        if (child) {
+            propagateGenericApiCallSuppression(child);
+            if (logger && !child.logger) {
+                child.setLogger(logger);
+            }
         }
         return child;
     }
@@ -4343,26 +4368,69 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-CHILD-PROVIDER unknown child provider
 
-        @note If \a name is @ref GenericApiCallChildName "__call__" and the provider's own
-        @ref getChildProviderImpl() returns @ref NOTHING for it, the framework attempts to build the
-        auto-injected generic API call child via @ref buildGenericApiCallChild() before raising the
-        \c INVALID-CHILD-PROVIDER exception. This mirrors the behavior of @ref getChildProvider().
+        @note If \a name is @ref GenericApiCallChildName "__call__", the framework builds the
+        auto-injected generic API call child itself when @ref hasGenericApiCallChild() returns @ref True
+        and raises \c INVALID-CHILD-PROVIDER otherwise; the reserved name is never delegated to
+        @ref getChildProviderImpl(). This mirrors the behavior of @ref getChildProvider().
 
         @see getChildProvider()
     */
     AbstractDataProvider getChildProviderEx(string name) {
-        *AbstractDataProvider provider = getChildProviderImpl(name);
-        if (!provider && name == GenericApiCallChildName) {
-            provider = buildGenericApiCallChild();
-        }
+        *AbstractDataProvider provider = resolveChildProvider(name);
         if (!provider) {
             throw "INVALID-CHILD-PROVIDER", sprintf("provider %y is unknown; known children of %y: %y", name,
                 getName(), getChildProviderNames());
         }
+        propagateGenericApiCallSuppression(provider);
         if (logger && !provider.logger) {
             provider.setLogger(logger);
         }
         return provider;
+    }
+
+    #! Resolves a child provider, handling the reserved generic API call child name framework-side
+    /** @ref GenericApiCallChildName "__call__" is reserved framework-wide, so it is always resolved here
+        and never passed to @ref getChildProviderImpl(); providers that resolve children dynamically would
+        otherwise issue a remote lookup for a child that cannot exist — returning an error and logging a
+        spurious 404 — every time the name is resolved, whether or not this provider exposes the generic
+        API call child.
+
+        @param name the name of the child
+
+        @return the child provider, or @ref NOTHING if the given child is unknown
+
+        @since DataProvider 3.5
+    */
+    private:internal *AbstractDataProvider resolveChildProvider(string name) {
+        if (name == GenericApiCallChildName) {
+            return hasGenericApiCallChild() ? buildGenericApiCallChild() : NOTHING;
+        }
+        return getChildProviderImpl(name);
+    }
+
+    #! Suppresses the framework-injected generic API call child on the given child provider, if applicable
+    /** Called for every child handed out by @ref getChildProvider() and @ref getChildProviderEx(); the
+        generic API call child is injected only at the root of the provider tree, so any provider reached
+        through a parent that already exposes it (or that is itself already inside such a subtree) must
+        not expose it again.
+
+        @param child the child provider that was just resolved
+
+        @since DataProvider 3.5
+    */
+    private:internal propagateGenericApiCallSuppression(AbstractDataProvider child) {
+        # note: the cheap flag is tested first, so no reflective REST-client discovery is performed
+        # anywhere below the root of a suppressed subtree
+        if (generic_api_call_suppressed || hasGenericApiCallChild()) {
+            child.setGenericApiCallSuppressed();
+        }
+    }
+
+    #! Marks this provider as being inside a subtree whose root already exposes the generic API call child
+    /** @since DataProvider 3.5
+    */
+    private:internal setGenericApiCallSuppressed() {
+        generic_api_call_suppressed = True;
     }
 
     #! Returns the REST client object that backs the framework-injected generic API call action
@@ -4387,13 +4455,26 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns @ref True if this provider exposes a framework-injected generic API call child
-    /** @return @ref True if @ref getRestClientForGenericCall() returns a non-NOTHING value and a generic API
-        call child builder has been registered via @ref setGenericApiCallChildBuilder(); @ref False otherwise
+    /** The generic API call child is injected exactly once per provider tree, at its root. All of the
+        following must hold:
+        - this provider was not handed out as a child by a provider that already exposes the generic API
+          call child; the framework marks children in @ref getChildProvider() and
+          @ref getChildProviderEx(), so providers obtained from a factory, from a connection, or by
+          direct construction are treated as roots
+        - a generic API call child builder has been registered via @ref setGenericApiCallChildBuilder()
+        - the provider has not opted out via @ref hasGenericApiCallChildImpl()
+        - @ref getRestClientForGenericCall() returns a non-NOTHING value
+
+        @return @ref True if this provider exposes the framework-injected generic API call child;
+        @ref False otherwise
 
         @since DataProvider 3.5
     */
     bool hasGenericApiCallChild() {
-        return cb_build_generic_api_call_child && exists getRestClientForGenericCall();
+        return !generic_api_call_suppressed
+            && cb_build_generic_api_call_child
+            && hasGenericApiCallChildImpl()
+            && exists getRestClientForGenericCall();
     }
 
     #! Sets the static builder used to construct the framework-injected generic API call child provider
@@ -4438,6 +4519,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @return the generic API call child provider, or @ref NOTHING if this provider is not REST-capable or
         no builder has been registered
 
+        @note The child returned is always marked as suppressed: it holds the REST client itself, so
+        without this it would rediscover its own client member reflectively and advertise an
+        infinitely-nested @ref GenericApiCallChildName "__call__" chain
+
         @since DataProvider 3.5
     */
     private *AbstractDataProvider buildGenericApiCallChild() {
@@ -4448,7 +4533,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         if (!rest) {
             return;
         }
-        return call_function_args(cb_build_generic_api_call_child, (rest,));
+        auto rv = call_function_args(cb_build_generic_api_call_child, (rest,));
+        if (!(rv instanceof AbstractDataProvider)) {
+            return;
+        }
+        AbstractDataProvider child = cast<AbstractDataProvider>(rv);
+        child.setGenericApiCallSuppressed();
+        return child;
     }
 
     #! Returns the given child provider from a \c "/" separated path string
@@ -6897,6 +6988,28 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             # silent fall-through; reflection or connection issues just mean "no rest client discovered"
         }
         return NOTHING;
+    }
+
+    #! Returns @ref True if this provider may expose the framework-injected generic API call child
+    /** The default implementation returns @ref True, so every REST-capable provider tree exposes the
+        @ref GenericApiCallChildName "__call__" child at its root.
+
+        Providers belonging to an app that sets
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call" must
+        override this method to return @ref False, so that the runtime provider tree and the action
+        catalog agree; a provider has no way to look up its own app, so the opt-out has to be declared on
+        both sides. Overriding this method rather than
+        @ref getRestClientForGenericCallImpl() keeps @ref getRestClientForGenericCall() truthful for
+        other callers.
+
+        @return @ref True if this provider may expose the framework-injected generic API call child
+
+        @see hasGenericApiCallChild()
+
+        @since DataProvider 3.5
+    */
+    private bool hasGenericApiCallChildImpl() {
+        return True;
     }
 
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING

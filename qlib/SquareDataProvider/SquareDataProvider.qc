@@ -57,7 +57,6 @@ public class SquareDataProvider inherits SquareDataProviderBase {
             "refunds": Class::forName("SquareRefundsDataProvider"),
             "inventory": Class::forName("SquareInventoryDataProvider"),
             # Action providers
-            "execute-api-call": Class::forName("SquareExecuteApiCallDataProvider"),
             # Events container
             "events": Class::forName("SquareEventsDataProvider"),
         };

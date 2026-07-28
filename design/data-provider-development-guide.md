@@ -785,10 +785,13 @@ For dynamic options, implement `getRequestTypeWithDataImpl()`.
 > action with body-type-driven dynamic option resolution, path-variable
 > templating, response-status assertions, and multipart upload support.
 > No per-provider code is needed for any provider that follows the
-> universal `rest` member convention. See
+> universal `rest` member convention. The action is backed by a `__call__`
+> child injected once per provider tree, at its root; providers of an app
+> that sets `disable_generic_api_call` also override
+> `hasGenericApiCallChildImpl()` to return `False`. See
 > [Generic "Make an API call" Action](generic-api-call-action.md) for the
-> full design (reflective discovery, builder hooks, request/response
-> schema, opt-out, and the Qorus UI encoding boundary).
+> full design (reflective discovery, injection point, builder hooks,
+> request/response schema, opt-out, and the Qorus UI encoding boundary).
 
 ### DPAT_EVENT
 

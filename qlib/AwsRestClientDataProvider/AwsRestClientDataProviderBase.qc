@@ -44,6 +44,22 @@ public class AwsRestClientDataProviderBase inherits DataProvider::AbstractDataPr
         rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
     }
+
+    #! This provider opts out of the framework-injected generic API call child
+    /** This is a generic AWS REST client provider whose own \c call child already makes arbitrary
+        signed requests through the connection, exactly as the framework-injected
+        @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "__call__" child would; the
+        same reasoning applies here as for
+        @ref RestClientDataProvider::RestClientDataProviderBase "RestClientDataProviderBase" and the
+        \c GenericRest app.
+
+        @return @ref False
+
+        @since AwsRestClientDataProvider 1.1
+    */
+    private bool hasGenericApiCallChildImpl() {
+        return False;
+    }
 }
 }
 

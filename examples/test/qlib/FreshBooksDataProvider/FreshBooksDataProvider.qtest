@@ -325,7 +325,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("create-payment"));
         assertTrue(children.contains("update-payment"));
         assertTrue(children.contains("delete-payment"));
-        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains(AbstractDataProvider::GenericApiCallChildName));
 
         # Verify events provider exists
         assertTrue(children.contains("events"));
@@ -686,8 +686,8 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         # Test get-* (DPAT_FIND_SINGLE) for all entity types
         testGetSingleRecords();
 
-        # Test execute-api-call
-        testExecuteApiCall();
+        # Test the framework-injected generic API call child
+        testGenericApiCall();
 
         # Cleanup test data
         cleanup();
@@ -1482,25 +1482,26 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         }
     }
 
-    #! Test execute-api-call provider
-    private testExecuteApiCall() {
+    #! Test the framework-injected generic API call child provider
+    private testGenericApiCall() {
         if (m_options.verbose) {
             printf("\n--- Testing Execute API Call ---\n");
         }
 
         FreshBooksDataProvider::FreshBooksDataProvider prov(client);
-        AbstractDataProvider apiCallProvider = prov.getChildProvider("execute-api-call");
+        AbstractDataProvider apiCallProvider = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
 
-        # Test GET request via execute-api-call
+        # Test GET request via the generic API call child
         hash<auto> result = apiCallProvider.doRequest({
             "method": "GET",
             "path": "/auth/api/v1/users/me",
         });
-        assertTrue(result.id.val() || result.first_name.val(),
-            "execute-api-call GET should return user data");
+        assertEq(200, result.status, "generic API call GET should succeed");
+        assertTrue(result.body.id.val() || result.body.first_name.val(),
+            "generic API call GET should return user data");
         if (m_options.verbose) {
-            printf("execute-api-call GET: OK (user: %s %s)\n",
-                result.first_name ?? "N/A", result.last_name ?? "N/A");
+            printf("generic API call GET: OK (user: %s %s)\n",
+                result.body.first_name ?? "N/A", result.body.last_name ?? "N/A");
         }
 
         if (m_options.verbose) {
@@ -1549,7 +1550,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         # Delete test estimate (soft delete via vis_state)
         if (testEstimateId) {
             try {
-                AbstractDataProvider executeApi = prov.getChildProvider("execute-api-call");
+                AbstractDataProvider executeApi = prov.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
                 executeApi.doRequest({
                     "method": "PUT",
                     "path": sprintf("/accounting/account/%s/estimates/estimates/%d",

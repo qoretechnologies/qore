@@ -46,6 +46,20 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
         LoggerWrapper::setLogger(logger);
     }
 
+    #! This app opts out of the framework-injected generic API call child
+    /** The @ref RestClientDataProvider::RestClientDataProvider::AppName "GenericRest" app registers
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call" because
+        its canonical \c /call child already provides exactly this functionality; the runtime provider tree
+        has to declare the same opt-out, as a provider cannot look up its own app.
+
+        @return @ref False
+
+        @since RestClientDataProvider 2.4
+    */
+    private bool hasGenericApiCallChildImpl() {
+        return False;
+    }
+
     #! Makes a REST request with debug info collection
     /** @param meth the HTTP method (GET, POST, PUT, DELETE, etc.)
         @param body the request body (can be NOTHING for GET, DELETE, etc.)

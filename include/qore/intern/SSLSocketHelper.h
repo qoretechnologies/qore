@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,19 @@ typedef enum {
     WRITE,
     PEEK,
 } SslAction;
+
+//! Classifies the OpenSSL call that reported a failure
+/** Only calls that read from or write to the socket can fail because of the peer or the transport.
+    An empty OpenSSL error queue means something different for each kind: for a transport call it
+    says the connection went away, while for a setup call it says only that the TLS library gave no
+    reason — the socket is not involved and must not be blamed or closed.
+*/
+enum class SslCall : unsigned char {
+    //! a local call: context or handle creation and configuration; never touches the socket
+    Setup,
+    //! a call that reads from or writes to the socket
+    Transport,
+};
 
 static inline const char* get_action_method(SslAction action) {
     switch (action) {
@@ -176,13 +189,22 @@ private:
     DLLLOCAL ~SSLSocketHelper();
 
     // must be called with refs > 1
-    DLLLOCAL bool sslError(ExceptionSink* xsink, const char* meth, const char* msg, bool always_error = true);
+    DLLLOCAL bool sslError(ExceptionSink* xsink, const char* meth, const char* msg, bool always_error = true,
+            SslCall call = SslCall::Transport);
 
     // must be called with refs > 1
     DLLLOCAL int sysCallError(ExceptionSink* xsink, int rc, const char* mname, const char* ssl_func);
 
-    DLLLOCAL void handleErrorIntern(ExceptionSink* xsink, int e, const char* mname, const char* func,
-            bool always_error);
+    //! Reports one OpenSSL error-queue entry, or the failure of a call that queued nothing
+    /** @param e a packed @c ERR_get_error() code, or 0 when the OpenSSL error queue was empty; what
+        that means depends on \a call
+        @param sockerr the socket errno captured before the OpenSSL calls that can clobber it
+        @param call whether the failing call touches the socket; with an empty error queue a
+        @ref SslCall::Transport "Transport" call means the connection went away, while a
+        @ref SslCall::Setup "Setup" call means only that the TLS library gave no reason
+    */
+    DLLLOCAL void handleErrorIntern(ExceptionSink* xsink, unsigned long e, int sockerr, const char* mname,
+            const char* func, bool always_error, SslCall call);
 };
 
 class SSLSocketReferenceHelper {

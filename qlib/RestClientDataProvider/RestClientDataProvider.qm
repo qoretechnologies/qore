@@ -315,6 +315,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "\"__call__\"" child;
         it accepts any @c AbstractRestClient subclass, so it works uniformly with both the
         synchronous @c RestClient and the async @c RestClientIo transports
+      - the \c GenericRest app's providers declare the runtime side of the app's
+        @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
+        opt-out, so the canonical \c /call child is not duplicated by an injected \c "__call__" child
       - rich per-call configuration:
         - `body_type` selector (json / form / multipart / xml / yaml / text / binary / auto) drives
           both body serialization and the `Content-Type` header; the

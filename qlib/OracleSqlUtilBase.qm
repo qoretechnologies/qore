@@ -776,13 +776,16 @@ public class OracleForeignConstraint inherits SqlUtil::AbstractForeignConstraint
         bool enabled;
     }
 
-    constructor(string n, Columns c, ForeignConstraintTarget t, bool e) : AbstractForeignConstraint(n, c, t) {
+    constructor(string n, Columns c, ForeignConstraintTarget t, bool e, bool deferrable = False,
+            bool initially_deferred = False)
+            : AbstractForeignConstraint(n, c, t, deferrable, initially_deferred) {
         enabled = e;
     }
 
     string getCreateSql(string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)", table_name, name,
-            (foldl $1 + ", " + $2, h.keys()), target.table, (foldl $1 + ", " + $2, target.columns.keys()));
+        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name, name,
+            (foldl $1 + ", " + $2, h.keys()), target.table, (foldl $1 + ", " + $2, target.columns.keys()),
+            getDeferrabilitySql());
     }
 
     softlist getRenameSql(string table_name, string new_name) {
@@ -3977,7 +3980,9 @@ group by p.index_name", schema.upr(), name.upr());
         hash ch;
 
         # get foreign referential constraints
-        *hash qh = ds.select("select constraint_name, status from user_constraints" + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v and constraint_type = 'R'", schema.upr(), name.upr());
+        *hash qh = ds.select("select constraint_name, status, deferrable, deferred from user_constraints"
+            + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v and constraint_type = 'R'",
+            schema.upr(), name.upr());
         if (qh.status) {
             hash rv;
             foreach hash<auto> row in (qh.contextIterator()) {
@@ -3985,6 +3990,8 @@ group by p.index_name", schema.upr(), name.upr());
                     row.constraint_name = row.constraint_name.lwr();
                 rv.(row.constraint_name) = (
                     "enabled": row.status == "ENABLED",
+                    "deferrable": row.deferrable == "DEFERRABLE",
+                    "initially_deferred": row.deferred == "DEFERRED",
                     );
             }
             qh = ds.select("select c.constraint_name, status, cols1.column_name source_column, cols1.position, cols2.table_name target_table, cols2.column_name target_column from " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " c, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols1, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols2 where c.owner = %v and c.table_name = %v and c.constraint_name = cols1.constraint_name and constraint_type = 'R' and c.r_constraint_name = cols2.constraint_name and cols1.position = cols2.position and cols1.owner = c.owner and cols2.owner = c.owner order by cols1.position", schema.upr(), name.upr());
@@ -4007,7 +4014,8 @@ group by p.index_name", schema.upr(), name.upr());
                 # get a description of the target table's columns
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table, targ_columns.subset(c.value.target.columns.keys()));
-                ch.(c.key) = new OracleForeignConstraint(c.key, new Columns(c.value.columns), fct, c.value.enabled);
+                ch.(c.key) = new OracleForeignConstraint(c.key, new Columns(c.value.columns), fct, c.value.enabled,
+                    c.value.deferrable, c.value.initially_deferred);
             }
         }
 
@@ -4230,7 +4238,8 @@ group by p.index_name", schema.upr(), name.upr());
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {
         ForeignConstraintTarget fct(table, new Columns(tch));
-        return new OracleForeignConstraint(cname, new Columns(ch), fct, True);
+        return new OracleForeignConstraint(cname, new Columns(ch), fct, True, opt.deferrable,
+            opt.initially_deferred);
     }
 
     private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash opt) {
@@ -4444,6 +4453,10 @@ group by p.index_name", schema.upr(), name.upr());
     private bool supportsPartitionsImpl() {
         # Oracle table partitioning is enabled from 12c onwards (per the SqlUtil partition design)
         return getOracleServerMajorVersion() >= 12;
+    }
+
+    private bool supportsDeferrableForeignConstraintsImpl() {
+        return True;
     }
 
     private bool supportsPartitionMethodImpl(string method, bool subpartition) {

@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression test for the diagnostic quality of the TLS-handshake failure message.
+
+    When the peer drops the connection during a TLS handshake, OpenSSL reports the
+    failure with an empty error queue (Qore sets SSL_OP_IGNORE_UNEXPECTED_EOF, so a
+    bare TCP FIN arrives as SSL_ERROR_ZERO_RETURN with nothing queued).  The message
+    used to end in "(err: 6)", which was a placeholder substituted for the empty
+    queue: it carried no information and could not distinguish an orderly TLS
+    shutdown from the peer dropping the connection mid-handshake.  It must now say
+    which of the two happened.
+*/
+
+%modern
+
+%requires QUnit
+
+%exec-class SslHandshakeDropTest
+
+class SslHandshakeDropTest inherits QUnit::Test {
+    constructor() : Test("SslHandshakeDropTest", "1.0") {
+        addTestCase("a connection dropped mid-handshake is reported as such",
+            \testHandshakeDropIsExplained());
+        set_return_value(main());
+    }
+
+    #! A peer that accepts the TCP connection and closes it without speaking TLS
+    /** This is the shape of the CI flake this message is used to diagnose: the client's
+        SSL_connect() sees the connection go away with no TLS alert and no OpenSSL error.
+    */
+    private testHandshakeDropIsExplained() {
+        Socket listener();
+        listener.bindINET("localhost", "0", True);
+        int port = listener.getSocketInfo().port;
+        listener.listen();
+
+        Counter accepted(1);
+        background sub () {
+            on_exit accepted.dec();
+            try {
+                *Socket conn = listener.accept(10s);
+                if (conn) {
+                    # drop the connection without answering the ClientHello
+                    conn.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may have gone first; nothing to do
+            }
+        }();
+
+        hash<ExceptionInfo> ex;
+        {
+            Socket client();
+            on_exit delete client;
+            try {
+                client.connectSSL("localhost:" + port, 10s);
+                fail("connectSSL() succeeded against a peer that never spoke TLS");
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }
+        accepted.waitForZero(30s);
+        listener.close();
+
+        assertEq("SOCKET-SSL-ERROR", ex.err, "a dropped handshake reports SOCKET-SSL-ERROR");
+        # the point of the test: the description must say what happened rather than print a
+        # placeholder error number
+        assertFalse(ex.desc =~ /err: 6/, "the placeholder error number is gone");
+        assertRegex("during the TLS handshake", ex.desc,
+            "the description says the connection was dropped during the handshake");
+    }
+}
