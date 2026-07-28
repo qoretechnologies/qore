@@ -8,10 +8,10 @@
 %requires QUnit
 %requires Mime
 %requires Logger
-%requires HttpServerUtil
+%requires ../../../../qlib/HttpServerUtil.qm
 %requires AsyncSocketIo
 %requires HttpServerAsyncIo
-%requires HttpServer
+%requires ../../../../qlib/HttpServer.qm
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
@@ -1149,7 +1149,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         try {
             hash<auto> resp = mgr.request("https://127.0.0.1:" + h3info.port,
-                "POST", "/test", {"User-Agent": "qore-log-test"}, "x");
+                "POST", "/test?token=qore-test-secret&mode=audit",
+                {"User-Agent": "qore-log-test"}, "x");
             assertEq(200, resp.status_code);
             assertEq("h3", resp.protocol);
         } catch (hash<ExceptionInfo> ex) {
@@ -1170,8 +1171,14 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("QUIC-SESSION-ERROR", r.unknown_version_err);
 
         bool found;
+        bool found_masked_target;
         foreach string message in (appender.getMessages()) {
-            if (message =~ /POST \/test HTTP\/3 \(agent: "qore-log-test"/) {
+            assertFalse(message =~ /qore-test-secret/,
+                "HTTP/3 diagnostics must not expose authentication query values");
+            if (message =~ /\/test\?token=<masked>&mode=audit/) {
+                found_masked_target = True;
+            }
+            if (message =~ /POST \/test\?token=<masked>&mode=audit HTTP\/3 \(agent: "qore-log-test"/) {
                 found = True;
                 assertTrue(message.find(r.cipher_name) >= 0,
                     "HTTP/3 access log must include QUIC TLS cipher name: " + message);
@@ -1182,6 +1189,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
         }
         assertTrue(found, "expected HTTP/3 access log message");
+        assertTrue(found_masked_target,
+            "HTTP/3 diagnostics preserve a useful request target while masking its token");
     }
 
     issue3116() {
@@ -1409,6 +1418,20 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     misc() {
         assertEq(("method": "path", "params": ("a": "1", "b": "2")), parse_uri_query("path?a=1;b=2"));
         assertEq(("method": "path", "params": ("a": "1", "b": True)), parse_uri_query("path?a=1;b"));
+        assertEq("/creator?subscription=true&token=<masked>&limit=10",
+            mask_sensitive_url_query_values(
+                "/creator?subscription=true&token=secret%3F%26still-secret&limit=10"),
+            "query token values are masked before URL decoding");
+        assertEq("/creator?ACCESS_TOKEN=<masked>;client-secret=<masked>&mode=full",
+            mask_sensitive_url_query_values(
+                "/creator?ACCESS_TOKEN=access-secret;client-secret=client-value&mode=full"),
+            "standard sensitive parameter names are masked case-insensitively");
+        assertEq("/creator?t%6fken=<masked>&mode=full",
+            mask_sensitive_url_query_values("/creator?t%6fken=encoded-name-secret&mode=full"),
+            "percent-encoded sensitive parameter names are masked");
+        assertEq("/creator?subscription=true&mode=full",
+            mask_sensitive_url_query_values("/creator?subscription=true&mode=full"),
+            "non-sensitive query parameters are preserved");
 
         Socket sock();
         sock.connect("localhost:" + port);
@@ -1428,6 +1451,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         resp = readRawHttpResponse(mask_sock);
         assertEq(200, resp.status_code);
         assertEq("/masked path?password=<masked>...", resp.body);
+
+        Socket token_mask_sock();
+        token_mask_sock.connect("localhost:" + port);
+        on_exit token_mask_sock.close();
+        token_mask_sock.send("GET /masked%20path?subscription=true&token=secret%3F%26still-secret&limit=100 HTTP/1.1\r\n"
+            "Host: localhost\r\nConnection: close\r\n\r\n");
+        resp = readRawHttpResponse(token_mask_sock);
+        assertEq(200, resp.status_code);
+        assertEq("/masked path?subscription=true&token=<masked>&limit=100", resp.body,
+            "handler-visible masked_path does not expose query tokens");
     }
 
     private multipartFormDataBinaryFileTest() {

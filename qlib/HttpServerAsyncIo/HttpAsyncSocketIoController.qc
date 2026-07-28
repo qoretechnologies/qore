@@ -697,7 +697,7 @@ public class HttpAsyncSocketIoController {
             "conn_info": conn_info,
         }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/1.x request routed to persistent queue: %y %s %s",
-                uh, conn_info.hdr.method, conn_info.hdr.path);
+                uh, conn_info.hdr.method, getLogRequestPath(conn_info.hdr.path));
             AutoWriteLock al(m);
             remove connections{uh};
         })) {
@@ -1699,7 +1699,7 @@ public class HttpAsyncSocketIoController {
         int stream_id = request.stream_id;
 
         log(LoggerLevel::DEBUG, "HTTP/3 request ready: session=%d stream=%d %s %s",
-            session_id, stream_id, request.method, request.path);
+            session_id, stream_id, request.method, getLogRequestPath(request.path));
 
         # NOTE: h3op is already in STATE_READING — getOutput() atomically
         # transitions from STATE_REQUEST_READY to STATE_READING when it
@@ -1776,7 +1776,8 @@ public class HttpAsyncSocketIoController {
             && request.headers.":protocol" == "websocket";
         if (is_extended_connect) {
             log(LoggerLevel::DEBUG, "HTTP/3 extended CONNECT (%s): session=%d stream=%d %s",
-                request.headers.":protocol", session_id, stream_id, request.path);
+                request.headers.":protocol", session_id, stream_id,
+                getLogRequestPath(request.path));
         }
 
         # Build header hash (same format as HTTP/2)
@@ -1910,7 +1911,8 @@ public class HttpAsyncSocketIoController {
         }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/3 request routed to persistent queue: %y "
                 "session=%d stream=%d %s %s",
-                persistent_uh, session_id, stream_id, request.method, request.path);
+                persistent_uh, session_id, stream_id, request.method,
+                getLogRequestPath(request.path));
         })) {
             return;
         }
@@ -3887,7 +3889,8 @@ public class HttpAsyncSocketIoController {
 
         if (is_extended_connect) {
             log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT (%s): %y stream=%d %s",
-                request.headers.":protocol", uh, stream_id, request.path);
+                request.headers.":protocol", uh, stream_id,
+                getLogRequestPath(request.path));
             handleHttp2ExtendedConnect(uh, cinfo, h2op, request, stream_id,
                 is_websocket_connect);
             return;
@@ -3896,7 +3899,7 @@ public class HttpAsyncSocketIoController {
         # Multiplexed path: h2op stays on the I/O thread, handler sends response via
         # submitHttp2Response() — supports true HTTP/2 multiplexing with all response types
         log(LoggerLevel::DEBUG, "HTTP/2 request ready: %y stream=%d %s %s",
-            uh, stream_id, request.method, request.path);
+            uh, stream_id, request.method, getLogRequestPath(request.path));
 
         # Build header hash
         hash<auto> hdr = request.headers;
@@ -4041,7 +4044,8 @@ public class HttpAsyncSocketIoController {
             "resume_reading": resume_reading,
         }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/2 request routed to persistent queue: %y stream=%d %s %s",
-                dispatch_uh, dispatch_stream_id, request.method, request.path);
+                dispatch_uh, dispatch_stream_id, request.method,
+                getLogRequestPath(request.path));
         })) {
             return;
         }
@@ -4182,7 +4186,8 @@ public class HttpAsyncSocketIoController {
             Http2PollOperation h2op, hash<auto> request, int stream_id,
             bool is_websocket_connect = True) {
         log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT (%s, multiplexed): %y stream=%d %s",
-            request.headers.":protocol", uh, stream_id, request.path);
+            request.headers.":protocol", uh, stream_id,
+            getLogRequestPath(request.path));
 
         # Create unlimited Queue for async data delivery to the handler.
         # WebSocket CONNECT takes the C++ WebSocketStreamFrameState fast
@@ -4666,6 +4671,12 @@ public class HttpAsyncSocketIoController {
             # collapse pure "%s" results to empty output
             logger.log(level, "%s", vsprintf(fmt, argv));
         }
+    }
+
+    #! Returns a safe request target only when protocol diagnostics are enabled
+    private string getLogRequestPath(string path) {
+        return logger && logger.isEnabledFor(LoggerLevel::DEBUG)
+            ? mask_sensitive_url_query_values(path) : "";
     }
 
     #! Returns the effective HTTP version respecting global HTTP/2 mode
