@@ -18214,6 +18214,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_collection_producer_consumers(func, query);
         }
         size_t string_consumers = 0;
+        size_t int_string_measure_consumers = 0;
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION")) {
+            int_string_measure_consumers =
+                qore_ir_fuse_native_int_string_measure_consumers(func);
+        }
         QoreIRStringProducerQuery string_producer_query;
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
             string_producer_query =
@@ -18423,6 +18429,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || boxed_return_calls
                 || changed
                 || collection_consumers || string_consumers
+                || int_string_measure_consumers
                 || string_transform_consumers
                 || cross_block_boxed_facts
                 || boxed_specializations
@@ -18440,6 +18447,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " inplace-push=%zu"
                 " collection-consumers=%zu"
                 " string-consumers=%zu"
+                " int-string-measure-consumers=%zu"
                 " string-transform-consumers=%zu"
                 " post-rewrite-rounds=%zu"
                 " cross-block-boxed-facts=%zu"
@@ -18452,6 +18460,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 aggregate_projections, borrowed_aggregate_projections,
                 object_scalar_projections, boxed_return_calls, changed,
                 collection_consumers, string_consumers,
+                int_string_measure_consumers,
                 string_transform_consumers,
                 post_rewrite_rounds,
                 cross_block_boxed_facts,

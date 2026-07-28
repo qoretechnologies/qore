@@ -12318,7 +12318,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* result;
-            if (!std::getenv("QORE_DISABLE_AOT_DIRECT_INT_TO_STRING")
+            if (inst->aot_int_to_string_measure) {
+                if (val->getType() != i64_type
+                        || nanboxed_values.count(inst->operands[0].id)) {
+                    error = "integer string measurement requires a native integer";
+                    return false;
+                }
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_int_to_string_measure",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                result = builder->CreateCall(helper, {val});
+                values[inst->result.id] = result;
+                return true;
+            } else if (!std::getenv("QORE_DISABLE_AOT_DIRECT_INT_TO_STRING")
                     && val->getType() == i64_type
                     && !nanboxed_values.count(inst->operands[0].id)) {
                 auto helper = module.getOrInsertFunction(

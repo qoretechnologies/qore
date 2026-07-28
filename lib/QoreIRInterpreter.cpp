@@ -11775,6 +11775,13 @@ load_local_done:
             }
             case QoreIROpcode::ToString: {
                 QoreValue val = getIRValue(values, inst->operands[0]);
+                if (inst->aot_int_to_string_measure) {
+                    setValueSlot(values, inst->result.id,
+                        QoreValue(qore_rt_int_to_string_measure(
+                            val.getAsBigInt())), xsink);
+                    ++ip;
+                    break;
+                }
                 QoreStringNode* str;
                 switch (val.getType()) {
                     case NT_STRING: {

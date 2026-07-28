@@ -336,6 +336,10 @@ using QoreIRStringProducerQuery = std::function<bool(
 size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     const QoreIRStringProducerQuery& is_supported);
 
+//! Replace a native integer conversion with its decimal width when its sole
+//! consumer is string size() or length().
+size_t qore_ir_fuse_native_int_string_measure_consumers(QoreIRFunction& func);
+
 //! Fuse exact string case transformations with supported sole consumers.
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
 

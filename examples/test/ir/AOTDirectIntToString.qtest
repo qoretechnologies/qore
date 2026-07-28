@@ -41,6 +41,7 @@ string enabled_compile = backquote(sprintf(
     libqore_dir, qcc_bin, enabled, source));
 string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_DIRECT_INT_TO_STRING=1"
+        + " QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled, source));
 if (!is_file(enabled) || !is_file(disabled)) {
@@ -89,5 +90,60 @@ string boxed_undefined = is_file(boxed)
 if (!is_file(boxed) || boxed_undefined !~ /qore_rt_to_string/) {
     printf("boxed conversion did not retain generic lowering:\n%s\n%s",
         boxed_compile, boxed_undefined);
+    exit(2);
+}
+
+string measure_source = root + "/measure.qr";
+string measure_enabled = root + "/measure-enabled";
+string measure_disabled = root + "/measure-disabled";
+File measure_file();
+measure_file.open2(measure_source, O_WRONLY | O_CREAT | O_TRUNC);
+measure_file.write("%modern
+int sub measureSize(int value) {
+    return string(value).size();
+}
+int sub measureLength(int value) {
+    return string(value).length();
+}
+list<int> values = (
+    -9223372036854775807 - 1, -1000000, -1, 0, 1, 1000000,
+    9223372036854775807);
+foreach int value in (values) {
+    printf(\"%d:%d\\n\", measureSize(value), measureLength(value));
+}
+");
+measure_file.close();
+string measure_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, measure_source));
+string measure_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, measure_enabled, measure_source));
+string measure_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, measure_disabled, measure_source));
+string measure_enabled_output = is_file(measure_enabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, measure_enabled)) : "";
+string measure_disabled_output = is_file(measure_disabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, measure_disabled)) : "";
+string measure_enabled_undefined = is_file(measure_enabled)
+    ? backquote(sprintf("nm -u %s 2>&1", measure_enabled)) : "";
+string measure_disabled_undefined = is_file(measure_disabled)
+    ? backquote(sprintf("nm -u %s 2>&1", measure_disabled)) : "";
+if (!is_file(measure_enabled) || !is_file(measure_disabled)
+        || measure_enabled_output != measure_ast
+        || measure_disabled_output != measure_ast
+        || measure_enabled_undefined !~ /qore_rt_int_to_string_measure/
+        || measure_disabled_undefined !~ /qore_rt_int_to_string/
+        || measure_disabled_undefined =~ /qore_rt_int_to_string_measure/) {
+    printf("unexpected measurement lowering:\nenabled compile:\n%s"
+        + "disabled compile:\n%senabled output:\n%sdisabled output:\n%s"
+        + "AST output:\n%senabled symbols:\n%sdisabled symbols:\n%s",
+        measure_enabled_compile, measure_disabled_compile,
+        measure_enabled_output, measure_disabled_output, measure_ast,
+        measure_enabled_undefined, measure_disabled_undefined);
     exit(2);
 }

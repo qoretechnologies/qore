@@ -987,6 +987,7 @@ public:
     bool typed_value_prevalidated = false;  // Transient: a dominating typed store validated this scalar value
     bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
     bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
+    bool aot_int_to_string_measure = false;  // Transient: ToString returns the native decimal width
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
