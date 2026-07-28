@@ -49,33 +49,83 @@ public class PromptSecretProtector {
         const DefaultRedactionText = "<redacted>";
     }
 
+    private {
+        #! Versioned machine contract returned by buildSystemContext()
+        const SystemContextContractId =
+            "qore.llm.protected_values.v1";
+        #! Maximum unique values protected in one request
+        const MaxProtectedCandidates = 64;
+
+        #! Exact canonical machine keys whose values are sensitive
+        /** These are protocol identifiers, not natural-language aliases.
+            Matching is deliberately case- and separator-sensitive so
+            translated words, cognates, and user-defined labels remain opaque.
+        */
+        const SensitiveMachineKeys = {
+            "api-key": True,
+            "api_key": True,
+            "apikey": True,
+            "access-token": True,
+            "access_token": True,
+            "bearer-token": True,
+            "bearer_token": True,
+            "refresh-token": True,
+            "refresh_token": True,
+            "token": True,
+            "pass": True,
+            "password": True,
+            "passphrase": True,
+            "authorization": True,
+            "credential": True,
+            "client-secret": True,
+            "client_secret": True,
+            "secret": True,
+            "private-key": True,
+            "private_key": True,
+            "sensitive": True,
+            "sensitive-data": True,
+            "sensitive_data": True,
+            "svalue": True,
+        };
+    }
+
     #! Replace credential-like values in \a input with request-local placeholders
     /** @param input prompt text to mutate in place
         @param options optional placeholder and redaction configuration
 
         @return a placeholder hash mapping placeholder strings to raw values,
             or @ref nothing when no credential-like values were found
+
+        @throw LLM-SECRET-PROTECTION-ERROR when one request contains more
+            unique protected values than the bounded placeholder contract
+
+        @par Language-independent input forms
+        Any Unicode label can mark a protected value with the structural
+        \c := delimiter, for example \c contraseña:=valor or
+        \c 認証情報:="値".  Values assigned to exact canonical sensitive
+        machine keys and URI userinfo passwords are also protected.  Natural
+        language words are never classified as sensitive.
     */
     static *hash<auto> protectText(reference<string> input,
             *hash<PromptSecretProtectionOptions> options) {
-        *list<string> matches = (input =~ x/\b(api[\s_-]*key|apikey|access[\s_-]*token|bearer[\s_-]*token|refresh[\s_-]*token|token|password|passphrase|client[\s_-]*secret|secret|private[\s_-]*key)\b\s*(?:is|=|:)?\s*([A-Za-z0-9_\-\.\/+=]{4,})/ig);
-        if (!matches) {
-            return NOTHING;
-        }
-
         int min_value_length = options.min_value_length ?? 8;
         if (min_value_length < 1) {
             min_value_length = 1;
         }
+        list<string> candidates =
+            collectProtectedCandidates(input, min_value_length);
+        if (!candidates) {
+            return NOTHING;
+        }
+
         string prefix = normalizePlaceholderPrefix(
             options.placeholder_prefix ?? DefaultPlaceholderPrefix);
         string safe_input = input;
         hash<auto!> secrets = {};
         hash<string, bool> seen_values = {};
         int idx = 0;
-        for (int i = 0; i + 1 < matches.size(); i += 2) {
-            string secret = matches[i + 1];
-            if (secret.length() < min_value_length || seen_values{secret}) {
+        foreach string secret in (candidates) {
+            if (seen_values{secret}) {
                 continue;
             }
             seen_values{secret} = True;
@@ -107,18 +157,23 @@ public class PromptSecretProtector {
         names = sort(names, int sub (string a, string b) {
             return a <=> b;
         });
-        string operation = options.operation_description ?? "the requested operation";
-        return sprintf("CURRENT REQUEST CREDENTIAL PLACEHOLDERS: The current "
-            "request included %d user-supplied credential value%s. They were "
-            "replaced before LLM processing with these placeholders: %s. "
-            "Treat these placeholders as opaque credential values supplied by "
-            "the user for %s. If a tool or action argument needs a credential, "
-            "pass the matching placeholder string exactly; application code "
-            "can restore the real value only at the execution boundary. Never "
-            "print, reveal, summarize, transform, save to memory, or ask the "
-            "user to re-enter these credentials.",
-            names.size(), names.size() == 1 ? "" : "s", names.join(", "),
-            operation);
+        return make_json({
+            "contract_id": SystemContextContractId,
+            "placeholders": names,
+            "operation_description":
+                options.operation_description ?? "current_operation",
+            "value_semantics": "opaque_sensitive_value",
+            "allowed_use": "exact_execution_argument",
+            "restore_boundary": "application_execution",
+            "forbidden_uses": (
+                "print",
+                "reveal",
+                "summarize",
+                "transform",
+                "persist",
+                "request_reentry",
+            ),
+        }, JGF_ADD_FORMATTING);
     }
 
     #! Restore request-local placeholders in a value before tool execution
@@ -166,13 +221,17 @@ public class PromptSecretProtector {
             redaction_text ?? DefaultRedactionText);
     }
 
-    #! Return @ref True if the key name conventionally contains a secret
-    /** @param key hash key or option name to inspect
+    #! Return @ref True for an exact canonical sensitive machine key
+    /** @param key hash key or option name to inspect without normalization
 
-        @return @ref True when \a key conventionally names a secret value
+        @return @ref True only when \a key is an exact closed protocol key
+
+        @note Case, separator, translated, and cognate variants are not
+            aliases.  Callers with schema metadata should use its explicit
+            sensitive flag instead of inferring sensitivity from labels.
     */
     static bool isSensitiveKey(string key) {
-        return key.lwr() =~ /\b(api[\s_-]*key|apikey|access[\s_-]*token|bearer[\s_-]*token|refresh[\s_-]*token|token|pass|password|passphrase|authorization|credential|client[\s_-]*secret|secret|private[\s_-]*key|sensitive(?:_data)?|svalue)\b/;
+        return SensitiveMachineKeys{key} ?? False;
     }
 
     #! Recursively redact sensitive keyed values and credential phrases
@@ -215,14 +274,94 @@ public class PromptSecretProtector {
     static string redactSensitiveString(string value, *string redaction_text) {
         string marker = redaction_text ?? DefaultRedactionText;
         string rv = value;
-        rv =~ s/((?:"?(?:api[\s_-]*key|apikey|access[\s_-]*token|bearer[\s_-]*token|refresh[\s_-]*token|token|pass|password|passphrase|authorization|credential|client[\s_-]*secret|secret|private[\s_-]*key|sensitive(?:_data)?|svalue)"?\s*[=:>]\s*"?))[^",}\s]+("?)/$1<redacted>$2/ig;
-        rv =~ s/\b((?:api[\s_-]*key|apikey|access[\s_-]*token|bearer[\s_-]*token|refresh[\s_-]*token|token|password|passphrase|authorization|credential|client[\s_-]*secret|secret|private[\s_-]*key|sensitive(?:_data)?|svalue)\b\s*(?:is|=|:)?\s*)([A-Za-z0-9_\-.\/+=]{8,})/$1<redacted>/ig;
-        rv =~ s/^([a-z][a-z0-9+.-]*:\/\/[^:\/?#\s]+:)[^@\/?#\s]+(@)/$1<redacted>$2/i;
-        if (marker != DefaultRedactionText) {
-            rv = replace(rv, DefaultRedactionText, marker);
-            rv = replace(rv, "<redacted>", marker);
+        *hash<auto> placeholders;
+        try {
+            placeholders = protectText(\rv);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-SECRET-PROTECTION-ERROR") {
+                return marker;
+            }
+            rethrow;
+        }
+        if (placeholders) {
+            rv = redactPlaceholders(rv, placeholders, marker);
         }
         return rv;
+    }
+
+    #! Collect exact values protected by structural, language-neutral rules
+    private static list<string> collectProtectedCandidates(string input,
+            int min_value_length) {
+        list<string> rv = ();
+        hash<string, bool> seen = {};
+
+        # Any-language explicit protected binding.  The delimiter, rather
+        # than the label, carries sensitivity.
+        addCandidateMatches(\rv, \seen,
+            input =~ x/:=\s*"([^"\r\n]+)"/g, min_value_length);
+        addCandidateMatches(\rv, \seen,
+            input =~ x/:=\s*'([^'\r\n]+)'/g, min_value_length);
+        addCandidateMatches(\rv, \seen,
+            input =~ x/:=\s*(?!["'])([^\s,;}\]]+)/g,
+            min_value_length);
+
+        # Exact canonical machine-key assignments.  Capturing is structural;
+        # key classification uses the closed, case-sensitive set above.
+        *list<string> assignments = input =~
+            x/(?:^|[\s,{;])["']?([A-Za-z][A-Za-z0-9_-]*)["']?\s*(?:=|:)\s*([^,\r\n;}]+)/g;
+        if (assignments) {
+            for (int i = 0; i + 1 < assignments.size(); i += 2) {
+                if (isSensitiveKey(assignments[i])) {
+                    addCandidate(\rv, \seen, assignments[i + 1],
+                        min_value_length);
+                }
+            }
+        }
+
+        # URI userinfo has a standard structural password position.
+        addCandidateMatches(\rv, \seen,
+            input =~ x/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^:\/?#\s]+:([^@\/?#\s]+)@/g,
+            min_value_length);
+        return rv;
+    }
+
+    private static addCandidateMatches(reference<list<string>> rv,
+            reference<hash<string, bool>> seen, *list<string> matches,
+            int min_value_length) {
+        foreach string match in (matches ?? ()) {
+            addCandidate(\rv, \seen, match, min_value_length);
+        }
+    }
+
+    private static addCandidate(reference<list<string>> rv,
+            reference<hash<string, bool>> seen, string raw,
+            int min_value_length) {
+        string candidate = trim(raw);
+        if (candidate.length() >= 2) {
+            string first = candidate.substr(0, 1);
+            string last = candidate.substr(candidate.length() - 1, 1);
+            if ((first == "\"" && last == "\"")
+                    || (first == "'" && last == "'")) {
+                candidate = candidate.substr(1,
+                    candidate.length() - 2);
+            }
+        }
+        candidate = trim(candidate);
+        if (candidate.length() < min_value_length
+                || candidate == DefaultRedactionText
+                || candidate =~ /^<credential-[0-9]+>$/
+                || seen{candidate}) {
+            return;
+        }
+        if (rv.size() >= MaxProtectedCandidates) {
+            throw "LLM-SECRET-PROTECTION-ERROR", make_json({
+                "contract_id": SystemContextContractId,
+                "constraint": "max_protected_values",
+                "maximum": MaxProtectedCandidates,
+            });
+        }
+        seen{candidate} = True;
+        rv += candidate;
     }
 
     private static auto replacePlaceholders(auto value,

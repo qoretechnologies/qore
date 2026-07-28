@@ -222,6 +222,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \promptSecretRedactProtectedValuesTest());
         addTestCase("PromptSecretProtector redacts sensitive keys and text",
             \promptSecretRedactSensitiveValueTest());
+        addTestCase("PromptSecretProtector bounds protected values",
+            \promptSecretProtectedValueLimitTest());
         addTestCase("qoreTypeNameToJsonSchema maps scalars and nullables",
             \qoreTypeNameToJsonSchemaScalarTest());
         addTestCase("qoreTypeNameToJsonSchema maps parameterised lists",
@@ -3131,7 +3133,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
     promptSecretProtectRestoreTest() {
         string raw_secret = "qore-test-secret-value-12345";
-        string text = "create a connection using API key " + raw_secret;
+        string text = "crea una conexión con contraseña:=" + raw_secret;
         *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
         assertTrue(placeholders.val());
         assertFalse(text.find(raw_secret) >= 0);
@@ -3141,6 +3143,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         string context_text = PromptSecretProtector::buildSystemContext(placeholders);
         assertTrue(context_text.find("<credential-1>") >= 0);
         assertFalse(context_text.find(raw_secret) >= 0);
+        assertTrue(context_text.find("qore.llm.protected_values.v1") >= 0);
+        assertTrue(context_text.find("\"forbidden_uses\"") >= 0);
 
         hash<auto> args = {
             "options": {"apikey": "<credential-1>"},
@@ -3154,7 +3158,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
     promptSecretRedactNestedTest() {
         string raw_secret = "qore-test-secret-value-24680";
-        string text = "API key " + raw_secret;
+        string text = "認証情報:=\"" + raw_secret + "\"";
         *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
         hash<auto> value = {
             "options": {"apikey": "<credential-1>"},
@@ -3169,7 +3173,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
     promptSecretRedactProtectedValuesTest() {
         string raw_secret = "qore-test-secret-value-67890";
-        string text = "create using api key " + raw_secret;
+        string text = "apikey=" + raw_secret;
         *hash<auto> placeholders = PromptSecretProtector::protectText(\text);
         hash<auto> value = {
             "message": "tool failed with apikey=" + raw_secret,
@@ -3187,11 +3191,13 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<auto> value = {
             "apikey": "secret-value-12345",
             "nested": {
-                "plain": "use api key secret-value-67890",
+                "plain": "heslo:=secret-value-67890",
                 "url": "https://example.com",
                 "url_with_auth": "https://user:secret-value-99999@example.com/path",
             },
             "svalue": "secret-value-54321",
+            "secreto": "ordinary-cognate-value",
+            "Segreto": "ordinary-case-distinct-value",
         };
         hash<auto> redacted = cast<hash>(
             PromptSecretProtector::redactSensitiveValue(value));
@@ -3201,6 +3207,31 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("https://example.com", redacted.nested.url);
         assertEq("https://user:<redacted>@example.com/path",
             redacted.nested.url_with_auth);
+        assertEq("ordinary-cognate-value", redacted.secreto);
+        assertEq("ordinary-case-distinct-value", redacted.Segreto);
+        assertFalse(PromptSecretProtector::isSensitiveKey("SeCrEt"));
+        assertFalse(PromptSecretProtector::isSensitiveKey("secreto"));
+        assertFalse(PromptSecretProtector::isSensitiveKey("segreto"));
+        assertFalse(PromptSecretProtector::isSensitiveKey("tajomstvo"));
+        assertFalse(PromptSecretProtector::isSensitiveKey("hemmelig"));
+        assertTrue(PromptSecretProtector::isSensitiveKey("secret"));
+
+        string ordinary = "Il segreto industriale resta una descrizione";
+        assertEq(ordinary,
+            PromptSecretProtector::redactSensitiveString(ordinary));
+    }
+
+    promptSecretProtectedValueLimitTest() {
+        string text;
+        for (int i = 0; i < 65; ++i) {
+            text += sprintf("password=value-%06d; ", i);
+        }
+        assertThrows("LLM-SECRET-PROTECTION-ERROR",
+            "max_protected_values", sub () {
+                PromptSecretProtector::protectText(\text);
+            });
+        assertEq("<redacted>",
+            PromptSecretProtector::redactSensitiveString(text));
     }
 
     # --- qorus#230 helpers: qoreParamsToJsonSchema / sanitizeLlmToolName ---
