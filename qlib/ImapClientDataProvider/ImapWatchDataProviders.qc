@@ -87,11 +87,19 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
             },
             "delete_messages": <DataProviderOptionInfo>{
                 "display_name": "Delete Messages?",
-                "short_desc": "Delete reported messages?",
+                "short_desc": "Delete reported messages once their event has been raised?",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "Flag each reported message `\\Deleted` and expunge it.\n\n"
+                "desc": "Flag each reported message `\\Deleted` and expunge it once its event has been "
+                    "raised.\n\n"
                     "**This removes mail from the server permanently**; prefer `mark_seen` or a move to "
-                    "another mailbox unless the mailbox is a queue that is meant to be drained",
+                    "another mailbox unless the mailbox is a queue that is meant to be drained.\n\n"
+                    "The message is expunged as soon as its event has been **raised**, which is not the "
+                    "same as the consumer having **processed** it. Raising the event throwing an exception "
+                    "leaves the message in place for the next sweep, but a consumer that receives the "
+                    "event and then fails, times out, or is restarted mid-processing has already lost the "
+                    "only copy. For a workload that must not lose the source message, leave this option "
+                    "unset and act from the consumer once processing has succeeded: every event carries "
+                    "its `uid`, and the `set-flags` and `move-messages` actions take it",
                 "default_value": False,
             },
         };

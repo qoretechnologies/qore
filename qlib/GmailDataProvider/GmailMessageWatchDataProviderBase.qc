@@ -32,9 +32,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         const ConstructorOptions = {
             "delete_messages": <DataProviderOptionInfo>{
                 "display_name": "Delete Messages?",
-                "short_desc": "Delete messages matched?",
+                "short_desc": "Permanently delete each matched message after raising its event?",
                 "type": (AbstractDataProviderTypeMap."bool",),
-                "desc": "Delete messages matched?",
+                "desc": "Permanently delete each matched message after raising its event?\n\n"
+                    "**The message is deleted as soon as its event has been raised, whatever the event "
+                    "consumer then does with it.** Event delivery is not consumer processing: a consumer "
+                    "that fails, times out, or is restarted mid-processing has already lost the only copy "
+                    "of the message, and a Gmail delete cannot be undone.\n\n"
+                    "For any workload that must not lose the source message, leave this option unset and "
+                    "delete from the consumer once processing has succeeded — every event carries the "
+                    "`message_id` of its source message, and the `delete-message` and `trash-message` "
+                    "actions take that ID",
             },
             "q": <DataProviderOptionInfo>{
                 "display_name": "Search Criteria",
