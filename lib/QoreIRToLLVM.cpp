@@ -12317,10 +12317,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ToString: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-            auto helper = module.getOrInsertFunction("qore_rt_to_string",
+            llvm::Value* result;
+            if (!std::getenv("QORE_DISABLE_AOT_DIRECT_INT_TO_STRING")
+                    && val->getType() == i64_type
+                    && !nanboxed_values.count(inst->operands[0].id)) {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_int_to_string",
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {val_boxed});
+                result = builder->CreateCall(helper, {val});
+            } else {
+                llvm::Value* val_boxed = boxValue(
+                    val, inst->operands[0].id);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_to_string",
+                    llvm::FunctionType::get(
+                        i64_type, {i64_type}, false));
+                result = builder->CreateCall(helper, {val_boxed});
+            }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
