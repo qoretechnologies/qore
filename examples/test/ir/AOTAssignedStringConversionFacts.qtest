@@ -107,8 +107,10 @@ string objdump = backquote("command -v objdump 2>/dev/null || true");
 trim objdump;
 string otool = backquote("command -v otool 2>/dev/null || true");
 trim otool;
-string disassemble = objdump.val() ? objdump + " -d"
-    : otool.val() ? otool + " -tV" : "";
+# Apple objdump leaves imported branch targets as numeric stub addresses;
+# otool -V resolves them to the imported helper symbols required below.
+string disassemble = otool.val() ? otool + " -tV"
+    : objdump.val() ? objdump + " -d" : "";
 if (!disassemble.val()) {
     printf("cannot inspect AOT call lowering: no objdump or otool available\n");
     exit(2);
