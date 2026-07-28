@@ -115,7 +115,11 @@ public class Main inherits QUnit::Test {
 
     connectionTest() {
         checkModule();
-        string url = "http://localhost:8080";
+        # a hard-coded port encodes an assumption about the machine that the test cannot verify; ports in
+        # common use (8080 above all) are occupied on many developer machines, and connecting to whatever is
+        # listening there produces an unrelated error.  Reserve an unused one instead
+        int port = get_free_port();
+        string url = sprintf("http://localhost:%d", port);
         Sap4HanaRestConnection swsc("test", "test", url, {}, ("apikey": "x"));
         assertEq(True, swsc instanceof Sap4HanaRestConnection);
 

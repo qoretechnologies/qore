@@ -579,18 +579,7 @@ class ServiceNowTest inherits QUnit::Test {
         # cannot provide that - port 8080 in particular is in use on many developer machines, and connecting to
         # whatever is listening there produces an unrelated error (an SSL handshake failure against a plain HTTP
         # server, for example) instead of the connection failure the test is checking for.
-        #
-        # Ask the kernel for an unused ephemeral port and release it again.  Holding the socket bound without
-        # listening was tried first and is not portable: on Darwin a connect to a bound-but-not-listening socket
-        # is not refused promptly, so the ping produced an unexpected error after several seconds.  Binding and
-        # releasing leaves the same "nothing is listening here" condition on every platform.
-        int port;
-        {
-            Socket probe();
-            probe.bind("localhost:0");
-            port = probe.getSocketInfo().port;
-            probe.close();
-        }
+        int port = get_free_port();
         # a platform that does not report the bound ephemeral port would silently turn this into a test of some
         # other port, so check it rather than letting the ping fail for an unrelated reason
         assertGt(0, port, "an ephemeral port was reserved for the negative ping test");
