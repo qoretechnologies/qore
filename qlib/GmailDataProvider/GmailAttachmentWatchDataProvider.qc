@@ -136,6 +136,11 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
     }
 
     #! Raise events
+    /** @note the ID of the message carrying the attachment is added to each event as
+        \c message_id; without it an event consumer has no way to refer back to the source message
+        (to delete or label it after successful processing, for example), because the event
+        otherwise carries attachment data only
+    */
     private messageReceived(hash<auto> msg) {
         int matches;
         foreach hash<auto> att in (msg.attachments) {
@@ -144,7 +149,7 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
                     att.filename, attachment_glob);
                 continue;
             }
-            notifyObservers(EVENT_ATTACHMENT_MATCHED, att);
+            notifyObservers(EVENT_ATTACHMENT_MATCHED, att + {"message_id": msg.id});
             ++matches;
         }
         LoggerWrapper::info("Gmail: message %y matched attachments: %d/%d", msg.id, matches, msg.attachments.size());
@@ -164,7 +169,8 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
         hash<auto> info = setup() + {"test_mode": True};
         *hash<auto> msg = pollOnceIntern(\info);
         if (msg.attachments) {
-            return msg.attachments[0];
+            # must match the shape raised by messageReceived(), including the source message ID
+            return msg.attachments[0] + {"message_id": msg.id};
         }
         return AbstractDataProvider::getExampleEventDataImpl(event_id);
     }
@@ -174,6 +180,14 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
 public class GmailAttachmentEventDataType inherits HashDataType {
     public {
         const Fields = {
+            "message_id": {
+                "display_name": "Message ID",
+                "short_desc": "The ID of the Gmail message carrying the attachment",
+                "desc": "The ID of the Gmail message carrying the attachment; use this to refer back to the "
+                    "source message after processing the attachment - to delete or label it, for example - "
+                    "with the `make-api-call` action.  Always set on events raised by this provider",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "hdr": {
                 "display_name": "Headers",
                 "short_desc": "Attachment headers, if any",
