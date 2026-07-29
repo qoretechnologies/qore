@@ -1700,13 +1700,16 @@ void UserSignature::setupFromAOTMetadata(
         const char* parseLocFile,
         int parseLocFirstLine,
         int parseLocLastLine,
-        std::vector<uint8_t>&& paramFlags) {
+        std::vector<uint8_t>&& paramFlags,
+        QoreProgram* localOwnerPgm) {
     returnTypeInfo = retType;
     clearTypeParameterSubstitutionCache();
 
     const size_t nparams = paramTypes.size();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_program_private* local_pp = localOwnerPgm
+        ? qore_program_private::get(*localOwnerPgm) : pp;
     // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
     // with a program-interned `(file, first_line, last_line)` location when
     // the caller knows the declaring source path.  The parser sets this to
@@ -1732,7 +1735,7 @@ void UserSignature::setupFromAOTMetadata(
     lv.resize(nparams);
     for (size_t i = 0; i < nparams; ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
-        lv[i] = pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
+        lv[i] = local_pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
         if (paramReadOnlyList[i]) {
             lv[i]->setReadOnly();
         }
@@ -1753,9 +1756,9 @@ void UserSignature::setupFromAOTMetadata(
     // and LLVM lowering rely on it for the static borrowed-reference semantics
     // of constructor/method self.
     if (classTypeInfo) {
-        LocalVar*& cached = pp->shared_aot_self[classTypeInfo];
+        LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
         if (!cached) {
-            cached = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+            cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
             cached->setSelf();
         } else if (!cached->isSelf()) {
             cached->setSelf();
@@ -1769,10 +1772,10 @@ void UserSignature::setupFromAOTMetadata(
     // instantiates its own frame-local slot via the thread-local stack.
     // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
     // 656 k variants).
-    if (!pp->shared_aot_argv) {
-        pp->shared_aot_argv = pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+    if (!local_pp->shared_aot_argv) {
+        local_pp->shared_aot_argv = local_pp->createLocalVar("argv", autoListOrNothingTypeInfo);
     }
-    argvid = pp->shared_aot_argv;
+    argvid = local_pp->shared_aot_argv;
 
     // Set flags
     varargs = hasVarargs;

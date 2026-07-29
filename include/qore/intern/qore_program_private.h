@@ -64,6 +64,7 @@ class QoreSandboxManager;
 #include <cstdarg>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <set>
@@ -422,6 +423,19 @@ public:
     //! per class removes ~(methods-per-class) emplaces × (classes) off the
     //! hot path.  Same safety argument as shared_aot_argv.
     std::unordered_map<const QoreClass*, LocalVar*> shared_aot_self;
+
+    //! AOT modules merged into this Program and eligible for deferred init.
+    /** Runtime access is protected by the global AOT module-state lock; Program
+        teardown clears the sets after all Program threads have terminated. */
+    std::unordered_set<std::string> merged_aot_modules;
+
+    //! AOT modules currently executing deferred init in this Program.
+    std::unordered_set<std::string> initializing_aot_modules;
+
+    //! AOT modules whose deferred init functions have run in this Program.
+    /** This state belongs to the target Program so teardown cannot leave stale
+        raw Program pointers in process-wide AOT module state. */
+    std::unordered_set<std::string> initialized_aot_modules;
 
     // for the thread counter, used only with plock
     QoreCondition pcond;

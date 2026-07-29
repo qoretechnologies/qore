@@ -66,6 +66,7 @@ struct AOTInstReadCtx {
     const std::unordered_map<std::string, class LocalVar*>& local_map;
     const AOTExprReadFunc& readExpr;
     QoreProgram* pgm;
+    QoreProgram* local_owner_pgm;
     std::string& error;
     //! Slot-indexed local variable map for disambiguation of same-named variables
     const std::unordered_map<uint32_t, LocalVar*>* slot_to_local = nullptr;

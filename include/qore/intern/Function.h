@@ -333,7 +333,8 @@ public:
         const char* parseLocFile = nullptr,
         int parseLocFirstLine = 0,
         int parseLocLastLine = 0,
-        std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>());
+        std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
+        QoreProgram* localOwnerPgm = nullptr);
 
     DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
         std::vector<const QoreTypeInfo*>&& paramTypes);

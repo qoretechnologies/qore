@@ -53,7 +53,8 @@ extern QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
-        Var** globals, int num_globals);
+        Var** globals, int num_globals,
+        QoreProgram* local_owner_pgm);
 
 // Include all handler implementations (Phase 3.2 extracted handlers)
 #include "QoreAOTExprHandlers.cpp"

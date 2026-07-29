@@ -740,7 +740,8 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
         QoreAOTTypeResolver type_resolver(ctx.pgm);
         const QoreTypeInfo* ti = (ltype && *ltype)
             ? type_resolver.resolve(ltype, type_error) : nullptr;
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        qore_program_private* pp = qore_program_private::get(
+            *(ctx.local_owner_pgm ? ctx.local_owner_pgm : ctx.pgm));
         lv = pp->createLocalVar(lname, ti);
     }
     if (lv && read_only && !lv->isReadOnly()) {
@@ -851,7 +852,8 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
         // Without this, parent-slot references in the handler would allocate fresh
         // LocalVars whose name pointers don't match what evalTiered pushed.
         nested_handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
-            &ctx.local_map, ctx.error);
+            &ctx.local_map, ctx.error, nullptr, 0, nullptr, false, nullptr,
+            ctx.local_owner_pgm);
         if (!nested_handler) {
             ctx.error = "failed to deserialize nested OnBlockExit handler IR: " + ctx.error;
             return nullptr;

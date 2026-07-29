@@ -206,6 +206,7 @@ struct QoreAOTContext {
     QoreAOTContext();
 
     QoreProgram* pgm = nullptr;     //!< Program owning the deserialized AOT symbols for type/name resolution
+    QoreProgram* local_owner_pgm = nullptr;  //!< Optional owner for lazily deserialized LocalVars
 
     LocalVar** locals = nullptr;    //!< LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
     int num_locals = 0;

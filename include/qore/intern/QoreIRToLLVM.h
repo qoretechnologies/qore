@@ -80,6 +80,14 @@ public:
         aot_slots = slots;
     }
 
+    //! Control immediate-closure dispatch lowering in AOT mode.
+    /** Init-function compilation does not emit native closure bodies, so its
+        lowerers must use the generic runtime helper instead of declaring a
+        dispatch symbol that will not be defined. */
+    void setAOTDirectClosureFastEntry(bool v) {
+        aot_direct_closure_fast_entry = v;
+    }
+
     //! Set deopt counter pointer for profile-informed guard failure tracking.
     //! When set, profiled guard failure paths emit a call to qore_rt_deopt()
     //! that increments this counter. The evalTiered() path checks the counter
@@ -209,6 +217,7 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+    bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
     // function exit. Ordinary AOT code must keep this disabled to preserve Qore's

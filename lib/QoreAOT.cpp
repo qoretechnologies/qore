@@ -4572,6 +4572,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots);
+    lowerer.setAOTDirectClosureFastEntry(false);
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -19707,6 +19708,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots);
+            lowerer.setAOTDirectClosureFastEntry(false);
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());

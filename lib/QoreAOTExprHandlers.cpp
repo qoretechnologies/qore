@@ -223,7 +223,7 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
             for (uint8_t j = 0; j < num_args; ++j) {
                 std::string arg_err;
                 QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                    ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                    ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
                 if (!arg_err.empty()) {
                     ctx.error = arg_err;
                     arg.discard(nullptr);
@@ -383,7 +383,7 @@ static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
             for (uint8_t j = 0; j < num_args; ++j) {
                 std::string arg_err;
                 QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                    ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                    ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
                 if (!arg_err.empty()) {
                     ctx.error = arg_err;
                     arg.discard(nullptr);
@@ -654,7 +654,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 ctx.error = arg_err;
                 args_list->deref(nullptr);
@@ -994,7 +994,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 ctx.error = arg_err;
                 args_list->deref(nullptr);
@@ -1414,7 +1414,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class);
+        closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+        std::vector<uint8_t>(), ctx.local_owner_pgm);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
     }
@@ -1486,11 +1487,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             ? nullptr : closure_locals_vec.data();
         int cnt = static_cast<int>(closure_locals_vec.size());
         return readOneTopLevelIRExpr(rdr, p, e, err, ctx.pgm,
-            arr, cnt, ctx.globals, ctx.num_globals);
+            arr, cnt, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     };
     auto closure_ir = deserializeIRFunction(ctx.reader, ctx.ptr, ir_end_ptr, ctx.pgm,
         readExprCb, &enclosing_locals, ir_error,
-        ctx.locals, ctx.num_locals, &closure_locals_vec);
+        ctx.locals, ctx.num_locals, &closure_locals_vec, false, nullptr,
+        ctx.local_owner_pgm);
     ctx.ptr = ir_end_ptr;  // Ensure we advance past IR data
 
     if (!closure_ir) {
@@ -1678,7 +1680,7 @@ static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
     std::string callee_err;
     QoreValue callee = readOneExpr(ctx.reader, ctx.ptr, ctx.end, callee_err,
-        ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!callee_err.empty()) {
         ctx.error = "CALLREF_CALL callee: " + callee_err;
         return QoreValue();
@@ -1695,7 +1697,7 @@ static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
         for (uint8_t i = 0; i < nargs; ++i) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err,
-                ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 delete args;
                 callee.discard(nullptr);
@@ -1926,7 +1928,7 @@ static QoreValue read_expr_obj_method_ref_expr(AOTExprReadCtx& ctx) {
 
     std::string target_err;
     QoreValue target = readOneExpr(ctx.reader, ctx.ptr, ctx.end, target_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!target_err.empty()) {
         ctx.error = target_err;
         target.discard(nullptr);
@@ -2058,7 +2060,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 ctx.error = arg_err;
                 args_list->deref(nullptr);
@@ -2185,7 +2187,7 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
                 call_args->push(QoreValue(), nullptr);
@@ -2261,7 +2263,7 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
                 call_args->push(QoreValue(), nullptr);
@@ -2331,7 +2333,7 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     if (num_args > 0) {
         std::string arg_err;
         arg_val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
@@ -2383,7 +2385,7 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     if (num_args > 0) {
         std::string arg_err;
         arg_val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
@@ -2514,7 +2516,7 @@ static QoreValue read_expr_hash_literal(AOTExprReadCtx& ctx) {
         const char* key_str = ctx.reader.readStringRef(ctx.ptr);
         std::string val_err;
         QoreValue val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         if (!val_err.empty()) {
             ctx.error = val_err;
             val.discard(nullptr);
@@ -2562,10 +2564,10 @@ static QoreValue read_expr_parse_hash(AOTExprReadCtx& ctx) {
     for (uint8_t j = 0; j < num_pairs; ++j) {
         std::string key_err;
         QoreValue key = readOneExpr(ctx.reader, ctx.ptr, ctx.end, key_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         std::string val_err;
         QoreValue val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         if (!key_err.empty() || !val_err.empty()) {
             key.discard(nullptr);
             val.discard(nullptr);
@@ -2618,13 +2620,15 @@ static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
         }
     }
     std::string left_err;
-    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty()) {
         ctx.error = left_err;
         return QoreValue();
     }
     std::string right_err;
-    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!right_err.empty()) {
         ctx.error = right_err;
         left.discard(nullptr);
@@ -2681,7 +2685,8 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
         type_path = ctx.reader.readStringRef(ctx.ptr);
     }
     std::string inner_err;
-    QoreValue inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    QoreValue inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!inner_err.empty()) {
         ctx.error = inner_err;
         return QoreValue();
@@ -2769,7 +2774,7 @@ static bool read_expr_cast_inner(AOTExprReadCtx& ctx, QoreValue& inner) {
     }
     std::string inner_err;
     inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!inner_err.empty()) {
         ctx.error = inner_err;
         inner.discard(nullptr);
@@ -3126,7 +3131,7 @@ static QoreValue read_expr_list_literal(AOTExprReadCtx& ctx) {
     for (uint8_t j = 0; j < count; ++j) {
         std::string val_err;
         QoreValue val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
         if (!val_err.empty()) {
             ctx.error = val_err;
             val.discard(nullptr);
@@ -3171,7 +3176,7 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     // Target expression
     std::string target_err;
     QoreValue target = readOneExpr(ctx.reader, ctx.ptr, ctx.end, target_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!target_err.empty()) {
         ctx.error = "DOT_EVAL_TARGET target: " + target_err;
         target.discard(nullptr);
@@ -3186,7 +3191,7 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 ctx.error = "DOT_EVAL_TARGET arg " + std::to_string(j) + ": " + arg_err;
                 arg.discard(nullptr);
@@ -3255,7 +3260,7 @@ static bool write_expr_dot_eval_expr(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_dot_eval_expr(AOTExprReadCtx& ctx) {
     return readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
 }
 
 // ============================================================================
@@ -3297,10 +3302,10 @@ static bool write_expr_plus(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_plus(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3331,10 +3336,10 @@ static bool write_expr_square_bracket(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_square_bracket(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3363,13 +3368,13 @@ static bool write_expr_square_bracket_range(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_square_bracket_range(AOTExprReadCtx& ctx) {
     std::string src_err;
     QoreValue src = readOneExpr(ctx.reader, ctx.ptr, ctx.end, src_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string start_err;
     QoreValue start = readOneExpr(ctx.reader, ctx.ptr, ctx.end, start_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string stop_err;
     QoreValue stop = readOneExpr(ctx.reader, ctx.ptr, ctx.end, stop_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!src_err.empty() || !start_err.empty() || !stop_err.empty()) {
         src.discard(nullptr);
         start.discard(nullptr);
@@ -3399,7 +3404,7 @@ static bool write_expr_exists(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_exists(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3451,10 +3456,10 @@ static bool write_expr_minus(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_minus(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3485,10 +3490,10 @@ static bool write_expr_multiply(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_multiply(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3515,10 +3520,10 @@ static bool write_expr_divide(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_divide(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3545,10 +3550,10 @@ static bool write_expr_modulo(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_modulo(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -3577,7 +3582,7 @@ static bool write_expr_keys(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_keys(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3632,7 +3637,7 @@ static QoreValue read_expr_instanceof(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3706,7 +3711,7 @@ static QoreValue read_regex_match_payload(AOTExprReadCtx& ctx, AOTExprKind kind)
     int64_t options = QoreAOTBinaryReader::readI64(ctx.ptr);
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3809,7 +3814,7 @@ static bool write_expr_post_dec(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_pre_inc(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3821,7 +3826,7 @@ static QoreValue read_expr_pre_inc(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_pre_dec(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3833,7 +3838,7 @@ static QoreValue read_expr_pre_dec(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_post_inc(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3845,7 +3850,7 @@ static QoreValue read_expr_post_inc(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_post_dec(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -3876,10 +3881,10 @@ template <typename NodeT>
 static QoreValue read_binary_expr(AOTExprReadCtx& ctx) {
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string right_err;
     QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!left_err.empty() || !right_err.empty()) {
         left.discard(nullptr);
         right.discard(nullptr);
@@ -4118,7 +4123,7 @@ static bool write_expr_log_not(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_log_not(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -4145,7 +4150,7 @@ static bool write_expr_unary_minus(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_unary_minus(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;
@@ -4196,13 +4201,13 @@ static bool write_expr_question(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_question(AOTExprReadCtx& ctx) {
     std::string cond_err;
     QoreValue cond = readOneExpr(ctx.reader, ctx.ptr, ctx.end, cond_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string true_err;
     QoreValue true_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, true_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string false_err;
     QoreValue false_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, false_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!cond_err.empty() || !true_err.empty() || !false_err.empty()) {
         cond.discard(nullptr);
         true_expr.discard(nullptr);
@@ -4298,13 +4303,13 @@ static QoreValue read_expr_map(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_map_select(AOTExprReadCtx& ctx) {
     std::string map_err;
     QoreValue map_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, map_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string source_err;
     QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string where_err;
     QoreValue where_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, where_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!map_err.empty() || !source_err.empty() || !where_err.empty()) {
         map_expr.discard(nullptr);
         source.discard(nullptr);
@@ -4318,13 +4323,13 @@ static QoreValue read_expr_map_select(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_hash_map(AOTExprReadCtx& ctx) {
     std::string key_err;
     QoreValue key_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, key_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string val_err;
     QoreValue val_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string source_err;
     QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!key_err.empty() || !val_err.empty() || !source_err.empty()) {
         key_expr.discard(nullptr);
         val_expr.discard(nullptr);
@@ -4338,16 +4343,16 @@ static QoreValue read_expr_hash_map(AOTExprReadCtx& ctx) {
 static QoreValue read_expr_hash_map_select(AOTExprReadCtx& ctx) {
     std::string key_err;
     QoreValue key_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, key_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string val_err;
     QoreValue val_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string source_err;
     QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string where_err;
     QoreValue where_expr = readOneExpr(ctx.reader, ctx.ptr, ctx.end, where_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!key_err.empty() || !val_err.empty() || !source_err.empty() || !where_err.empty()) {
         key_expr.discard(nullptr);
         val_expr.discard(nullptr);
@@ -4387,7 +4392,7 @@ static bool write_expr_iterate(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_iterate(AOTExprReadCtx& ctx) {
     std::string source_err;
     QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!source_err.empty()) {
         source.discard(nullptr);
         ctx.error = source_err;
@@ -4415,10 +4420,10 @@ static QoreValue read_expr_streaming(AOTExprReadCtx& ctx) {
         QoreAOTBinaryReader::readU8(ctx.ptr));
     std::string predicate_err;
     QoreValue predicate = readOneExpr(ctx.reader, ctx.ptr, ctx.end, predicate_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     std::string source_err;
     QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!predicate_err.empty() || !source_err.empty()) {
         predicate.discard(nullptr);
         source.discard(nullptr);
@@ -4448,7 +4453,7 @@ template <typename NodeT>
 static QoreValue read_unary_expr(AOTExprReadCtx& ctx) {
     std::string operand_err;
     QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
-        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
     if (!operand_err.empty()) {
         operand.discard(nullptr);
         ctx.error = operand_err;

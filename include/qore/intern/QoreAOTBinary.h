@@ -3538,6 +3538,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     //! Optional body-local table already resolved by the surrounding AOT context.
     //! Indexed in serialized body-local order.
     const std::vector<LocalVar*>* direct_body_locals = nullptr,
+    //! Optional Program that owns newly created LocalVars. Namespace and type
+    //! resolution still use pgm.
+    QoreProgram* local_owner_pgm = nullptr,
     //! If true, reconstruct only the function header and local tables, then
     //! advance ptr to end without deserializing blocks or instructions.
     bool metadata_only = false,
@@ -3632,7 +3635,8 @@ QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
-        Var** globals, int num_globals);
+        Var** globals, int num_globals,
+        QoreProgram* local_owner_pgm = nullptr);
 
 //! Read one top-level serialized IR instruction expression field.
 //!
@@ -3644,6 +3648,7 @@ QoreValue readOneTopLevelIRExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
-        Var** globals, int num_globals);
+        Var** globals, int num_globals,
+        QoreProgram* local_owner_pgm = nullptr);
 
 #endif

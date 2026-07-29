@@ -23561,7 +23561,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
                         const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
                         const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
-                        if (current_ir_func && closure && !closure->isInMethod()
+                        if (aot_direct_closure_fast_entry
+                                && current_ir_func && closure && !closure->isInMethod()
                                 && (!captures || captures->empty()) && variant
                                 && std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY") == nullptr
                                 && qore_ir_fast_entry_operands_need_no_binding(variant,
