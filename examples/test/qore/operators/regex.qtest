@@ -25,6 +25,10 @@ class RegexTest inherits QUnit::Test {
         addTestCase("splitRegex limit", \testSplitRegexLimit());
         addTestCase("case escape sequences", \testCaseEscapes());
         addTestCase("invalid UTF-8 subject", \testInvalidUtf8Subject());
+        addTestCase("large subject linear scan", \testLargeSubjectLinearScan());
+        addTestCase("large subject correctness", \testLargeSubjectCorrectness());
+        addTestCase("excessive backtracking raises", \testExcessiveBacktracking());
+        addTestCase("large subject match is cancellable", \testLargeSubjectCancellable());
         set_return_value(main());
     }
 
@@ -1192,5 +1196,184 @@ class RegexTest inherits QUnit::Test {
         # regex_extract on invalid UTF-8
         assertEq(NOTHING, regex_extract(bad, "(password)"),
             "invalid UTF-8: regex_extract returns NOTHING, does not crash");
+    }
+
+    # the URI-userinfo pattern that triggered the original hang; unanchored, and its required
+    # code unit ('@') never appears in the subjects below, so every start offset is retried
+    const UriUserinfoPattern = "[A-Za-z][A-Za-z0-9+.-]*://[^:/?#\\s]+:([^@/?#\\s]+)@";
+
+    # PCRE2's interpreter switches off its required-code-unit start-of-match optimization once
+    # the remaining subject reaches REQ_CU_MAX * 1000 = 5,000,000 code units for unanchored
+    # patterns (see pcre2_match.c), which made the scan quadratic past that size.  Anything at or
+    # above the cliff must stay linear.
+    const ReqCuCliffSize = 5000000;
+
+    # Generous: post-fix each of these matches takes ~15ms on a developer machine, and the
+    # pre-fix time at 5.1 MB was over 37 seconds and grew quadratically from there.
+    const LargeSubjectMaxUs = 20000000;
+
+    private string makeSubject(int fill_len, string tail = "") {
+        return "{\"cmd\": \"hi\", \"f\": \"" + strmul("x", fill_len) + "\"}" + tail;
+    }
+
+    testLargeSubjectLinearScan() {
+        # Regression: a non-matching unanchored pattern over a subject larger than
+        # PCRE2's 5,000,000 code unit cliff used to spin a CPU core effectively forever
+        # (37s at 5.01 MB, growing quadratically), permanently wedging the calling thread.
+        # Each entry point below must complete in bounded time and report "no match".
+        string below = makeSubject(ReqCuCliffSize - 100000);
+        string above = makeSubject(ReqCuCliffSize + 500000);
+
+        assertLt(ReqCuCliffSize, below.size(), "subject below the cliff is still multi-megabyte");
+        assertGt(ReqCuCliffSize, above.size(), "subject above the cliff exceeds the PCRE2 threshold");
+
+        foreach string subject in ((below, above)) {
+            string label = sprintf("%d bytes", subject.size());
+
+            int t0 = clock_getmicros_monotonic();
+            assertFalse(subject.regex(UriUserinfoPattern), label + ": =~ // finds no match");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0, label + ": =~ // is bounded");
+
+            t0 = clock_getmicros_monotonic();
+            assertEq(NOTHING, subject.regexExtract(UriUserinfoPattern), label + ": x// extracts nothing");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0, label + ": x// is bounded");
+
+            t0 = clock_getmicros_monotonic();
+            assertEq(0, subject.regexCount(UriUserinfoPattern), label + ": regexCount counts none");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0, label + ": regexCount is bounded");
+
+            t0 = clock_getmicros_monotonic();
+            assertEq(subject.size(), regex_subst(subject, UriUserinfoPattern, "X").size(),
+                label + ": s/// leaves the subject unchanged");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0, label + ": s/// is bounded");
+
+            t0 = clock_getmicros_monotonic();
+            assertEq(1, subject.splitRegex(UriUserinfoPattern).size(),
+                label + ": splitRegex yields the whole subject");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0, label + ": splitRegex is bounded");
+
+            t0 = clock_getmicros_monotonic();
+            assertEq(NOTHING, subject.regexExtractDetailed(UriUserinfoPattern),
+                label + ": regexExtractDetailed extracts nothing");
+            assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0,
+                label + ": regexExtractDetailed is bounded");
+        }
+    }
+
+    testLargeSubjectCorrectness() {
+        # The fix must not change what matches: verify real matches past the cliff are still
+        # found, with correct capture groups and offsets.
+        string subject = makeSubject(ReqCuCliffSize + 500000, "https://user:s3cr3t@example.com/x");
+        assertGt(ReqCuCliffSize, subject.size(), "subject exceeds the PCRE2 threshold");
+
+        assertTrue(subject.regex(UriUserinfoPattern), "match past the cliff is found");
+        assertEq(("s3cr3t",), subject.regexExtract(UriUserinfoPattern), "capture group past the cliff");
+        assertEq(1, subject.regexCount(UriUserinfoPattern), "one match past the cliff");
+
+        # named groups over a large subject
+        hash<auto> named = subject.regexExtractNamed("://(?<user>[^:]+):(?<pass>[^@]+)@");
+        assertEq("user", named.user, "named group 'user' past the cliff");
+        assertEq("s3cr3t", named.pass, "named group 'pass' past the cliff");
+
+        # detailed match info: offset must point into the tail we appended
+        *list<hash<RegexMatchInfo>> detailed = subject.regexExtractDetailed(UriUserinfoPattern);
+        assertEq(1, detailed.size(), "one detailed match past the cliff");
+        assertGt(ReqCuCliffSize, detailed[0].offset, "detailed match offset is past the cliff");
+        assertEq("s3cr3t", detailed[0].groups[0], "detailed capture group past the cliff");
+
+        # substitution past the cliff
+        string masked = regex_subst(subject, UriUserinfoPattern, "REDACTED@");
+        assertTrue(masked =~ /REDACTED@/, "substitution applied past the cliff");
+        assertFalse(masked =~ /s3cr3t/, "secret removed past the cliff");
+
+        # two matches straddling the cliff
+        string two = "ftp://a:p1@h/" + strmul("x", ReqCuCliffSize + 100000) + " http://b:p2@h/";
+        assertEq(2, two.regexCount(UriUserinfoPattern), "two matches straddling the cliff");
+        assertEq(("p1", "p2"), two.regexExtract(UriUserinfoPattern, RE_Global),
+            "global extract straddling the cliff");
+
+        # multi-byte UTF-8 subject past the cliff: the PCRE2_NO_UTF_CHECK fast path in the
+        # global-match loops must not corrupt offsets
+        string utf8 = strmul("é中", (ReqCuCliffSize / 4) + 100000) + "https://u:pw@h/";
+        assertGt(ReqCuCliffSize, utf8.size(), "UTF-8 subject exceeds the PCRE2 threshold in bytes");
+        assertEq(("pw",), utf8.regexExtract(UriUserinfoPattern), "UTF-8 subject past the cliff");
+
+        # case-insensitive matching past the cliff
+        assertTrue(makeSubject(ReqCuCliffSize + 100000, "NEEDLE").regex("needle", RE_Caseless),
+            "caseless match past the cliff");
+    }
+
+    testExcessiveBacktracking() {
+        # A pattern whose backtracking explodes makes PCRE2 give up with
+        # PCRE2_ERROR_MATCHLIMIT (-47).  That is not "no match": the engine never decided.
+        # Previously every entry point silently reported "no match" in release builds and
+        # hit assert(false) in debug builds.  All of them must now raise REGEX-ERROR.
+        string s = strmul("a", 40) + "b";
+        string pat = '(a+)+$';
+
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.regex(pat); }, NOTHING, "regex() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.regexExtract(pat); }, NOTHING, "regexExtract() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.regexCount(pat); }, NOTHING, "regexCount() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.regexExtractNamed('(?<g>a+)+$'); }, NOTHING, "regexExtractNamed() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.regexExtractDetailed(pat); }, NOTHING, "regexExtractDetailed() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { string r = regex_subst(s, pat, "X"); delete r; }, NOTHING, "regex_subst() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s.splitRegex(pat); }, NOTHING, "splitRegex() raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () {
+                AbstractIterator i = s.splitLinesRegex(pat);
+                while (i.next()) {
+                    i.getValue();
+                }
+            }, NOTHING, "splitLinesRegex() iterator raises");
+
+        # the operator forms go through the same code path
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { bool b = s =~ /(a+)+$/; delete b; }, NOTHING, "=~ operator raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { bool b = s !~ /(a+)+$/; delete b; }, NOTHING, "!~ operator raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { *list<*string> l = s =~ x/(a+)+$/; delete l; }, NOTHING, "x// operator raises");
+        assertThrows("REGEX-ERROR", "too much backtracking",
+            sub () { s =~ s/(a+)+$/X/; }, NOTHING, "s/// operator raises");
+
+        # a pattern that does *not* blow up must still report a plain "no match"
+        assertFalse(s.regex("^zzz"), "well-behaved non-matching pattern does not raise");
+        assertEq(NOTHING, s.regexExtract("(zzz)"), "well-behaved extract does not raise");
+    }
+
+    testLargeSubjectCancellable() {
+        # A regular expression over a large subject used to wedge its thread with no way to
+        # recover it; the reported symptom was a server permanently burning one core per
+        # request.  Matching now completes in linear time, but a global match over a large
+        # subject can still iterate for a long time, so the match loops must honor thread
+        # cancellation.
+        Queue ready();
+        Queue result();
+
+        background sub () {
+            # build the subject before signalling, so that once the cancel request is
+            # delivered the regular expression loop is the only cancellation point left
+            string subject = strmul("a", 5000000);
+            ready.push(gettid());
+            try {
+                result.push(subject.regexCount("a"));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+
+        int tid = ready.get();
+        assertTrue(cancel_thread(tid, "regex cancellation test"), "cancel request delivered");
+
+        auto rv = result.get();
+        assertEq("hash", rv.type(), "the match did not run to completion");
+        assertEq("THREAD-CANCELLED", rv.err, "the match loop honors thread cancellation");
     }
 }
