@@ -365,6 +365,7 @@ public class ConnectionSchemeCache {
             "int": Type::Int,
             "boolean": Type::Boolean,
             "file-as-string": Type::String,
+            "timeout": Type::Int,
         };
     }
 
@@ -742,6 +743,15 @@ public class ConnectionSchemeCache {
                 string vtype = i.value.type();
                 if (type != "any" && type != "auto" && vtype != type) {
                     if (type == Type::Int && i.value.intp()) {
+                        if (info.type == "timeout") {
+                            # the "timeout" type takes integers as milliseconds and converts
+                            # relative date/time values to an integer number of milliseconds;
+                            # the generic int conversion below would instead truncate a duration
+                            # to whole seconds (1s -> 1, 1500ms -> 1)
+                            timeout ms = i.value;
+                            options{i.key} = ms;
+                            continue;
+                        }
                         options{i.key} = i.value.toInt();
                         continue;
                     }

@@ -43,6 +43,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("polling monitor", \pollingMonitorTest());
         addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
         addTestCase("async HE cancel mid-race", \asyncHeCancelMidRaceTest());
+        addTestCase("startPollConnect does not block", \asyncStartPollConnectNonBlockingTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -679,6 +680,42 @@ public class ConnectionProviderTest inherits QUnit::Test {
         connect/ping timeouts, the monitor stops, and connections clear — proving
         the race (H3/H2 sockets + stagger timer) was torn down with no leak.
     */
+    #! Tests that startPollConnect() returns a poll operation without blocking
+    /** \c startPollConnect() is documented as non-blocking: it must hand back a poll
+        operation that the caller (or the I/O controller) drives, so the work is
+        registered with the controller and can be canceled.
+
+        For an \c https:// URL the connection manager negotiates the protocol with
+        ALPN.  Waiting for that handshake inside \c startPollConnect() — as the
+        manager's async acquire used to — makes the call block for the whole
+        connect_timeout against a peer that accepts TCP and never speaks TLS, and
+        leaves nothing registered for \c cancelByOwner() to cancel, which is what
+        made \c PollingConnectionMonitor::stopClear() hang (see
+        @ref asyncHeCancelMidRaceTest).
+    */
+    asyncStartPollConnectNonBlockingTest() {
+        # a plain-TCP server that accepts but never speaks TLS: the handshake can
+        # never complete, so any blocking wait runs to the connect timeout
+        SimpleTcpServer server();
+        on_exit server.stop();
+
+        HttpConnection hc("async-connect-nonblocking", "test",
+            "https://127.0.0.1:" + server.getPort(), {},
+            {"connect_timeout": 30s});
+
+        int t0 = clock_getmicros_monotonic();
+        AbstractPollOperation op = hc.startPollConnect();
+        int elapsed_us = clock_getmicros_monotonic() - t0;
+        # abort tears down the never-completing handshake so the test does not
+        # leave it running for the whole connect timeout
+        on_exit op.abort();
+
+        assertTrue(exists op, "startPollConnect() returned a poll operation");
+        assertLt(2000000, elapsed_us,
+            sprintf("startPollConnect() took %dus; it must not wait for the TLS/ALPN "
+                "handshake (connect timeout is 30s)", elapsed_us));
+    }
+
     asyncHeCancelMidRaceTest() {
         # An HTTPS URL to a plain-TCP server that accepts but never speaks TLS:
         # the H2 (TCP) candidate connects TCP then hangs in the TLS handshake,

@@ -33,6 +33,15 @@ public namespace ConnectionProvider {
 */
 public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
     #! Option value type
+    /** In addition to Qore type names, the following option types are supported:
+        - \c "boolean": a @ref bool "bool" value
+        - \c "file-as-string": a @ref string "string" read from a file location; see @ref freeform
+        - \c "int": an @ref int "integer" value
+        - \c "timeout": a timeout value; integers are milliseconds, and relative date/time values
+          such as \c 30s are converted to an integer number of milliseconds.  Use this rather than
+          \c "int" for any duration option, so that callers can express the value as a relative
+          date/time — where the unit is unambiguous — instead of a bare number of milliseconds
+    */
     string type;
 
     #! Do environment variable substitution on the value?

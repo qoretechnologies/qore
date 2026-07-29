@@ -266,6 +266,27 @@ public:
         idle_timeout_us = timeout_us;
     }
 
+    //! Sets the connect-phase timeout for this connection (microseconds)
+    /** Bounds the time the connection may spend establishing itself — TCP connect,
+        TLS handshake (including ALPN) and proxy \c CONNECT tunnel — independently of
+        the caller's request budget.  Without it a stalled connect (a black-holed route
+        gives no OS-level feedback until the kernel's own SYN retry budget runs out,
+        which is minutes) is bounded only by the request timeout and surfaces as an
+        opaque \c HTTPCLIENT-TIMEOUT instead of a diagnosable connect-phase error.
+
+        Enforced by the I/O thread inside continuePoll(), never by a user-thread
+        readiness gate: a user-thread wait armed at the same timeout expires before
+        the I/O thread can generate the transport error, which masks the real cause
+        and defeats the connection manager's retry/fallback logic.
+
+        @param timeout_us timeout in microseconds; <= 0 disables the connect deadline
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setConnectTimeout(int64_t timeout_us) {
+        connect_timeout_us = timeout_us;
+    }
+
     //! Sets the keepalive ping interval (microseconds, -1 = disabled)
     /** When positive, an HTTP/2 PING frame is submitted when the connection
         has been idle (no active streams) for this long.  nghttp2 handles the
@@ -468,6 +489,21 @@ private:
     */
     int64_t idle_deadline_us = 0;
 
+    //! Connect-phase timeout (microseconds); <= 0 = no connect deadline
+    /** Set by setConnectTimeout() after construction from the connection manager's
+        \c connect_timeout option.  I/O thread only after submission.
+    */
+    int64_t connect_timeout_us = -1;
+
+    //! Absolute deadline for the connect phase (monotonic us); 0 = not armed
+    /** Armed on the first continuePoll() that runs in a connect-phase state, so the
+        budget starts when the connect starts rather than when the object was created
+        (the TCP connect itself can be deferred to the I/O thread).  Cleared once the
+        connection is multiplexing.  Monotonic, so a realtime clock adjustment cannot
+        collapse or extend it.  I/O thread only.
+    */
+    int64_t connect_deadline_us = 0;
+
     //! Keepalive ping interval (microseconds); -1 = disabled
     /** When positive and active_stream_count == 0, a PING frame is
         submitted every ping_interval_us to probe connection liveness.
@@ -513,6 +549,35 @@ private:
                 connection has been closed due to idle timeout
     */
     DLLLOCAL QoreHashNode* applyIdleTimeout(QoreHashNode* poll_info, ExceptionSink* xsink);
+
+    //! Returns True if \a state is part of the connect phase (not yet multiplexing)
+    DLLLOCAL static bool isConnectPhase(H2State state) {
+        return state == H2State::CONNECTING || state == H2State::SSL_UPGRADE
+            || state == H2State::PROXY_CONNECT_SEND || state == H2State::PROXY_CONNECT_RECV;
+    }
+
+    //! Arms the connect deadline on first use and fails the operation once it expires
+    /** I/O thread only.  No-op unless the connection is in a connect-phase state and
+        setConnectTimeout() supplied a positive timeout.
+
+        @param xsink exception sink
+
+        @return 0 to continue polling, -1 when the deadline has expired; in that case
+        setError() has already recorded \c HTTP2-CONNECT-TIMEOUT, closed the socket and
+        notified pending streams
+    */
+    DLLLOCAL int checkConnectDeadline(ExceptionSink* xsink);
+
+    //! Clamps \a poll_info's \c poll_timeout_ms so the I/O thread wakes at the connect deadline
+    /** Clamps rather than overwrites: the connect operation publishes its own timers —
+        the Happy Eyeballs stagger, the async resolver — that must keep firing on time.
+
+        @param poll_info the poll info hash to annotate; may be @ref nullptr
+        @param xsink exception sink
+
+        @return \a poll_info, for use as a return-value wrapper
+    */
+    DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);

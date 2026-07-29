@@ -275,6 +275,20 @@ public:
     DLLLOCAL HttpClientConnectionBase* takeOver(int max_concurrent_streams,
         HttpClientConnectionManagerBase* mgr, ExceptionSink* xsink);
 
+    //! Reports @ref HttpClientProtocol::NEGOTIATE until @ref takeOver has run
+    /** The base class default is @c H1, which would be wrong here: an
+        asynchronously-acquired negotiating connection lives in the manager's pool
+        while ALPN is still in flight, and
+        @ref HttpClientConnectionManagerBase::findReusableLocked selects pool
+        entries by protocol.  Reporting @c NEGOTIATE lets the reuse scan skip a
+        connection that cannot carry a request until it has been morphed into its
+        concrete H1/H2 form by
+        @ref HttpClientConnectionManagerBase::finalizeAsyncConnection.
+    */
+    DLLLOCAL HttpClientProtocol getProtocol() const override {
+        return HttpClientProtocol::NEGOTIATE;
+    }
+
     DLLLOCAL void closeConnection(ExceptionSink* xsink) override;
 
     //! Called from @ref NegotiatingConnectionPollOpPriv on the I/O thread

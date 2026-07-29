@@ -82,14 +82,14 @@ public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithI
                 "connect_timeout": <ConnectionOptionInfo>{
                     "display_name": "Connect Timeout",
                     "short_desc": "The connect timeout in milliseconds",
-                    "type": "int",
+                    "type": "timeout",
                     "desc": "The connect timeout in milliseconds",
                     "default_value": DefaultConnectTimeout.durationMilliseconds(),
                 },
                 "io_timeout": <ConnectionOptionInfo>{
                     "display_name": "I/O Timeout",
                     "short_desc": "The I/O timeout in milliseconds",
-                    "type": "int",
+                    "type": "timeout",
                     "desc": "The I/O timeout in milliseconds",
                     "default_value": DefaultIoTimeout.durationMilliseconds(),
                 },

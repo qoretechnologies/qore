@@ -53,14 +53,14 @@ public class MemcachedConnection inherits ConnectionProvider::AbstractConnection
             "connect_timeout": <ConnectionOptionInfo>{
                 "display_name": "Connect Timeout",
                 "short_desc": "Connection timeout in milliseconds",
-                "type": "int",
+                "type": "timeout",
                 "desc": "Connection timeout in milliseconds (default: 30000)",
                 "default_value": 30000,
             },
             "io_timeout": <ConnectionOptionInfo>{
                 "display_name": "I/O Timeout",
                 "short_desc": "Read/write timeout in milliseconds",
-                "type": "int",
+                "type": "timeout",
                 "desc": "I/O timeout in milliseconds for read/write operations (default: 15000)",
                 "default_value": 15000,
             },

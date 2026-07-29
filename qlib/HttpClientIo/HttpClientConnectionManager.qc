@@ -3227,11 +3227,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             || err == "HTTP2-EMPTY-READ"
             || err == "HTTP2-CONNECTION-CLOSED"
             || err == "HTTP2-CONNECT-ERROR"
+            || err == "HTTP2-CONNECT-TIMEOUT"    # connect_timeout expired in the connect phase
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
             || err == "HTTP2-STATE-ERROR"
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
+            || err == "HTTP1-CONNECT-TIMEOUT"    # connect_timeout expired in the connect phase
             || err == "HTTP1-CONNECTION-CLOSED"
             || err == "HTTP1-IDLE-TIMEOUT"
             || err == "HTTP1-STATE-ERROR"

@@ -6253,13 +6253,17 @@ public:
     }
 
     //! Constructor for connect mode (connection still CONNECTING)
+    /** @param pending_mgr the owning manager, needed to morph an ALPN-negotiating
+        connection into its concrete H1/H2 form once it reports ready
+    */
     HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
             QoreEventNotifier* notifier,
+            std::shared_ptr<HttpClientConnectionManagerBase> pending_mgr,
             qore_httpclient_priv* priv_ref = nullptr,
             QoreObject* client_obj = nullptr)
         : notifier(notifier), priv_ref(priv_ref),
           connect_mode(true), client_obj(client_obj),
-          pending_conn(pending_conn) {
+          pending_conn(pending_conn), pending_mgr(std::move(pending_mgr)) {
         assert(pending_conn);
         if (notifier) {
             notifier->ref();
@@ -6551,10 +6555,58 @@ public:
             return nullptr;
         }
 
+        // Morph an ALPN-negotiating connection into its concrete H1/H2 form so
+        // the pool is warmed with a usable connection, exactly as the blocking
+        // acquire path used to leave it.  No stream slot is reserved: this mode
+        // only establishes the connection.
+        if (!finalizePendingConn(false, xsink)) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+
         done = true;
         phase = Phase::DONE;
         clearPendingUnlocked(xsink);
         return nullptr;
+    }
+
+    //! Morphs @ref pending_conn once it reports ready, if it needs morphing.
+    /** An ALPN-negotiating connection acquired through
+        @ref HttpClientConnectionManagerBase::acquireConnectionAsync is transitional
+        and cannot carry a request; once ready it must be handed over to a concrete
+        H1/H2 connection.  Replaces @ref pending_conn with the concrete connection,
+        transferring this operation's reference.
+
+        @param reserve_stream reserve a stream slot for the request that follows
+        @param xsink exception sink
+
+        @return true to continue, false when the handover failed (an exception has
+        been raised)
+    */
+    DLLLOCAL bool finalizePendingConn(bool reserve_stream, ExceptionSink* xsink) {
+        if (!pending_conn || !pending_mgr) {
+            return true;
+        }
+        HttpClientConnectionBase* concrete =
+            pending_mgr->finalizeAsyncConnection(pending_conn, reserve_stream, xsink);
+        if (!concrete || *xsink) {
+            return false;
+        }
+        if (concrete != pending_conn) {
+            ExceptionSink dx;
+            pending_conn->deref(&dx);
+            dx.clear();
+            pending_conn = concrete;
+        } else {
+            // finalizeAsyncConnection() added a reference we do not need — this
+            // operation already holds one for pending_conn.
+            ExceptionSink dx;
+            concrete->deref(&dx);
+            dx.clear();
+        }
+        return true;
     }
 
     //! Handles WAITING_CONNECT phase.  Waits for notifier readiness, then
@@ -6616,7 +6668,62 @@ public:
             return nullptr;
         }
 
-        // READY: submit the request now.  Dispatch via the virtual
+        // READY: an ALPN-negotiating connection is transitional and cannot carry
+        // a request — hand it over to its concrete H1/H2 form first.  The stream
+        // slot the acquire reserved moves to the concrete connection with it.
+        if (!finalizePendingConn(true, xsink)) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+
+        // The concrete connection starts its own establishment: an adopted HTTP/2
+        // connection is not usable until its preface/SETTINGS exchange completes,
+        // so it reports CONNECTING again here.  Re-arm the wait on it rather than
+        // submitting a request it would reject.
+        if (!pending_conn->isReady() && !pending_conn->isClosed()) {
+            QoreObject* notifier_obj = getReferencedSocketObject(xsink);
+            if (!notifier_obj || *xsink) {
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                return nullptr;
+            }
+            // registerReadyNotifier() consumes both references whatever it returns
+            notifier->ref();
+            if (pending_conn->registerReadyNotifier(notifier, notifier_obj)) {
+                waiting_connect_armed = true;
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            }
+            // decided between the check and the registration — fall through and
+            // let the state checks below handle it
+        }
+        if (pending_conn->isClosed() && !pending_conn->wasReady()) {
+            ReferenceHolder<QoreHashNode> err_info(
+                pending_conn->getReferencedErrorInfo(), xsink);
+            std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+            std::string desc_str = "connection closed before READY during poll";
+            if (err_info) {
+                QoreValue ev = err_info->getKeyValue("err");
+                QoreValue dv = err_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    QoreStringValueHelper err(ev);
+                    err_str = err->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    QoreStringValueHelper desc(dv);
+                    desc_str = desc->c_str();
+                }
+            }
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+
+        // Submit the request now.  Dispatch via the virtual
         // submitRequestWithAction — H1 and H2 both implement it, H3
         // raises HTTPCLIENT-NOT-IMPLEMENTED.
         // PromiseNotifierAction refs both promise and notifier; we still
@@ -6936,6 +7043,30 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return rv.release();
     }
 
+    // An ALPN-negotiating connection is transitional and cannot carry a request.
+    // When ALPN is already decided — the controller can finish the handshake
+    // while this thread is still inside acquireConnectionAsync, which on loopback
+    // is the common case — morph it now, so every path below (the fast-path
+    // submit in particular) works with a connection that can accept a request.
+    // A connection that is still CONNECTING is morphed by the poll op instead,
+    // when it reports ready.
+    if (conn->isReady()) {
+        HttpClientConnectionBase* concrete = mgr.finalizeAsyncConnection(conn, true, xsink);
+        if (!concrete || *xsink) {
+            release_local_conn_ref();
+            return nullptr;
+        }
+        if (concrete != conn) {
+            release_local_conn_ref();
+            conn = concrete;
+            conn_local_ref_held = true;  // adopt the reference finalize returned
+        } else {
+            ExceptionSink dx;
+            concrete->deref(&dx);  // drop the extra reference finalize added
+            dx.clear();
+        }
+    }
+
     if (conn->isReady()) {
         // Fast path: pool hit (or the controller finished the handshake
         // between async acquire and here).  Submit synchronously, just
@@ -7144,7 +7275,29 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
 
     // If already ready, return a poll op that completes on first continuePoll
     if (conn->isReady()) {
-        mgr.releaseConnection(conn);
+        // Morph a transitional ALPN-negotiating connection so the pool is left
+        // holding a usable connection, as the blocking acquire path did.  A
+        // failure here is not fatal for a connect-only operation: the connect
+        // itself succeeded, so report success and let the pool entry go.
+        //
+        // NOTE: `conn` is borrowed from the pool here (this branch takes no
+        // reference of its own), and finalizeAsyncConnection() drops the pool's
+        // reference to the transitional connection — so `conn` must not be
+        // touched again once it returns something else.
+        ExceptionSink fin_xsink;
+        HttpClientConnectionBase* concrete =
+            mgr.finalizeAsyncConnection(conn, false, &fin_xsink);
+        fin_xsink.clear();
+        if (concrete) {
+            // finalizeAsyncConnection() returns an owned reference; this branch
+            // only has to give back the acquire's stream slot
+            mgr.releaseConnection(concrete);
+            ExceptionSink dx;
+            concrete->deref(&dx);
+            dx.clear();
+        } else {
+            mgr.releaseConnection(conn);
+        }
         ReferenceHolder<QoreEventNotifier> notifier_holder(
             new QoreEventNotifier(xsink), xsink);
         if (*xsink || !notifier_holder->isValid()) {
@@ -7251,7 +7404,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     // Create poll op — no future for connect, just notifier signaling
     QoreEventNotifier* notifier_for_op = *notifier_holder;
     ReferenceHolder<HttpClientConnMgrPollOp> poller(
-        new HttpClientConnMgrPollOp(conn, notifier_for_op, this, self), xsink);
+        new HttpClientConnMgrPollOp(conn, notifier_for_op, mgr_holder, this, self), xsink);
     ExceptionSink deref_xsink;
     conn->deref(&deref_xsink);
     deref_xsink.clear();
