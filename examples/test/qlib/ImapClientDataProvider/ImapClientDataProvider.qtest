@@ -221,6 +221,40 @@ class MockImapDpServer {
     }
 }
 
+#! Watch provider that fails for one UID only, to prove that a sweep stops rather than skips
+class SelectiveFailWatchDataProvider inherits ImapClientDataProvider::ImapWatchDataProviderBase {
+    public {
+        #! reportMessage() throws for this UID
+        int fail_uid;
+
+        #! the UIDs reported, in order
+        list<int> reported = ();
+    }
+
+    constructor(int fail_uid, *hash<auto> options) : ImapWatchDataProviderBase(options) {
+        self.fail_uid = fail_uid;
+    }
+
+    string getName() {
+        return "selective-fail-watch";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "SelectiveFailWatchDataProvider", "supports_observable": True};
+    }
+
+    private reportMessage(int uid) {
+        if (uid == fail_uid) {
+            throw "TEST-DELIVERY-ERROR", sprintf("simulated delivery failure for UID %d", uid);
+        }
+        push reported, uid;
+    }
+
+    runPoll() { pollOnce(); }
+    int runProcess() { return sweep(); }
+    forceBaseline(int uid) { last_uid = uid; }
+}
+
 #! Watch provider whose reportMessage() always fails, to exercise the failure path
 class FailingWatchDataProvider inherits ImapClientDataProvider::ImapWatchDataProviderBase {
     private {
@@ -253,7 +287,7 @@ class FailingWatchDataProvider inherits ImapClientDataProvider::ImapWatchDataPro
         commitCheckpoint(new_uidvalidity, new_last_uid);
     }
     runPoll() { pollOnce(); }
-    int runProcess() { return processNewMessages(); }
+    int runProcess() { return sweep(); }
 
     #! Calls each log helper with format arguments
     exerciseLogging() {
@@ -302,6 +336,7 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         addTestCase("event provider contract", \eventProviderTests());
         addTestCase("watch failure and logging semantics", \watchSemanticsTests());
         addTestCase("watch checkpoint semantics", \watchCheckpointTests());
+        addTestCase("a failed sweep stops instead of skipping", \watchOrderingTests());
         set_return_value(main());
     }
 
@@ -674,6 +709,42 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
     }
 
     #! A failed report must not advance the baseline, and log helpers must accept format args
+    #! A monotonic UID cursor must never step over a message whose delivery failed
+    watchOrderingTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        # the mock mailbox holds UIDs 101 and 102; fail the first one
+        SelectiveFailWatchDataProvider w(101, {
+            "url": server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+        });
+        on_exit w.getImapClient().disconnect();
+
+        w.runPoll();
+        w.forceBaseline(100);
+        assertEq(0, w.runProcess(), "the sweep reported nothing");
+        assertEq((), w.reported, "no message was delivered");
+        assertEq(100, w.getLastUid(),
+            "the cursor stayed below the failed UID rather than stepping over it");
+
+        # UID 102 must not have been delivered either: delivering it would have advanced the
+        # cursor past UID 101, dropping it permanently on what may be a transient error
+        assertEq(0, w.reported.size(), "the message after the failure was not delivered");
+
+        # once the failure clears, both messages are delivered in ascending UID order
+        w.fail_uid = 0;
+        assertEq(2, w.runProcess(), "both messages are delivered once the failure clears");
+        assertEq((101, 102), w.reported, "delivery is in ascending UID order");
+        assertEq(102, w.getLastUid());
+        assertEq(WSO_ASCENDING, w.getSourceOrdering(), "IMAP UID SEARCH returns ascending UIDs");
+        assertTrue(w.hasAscendingDispatch());
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
     watchSemanticsTests() {
         MockImapDpServer server(binary(TestBody));
         server.start();
