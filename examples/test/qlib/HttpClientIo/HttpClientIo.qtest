@@ -539,6 +539,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("H3 stale connection recovery", \testH3StaleConnectionRecovery());
         addTestCase("H3 async notification flush before close", \testH3AsyncFlushBeforeClose());
 
+        # Happy Eyeballs address-family fallback
+        addTestCase("unresponsive first address falls back", \testHappyEyeballsBlackhole());
+
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -3387,6 +3390,91 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Step 4: Request via same manager
         resp = mgr.request(quic_url, "GET", "/simple");
         assertEq(200, resp.status_code, "H3 stale: recovery request succeeds");
+    }
+
+    #! Tests that a black-holed first address falls back to the next one promptly
+    /** \c localhost resolves to both \c ::1 and \c 127.0.0.1, and RFC 8305 address sorting
+        puts the IPv6 address first, so the connect always attempts the blackhole first.
+
+        The blackhole is the kernel's own accept-queue overflow behaviour: a listener created
+        with a backlog of 0 accepts exactly one queued connection, after which further SYNs are
+        dropped silently — the client stays in \c SYN_SENT with no error, exactly like a
+        black-holed route.  No privileges and no external host are needed.
+
+        Regression test for the Happy Eyeballs stagger and its racing connect fds not reaching
+        the I/O controller: the additional attempt started when the 250ms stagger fires is
+        published in the poll info's \c extra_fds, but the controller only refreshed its extra
+        fd registrations when the primary socket registration changed — which it does not here,
+        since the racing fd is created by the inner connect poll operation that the controller
+        does not track.  The new attempt's connect completion then delivered no event at all and
+        the request stalled for the whole budget.
+    */
+    testHappyEyeballsBlackhole() {
+        # IPv6 loopback listener with a backlog of 0 whose accept queue we fill
+        Socket v6();
+        try {
+            v6.bind("[::1]:0", True);
+            v6.listen(0);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no IPv6 loopback on this host: " + ex.desc);
+        }
+        int port = v6.getSocketInfo().port;
+
+        Socket filler();
+        try {
+            filler.connect("[::1]:" + port, 2s);
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore; the probe below decides whether the setup is usable
+        }
+
+        # confirm that further connects to the IPv6 address really do hang
+        Socket probe();
+        try {
+            probe.connect("[::1]:" + port, 500ms);
+            testSkip("host does not silently drop on accept queue overflow");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-TIMEOUT") {
+                testSkip("host does not silently drop on accept queue overflow: " + ex.err);
+            }
+        }
+
+        # verify RFC 8305 sorting really puts the IPv6 address first
+        list<hash<auto>> addrs = Socket::resolveAddrInfo("localhost", string(port));
+        if (addrs.size() < 2 || addrs[0].family != AF_INET6) {
+            testSkip("localhost is not dual-stack on this host");
+        }
+
+        # working HTTP listener on the IPv4 address of the same port
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete server;
+        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": port,
+        });
+        server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "request_timeout": 10s,
+            "connect_timeout": 10s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        int start = clock_getmicros_monotonic();
+        hash<auto> resp = mgr.request("http://localhost:" + port, "GET", "/simple");
+        int elapsed_us = clock_getmicros_monotonic() - start;
+
+        assertEq(200, resp.status_code, "request succeeded over the IPv4 fallback");
+        # the fallback attempt starts one stagger (250ms) after the first attempt and its
+        # completion wakes the controller directly; anything near the 10s budget means the
+        # racing fd never entered the event loop
+        assertLt(3000000, elapsed_us, "fell back within the stagger, not the request budget");
     }
 
     #! Tests the "notification on close" pattern: submit async notifications while

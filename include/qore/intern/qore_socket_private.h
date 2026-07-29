@@ -480,9 +480,22 @@ public:
     //! Returns the primary socket events to poll for the current state
     DLLLOCAL int getPrimaryPollEvents(int rc) const;
 
-    //! Returns true if there are multiple address families to race
-    DLLLOCAL bool isRacing() const {
-        return multi_family;
+    //! Returns true if the set of connect fds changed since the last call, and clears the flag
+    /** The owning poll operation must bump its fd generation when this returns true so the
+        async I/O controller re-registers the primary fd; the primary fd changes when the
+        first racing attempt fails and another active attempt takes its place.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool takeFdSetChanged() {
+        bool rv = fd_set_changed;
+        fd_set_changed = false;
+        return rv;
+    }
+
+    //! Returns true if another address is still waiting for a connect attempt
+    DLLLOCAL bool hasPendingAddresses() const {
+        return next_addr_idx < sorted_addrs.size();
     }
 
     //! Returns the Happy Eyeballs state
@@ -511,6 +524,8 @@ private:
     int he_state = HEBS_RESOLVING;
     int winning_idx = -1;
     bool multi_family = false;
+    //! Set whenever an attempt fd is created or closed, or the primary fd is reassigned
+    bool fd_set_changed = false;
 
     //! Continue asynchronous DNS resolution
     /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
