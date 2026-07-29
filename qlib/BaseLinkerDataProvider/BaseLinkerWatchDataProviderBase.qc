@@ -115,6 +115,19 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     }
 
     #! Restores the journal cursor
+    #! Returns the configuration that defines which journal scan this provider follows
+    /** The lower bound decides where the journal is entered, so changing it defines a different
+        scan and must start a new cursor.  The poll interval is excluded: it changes how often the
+        same journal is read, not which entries it covers.
+
+        @since BaseLinkerDataProvider 1.1
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "since": since,
+        };
+    }
+
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
                 || checkpoint.last_log_id.typeCode() != NT_INT || checkpoint.last_log_id < 0) {

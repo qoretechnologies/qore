@@ -103,6 +103,9 @@ public const hash<auto> DataTypeMap = {
     "hexbinary": HexBinaryType,
     "data": DataType,
 
+    "timeout": TimeoutType,
+    "*timeout": TimeoutOrNothingType,
+
     "softint": SoftIntType,
     "softstring": SoftStringType,
     "softbool": SoftBoolType,

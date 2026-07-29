@@ -283,6 +283,23 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         return setup_info;
     }
 
+    #! Returns the configuration that defines which mailbox scan this provider follows
+    /** The search criteria select the messages the cursor is a position in, and the start date sets
+        where that scan begins, so changing either defines a different scan and must start a new
+        cursor.
+
+        Everything else is deliberately excluded: the poll interval, attachment retrieval, message
+        deletion, and the snapshot grouping key all change how the same scan is polled or what is done
+        with a message once it has been delivered, not which messages the scan covers.  Including them
+        would make an ordinary tuning change discard the cursor and redeliver the whole mailbox.
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "q": q,
+            "start_date": start_date,
+        };
+    }
+
     #! Restores the Gmail polling cursor
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1

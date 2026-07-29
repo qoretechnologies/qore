@@ -174,6 +174,23 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         delete_messages = options.delete_messages ?? False;
     }
 
+    #! Returns the configuration that defines which mailbox scan this provider follows
+    /** The UID cursor is a position in one mailbox under one set of search criteria, so changing
+        either defines a different scan and must start a new cursor.
+
+        The poll interval, the \c mark_seen flag, and message deletion are deliberately excluded: they
+        change how the same mailbox is polled or what is done with a message once it has been
+        delivered, not which messages the scan covers.  Including them would make an ordinary tuning
+        change discard the cursor and re-establish the baseline at the end of the mailbox, silently
+        skipping everything that arrived in between.
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "mailbox": mailbox,
+            "criteria": criteria,
+        };
+    }
+
     #! Restores the mailbox UID checkpoint
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1

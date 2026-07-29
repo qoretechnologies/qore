@@ -167,7 +167,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "connect_timeout": <ConnectionOptionInfo>{
                     "display_name": "Connect Timeout",
                     "short_desc": "The connect timeout in milliseconds",
-                    "type": "int",
+                    "type": "timeout",
                     "desc": "The connection timeout to use in milliseconds (default: 45 seconds)",
                     "default_value": 45000,
                 },
@@ -348,7 +348,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "timeout": <ConnectionOptionInfo>{
                     "display_name": "I/O Timeout",
                     "short_desc": "The maximum time an individual I/O operation can take in milliseconds",
-                    "type": "int",
+                    "type": "timeout",
                     "desc": "The transfer timeout to use in milliseconds (default: 45 seconds)",
                     "default_value": 45000,
                 },

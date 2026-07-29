@@ -250,6 +250,7 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
         addTestCase("isStopping flag", \testIsStoppingFlag());
         addTestCase("durable checkpoint lifecycle", \testCheckpointLifecycle());
         addTestCase("checkpoint validation and persistence errors", \testCheckpointErrors());
+        addTestCase("undeclared stream identity", \testStreamIdentityDefault());
         set_return_value(main());
     }
 
@@ -345,6 +346,12 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
             });
         });
         prov.stopEvents();
+    }
+
+    #! A provider that declares no stream identity leaves the embedder to key on the whole config
+    testStreamIdentityDefault() {
+        CheckpointWatchDataProvider prov();
+        assertNothing(prov.getWatchStreamIdentity());
     }
 
     testCheckpointErrors() {

@@ -541,6 +541,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Happy Eyeballs address-family fallback
         addTestCase("unresponsive first address falls back", \testHappyEyeballsBlackhole());
+        addTestCase("connect_timeout bounds the connect phase",
+            \testConnectTimeoutBoundsConnectPhase());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -3475,6 +3477,79 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # completion wakes the controller directly; anything near the 10s budget means the
         # racing fd never entered the event loop
         assertLt(3000000, elapsed_us, "fell back within the stagger, not the request budget");
+    }
+
+    #! Tests that connect_timeout bounds the connect phase independently of the request budget
+    /** A black-holed route gives no OS-level feedback until the kernel's own SYN retry budget
+        runs out, so without a connect-phase deadline the request budget is the only bound and
+        the failure surfaces as an opaque \c HTTPCLIENT-TIMEOUT.  The deadline is armed and
+        enforced by the transport's own poll operation on the I/O thread, so the error names
+        the real cause and the connection manager's retry/fallback logic can recognise it.
+
+        The target is the IPv6 literal rather than \c localhost so that every candidate address
+        is black-holed — with \c localhost the RFC 8305 race would simply fall back to IPv4.
+    */
+    testConnectTimeoutBoundsConnectPhase() {
+        Socket v6();
+        try {
+            v6.bind("[::1]:0", True);
+            v6.listen(0);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no IPv6 loopback on this host: " + ex.desc);
+        }
+        int port = v6.getSocketInfo().port;
+
+        Socket filler();
+        try {
+            filler.connect("[::1]:" + port, 2s);
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore; the probe below decides whether the setup is usable
+        }
+
+        Socket probe();
+        try {
+            probe.connect("[::1]:" + port, 500ms);
+            testSkip("host does not silently drop on accept queue overflow");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-TIMEOUT") {
+                testSkip("host does not silently drop on accept queue overflow: " + ex.err);
+            }
+        }
+
+        # h1 and h2 arm the deadline in their own poll operations; h3 already had one
+        foreach string proto in (("h1", "h2")) {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": proto,
+                "request_timeout": 20s,
+                "connect_timeout": 1s,
+                "max_request_retries": 0,
+                "logger": mLogger,
+            });
+            on_exit mgr.closeAll();
+
+            int start = clock_getmicros_monotonic();
+            hash<ExceptionInfo> ex;
+            try {
+                mgr.request("http://[::1]:" + port, "GET", "/simple");
+                fail(sprintf("%s: request to a black-holed address succeeded", proto));
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            int elapsed_us = clock_getmicros_monotonic() - start;
+
+            # the connect phase, not the request budget, must be what expired
+            assertLt(10000000, elapsed_us, proto + ": failed on the connect budget");
+            assertGt(500000, elapsed_us, proto + ": waited for the connect budget");
+
+            # the error must name the connect timeout, not be a generic request timeout,
+            # and must be one the connection manager recognises as a connection error
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, proto + ": connect-phase error");
+            assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err),
+                proto + ": error drives connection retry/fallback");
+            assertRegex(proto == "h1" ? "HTTP1-CONNECT-TIMEOUT" : "HTTP2-CONNECT-TIMEOUT", ex.desc,
+                proto + ": error names the connect timeout");
+        }
     }
 
     #! Tests the "notification on close" pattern: submit async notifications while

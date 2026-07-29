@@ -266,18 +266,24 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
 
     while (true) {
         H2State state = h2_state.load(std::memory_order_acquire);
+        // The connect-phase budget is enforced here, on the I/O thread, so the
+        // operation itself generates a diagnosable error before any caller-side
+        // wait can expire; see setConnectTimeout().
+        if (isConnectPhase(state) && checkConnectDeadline(xsink)) {
+            return nullptr;
+        }
         switch (state) {
             case H2State::CONNECTING:
-                return handleConnecting(xsink);
+                return clampConnectDeadline(handleConnecting(xsink), xsink);
 
             case H2State::SSL_UPGRADE:
-                return handleSslUpgrade(xsink);
+                return clampConnectDeadline(handleSslUpgrade(xsink), xsink);
 
             case H2State::PROXY_CONNECT_SEND:
-                return handleProxyConnectSend(xsink);
+                return clampConnectDeadline(handleProxyConnectSend(xsink), xsink);
 
             case H2State::PROXY_CONNECT_RECV:
-                return handleProxyConnectRecv(xsink);
+                return clampConnectDeadline(handleProxyConnectRecv(xsink), xsink);
 
             case H2State::READING:
                 return handleReading(xsink);
@@ -547,6 +553,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
 
 void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
     printd(5, "Http2ClientPollOperationPriv::startMultiplex()\n");
+    // the connect phase is over; the request budget governs from here on
+    connect_deadline_us = 0;
     sock_obj->ref();
     SocketPollOperationBase* op = new SocketHttp2ClientMultiplexPollOperation(xsink, sock_obj);
     if (*xsink) {
@@ -777,6 +785,50 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     h2_state.store(H2State::WAIT_READ, std::memory_order_release);
     op->deref(xsink);
     return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+}
+
+int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
+    if (connect_timeout_us <= 0) {
+        return 0;
+    }
+    int64_t now_us = q_get_monotonic_us();
+    if (!connect_deadline_us) {
+        connect_deadline_us = now_us + connect_timeout_us;
+        ASYNC_IO_TRACE("H2 checkConnectDeadline: arming now+%lldus target=%s:%d\n",
+            (long long)connect_timeout_us, target_host.c_str(), target_port);
+        return 0;
+    }
+    if (now_us < connect_deadline_us) {
+        return 0;
+    }
+    ASYNC_IO_TRACE("H2 checkConnectDeadline: EXPIRED target=%s:%d\n",
+        target_host.c_str(), target_port);
+    QoreStringMaker desc("connection to %s:%d was not established within the connect timeout "
+        "(%lld ms)", target_host.c_str(), target_port, (long long)(connect_timeout_us / 1000));
+    setError("HTTP2-CONNECT-TIMEOUT", desc.c_str(), xsink);
+    return -1;
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::clampConnectDeadline(QoreHashNode* poll_info,
+        ExceptionSink* xsink) {
+    if (!poll_info || connect_deadline_us <= 0
+        || !isConnectPhase(h2_state.load(std::memory_order_acquire))) {
+        return poll_info;
+    }
+    int64_t now_us = q_get_monotonic_us();
+    int64_t remaining_ms = now_us >= connect_deadline_us
+        ? 0
+        : (connect_deadline_us - now_us + 999) / 1000;
+    QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+    if (ptv.getType() == NT_INT) {
+        int64_t current_ms = ptv.getAsBigInt();
+        // < 0 means "no bound", so it always loses to the connect deadline
+        if (current_ms >= 0 && current_ms <= remaining_ms) {
+            return poll_info;
+        }
+    }
+    poll_info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
+    return poll_info;
 }
 
 QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_info,
@@ -1606,6 +1658,26 @@ nothing Http2ClientPollOperationBase::abort() {
 */
 nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
+}
+
+//! Sets the connect-phase timeout for this connection.
+/** Bounds the time spent establishing the connection - TCP connect, TLS handshake
+    (including ALPN) and proxy \c CONNECT tunnel - independently of the caller's request
+    budget.  When the deadline expires the operation fails itself with an
+    \c HTTP2-CONNECT-TIMEOUT error, closes the socket and marks the connection closed, so
+    the waiting caller gets \c HTTPCLIENT-CONNECT-ERROR naming the real cause instead of a
+    generic \c HTTPCLIENT-TIMEOUT once the request budget runs out.
+
+    @param connect_timeout_ms timeout in milliseconds; <= 0 disables the connect deadline
+
+    @note The deadline is enforced by the I/O thread inside \c continuePoll(); it must
+    never be duplicated as a caller-side wait, which would abort the operation before it
+    can generate the transport error.
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::setConnectTimeout(int connect_timeout_ms) [flags=NAMED_ARGS] {
+    priv->setConnectTimeout((int64_t)connect_timeout_ms * 1000);
 }
 
 //! Sets the keepalive ping interval in milliseconds

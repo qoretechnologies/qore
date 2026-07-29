@@ -336,6 +336,7 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         addTestCase("event provider contract", \eventProviderTests());
         addTestCase("watch failure and logging semantics", \watchSemanticsTests());
         addTestCase("watch checkpoint semantics", \watchCheckpointTests());
+        addTestCase("stream identity covers only the scan-defining options", \watchStreamIdentityTests());
         addTestCase("a failed sweep stops instead of skipping", \watchOrderingTests());
         set_return_value(main());
     }
@@ -851,6 +852,47 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
             "failed UID-validity reset does not change the in-memory UID validity");
         assertEq(9, persistence_failure.getLastUid(),
             "failed UID-validity reset does not change the in-memory UID cursor");
+    }
+
+    #! The UID cursor must survive an operational edit and reset only when the scan itself changes
+    watchStreamIdentityTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        hash<auto> base_opts = {
+            "url": server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+            "criteria": "UNSEEN",
+        };
+
+        code get_identity = *hash<auto> sub (hash<auto> opts) {
+            ImapMessageWatchDataProvider w(opts);
+            on_exit w.getImapClient().disconnect();
+            return w.getWatchStreamIdentity();
+        };
+
+        *hash<auto> base = get_identity(base_opts);
+        assertEq({"mailbox": "INBOX", "criteria": "UNSEEN"}, base);
+
+        # a changed poll interval, \Seen flagging, or post-delivery deletion polls the same mailbox
+        # the same way; treating them as a different scan would drop the UID cursor, and the next
+        # poll would re-establish the baseline at the end of the mailbox, skipping everything between
+        foreach hash<auto> opts in ((
+            base_opts + {"poll_interval": 30},
+            base_opts + {"mark_seen": True},
+            base_opts + {"delete_messages": True},
+        )) {
+            assertEq(base, get_identity(opts),
+                sprintf("operational options must not change the stream identity: %y",
+                    opts - ("url", "username", "password")));
+        }
+
+        # the mailbox and the search criteria define which messages the UID cursor is a position in
+        assertNeq(base, get_identity(base_opts + {"mailbox": "Archive"}), "another mailbox is another scan");
+        assertNeq(base, get_identity(base_opts + {"criteria": "ALL"}), "other criteria are another scan");
     }
 
     watchOptionTests() {

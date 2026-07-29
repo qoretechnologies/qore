@@ -40,14 +40,14 @@ public namespace MllpUtil {
                     "connect_timeout": <ConnectionOptionInfo>{
                         "display_name": "Connect Timeout",
                         "short_desc": "The connect timeout in milliseconds",
-                        "type": "int",
+                        "type": "timeout",
                         "desc": "The connection timeout to use in milliseconds (default: 30 seconds)",
                         "default_value": 30000,
                     },
                     "timeout": <ConnectionOptionInfo>{
                         "display_name": "I/O Timeout",
                         "short_desc": "The read/write timeout in milliseconds",
-                        "type": "int",
+                        "type": "timeout",
                         "desc": "The socket read/write timeout to use in milliseconds (default: 30 seconds)",
                         "default_value": 30000,
                     },

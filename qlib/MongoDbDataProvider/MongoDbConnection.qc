@@ -50,14 +50,14 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
             "connect_timeout": <ConnectionOptionInfo>{
                 "display_name": "Connect Timeout",
                 "short_desc": "Connection timeout in milliseconds",
-                "type": "int",
+                "type": "timeout",
                 "desc": "Connection timeout in milliseconds (default: 10000)",
                 "default_value": 10000,
             },
             "server_selection_timeout": <ConnectionOptionInfo>{
                 "display_name": "Server Selection Timeout",
                 "short_desc": "Server selection timeout in milliseconds",
-                "type": "int",
+                "type": "timeout",
                 "desc": "Timeout for selecting a server in milliseconds (default: 30000)",
                 "default_value": 30000,
             },

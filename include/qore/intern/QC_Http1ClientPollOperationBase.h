@@ -267,6 +267,27 @@ public:
         idle_timeout_us = timeout_us;
     }
 
+    //! Sets the connect-phase timeout for this connection (microseconds)
+    /** Bounds the time the connection may spend establishing itself — TCP connect,
+        TLS handshake and proxy \c CONNECT tunnel — independently of the caller's
+        request budget.  Without it a stalled connect (a black-holed route gives no
+        OS-level feedback until the kernel's own SYN retry budget runs out, which is
+        minutes) is bounded only by the request timeout and surfaces as an opaque
+        \c HTTPCLIENT-TIMEOUT instead of a diagnosable connect-phase error.
+
+        Enforced by the I/O thread inside continuePoll(), never by a user-thread
+        readiness gate: a user-thread wait armed at the same timeout expires before
+        the I/O thread can generate the transport error, which masks the real cause
+        and defeats the connection manager's retry/fallback logic.
+
+        @param timeout_us timeout in microseconds; <= 0 disables the connect deadline
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setConnectTimeout(int64_t timeout_us) {
+        connect_timeout_us = timeout_us;
+    }
+
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
     }
@@ -399,6 +420,21 @@ private:
     */
     int64_t idle_deadline_us = 0;
 
+    //! Connect-phase timeout (microseconds); <= 0 = no connect deadline
+    /** Set by setConnectTimeout() after construction from the connection manager's
+        \c connect_timeout option.  I/O thread only after submission.
+    */
+    int64_t connect_timeout_us = -1;
+
+    //! Absolute deadline for the connect phase (monotonic us); 0 = not armed
+    /** Armed on the first continuePoll() that runs in a connect-phase state, so the
+        budget starts when the connect starts rather than when the object was created
+        (the TCP connect itself can be deferred to the I/O thread).  Cleared once the
+        connection is ready.  Monotonic, so a realtime clock adjustment cannot collapse
+        or extend it.  I/O thread only.
+    */
+    int64_t connect_deadline_us = 0;
+
     // --- Shared data (under stream_lock) ---
 
     mutable QoreThreadLock stream_lock;
@@ -497,6 +533,35 @@ private:
     //! when the deadline expires.  I/O thread only.  No-op if idle_timeout_us
     //! is <= 0 or \a poll_info is nullptr.
     DLLLOCAL QoreHashNode* armIdleDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
+
+    //! Returns True if \a state is part of the connect phase (not yet ready for requests)
+    DLLLOCAL static bool isConnectPhase(H1State state) {
+        return state == H1State::CONNECTING || state == H1State::SSL_UPGRADE
+            || state == H1State::PROXY_CONNECT_SEND || state == H1State::PROXY_CONNECT_RECV;
+    }
+
+    //! Arms the connect deadline on first use and fails the operation once it expires
+    /** I/O thread only.  No-op unless the connection is in a connect-phase state and
+        setConnectTimeout() supplied a positive timeout.
+
+        @param xsink exception sink
+
+        @return 0 to continue polling, -1 when the deadline has expired; in that case
+        setError() has already recorded \c HTTP1-CONNECT-TIMEOUT, closed the socket and
+        notified the pending stream
+    */
+    DLLLOCAL int checkConnectDeadline(ExceptionSink* xsink);
+
+    //! Clamps \a poll_info's \c poll_timeout_ms so the I/O thread wakes at the connect deadline
+    /** Clamps rather than overwrites: the connect operation publishes its own timers —
+        the Happy Eyeballs stagger, the async resolver — that must keep firing on time.
+
+        @param poll_info the poll info hash to annotate; may be @ref nullptr
+        @param xsink exception sink
+
+        @return \a poll_info, for use as a return-value wrapper
+    */
+    DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);

@@ -95,6 +95,21 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     }
 
     #! Restores the delta link
+    #! Returns the configuration that defines which change feed this provider follows
+    /** The delta feed is scoped to the authenticated user's drive root, which is fixed rather than
+        configurable, so no option defines the stream and the delta link stays valid across any
+        option edit.  The scope is still declared explicitly: an identity of @ref NOTHING would
+        leave the embedder keying the cursor on the whole configuration, so tuning the poll interval
+        would discard the delta link and re-seed the feed.
+
+        @since OneDriveDataProvider 1.1
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "drive": "me/drive/root",
+        };
+    }
+
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
                 || checkpoint.delta_link.typeCode() != NT_STRING || !checkpoint.delta_link.val()) {

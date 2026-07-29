@@ -200,6 +200,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
             if (conn->getProtocol() == HttpClientProtocol::H2) {
                 continue;  // already tried above
             }
+            if (conn->getProtocol() == HttpClientProtocol::NEGOTIATE) {
+                // An asynchronously-acquired connection whose ALPN is still in
+                // flight, or which is ready but not yet morphed into its
+                // concrete form by finalizeAsyncConnection().  It cannot carry
+                // a request in this state.
+                continue;
+            }
             if (conn->tryReserveStream(streaming_send)) {
                 return conn;
             }
@@ -655,18 +662,26 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 return nullptr;
             }
 
-            // Block on the negotiation handshake regardless of the
-            // caller's wait_for_ready setting — we cannot construct
-            // the concrete H1/H2 adopt-socket connection until ALPN
-            // has been decided.  The resulting concrete connection
-            // will be returned in READY state, which satisfies the
-            // acquireConnectionAsync contract's "caller waits on
-            // CONNECTING via registerReadyNotifier" because there
-            // will be nothing to wait for.  True async takeover
-            // (returning a transitional NegotiatingHttpClientConnection
-            // that reports CONNECTING and later morphs into the
-            // concrete) is a later enhancement — blocking here keeps
-            // the phase 5 bypass removal atomic.
+            // Asynchronous acquisition: hand the transitional negotiating
+            // connection straight back, in CONNECTING state.  The caller waits
+            // on it exactly like any other CONNECTING connection (via
+            // registerReadyNotifier) and calls finalizeAsyncConnection() once it
+            // reports ready, which morphs it into the concrete H1/H2 connection.
+            //
+            // Blocking here instead — as this path used to — makes
+            // acquireConnectionAsync() synchronous for the whole connect_timeout:
+            // the caller's thread sits in waitForReadyOrError() before any poll
+            // operation exists, so there is nothing registered with the I/O
+            // controller for cancelByOwner() to cancel.  A PollingConnectionMonitor
+            // ping to an unresponsive TLS peer was therefore uncancelable, and
+            // stopClear() blocked for the entire connect_timeout.
+            if (!wait_for_ready) {
+                conn = neg.release();
+                break;
+            }
+
+            // Synchronous acquisition: block until ALPN is decided, then morph
+            // here so the caller gets a ready concrete connection as before.
             bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
             if (!ready || *xsink) {
                 if (!*xsink) {
@@ -774,6 +789,95 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 // ============================================================
 // releaseConnection / closeAndEvict / closeAll
 // ============================================================
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnection(
+        HttpClientConnectionBase* conn, bool reserve_stream, ExceptionSink* xsink) {
+    if (!conn) {
+        return nullptr;
+    }
+
+    // Nothing to morph: every fixed-protocol connection, and any connection that
+    // a previous caller has already finalized.  Hand back a reference so callers
+    // can treat the result uniformly.
+    NegotiatingHttpClientConnection* neg = dynamic_cast<NegotiatingHttpClientConnection*>(conn);
+    if (!neg) {
+        conn->ref();
+        return conn;
+    }
+
+    // takeOver() requires ALPN to have been decided; the caller establishes this
+    // by waiting for the connection to report ready.
+    ReferenceHolder<HttpClientConnectionBase> concrete(
+        neg->takeOver(opts_.max_streams_per_connection, this, xsink), xsink);
+    if (*xsink || !concrete) {
+        if (!*xsink) {
+            xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
+                "ALPN negotiation with %s:%d could not be handed over to a concrete "
+                "connection", neg->getTargetHost(), neg->getTargetPort());
+        }
+        // The transitional connection is defunct either way; evict it so no
+        // half-negotiated entry is left behind for the next acquire.
+        closeAndEvict(neg, xsink);
+        return nullptr;
+    }
+
+    HttpClientConnectionBase* concrete_raw = *concrete;
+    const std::string key = neg->getPoolKey();
+
+    // Swap the transitional entry for the concrete one under the write lock, so
+    // a concurrent acquire never sees both or neither.
+    bool swapped = false;
+    {
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        auto it = pool_.find(key);
+        if (it != pool_.end()) {
+            for (auto cit = it->second.begin(); cit != it->second.end(); ++cit) {
+                if (*cit == neg) {
+                    concrete_raw->setPoolKey(key);
+                    *cit = concrete_raw;
+                    concrete.release();  // the pool takes this reference
+                    swapped = true;
+                    break;
+                }
+            }
+        }
+        if (swapped) {
+            observed_protocols_.fetch_or(
+                1u << static_cast<unsigned>(concrete_raw->getProtocol()),
+                std::memory_order_release);
+            if (reserve_stream) {
+                // cannot fail: a freshly-adopted connection has no streams yet
+                (void)concrete_raw->tryReserveStream(false);
+            }
+        }
+    }
+
+    // Release the stream slot the acquire reserved on the transitional
+    // connection.  Its remaining references are the caller's (which the caller
+    // drops itself) and, when it was still pooled, the pool's, dropped below.
+    neg->releaseStreamReservation();
+
+    if (swapped) {
+        // The pool owns the reference given up by concrete.release() above; the
+        // caller gets its own.  Drop the pool's reference to the transitional
+        // connection it no longer holds.
+        concrete_raw->ref();
+        neg->deref(xsink);
+    } else {
+        // The transitional connection was evicted while ALPN was in flight (a
+        // racing closeAll(), max-age eviction or closeAndEvict(), each of which
+        // already dropped the pool's reference).  The concrete connection is
+        // still usable by this caller; it just never enters the pool, so it is
+        // closed when the caller derefs it.  The holder's reference becomes the
+        // caller's.
+        if (reserve_stream) {
+            // cannot fail: a freshly-adopted connection has no streams yet
+            (void)concrete_raw->tryReserveStream(false);
+        }
+        concrete.release();
+    }
+    return concrete_raw;
+}
 
 void HttpClientConnectionManagerBase::releaseConnection(HttpClientConnectionBase* conn) {
     if (!conn) {

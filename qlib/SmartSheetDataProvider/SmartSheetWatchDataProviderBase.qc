@@ -93,6 +93,21 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
     }
 
     #! Restores the event stream position
+    #! Returns the configuration that defines which event stream this provider follows
+    /** The sheet scopes the events and the event type selects which of them are delivered, so
+        either one changing is a different stream and the opaque stream position from the previous
+        one cannot be reused.  The poll interval is excluded: it changes how often the same stream
+        is read, not what it contains.
+
+        @since SmartSheetDataProvider 1.1
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "sheet_id": sheet_id,
+            "event_type": event_type,
+        };
+    }
+
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
                 || checkpoint.stream_position.typeCode() != NT_STRING || !checkpoint.stream_position.val()) {

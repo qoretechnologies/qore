@@ -257,6 +257,38 @@ public:
         const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
+    //! Completes an asynchronous acquisition once the connection reports ready.
+    /** For an ALPN-negotiating manager, @ref acquireConnectionAsync returns a
+        transitional connection that is still deciding between HTTP/1.1 and
+        HTTP/2.  That connection cannot carry a request: once it reports ready,
+        the caller must morph it into its concrete H1/H2 form with this method,
+        which hands the negotiated socket to an adopt-socket connection and
+        replaces the transitional entry in the pool.
+
+        Safe to call unconditionally — for a connection that needs no morphing
+        (every fixed-protocol manager, and a reused pool connection) this simply
+        returns @a conn with an added reference.
+
+        May be called from an I/O thread: the concrete connection's submission to
+        the I/O controller takes the controller's direct-insertion path there.
+
+        @param conn the connection returned by @ref acquireConnectionAsync, which
+            must have reached ready state
+        @param reserve_stream reserve a stream slot on the concrete connection for
+            the caller, as @ref acquireConnection would; pass @c false when the
+            caller only needed to establish the connection
+        @param xsink for exception handling
+
+        @return the connection to use from now on, with one reference owned by the
+            caller — @c deref it when done, and note that it may not be @a conn.
+            @c nullptr on error (@a xsink set), in which case @a conn has been
+            closed.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual HttpClientConnectionBase* finalizeAsyncConnection(
+        HttpClientConnectionBase* conn, bool reserve_stream, ExceptionSink* xsink);
+
     //! Releases a stream slot back to the pool.
     /** Decrements the connection's pending stream count.  Does NOT close
         the connection — the connection stays in the pool for reuse.

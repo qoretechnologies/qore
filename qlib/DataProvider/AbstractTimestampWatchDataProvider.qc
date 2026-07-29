@@ -72,6 +72,17 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
 
         #! the IDs of the records delivered at exactly @ref last_check
         hash<string, bool> last_ids = {};
+
+        #! the configured scan origin, as given to the constructor
+        /** Kept separately from @ref last_check, which starts here but then moves with the cursor
+            and is replaced wholesale when a checkpoint is restored.  The stream identity must
+            report the configured value: reporting the cursor would make the identity change on
+            every poll, and reporting the @c now_us() default would make it change on every
+            restart — either way the checkpoint would never be found again.
+
+            @since DataProvider 3.6
+        */
+        *date configured_start_date;
     }
 
     #! Creates the object
@@ -88,7 +99,29 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
             throw "WATCH-CHECKPOINT-ERROR", sprintf("the watch start date must be an absolute date/time value; got "
                 "%y", start_date);
         }
+        configured_start_date = start_date;
         last_check = start_date ?? now_us();
+    }
+
+    #! Returns the configuration that defines which scan this provider follows
+    /** The scan origin is the only stream-defining option this template owns: it decides where the
+        feed is entered, so changing it defines a different scan and must start a new cursor.  The
+        poll interval is deliberately excluded — it changes how often the same scan is polled, not
+        which records it covers, so tuning it must not discard the cursor.
+
+        Subclasses that add options selecting <i>which</i> records the feed returns (a filter, a
+        folder, an object type) must override this and include them, or a changed filter will resume
+        the previous cursor against the new selection and silently skip everything older than it.
+
+        @return the scan origin as configured, which is @ref NOTHING when the provider starts from
+        the time it was created
+
+        @since DataProvider 3.6
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "start_date": configured_start_date,
+        };
     }
 
     #! Returns the timestamp of the newest record delivered
