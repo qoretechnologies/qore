@@ -27,7 +27,7 @@ public namespace CloseDataProvider {
 
 #! Base class for Close polling watch data providers using the Event Log API
 public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -47,19 +47,11 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
         };
     }
 
-    private {
-        #! Last check time for high-water mark
-        date last_check;
-
-        #! Set of seen event IDs to avoid duplicates
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object with a REST client
     constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
             : CloseDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = options.start_date ?? now_us();
+              AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Destructor - stops the polling thread
@@ -72,66 +64,38 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
         rest.close();
     }
 
-    #! Polls for new events once
-    private pollOnce() {
-        try {
-            # Fetch events from Close Event Log API
-            string since_str = CloseDataProviderBase::formatDateTime(last_check);
-            hash<auto> params = {
-                "object_type": getObjectType(),
-                "action": getAction(),
-                "date_updated__gte": since_str,
-                "_limit": 50,
-            };
-            list<hash<auto>> events = fetchEventPages(params, 1000);
+    #! The upstream ordering is not relied on; records are ordered by timestamp before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_DESCENDING;
+    }
 
-            # Close returns latest-first; reverse for correct watermark advancement
-            events = reverse(events);
+    #! Fetches every record changed at or after the given timestamp
+    private list<hash<auto>> fetchRecords(date since) {
+        hash<auto> params = {
+            "object_type": getObjectType(),
+            "action": getAction(),
+            "date_updated__gte": CloseDataProviderBase::formatDateTime(since),
+            "_limit": 50,
+        };
+        return fetchEventPages(params, 1000);
+    }
 
-            date new_last_check = last_check;
+    #! Returns the record field holding the record's position in the feed
+    private string getTimestampField() {
+        return "date_updated";
+    }
 
-            foreach hash<auto> event in (events) {
-                # Check for shutdown between iterations
-                if (isStopping()) {
-                    break;
-                }
-                string id = string(event.id);
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
+    }
 
-                # Skip if already seen
-                if (seen_ids{id}) {
-                    continue;
-                }
-
-                # Check timestamp to avoid old events
-                *date event_time;
-                if (event.date_updated) {
-                    event_time = date(event.date_updated);
-                }
-                if (event_time) {
-                    if (event_time <= last_check) {
-                        continue;
-                    }
-                    if (event_time > new_last_check) {
-                        new_last_check = event_time;
-                    }
-                }
-
-                # Mark as seen
-                seen_ids{id} = True;
-
-                # Notify observers
-                notifyObservers(getEventName(), event);
-            }
-
-            last_check = new_last_check;
-
-            # Prune seen_ids if it gets too large
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
-        }
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, vsprintf(fmt, argv));
     }
 
     #! Returns a hash of all supported event types

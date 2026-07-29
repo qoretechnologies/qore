@@ -27,7 +27,7 @@ public namespace ZohoBooksDataProvider {
 
 #! Base class for Zoho Books polling watch data providers
 public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Maximum number of seen IDs to track before pruning
         const MaxSeenIds = 10000;
@@ -50,19 +50,11 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         };
     }
 
-    private {
-        #! Last check time
-        date last_check;
-
-        #! Set of seen IDs to avoid duplicates
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object with a REST client
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
             : ZohoBooksDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = options.start_date ?? now_us();
+              AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Destructor - stops the polling thread
@@ -75,58 +67,33 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         rest.close();
     }
 
-    #! Polls for new records once
-    private pollOnce() {
-        try {
-            # Get records modified since last check
-            hash<auto> params = getQueryParams();
+    #! The API is queried newest-first; records are reversed into delivery order
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_DESCENDING;
+    }
 
-            hash<auto> response = doGet(getResourcePath(), params);
-            list<auto> records = response{getResourceKey()} ?? ();
+    #! Fetches every record changed at or after the given timestamp
+    private list<hash<auto>> fetchRecords(date since) {
+        hash<auto> response = doGet(getResourcePath(), getQueryParams());
+        return response{getResourceKey()} ?? ();
+    }
 
-            date new_last_check = last_check;
+    #! Returns the record field holding the record's position in the feed
+    private string getTimestampField() {
+        return "created_time";
+    }
 
-            foreach hash<auto> record in (records) {
-                # check for shutdown between iterations
-                if (isStopping()) {
-                    break;
-                }
-                string id = string(record{getIdField()});
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
+    }
 
-                # Skip if already seen
-                if (seen_ids{id}) {
-                    continue;
-                }
-
-                # Check if this is a new record (created after last check)
-                *string created_time = record.created_time;
-                if (created_time) {
-                    date record_time = date(created_time);
-                    if (record_time <= last_check) {
-                        continue;
-                    }
-                    if (record_time > new_last_check) {
-                        new_last_check = record_time;
-                    }
-                }
-
-                # Mark as seen
-                seen_ids{id} = True;
-
-                # Notify observers
-                notifyObservers(getEventName(), record);
-            }
-
-            last_check = new_last_check;
-
-            # Prune seen_ids if it gets too large (time-based filtering is primary dedup)
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # Log error but continue polling
-            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getResourcePath(), ex.err, ex.desc);
-        }
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, vsprintf(fmt, argv));
     }
 
     #! Returns query parameters for the poll request

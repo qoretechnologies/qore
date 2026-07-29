@@ -46,8 +46,8 @@ public namespace DataProvider {
     @par Records without a usable timestamp
     A record whose timestamp field is missing or unparseable has no position in the feed, so it
     cannot be ordered against the cursor and is not dispatched; the fact is logged rather than
-    passed over silently. A provider whose feed carries its timestamp somewhere else overrides
-    @ref getRecordTimestamp().
+    passed over silently. A provider whose feed carries its timestamp or identity somewhere else
+    overrides @ref getWatchRecordTimestamp() or @ref getWatchRecordId().
 
     @par Durability
     The checkpoint format is
@@ -154,17 +154,18 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
     private list<hash<WatchItemInfo>> fetchWatchItems() {
         string ts_field = getTimestampField();
         string id_field = getIdField();
+        # both are read once for the log messages below; the values themselves come from the hooks
         list<hash<WatchItemInfo>> items = ();
         foreach hash<auto> record in (fetchRecords(last_check)) {
             if (isStopping()) {
                 break;
             }
-            *string id = exists record{id_field} ? string(record{id_field}) : NOTHING;
+            *string id = getWatchRecordId(record);
             if (!id.val()) {
                 logWatchInfo("watch record without a usable %y identity ignored", id_field);
                 continue;
             }
-            *date record_date = getRecordTimestamp(record, ts_field);
+            *date record_date = getWatchRecordTimestamp(record);
             if (!exists record_date) {
                 logWatchInfo("watch record %y has no usable %y timestamp, so it has no position in the feed and "
                     "cannot be delivered in order; ignored", id, ts_field);
@@ -202,18 +203,31 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
     }
     #! @endcond
 
+    #! Returns the record's stable identity
+    /** The default implementation reads @ref getIdField() from the record and converts it to a
+        string.
+
+        @param record the record as returned by @ref fetchRecords()
+
+        @return the record's identity, or @ref nothing if the record has none, in which case the
+        record is not delivered
+    */
+    private *string getWatchRecordId(hash<auto> record) {
+        auto val = record{getIdField()};
+        return exists val ? string(val) : NOTHING;
+    }
+
     #! Returns the record's position in the feed
     /** The default implementation reads @ref getTimestampField() from the record and accepts a
         date/time value or a string that can be converted to one.
 
         @param record the record as returned by @ref fetchRecords()
-        @param field the timestamp field name
 
         @return the record's timestamp, or @ref nothing if the record has no usable timestamp, in
         which case the record is not delivered
     */
-    private *date getRecordTimestamp(hash<auto> record, string field) {
-        auto val = record{field};
+    private *date getWatchRecordTimestamp(hash<auto> record) {
+        auto val = record{getTimestampField()};
         switch (val.typeCode()) {
             case NT_DATE:
                 return val.absolute() ? val : NOTHING;

@@ -27,7 +27,7 @@ public namespace CircleDataProvider {
 
 #! Base class for Circle polling watch data providers
 public class CircleWatchDataProviderBase inherits CircleDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -41,20 +41,12 @@ public class CircleWatchDataProviderBase inherits CircleDataProviderBase,
         };
     }
 
-    private {
-        #! Last check time
-        date last_check;
-
-        #! Set of seen IDs to avoid duplicates
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object with a REST client (async)
     constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
             : CircleDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
-                  MinPollInterval)) {
-        last_check = now_us();
+              AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval,
+                  MinPollInterval),
+                  options.start_date) {
     }
 
     #! Destructor - stops the polling thread
@@ -67,56 +59,22 @@ public class CircleWatchDataProviderBase inherits CircleDataProviderBase,
         rest.close();
     }
 
-    #! Polls for new records once
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date new_last_check = last_check;
+    #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
 
-            foreach hash<auto> record in (records) {
-                if (isStopping()) {
-                    break;
-                }
-                string id = string(record.id);
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
+    }
 
-                # Skip if already seen
-                if (seen_ids{id}) {
-                    continue;
-                }
-
-                # Check timestamp to avoid old records
-                *date record_time;
-                *string ts = record{getTimestampField()};
-                if (ts) {
-                    record_time = date(ts);
-                }
-                if (record_time) {
-                    if (record_time <= last_check) {
-                        continue;
-                    }
-                    if (record_time > new_last_check) {
-                        new_last_check = record_time;
-                    }
-                }
-
-                seen_ids{id} = True;
-                notifyObservers(getEventName(), record);
-            }
-
-            last_check = new_last_check;
-
-            # Prune oldest half of seen_ids if it gets too large
-            if (seen_ids.size() > 10000) {
-                list<string> all_keys = keys seen_ids;
-                int half = all_keys.size() / 2;
-                foreach string k in (all_keys[0..half-1]) {
-                    delete seen_ids{k};
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err,
-                ex.desc);
-        }
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, vsprintf(fmt, argv));
     }
 
     #! Returns a hash of all supported event types

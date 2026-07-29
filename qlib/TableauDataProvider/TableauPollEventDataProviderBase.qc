@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Base class for Tableau polling event data providers
 public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Constructor options for polling watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -48,38 +48,19 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
     }
 
     private {
-        #! Mutex for thread synchronization
-        Mutex lck();
-
-        #! Condition variable for sleeping
-        Condition cond();
-
-        #! Background thread ID
-        int io_tid;
-
-        #! Stop flag
-        bool stop = False;
-
         #! Poll interval in seconds
         int poll_secs;
 
         #! Start date for filtering
         date start_date;
-
-        #! Last check time
-        date last_check;
-
-        #! Set of seen IDs to avoid duplicates
-        hash<string, bool> seen_ids;
     }
 
     #! Creates the object with a REST client
     constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
-            : TableauDataProviderBase(rest) {
-        poll_secs = options.poll_interval ?? DefaultPollInterval;
-        if (poll_secs < MinPollInterval) {
-            poll_secs = MinPollInterval;
-        }
+            : TableauDataProviderBase(rest),
+              AbstractTimestampWatchDataProvider(TableauPollEventDataProviderBase::getPollInterval(options),
+                  options.start_date) {
+        poll_secs = TableauPollEventDataProviderBase::getPollInterval(options);
         if (options.start_date) {
             start_date = options.start_date;
         }
@@ -90,120 +71,44 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
         stopEventsIntern();
     }
 
-    #! Called when observers are ready
-    observersReady() {
-        lck.lock();
-        on_exit lck.unlock();
-        if (io_tid) {
-            return;
-        }
-        io_tid = background pollThread();
+    #! Returns the effective poll interval in seconds
+    private static int getPollInterval(*hash<auto> options) {
+        return max(options.poll_interval ?? DefaultPollInterval, MinPollInterval);
     }
 
-    #! Stops event generation
-    stopEvents() {
-        stopEventsIntern();
+    #! Cancels any in-flight REST request during shutdown
+    private cancelPollOperation() {
+        rest.close();
     }
 
-    #! Internal method to stop events
-    private stopEventsIntern() {
-        lck.lock();
-        on_exit lck.unlock();
-        stop = True;
-        cond.broadcast();
-        # Wait for the polling thread to exit; no timeout needed since pollThread always broadcasts on exit
-        while (io_tid) {
-            cond.wait(lck);
-        }
+    #! The upstream ordering is not relied on; records are ordered by timestamp before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
     }
 
-    #! Returns True if events are still being generated
-    bool isActive() {
-        return !stop && io_tid > 0;
+    #! Returns the record's identity using the provider's own accessor
+    private *string getWatchRecordId(hash<auto> record) {
+        return getRecordId(record);
     }
 
-    #! The polling thread
-    private pollThread() {
-        on_exit {
-            lck.lock();
-            on_exit lck.unlock();
-            remove io_tid;
-            cond.broadcast();
-        }
-
-        # Initialize tracking state
-        last_check = start_date ?? now_us();
-
-        while (True) {
-            # Check stop flag under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-            }
-
-            pollOnce();
-
-            # Wait for next poll interval under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-                cond.wait(lck, poll_secs * 1000);
-            }
-        }
+    #! Returns the record's position in the feed using the provider's own accessor
+    private *date getWatchRecordTimestamp(hash<auto> record) {
+        return getRecordTimestamp(record);
     }
 
-    #! Polls for new records once
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date new_last_check = last_check;
-
-            foreach hash<auto> record in (records) {
-                # check for shutdown between iterations
-                if (stop) {
-                    break;
-                }
-                string id = getRecordId(record);
-
-                # Skip if already seen
-                if (seen_ids{id}) {
-                    continue;
-                }
-
-                # Check timestamp to avoid old records
-                *date record_time = getRecordTimestamp(record);
-                if (record_time) {
-                    if (record_time <= last_check) {
-                        continue;
-                    }
-                    if (record_time > new_last_check) {
-                        new_last_check = record_time;
-                    }
-                }
-
-                # Mark as seen
-                seen_ids{id} = True;
-
-                # Notify observers
-                notifyObservers(getEventName(), record);
-            }
-
-            last_check = new_last_check;
-
-            # Prune seen_ids if it gets too large
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
-        }
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
     }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, vsprintf(fmt, argv));
+    }
+
 
     #! Returns the timestamp from a record for deduplication
     private *date getRecordTimestamp(hash<auto> record) {

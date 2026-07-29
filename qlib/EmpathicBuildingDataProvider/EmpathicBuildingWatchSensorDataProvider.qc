@@ -109,6 +109,16 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
     }
 
     #! Performs a single polling operation
+    #! Sensor readings are a level, not an ordered feed
+    /** This provider reports the sensor's current state whenever it changes, so there is no feed to
+        order and no cursor to make durable: a restart simply reports the next reading that differs
+        from the one it then reads. It is a documented exemption from the shared ordered template
+        (@ref DataProvider::AbstractOrderedWatchDataProvider) and from durable checkpoints.
+    */
+    string getSourceOrdering() {
+        return WSO_UNORDERED;
+    }
+
     private pollOnce() {
         hash<auto> event = getEvent();
         if (event != last_event) {

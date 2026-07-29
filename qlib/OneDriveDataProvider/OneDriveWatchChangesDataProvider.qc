@@ -83,6 +83,46 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     }
 
     #! Polls for changes using delta query
+    #! The Microsoft Graph delta feed returns changes in ascending change order
+    /** The delta link is an opaque cursor, so this provider is a documented exemption from the
+        shared ordered template (@ref DataProvider::AbstractOrderedWatchDataProvider): there is no
+        per-change key to sort or compare against. Changes are delivered in the order the delta feed
+        returns them, and the replacement delta link is made durable only once every change has been
+        delivered.
+    */
+    string getSourceOrdering() {
+        return WSO_ASCENDING;
+    }
+
+    #! Restores the delta link
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.delta_link.typeCode() != NT_STRING || !checkpoint.delta_link.val()) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid OneDrive watch checkpoint; expecting version 1 and a "
+                "non-empty delta_link";
+        }
+        delta_link = checkpoint.delta_link;
+        # a restored delta link means the baseline has already been established
+        first_poll = False;
+    }
+
+    #! Durably advances the delta link
+    private commitCheckpoint(string next_delta_link) {
+        if (!next_delta_link.val()) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist an empty OneDrive delta link";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "delta_link": next_delta_link,
+        });
+        delta_link = next_delta_link;
+    }
+
+    #! Polls once, advancing the delta link only after every change has been delivered
+    /** @note The replacement delta link is stored only after every change it supersedes has been
+        raised. Storing it first would skip the whole batch if delivery then failed; storing it
+        afterwards means a failure re-reads the batch, so delivery is at-least-once.
+    */
     private pollOnce() {
         try {
             string path;
@@ -98,9 +138,11 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
 
             # Fetch all pages of changes
             list<hash<auto>> changes = ();
+            *string next_delta_link;
             while (True) {
                 if (isStopping()) {
-                    break;
+                    # the delta link stays where it is, so this batch is read again
+                    return;
                 }
                 hash<auto> response = doRestCommand("GET", path);
                 if (response.body.value) {
@@ -110,8 +152,7 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
                     next_link =~ s/^https:\/\/graph\.microsoft\.com\/v1\.0\///;
                     path = next_link;
                 } else {
-                    # Save the delta link for next poll
-                    delta_link = response.body."@odata.deltaLink";
+                    next_delta_link = response.body."@odata.deltaLink";
                     break;
                 }
             }
@@ -119,15 +160,24 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
             if (first_poll) {
                 # On first poll, seed the cursor without firing events
                 first_poll = False;
+                if (next_delta_link.val()) {
+                    commitCheckpoint(next_delta_link);
+                }
                 return;
             }
 
             # Notify observers for each change
             foreach hash<auto> item in (changes) {
                 if (isStopping()) {
-                    break;
+                    # the delta link stays where it is, so the remaining changes are read again
+                    return;
                 }
                 notifyObservers(EVENT_FILE_CHANGE, item);
+            }
+
+            # the batch has been delivered, so the replacement delta link can be made durable
+            if (next_delta_link.val()) {
+                commitCheckpoint(next_delta_link);
             }
         } catch (hash<ExceptionInfo> ex) {
             error("Error polling for %s events: %s: %s", EVENT_FILE_CHANGE, ex.err, ex.desc);

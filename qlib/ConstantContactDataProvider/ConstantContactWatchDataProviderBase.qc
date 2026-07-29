@@ -27,7 +27,7 @@ public namespace ConstantContactDataProvider {
 
 #! Base class for Constant Contact polling watch data providers
 public class ConstantContactWatchDataProviderBase inherits ConstantContactDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -47,20 +47,12 @@ public class ConstantContactWatchDataProviderBase inherits ConstantContactDataPr
         };
     }
 
-    private {
-        #! Last check time
-        date last_check;
-
-        #! Set of seen IDs to avoid duplicates
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object with a REST client
     constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
             : ConstantContactDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
-                  MinPollInterval)) {
-        last_check = options.start_date ?? now_us();
+              AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval,
+                  MinPollInterval),
+                  options.start_date) {
     }
 
     #! Destructor - stops the polling thread
@@ -73,51 +65,32 @@ public class ConstantContactWatchDataProviderBase inherits ConstantContactDataPr
         rest.close();
     }
 
-    #! Polls for new records once
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date new_last_check = last_check;
+    #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
 
-            foreach hash<auto> record in (records) {
-                # check for shutdown between iterations
-                if (isStopping()) {
-                    break;
-                }
-                string id = getRecordId(record);
+    #! Returns the record's identity using the provider's own accessor
+    private *string getWatchRecordId(hash<auto> record) {
+        return getRecordId(record);
+    }
 
-                # Skip if already seen
-                if (seen_ids{id}) {
-                    continue;
-                }
+    #! Returns the record's position in the feed using the provider's own accessor
+    private *date getWatchRecordTimestamp(hash<auto> record) {
+        return getRecordTimestamp(record);
+    }
 
-                # Check timestamp to avoid old records
-                *date record_time = getRecordTimestamp(record);
-                if (record_time) {
-                    if (record_time <= last_check) {
-                        continue;
-                    }
-                    if (record_time > new_last_check) {
-                        new_last_check = record_time;
-                    }
-                }
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
+    }
 
-                # Mark as seen
-                seen_ids{id} = True;
-
-                # Notify observers
-                notifyObservers(getEventName(), record);
-            }
-
-            last_check = new_last_check;
-
-            # Prune seen_ids if it gets too large
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
-        }
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, vsprintf(fmt, argv));
     }
 
     #! Returns the timestamp from a record for deduplication

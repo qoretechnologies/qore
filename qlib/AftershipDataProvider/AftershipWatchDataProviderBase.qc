@@ -26,7 +26,7 @@
 public namespace AftershipDataProvider {
 #! Base class for Aftership polling watch providers
 public class AftershipWatchDataProviderBase inherits AftershipDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Watch constructor options
         const WatchConstructorOptions = ConstructorOptions + {
@@ -44,28 +44,20 @@ public class AftershipWatchDataProviderBase inherits AftershipDataProviderBase,
         const MaxSeenIds = 10000;
     }
 
-    private {
-        #! Last check timestamp
-        date last_check;
-
-        #! Set of seen record IDs for deduplication
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object from a RestClientIo client
     constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
             : AftershipDataProviderBase(rest),
-              AbstractWatchDataProviderBase(
-                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = now_us();
+              AbstractTimestampWatchDataProvider(
+                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options)
             : AftershipDataProviderBase(options),
-              AbstractWatchDataProviderBase(
-                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = now_us();
+              AbstractTimestampWatchDataProvider(
+                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Cancels in-flight REST operations for graceful shutdown
@@ -73,41 +65,27 @@ public class AftershipWatchDataProviderBase inherits AftershipDataProviderBase,
         rest.close();
     }
 
-    #! Polls for new/changed records
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date newest = last_check;
-            foreach hash<auto> record in (records) {
-                string record_id = getRecordId(record);
-                # skip already-seen records
-                if (seen_ids{record_id}) {
-                    continue;
-                }
-                # check timestamp
-                *string ts_str = record{getTimestampField()};
-                if (ts_str.val()) {
-                    date ts = date(ts_str);
-                    if (ts <= last_check) {
-                        continue;
-                    }
-                    if (ts > newest) {
-                        newest = ts;
-                    }
-                }
-                seen_ids{record_id} = True;
-                notifyObservers(getEventName(), record);
-            }
-            if (newest > last_check) {
-                last_check = newest;
-            }
-            # prune seen_ids if too large
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
-        }
+    #! The upstream ordering is not relied on; records are ordered by timestamp before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
+
+    #! Returns the record's identity using the provider's own accessor
+    private *string getWatchRecordId(hash<auto> record) {
+        return getRecordId(record);
+    }
+
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
+    }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        info(vsprintf(fmt, argv));
     }
 
     #! Returns example event data

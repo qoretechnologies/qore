@@ -27,7 +27,7 @@ public namespace SendCloudDataProvider {
 
 #! Base class for polling-based SendCloud watch providers
 public class SendCloudWatchDataProviderBase inherits SendCloudDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Watch constructor options (extend with per-subclass options if needed)
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -50,16 +50,14 @@ public class SendCloudWatchDataProviderBase inherits SendCloudDataProviderBase,
     }
 
     private {
-        #! Last check timestamp (updated each poll cycle)
-        date last_check;
     }
 
     #! Creates the object from a RestClientIo client plus options
     constructor(*RestClientIo::RestClientIo rest, *hash<auto> options)
             : SendCloudDataProviderBase(rest),
-              AbstractWatchDataProviderBase(
-                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = options.start_date ?? now_us();
+              AbstractTimestampWatchDataProvider(
+                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Cancels in-flight REST operations for graceful shutdown
@@ -69,30 +67,33 @@ public class SendCloudWatchDataProviderBase inherits SendCloudDataProviderBase,
         }
     }
 
-    #! Polls for new/changed records and emits events
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date newest = last_check;
-            foreach hash<auto> record in (records) {
-                if (!shouldEmit(record)) {
-                    continue;
-                }
-                *string ts_str = record{getTimestampField()};
-                if (ts_str.val()) {
-                    date ts = date(ts_str);
-                    if (ts > newest) {
-                        newest = ts;
-                    }
-                }
-                notifyObservers(getEventName(), record);
+    #! The upstream ordering is not relied on; records are ordered by timestamp before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
+
+    #! Returns the cycle's candidate records, less the ones the provider filters out
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        list<hash<WatchItemInfo>> items = ();
+        foreach hash<WatchItemInfo> item in (AbstractTimestampWatchDataProvider::fetchWatchItems()) {
+            if (shouldEmit(item.data)) {
+                push items, item;
             }
-            if (newest > last_check) {
-                last_check = newest;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
         }
+        return items;
+    }
+
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
+    }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        info(vsprintf(fmt, argv));
     }
 
     #! Returns example event data for the given event
