@@ -599,6 +599,17 @@ public hash<auto> sub parseToolResponse(*string content) {
     knobs (max output tokens, temperature, reasoning budget, body merge)
     on the host provider and pass the resolved values in via \a resolved.
 
+    @note Contiguous OpenAI-style \c tool result messages are emitted as
+    \c functionResponse parts in one Gemini user turn.  Gemini requires
+    that turn to contain exactly one response for every function call in
+    the preceding model turn.  When a result omits its function name, the
+    shaper recovers it from the preceding call's stable id.
+
+    @par Example
+    An operations assistant can request service status and alert details in
+    parallel.  Passing the two resulting \c tool messages after the assistant
+    call turn produces one Gemini user turn containing both responses.
+
     @param messages provider-neutral chat history
     @param tools optional tool definitions
     @param output_schema optional JSON schema for structured output
@@ -619,8 +630,14 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         hash<auto> resolved) {
     list<hash<auto>> contents = ();
     list<hash<auto>> system_parts = ();
+    list<hash<auto>> tool_response_parts = ();
+    hash<string, string> tool_call_names;
 
     foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
+        if (msg.role != "tool" && tool_response_parts) {
+            push contents, {"role": "user", "parts": tool_response_parts};
+            tool_response_parts = ();
+        }
         if (msg.role == "system") {
             list<hash<auto>> parts = GeminiBodyShape::shapeContentParts(msg);
             if (parts) {
@@ -631,19 +648,25 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
 
         list<hash<auto>> parts;
         if (msg.role == "tool") {
-            parts = ({
+            push tool_response_parts, {
                 "functionResponse": {
-                    "name": msg.name ?? msg.tool_call_id ?? "tool_result",
+                    "name": msg.name
+                        ?? tool_call_names{msg.tool_call_id}
+                        ?? msg.tool_call_id
+                        ?? "tool_result",
                     "response": GeminiBodyShape::parseToolResponse(msg.content),
                 },
-            },);
-            push contents, {"role": "user", "parts": parts};
+            };
             continue;
         }
 
         parts = GeminiBodyShape::shapeContentParts(msg);
         if (msg.role == "assistant" && msg.tool_calls) {
+            tool_call_names = {};
             foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
+                if (tc.id.val() && tc.name.val()) {
+                    tool_call_names{tc.id} = tc.name;
+                }
                 hash<auto!> part = {
                     "functionCall": {
                         "name": tc.name,
@@ -665,6 +688,9 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
             "role": msg.role == "assistant" ? "model" : "user",
             "parts": parts,
         };
+    }
+    if (tool_response_parts) {
+        push contents, {"role": "user", "parts": tool_response_parts};
     }
 
     hash<auto!> body;

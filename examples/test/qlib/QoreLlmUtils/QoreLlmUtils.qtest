@@ -1157,6 +1157,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 "tool_call_id": rv.tool_calls[0].id,
                 "content": "{\"result\":\"ok\"}",
             },
+            <ChatMessage>{
+                "role": "tool",
+                "name": "lookup",
+                "tool_call_id": rv.tool_calls[1].id,
+                "content": "{\"result\":\"order-ok\"}",
+            },
         ), (
             <ToolDefinition>{"name": "lookup"},
         ));
@@ -1170,6 +1176,19 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the replayed function call carries its reasoning signature back");
         assertEq("sig-def-456", replayed[1].thoughtSignature,
             "every replayed function call carries its own signature back");
+        assertEq(3, gemini_handler.requests[1].body.contents.size(),
+            "parallel tool results form one follow-up user turn");
+        list<auto> responses =
+            gemini_handler.requests[1].body.contents[2].parts;
+        assertEq(2, responses.size(),
+            "parallel function calls have the same number of responses");
+        assertEq("lookup", responses[0].functionResponse.name,
+            "the first response preserves its function name");
+        assertEq("lookup", responses[1].functionResponse.name,
+            "the second response preserves its function name");
+        assertEq("order-ok",
+            responses[1].functionResponse.response.result,
+            "the second response remains distinct in the grouped turn");
     }
 
     #! A STREAMED Gemini tool call must keep its reasoning signature exactly like a non-streamed one
@@ -1270,6 +1289,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                     "tool_call_id": state.tool_calls[0].id,
                     "content": "{\"result\":\"ok\"}",
                 },
+                {
+                    "role": "tool",
+                    "name": "lookup",
+                    "tool_call_id": state.tool_calls[1].id,
+                    "content": "{\"result\":\"order-ok\"}",
+                },
             ),
             "tools": ({
                 "type": "function",
@@ -1284,6 +1309,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the replayed streamed call carries its reasoning signature back");
         assertEq("sig-stream-def", replayed[1].thoughtSignature,
             "every replayed streamed call carries its own signature back");
+        assertEq(2,
+            gemini_handler.requests[0].body.contents[2].parts.size(),
+            "streamed parallel calls replay all responses in one user turn");
     }
 
     geminiOpenAiChatCompletionsFacadeTest() {
@@ -2734,13 +2762,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                             "name": "lookup",
                             "arguments": "{\"key\":\"customer\"}",
                         },
+                    }, {
+                        "id": "call-2",
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_order",
+                            "arguments": "{\"key\":\"order\"}",
+                        },
                     },),
                 },
                 {
                     "role": "tool",
                     "tool_call_id": "call-1",
-                    "name": "lookup",
                     "content": "{\"ok\":true}",
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-2",
+                    "content": "{\"ok\":false}",
                 },
             ),
         });
@@ -2761,6 +2800,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(True,
             gemini_handler.requests[0].body.contents[2].parts[0].functionResponse.response.ok,
             "tool result JSON parsed");
+        assertEq(2,
+            gemini_handler.requests[0].body.contents[2].parts.size(),
+            "parallel tool results share one Gemini user turn");
+        assertEq("lookup_order",
+            gemini_handler.requests[0].body.contents[2].parts[1].functionResponse.name,
+            "a missing result name is recovered from its tool-call id");
+        assertEq(False,
+            gemini_handler.requests[0].body.contents[2].parts[1].functionResponse.response.ok,
+            "grouping preserves each parallel result payload");
     }
 
     anthropicOpenAiFacadeCacheAndFileTest() {
