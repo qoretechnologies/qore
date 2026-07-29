@@ -3551,10 +3551,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # get primary key description
         *hash<auto> qh = ds.select("select c1.relname index_name, a.attname, "
             "pg_catalog.pg_get_indexdef(a.attrelid, a.attnum, TRUE) AS column_name, "
-            "pg_catalog.format_type(a.atttypid, a.atttypmod), tablespace from pg_class c, pg_index i, "
-            "pg_attribute a, pg_class c1, pg_indexes ix where c.oid = %v::regclass and c.oid = i.indrelid and "
-            "i.indisprimary and i.indexrelid = a.attrelid and c1.oid = i.indexrelid and c1.relname = "
-            "ix.indexname and i.indisvalid and not a.attisdropped order by a.attnum", schema + "." + name);
+            "pg_catalog.format_type(a.atttypid, a.atttypmod), ts.spcname tablespace "
+            "from pg_catalog.pg_class c "
+            "join pg_catalog.pg_index i on (c.oid = i.indrelid) "
+            "join pg_catalog.pg_attribute a on (i.indexrelid = a.attrelid) "
+            "join pg_catalog.pg_class c1 on (c1.oid = i.indexrelid) "
+            "left join pg_catalog.pg_tablespace ts on (ts.oid = c1.reltablespace) "
+            "where c.oid = %v::regclass and i.indisprimary and i.indisvalid and not a.attisdropped "
+            "order by a.attnum", schema + "." + name);
         if (!qh.index_name) {
             return new PgsqlPrimaryKey();
         }
@@ -3577,17 +3581,20 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # recover the non-default opclass and WITH (storage option) clauses so that indexes using
         # pgvector access methods (ivfflat / hnsw) round-trip correctly through align / diff
         *hash<auto> qh = ds.select("SELECT i.relname index_name, d.indisunique, d.indisprimary, "
-            "pg_get_indexdef(i.oid, a.attnum, false) column_name, xs.tablespace, "
-            "am.amname access_method, pg_get_indexdef(i.oid, 0, false) indexdef "
-            "FROM pg_class t, pg_class i, pg_index d, pg_attribute a, pg_indexes xs, pg_am am "
+            "pg_catalog.pg_get_indexdef(i.oid, a.attnum, false) column_name, ts.spcname tablespace, "
+            "am.amname access_method, pg_catalog.pg_get_indexdef(i.oid, 0, false) indexdef "
+            "FROM pg_catalog.pg_class t "
+            "join pg_catalog.pg_index d on (t.oid = d.indrelid) "
+            "join pg_catalog.pg_class i on (d.indexrelid = i.oid) "
+            "join pg_catalog.pg_attribute a on (a.attrelid = i.oid) "
+            "join pg_catalog.pg_am am on (i.relam = am.oid) "
+            "join pg_catalog.pg_namespace n on (n.oid = i.relnamespace) "
+            "left join pg_catalog.pg_tablespace ts on (ts.oid = i.reltablespace) "
             # PostgreSQL uses relkind 'I' for partitioned parent indexes and
             # 'i' for ordinary indexes. Both are logical indexes on the table
             # and must round-trip through the portable SqlUtil API.
-            "WHERE i.relkind in ('i', 'I') and i.relname = xs.indexname AND "
-            "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relam = am.oid AND "
-            "i.relnamespace IN (SELECT oid FROM pg_namespace "
-            "WHERE nspname IN (%v)) AND a.attrelid = i.oid AND t.relname = %v ORDER BY i.relname, attnum", schema,
-            name);
+            "WHERE i.relkind in ('i', 'I') and n.nspname = %v and t.relnamespace = i.relnamespace "
+            "and t.relname = %v ORDER BY i.relname, a.attnum", schema, name);
 
         if (qh.index_name) {
             hash<auto> ih;

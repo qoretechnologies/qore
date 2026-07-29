@@ -124,6 +124,22 @@ class Bug2963Schema inherits SqlUtilTestSchema {
 class DatasourceProxy inherits AbstractDatasource {
     private {
         AbstractDatasource real_ds;
+
+        *int primary_key_introspection_rows;
+
+        *int index_introspection_rows;
+    }
+
+    private recordIntrospectionRows(string sql, auto result) {
+        if (result.typeCode() != NT_HASH) {
+            return;
+        }
+        int rows = result.index_name ? result.index_name.size() : 0;
+        if (sql =~ /i\.indisprimary/) {
+            primary_key_introspection_rows = rows;
+        } else if (sql =~ /am\.amname access_method/) {
+            index_introspection_rows = rows;
+        }
     }
 
     constructor(AbstractDatasource ds) {
@@ -135,12 +151,20 @@ class DatasourceProxy inherits AbstractDatasource {
     auto exec(string sql, ...) { return call_function_args(\real_ds.vexec(), (sql, argv)); }
     auto vexec(string sql, *softlist<auto> vargs) { return real_ds.vexec(sql, vargs); }
     auto execRaw(string sql) { return real_ds.execRaw(sql); }
-    auto select(string sql, ...) { return call_function_args(\real_ds.vselect(), (sql, argv)); }
+    auto select(string sql, ...) {
+        auto result = call_function_args(\real_ds.vselect(), (sql, argv));
+        recordIntrospectionRows(sql, result);
+        return result;
+    }
     auto selectRow(string sql, ...) { return call_function_args(\real_ds.vselectRow(), (sql, argv)); }
     auto selectRows(string sql, ...) { return call_function_args(\real_ds.vselectRows(), (sql, argv)); }
     auto selectTyped(string sql, ...) { return call_function_args(\real_ds.vselectTyped(), (sql, argv)); }
     auto selectRowsTyped(string sql, ...) { return call_function_args(\real_ds.vselectRowsTyped(), (sql, argv)); }
-    auto vselect(string sql, *softlist<auto> vargs) { return real_ds.vselect(sql, vargs); }
+    auto vselect(string sql, *softlist<auto> vargs) {
+        auto result = real_ds.vselect(sql, vargs);
+        recordIntrospectionRows(sql, result);
+        return result;
+    }
     auto vselectRow(string sql, *softlist<auto> vargs) { return real_ds.vselectRow(sql, vargs); }
     auto vselectRows(string sql, *softlist<auto> vargs) { return real_ds.vselectRows(sql, vargs); }
     auto vselectTyped(string sql, *softlist<auto> vargs) { return real_ds.vselectTyped(sql, vargs); }
@@ -160,6 +184,14 @@ class DatasourceProxy inherits AbstractDatasource {
     hash<auto> getConfigHash() { return real_ds.getConfigHash(); }
     string getConfigString() { return real_ds.getConfigString(); }
     int getCapabilities() { return real_ds.getCapabilities(); }
+
+    *int getPrimaryKeyIntrospectionRows() {
+        return primary_key_introspection_rows;
+    }
+
+    *int getIndexIntrospectionRows() {
+        return index_introspection_rows;
+    }
 }
 
 #! Schema with pgvector columns for testing vector type support
@@ -341,6 +373,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("search_path schema resolution", \searchPathSchemaResolutionTest());
             addTestCase("sequence schema resolution", \sequenceSchemaResolutionTest());
+            addTestCase("index introspection schema isolation", \indexSchemaIsolationTest());
             addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
@@ -817,6 +850,50 @@ class PgsqlTest inherits SqlTestBase {
         # an explicit schema must still reach the other schema's sequence
         assertTrue(exists db.getSequence(other + "." + other_only),
             "an explicitly qualified sequence in another schema is found");
+    }
+
+    #! Index introspection must not join identically named indexes from other schemas
+    /** Per-tenant schemas repeat table, primary-key, and index names. Introspection of one table must
+        consume only that table's catalog rows; joining pg_indexes by index name alone multiplies every
+        target index column by the number of schemas carrying the same name.
+    */
+    private indexSchemaIsolationTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string mine = ("qore_pgsql_ixm_" + get_random_string()).lwr();
+        string other = ("qore_pgsql_ixo_" + get_random_string()).lwr();
+        string tname = ("qore_pgsql_ixt_" + get_random_string()).lwr();
+        string iname = ("qore_pgsql_ix_" + get_random_string()).lwr();
+        ds.exec(sprintf("create schema %s", mine));
+        ds.exec(sprintf("create schema %s", other));
+        on_exit {
+            ds.exec(sprintf("drop schema if exists %s cascade", mine));
+            ds.exec(sprintf("drop schema if exists %s cascade", other));
+            ds.commit();
+        }
+
+        ds.exec(sprintf("create table %s.%s (id int primary key, a int, b text)", mine, tname));
+        ds.exec(sprintf("create table %s.%s (id int primary key, a int, b text)", other, tname));
+        ds.exec(sprintf("create unique index %s on %s.%s (a, b)", iname, mine, tname));
+        ds.exec(sprintf("create unique index %s on %s.%s (a)", iname, other, tname));
+        ds.commit();
+
+        DatasourceProxy proxy(ds);
+        PgsqlTable target(proxy, mine + "." + tname);
+        Indexes indexes = target.getIndexes();
+
+        assertEq(1, proxy.getPrimaryKeyIntrospectionRows(),
+            "primary-key introspection returns one row for the target key column");
+        assertEq(3, proxy.getIndexIntrospectionRows(),
+            "index introspection returns the target primary-key row plus two target index-column rows");
+        assertTrue(indexes.hasKey(iname), "the target secondary index is described");
+        assertEq(2, indexes.memberGate(iname).columns.size(),
+            "the target secondary index retains its two columns");
     }
 
     private searchPathSchemaResolutionTest() {
