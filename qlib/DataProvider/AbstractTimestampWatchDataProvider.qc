@@ -218,21 +218,39 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
     }
 
     #! Returns the record's position in the feed
-    /** The default implementation reads @ref getTimestampField() from the record and accepts a
-        date/time value or a string that can be converted to one.
+    /** The default implementation reads @ref getTimestampField() from the record and accepts an
+        absolute date/time value or a string that converts to one.
+
+        A relative date/time value is not a position in a feed, and an unparseable string is not one
+        either, so both are reported as "no usable timestamp" rather than being turned into an
+        ordering key that cannot be compared against the cursor or stored in a checkpoint.
 
         @param record the record as returned by @ref fetchRecords()
 
         @return the record's timestamp, or @ref nothing if the record has no usable timestamp, in
         which case the record is not delivered
+
+        @note this method must not throw; an unusable timestamp skips one record, whereas an
+        exception here would abort the whole cycle and stall every other record with it
     */
     private *date getWatchRecordTimestamp(hash<auto> record) {
         auto val = record{getTimestampField()};
         switch (val.typeCode()) {
             case NT_DATE:
                 return val.absolute() ? val : NOTHING;
-            case NT_STRING:
-                return val.val() ? date(val) : NOTHING;
+            case NT_STRING: {
+                if (!val.val()) {
+                    return;
+                }
+                date parsed;
+                try {
+                    parsed = date(val);
+                } catch (hash<ExceptionInfo> ex) {
+                    # ex: INVALID-DATE; the record simply has no position in the feed
+                    return;
+                }
+                return parsed.absolute() ? parsed : NOTHING;
+            }
         }
     }
 

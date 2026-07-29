@@ -83,8 +83,11 @@ public class ShippoWatchDataProviderBase inherits ShippoDataProviderBase,
     }
 
     #! Fetches every record changed at or after the given timestamp
+    /** The cursor is passed explicitly rather than read from the base class's state, so that the
+        query a cycle issues is derived from the cursor it was given and can be exercised directly.
+    */
     private list<hash<auto>> fetchRecords(date since) {
-        hash<auto> response = doGet(getResourcePath(), getQueryParams());
+        hash<auto> response = doGet(getResourcePath(), getQueryParams(since));
         return response.results ?? ();
     }
 
@@ -104,9 +107,9 @@ public class ShippoWatchDataProviderBase inherits ShippoDataProviderBase,
     }
 
     #! Returns query parameters for the poll request
-    private hash<auto> getQueryParams() {
+    private hash<auto> getQueryParams(date since) {
         return {
-            "object_created_gt": last_check,
+            "object_created_gt": since,
             "results": MaxPageSize,
         };
     }

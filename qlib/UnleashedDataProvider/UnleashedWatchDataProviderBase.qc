@@ -46,6 +46,12 @@ public const WatchConstructorOptions = UnleashedDataProviderBase::BaseConstructo
 public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
         DataProvider::AbstractWatchDataProviderBase {
     public {
+        #! The number of delivered record IDs retained before the set is pruned
+        const MaxDeliveredIds = 10000;
+
+        #! The number of least recently added IDs dropped when the set is pruned
+        const DeliveredIdPruneCount = 5000;
+
         #! Constructor options for watch providers
         const WatchProviderConstructorOptions = WatchConstructorOptions;
     }
@@ -159,10 +165,12 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
             }
         }
 
-        # Clean up old IDs periodically (keep the most recent 5000)
-        if (delivered.size() > 10000) {
+        # Bound the delivered set: drop the 5000 least recently added IDs. %Qore hashes keep
+        # insertion order, so the leading keys are the ones added earliest and therefore the ones
+        # least likely to reappear in a future poll window.
+        if (delivered.size() > MaxDeliveredIds) {
             list<string> all_keys = keys delivered;
-            foreach string key in (all_keys[0..4999]) {
+            foreach string key in (all_keys[0..(DeliveredIdPruneCount - 1)]) {
                 remove delivered{key};
             }
         }

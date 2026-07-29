@@ -69,16 +69,53 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
 
     #! The API is queried newest-first; records are reversed into delivery order
     /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
-        advances only after a record has been delivered successfully.
+        advances only after a record has been delivered successfully. The query issued by
+        @ref getQueryParams() must keep the newest-first order this declares, because
+        @ref fetchRecords() relies on it to know when it has paged back to the cursor.
     */
     string getSourceOrdering() {
         return WSO_DESCENDING;
     }
 
-    #! Fetches every record changed at or after the given timestamp
+    #! Fetches every record created at or after the given timestamp, following pagination
+    /** The API returns records newest-first, so the walk stops as soon as a page reaches a record at
+        or before the cursor: every remaining page is older still.
+
+        Walking the pages matters now that the cursor is durable. Returning only the newest page
+        would let the cursor advance past older records that were never fetched, dropping them
+        permanently rather than merely delaying them.
+
+        @note if shutdown interrupts the walk the partial result is discarded, because a
+        newest-first prefix is not safe to deliver: doing so would advance the cursor past the
+        records the walk had not reached yet
+    */
     private list<hash<auto>> fetchRecords(date since) {
-        hash<auto> response = doGet(getResourcePath(), getQueryParams());
-        return response{getResourceKey()} ?? ();
+        list<hash<auto>> records = ();
+        int page = 1;
+        while (True) {
+            hash<auto> response = doGet(getResourcePath(), getQueryParams() + {"page": page});
+            list<auto> batch = response{getResourceKey()} ?? ();
+            records += batch;
+            if (!batch || !response.page_context.has_more_page || reachedCursor(batch, since)) {
+                break;
+            }
+            if (isStopping()) {
+                return ();
+            }
+            ++page;
+        }
+        return records;
+    }
+
+    #! Returns @ref True if the page reaches back to the cursor
+    private bool reachedCursor(list<auto> batch, date since) {
+        foreach hash<auto> record in (batch) {
+            *date record_date = getWatchRecordTimestamp(record);
+            if (exists record_date && record_date <= since) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Returns the record field holding the record's position in the feed
@@ -101,7 +138,6 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         return {
             "sort_column": "created_time",
             "sort_order": "D",
-            "page": 1,
             "per_page": 200,
         };
     }

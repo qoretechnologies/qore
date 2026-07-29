@@ -487,14 +487,25 @@ public class OrderedWatchDataProviderTest inherits QUnit::Test {
         assertEq(1, restarted.runCycle().dispatched, "only the record after the restored cursor is delivered");
         assertEq(("r5",), obs2.getIds());
 
-        # a record with no usable position is reported rather than delivered out of order
+        # a record with no usable position is reported rather than delivered out of order; a
+        # timestamp that cannot be turned into a position must skip that one record and no more,
+        # because an exception here would abort the cycle and stall every other record with it
         MockTimestampWatchProvider unpositioned(base);
         RecordingObserver obs3();
         unpositioned.registerObserver(obs3);
-        unpositioned.records = ({"id": "no-ts"}, {"created_at": base + 5s}, {"id": "ok", "created_at": base + 5s});
-        assertEq(1, unpositioned.runCycle().dispatched);
+        unpositioned.records = (
+            {"id": "no-ts"},
+            {"created_at": base + 5s},
+            {"id": "unparseable", "created_at": "not-a-date-at-all"},
+            {"id": "relative-string", "created_at": "PT5S"},
+            {"id": "relative-date", "created_at": 5s},
+            {"id": "empty", "created_at": ""},
+            {"id": "ok", "created_at": base + 5s},
+        );
+        assertEq(1, unpositioned.runCycle().dispatched,
+            "only the record with a usable position was delivered");
         assertEq(("ok",), obs3.getIds());
-        assertEq(2, unpositioned.infos.size(), "the skipped records were reported");
+        assertEq(6, unpositioned.infos.size(), "every skipped record was reported rather than dropped silently");
     }
 
     #! A checkpoint in an unknown shape must be rejected instead of silently ignored
