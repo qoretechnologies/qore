@@ -1188,6 +1188,26 @@ private:
     DLLLOCAL void updateExtraFds(IoThreadContext& t, const std::string& key, QoreObject* socket,
         QoreHashNode* poll_info, ExceptionSink* xsink);
 
+    //! Returns True if \a poll_info's extra fd set differs from what is registered for \a key
+    /** The primary socket registration (socket object, events, fd generation) can be
+        completely unchanged while an operation's auxiliary fd set changes underneath
+        it — Happy Eyeballs starts an additional racing connect fd when the RFC 8305
+        stagger fires, and the inner connect poll state is not the object the
+        controller tracks, so its fd generation bump is invisible here.  Callers use
+        this to decide whether updateExtraFds() must run on the registration fast
+        path.
+
+        @param t the I/O thread context
+        @param key the operation key
+        @param poll_info the poll info hash returned by continuePoll()
+
+        @return True if the extra fd set or its event mask changed
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool extraFdsChanged(const IoThreadContext& t, const std::string& key,
+        const QoreHashNode* poll_info) const;
+
     //! Unregister extra fds for an operation
     /** @since %Qore 3.0
     */

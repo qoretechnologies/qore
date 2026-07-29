@@ -104,8 +104,7 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
         @since DataProvider 3.0
     */
     private auto getExampleEventDataImpl(string event_id) {
-        hash<auto> info = setup() + {"test_mode": True};
-        if (*hash<auto> msg = pollOnceIntern(\info)) {
+        if (*hash<auto> msg = getExampleMessage()) {
             return msg;
         }
         return AbstractDataProvider::getExampleEventDataImpl(event_id);
@@ -255,6 +254,25 @@ public class GmailMessageEventDataType inherits HashDataType {
             "short_desc": "Message attachments",
             "desc": "Message attachments",
             "type": new ListDataType("AttachmentList", new GmailAttachmentEventDataType(), True),
+        }));
+        addField(new QoreDataField({
+            "name": "superseded_count",
+            "display_name": "Superseded Message Count",
+            "short_desc": "How many older messages this event collapsed away",
+            "desc": "How many older messages this event collapsed away.\n\n"
+                "Only present when the watch runs with `snapshot_mode` set and this event stood in for a "
+                "backlog; a consumer can use it to tell a collapsed event from an ordinary one",
+            "type": AbstractDataProviderTypeMap."*int",
+        }));
+        addField(new QoreDataField({
+            "name": "superseded_ids",
+            "display_name": "Superseded Message IDs",
+            "short_desc": "The IDs of the older messages this event collapsed away",
+            "desc": "The IDs of the older messages this event collapsed away, oldest first.\n\n"
+                "Only present when the watch runs with `snapshot_mode` set. The messages are still "
+                "addressable with the `trash-message` and `delete-message` actions unless the watch's "
+                "`superseded_action` option already removed them",
+            "type": new ListDataType("SupersededMessageIdList", AbstractDataProviderTypeMap."string", True),
         }));
     }
 }

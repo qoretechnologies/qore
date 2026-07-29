@@ -88,6 +88,52 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
     }
 
     #! Polls for new submissions
+    #! Tally returns submissions newest-first with no monotonic position to checkpoint against
+    /** Submissions are deduplicated by ID rather than ordered, so no ordering guarantee can be
+        offered. This provider is a documented exemption from the shared ordered template
+        (@ref DataProvider::AbstractOrderedWatchDataProvider) because the API exposes no comparable
+        per-submission position; its cursor is nonetheless durable.
+    */
+    string getSourceOrdering() {
+        return WSO_UNORDERED;
+    }
+
+    #! Restores the submission cursor
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.seen_ids.typeCode() != NT_LIST) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid Tally watch checkpoint; expecting version 1 and a seen_ids "
+                "list";
+        }
+        hash<string, bool> restored = {};
+        foreach auto id in (checkpoint.seen_ids) {
+            if (id.typeCode() != NT_STRING || !id.val()) {
+                throw "WATCH-CHECKPOINT-ERROR", "invalid Tally watch checkpoint; submission IDs must be non-empty "
+                    "strings";
+            }
+            restored{id} = True;
+        }
+        last_submission_id = checkpoint.last_submission_id;
+        seen_ids = restored;
+        # a restored cursor means the baseline has already been established
+        first_poll = False;
+    }
+
+    #! Durably advances the submission cursor
+    private commitCheckpoint(*string submission_id, hash<string, bool> delivered) {
+        persistCheckpoint({
+            "version": 1,
+            "last_submission_id": submission_id,
+            "seen_ids": keys delivered,
+        });
+        last_submission_id = submission_id;
+        seen_ids = delivered;
+    }
+
+    #! Polls once, advancing the cursor only after every new submission has been delivered
+    /** @note Advancing the cursor after a partial sweep would mark submissions as seen that were
+        never delivered, so the cursor moves only once the whole sweep has succeeded.
+    */
     private pollOnce() {
         if (!form_id) {
             error("Cannot poll for submissions: form_id not set");
@@ -95,33 +141,33 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
         }
         try {
             list<hash<auto>> records = fetchRecords();
+            hash<string, bool> delivered = seen_ids;
             if (first_poll) {
                 # on first poll, seed the cursor and seen IDs without firing events
-                first_poll = False;
                 foreach hash<auto> record in (records) {
-                    seen_ids{record.id ?? ""} = True;
+                    delivered{record.id ?? ""} = True;
                 }
-                if (records.size()) {
-                    last_submission_id = records.last().id;
-                }
+                commitCheckpoint(records.size() ? records.last().id : last_submission_id, delivered);
+                first_poll = False;
                 return;
             }
             foreach hash<auto> record in (records) {
+                if (isStopping()) {
+                    # the cursor stays where it is, so the remaining submissions are swept again
+                    return;
+                }
                 string record_id = record.id ?? "";
-                if (seen_ids{record_id}) {
+                if (delivered{record_id}) {
                     continue;
                 }
-                seen_ids{record_id} = True;
                 notifyObservers(getEventName(), record);
+                delivered{record_id} = True;
             }
-            # update cursor to last seen ID
-            if (records.size()) {
-                last_submission_id = records.last().id;
+            # prune the delivered set if too large
+            if (delivered.size() > MaxSeenIds) {
+                delivered = {};
             }
-            # prune seen_ids if too large
-            if (seen_ids.size() > MaxSeenIds) {
-                seen_ids = {};
-            }
+            commitCheckpoint(records.size() ? records.last().id : last_submission_id, delivered);
         } catch (hash<ExceptionInfo> ex) {
             error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
         }

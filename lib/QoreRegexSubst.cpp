@@ -105,6 +105,7 @@ int QoreRegexSubst::parseRT(const char* pstr, ExceptionSink* xsink) {
             eo, pstr, buffer);
         return -1;
     }
+    jitCompile();
     return 0;
 }
 
@@ -294,23 +295,27 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
 
     //printd(5, "QoreRegexSubst::exec(%s) this=%p: global=%s\n", ptr, this, global ? "true" : "false");
     while (true) {
+        // a global substitution over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression substitution")) {
+            return nullptr;
+        }
+
         PCRE2_SIZE offset = ptr - t->c_str();
         if ((unsigned)offset >= t->size()) {
             break;
         }
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md);
         //int rc = pcre_exec(p, 0, t->c_str(), t->strlen(), offset, 0, ovector, SUBST_OVECSIZE);
 
         //printd(5, "QoreRegexSubst::exec() prec_exec() rc: %d ovector[0]: %d\n", rc, ovector[0]);
-        // FIXME: rc = 0 means that not enough space was available in ovector!
+        // rc == 0 means the ovector was not large enough, which cannot happen when it is allocated
+        // with pcre2_match_data_create_from_pattern(); it is reported as an error below rather than
+        // being silently treated as "no match"
         if (rc < 1) {
-#ifdef DEBUG
-            if (!qore_pcre2_expected_match_error(rc)) {
-                printd(0, "QoreRegexSubst::exec() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
-                    t->c_str(), rc);
-                assert(false);
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return nullptr;
             }
-#endif
             break;
         }
 
@@ -382,12 +387,21 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
 
     while (true) {
+        // a global substitution over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression substitution with callback")) {
+            return nullptr;
+        }
+
         PCRE2_SIZE offset = ptr - t->c_str();
         if (offset >= t->size()) {
             break;
         }
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md);
         if (rc < 1) {
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return nullptr;
+            }
             break;
         }
 

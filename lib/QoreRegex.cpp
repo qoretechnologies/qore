@@ -88,7 +88,9 @@ void QoreRegex::parseRT(const char* pattern, ExceptionSink* xsink) {
         //printd(5, "QoreRegex::parse() error parsing '%s': %s", pattern, (char* )err);
         xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
             eo, pattern, buffer);
+        return;
     }
+    jitCompile();
 }
 
 void QoreRegex::parse(q_get_loc_t get_loc) {
@@ -109,10 +111,16 @@ bool QoreRegex::exec(const QoreString* target, ExceptionSink* xsink) const {
     if (!t)
         return false;
 
-    return exec(t->c_str(), t->strlen());
+    return exec(t->c_str(), t->strlen(), xsink);
 }
 
 bool QoreRegex::exec(const char* str, size_t len) const {
+    // internal callers matching short identifiers (ex: namespace and class name filters) have no
+    // exception sink; a resource-limit failure can only mean "no match" for them
+    return exec(str, len, nullptr);
+}
+
+bool QoreRegex::exec(const char* str, size_t len, ExceptionSink* xsink) const {
     // the PCRE docs say that if we don't send an ovector here the library may have to malloc
     // memory, so, even though we don't need the results, we include the vector to avoid
     // extraneous malloc()s
@@ -120,12 +128,16 @@ bool QoreRegex::exec(const char* str, size_t len) const {
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
 
-    int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(str), len, 0, 0, md, nullptr);
+    int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(str), len, 0, 0, md);
     // rc == 0 means the ovector was not large enough, which should not happen when using
     // pcre2_match_data_create_from_pattern()
     assert(rc);
     //printd(5, "QoreRegex::exec(%s) this: %p pre_exec() rc=%d\n", str, this, rc);
-    return rc >= 0;
+    if (rc < 1) {
+        qore_pcre2_check_match_error(rc, xsink);
+        return false;
+    }
+    return true;
 }
 
 // return type: *list<*string>
@@ -147,25 +159,27 @@ QoreListNode* QoreRegex::extractSubstrings(const QoreString* target, ExceptionSi
     uint32_t match_options = 0;
 
     while (true) {
+        // a global match over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression match")) {
+            return nullptr;
+        }
+
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
-            match_options, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         //printd(5, "QoreRegex::extractSubstrings('%s') =~ /xxx/ = %d (global: %d)\n", t->c_str() + offset, rc, global);
         // rc == 0 means the ovector was not large enough, which should not happen when using
         // pcre2_match_data_create_from_pattern()
         assert(rc);
 
         if (rc < 1) {
-#ifdef DEBUG
-            if (!qore_pcre2_expected_match_error(rc)) {
-                printd(0, "QoreRegex::extractSubstrings() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
-                    t->c_str(), rc);
-                assert(false);
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return nullptr;
             }
-#endif
             break;
         }
 
@@ -237,6 +251,11 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
     uint32_t match_options = 0;
 
     while (true) {
+        // a split over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression split")) {
+            return nullptr;
+        }
+
         if (offset >= t->size()) {
             break;
         }
@@ -248,20 +267,17 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
-            match_options, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         printd(5, "QoreRegex::extractWithPattern('%s') = %d\n", t->c_str() + offset, rc);
 
         assert(rc);
 
         if (rc < 1) {
-#ifdef DEBUG
-            if (!qore_pcre2_expected_match_error(rc)) {
-                printd(0, "QoreRegex::extractWithPattern() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
-                    t->c_str(), rc);
-                assert(false);
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return nullptr;
             }
-#endif
             // add rest of string to list
             QoreStringNode* tstr = new QoreStringNode(t->c_str() + offset, t->getEncoding());
             l->push(tstr, xsink);
@@ -305,13 +321,22 @@ int64 QoreRegex::countMatches(const QoreString* target, ExceptionSink* xsink) co
     uint32_t match_options = 0;
 
     while (true) {
+        // a global match over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression match count")) {
+            return 0;
+        }
+
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
-            match_options, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         if (rc < 1) {
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return 0;
+            }
             break;
         }
 
@@ -362,13 +387,22 @@ QoreValue QoreRegex::extractNamedGroups(const QoreString* target, ExceptionSink*
     uint32_t match_options = 0;
 
     while (true) {
+        // a global match over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression named group match")) {
+            return QoreValue();
+        }
+
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
-            match_options, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         if (rc < 1) {
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return QoreValue();
+            }
             break;
         }
 
@@ -445,13 +479,22 @@ QoreListNode* QoreRegex::extractDetailed(const QoreString* target, ExceptionSink
     uint32_t match_options = 0;
 
     while (true) {
+        // a global match over a large subject can iterate many times; stay cancellable
+        if (qore_check_cancel(xsink, "regular expression detailed match")) {
+            return nullptr;
+        }
+
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
-            match_options, md, nullptr);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         if (rc < 1) {
+            if (qore_pcre2_check_match_error(rc, xsink)) {
+                assert(*xsink);
+                return nullptr;
+            }
             break;
         }
 

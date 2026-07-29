@@ -494,3 +494,41 @@
    ...
    obj:*libcudart.so*
 }
+
+# ============================================================================
+# PCRE2 JIT-generated code
+# ============================================================================
+# Regular expressions are compiled with the PCRE2 just-in-time compiler (see
+# QoreRegexBase::jitCompile()), which is required for linear-time matching on
+# subjects over 5,000,000 bytes -- PCRE2's interpreter disables its
+# required-code-unit start-of-match optimization past that size and becomes
+# quadratic.
+#
+# The JIT emits machine code into anonymous executable memory, so valgrind can
+# neither symbolize it nor unwind through it (every frame prints as '???' and
+# frames repeat).  Its scanning loops test whole words and rely on PCRE2's own
+# bounds tracking, which memcheck reports as reading uninitialised values.
+# These are false positives: upstream ships a --enable-valgrind build option
+# that annotates the JIT for memcheck, and distribution PCRE2 packages are not
+# built with it.
+#
+# NOTE: valgrind can only match unattributable frames as 'obj:*', so these
+# entries also cover any other JIT-generated code, including Qore's own LLVM
+# JIT tier (which is valgrind-clean as of this writing).  When investigating a
+# suspected bug in Qore-generated machine code, re-run without
+# --suppressions=qore.supp, or comment out this block.
+# ============================================================================
+
+{
+   pcre2_jit_generated_code_cond
+   Memcheck:Cond
+   obj:*
+   ...
+}
+
+{
+   pcre2_jit_generated_code_value8
+   Memcheck:Value8
+   obj:*
+   ...
+}

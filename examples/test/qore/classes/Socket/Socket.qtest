@@ -192,6 +192,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs sync connect", \happyEyeballsSyncTest());
         addTestCase("Happy Eyeballs async connect", \happyEyeballsAsyncTest());
         addTestCase("Happy Eyeballs single family", \happyEyeballsSingleFamilyTest());
+        addTestCase("Happy Eyeballs blackhole fallback", \happyEyeballsBlackholeTest());
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         addTestCase("fd_generation re-verification", \fdGenerationTest());
         set_return_value(main());
@@ -2584,6 +2585,133 @@ class SocketTest inherits QUnit::Test {
                 rethrow;
             }
         }
+    }
+
+    #! Builds a deterministic TCP blackhole on [::1] plus a working IPv4 listener on the same port
+    /** \c localhost resolves to both \c ::1 and \c 127.0.0.1, and RFC 8305 address sorting puts the
+        IPv6 address first, so a connect to \c localhost:<port> always attempts the blackhole first.
+
+        The blackhole is the kernel's own accept-queue overflow behaviour: a listener created with a
+        backlog of 0 accepts exactly one queued connection, after which further SYNs are dropped
+        silently — the client stays in \c SYN_SENT with no error, which is exactly what a black-holed
+        route looks like.  This needs no privileges and no external host.
+
+        @return a hash with \c port, and the sockets that must stay open for the duration of the test,
+        or @ref nothing if this host cannot provide the setup (no IPv6 loopback, or a kernel that does
+        not silently drop on accept-queue overflow)
+    */
+    private *hash<auto> getHappyEyeballsBlackhole() {
+        Socket v6();
+        try {
+            v6.bind("[::1]:0", True);
+            v6.listen(0);
+        } catch (hash<ExceptionInfo> ex) {
+            # no IPv6 loopback on this host
+            return;
+        }
+        int port = v6.getSocketInfo().port;
+
+        Socket v4();
+        try {
+            v4.bind("127.0.0.1:" + port, True);
+            v4.listen(20);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+
+        # fill the IPv6 accept queue; on some kernels the queue is already full here
+        Socket filler();
+        try {
+            filler.connect("[::1]:" + port, 2s);
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore; the probe below decides whether the setup is usable
+        }
+
+        # confirm that further connects to the IPv6 address really do hang
+        Socket probe();
+        try {
+            probe.connect("[::1]:" + port, 500ms);
+            # the peer answered, so this host gives no blackhole
+            return;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-TIMEOUT") {
+                return;
+            }
+        }
+
+        # verify RFC 8305 sorting really puts the IPv6 address first
+        list<hash<auto>> addrs = Socket::resolveAddrInfo("localhost", string(port));
+        if (addrs.size() < 2 || addrs[0].family != AF_INET6) {
+            return;
+        }
+
+        return {
+            "port": port,
+            "v6": v6,
+            "v4": v4,
+            "filler": filler,
+        };
+    }
+
+    #! Tests that a non-responding first address falls back to the next one promptly
+    /** Regression test for the Happy Eyeballs stagger not reaching the event loop: the RFC 8305
+        250ms timer must be published as \c poll_timeout_ms, and the fd of each additional racing
+        attempt must be published in \c extra_fds, or a black-holed first address stalls the connect
+        for the entire operation budget instead of falling back to the working address.
+    */
+    happyEyeballsBlackholeTest() {
+        *hash<auto> bh = getHappyEyeballsBlackhole();
+        if (!bh) {
+            testSkip("host cannot provide a deterministic IPv6 loopback blackhole");
+        }
+
+        Socket client();
+        SocketPollOperation spop = client.startPollConnect("localhost:" + bh.port);
+
+        bool saw_stagger;
+        bool saw_racing_fd;
+        int start = clock_getmicros_monotonic();
+        # bound the loop so a regression fails the assertions below instead of hanging
+        int deadline = start + 10000000;
+        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+            # while an address is still waiting for an attempt, the stagger must be published
+            if (exists info.poll_timeout_ms) {
+                assertGt(0, info.poll_timeout_ms, "stagger is a positive timeout");
+                assertLe(250, info.poll_timeout_ms, "stagger does not exceed the RFC 8305 delay");
+                saw_stagger = True;
+            }
+            # once the stagger fires, the second attempt's fd must be published for polling
+            if (info.extra_fds) {
+                saw_racing_fd = True;
+            }
+            if (clock_getmicros_monotonic() >= deadline) {
+                break;
+            }
+            Socket::poll((info,), 2s);
+        }
+        int elapsed_us = clock_getmicros_monotonic() - start;
+
+        assertTrue(spop.goalReached(), "connect completed");
+        assertTrue(client.isOpen());
+        assertTrue(saw_stagger, "the RFC 8305 stagger was published to the event loop");
+        assertTrue(saw_racing_fd, "the racing connect fd was published to the event loop");
+
+        # the winner must be the working IPv4 address, not the black-holed IPv6 one
+        assertEq("127.0.0.1", client.getPeerInfo().address, "fell back to the IPv4 address");
+
+        # the fallback happens one stagger after the first attempt; anything near the 10s poll
+        # budget means the second address was never tried
+        assertLt(3000000, elapsed_us, "fallback took roughly the stagger, not the full budget");
+
+        Socket accepted = bh.v4.accept();
+        assertTrue(accepted.isOpen());
+
+        string test_data = "Happy Eyeballs blackhole test";
+        client.send(test_data);
+        assertEq(test_data, accepted.recv(test_data.size()));
+
+        client.close();
+        accepted.close();
     }
 
     #! Test Happy Eyeballs with SSL connect

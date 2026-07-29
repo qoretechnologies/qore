@@ -2,7 +2,7 @@
 /*
     QoreRegex.h
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -68,7 +68,10 @@ public:
     // pattern must be in UTF-8 encoding
     DLLLOCAL void parseRT(const char* pattern, ExceptionSink* xsink);
     DLLLOCAL bool exec(const QoreString* target, ExceptionSink* xsink) const;
+    //! Matches without an exception sink; PCRE2 resource-limit failures are reported as "no match"
     DLLLOCAL bool exec(const char* str, size_t len) const;
+    //! Matches; raises @c REGEX-ERROR through \a xsink if PCRE2 cannot decide the match
+    DLLLOCAL bool exec(const char* str, size_t len, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* extractSubstrings(const QoreString* target, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* extractWithPattern(const QoreString& target, bool include_pattern,
             ExceptionSink* xsink, int limit = -1) const;

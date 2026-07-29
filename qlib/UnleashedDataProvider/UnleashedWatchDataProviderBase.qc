@@ -46,6 +46,12 @@ public const WatchConstructorOptions = UnleashedDataProviderBase::BaseConstructo
 public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
         DataProvider::AbstractWatchDataProviderBase {
     public {
+        #! The number of delivered record IDs retained before the set is pruned
+        const MaxDeliveredIds = 10000;
+
+        #! The number of least recently added IDs dropped when the set is pruned
+        const DeliveredIdPruneCount = 5000;
+
         #! Constructor options for watch providers
         const WatchProviderConstructorOptions = WatchConstructorOptions;
     }
@@ -90,36 +96,86 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     }
 
     #! Performs a single polling operation
+    #! The upstream feed carries no reliable per-record ordering key
+    /** Records are deduplicated by ID and the cursor is a wall-clock poll boundary, so no ordering
+        guarantee can be offered; consumers must not assume that events arrive in source order.
+
+        This provider is a documented exemption from the shared ordered template
+        (@ref DataProvider::AbstractOrderedWatchDataProvider) because its API exposes no monotonic
+        per-record position to order or checkpoint against. Its cursor is nonetheless durable.
+    */
+    string getSourceOrdering() {
+        return WSO_UNORDERED;
+    }
+
+    #! Restores the poll-boundary cursor
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.since.typeCode() != NT_DATE || !checkpoint.since.absolute()
+                || checkpoint.seen_ids.typeCode() != NT_LIST) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid watch checkpoint; expecting version 1, an absolute since "
+                "date/time value, and a seen_ids list";
+        }
+        hash<string, bool> restored = {};
+        foreach auto id in (checkpoint.seen_ids) {
+            if (id.typeCode() != NT_STRING || !id.val()) {
+                throw "WATCH-CHECKPOINT-ERROR", "invalid watch checkpoint; record IDs must be non-empty strings";
+            }
+            restored{id} = True;
+        }
+        since = checkpoint.since;
+        seen_ids = restored;
+    }
+
+    #! Durably advances the poll-boundary cursor
+    /** The IDs delivered are stored with the boundary, because a wall-clock cursor alone cannot tell
+        a record that has already been delivered from one that arrived in the same instant.
+    */
+    private commitCheckpoint(date poll_start, hash<string, bool> delivered) {
+        if (!poll_start.absolute()) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist a relative date/time value as a watch cursor";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "since": poll_start,
+            "seen_ids": keys delivered,
+        });
+        since = poll_start;
+        seen_ids = delivered;
+    }
+
+    #! Polls once, advancing the cursor only after every record has been delivered
+    /** @note The cursor is advanced only once the whole sweep has succeeded. Advancing it after a
+        partial sweep would move the poll boundary past records that were never delivered.
+    */
     private pollOnce() {
         date poll_start = now_us();
         list<hash<auto>> records = pollOnceImpl();
 
+        hash<string, bool> delivered = seen_ids;
         foreach hash<auto> record in (records) {
             if (isStopping()) {
-                break;
+                # the cursor stays where it is, so the remaining records are swept again
+                return;
             }
             string id = getRecordId(record);
-            if (!seen_ids{id}) {
-                seen_ids{id} = True;
+            if (!delivered{id}) {
                 notifyObservers(getEventName(), record);
+                delivered{id} = True;
             }
         }
 
-        # Update since time for next poll
-        since = poll_start;
-
-        # Clean up old seen_ids periodically (keep last 10000)
-        if (seen_ids.size() > 10000) {
-            # Remove oldest half
-            int count = 0;
-            foreach string key in (keys seen_ids) {
-                if (count++ < 5000) {
-                    remove seen_ids{key};
-                } else {
-                    break;
-                }
+        # Bound the delivered set: drop the 5000 least recently added IDs. %Qore hashes keep
+        # insertion order, so the leading keys are the ones added earliest and therefore the ones
+        # least likely to reappear in a future poll window.
+        if (delivered.size() > MaxDeliveredIds) {
+            list<string> all_keys = keys delivered;
+            foreach string key in (all_keys[0..(DeliveredIdPruneCount - 1)]) {
+                remove delivered{key};
             }
         }
+
+        commitCheckpoint(poll_start, delivered);
     }
 
     #! Called when a polling error occurs

@@ -18,6 +18,17 @@
 
 %exec-class GmailDataProviderTest
 
+#! Gmail watch provider exposing its cursor for deterministic persistence tests
+class TestGmailMessageWatchDataProvider inherits GmailMessageWatchDataProvider {
+    constructor(GoogleRestClient::GoogleRestClientIo rest, *hash<auto> options)
+            : GmailMessageWatchDataProvider(rest, options) {
+    }
+
+    int getPollEpoch() { return poll_epoch; }
+    list<string> getLastMessageIds() { return keys last_msg; }
+    advance(int epoch, string message_id) { commitCheckpoint(epoch, message_id); }
+}
+
 public class GmailDataProviderTest inherits QUnit::Test {
     private {
         GmailBaseDataProvider gdp;
@@ -37,6 +48,7 @@ public class GmailDataProviderTest inherits QUnit::Test {
         addTestCase("gmail message clearing actions", \gmailMessageClearingActionTest());
         addTestCase("gmail attachment events address their source message",
             \gmailAttachmentEventSourceMessageTest());
+        addTestCase("gmail watch checkpoint semantics", \gmailWatchCheckpointTest());
 
         try {
             setupConnection();
@@ -61,7 +73,7 @@ public class GmailDataProviderTest inherits QUnit::Test {
     }
 
     gmailWatchPollIntervalFromDataContextTest() {
-        hash opts = {
+        hash<auto!> opts = {
             "api_profile": "gmail",
             "url": "https://example.com",
             "oauth2_client_id": "test",
@@ -82,7 +94,7 @@ public class GmailDataProviderTest inherits QUnit::Test {
     }
 
     gmailWatchPollIntervalDefaultTest() {
-        hash opts = {
+        hash<auto!> opts = {
             "api_profile": "gmail",
             "url": "https://example.com",
             "oauth2_client_id": "test",
@@ -142,6 +154,72 @@ public class GmailDataProviderTest inherits QUnit::Test {
             "the source message ID is optional so a future producer cannot break the watch loop");
     }
 
+    gmailWatchCheckpointTest() {
+        hash<auto!> opts = {
+            "api_profile": "gmail",
+            "url": "https://example.com",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_redirect_url": "https://localhost",
+            "token": "test",
+        };
+        GoogleRestClientIo rest(opts);
+        TestGmailMessageWatchDataProvider provider(rest, ("q": "in:inbox"));
+
+        hash<auto> saved;
+        provider.setCheckpointPersistence({
+            "version": 1,
+            "poll_epoch": 100,
+            "last_message_ids": ("a", "b"),
+        }, sub (hash<auto> checkpoint) {
+            saved = checkpoint;
+        });
+        assertEq(100, provider.getPollEpoch(), "Gmail epoch restored");
+        assertEq(("a", "b"), sort(provider.getLastMessageIds()), "same-second message IDs restored");
+
+        provider.advance(101, "c");
+        assertEq(101, saved.poll_epoch, "advanced Gmail epoch persisted");
+        assertEq(1, saved.version, "Gmail checkpoint format version persisted");
+        assertEq(("c",), saved.last_message_ids, "message IDs reset for a newer second");
+
+        TestGmailMessageWatchDataProvider failing(rest, ("q": "in:inbox"));
+        failing.setCheckpointPersistence({
+            "version": 1,
+            "poll_epoch": 200,
+            "last_message_ids": (),
+        }, sub (hash<auto> checkpoint) {
+            throw "TEST-PERSISTENCE-ERROR", "checkpoint was not stored";
+        });
+        assertThrows("TEST-PERSISTENCE-ERROR", sub () {
+            failing.advance(201, "x");
+        });
+        assertEq(200, failing.getPollEpoch(), "failed persistence does not advance the in-memory cursor");
+        assertEq((), failing.getLastMessageIds(),
+            "failed persistence does not change the IDs at a newer checkpoint second");
+        assertThrows("TEST-PERSISTENCE-ERROR", sub () {
+            failing.advance(200, "x");
+        });
+        assertEq((), failing.getLastMessageIds(),
+            "failed persistence does not change the IDs at the current checkpoint second");
+
+        TestGmailMessageWatchDataProvider invalid(rest, ("q": "in:inbox"));
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            invalid.setCheckpointPersistence({
+                "version": 1,
+                "poll_epoch": -1,
+                "last_message_ids": (),
+            }, sub (hash<auto> checkpoint) {
+                # no-op
+            });
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            provider.advance(-1, "x");
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            provider.advance(102, "");
+        });
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name", OptionColumn);
@@ -154,7 +232,7 @@ public class GmailDataProviderTest inherits QUnit::Test {
     private setupConnection() {
         *string conn_name = m_options.conn ?? ENV.GMAIL_CONNECTION;
         if (!conn_name.val()) {
-            error("missing -c,--connection option or GMAIL_CONNECTION environment variable");
+            return;
         }
 
         AbstractConnection conn = get_connection(conn_name);

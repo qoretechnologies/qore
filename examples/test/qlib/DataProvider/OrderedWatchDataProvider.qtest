@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class OrderedWatchDataProviderTest
+
+#! Records the events raised by a watch provider
+class RecordingObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        push events, data_ + {"event_id": event_id};
+    }
+
+    list<auto> getIds() {
+        return map $1.id, events;
+    }
+}
+
+#! Watch provider driving the shared template with a scripted feed
+class MockOrderedWatchProvider inherits DataProvider::AbstractOrderedWatchDataProvider {
+    public {
+        #! the feed returned by fetchWatchItems(), deliberately newest-first
+        list<hash<auto>> feed = ();
+
+        #! the cursor: the order key of the newest item delivered
+        int cursor = 0;
+
+        #! dispatch fails for this item ID
+        *string fail_on;
+
+        #! the superseded action fails when it covers this item ID
+        *string supersede_fail_on;
+
+        #! payload retrievals performed
+        int payload_calls = 0;
+
+        #! IDs passed to the post-success hook, in order
+        list<string> post_success = ();
+
+        #! superseded ID lists passed to the superseded action, in order
+        list<auto> superseded_calls = ();
+
+        #! errors reported through logPollError()
+        list<string> errors = ();
+
+        #! messages reported through logWatchInfo()
+        list<string> infos = ();
+
+        #! checkpoints persisted, in order
+        list<hash<auto>> checkpoints = ();
+    }
+
+    constructor(*bool snapshot, *string action, *int budget) : AbstractOrderedWatchDataProvider(30) {
+        setWatchPolicy(snapshot ?? False, action, budget);
+    }
+
+    string getSourceOrdering() {
+        return WSO_DESCENDING;
+    }
+
+    #! Runs one cycle and returns its outcome
+    hash<WatchCycleInfo> runCycle() {
+        return runWatchCycle(fetchWatchItems());
+    }
+
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        list<hash<WatchItemInfo>> items = ();
+        foreach hash<auto> entry in (feed) {
+            push items, <WatchItemInfo>{
+                "id": entry.id,
+                "order_key": entry.order_key,
+                "group_key": entry.group_key,
+                "data": entry,
+            };
+        }
+        return items;
+    }
+
+    private bool isNewWatchItem(hash<WatchItemInfo> item) {
+        return item.order_key > cursor;
+    }
+
+    private auto fetchWatchItemPayload(hash<WatchItemInfo> item) {
+        ++payload_calls;
+        return item.data;
+    }
+
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        if (fail_on == item.id) {
+            throw "MOCK-DISPATCH-ERROR", sprintf("dispatch of item %y failed", item.id);
+        }
+        notifyObservers("MOCK-EVENT", payload + {
+            "superseded_count": superseded.size(),
+            "superseded_ids": map $1.id, superseded,
+        });
+    }
+
+    private advanceWatchCursor(hash<WatchItemInfo> item) {
+        hash<auto> checkpoint = {
+            "version": 1,
+            "cursor": item.order_key,
+            "id": item.id,
+        };
+        persistCheckpoint(checkpoint);
+        push checkpoints, checkpoint;
+        cursor = item.order_key;
+    }
+
+    private afterWatchItemDispatched(hash<WatchItemInfo> item, auto payload) {
+        push post_success, item.id;
+    }
+
+    private applySupersededAction(list<hash<WatchItemInfo>> superseded) {
+        list<auto> ids = map $1.id, superseded;
+        if (supersede_fail_on.val()) {
+            foreach auto id in (ids) {
+                if (id == supersede_fail_on) {
+                    throw "MOCK-SUPERSEDE-ERROR", sprintf("could not remove %y", supersede_fail_on);
+                }
+            }
+        }
+        push superseded_calls, ids;
+    }
+
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        cursor = checkpoint.cursor;
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+        push errors, sprintf("%s: %s", ex.err, ex.desc);
+    }
+
+    private logWatchInfo(string fmt, ...) {
+        push infos, vsprintf(fmt, argv);
+    }
+}
+
+#! Snapshot-mode provider that does not implement a superseded action
+class MockNoSupersededActionProvider inherits DataProvider::AbstractOrderedWatchDataProvider {
+    public {
+        list<hash<auto>> feed = ();
+        list<string> errors = ();
+    }
+
+    constructor() : AbstractOrderedWatchDataProvider(30) {
+        setWatchPolicy(True, WSA_DELETE);
+    }
+
+    hash<WatchCycleInfo> runCycle() {
+        return runWatchCycle(fetchWatchItems());
+    }
+
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        return map <WatchItemInfo>{"id": $1.id, "order_key": $1.order_key, "data": $1}, feed;
+    }
+
+    private bool isNewWatchItem(hash<WatchItemInfo> item) {
+        return True;
+    }
+
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        notifyObservers("MOCK-EVENT", payload);
+    }
+
+    private advanceWatchCursor(hash<WatchItemInfo> item) {
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+        push errors, sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+
+#! Timestamp watch provider with a scripted record feed
+class MockTimestampWatchProvider inherits DataProvider::AbstractTimestampWatchDataProvider {
+    public {
+        list<hash<auto>> records = ();
+        list<hash<auto>> fetch_args = ();
+        list<string> infos = ();
+        *string fail_on;
+    }
+
+    constructor(*date start_date) : AbstractTimestampWatchDataProvider(30, start_date) {
+    }
+
+    string getSourceOrdering() {
+        return WSO_DESCENDING;
+    }
+
+    hash<WatchCycleInfo> runCycle() {
+        return runWatchCycle(fetchWatchItems());
+    }
+
+    private list<hash<auto>> fetchRecords(date since) {
+        push fetch_args, {"since": since};
+        return records;
+    }
+
+    private string getEventName() {
+        return "MOCK-RECORD";
+    }
+
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        if (fail_on == item.id) {
+            throw "MOCK-DISPATCH-ERROR", sprintf("dispatch of record %y failed", item.id);
+        }
+        AbstractTimestampWatchDataProvider::dispatchWatchItem(item, payload, superseded);
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+    }
+
+    private logWatchInfo(string fmt, ...) {
+        push infos, vsprintf(fmt, argv);
+    }
+}
+
+public class OrderedWatchDataProviderTest inherits QUnit::Test {
+    constructor() : Test("OrderedWatchDataProviderTest", "1.0") {
+        addTestCase("descending input dispatches ascending", \ascendingDispatchTest());
+        addTestCase("items sharing an ordering key dispatch deterministically", \ascendingDispatchTiesTest());
+        addTestCase("a failed dispatch stops the cycle", \failedDispatchStopsCycleTest());
+        addTestCase("a failed checkpoint write does not advance the cursor", \failedCheckpointTest());
+        addTestCase("snapshot mode collapses a backlog", \snapshotCollapseTest());
+        addTestCase("snapshot mode groups by key", \snapshotGroupKeyTest());
+        addTestCase("a superseded action failure does not cost the event", \supersededActionFailureTest());
+        addTestCase("watch policy validation", \watchPolicyValidationTest());
+        addTestCase("the dispatch budget defers from the newest end", \dispatchBudgetTest());
+        addTestCase("ordering declarations", \orderingDeclarationTest());
+        addTestCase("timestamp cursor ordering and checkpoints", \timestampWatchTest());
+        addTestCase("timestamp checkpoint validation", \timestampCheckpointValidationTest());
+
+        set_return_value(main());
+    }
+
+    #! The template must dispatch oldest-first however the upstream API ordered its response
+    ascendingDispatchTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        # newest first, as a "latest N" API returns
+        provider.feed = ({"id": "c", "order_key": 30}, {"id": "b", "order_key": 20}, {"id": "a", "order_key": 10});
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(3, info.dispatched, "every new item was dispatched");
+        assertEq(0, info.failed);
+        assertEq(("a", "b", "c"), obs.getIds(), "descending input is dispatched oldest-first");
+        assertEq(("a", "b", "c"), provider.post_success, "the post-success hook runs in dispatch order");
+        assertEq(30, provider.cursor, "the cursor identifies the newest item");
+        assertEq((10, 20, 30), (map $1.cursor, provider.checkpoints),
+            "the cursor is persisted once per item, ascending");
+
+        # items at or before the cursor are discarded on the next cycle
+        assertEq(0, provider.runCycle().dispatched, "already delivered items are not dispatched again");
+        assertEq(3, obs.events.size());
+    }
+
+    #! Items sharing an ordering key must still dispatch deterministically and advance the cursor
+    ascendingDispatchTiesTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = ({"id": "z", "order_key": 10}, {"id": "a", "order_key": 10});
+        provider.runCycle();
+        assertEq(("a", "z"), obs.getIds(), "ties break on identity");
+    }
+
+    #! Continuing past a failure would advance a monotonic cursor past an undelivered item
+    failedDispatchStopsCycleTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = ({"id": "c", "order_key": 30}, {"id": "b", "order_key": 20}, {"id": "a", "order_key": 10});
+        provider.fail_on = "b";
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(1, info.dispatched, "only the item before the failure was dispatched");
+        assertEq(1, info.failed);
+        assertEq(("a",), obs.getIds());
+        assertEq(10, provider.cursor, "the cursor stops at the last successfully delivered item");
+        assertEq(1, provider.errors.size(), "the failure was reported");
+        assertEq(("a",), provider.post_success, "the post-success hook did not run for the failed item");
+
+        # the failed item and everything after it is retried once the failure clears
+        provider.fail_on = NOTHING;
+        assertEq(2, provider.runCycle().dispatched, "the failed item and its successors are retried");
+        assertEq(("a", "b", "c"), obs.getIds(), "the retry preserves ascending order");
+        assertEq(30, provider.cursor);
+    }
+
+    #! A checkpoint that was not stored must not advance the in-memory cursor
+    failedCheckpointTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            throw "TEST-PERSISTENCE-ERROR", "checkpoint was not stored";
+        });
+        provider.feed = ({"id": "a", "order_key": 10}, {"id": "b", "order_key": 20});
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(0, info.dispatched, "a checkpoint that was not stored fails the item");
+        assertEq(1, info.failed);
+        assertEq(0, provider.cursor, "the in-memory cursor did not advance");
+        assertEq(1, obs.events.size(), "the event was raised before the checkpoint failed");
+        assertEq((), provider.post_success, "the post-success hook did not run");
+
+        # the item is retried, so delivery is at-least-once and never at-most-once
+        assertEq(1, provider.runCycle().failed);
+        assertEq(2, obs.events.size(), "the undelivered item is retried");
+    }
+
+    #! A backlog must collapse to the latest item without fetching the payloads it discards
+    snapshotCollapseTest() {
+        MockOrderedWatchProvider provider(True, WSA_TRASH);
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = (
+            {"id": "c", "order_key": 30},
+            {"id": "a", "order_key": 10},
+            {"id": "b", "order_key": 20},
+        );
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(1, info.dispatched, "only the latest item is dispatched");
+        assertEq(2, info.superseded, "the older items were collapsed away");
+        assertEq(("c",), obs.getIds());
+        assertEq(1, provider.payload_calls, "no payload is fetched for a superseded item");
+        assertEq(30, provider.cursor, "the cursor covers the whole collapsed backlog");
+        assertEq(2, obs.events[0].superseded_count, "the event reports how many items it superseded");
+        assertEq(("a", "b"), obs.events[0].superseded_ids, "the event identifies the superseded items");
+        assertEq((("a", "b"),), provider.superseded_calls, "the superseded action ran once for the group");
+    }
+
+    #! Grouping must retain the latest item per key, not one item overall
+    snapshotGroupKeyTest() {
+        MockOrderedWatchProvider provider(True, WSA_IGNORE);
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = (
+            {"id": "t1-new", "order_key": 40, "group_key": "t1"},
+            {"id": "t2-old", "order_key": 15, "group_key": "t2"},
+            {"id": "t1-old", "order_key": 10, "group_key": "t1"},
+            {"id": "t2-new", "order_key": 30, "group_key": "t2"},
+        );
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(2, info.dispatched, "one item per group is retained");
+        assertEq(2, info.superseded);
+        assertEq(("t2-new", "t1-new"), obs.getIds(),
+            "retained items are still dispatched ascending across groups");
+        assertEq(40, provider.cursor);
+        # a superseded item of a later group (t1-old at 10) precedes the retained item of an earlier
+        # group (t2-new at 30), and is still covered once the newest retained item commits
+        assertEq(2, obs.events.size());
+        assertEq(("t2-old",), obs.events[0].superseded_ids);
+        assertEq(("t1-old",), obs.events[1].superseded_ids);
+    }
+
+    #! Removing a superseded item is cleanup; failing at it must not cost the delivered event
+    supersededActionFailureTest() {
+        MockOrderedWatchProvider provider(True, WSA_DELETE);
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = ({"id": "a", "order_key": 10}, {"id": "b", "order_key": 20});
+        provider.supersede_fail_on = "a";
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(1, info.dispatched, "the retained event was delivered");
+        assertEq(0, info.failed, "a cleanup failure is not a delivery failure");
+        assertEq(("b",), obs.getIds());
+        assertEq(20, provider.cursor, "the cursor is durable regardless of the cleanup outcome");
+        assertEq(1, provider.errors.size(), "the cleanup failure was reported rather than swallowed");
+        assertEq(0, provider.runCycle().dispatched, "the item left behind is not re-delivered");
+    }
+
+    #! An unusable removal policy must be rejected when it is configured, not when it fires
+    watchPolicyValidationTest() {
+        assertThrows("WATCH-POLICY-ERROR", "unknown", sub () {
+            MockOrderedWatchProvider p(True, "shred");
+        });
+        assertThrows("WATCH-POLICY-ERROR", "requires snapshot mode", sub () {
+            MockOrderedWatchProvider p(False, WSA_DELETE);
+        });
+        assertThrows("WATCH-POLICY-ERROR", "negative", sub () {
+            MockOrderedWatchProvider p(False, NOTHING, -1);
+        });
+
+        # a provider that does not implement removal must say so instead of quietly keeping the items
+        MockNoSupersededActionProvider silent();
+        RecordingObserver obs();
+        silent.registerObserver(obs);
+        silent.feed = ({"id": "a", "order_key": 10}, {"id": "b", "order_key": 20});
+        hash<WatchCycleInfo> info = silent.runCycle();
+        assertEq(1, info.dispatched);
+        assertEq(1, silent.errors.size(), "the unimplemented removal action was reported");
+        assertTrue(silent.errors[0].find("WATCH-POLICY-ERROR") >= 0);
+    }
+
+    #! A bounded batch must be taken from the oldest end so that the cursor stays contiguous
+    dispatchBudgetTest() {
+        MockOrderedWatchProvider provider(False, NOTHING, 2);
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = (
+            {"id": "d", "order_key": 40},
+            {"id": "c", "order_key": 30},
+            {"id": "b", "order_key": 20},
+            {"id": "a", "order_key": 10},
+        );
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(2, info.dispatched);
+        assertEq(2, info.deferred, "the remainder is deferred, not dropped");
+        assertEq(("a", "b"), obs.getIds(), "the budget takes the oldest items");
+        assertEq(20, provider.cursor);
+        assertEq(1, provider.infos.size(), "the deferral is logged rather than applied silently");
+
+        assertEq(2, provider.runCycle().dispatched, "the next cycle takes the rest");
+        assertEq(("a", "b", "c", "d"), obs.getIds());
+        assertEq(40, provider.cursor);
+    }
+
+    #! Every watch provider must declare whether its feed is ordered
+    orderingDeclarationTest() {
+        MockOrderedWatchProvider provider();
+        assertEq(WSO_DESCENDING, provider.getSourceOrdering(), "the upstream ordering is declared");
+        assertTrue(provider.hasAscendingDispatch(),
+            "a descending upstream feed is still dispatched ascending by the template");
+        assertEq(WSA_IGNORE, provider.getSupersededAction());
+        assertFalse(provider.hasSnapshotMode());
+        assertEq(0, provider.getMaxItemsPerCycle());
+
+        MockOrderedWatchProvider snap(True, WSA_TRASH, 5);
+        assertTrue(snap.hasSnapshotMode());
+        assertEq(WSA_TRASH, snap.getSupersededAction());
+        assertEq(5, snap.getMaxItemsPerCycle());
+    }
+
+    #! The timestamp cursor must order by record time and survive a restart
+    timestampWatchTest() {
+        date base = 2026-07-29T10:00:00Z;
+        MockTimestampWatchProvider provider(base);
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        list<hash<auto>> saved = ();
+        provider.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            push saved, checkpoint;
+        });
+        assertEq(base, provider.getLastCheck(), "the cursor starts at the configured start date");
+
+        # returned newest-first, and one record shares the newest timestamp
+        provider.records = (
+            {"id": "r3", "created_at": base + 20s},
+            {"id": "r4", "created_at": base + 20s},
+            {"id": "r1", "created_at": base + 5s},
+            {"id": "r0", "created_at": base},
+            {"id": "r2", "created_at": (base + 10s).format("YYYY-MM-DDTHH:mm:SSZ")},
+        );
+
+        hash<WatchCycleInfo> info = provider.runCycle();
+        assertEq(5, info.dispatched, "every record from the start date on was delivered");
+        assertEq(("r0", "r1", "r2", "r3", "r4"), obs.getIds(),
+            "records are delivered oldest-first, including one landing exactly on the start date");
+        assertEq(base + 20s, provider.getLastCheck());
+        assertEq(("r3", "r4"), sort(provider.getLastIds()),
+            "both records sharing the newest timestamp are remembered");
+        assertEq(base, provider.fetch_args[0].since, "the fetch is bounded by the cursor");
+
+        assertEq(0, provider.runCycle().dispatched, "nothing is delivered twice");
+
+        # a restart restores the cursor from the last checkpoint written
+        MockTimestampWatchProvider restarted(base);
+        RecordingObserver obs2();
+        restarted.registerObserver(obs2);
+        restarted.setCheckpointPersistence(saved.last(), sub (hash<auto> checkpoint) {});
+        assertEq(base + 20s, restarted.getLastCheck(), "the cursor was restored");
+        assertEq(("r3", "r4"), sort(restarted.getLastIds()));
+        restarted.records = provider.records + {"id": "r5", "created_at": base + 30s};
+        assertEq(1, restarted.runCycle().dispatched, "only the record after the restored cursor is delivered");
+        assertEq(("r5",), obs2.getIds());
+
+        # a record with no usable position is reported rather than delivered out of order; a
+        # timestamp that cannot be turned into a position must skip that one record and no more,
+        # because an exception here would abort the cycle and stall every other record with it
+        MockTimestampWatchProvider unpositioned(base);
+        RecordingObserver obs3();
+        unpositioned.registerObserver(obs3);
+        unpositioned.records = (
+            {"id": "no-ts"},
+            {"created_at": base + 5s},
+            {"id": "unparseable", "created_at": "not-a-date-at-all"},
+            {"id": "relative-string", "created_at": "PT5S"},
+            {"id": "relative-date", "created_at": 5s},
+            {"id": "empty", "created_at": ""},
+            {"id": "ok", "created_at": base + 5s},
+        );
+        assertEq(1, unpositioned.runCycle().dispatched,
+            "only the record with a usable position was delivered");
+        assertEq(("ok",), obs3.getIds());
+        assertEq(6, unpositioned.infos.size(), "every skipped record was reported rather than dropped silently");
+    }
+
+    #! A checkpoint in an unknown shape must be rejected instead of silently ignored
+    timestampCheckpointValidationTest() {
+        date base = 2026-07-29T10:00:00Z;
+        code noop = sub (hash<auto> checkpoint) {};
+
+        assertThrows("WATCH-CHECKPOINT-ERROR", "version 1", sub () {
+            MockTimestampWatchProvider p(base);
+            p.setCheckpointPersistence({"version": 2, "last_check": base, "last_ids": ()}, noop);
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", "absolute", sub () {
+            MockTimestampWatchProvider p(base);
+            p.setCheckpointPersistence({"version": 1, "last_check": 5s, "last_ids": ()}, noop);
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", "non-empty", sub () {
+            MockTimestampWatchProvider p(base);
+            p.setCheckpointPersistence({"version": 1, "last_check": base, "last_ids": ("",)}, noop);
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", "absolute", sub () {
+            MockTimestampWatchProvider p(5s);
+        });
+
+        # the cursor may not move backwards
+        MockTimestampWatchProvider p(base);
+        p.setCheckpointPersistence({"version": 1, "last_check": base + 10s, "last_ids": ()}, noop);
+        assertEq(base + 10s, p.getLastCheck());
+
+        # a provider that has not been given a checkpoint format must reject one
+        MockNoSupersededActionProvider plain();
+        assertThrows("WATCH-CHECKPOINT-ERROR", "does not support checkpoints", sub () {
+            plain.setCheckpointPersistence({"anything": 1}, noop);
+        });
+    }
+}

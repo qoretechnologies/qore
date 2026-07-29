@@ -26,7 +26,7 @@
 public namespace GmailDataProvider {
 #! The parent class for Gmail REST APIs
 public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::GoogleDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractOrderedWatchDataProvider {
     public {
         #! Constructor options
         const ConstructorOptions = {
@@ -73,7 +73,92 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 "type": (AbstractDataProviderTypeMap."date",),
                 "desc": "Do not retrieve emails earlier than the given date",
             },
+            "snapshot_mode": <DataProviderOptionInfo>{
+                "display_name": "Latest Message Only?",
+                "short_desc": "Collapse a backlog to its latest message instead of replaying it?",
+                "type": (AbstractDataProviderTypeMap."bool",),
+                "desc": "Collapse a backlog to its latest message instead of replaying it.\n\n"
+                    "Some feeds are snapshots rather than a log: each message restates the current state, so "
+                    "after an outage only the last one is worth processing. With this option set, each polling "
+                    "cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, "
+                    "and reports the messages it collapsed away in the event's `superseded_count` and "
+                    "`superseded_ids` fields. The messages that are collapsed away are never fetched in full, "
+                    "so a large backlog costs one message retrieval, not one per message.\n\n"
+                    "Leave this unset for a feed where every message must be processed",
+            },
+            "snapshot_key": <DataProviderOptionInfo>{
+                "display_name": "Snapshot Grouping",
+                "short_desc": "How messages are grouped before the latest one is selected",
+                "type": (AbstractDataProviderTypeMap."string",),
+                "desc": "How matching messages are grouped before the latest one in each group is selected; "
+                    "ignored unless `snapshot_mode` is set.\n\n"
+                    "- `all`: one global group, so each cycle raises a single event carrying the newest "
+                    "matching message\n"
+                    "- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that "
+                    "thread's newest message",
+                "default_value": SnapshotKeyAll,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": SnapshotKeyAll,
+                        "display_name": "Latest Overall",
+                        "desc": "Retain the single newest matching message",
+                    },
+                    <AllowedValueInfo>{
+                        "value": SnapshotKeyThread,
+                        "display_name": "Latest Per Thread",
+                        "desc": "Retain the newest message in each Gmail thread",
+                    },
+                ),
+            },
+            "superseded_action": <DataProviderOptionInfo>{
+                "display_name": "Superseded Message Action",
+                "short_desc": "What to do with messages that were collapsed away",
+                "type": (AbstractDataProviderTypeMap."string",),
+                "desc": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless "
+                    "`snapshot_mode` is set.\n\n"
+                    "- `ignore`: leave them in the mailbox, so they remain available for audit; they are not "
+                    "raised as events again because the watch cursor has moved past them\n"
+                    "- `trash`: move them to the Gmail trash, where they can still be recovered\n"
+                    "- `delete`: delete them permanently; **this cannot be undone**\n\n"
+                    "A removal that fails is logged and the message is left in place; it is not retried, "
+                    "because its event has already been raised and the watch cursor has already moved past it",
+                "default_value": WSA_IGNORE,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": WSA_IGNORE,
+                        "display_name": "Keep",
+                        "desc": "Leave superseded messages in the mailbox",
+                    },
+                    <AllowedValueInfo>{
+                        "value": WSA_TRASH,
+                        "display_name": "Move to Trash",
+                        "desc": "Move superseded messages to the Gmail trash",
+                    },
+                    <AllowedValueInfo>{
+                        "value": WSA_DELETE,
+                        "display_name": "Delete Permanently",
+                        "desc": "Delete superseded messages permanently",
+                    },
+                ),
+            },
+            "max_messages_per_cycle": <DataProviderOptionInfo>{
+                "display_name": "Maximum Messages Per Cycle",
+                "short_desc": "The maximum number of messages delivered in one polling cycle",
+                "type": (AbstractDataProviderTypeMap."int",),
+                "desc": "The maximum number of messages delivered in one polling cycle; unset or `0` means no "
+                    "limit.\n\n"
+                    "The limit is applied from the **oldest** end of the backlog, so the watch cursor still "
+                    "advances contiguously and the remaining messages are delivered by the following cycles "
+                    "rather than skipped. Use it to bound the work a single cycle can do when a large backlog "
+                    "may accumulate",
+            },
         };
+
+        #! Snapshot grouping: retain the newest matching message overall
+        const SnapshotKeyAll = "all";
+
+        #! Snapshot grouping: retain the newest message in each Gmail thread
+        const SnapshotKeyThread = "thread";
 
         #! Minimum poll interval in seconds
         const MinPollInterval = 30;
@@ -114,11 +199,14 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         #! Match query
         string q;
 
-        #! Current epoch for polling (tracks latest message timestamp)
-        int poll_epoch;
+        #! Current epoch for polling (tracks latest message timestamp); 0 until the first message
+        int poll_epoch = 0;
 
         #! Message IDs already processed at current epoch (deduplication)
-        hash<string, bool> last_msg;
+        hash<string, bool> last_msg = {};
+
+        #! How messages are grouped in snapshot mode
+        string snapshot_key = SnapshotKeyAll;
 
         #! Setup info for polling (initialized on first poll)
         hash<auto> setup_info;
@@ -128,7 +216,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     constructor(GoogleRestClient::GoogleRestClientIo rest,
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
             : GoogleDataProviderBase(rest),
-              AbstractWatchDataProviderBase(GmailMessageWatchDataProviderBase::getPollInterval(
+              AbstractOrderedWatchDataProvider(GmailMessageWatchDataProviderBase::getPollInterval(
                   DataProviderDataContextHelper::getHash(){keys constructor_options} + options)) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options,
             DataProviderDataContextHelper::getHash(){keys constructor_options} + options);
@@ -158,8 +246,21 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             start_date = copts.start_date;
             poll_epoch = mktime(start_date);
         }
+        if (copts.snapshot_key.val()) {
+            if (copts.snapshot_key != SnapshotKeyAll && copts.snapshot_key != SnapshotKeyThread) {
+                throw "CONSTRUCTOR-ERROR", sprintf("snapshot_key %y is unknown; expecting one of %y",
+                    copts.snapshot_key, (SnapshotKeyAll, SnapshotKeyThread));
+            }
+            snapshot_key = copts.snapshot_key;
+        }
+        setWatchPolicy(copts.snapshot_mode ?? False, copts.superseded_action, copts.max_messages_per_cycle);
 
         q = copts.q;
+    }
+
+    #! Gmail lists messages newest-first, so the watch reverses them before delivery
+    string getSourceOrdering() {
+        return WSO_DESCENDING;
     }
 
     #! Returns the effective poll interval in seconds
@@ -174,111 +275,284 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         };
     }
 
-    #! Performs a single polling operation
-    private pollOnce() {
+    #! Returns the message type used to validate and convert retrieved messages
+    private hash<auto> getSetupInfo() {
         if (!setup_info) {
             setup_info = setup();
         }
-        pollOnceIntern(\setup_info);
+        return setup_info;
     }
 
-    #! Perform one poll
-    private *hash<auto> pollOnceIntern(reference<hash<auto>> setup) {
-        # check for matching mail
-        try {
-            hash<auto> res;
-            string gmail_query = q;
-            if (poll_epoch) {
-                gmail_query += sprintf(" after:%d", poll_epoch);
+    #! Restores the Gmail polling cursor
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.poll_epoch.typeCode() != NT_INT || checkpoint.poll_epoch < 0
+                || checkpoint.last_message_ids.typeCode() != NT_LIST) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid Gmail watch checkpoint; expecting version 1, a non-negative "
+                "poll_epoch, and last_message_ids";
+        }
+        hash<string, bool> restored_ids = {};
+        foreach string message_id in (checkpoint.last_message_ids) {
+            if (!message_id) {
+                throw "WATCH-CHECKPOINT-ERROR", "invalid Gmail watch checkpoint; message IDs cannot be empty";
             }
-            string this_uri = "gmail/v1/users/me/messages?q=" + encode_url(gmail_query);
-            bool epoch_updated;
+            restored_ids{message_id} = True;
+        }
+        poll_epoch = checkpoint.poll_epoch;
+        last_msg = restored_ids;
+    }
+
+    #! Durably advances the Gmail polling cursor
+    private commitCheckpoint(int message_epoch, string message_id) {
+        if (message_epoch < 0 || !message_id) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist a Gmail checkpoint with a negative epoch or empty "
+                "message ID";
+        }
+        hash<string, bool> next_ids = message_epoch == poll_epoch ? last_msg : {};
+        next_ids{message_id} = True;
+        persistCheckpoint({
+            "version": 1,
+            "poll_epoch": message_epoch,
+            "last_message_ids": keys next_ids,
+        });
+        poll_epoch = message_epoch;
+        last_msg = next_ids;
+    }
+
+    #! Lists every message matching the watch query, following pagination
+    /** @param gmail_query the Gmail search expression
+        @param max_pages stop after this many pages; unset means walk every page
+
+        @return the listed message stubs, newest first as Gmail returns them, or an empty list if
+        shutdown interrupted the walk
+
+        @note Every page in scope is walked by default. A partial list is not usable: Gmail lists
+        newest-first, so stopping early yields the newest messages and delivering any of them would
+        advance the watch cursor past older messages that were never listed. If shutdown interrupts
+        the walk, this method therefore returns nothing at all and the cycle does no work.
+    */
+    private list<hash<auto>> listMessages(string gmail_query, *int max_pages) {
+        list<hash<auto>> listed = ();
+        *string page_token;
+        int pages = 0;
+        while (True) {
+            # 500 is the maximum page size the Gmail API accepts; using it minimizes round trips
+            string this_uri = "gmail/v1/users/me/messages?maxResults=500&q=" + encode_url(gmail_query);
+            if (page_token.val()) {
+                this_uri += "&pageToken=" + encode_url(page_token);
+            }
             LoggerWrapper::debug("Gmail polling using URI: %y epoch: %y poll_interval: %ds", this_uri, poll_epoch,
                 poll_secs);
-            res = rest.restGet(this_uri).body;
-            int match;
-            foreach hash<auto> minfo in (res.messages) {
-                # check for shutdown between REST calls
-                if (isStopping()) {
-                    break;
-                }
-                # skip messages already processed
-                if (last_msg{minfo.id}) {
-                    continue;
-                }
-                # retrieve each email
-                string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
-                hash<auto> msg = rest.restGet(msguri).body;
+            hash<auto> res = rest.restGet(this_uri).body;
+            ++pages;
+            if (res.messages) {
+                listed += res.messages;
+            }
+            page_token = res.nextPageToken;
+            if (!page_token.val()) {
+                break;
+            }
+            if (isStopping()) {
+                LoggerWrapper::debug("Gmail: shutting down during pagination after %d page(s); discarding the "
+                    "partial list so the cursor cannot advance past unlisted messages", pages);
+                return ();
+            }
+            if (max_pages && pages >= max_pages) {
+                break;
+            }
+        }
+        LoggerWrapper::debug("Gmail: listed %d message(s) over %d page(s)", listed.size(), pages);
+        return listed;
+    }
 
-                # try to decode body as base64 if there is a Content-Transfer-Encoding header
-                # do not allow message bodies to be re-encoded as base64
-                processHeaders(\msg.payload, GmailMessageEventDataType::Fields,
-                    GmailMessageEventDataType::PartFields);
+    #! Retrieves and normalizes one message in full
+    private hash<auto> getFullMessage(string message_id) {
+        hash<auto> msg = rest.restGet(sprintf("gmail/v1/users/me/messages/%s", message_id)).body;
 
-                # check message structure and convert types where necessary
-                msg = setup.msgtype.acceptsValue(msg);
+        # try to decode body as base64 if there is a Content-Transfer-Encoding header
+        # do not allow message bodies to be re-encoded as base64
+        processHeaders(\msg.payload, GmailMessageEventDataType::Fields,
+            GmailMessageEventDataType::PartFields);
 
-                # convert base64-decoded message bodies to strings if they have text MIME types
-                processBody(\msg.payload);
+        # check message structure and convert types where necessary
+        msg = getSetupInfo().msgtype.acceptsValue(msg);
 
-                # internalDate is given as a ms offset from the epoch
-                int msg_epoch = msg.internalDate / 1000;
-                if (msg_epoch > poll_epoch) {
-                    # reset deduplication set for new epoch
-                    last_msg = {minfo.id: True};
-                    poll_epoch = msg_epoch;
-                    epoch_updated = True;
-                } else if (msg_epoch == poll_epoch) {
-                    last_msg{minfo.id} = True;
-                }
-                if (retrieve_attachments) {
-                    msg.attachments = ();
-                    foreach hash<auto> part in (msg.payload.parts) {
-                        if (*string aid = part.body.attachmentId) {
-                            # retrieve attachment; skip on error to preserve the message event
-                            string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", minfo.id,
-                                aid);
-                            try {
-                                hash<auto> att = rest.restGet(atturi).body;
-                                msg.attachments += getAttachment(att, part.headers);
-                            } catch (hash<ExceptionInfo> att_ex) {
-                                LoggerWrapper::warn("Gmail: failed to retrieve attachment %y for message %y: %s",
-                                    aid, minfo.id, get_exception_string(att_ex));
-                            }
-                        }
-                    }
-                    LoggerWrapper::info("Gmail: matched message %y attachments: %d", minfo.id,
-                        msg.attachments.size());
-                } else {
-                    LoggerWrapper::info("Gmail: matched message %y", minfo.id);
-                }
+        # convert base64-decoded message bodies to strings if they have text MIME types
+        processBody(\msg.payload);
+        return msg;
+    }
 
-                if (setup.test_mode) {
-                    return msg;
-                }
-                ++match;
-                messageReceived(msg);
-                if (delete_messages) {
-                    string deluri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
-                    rest.restDel(deluri);
-                    LoggerWrapper::info("Gmail: deleted matched message %y", minfo.id);
-                }
-                if (epoch_updated) {
-                    LoggerWrapper::debug("Gmail using new epoch: %y", poll_epoch);
+    #! Returns the message's position in the feed in seconds since the epoch
+    private static int getMessageEpoch(auto internal_date) {
+        return int(internal_date) / 1000;
+    }
+
+    #! Returns @ref True if the cycle needs a cheap ordering pass before fetching payloads
+    /** Collapsing a backlog or bounding a batch means deciding which messages to deliver before
+        paying for their payloads, which needs each message's timestamp up front. Without either
+        option every listed message is delivered anyway, so the full retrieval doubles as the
+        ordering pass and no extra API call is made.
+    */
+    private bool usesOrderingPass() {
+        return hasSnapshotMode() || getMaxItemsPerCycle() > 0;
+    }
+
+    #! Returns the cycle's candidate messages
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        string gmail_query = q;
+        if (poll_epoch) {
+            # Include the preceding second so messages sharing the checkpoint second can be
+            # deduplicated by ID instead of being lost if Gmail applies a strict timestamp bound.
+            gmail_query += sprintf(" after:%d", poll_epoch - 1);
+        }
+        bool ordering_pass = usesOrderingPass();
+        list<hash<WatchItemInfo>> items = ();
+        foreach hash<auto> minfo in (listMessages(gmail_query)) {
+            # check for shutdown between REST calls
+            if (isStopping()) {
+                return ();
+            }
+            hash<auto> msg;
+            if (ordering_pass) {
+                # "minimal" returns the message's identity, thread, and internalDate without its
+                # payload, so a message that is about to be collapsed away costs almost nothing
+                msg = rest.restGet(sprintf("gmail/v1/users/me/messages/%s?format=minimal", minfo.id)).body;
+            } else {
+                msg = getFullMessage(minfo.id);
+            }
+            push items, <WatchItemInfo>{
+                "id": msg.id,
+                "order_key": GmailMessageWatchDataProviderBase::getMessageEpoch(msg.internalDate),
+                "group_key": snapshot_key == SnapshotKeyThread ? msg.threadId : NOTHING,
+                "data": ordering_pass ? NOTHING : msg,
+            };
+        }
+        return items;
+    }
+
+    #! Returns @ref True if the message lies beyond the durable cursor
+    private bool isNewWatchItem(hash<WatchItemInfo> item) {
+        int msg_epoch = item.order_key;
+        if (msg_epoch > poll_epoch) {
+            return True;
+        }
+        if (msg_epoch == poll_epoch) {
+            return !last_msg{item.id};
+        }
+        return False;
+    }
+
+    #! Retrieves the message payload, including attachment data when requested
+    private auto fetchWatchItemPayload(hash<WatchItemInfo> item) {
+        hash<auto> msg = item.data ?? getFullMessage(item.id);
+        if (retrieve_attachments) {
+            msg = addAttachments(msg);
+            LoggerWrapper::info("Gmail: matched message %y attachments: %d", msg.id, msg.attachments.size());
+        } else {
+            LoggerWrapper::info("Gmail: matched message %y", msg.id);
+        }
+        return msg;
+    }
+
+    #! Retrieves and attaches the message's attachment data
+    private hash<auto> addAttachments(hash<auto> msg) {
+        msg.attachments = ();
+        foreach hash<auto> part in (msg.payload.parts) {
+            if (*string aid = part.body.attachmentId) {
+                # retrieve attachment; skip on error to preserve the message event
+                string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", msg.id, aid);
+                try {
+                    hash<auto> att = rest.restGet(atturi).body;
+                    msg.attachments += getAttachment(att, part.headers);
+                } catch (hash<ExceptionInfo> att_ex) {
+                    LoggerWrapper::warn("Gmail: failed to retrieve attachment %y for message %y: %s",
+                        aid, msg.id, get_exception_string(att_ex));
                 }
             }
-            if (!match) {
-                LoggerWrapper::debug("Gmail: matched no messages");
+        }
+        return msg;
+    }
+
+    #! Raises the event for one message
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        hash<auto> msg = payload;
+        if (superseded) {
+            msg += {
+                "superseded_count": superseded.size(),
+                "superseded_ids": map $1.id, superseded,
+            };
+        }
+        messageReceived(msg);
+    }
+
+    #! Durably advances the Gmail cursor to the given message
+    private advanceWatchCursor(hash<WatchItemInfo> item) {
+        int msg_epoch = item.order_key;
+        bool epoch_updated = msg_epoch > poll_epoch;
+        commitCheckpoint(msg_epoch, item.id);
+        if (epoch_updated) {
+            LoggerWrapper::debug("Gmail using new epoch: %y", poll_epoch);
+        }
+    }
+
+    #! Deletes the source message when the watch was configured to do so
+    /** @note the message is deleted because its event was raised, which is not the same as the
+        consumer having processed it; see @ref watch_removal_semantics
+    */
+    private afterWatchItemDispatched(hash<WatchItemInfo> item, auto payload) {
+        if (delete_messages) {
+            rest.restDel(sprintf("gmail/v1/users/me/messages/%s", item.id));
+            LoggerWrapper::info("Gmail: deleted matched message %y", item.id);
+        }
+    }
+
+    #! Trashes or deletes the messages that snapshot mode collapsed away
+    /** A failure is logged per message and does not stop the others: the retained event has already
+        been raised and its cursor committed, so nothing can be lost by continuing, and the message
+        left behind is simply not raised again.
+    */
+    private applySupersededAction(list<hash<WatchItemInfo>> superseded) {
+        string action = getSupersededAction();
+        if (action == WSA_IGNORE) {
+            return;
+        }
+        foreach hash<WatchItemInfo> item in (superseded) {
+            try {
+                if (action == WSA_TRASH) {
+                    rest.restPost(sprintf("gmail/v1/users/me/messages/%s/trash", item.id), {});
+                } else {
+                    rest.restDel(sprintf("gmail/v1/users/me/messages/%s", item.id));
+                }
+                LoggerWrapper::info("Gmail: applied superseded action %y to message %y", action, item.id);
+            } catch (hash<ExceptionInfo> ex) {
+                LoggerWrapper::warn("Gmail: could not apply superseded action %y to message %y: %s; the message "
+                    "is left in place and will not be raised again", action, item.id, get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Returns one matching message for use as example event data, without delivering it
+    private *hash<auto> getExampleMessage() {
+        try {
+            # one page is enough for an example
+            foreach hash<auto> minfo in (listMessages(q, 1)) {
+                hash<auto> msg = getFullMessage(minfo.id);
+                return retrieve_attachments ? addAttachments(msg) : msg;
             }
         } catch (hash<ExceptionInfo> ex) {
-            if (setup.test_mode) {
-                LoggerWrapper::error("Gmail error retrieving emails in test mode: %s", get_exception_string(ex));
-                return;
-            }
-
-            LoggerWrapper::error("Gmail error retrieving emails: %s; polling again in %ds", get_exception_string(ex),
-                poll_secs);
+            LoggerWrapper::error("Gmail error retrieving example message: %s", get_exception_string(ex));
         }
+    }
+
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        LoggerWrapper::error("Gmail error retrieving emails: %s; polling again in %ds", get_exception_string(ex),
+            poll_secs);
+    }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        LoggerWrapper::logArgs(LoggerLevel::INFO, "Gmail: " + fmt, argv);
     }
 
     #! Process headers and body

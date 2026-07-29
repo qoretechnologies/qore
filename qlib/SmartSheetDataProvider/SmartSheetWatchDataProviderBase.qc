@@ -81,6 +81,44 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
     }
 
     #! Polls for new events once
+    #! The Smartsheet event stream is returned in ascending event order
+    /** The stream position is an opaque cursor, so this provider is a documented exemption from the
+        shared ordered template (@ref DataProvider::AbstractOrderedWatchDataProvider): there is no
+        per-event key to sort or compare against. Events are delivered in the order the stream
+        returns them, and the stream position is made durable only once a whole page has been
+        delivered.
+    */
+    string getSourceOrdering() {
+        return WSO_ASCENDING;
+    }
+
+    #! Restores the event stream position
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.stream_position.typeCode() != NT_STRING || !checkpoint.stream_position.val()) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid Smartsheet watch checkpoint; expecting version 1 and a "
+                "non-empty stream_position";
+        }
+        stream_position = checkpoint.stream_position;
+    }
+
+    #! Durably advances the event stream position
+    private commitCheckpoint(string next_position) {
+        if (!next_position.val()) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist an empty Smartsheet stream position";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "stream_position": next_position,
+        });
+        stream_position = next_position;
+    }
+
+    #! Polls once, advancing the stream position only after the page has been delivered
+    /** @note The stream position returned with a page is stored only after every event on that page
+        has been raised. Storing it first would skip the whole page if delivery then failed; storing
+        it afterwards means a failure re-reads the page, so delivery is at-least-once.
+    */
     private pollOnce() {
         try {
             hash<auto> params;
@@ -93,15 +131,11 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
 
             hash<auto> response = doGet("events", params);
 
-            # Update stream position for next poll
-            if (response.nextStreamPosition) {
-                stream_position = response.nextStreamPosition;
-            }
-
             if (response.data) {
                 foreach hash<auto> event in (response.data) {
                     if (isStopping()) {
-                        break;
+                        # the stream position stays where it is, so this page is read again
+                        return;
                     }
                     # Filter by event type and object type
                     if (!matchesEvent(event)) {
@@ -111,6 +145,11 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
                     hash<auto> enriched = enrichEvent(event);
                     notifyObservers(event_type, enriched);
                 }
+            }
+
+            # Update stream position for next poll now that the page has been delivered
+            if (response.nextStreamPosition) {
+                commitCheckpoint(response.nextStreamPosition);
             }
         } catch (hash<ExceptionInfo> ex) {
             if (isStopping()) {

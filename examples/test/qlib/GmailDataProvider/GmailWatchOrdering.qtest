@@ -1,0 +1,460 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires GoogleRestClient
+%requires GoogleDataProvider
+%requires GmailDataProvider
+
+%exec-class GmailWatchOrderingTest
+
+#! Records the events raised by a watch provider
+class RecordingObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        push events, data_;
+    }
+
+    list<auto> getIds() {
+        return map $1.id, events;
+    }
+}
+
+#! A Gmail REST client that answers from a scripted mailbox instead of the network
+class MockGmailRestClient inherits GoogleRestClient::GoogleRestClientIo {
+    public {
+        #! list pages: page token ("" for the first page) -> (message ID, ...)
+        hash<auto> pages = {"": ()};
+
+        #! next page token by page token
+        hash<auto> next_tokens = {};
+
+        #! message ID -> internalDate in milliseconds
+        hash<auto> internal_dates = {};
+
+        #! message ID -> thread ID
+        hash<auto> thread_ids = {};
+
+        #! request paths seen, by method
+        list<string> gets = ();
+        list<string> dels = ();
+        list<string> posts = ();
+
+        #! fail requests for these message IDs
+        hash<string, bool> fail_get = {};
+        hash<string, bool> fail_remove = {};
+    }
+
+    constructor() : GoogleRestClientIo(MockGmailRestClient::getRestOptions()) {
+    }
+
+    #! Returns REST options that do not narrow when the client copies them
+    static hash<auto!> getRestOptions() {
+        hash<auto!> opts = {
+            "api_profile": "gmail",
+            "url": "https://example.com",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_redirect_url": "https://localhost",
+            "token": "test",
+        };
+        return opts;
+    }
+
+    #! Loads a mailbox where message N has internalDate base + N seconds
+    setMailbox(list<hash<auto>> messages, *int page_size) {
+        pages = {};
+        next_tokens = {};
+        internal_dates = {};
+        thread_ids = {};
+        list<string> ids = map $1.id, messages;
+        map internal_dates{$1.id} = $1.internal_date, messages;
+        map thread_ids{$1.id} = $1.thread_id ?? ("t-" + $1.id), messages;
+
+        int size = page_size ?? ids.size();
+        if (!size) {
+            pages{""} = ();
+            return;
+        }
+        int page = 0;
+        for (int i = 0; i < ids.size(); i += size) {
+            string token = page ? sprintf("page%d", page) : "";
+            int last = min(i + size, ids.size()) - 1;
+            pages{token} = ids[i..last];
+            if (last < ids.size() - 1) {
+                next_tokens{token} = sprintf("page%d", page + 1);
+            }
+            ++page;
+        }
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push gets, path;
+        if (path =~ /users\/me\/messages\?/) {
+            *string token = (path =~ x/pageToken=([^&]+)/)[0];
+            string key = token ?? "";
+            hash<auto!> body = {
+                "messages": map ("id": $1, "threadId": thread_ids{$1}), pages{key},
+            };
+            if (next_tokens{key}) {
+                body += {"nextPageToken": next_tokens{key}};
+            }
+            return makeResponse(body);
+        }
+        *string id = (path =~ x/messages\/([^\/\?]+)/)[0];
+        if (!id.val()) {
+            throw "MOCK-ERROR", sprintf("unexpected GET %y", path);
+        }
+        if (fail_get{id}) {
+            throw "MOCK-GET-ERROR", sprintf("retrieval of message %y failed", id);
+        }
+        return makeResponse(makeMessage(id));
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        push dels, path;
+        checkRemoval(path);
+        return makeResponse(NOTHING);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push posts, path;
+        checkRemoval(path);
+        return makeResponse({});
+    }
+
+    private checkRemoval(string path) {
+        *string id = (path =~ x/messages\/([^\/\?]+)/)[0];
+        if (id.val() && fail_remove{id}) {
+            throw "MOCK-REMOVE-ERROR", sprintf("removal of message %y failed", id);
+        }
+    }
+
+    #! Returns a Gmail message with the minimum structure the watch provider needs
+    private hash<auto> makeMessage(string id) {
+        return {
+            "id": id,
+            "threadId": thread_ids{id},
+            "internalDate": string(internal_dates{id}),
+            "labelIds": ("INBOX",),
+            "snippet": sprintf("message %s", id),
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": (
+                    {"name": "Subject", "value": sprintf("subject %s", id)},
+                    {"name": "From", "value": "sender@example.com"},
+                    {"name": "Date", "value": "Wed, 29 Jul 2026 10:00:00 +0000"},
+                    {"name": "Content-Type", "value": "text/plain"},
+                ),
+                "body": {"size": 0},
+            },
+        };
+    }
+
+    private hash<RestClient::RestResponseInfo> makeResponse(auto body) {
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": body,
+        };
+    }
+}
+
+#! Gmail watch provider exposing its cursor and a single polling cycle
+class TestGmailWatch inherits GmailMessageWatchDataProvider {
+    constructor(GoogleRestClient::GoogleRestClientIo rest, *hash<auto> options)
+            : GmailMessageWatchDataProvider(rest, options) {
+    }
+
+    int getPollEpoch() { return poll_epoch; }
+    list<string> getLastMessageIds() { return keys last_msg; }
+    hash<WatchCycleInfo> runCycle() { return runWatchCycle(fetchWatchItems()); }
+    bool usesOrdering() { return usesOrderingPass(); }
+}
+
+public class GmailWatchOrderingTest inherits QUnit::Test {
+    private {
+        #! 2026-07-29T10:00:00Z in milliseconds
+        const BaseMs = 1785664800000;
+    }
+
+    constructor() : Test("GmailWatchOrderingTest", "1.0") {
+        addTestCase("newest-first listings dispatch oldest-first", \orderingRegressionTest());
+        addTestCase("messages sharing a second are all delivered", \sameSecondTest());
+        addTestCase("pagination walks every page", \paginationTest());
+        addTestCase("a failed retrieval does not advance past the message", \failedMessageTest());
+        addTestCase("snapshot mode collapses to the latest message", \snapshotModeTest());
+        addTestCase("snapshot mode groups by thread", \snapshotThreadTest());
+        addTestCase("snapshot mode trashes superseded messages", \supersededTrashTest());
+        addTestCase("a failed superseded removal does not cost the event", \supersededFailureTest());
+        addTestCase("the per-cycle budget delivers the oldest messages first", \messageBudgetTest());
+        addTestCase("watch option validation", \optionValidationTest());
+
+        set_return_value(main());
+    }
+
+    private MockGmailRestClient getRest() {
+        return new MockGmailRestClient();
+    }
+
+    #! Gmail lists newest-first; the watch must deliver oldest-first and end on the newest message
+    orderingRegressionTest() {
+        MockGmailRestClient rest = getRest();
+        # deliberately newest first, as users.messages.list returns
+        rest.setMailbox((
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+        list<hash<auto>> saved = ();
+        watch.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            push saved, checkpoint;
+        });
+
+        hash<WatchCycleInfo> info = watch.runCycle();
+        assertEq(3, info.dispatched);
+        assertEq(("m1", "m2", "m3"), obs.getIds(), "a newest-first listing is delivered oldest-first");
+        assertEq((BaseMs + 10000) / 1000, saved[0].poll_epoch, "the first checkpoint is the oldest message");
+        assertEq((BaseMs + 30000) / 1000, saved.last().poll_epoch,
+            "the final checkpoint identifies the newest message");
+        assertEq(("m3",), saved.last().last_message_ids);
+        assertEq((BaseMs + 30000) / 1000, watch.getPollEpoch());
+
+        assertEq(0, watch.runCycle().dispatched, "nothing is delivered twice");
+        assertEq(3, obs.events.size());
+    }
+
+    #! Messages sharing one second must all be delivered and all be remembered at the cursor
+    sameSecondTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "b", "internal_date": BaseMs + 10000},
+            {"id": "a", "internal_date": BaseMs + 10000},
+            {"id": "older", "internal_date": BaseMs},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+        list<hash<auto>> saved = ();
+        watch.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            push saved, checkpoint;
+        });
+
+        assertEq(3, watch.runCycle().dispatched);
+        assertEq(("older", "a", "b"), obs.getIds(),
+            "messages sharing a second are delivered together, ordered by ID");
+        assertEq(("a", "b"), sort(watch.getLastMessageIds()),
+            "both messages at the cursor second are remembered");
+        assertEq(("a", "b"), sort(saved.last().last_message_ids), "and both are persisted");
+
+        # the next poll includes the preceding second, so both must be filtered out by ID
+        assertEq(0, watch.runCycle().dispatched, "neither message at the cursor second is re-delivered");
+    }
+
+    #! A backlog spanning several list pages must be delivered in full and in order
+    paginationTest() {
+        MockGmailRestClient rest = getRest();
+        list<hash<auto>> mailbox = ();
+        # newest first across 5 pages of 2
+        for (int i = 10; i > 0; --i) {
+            push mailbox, {"id": sprintf("m%02d", i), "internal_date": BaseMs + i * 1000};
+        }
+        rest.setMailbox(mailbox, 2);
+        TestGmailWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        assertEq(10, watch.runCycle().dispatched, "every page is walked in one cycle");
+        assertEq((map sprintf("m%02d", $1), (1..10)), obs.getIds(),
+            "messages from every page are delivered oldest-first");
+        assertEq(5, (select rest.gets, $1 =~ /users\/me\/messages\?/).size(), "all 5 list pages were fetched");
+        assertEq((BaseMs + 10000) / 1000, watch.getPollEpoch());
+    }
+
+    #! A message that cannot be retrieved must block the cursor, not be skipped over
+    failedMessageTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        rest.fail_get{"m2"} = True;
+        TestGmailWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        # the cycle cannot deliver anything: the failed message has no position, so delivering the
+        # messages around it could only advance the cursor past a message that was never delivered
+        assertThrows("MOCK-GET-ERROR", sub () {
+            watch.runCycle();
+        });
+        assertEq((), obs.getIds(), "nothing is delivered while the feed has a hole in it");
+        assertEq(0, watch.getPollEpoch(), "the cursor did not move");
+
+        remove rest.fail_get{"m2"};
+        assertEq(3, watch.runCycle().dispatched, "the whole cycle is retried once the failure clears");
+        assertEq(("m1", "m2", "m3"), obs.getIds(), "the retry delivers everything in order");
+        assertEq((BaseMs + 30000) / 1000, watch.getPollEpoch());
+    }
+
+    #! A snapshot feed must raise one event for the newest message and report the rest
+    snapshotModeTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox", "snapshot_mode": True});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        hash<WatchCycleInfo> info = watch.runCycle();
+        assertEq(1, info.dispatched, "only the latest message is delivered");
+        assertEq(2, info.superseded);
+        assertEq(("m3",), obs.getIds());
+        assertEq(2, obs.events[0].superseded_count, "the event says how much backlog it stood in for");
+        assertEq(("m1", "m2"), obs.events[0].superseded_ids, "and identifies the collapsed messages");
+        assertEq((BaseMs + 30000) / 1000, watch.getPollEpoch(), "the cursor covers the whole backlog");
+
+        # the collapsed messages were never retrieved in full
+        assertEq(3, (select rest.gets, $1 =~ /format=minimal/).size(),
+            "each candidate costs only a metadata retrieval");
+        assertEq(1, (select rest.gets, $1 =~ /messages\/[^\/\?]+$/).size(),
+            "only the retained message is retrieved in full");
+        assertEq((), rest.dels, "the default superseded action leaves the messages in place");
+        assertEq(0, watch.runCycle().dispatched, "the collapsed messages are not raised again");
+    }
+
+    #! Grouping by thread must retain the newest message of each thread
+    snapshotThreadTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "a2", "internal_date": BaseMs + 40000, "thread_id": "ta"},
+            {"id": "b2", "internal_date": BaseMs + 30000, "thread_id": "tb"},
+            {"id": "b1", "internal_date": BaseMs + 20000, "thread_id": "tb"},
+            {"id": "a1", "internal_date": BaseMs + 10000, "thread_id": "ta"},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox", "snapshot_mode": True, "snapshot_key": "thread"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        hash<WatchCycleInfo> info = watch.runCycle();
+        assertEq(2, info.dispatched, "one event per thread");
+        assertEq(2, info.superseded);
+        assertEq(("b2", "a2"), obs.getIds(), "retained messages are still delivered oldest-first");
+        assertEq(("b1",), obs.events[0].superseded_ids);
+        assertEq(("a1",), obs.events[1].superseded_ids);
+        assertEq((BaseMs + 40000) / 1000, watch.getPollEpoch());
+    }
+
+    #! A configured removal action must actually run against the collapsed messages
+    supersededTrashTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox", "snapshot_mode": True, "superseded_action": "trash"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        assertEq(1, watch.runCycle().dispatched);
+        assertEq(2, rest.posts.size(), "both superseded messages were trashed");
+        assertTrue(rest.posts[0] =~ /messages\/m1\/trash/);
+        assertTrue(rest.posts[1] =~ /messages\/m2\/trash/);
+        assertEq((), rest.dels, "trashing does not delete permanently");
+
+        # "delete" removes permanently instead
+        MockGmailRestClient rest2 = getRest();
+        rest2.setMailbox((
+            {"id": "n2", "internal_date": BaseMs + 20000},
+            {"id": "n1", "internal_date": BaseMs + 10000},
+        ));
+        TestGmailWatch del(rest2, {"q": "in:inbox", "snapshot_mode": True, "superseded_action": "delete"});
+        RecordingObserver obs2();
+        del.registerObserver(obs2);
+        assertEq(1, del.runCycle().dispatched);
+        assertEq(1, rest2.dels.size(), "the superseded message was deleted");
+        assertTrue(rest2.dels[0] =~ /messages\/n1$/);
+    }
+
+    #! Cleanup is not delivery: a removal failure must not undo a delivered event
+    supersededFailureTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        rest.fail_remove{"m1"} = True;
+        TestGmailWatch watch(rest, {"q": "in:inbox", "snapshot_mode": True, "superseded_action": "delete"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        hash<WatchCycleInfo> info = watch.runCycle();
+        assertEq(1, info.dispatched, "the retained event was delivered");
+        assertEq(0, info.failed, "a removal failure is not a delivery failure");
+        assertEq((BaseMs + 30000) / 1000, watch.getPollEpoch(), "the cursor is durable regardless");
+        assertEq(2, rest.dels.size(), "the failure did not stop the other removal");
+        assertEq(0, watch.runCycle().dispatched, "the message left behind is not raised as an event");
+    }
+
+    #! A bounded batch must start at the oldest message so the cursor stays contiguous
+    messageBudgetTest() {
+        MockGmailRestClient rest = getRest();
+        rest.setMailbox((
+            {"id": "m4", "internal_date": BaseMs + 40000},
+            {"id": "m3", "internal_date": BaseMs + 30000},
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        ));
+        TestGmailWatch watch(rest, {"q": "in:inbox", "max_messages_per_cycle": 2});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+        assertTrue(watch.usesOrdering(), "a bounded batch needs the cheap ordering pass");
+
+        assertEq(2, watch.runCycle().dispatched);
+        assertEq(("m1", "m2"), obs.getIds(), "the oldest messages are delivered first");
+        assertEq((BaseMs + 20000) / 1000, watch.getPollEpoch());
+
+        assertEq(2, watch.runCycle().dispatched, "the deferred messages follow on the next cycle");
+        assertEq(("m1", "m2", "m3", "m4"), obs.getIds());
+        assertEq((BaseMs + 40000) / 1000, watch.getPollEpoch());
+    }
+
+    #! An unusable backlog policy must be rejected when the watch is created
+    optionValidationTest() {
+        MockGmailRestClient rest = getRest();
+        assertThrows("OPTION-VALUE-ERROR", "snapshot_key", sub () {
+            new TestGmailWatch(rest, {"q": "in:inbox", "snapshot_mode": True, "snapshot_key": "sender"});
+        });
+        assertThrows("WATCH-POLICY-ERROR", "requires snapshot mode", sub () {
+            new TestGmailWatch(rest, {"q": "in:inbox", "superseded_action": "delete"});
+        });
+        assertThrows("OPTION-VALUE-ERROR", "superseded_action", sub () {
+            new TestGmailWatch(rest, {"q": "in:inbox", "snapshot_mode": True, "superseded_action": "shred"});
+        });
+
+        TestGmailWatch plain(rest, {"q": "in:inbox"});
+        assertEq(WSO_DESCENDING, plain.getSourceOrdering(), "Gmail lists newest-first");
+        assertTrue(plain.hasAscendingDispatch(), "and the watch reverses that before delivery");
+        assertFalse(plain.usesOrdering(), "a plain watch does not pay for a separate ordering pass");
+    }
+}
