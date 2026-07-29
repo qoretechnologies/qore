@@ -1618,7 +1618,8 @@ QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
-        Var** globals, int num_globals) {
+        Var** globals, int num_globals,
+        QoreProgram* local_owner_pgm) {
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
@@ -1628,7 +1629,9 @@ QoreValue readOneExpr(
         err = "unsupported expression kind " + std::to_string(ekind);
         return QoreValue();
     }
-    AOTExprReadCtx rctx{rdr, p, e, pgm, err, locals, num_locals, globals, num_globals};
+    AOTExprReadCtx rctx{
+        rdr, p, e, pgm, err, locals, num_locals, globals, num_globals, local_owner_pgm
+    };
     return kinfo->read_fn(rctx);
 }
 
@@ -1636,14 +1639,16 @@ QoreValue readOneTopLevelIRExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
-        Var** globals, int num_globals) {
+        Var** globals, int num_globals,
+        QoreProgram* local_owner_pgm) {
     const uint8_t* start = p;
     uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
     if (static_cast<AOTExprKind>(kind_byte) == AOTExprKind::GENERIC_EVAL) {
         return QoreValue();
     }
     p = start;
-    return readOneExpr(rdr, p, e, err, pgm, locals, num_locals, globals, num_globals);
+    return readOneExpr(rdr, p, e, err, pgm, locals, num_locals, globals, num_globals,
+        local_owner_pgm);
 }
 
 // ---- Expression Tree Deserializer ----
@@ -1959,7 +1964,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         QoreAOTTypeResolver* shared_type_resolver = nullptr,
         std::string* build_error = nullptr,
         std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
-        const uint8_t* slot_maps_start = nullptr) {
+        const uint8_t* slot_maps_start = nullptr,
+        QoreProgram* local_owner_pgm = nullptr) {
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -2036,6 +2042,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     ctx->allocate();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_program_private* local_pp = local_owner_pgm
+        ? qore_program_private::get(*local_owner_pgm) : pp;
 
     // Get UserSignature for param resolution
     UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -2180,7 +2188,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         type_error.clear();
                     }
                 }
-                lv = pp->createLocalVar(lname ? lname : "", ti);
+                lv = local_pp->createLocalVar(lname ? lname : "", ti);
             }
         }
 
@@ -2412,7 +2420,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
-                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                         if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading complex hash arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
@@ -2475,7 +2483,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (num_args > 0) {
                     std::string arg_err;
                     arg_val = readOneExpr(reader, ptr, end, arg_err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                     if (!arg_err.empty()) {
                         printd(0, "AOT v2: error reading complex list arg for '%s': %s\n",
                             ref1 ? ref1 : "", arg_err.c_str());
@@ -2519,7 +2527,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (num_args > 0) {
                     std::string arg_err;
                     arg_val = readOneExpr(reader, ptr, end, arg_err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                     if (!arg_err.empty()) {
                         printd(0, "AOT v2: error reading complex buffer arg for '%s': %s\n",
                             ref1 ? ref1 : "", arg_err.c_str());
@@ -2560,7 +2568,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
-                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                         if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading hashdecl arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
@@ -2675,7 +2683,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CALLREF_CALL: {
                 std::string callee_err;
                 QoreValue callee = readOneExpr(reader, ptr, end, callee_err, pgm,
-                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                 if (!callee_err.empty()) {
                     printd(0, "AOT v2: error reading callref callee for slot %d: %s\n",
                         i, callee_err.c_str());
@@ -2690,7 +2698,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
-                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                         if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading callref arg %d for slot %d: %s\n",
                                 j, i, arg_err.c_str());
@@ -2777,7 +2785,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref1 = reader.readStringRef(ptr);   // method_name
                 std::string child_err;
                 QoreValue target = readOneExpr(reader, ptr, end, child_err, pgm,
-                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                 if (!child_err.empty()) {
                     printd(0, "AOT v2: error reading obj method ref target for '%s': %s\n",
                         ref1 ? ref1 : "", child_err.c_str());
@@ -2847,7 +2855,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
-                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                         if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading static method arg %d for '%s::%s': %s\n",
                                 j, ref1 ? ref1 : "", ref2 ? ref2 : "", arg_err.c_str());
@@ -2961,7 +2969,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     std::string val_err;
                     // readOneExpr reads its own ekind byte from ptr
                     QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
-                        ctx->locals, num_locals, ctx->globals, num_globals);
+                        ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                     if (!hash_ok) {
                         val.discard(nullptr);
                     } else if (!val_err.empty()) {
@@ -2988,10 +2996,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 for (uint8_t j = 0; j < num_pairs; ++j) {
                     std::string key_err;
                     QoreValue key = readOneExpr(reader, ptr, end, key_err, pgm,
-                        ctx->locals, num_locals, ctx->globals, num_globals);
+                        ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                     std::string val_err;
                     QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
-                        ctx->locals, num_locals, ctx->globals, num_globals);
+                        ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                     if (!hash_ok) {
                         key.discard(nullptr);
                         val.discard(nullptr);
@@ -3021,7 +3029,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 for (uint8_t j = 0; j < count; ++j) {
                     std::string val_err;
                     QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
-                        ctx->locals, num_locals, ctx->globals, num_globals);
+                        ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                     if (!list_ok) {
                         val.discard(nullptr);
                     } else if (!val_err.empty()) {
@@ -3053,7 +3061,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 std::string inner_err;
                 QoreValue inner = readOneExpr(reader, ptr, end, inner_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!inner_err.empty()) {
                     printd(2, "AOT v2: PARSE_REF inner error for expr slot %d of '%s': %s\n",
                         i, name, inner_err.c_str());
@@ -3138,10 +3146,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // left (base expr) + right (key expr) — uses readOneExpr to consume both sub-expressions
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3155,10 +3163,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::PLUS: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3172,10 +3180,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::RANGE: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3189,10 +3197,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::SQUARE_BRACKET: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3206,13 +3214,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::SQUARE_BRACKET_RANGE: {
                 std::string src_err;
                 QoreValue src = readOneExpr(reader, ptr, end, src_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string start_err;
                 QoreValue start = readOneExpr(reader, ptr, end, start_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string stop_err;
                 QoreValue stop = readOneExpr(reader, ptr, end, stop_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!src_err.empty() || !start_err.empty() || !stop_err.empty()) {
                     src.discard(nullptr);
                     start.discard(nullptr);
@@ -3227,7 +3235,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::EXISTS: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3247,10 +3255,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::MINUS: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3264,10 +3272,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::MULTIPLY: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3281,10 +3289,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::DIVIDE: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3298,10 +3306,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::MODULO: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3319,10 +3327,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::SHIFT_RIGHT: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3348,7 +3356,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::KEYS: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3366,7 +3374,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* type_path = reader.readStringRef(ptr);
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3398,7 +3406,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 int64_t options = QoreAOTBinaryReader::readI64(ptr);
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty() || !pattern) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3431,7 +3439,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::POST_DEC: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3471,10 +3479,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::ASSIGN: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3536,7 +3544,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::ITERATE: {
                 std::string source_err;
                 QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!source_err.empty()) {
                     source.discard(nullptr);
                     has_unsupported = true;
@@ -3551,10 +3559,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     QoreAOTBinaryReader::readU8(ptr));
                 std::string predicate_err;
                 QoreValue predicate = readOneExpr(reader, ptr, end, predicate_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string source_err;
                 QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!predicate_err.empty() || !source_err.empty()) {
                     predicate.discard(nullptr);
                     source.discard(nullptr);
@@ -3568,13 +3576,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::MAP_SELECT: {
                 std::string map_err;
                 QoreValue map_expr = readOneExpr(reader, ptr, end, map_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string source_err;
                 QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string where_err;
                 QoreValue where_expr = readOneExpr(reader, ptr, end, where_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!map_err.empty() || !source_err.empty() || !where_err.empty()) {
                     map_expr.discard(nullptr);
                     source.discard(nullptr);
@@ -3590,13 +3598,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::HASH_MAP_SELECT_OP: {
                 std::string key_err;
                 QoreValue key_expr = readOneExpr(reader, ptr, end, key_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string val_err;
                 QoreValue val_expr = readOneExpr(reader, ptr, end, val_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string source_err;
                 QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (kind == AOTExprKind::HASH_MAP_OP) {
                     if (!key_err.empty() || !val_err.empty() || !source_err.empty()) {
                         key_expr.discard(nullptr);
@@ -3611,7 +3619,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 std::string where_err;
                 QoreValue where_expr = readOneExpr(reader, ptr, end, where_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!key_err.empty() || !val_err.empty() || !source_err.empty() || !where_err.empty()) {
                     key_expr.discard(nullptr);
                     val_expr.discard(nullptr);
@@ -3628,7 +3636,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::LOG_NOT: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3641,7 +3649,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::UNARY_MINUS: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3654,13 +3662,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::QUESTION: {
                 std::string cond_err;
                 QoreValue cond = readOneExpr(reader, ptr, end, cond_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string true_err;
                 QoreValue true_expr = readOneExpr(reader, ptr, end, true_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string false_err;
                 QoreValue false_expr = readOneExpr(reader, ptr, end, false_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!cond_err.empty() || !true_err.empty() || !false_err.empty()) {
                     cond.discard(nullptr);
                     true_expr.discard(nullptr);
@@ -3682,7 +3690,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::BACKGROUND: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!operand_err.empty()) {
                     operand.discard(nullptr);
                     has_unsupported = true;
@@ -3717,10 +3725,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::UNSHIFT: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 std::string right_err;
                 QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!left_err.empty() || !right_err.empty()) {
                     left.discard(nullptr);
                     right.discard(nullptr);
@@ -3737,7 +3745,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::DOT_EVAL_EXPR: {
                 std::string dot_err;
                 QoreValue dot_expr = readOneExpr(reader, ptr, end, dot_err, pgm,
-                    ctx->locals, num_locals, ctx->globals, num_globals);
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
                 if (!dot_err.empty()) {
                     dot_expr.discard(nullptr);
                     has_unsupported = true;
@@ -3863,7 +3871,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
-                    closure_sig_has_varargs, closure_class);
+                    closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+                    std::vector<uint8_t>(), local_owner_pgm);
                 if (closure_needs_extra_args) {
                     closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
                 }
@@ -3951,18 +3960,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // visible to readExprCb when instruction reading fires readExpr
                 // calls.
                 std::string ir_error;
-                auto readExprCb = [pgm, ctx, num_globals, &closure_locals_vec]
+                auto readExprCb = [pgm, ctx, num_globals, &closure_locals_vec, local_owner_pgm]
                         (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
                         const uint8_t* e, std::string& err) -> QoreValue {
                     LocalVar** arr = closure_locals_vec.empty()
                         ? nullptr : closure_locals_vec.data();
                     int cnt = static_cast<int>(closure_locals_vec.size());
                     return readOneTopLevelIRExpr(rdr, p, e, err, pgm,
-                        arr, cnt, ctx->globals, num_globals);
+                        arr, cnt, ctx->globals, num_globals, local_owner_pgm);
                 };
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error,
-                    ctx->locals, num_locals, &closure_locals_vec);
+                    ctx->locals, num_locals, &closure_locals_vec, false, nullptr,
+                    local_owner_pgm);
                 ptr = ir_end_ptr;  // Ensure we advance past IR data
 
                 if (!closure_ir) {
@@ -4378,7 +4388,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
             }
 
-            lv = pp->createLocalVar(blname ? blname : "", ti);
+            lv = local_pp->createLocalVar(blname ? blname : "", ti);
         }
         if ((bl_flags & 0x01) && !lv->closureUse()) {
             lv->setClosureUse();
@@ -4424,7 +4434,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (QoreAOTBinaryReader::readU8(ptr)) {
                     std::string expr_error;
                     QoreValue legacy_delete_lvalue_expr = readOneExpr(reader, ptr, end, expr_error, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                     legacy_delete_lvalue_expr.discard(nullptr);
                     if (!expr_error.empty()) {
                         printd(2, "AOT buildCtx: '%s' LValuePath delete expr deser failed: %s\n",
@@ -4617,7 +4627,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const uint8_t* handler_ir_end = ptr + handler_ir_size;
                 // Deserialize handler IR function
                 std::string ir_error;
-                auto readExprCb = [pgm, ctx](const QoreAOTBinaryReader& rdr, const uint8_t*& p,
+                auto readExprCb = [pgm, ctx, local_owner_pgm](
+                        const QoreAOTBinaryReader& rdr, const uint8_t*& p,
                         const uint8_t* e, std::string& err) -> QoreValue {
                     // Peek at kind byte for special cases
                     uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
@@ -4645,11 +4656,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     // itself. Use a wrapper that re-reads from p-1 by adjusting p.
                     --p;  // unconsume the kind byte so readOneExpr can read it
                     return readOneExpr(rdr, p, e, err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
                 };
                 auto handler = deserializeIRFunction(reader, ptr, end, pgm, readExprCb,
                     &handler_local_map, ir_error,
-                    ctx->locals, num_locals);
+                    ctx->locals, num_locals, nullptr, false, nullptr, local_owner_pgm);
                 if (handler) {
                     // Compute slot IDs for the deserialized handler
                     handler->computeSlotIdsAndEmbed();
@@ -4918,6 +4929,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const std::unordered_map<uint32_t, LocalVar*>* slot_to_local,
         const AOTExprReadFunc& readExpr,
         QoreProgram* pgm,
+        QoreProgram* local_owner_pgm,
         std::string& error) {
     auto need = [&ptr, end, &error](size_t bytes, const char* field) -> bool {
         if (end < ptr || static_cast<size_t>(end - ptr) < bytes) {
@@ -4999,7 +5011,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         error += "; this usually means qcc emitted malformed or schema-incompatible IR";
         return nullptr;
     }
-    AOTInstReadCtx rctx{reader, ptr, end, blocks, local_map, readExpr, pgm, error, slot_to_local};
+    AOTInstReadCtx rctx{
+        reader, ptr, end, blocks, local_map, readExpr, pgm, local_owner_pgm, error, slot_to_local
+    };
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
     if (!inst) {
         const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
@@ -5142,7 +5156,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 QoreAOTTypeResolver type_resolver(pgm);
                 const QoreTypeInfo* ti = (ltype && *ltype)
                     ? type_resolver.resolve(ltype, type_error) : nullptr;
-                qore_program_private* pp = qore_program_private::get(*pgm);
+                qore_program_private* pp = qore_program_private::get(
+                    *(local_owner_pgm ? local_owner_pgm : pgm));
                 lv = pp->createLocalVar(lname, ti);
             }
             if (lv && read_only && !lv->isReadOnly()) {
@@ -5847,7 +5862,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             std::unique_ptr<QoreIRFunction> nested_handler;
             if (has_handler_ir) {
                 nested_handler = deserializeIRFunction(reader, ptr, end, pgm, readExpr,
-                    &local_map, error, parent_locals_arr, num_parent_locals);
+                    &local_map, error, parent_locals_arr, num_parent_locals,
+                    nullptr, false, nullptr, local_owner_pgm);
                 if (!nested_handler) {
                     error = "failed to deserialize nested OnBlockExit handler IR: " + error;
                     return nullptr;
@@ -5976,7 +5992,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         int num_parent_locals,
         std::vector<LocalVar*>* extended_closure_locals,
         bool use_parent_locals_for_all_slots,
-        const std::vector<LocalVar*>* direct_body_locals) {
+        const std::vector<LocalVar*>* direct_body_locals,
+        QoreProgram* local_owner_pgm) {
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -6139,7 +6156,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         return it != local_map.end() && enclosing_local_set.count(it->second)
             ? it->second : nullptr;
     };
-    auto createLocal = [pgm](const char* lname, const char* ltype) -> LocalVar* {
+    auto createLocal = [pgm, local_owner_pgm](const char* lname, const char* ltype) -> LocalVar* {
         if (!pgm) {
             printd(5, "AOT IR deser: local '%s' not found in enclosing scope and no pgm\n", lname);
             return nullptr;
@@ -6148,7 +6165,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         QoreAOTTypeResolver type_resolver(pgm);
         const QoreTypeInfo* ti = (ltype && *ltype)
             ? type_resolver.resolve(ltype, type_error) : nullptr;
-        qore_program_private* pp = qore_program_private::get(*pgm);
+        qore_program_private* pp = qore_program_private::get(
+            *(local_owner_pgm ? local_owner_pgm : pgm));
         return pp->createLocalVar(lname, ti);
     };
     for (int i = 0; i < num_local_slots; ++i) {
@@ -6371,7 +6389,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 }
             }
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
-                func.get(), &slot_to_local, *effectiveReadExpr, pgm, error);
+                func.get(), &slot_to_local, *effectiveReadExpr, pgm, local_owner_pgm, error);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i)
@@ -6605,7 +6623,8 @@ static void registerAOTFunctionsFromSlotMaps(
         std::vector<AOTInitFuncExecInfo>* init_func_contexts = nullptr,
         QoreAOTTypeResolver* shared_type_resolver = nullptr,
         std::vector<std::string>* registration_errors = nullptr,
-        std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr) {
+        std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
+        QoreProgram* local_owner_pgm = nullptr) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
@@ -7095,7 +7114,7 @@ static void registerAOTFunctionsFromSlotMaps(
         std::string build_error;
         QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func,
             func_name, entry_end, shared_type_resolver, &build_error, debug_metadata,
-            slot_maps_start);
+            slot_maps_start, local_owner_pgm);
         // Debug: trace init function context building
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
@@ -9022,8 +9041,6 @@ struct AotModuleState {
     std::vector<uint8_t> metadata;
     //! Init function descriptors (target type, ns path, item name) read during module_init
     std::vector<AOTInitFuncDescriptor> init_descriptors;
-    //! Target programs where init functions have already run for this module
-    std::unordered_set<QoreProgram*> init_done_pgms;
     //! Module path/label used for get_module_context_path() during deferred module init
     std::string path;
     //! Progress of the one-time initialization of the shared shadow (module-own) Program's
@@ -10261,9 +10278,10 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     // Execute deferred init functions for constants/static vars.
     // This must happen AFTER namespace merge so that class hierarchies are fully
     // committed and object constructors can find base class private data slots.
-    // We build init function contexts HERE using the TARGET program's namespace tree
-    // (which has properly committed classes) rather than the module program's tree.
+    // Contexts resolve module symbols against the shared shadow Program, while
+    // generated locals are owned by the importing Program.
     if (mod_name) {
+        qore_program_private* target_pp = qore_program_private::get(*tpgm);
         const QoreAOTFunc* init_funcs = nullptr;
         int init_num_funcs = 0;
         QoreProgram* init_ctx_pgm = nullptr;
@@ -10286,8 +10304,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             }
             if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
                     && !it->second.metadata.empty()
-                    && it->second.init_done_pgms.find(tpgm) == it->second.init_done_pgms.end()) {
-                it->second.init_done_pgms.insert(tpgm);
+                    && target_pp->initialized_aot_modules.insert(mod_name).second) {
                 init_funcs = it->second.funcs;
                 init_num_funcs = it->second.num_funcs;
                 init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
@@ -10313,10 +10330,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                         if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
                             // This target did not run its init functions, so allow a later import
                             // attempt to retry after the cancellation condition has been handled.
-                            auto retry_state = aot_module_map.find(mod_name);
-                            if (retry_state != aot_module_map.end()) {
-                                retry_state->second.init_done_pgms.erase(tpgm);
-                            }
+                            target_pp->initialized_aot_modules.erase(mod_name);
                             if (!external_xsink) {
                                 xsink.handleExceptions();
                             }
@@ -10357,14 +10371,6 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         } shadow_finalizer{mod_name, write_shadow};
 
         if (!init_descriptors.empty() && !init_metadata.empty()) {
-            // Build function table from the stored function pointers.
-            // Only include init functions (__const_init::, __svar_init::,
-            // __module_init::) — regular user functions were already registered
-            // during the module init pass against the MODULE's namespace tree
-            // (which includes private functions).  The TARGET namespace tree
-            // used here only contains public functions (merged via
-            // mergeUserPublic), so namespace-private functions would fail
-            // lookup and produce spurious "unresolved local slot" warnings.
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
                 const char* fname = init_funcs[i].name;
@@ -10380,20 +10386,9 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                     mod_name, func_map.size());
             }
 
-            // Build init function contexts from slot maps.
-            //
-            // We pass the MODULE's own program (it->second.pgm) rather than the
-            // target program (tpgm). The module's program has all dependencies
-            // loaded (e.g. reflection — providing Qore::Reflection::IntType),
-            // so RUNTIME_CONST_REF slot resolution for cross-module constants
-            // finds the right ConstantEntry. The target program may not have
-            // those dependencies loaded as top-level namespaces.
-            //
-            // Classes and hashdecls are merged into the target namespace tree
-            // by scanMergeCommittedNamespace above, but the module's own
-            // program still holds references to everything the AOT-compiled
-            // init code was lowered against, so the module program is the
-            // natural context for slot resolution.
+            // Resolve names and types against the module Program because it has all
+            // dependencies loaded. Newly deserialized LocalVars belong to the target
+            // Program, so repeated imports are reclaimed with that Program.
             assert(init_ctx_pgm);
             QoreAOTBinaryReader init_reader;
             std::string reader_error;
@@ -10407,30 +10402,23 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 auto debug_metadata = makeAOTDebugMetadata(init_reader,
                     init_metadata.data(), static_cast<int>(init_metadata.size()));
                 {
-                    // Lock the thread-current Program before the per-module shadow builder.  Static
-                    // method references decoded below acquire this parse context.  Taking the shadow
-                    // lock first can deadlock with the first importer, which already owns the shadow
-                    // Program's parse context and is waiting to build the same module's init contexts.
                     CurrentProgramRuntimeParseContextHelper current_pch;
-                    // Serialize only builders for this module's shared shadow Program.  Context
-                    // deserialization can resolve APIs in another Program and wait for its parse
-                    // lock; taking that context above gives every same-module importer one lock order
-                    // (Program parse context, then shadow builder), while the per-module scope avoids
-                    // coupling unrelated module loads.
                     assert(shadow_build_lock);
                     AutoLocker shadow_build_al(*shadow_build_lock);
                     registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
                         init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
-                        &registration_errors, debug_metadata);
+                        &registration_errors, debug_metadata, tpgm);
                 }
 
                 if (aotInitTraceEnabled()) {
-                    fprintf(stderr, "[aot-init] ns_init module=%s registered=%d contexts=%zu remaining=%zu\n",
+                    fprintf(stderr,
+                        "[aot-init] ns_init module=%s registered=%d contexts=%zu remaining=%zu\n",
                         mod_name, registered, init_func_contexts.size(), func_map.size());
                 }
                 if (!registration_errors.empty()) {
                     std::string msg = makeAOTRegistrationFailureMessage(mod_name, registered,
-                        static_cast<int>(func_map.size() + registered), &func_map, &registration_errors);
+                        static_cast<int>(func_map.size() + registered), &func_map,
+                        &registration_errors);
                     raise_ns_init_error(std::string("AOT ns_init '")
                         + (mod_name ? mod_name : "(unknown)") + "': " + msg);
                     return;
@@ -10440,13 +10428,6 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 if (!init_func_contexts.empty()) {
                     printd(2, "AOT ns_init '%s': executing %d init functions\n",
                         mod_name, (int)init_func_contexts.size());
-                    // Execute against the target program (tpgm) so objects
-                    // constructed during init find committed class hierarchies.
-                    // Pass init_ctx_pgm (the module's own program) as shadow so
-                    // results are also mirrored into the module's own
-                    // ConstantEntries — subsequent init functions built against
-                    // the module program will then read correct values via
-                    // RuntimeConstantRefNode.
                     executeInitFunctions(tpgm, init_func_contexts,
                         init_descriptors, mod_name,
                         init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
@@ -11375,7 +11356,6 @@ static void executeInitFunctions(
         }
     }
 
-    // Clean up init function contexts
     for (auto& info : exec_infos) {
         delete info.ctx;
     }

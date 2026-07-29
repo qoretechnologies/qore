@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires FsUtil
 %exec-class ProgramMemoryTest
 
 class ProgramMemoryImportedBaseClass {
@@ -36,6 +37,8 @@ class ProgramMemoryTest inherits QUnit::Test {
         addTestCase("child Program class handles are reclaimed", \classHandleReclamationTest());
         addTestCase("objects outliving their Program release class handles",
             \objectClassHandleReclamationTest());
+        addTestCase("AOT module imports reclaim per-Program init state",
+            \aotModuleProgramReclamationTest());
         addTestCase("imported classes can be used as base classes with constructor arguments",
             \importedBaseClassConstructorArgTest());
         set_return_value(main());
@@ -93,6 +96,76 @@ class ProgramMemoryTest inherits QUnit::Test {
             "allocations");
     }
 
+    aotModuleProgramReclamationTest() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/ProgramMemoryAOT.qm";
+        string qmod_path = tmp_dir + "/ProgramMemoryAOT.qmod";
+        File source();
+        source.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        source.write("%modern
+module ProgramMemoryAOT {
+    version = \"1.0\";
+    desc = \"Program AOT module lifetime test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        code<int(int)> increment = int sub (int value) {
+            return value + 1;
+        };
+        ProgramMemoryAOT::InitCount = increment(ProgramMemoryAOT::InitCount ?? 0);
+    };
+}
+
+public namespace ProgramMemoryAOT {
+    public our int InitCount;
+}
+");
+        source.close();
+
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, libqore_dir, qcc_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled AOT module: " + compile_out);
+
+        # Warm the process-wide AOT module and its shadow metadata before tracking.
+        Program warmup();
+        warmup.loadModule(qmod_path);
+        delete warmup;
+
+        if (!hasAllocTracking()) {
+            testSkip("allocation-tracking build required for leak-byte assertion");
+        }
+
+        int init_count = runSequentialAotModuleCycles(qmod_path, 100);
+        assertEq(101, init_count,
+            "AOT module init markers must not outlive their Program");
+
+        # Warm the larger loop path before measuring so that IR interpreter
+        # capacity growth is not attributed to AOT module imports.
+        init_count = runSequentialAotModuleCycles(qmod_path, 200);
+        assertEq(301, init_count, "AOT module init must run once in every warmup Program");
+
+        # End feature detection before measuring the allocation slope.
+        call_function("stop_alloc_tracking");
+        call_function("start_alloc_tracking");
+        init_count = runSequentialAotModuleCycles(qmod_path, 100);
+        hash<auto> result_100 = call_function("stop_alloc_tracking");
+        assertEq(401, init_count, "AOT module init must run once in every Program");
+
+        call_function("start_alloc_tracking");
+        init_count = runSequentialAotModuleCycles(qmod_path, 200);
+        hash<auto> result_200 = call_function("stop_alloc_tracking");
+        assertEq(601, init_count, "AOT module init must run once in every Program");
+        assertLe(getLiveBytes(result_100) + 1024, getLiveBytes(result_200),
+            "AOT module import allocations must remain bounded as Program count grows");
+    }
+
     #! An imported class must be usable as a base class with base class constructor arguments
     /** Base class nodes store the canonical (primary) class pointer, while base class constructor
         argument lists are resolved to the importing Program's wrapper for the same class; matching
@@ -119,6 +192,17 @@ int sub get() { return (new Child()).get(); }", "test");
             rethrow;
         }
         return True;
+    }
+
+    private int runSequentialAotModuleCycles(string qmod_path, int cycles) {
+        int init_count;
+        for (int i = 0; i < cycles; ++i) {
+            Program pgm();
+            pgm.loadModule(qmod_path);
+            init_count = pgm.getGlobalVariable("ProgramMemoryAOT::InitCount");
+            delete pgm;
+        }
+        return init_count;
     }
 
     private static int getLiveBytes(hash<auto> result) {
