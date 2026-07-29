@@ -1073,6 +1073,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
 
     // Conversion helpers
     module.getOrInsertFunction("qore_rt_to_int", llvm::FunctionType::get(i64_type, {i64_type}, false));
+    module.getOrInsertFunction("qore_rt_to_timeout",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    module.getOrInsertFunction("qore_rt_coerce_optional_timeout",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_to_float", llvm::FunctionType::get(double_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_to_bool", llvm::FunctionType::get(i64_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_is_null_or_nothing",
@@ -1796,6 +1800,48 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
     phi->addIncoming(fast_result, fast_bb);
     phi->addIncoming(slow_result, slow_bb);
     cacheStableConversion(value_id, phi, stable_int_conversions);
+    return phi;
+}
+
+llvm::Value* QoreIRToLLVM::ensureTimeoutTypeInline(
+        llvm::Value* val, uint32_t value_id) {
+    if (!nanboxed_values.count(value_id)) {
+        return ensureIntTypeInline(val, value_id);
+    }
+
+    // timeout accepts native integers unchanged, but converts relative dates
+    // to their full duration in milliseconds.
+    auto* cur_func = builder->GetInsertBlock()->getParent();
+    auto* fast_bb = llvm::BasicBlock::Create(ctx, "timeout_int48_fast", cur_func);
+    auto* slow_bb = llvm::BasicBlock::Create(ctx, "timeout_convert", cur_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "timeout_merge", cur_func);
+
+    llvm::Value* tag = builder->CreateLShr(
+        val, llvm::ConstantInt::get(i64_type, 48));
+    llvm::Value* is_int48 = builder->CreateICmpEQ(
+        tag, llvm::ConstantInt::get(i64_type, 0xFFF9));
+    builder->CreateCondBr(is_int48, fast_bb, slow_bb);
+
+    builder->SetInsertPoint(fast_bb);
+    llvm::Value* payload = builder->CreateAnd(
+        val, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+    llvm::Value* shifted = builder->CreateShl(
+        payload, llvm::ConstantInt::get(i64_type, 16));
+    llvm::Value* fast_result = builder->CreateAShr(
+        shifted, llvm::ConstantInt::get(i64_type, 16));
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(slow_bb);
+    auto to_timeout = current_module->getOrInsertFunction(
+        "qore_rt_to_timeout",
+        llvm::FunctionType::get(i64_type, {i64_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(to_timeout, {val});
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(merge_bb);
+    auto* phi = builder->CreatePHI(i64_type, 2);
+    phi->addIncoming(fast_result, fast_bb);
+    phi->addIncoming(slow_result, slow_bb);
     return phi;
 }
 
@@ -13023,7 +13069,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Native int local: store native i64 directly (no boxing)
             if (is_native_int) {
-                llvm::Value* native_val = ensureIntTypeInline(val, inst->operands[0].id);
+                const QoreTypeInfo* local_type = linst->local
+                    ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
+                llvm::Value* native_val = QoreTypeInfo::equal(
+                        local_type, timeoutTypeInfo)
+                    ? ensureTimeoutTypeInline(val, inst->operands[0].id)
+                    : ensureIntTypeInline(val, inst->operands[0].id);
                 builder->CreateStore(native_val, it->second);
                 markLocalCacheFresh(key, llvm_func);
                 if (inst->result.isValid()) {
@@ -14379,10 +14430,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // scalar fast entries extract the value before releasing that source.
             llvm::Value* return_value = nullptr;
             bool boxed_return = fast_entry_return_kind == BatchCalleeReturnKind::Boxed;
+            const QoreTypeInfo* return_type = current_ir_func
+                ? specializeType(current_ir_func->return_type_info) : nullptr;
+            bool timeout_return = QoreTypeInfo::equal(
+                return_type, timeoutTypeInfo);
+            bool optional_timeout_return = QoreTypeInfo::equal(
+                return_type, timeoutOrNothingTypeInfo);
             if (ret->has_value) {
                 auto* val = getVal(ret->value.id, error);
                 if (!val) { return false; }
-                if (fast_entry_return_kind == BatchCalleeReturnKind::NativeInt) {
+                if (timeout_return) {
+                    llvm::Value* timeout_value = ensureTimeoutTypeInline(
+                        val, ret->value.id);
+                    return_value = boxed_return
+                        ? boxIntInline(timeout_value) : timeout_value;
+                } else if (optional_timeout_return) {
+                    llvm::Value* boxed = boxValue(val, ret->value.id);
+                    auto coerce_timeout = module.getOrInsertFunction(
+                        "qore_rt_coerce_optional_timeout",
+                        llvm::FunctionType::get(
+                            i64_type, {i64_type}, false));
+                    return_value = builder->CreateCall(
+                        coerce_timeout, {boxed});
+                } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeInt) {
                     return_value = ensureIntTypeInline(val, ret->value.id);
                 } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
                     return_value = ensureFloatType(val, ret->value.id, module);

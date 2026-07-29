@@ -964,6 +964,9 @@ private:
     // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
     llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
 
+    // Preserve timeout's relative-date-to-milliseconds assignment semantics.
+    llvm::Value* ensureTimeoutTypeInline(llvm::Value* val, uint32_t value_id);
+
     // Inline fast-path version of boxInt for StoreLocal (NOT in PHI fixup/boxValue context).
     // Uses LLVM branches for INT48 range check, falling back to runtime for big ints.
     llvm::Value* boxIntInline(llvm::Value* int_val);

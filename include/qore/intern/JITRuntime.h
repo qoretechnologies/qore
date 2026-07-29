@@ -135,6 +135,12 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
 
+//! Convert a QoreValue accepted by the timeout type to milliseconds
+int64_t qore_rt_to_timeout(uint64_t val);
+
+//! Apply *timeout conversion while preserving NOTHING
+uint64_t qore_rt_coerce_optional_timeout(uint64_t val);
+
 //! Convert a QoreValue to double
 double qore_rt_to_float(uint64_t val);
 

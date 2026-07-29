@@ -131,6 +131,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_mod_int", reinterpret_cast<void*>(&qore_rt_mod_int) },
     { "qore_rt_div_float", reinterpret_cast<void*>(&qore_rt_div_float) },
     { "qore_rt_to_int", reinterpret_cast<void*>(&qore_rt_to_int) },
+    { "qore_rt_to_timeout", reinterpret_cast<void*>(&qore_rt_to_timeout) },
+    { "qore_rt_coerce_optional_timeout",
+        reinterpret_cast<void*>(&qore_rt_coerce_optional_timeout) },
     { "qore_rt_to_float", reinterpret_cast<void*>(&qore_rt_to_float) },
     { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
@@ -866,6 +869,25 @@ extern "C" DLLEXPORT double qore_rt_div_float(double left, double right, Excepti
 extern "C" DLLEXPORT int64_t qore_rt_to_int(uint64_t val) {
     QoreValue v = fromBits(val);
     return v.getAsBigInt();
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_to_timeout(uint64_t val) {
+    QoreValue v = fromBits(val);
+    return v.getType() == NT_DATE
+        ? v.get<const DateTimeNode>()->getRelativeMilliseconds()
+        : v.getAsBigInt();
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_optional_timeout(uint64_t val) {
+    QoreValue v = fromBits(val);
+    if (v.isNullOrNothing()) {
+        return toBits(QoreValue());
+    }
+    if (v.getType() == NT_DATE) {
+        return toBits(QoreValue(
+            v.get<const DateTimeNode>()->getRelativeMilliseconds()));
+    }
+    return val;
 }
 
 extern "C" DLLEXPORT double qore_rt_to_float(uint64_t val) {
