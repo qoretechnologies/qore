@@ -1983,11 +1983,17 @@ public:
 
             if (phase == Phase::Connect) {
                 auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
+                // Note: deliberately not restricted to dual-family races; RFC 8305 staggers
+                // attempts between every address, so a single-family multi-address host needs the
+                // extra fds and the stagger timer surfaced here as well, otherwise a non-responding
+                // first address stalls the connect for the entire operation budget
                 if (he_state && (he_state->getState() == HEBS_RESOLVING
-                        || (he_state->isRacing() && he_state->getState() == HEBS_RACING))) {
+                        || he_state->getState() == HEBS_RACING)) {
                     std::vector<std::pair<int, int>> extra_fds;
                     he_state->getExtraFds(extra_fds);
-                    bumpFdGeneration();
+                    if (he_state->takeFdSetChanged()) {
+                        bumpFdGeneration();
+                    }
                     QoreHashNode* rv = getSocketPollInfoHash(xsink, he_state->getPrimaryPollEvents(rc),
                         extra_fds);
                     if (rv) {
@@ -7486,6 +7492,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             ::close(active_attempts[i].fd);
 #endif
             active_attempts[i].fd = QORE_INVALID_SOCKET;
+            fd_set_changed = true;
             if (was_primary) {
                 // Assign another active fd as primary so isOpen() remains true
                 sock->sock = QORE_INVALID_SOCKET;
@@ -7570,7 +7577,10 @@ int SocketConnectInetHappyEyeballsPollState::getPollTimeoutMs() const {
     if (he_state == HEBS_RESOLVING) {
         return resolver ? resolver->getPollTimeoutMs() : 1;
     }
-    return he_state == HEBS_RACING ? HAPPY_EYEBALLS_DELAY_MS : -1;
+    // The RFC 8305 stagger only has to be armed while an address is still waiting for
+    // an attempt; once every address has a connect in flight there is nothing left for
+    // the timer to start, and the attempt fds themselves drive the operation.
+    return he_state == HEBS_RACING && hasPendingAddresses() ? HAPPY_EYEBALLS_DELAY_MS : -1;
 }
 
 int SocketConnectInetHappyEyeballsPollState::getPrimaryPollEvents(int rc) const {
@@ -7680,6 +7690,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
             active_attempts.push_back(a);
             winning_idx = (int)(active_attempts.size() - 1);
             ++next_addr_idx;
+            fd_set_changed = true;
             return 0;
         }
 
@@ -7702,6 +7713,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         a.addr_idx = next_addr_idx;
         active_attempts.push_back(a);
         ++next_addr_idx;
+        fd_set_changed = true;
 
         // Assign first racing fd to sock->sock so isOpen() returns true
         if (sock->sock == QORE_INVALID_SOCKET) {
@@ -12421,12 +12433,18 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
                 }
                 // Happy Eyeballs can be waiting on c-ares resolver fds before a
                 // primary socket exists, or on extra racing connect fds.
+                // Note: deliberately not restricted to dual-family races; RFC 8305 staggers
+                // attempts between every address, so a single-family multi-address host needs the
+                // extra fds and the stagger timer surfaced here as well, otherwise a non-responding
+                // first address stalls the connect for the entire operation budget
                 auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
                 if (he_state && (he_state->getState() == HEBS_RESOLVING
-                        || (he_state->isRacing() && he_state->getState() == HEBS_RACING))) {
+                        || he_state->getState() == HEBS_RACING)) {
                     std::vector<std::pair<int, int>> extra_fds;
                     he_state->getExtraFds(extra_fds);
-                    bumpFdGeneration();
+                    if (he_state->takeFdSetChanged()) {
+                        bumpFdGeneration();
+                    }
                     rv = getSocketPollInfoHash(xsink, he_state->getPrimaryPollEvents(rc), extra_fds);
                     if (rv) {
                         int poll_timeout_ms = he_state->getPollTimeoutMs();

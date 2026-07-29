@@ -4766,6 +4766,33 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             sock_hash = pinfo.cached_sock_hash;
                         } else {
                             sock_hash = pinfo.cached_sock_hash;
+                            // The primary registration is unchanged, but the
+                            // operation's auxiliary fd set can still change
+                            // underneath it.  Happy Eyeballs (RFC 8305) starts an
+                            // additional racing connect fd when the 250ms stagger
+                            // fires: the socket object, the events and the tracked
+                            // operation's fd generation all stay the same (the
+                            // generation is bumped on the *inner* connect poll
+                            // operation, which is not what the controller tracks
+                            // for wrapped ops such as the HTTP/1.1 and HTTP/2
+                            // client poll operations).  Without this the new fd is
+                            // never added to the event loop, so its connect
+                            // completion delivers no event.
+                            if (new_sock_obj
+                                    && extraFdsChanged(t, result.key, result.new_poll_info)) {
+                                ASYNC_IO_TRACE("Phase3 EXTRA-FDS key='%s' sock='%s'\n",
+                                    result.key.c_str(), sock_hash.c_str());
+                                // use a private sink: extra fd registration failures are
+                                // already non-fatal inside updateExtraFds(), and leaving a
+                                // dirty sink here would silently skip the typed-container
+                                // assignments made further down this loop iteration
+                                ExceptionSink extra_xsink;
+                                updateExtraFds(t, result.key, new_sock_obj,
+                                    result.new_poll_info, &extra_xsink);
+                                if (extra_xsink) {
+                                    extra_xsink.clear();
+                                }
+                            }
                         }
                         snapshotSocketWaitGeneration(pinfo, result.new_poll_info);
 
@@ -6728,6 +6755,60 @@ void AsyncIoControllerPriv::removeExtraFdKeyRegistration(IoThreadContext& t, int
     }
 
     releaseFdIfOwner(t, fd, expected_hash, xsink);
+}
+
+bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, const std::string& key,
+        const QoreHashNode* poll_info) const {
+    QoreValue v = poll_info->getKeyValue("extra_fds");
+    const QoreListNode* list = v.getType() == NT_LIST ? v.get<const QoreListNode>() : nullptr;
+    size_t new_size = list ? list->size() : 0;
+
+    // Fast path for the steady state: this operation wants no extra fds and no operation
+    // on this I/O thread has any registered, so there is nothing to reconcile
+    if (!new_size && t.key_extra_fds.empty()) {
+        return false;
+    }
+
+    auto prev_it = t.key_extra_fds.find(key);
+    const std::unordered_set<int>* prev_fds = prev_it == t.key_extra_fds.end()
+        ? nullptr
+        : &prev_it->second;
+
+    // Nothing to register now; only a change if something is still registered
+    if (!new_size) {
+        return prev_fds && !prev_fds->empty();
+    }
+    if (!prev_fds || prev_fds->size() != new_size) {
+        return true;
+    }
+
+    // Same count: compare fds and their event masks
+    ConstListIterator li(list);
+    while (li.next()) {
+        QoreValue ev = li.getValue();
+        if (ev.getType() != NT_HASH) {
+            // malformed entry; let updateExtraFds() handle it as before
+            return true;
+        }
+        const QoreHashNode* h = ev.get<const QoreHashNode>();
+        int fd = (int)h->getKeyValue("fd").getAsBigInt();
+        if (!prev_fds->count(fd)) {
+            return true;
+        }
+        int events = (int)h->getKeyValue("events").getAsBigInt();
+        if (!events) {
+            events = QORE_EV_READ;  // matches updateExtraFds()'s default
+        }
+        auto fd_it = t.extra_fd_to_key_events.find(fd);
+        if (fd_it == t.extra_fd_to_key_events.end()) {
+            return true;
+        }
+        auto key_it = fd_it->second.find(key);
+        if (key_it == fd_it->second.end() || key_it->second != events) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string& key,
