@@ -85,7 +85,7 @@ public class AftershipWatchDataProviderBase inherits AftershipDataProviderBase,
 
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
-        info(vsprintf(fmt, argv));
+        info("%s", vsprintf(fmt, argv));
     }
 
     #! Returns example event data

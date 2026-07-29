@@ -72,7 +72,7 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
 
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
-        log(LoggerLevel::INFO, vsprintf(fmt, argv));
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns the event types supported by this provider

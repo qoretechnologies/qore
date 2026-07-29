@@ -89,7 +89,7 @@ public class BigCommerceWatchDataProviderBase inherits BigCommerceDataProviderBa
 
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
-        log(LoggerLevel::INFO, vsprintf(fmt, argv));
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns the timestamp from a record for deduplication

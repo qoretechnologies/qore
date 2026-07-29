@@ -409,6 +409,24 @@ module GmailDataProvider {
     - attachment watch events carry the \c message_id of the source message, so a consumer can address it
     - documented that the \c delete_messages watch option deletes each matched message as soon as its
       event has been raised, whatever the consumer then does with it
+    - the watch now follows \c nextPageToken and processes every page of matching messages in one polling
+      cycle; previously only the first page was ever seen, so a backlog larger than one page was never
+      fully delivered
+    - the watch delivers messages oldest-first and advances its durable cursor only after a message has
+      been delivered successfully, stopping the cycle at the first failure; Gmail lists messages
+      newest-first, so delivering in that order advanced the cursor past older messages that had not been
+      delivered
+    - added the \c snapshot_mode watch option for feeds where each message restates the current state
+      rather than adding to a log: a backlog is collapsed to the newest message overall or, with
+      \c snapshot_key set to \c "thread", to the newest message in each thread. The event reports what it
+      stood in for in its \c superseded_count and \c superseded_ids fields, and the collapsed messages are
+      never retrieved in full, so a large backlog costs one message retrieval rather than one per message
+    - added the \c superseded_action watch option to leave collapsed messages in place (the default), move
+      them to the trash, or delete them permanently; a removal that fails is logged and the message is left
+      in place
+    - added the \c max_messages_per_cycle watch option to bound the work one cycle can do; the limit is
+      applied from the oldest end of the backlog, so the cursor still advances contiguously and the
+      remaining messages are delivered by the following cycles rather than skipped
 
     @subsection gmaildataprovider_v1_0 GmailDataProvider v1.0
     - initial release of the module

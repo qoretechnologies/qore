@@ -93,7 +93,7 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
 
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
-        log(LoggerLevel::INFO, vsprintf(fmt, argv));
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns query parameters for the poll request

@@ -249,6 +249,13 @@ module ImapClientDataProvider {
 
     @subsection imapclientdataprovider_v1_0 ImapClientDataProvider 1.0
     - initial release of the module
+    - a watch sweep stops at the first message whose delivery fails instead of continuing with the next
+      UID; continuing advanced the monotonic UID cursor past the failed message and dropped it permanently
+      on what may well have been a transient error
+    - documented that the first poll with no stored checkpoint establishes a baseline from the mailbox's
+      current highest UID, so mail that was already there — including mail that arrived while the watch
+      was not running — is never reported, and that configuring checkpoint persistence closes that gap
+      across restarts
 */
 
 #! Contains all public definitions in the ImapClientDataProvider module

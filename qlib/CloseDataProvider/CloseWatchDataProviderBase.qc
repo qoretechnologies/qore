@@ -95,7 +95,7 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
 
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
-        log(LoggerLevel::INFO, vsprintf(fmt, argv));
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns a hash of all supported event types
