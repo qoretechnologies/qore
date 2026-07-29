@@ -76,7 +76,7 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         # bound the connect phase independently of the caller's request budget; the
         # deadline is enforced by the I/O thread in the C++ poll operation, never by a
         # caller-side wait (see Http1ClientPollOperationBase::setConnectTimeout())
-        setConnectTimeout(connect_timeout);
+        Http1ClientPollOperationBase::setConnectTimeout(connect_timeout);
         # Store connection in Qore data hash for DGC cycle detection
         setConnection(connection);
     }
