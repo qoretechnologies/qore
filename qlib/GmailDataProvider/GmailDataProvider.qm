@@ -227,7 +227,7 @@ module GmailDataProvider {
                     "desc": "Sets the start date and time for matching messages",
                     "type": AbstractDataProviderTypeMap."date",
                 },
-            },
+            } + WatchBacklogOptions,
             "get_output_type": AbstractDataProviderType sub () {
                 return create_object("GmailMessageEventDataType");
             },
@@ -298,7 +298,7 @@ module GmailDataProvider {
                     "desc": "Sets the start date and time for matching messages",
                     "type": AbstractDataProviderTypeMap."date",
                 },
-            },
+            } + WatchBacklogOptions,
             "output_type": GmailAttachmentEventDataType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -424,4 +424,88 @@ public const GoogleDiscoveryGmailApiName = "gmail";
 
 #! used in accordance with: https://about.google/brand-resource-center/brand-elements/
 public const GmailLogo = File::readTextFile(get_script_dir() + "/gmail-logo.svg");
+
+#! Backlog-handling options shared by the Gmail watch actions
+/** @since GmailDataProvider 1.1
+*/
+public const WatchBacklogOptions = {
+    "snapshot_mode": <ActionOptionInfo>{
+        "display_name": "Latest Message Only?",
+        "short_desc": "Collapse a backlog to its latest message instead of replaying it?",
+        "desc": "Collapse a backlog to its latest message instead of replaying it.\n\n"
+            "Some feeds are snapshots rather than a log: each message restates the current state, so after "
+            "an outage only the last one is worth processing. With this option set, each polling cycle "
+            "raises one event per group (see `snapshot_key`) carrying the newest matching message, and "
+            "reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` "
+            "fields. The collapsed messages are never retrieved in full, so a large backlog costs one "
+            "message retrieval, not one per message.\n\n"
+            "Leave this unset for a feed where every message must be processed",
+        "type": AbstractDataProviderTypeMap."bool",
+    },
+    "snapshot_key": <ActionOptionInfo>{
+        "display_name": "Snapshot Grouping",
+        "short_desc": "How messages are grouped before the latest one is selected",
+        "desc": "How matching messages are grouped before the latest one in each group is selected; ignored "
+            "unless `snapshot_mode` is set.\n\n"
+            "- `all`: one global group, so each cycle raises a single event carrying the newest matching "
+            "message\n"
+            "- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that "
+            "thread's newest message",
+        "type": AbstractDataProviderTypeMap."string",
+        "default_value": "all",
+        "allowed_values": (
+            <AllowedValueInfo>{
+                "value": "all",
+                "display_name": "Latest Overall",
+                "desc": "Retain the single newest matching message",
+            },
+            <AllowedValueInfo>{
+                "value": "thread",
+                "display_name": "Latest Per Thread",
+                "desc": "Retain the newest message in each Gmail thread",
+            },
+        ),
+    },
+    "superseded_action": <ActionOptionInfo>{
+        "display_name": "Superseded Message Action",
+        "short_desc": "What to do with messages that were collapsed away",
+        "desc": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless "
+            "`snapshot_mode` is set.\n\n"
+            "- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised "
+            "as events again because the watch cursor has moved past them\n"
+            "- `trash`: move them to the Gmail trash, where they can still be recovered\n"
+            "- `delete`: delete them permanently; **this cannot be undone**\n\n"
+            "A removal that fails is logged and the message is left in place; it is not retried, because "
+            "its event has already been raised and the watch cursor has already moved past it",
+        "type": AbstractDataProviderTypeMap."string",
+        "default_value": "ignore",
+        "allowed_values": (
+            <AllowedValueInfo>{
+                "value": "ignore",
+                "display_name": "Keep",
+                "desc": "Leave superseded messages in the mailbox",
+            },
+            <AllowedValueInfo>{
+                "value": "trash",
+                "display_name": "Move to Trash",
+                "desc": "Move superseded messages to the Gmail trash",
+            },
+            <AllowedValueInfo>{
+                "value": "delete",
+                "display_name": "Delete Permanently",
+                "desc": "Delete superseded messages permanently",
+            },
+        ),
+    },
+    "max_messages_per_cycle": <ActionOptionInfo>{
+        "display_name": "Maximum Messages Per Cycle",
+        "short_desc": "The maximum number of messages delivered in one polling cycle",
+        "desc": "The maximum number of messages delivered in one polling cycle; unset or `0` means no "
+            "limit.\n\n"
+            "The limit is applied from the **oldest** end of the backlog, so the watch cursor still advances "
+            "contiguously and the remaining messages are delivered by the following cycles rather than "
+            "skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+        "type": AbstractDataProviderTypeMap."int",
+    },
+};
 }
