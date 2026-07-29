@@ -444,6 +444,25 @@ public:
     */
     DLLLOCAL int setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink);
 
+    //! Internal async-poll helper for TCP_USER_TIMEOUT setup from poll operation code.
+    /** Public synchronous callers must use @ref setUserTimeout(), which delegates through the
+        async I/O controller and therefore must not be called while a poll operation is being
+        driven.  Poll operations use this helper so I/O-thread execution can use the
+        controller-side setup path directly, while non-I/O-thread execution still delegates
+        through the public sync API.
+
+        Needed because a connection can now be built on the I/O thread: the ALPN handover to a
+        concrete H1/H2 connection runs from continuePoll(), and its adopt-socket constructor
+        applies the configured TCP_USER_TIMEOUT.
+
+        @param ms the TCP_USER_TIMEOUT value in milliseconds
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setUserTimeoutForAsyncPoll(int ms, ExceptionSink* xsink);
+
     //! Sets the ALPN protocols to offer during TLS negotiation
     /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})
         @param xsink Exception sink for error handling

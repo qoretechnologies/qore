@@ -131,7 +131,9 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {
-            sock_priv_raw->setUserTimeout(ut_ms);
+            // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
+            // handover happens from continuePoll(), where the public sync API is forbidden
+            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
 
@@ -223,7 +225,9 @@ int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {
-            sock_priv_raw->setUserTimeout(ut_ms);
+            // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
+            // handover happens from continuePoll(), where the public sync API is forbidden
+            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
 

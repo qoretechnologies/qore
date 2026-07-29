@@ -6040,13 +6040,33 @@ bool QoreSocketObject::isOpen() const {
 }
 
 int QoreSocketObject::setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink) {
-    if (!qore_on_async_io_thread()) {
+    // Both conditions matter: poll operation code runs on the I/O thread proper and on
+    // continuePoll workers, and the public sync API refuses to run in either context.
+    if (!qore_on_async_io_thread() && !qore_in_async_io_continue_poll_worker()) {
         return setNoDelay(nodelay);
     }
 
     this->ref();
     ReferenceHolder<SocketSetupPollOperation> poller(new SocketSetupPollOperation(xsink, this,
         SocketSetupPollOperation::ConfigAction::SetNoDelay, nodelay), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    poller->continuePoll(xsink);
+    return *xsink ? -1 : poller->getRc();
+}
+
+int QoreSocketObject::setUserTimeoutForAsyncPoll(int ms, ExceptionSink* xsink) {
+    // Both conditions matter: the ALPN handover can run on the I/O thread proper or on a
+    // continuePoll worker, and the public sync API refuses to run in either context.
+    if (!qore_on_async_io_thread() && !qore_in_async_io_continue_poll_worker()) {
+        return setUserTimeout(ms);
+    }
+
+    this->ref();
+    ReferenceHolder<SocketSetupPollOperation> poller(new SocketSetupPollOperation(xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetUserTimeout, ms), xsink);
     if (*xsink) {
         return -1;
     }
