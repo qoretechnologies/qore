@@ -118,7 +118,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         int poll_epoch;
 
         #! Message IDs already processed at current epoch (deduplication)
-        hash<string, bool> last_msg;
+        hash<string, bool> last_msg = {};
 
         #! Setup info for polling (initialized on first poll)
         hash<auto> setup_info;
@@ -182,6 +182,42 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         pollOnceIntern(\setup_info);
     }
 
+    #! Restores the Gmail polling cursor
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.poll_epoch.typeCode() != NT_INT || checkpoint.poll_epoch < 0
+                || checkpoint.last_message_ids.typeCode() != NT_LIST) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid Gmail watch checkpoint; expecting version 1, a non-negative "
+                "poll_epoch, and last_message_ids";
+        }
+        hash<string, bool> restored_ids = {};
+        foreach string message_id in (checkpoint.last_message_ids) {
+            if (!message_id) {
+                throw "WATCH-CHECKPOINT-ERROR", "invalid Gmail watch checkpoint; message IDs cannot be empty";
+            }
+            restored_ids{message_id} = True;
+        }
+        poll_epoch = checkpoint.poll_epoch;
+        last_msg = restored_ids;
+    }
+
+    #! Durably advances the Gmail polling cursor
+    private commitCheckpoint(int message_epoch, string message_id) {
+        if (message_epoch < 0 || !message_id) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist a Gmail checkpoint with a negative epoch or empty "
+                "message ID";
+        }
+        hash<string, bool> next_ids = message_epoch == poll_epoch ? last_msg : {};
+        next_ids{message_id} = True;
+        persistCheckpoint({
+            "version": 1,
+            "poll_epoch": message_epoch,
+            "last_message_ids": keys next_ids,
+        });
+        poll_epoch = message_epoch;
+        last_msg = next_ids;
+    }
+
     #! Perform one poll
     private *hash<auto> pollOnceIntern(reference<hash<auto>> setup) {
         # check for matching mail
@@ -189,22 +225,20 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             hash<auto> res;
             string gmail_query = q;
             if (poll_epoch) {
-                gmail_query += sprintf(" after:%d", poll_epoch);
+                # Include the preceding second so messages sharing the checkpoint second can be
+                # deduplicated by ID instead of being lost if Gmail applies a strict timestamp bound.
+                gmail_query += sprintf(" after:%d", poll_epoch - 1);
             }
             string this_uri = "gmail/v1/users/me/messages?q=" + encode_url(gmail_query);
-            bool epoch_updated;
             LoggerWrapper::debug("Gmail polling using URI: %y epoch: %y poll_interval: %ds", this_uri, poll_epoch,
                 poll_secs);
             res = rest.restGet(this_uri).body;
             int match;
+            list<hash<auto>> messages;
             foreach hash<auto> minfo in (res.messages) {
                 # check for shutdown between REST calls
                 if (isStopping()) {
                     break;
-                }
-                # skip messages already processed
-                if (last_msg{minfo.id}) {
-                    continue;
                 }
                 # retrieve each email
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
@@ -221,36 +255,42 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 # convert base64-decoded message bodies to strings if they have text MIME types
                 processBody(\msg.payload);
 
-                # internalDate is given as a ms offset from the epoch
+                # Fetch the page before delivery and process it oldest-first. Gmail lists newest
+                # messages first; advancing a durable timestamp in that order could skip an older
+                # message if delivery of a later item failed.
+                push messages, msg;
+            }
+            messages = sort(messages, int sub (hash<auto> left, hash<auto> right) {
+                return left.internalDate <=> right.internalDate;
+            });
+            foreach hash<auto> msg in (messages) {
                 int msg_epoch = msg.internalDate / 1000;
-                if (msg_epoch > poll_epoch) {
-                    # reset deduplication set for new epoch
-                    last_msg = {minfo.id: True};
-                    poll_epoch = msg_epoch;
-                    epoch_updated = True;
-                } else if (msg_epoch == poll_epoch) {
-                    last_msg{minfo.id} = True;
+                if (isStopping()) {
+                    break;
+                }
+                if (msg_epoch < poll_epoch || (msg_epoch == poll_epoch && last_msg{msg.id})) {
+                    continue;
                 }
                 if (retrieve_attachments) {
                     msg.attachments = ();
                     foreach hash<auto> part in (msg.payload.parts) {
                         if (*string aid = part.body.attachmentId) {
                             # retrieve attachment; skip on error to preserve the message event
-                            string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", minfo.id,
+                            string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", msg.id,
                                 aid);
                             try {
                                 hash<auto> att = rest.restGet(atturi).body;
                                 msg.attachments += getAttachment(att, part.headers);
                             } catch (hash<ExceptionInfo> att_ex) {
                                 LoggerWrapper::warn("Gmail: failed to retrieve attachment %y for message %y: %s",
-                                    aid, minfo.id, get_exception_string(att_ex));
+                                    aid, msg.id, get_exception_string(att_ex));
                             }
                         }
                     }
-                    LoggerWrapper::info("Gmail: matched message %y attachments: %d", minfo.id,
+                    LoggerWrapper::info("Gmail: matched message %y attachments: %d", msg.id,
                         msg.attachments.size());
                 } else {
-                    LoggerWrapper::info("Gmail: matched message %y", minfo.id);
+                    LoggerWrapper::info("Gmail: matched message %y", msg.id);
                 }
 
                 if (setup.test_mode) {
@@ -258,10 +298,12 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 }
                 ++match;
                 messageReceived(msg);
+                bool epoch_updated = msg_epoch > poll_epoch;
+                commitCheckpoint(msg_epoch, msg.id);
                 if (delete_messages) {
-                    string deluri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
+                    string deluri = sprintf("gmail/v1/users/me/messages/%s", msg.id);
                     rest.restDel(deluri);
-                    LoggerWrapper::info("Gmail: deleted matched message %y", minfo.id);
+                    LoggerWrapper::info("Gmail: deleted matched message %y", msg.id);
                 }
                 if (epoch_updated) {
                     LoggerWrapper::debug("Gmail using new epoch: %y", poll_epoch);

@@ -205,12 +205,51 @@ class ErrorCancelWatchDataProvider inherits DataProvider::AbstractWatchDataProvi
     }
 }
 
+#! Concrete provider exposing the generic checkpoint hooks for deterministic tests
+class CheckpointWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    private {
+        hash<auto> restored;
+    }
+
+    constructor() : AbstractWatchDataProviderBase(60) {
+    }
+
+    hash<auto> getRestoredCheckpoint() {
+        return restored;
+    }
+
+    save(hash<auto> checkpoint) {
+        persistCheckpoint(checkpoint);
+    }
+
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version != 1) {
+            throw "TEST-CHECKPOINT-ERROR", "unsupported checkpoint";
+        }
+        restored = checkpoint;
+    }
+
+    private pollOnce() {
+        # no-op
+    }
+
+    string getName() { return "test-checkpoint-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
 class WatchDataProviderShutdownTest inherits QUnit::Test {
     constructor() : Test("WatchDataProviderShutdownTest", "1.0") {
         addTestCase("cancel during blocked poll", \testCancelDuringBlockedPoll());
         addTestCase("cancel during sleep", \testCancelDuringSleep());
         addTestCase("cancel error does not break shutdown", \testCancelErrorHandling());
         addTestCase("isStopping flag", \testIsStoppingFlag());
+        addTestCase("durable checkpoint lifecycle", \testCheckpointLifecycle());
+        addTestCase("checkpoint validation and persistence errors", \testCheckpointErrors());
         set_return_value(main());
     }
 
@@ -283,5 +322,45 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
 
         prov.stopEvents();
         assertTrue(prov.checkStopping(), "stopping after stopEvents()");
+    }
+
+    testCheckpointLifecycle() {
+        CheckpointWatchDataProvider prov();
+        hash<auto> saved;
+        prov.setCheckpointPersistence({"version": 1, "cursor": 42}, sub (hash<auto> checkpoint) {
+            saved = checkpoint;
+        });
+        assertEq(42, prov.getRestoredCheckpoint().cursor, "checkpoint restored before polling starts");
+
+        prov.save({"version": 1, "cursor": 43});
+        assertEq(43, saved.cursor, "replacement checkpoint passed to persistence callback");
+
+        TestObserver obs();
+        prov.registerObserver(obs);
+        prov.observersReady();
+        prov.observersReady();
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            prov.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+                # no-op
+            });
+        });
+        prov.stopEvents();
+    }
+
+    testCheckpointErrors() {
+        CheckpointWatchDataProvider invalid();
+        assertThrows("TEST-CHECKPOINT-ERROR", sub () {
+            invalid.setCheckpointPersistence({"version": 2}, sub (hash<auto> checkpoint) {
+                # no-op
+            });
+        });
+
+        CheckpointWatchDataProvider failing();
+        failing.setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            throw "TEST-PERSISTENCE-ERROR", "checkpoint was not stored";
+        });
+        assertThrows("TEST-PERSISTENCE-ERROR", sub () {
+            failing.save({"version": 1, "cursor": 1});
+        });
     }
 }

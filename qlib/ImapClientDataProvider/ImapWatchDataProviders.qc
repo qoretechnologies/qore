@@ -154,6 +154,32 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         mark_seen = options.mark_seen ?? False;
         delete_messages = options.delete_messages ?? False;
     }
+
+    #! Restores the mailbox UID checkpoint
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.uidvalidity.typeCode() != NT_INT || checkpoint.uidvalidity <= 0
+                || checkpoint.last_uid.typeCode() != NT_INT || checkpoint.last_uid < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid IMAP watch checkpoint; expecting version 1, a positive "
+                "uidvalidity, and a non-negative last_uid";
+        }
+        uidvalidity = checkpoint.uidvalidity;
+        last_uid = checkpoint.last_uid;
+    }
+
+    #! Durably stores and applies a mailbox UID checkpoint
+    private commitCheckpoint(int new_uidvalidity, int new_last_uid) {
+        if (new_uidvalidity <= 0 || new_last_uid < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist an IMAP checkpoint with invalid UID values";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "uidvalidity": new_uidvalidity,
+            "last_uid": new_last_uid,
+        });
+        uidvalidity = new_uidvalidity;
+        last_uid = new_last_uid;
+    }
     #! @endcond
 
     #! Returns the mailbox being watched
@@ -186,19 +212,18 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
 
         # a uidvalidity change means the server reassigned UIDs; the stored baseline no longer refers
         # to the same messages, so start again from the current end of the mailbox
-        if (exists uidvalidity && status.uidvalidity != uidvalidity) {
+        bool uidvalidity_changed = exists uidvalidity && status.uidvalidity != uidvalidity;
+        if (uidvalidity_changed) {
             logInfo("mailbox %y uidvalidity changed from %y to %y; resetting the watch baseline",
                 mailbox, uidvalidity, status.uidvalidity);
-            last_uid = -1;
         }
-        uidvalidity = status.uidvalidity;
-
-        if (last_uid < 0) {
+        if (last_uid < 0 || uidvalidity_changed) {
             # establish the baseline without reporting the mail that was already there
             list<int> existing = imap.uidSearch("ALL");
-            last_uid = existing ? existing.last() : 0;
+            commitCheckpoint(status.uidvalidity, existing ? existing.last() : 0);
             logInfo("watching mailbox %y from UID %d with criteria %y", mailbox, last_uid, criteria);
         } else {
+            uidvalidity = status.uidvalidity;
             processNewMessages();
         }
 
@@ -241,7 +266,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
             ++reported;
             # max(): stay correct even if a server ever returns UIDs out of order
             if (uid > last_uid) {
-                last_uid = uid;
+                commitCheckpoint(uidvalidity, uid);
             }
 
             if (mark_seen) {

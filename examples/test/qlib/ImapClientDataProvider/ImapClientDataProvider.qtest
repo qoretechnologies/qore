@@ -247,7 +247,11 @@ class FailingWatchDataProvider inherits ImapClientDataProvider::ImapWatchDataPro
     int getAttemptCount() { return attempts; }
     int getReportCount() { return reports; }
     int getLastUid() { return last_uid; }
+    *int getUidValidity() { return uidvalidity; }
     forceBaseline(int uid) { last_uid = uid; }
+    forceCheckpoint(int new_uidvalidity, int new_last_uid) {
+        commitCheckpoint(new_uidvalidity, new_last_uid);
+    }
     runPoll() { pollOnce(); }
     int runProcess() { return processNewMessages(); }
 
@@ -297,6 +301,7 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         addTestCase("action paths resolve", \actionPathResolutionTests());
         addTestCase("event provider contract", \eventProviderTests());
         addTestCase("watch failure and logging semantics", \watchSemanticsTests());
+        addTestCase("watch checkpoint semantics", \watchCheckpointTests());
         set_return_value(main());
     }
 
@@ -704,6 +709,77 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         w.setLogger(new Logger("imap-watch-test", LoggerLevel::getLevelInfo()));
         assertNothing(w.exerciseLogging(), "variadic log helpers accept format arguments");
         assertNothing(server.getServerError(), "no server errors");
+    }
+
+    watchCheckpointTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        FailingWatchDataProvider w({
+            "url": server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+        });
+        on_exit w.getImapClient().disconnect();
+
+        hash<auto> saved;
+        w.setCheckpointPersistence({"version": 1, "uidvalidity": 12345, "last_uid": 7},
+                sub (hash<auto> checkpoint) {
+            saved = checkpoint;
+        });
+        assertEq(12345, w.getUidValidity(), "restored checkpoint retains mailbox UID validity");
+        assertEq(7, w.getLastUid(), "restored checkpoint retains the last delivered UID");
+
+        w.runPoll();
+        assertEq(7, w.getLastUid(), "a restored watch does not replace its cursor with a fresh baseline");
+        assertNothing(saved, "an unchanged restored cursor is not written again");
+
+        FailingWatchDataProvider invalid({
+            "url": server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+        });
+        on_exit invalid.getImapClient().disconnect();
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            invalid.setCheckpointPersistence({"version": 1, "uidvalidity": 12345}, sub (hash<auto> checkpoint) {
+                # no-op
+            });
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            w.forceCheckpoint(0, 8);
+        });
+        assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
+            w.forceCheckpoint(12345, -1);
+        });
+        w.getImapClient().disconnect();
+
+        MockImapDpServer persistence_server(binary(TestBody));
+        persistence_server.start();
+        on_exit persistence_server.wait();
+        FailingWatchDataProvider persistence_failure({
+            "url": persistence_server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+        });
+        on_exit persistence_failure.getImapClient().disconnect();
+        persistence_failure.setCheckpointPersistence({
+            "version": 1,
+            "uidvalidity": 54321,
+            "last_uid": 9,
+        }, sub (hash<auto> checkpoint) {
+            throw "TEST-PERSISTENCE-ERROR", "checkpoint was not stored";
+        });
+        assertThrows("TEST-PERSISTENCE-ERROR", sub () {
+            persistence_failure.runPoll();
+        });
+        assertEq(54321, persistence_failure.getUidValidity(),
+            "failed UID-validity reset does not change the in-memory UID validity");
+        assertEq(9, persistence_failure.getLastUid(),
+            "failed UID-validity reset does not change the in-memory UID cursor");
     }
 
     watchOptionTests() {
