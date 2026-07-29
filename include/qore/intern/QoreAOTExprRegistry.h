@@ -72,6 +72,7 @@ struct AOTExprReadCtx {
     int num_locals;                 //!< Number of local variables
     Var** globals;                  //!< Global variable array for GLOBAL_VARREF resolution
     int num_globals;                //!< Number of global variables
+    QoreProgram* local_owner_pgm;   //!< Optional owner for newly deserialized LocalVars
 };
 
 //! Expression handler function types

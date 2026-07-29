@@ -1214,6 +1214,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // no manual delete loop needed.
         local_var_list.clear();
 
+        // Deferred AOT module initialization is scoped to this Program. Release
+        // the per-Program markers together with the parse data so repeated
+        // short-lived Program imports cannot retain module-name allocations.
+        std::unordered_set<std::string>().swap(initialized_aot_modules);
+
         // clear program location
         //update_runtime_location(&loc_builtin);
     }
