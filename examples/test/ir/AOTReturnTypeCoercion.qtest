@@ -1,0 +1,525 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-return-type-coercion-" + string(getpid());
+mkdir(root);
+string source_path = root + "/conversions.qr";
+string aot_path = root + "/conversions";
+
+string source = "%modern
+
+class ExpectedClass {
+}
+
+class WrongClass {
+}
+
+hashdecl ConversionRecord {
+    softint value;
+}
+
+number sub numberReturn() {
+    return 42;
+}
+
+float sub floatReturn() {
+    return 7;
+}
+
+string sub stringReturn() {
+    return c'A';
+}
+
+bool sub boolReturn() {
+    return c'\\0';
+}
+
+softint sub softIntReturn() {
+    return \"42\";
+}
+
+softfloat sub softFloatReturn() {
+    return \"2.5\";
+}
+
+softnumber sub softNumberReturn() {
+    return \"3.5\";
+}
+
+softbinary sub softBinaryReturn() {
+    return \"abc\";
+}
+
+softbool sub softBoolReturn() {
+    return \"\";
+}
+
+softchar sub softCharReturn() {
+    return 65;
+}
+
+softstring sub softStringReturn() {
+    return 12345;
+}
+
+softdate sub softDateReturn() {
+    return 0;
+}
+
+softlist sub softListReturn() {
+    return 17;
+}
+
+hexbinary sub hexBinaryReturn() {
+    return \"4142\";
+}
+
+base64binary sub base64BinaryReturn() {
+    return \"QUI=\";
+}
+
+base64urlbinary sub base64UrlBinaryReturn() {
+    return \"QUI\";
+}
+
+*int sub optionalIntNothingReturn() {
+    return NULL;
+}
+
+*float sub optionalFloatNothingReturn() {
+    return NULL;
+}
+
+*number sub optionalNumberNothingReturn() {
+    return NULL;
+}
+
+*string sub optionalStringNothingReturn() {
+    return NULL;
+}
+
+*bool sub optionalBoolNothingReturn() {
+    return NULL;
+}
+
+*binary sub optionalBinaryNothingReturn() {
+    return NULL;
+}
+
+*hash<auto> sub optionalHashNothingReturn() {
+    return NULL;
+}
+
+*list<auto> sub optionalListNothingReturn() {
+    return NULL;
+}
+
+*date sub optionalDateNothingReturn() {
+    return NULL;
+}
+
+*softint sub optionalSoftIntNothingReturn() {
+    return NULL;
+}
+
+*softfloat sub optionalSoftFloatNothingReturn() {
+    return NULL;
+}
+
+*softnumber sub optionalSoftNumberNothingReturn() {
+    return NULL;
+}
+
+*softbinary sub optionalSoftBinaryNothingReturn() {
+    return NULL;
+}
+
+*softbool sub optionalSoftBoolNothingReturn() {
+    return NULL;
+}
+
+*softchar sub optionalSoftCharNothingReturn() {
+    return NULL;
+}
+
+*softstring sub optionalSoftStringNothingReturn() {
+    return NULL;
+}
+
+*softdate sub optionalSoftDateNothingReturn() {
+    return NULL;
+}
+
+*softlist sub optionalSoftListNothingReturn() {
+    return NULL;
+}
+
+*hexbinary sub optionalHexNothingReturn() {
+    return NULL;
+}
+
+*base64binary sub optionalBase64NothingReturn() {
+    return NULL;
+}
+
+*base64urlbinary sub optionalBase64UrlNothingReturn() {
+    return NULL;
+}
+
+*ExpectedClass sub optionalClassNothingReturn() {
+    return NULL;
+}
+
+*ConversionRecord sub optionalHashdeclNothingReturn() {
+    return NULL;
+}
+
+*date<relative> sub optionalRelativeDateNothingReturn() {
+    return NULL;
+}
+
+*date<absolute> sub optionalAbsoluteDateNothingReturn() {
+    return NULL;
+}
+
+*float sub optionalFloatValueReturn() {
+    return 7;
+}
+
+*number sub optionalNumberValueReturn() {
+    return 7;
+}
+
+*string sub optionalStringValueReturn() {
+    return c'A';
+}
+
+*bool sub optionalBoolValueReturn() {
+    return c'\\0';
+}
+
+*softint sub optionalSoftIntValueReturn() {
+    return \"42\";
+}
+
+*softfloat sub optionalSoftFloatValueReturn() {
+    return \"2.5\";
+}
+
+*softnumber sub optionalSoftNumberValueReturn() {
+    return \"3.5\";
+}
+
+*softbinary sub optionalSoftBinaryValueReturn() {
+    return \"abc\";
+}
+
+*softbool sub optionalSoftBoolValueReturn() {
+    return \"\";
+}
+
+*softchar sub optionalSoftCharValueReturn() {
+    return 65;
+}
+
+*softstring sub optionalSoftStringValueReturn() {
+    return 12345;
+}
+
+*softdate sub optionalSoftDateValueReturn() {
+    return 0;
+}
+
+*softlist sub optionalSoftListValueReturn() {
+    return 17;
+}
+
+*hexbinary sub optionalHexValueReturn() {
+    return \"4142\";
+}
+
+*base64binary sub optionalBase64ValueReturn() {
+    return \"QUI=\";
+}
+
+*base64urlbinary sub optionalBase64UrlValueReturn() {
+    return \"QUI\";
+}
+
+hash sub plainHashReturn() {
+    hash<string, int> value = (\"a\": 1);
+    return value;
+}
+
+list sub plainListReturn() {
+    list<int> value = (1, 2);
+    return value;
+}
+
+any sub anyHashReturn() {
+    hash<string, int> value = (\"a\": 1);
+    return value;
+}
+
+ConversionRecord sub invalidHashdeclReturn() {
+    auto value = (\"value\": \"42\");
+    return value;
+}
+
+hash<string, softint> sub typedHashReturn() {
+    auto value = (\"value\": \"42\");
+    return value;
+}
+
+list<softint> sub typedListReturn() {
+    auto value = (\"42\", \"43\");
+    return value;
+}
+
+date<relative> sub invalidRelativeDateReturn() {
+    auto value = 2017-07-10;
+    return value;
+}
+
+date<absolute> sub invalidAbsoluteDateReturn() {
+    auto value = 1s;
+    return value;
+}
+
+ExpectedClass sub invalidClassReturn() {
+    auto value = new WrongClass();
+    return value;
+}
+
+string sub invalidHashdeclCase() {
+    try {
+        invalidHashdeclReturn();
+        return \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub invalidRelativeDateCase() {
+    try {
+        invalidRelativeDateReturn();
+        return \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub invalidAbsoluteDateCase() {
+    try {
+        invalidAbsoluteDateReturn();
+        return \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub invalidClassCase() {
+    try {
+        invalidClassReturn();
+        return \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub main() {
+    printf(\"scalar=%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n\",
+        floatReturn().type(), numberReturn().type(),
+        stringReturn().type(), boolReturn().type(),
+        softIntReturn().type(), softFloatReturn().type(),
+        softNumberReturn().type(), softBinaryReturn().type(),
+        softBoolReturn().type(), softCharReturn().type(),
+        softStringReturn().type(), softDateReturn().type());
+    printf(\"soft-list=%s:%d:%s\\n\", softListReturn().type(),
+        softListReturn().size(), softListReturn()[0].type());
+    printf(\"encoded=%s:%d,%s:%d,%s:%d\\n\",
+        hexBinaryReturn().type(), hexBinaryReturn().size(),
+        base64BinaryReturn().type(), base64BinaryReturn().size(),
+        base64UrlBinaryReturn().type(), base64UrlBinaryReturn().size());
+    printf(\"optional-nothing=%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+        + "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n\",
+        optionalIntNothingReturn().type(),
+        optionalFloatNothingReturn().type(),
+        optionalNumberNothingReturn().type(),
+        optionalStringNothingReturn().type(),
+        optionalBoolNothingReturn().type(),
+        optionalBinaryNothingReturn().type(),
+        optionalHashNothingReturn().type(),
+        optionalListNothingReturn().type(),
+        optionalDateNothingReturn().type(),
+        optionalSoftIntNothingReturn().type(),
+        optionalSoftFloatNothingReturn().type(),
+        optionalSoftNumberNothingReturn().type(),
+        optionalSoftBinaryNothingReturn().type(),
+        optionalSoftBoolNothingReturn().type(),
+        optionalSoftCharNothingReturn().type(),
+        optionalSoftStringNothingReturn().type(),
+        optionalSoftDateNothingReturn().type(),
+        optionalSoftListNothingReturn().type(),
+        optionalHexNothingReturn().type(),
+        optionalBase64NothingReturn().type(),
+        optionalBase64UrlNothingReturn().type(),
+        optionalClassNothingReturn().type(),
+        optionalHashdeclNothingReturn().type(),
+        optionalRelativeDateNothingReturn().type(),
+        optionalAbsoluteDateNothingReturn().type());
+    printf(\"optional-values=%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+        + "%s,%s,%s,%s\\n\",
+        optionalFloatValueReturn().type(),
+        optionalNumberValueReturn().type(),
+        optionalStringValueReturn().type(),
+        optionalBoolValueReturn().type(),
+        optionalSoftIntValueReturn().type(),
+        optionalSoftFloatValueReturn().type(),
+        optionalSoftNumberValueReturn().type(),
+        optionalSoftBinaryValueReturn().type(),
+        optionalSoftBoolValueReturn().type(),
+        optionalSoftCharValueReturn().type(),
+        optionalSoftStringValueReturn().type(),
+        optionalSoftDateValueReturn().type(),
+        optionalSoftListValueReturn().type(),
+        optionalHexValueReturn().type(),
+        optionalBase64ValueReturn().type(),
+        optionalBase64UrlValueReturn().type());
+
+    auto plain_hash = plainHashReturn();
+    plain_hash.b = \"x\";
+    auto plain_list = plainListReturn();
+    push plain_list, \"x\";
+    auto any_hash = anyHashReturn();
+    any_hash.b = \"x\";
+    printf(\"plain=%s:%s,%s:%s,%s:%s\\n\", plain_hash.type(),
+        plain_hash.b.type(), plain_list.type(), plain_list[-1].type(),
+        any_hash.type(), any_hash.b.type());
+
+    auto typed_hash = typedHashReturn();
+    auto typed_list = typedListReturn();
+    printf(\"typed=%s:%s,%s:%s\\n\", typed_hash.value.type(),
+        typed_hash.value, typed_list[0].type(), typed_list[0]);
+
+    printf(\"validation=%s,%s,%s,%s\\n\",
+        invalidHashdeclCase(), invalidRelativeDateCase(),
+        invalidAbsoluteDateCase(), invalidClassCase());
+    return 0;
+}
+
+main();
+";
+
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string expected = "scalar=float,number,string,bool,integer,float,number,"
+        + "binary,bool,char,string,date\n"
+    + "soft-list=list:1:integer\n"
+    + "encoded=binary:2,binary:2,binary:2\n"
+    + "optional-nothing=nothing,nothing,nothing,nothing,nothing,nothing,"
+        + "nothing,nothing,nothing,nothing,nothing,nothing,nothing,nothing,"
+        + "nothing,nothing,nothing,nothing,nothing,nothing,nothing,nothing,"
+        + "nothing,nothing,nothing\n"
+    + "optional-values=float,number,string,bool,integer,float,number,binary,"
+        + "bool,char,string,date,list,binary,binary,binary\n"
+    + "plain=hash:string,list:string,hash:string\n"
+    + "typed=integer:42,integer:42\n"
+    + "validation=RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR,"
+        + "RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR\n";
+
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string compile_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, aot_path, source_path));
+if (!is_file(aot_path)) {
+    printf("AOT compile failed:\n%s", compile_output);
+    exit(2);
+}
+
+string aot_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, aot_path));
+if (aot_output != expected) {
+    printf("AOT mismatch:\nexpected:\n%sactual:\n%s",
+        expected, aot_output);
+    exit(2);
+}
+
+string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", aot_path));
+if (!(undefined_symbols =~ /qore_rt_coerce_return_by_type_path_aot/)) {
+    printf("AOT conversion helper is not imported:\n%s", undefined_symbols);
+    exit(2);
+}
+
+string exact_source_path = root + "/exact.qr";
+string exact_aot_path = root + "/exact";
+File exact_source_file();
+exact_source_file.open2(exact_source_path, O_WRONLY | O_CREAT | O_TRUNC);
+exact_source_file.write("%modern
+int sub exactInt(int value) {
+    return value + 1;
+}
+
+string sub exactString(string value) {
+    return value;
+}
+
+int sub main() {
+    printf(\"%d:%s\\n\", exactInt(41), exactString(\"ok\"));
+    return 0;
+}
+
+main();
+");
+exact_source_file.close();
+
+string exact_compile_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exact_aot_path, exact_source_path));
+if (!is_file(exact_aot_path)) {
+    printf("exact-return AOT compile failed:\n%s", exact_compile_output);
+    exit(2);
+}
+
+string exact_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exact_aot_path));
+if (exact_output != "42:ok\n") {
+    printf("exact-return AOT mismatch:\n%s", exact_output);
+    exit(2);
+}
+
+string exact_undefined_symbols = backquote(sprintf(
+    "nm -u %s 2>&1", exact_aot_path));
+if (exact_undefined_symbols
+        =~ /qore_rt_coerce_return_by_type_path_aot/) {
+    printf("exact return unexpectedly imports conversion helper:\n%s",
+        exact_undefined_symbols);
+    exit(2);
+}

@@ -1599,6 +1599,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     return result;
 }
 
+static uint64_t qore_rt_coerce_return_value(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    ti = qore_substitute_type_params_if_needed(ti);
+    QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (val.hasNode()) {
+        val.refSelf();
+    }
+    QoreTypeInfo::acceptAssignment(ti, "<return statement>", val, xsink);
+    uint64_t result = toBits(val);
+    if (cleanup_ptr) {
+        *cleanup_ptr = result;
+    }
+    return result;
+}
+
 // Strip complex type info from hash/list values in place.
 // Used when storing to plain "hash" or "list" typed variables:
 // the IR/JIT creates hashes with narrowed types (e.g., hash<string, int>)
@@ -3714,6 +3734,21 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
     front_entry = {ctx->hashdecl_cache_generation, type_path,
         receiver_type_info, type_info};
     return type_info;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_return_by_type_path_aot(
+        QoreAOTContext* ctx, const char* type_path, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(
+            ctx, type_path, "return type", xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return qore_rt_coerce_return_value(
+        type_info, value, cleanup_ptr, xsink);
 }
 
 static uint64_t qore_rt_new_complex_hash_from_hash_impl(const QoreTypeInfo* typeInfo,

@@ -2150,7 +2150,7 @@ public:
             },
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
-            }, q_return_vec_t {{NT_HASH}, {NT_NOTHING}}) {
+            }, q_return_vec_t {{NT_BINARY}, {NT_NOTHING}}) {
     }
 
 protected:
@@ -2198,7 +2198,7 @@ public:
             },
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
-            }, q_return_vec_t {{NT_HASH}, {NT_NOTHING}}) {
+            }, q_return_vec_t {{NT_BINARY}, {NT_NOTHING}}) {
     }
 
 protected:
@@ -2246,7 +2246,7 @@ public:
             },
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
-            }, q_return_vec_t {{NT_HASH}, {NT_NOTHING}}) {
+            }, q_return_vec_t {{NT_BINARY}, {NT_NOTHING}}) {
     }
 
 protected:

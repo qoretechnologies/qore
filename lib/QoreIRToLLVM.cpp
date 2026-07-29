@@ -1037,6 +1037,42 @@ static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }
 
+static bool qore_ir_aot_return_needs_coercion(
+        const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts) {
+    // Compiler-generated AOT helpers use nullptr for raw transport returns;
+    // user functions without a concrete declared type use auto/any.
+    if (!return_type || return_type == autoTypeInfo) {
+        return false;
+    }
+
+    const QoreTypeInfo* value_type = value_facts
+        ? value_facts->type_info : nullptr;
+    if (return_type == anyTypeInfo) {
+        return !value_type || value_type == autoTypeInfo
+            || value_type == anyTypeInfo
+            || QoreTypeInfo::isComplex(value_type);
+    }
+    if (!value_type) {
+        return true;
+    }
+
+    bool may_not_match = false;
+    bool may_need_filter = false;
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e match = QoreTypeInfo::parseAccepts(
+        return_type, value_type, may_not_match, may_need_filter, max_result);
+    if (match == QTI_NOT_EQUAL || may_not_match || may_need_filter) {
+        return true;
+    }
+
+    if (QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+        return false;
+    }
+    return !value_facts
+        || value_facts->assigned_state != QoreIRAssignedState::Assigned
+        || !value_facts->never_nothing;
+}
+
 static std::string qore_ir_get_cast_type_path(QoreIROpcode opcode, const QoreCastOperatorNode* cast_node,
         const QoreTypeInfo* ti) {
     if (opcode == QoreIROpcode::CastHash) {
@@ -14436,6 +14472,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return_type, timeoutTypeInfo);
             bool optional_timeout_return = QoreTypeInfo::equal(
                 return_type, timeoutOrNothingTypeInfo);
+            const QoreIRValueFacts* return_value_facts = current_ir_func
+                ? current_ir_func->getValueFacts(ret->value) : nullptr;
             if (ret->has_value) {
                 auto* val = getVal(ret->value.id, error);
                 if (!val) { return false; }
@@ -14469,6 +14507,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return_value = builder->CreateICmpNE(bool_value,
                             llvm::ConstantInt::get(i64_type, 0));
                     }
+                } else if (aot_mode && qore_ir_aot_return_needs_coercion(
+                        return_type, return_value_facts)) {
+                    llvm::Value* boxed = boxValue(val, ret->value.id);
+                    llvm::Function* func = builder->GetInsertBlock()->getParent();
+                    llvm::BasicBlock* entry = &func->getEntryBlock();
+                    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                    auto* cleanup = alloca_builder.CreateAlloca(
+                        i64_type, nullptr, "return_coerce_cleanup");
+                    alloca_builder.CreateStore(
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                    registerInvokeCleanupAlloca(cleanup);
+
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_coerce_return_by_type_path_aot",
+                        llvm::FunctionType::get(
+                            i64_type,
+                            {ptr_type, ptr_type, i64_type, ptr_type, ptr_type},
+                            false));
+                    llvm::Value* type_path = return_type
+                        ? getTypePathArg(return_type)
+                        : llvm::ConstantPointerNull::get(
+                            llvm::cast<llvm::PointerType>(ptr_type));
+                    return_value = builder->CreateCall(
+                        helper,
+                        {aot_ctx_arg, type_path, boxed, cleanup, xsink_arg});
+                    emitExceptionCheck(module, llvm_func, inst);
                 } else if (nanboxed_values.count(ret->value.id)) {
                     return_value = val;
                 } else if (val->getType() == i64_type) {
