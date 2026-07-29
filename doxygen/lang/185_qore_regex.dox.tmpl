@@ -40,6 +40,43 @@
     *list l = (str =~ x/(?:(\w+):(\w+):)(\w+)/);
     @endcode
 
+    @section qore_regex_limits Qore Regular Expression Resource Limits
+
+    Patterns are compiled with PCRE2's just-in-time compiler where the platform supports it, so matching cost is
+    linear in the length of the subject string for the great majority of patterns, at every subject size.
+
+    Some patterns can still require an impractical amount of backtracking to decide; nested unbounded quantifiers
+    such as <tt>(a+)+</tt> are the classic case, where the number of ways to split the subject grows exponentially.
+    PCRE2 bounds this work and reports that it could not determine a result, and %Qore raises a \c REGEX-ERROR
+    exception in that case.
+
+    This is deliberately not reported as "no match": the engine never decided whether the subject matches, so
+    treating it as a non-match would silently produce a wrong answer.
+
+    @par Example:
+    @code{.py}
+    string str = strmul("a", 40) + "b";
+    try {
+        # the engine cannot decide this in a reasonable number of steps
+        bool b = str =~ /(a+)+$/;
+    } catch (hash<ExceptionInfo> ex) {
+        # REGEX-ERROR: the regular expression engine gave up before it could determine a result; ...
+        printf("%s: %s\n", ex.err, ex.desc);
+    }
+    @endcode
+
+    Rewriting the pattern to remove the ambiguity &mdash; with a possessive quantifier (<tt>(a++)+$</tt>), an atomic
+    group (<tt>(?>a+)+$</tt>), or simply <tt>a+$</tt> &mdash; makes it decidable and fast.
+
+    Subject strings that are tagged as UTF-8 but contain invalid byte sequences are not an error; they report
+    "no match" as before.
+
+    Global matching, substitution, and splitting iterate once per match, so they are also
+    @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::SandboxManager "SandboxManager" interrupt points;
+    a long-running match over a large subject can be stopped without waiting for it to finish.
+
+    @since %Qore 3.0 raises \c REGEX-ERROR for indeterminate matches; earlier versions reported "no match"
+
     @section qore_regex_operators Qore Regular Expression Operators
 
     The following is a list of operators based on regular expressions (or similar to regular expressions in the case

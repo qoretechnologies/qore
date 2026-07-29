@@ -99,6 +99,15 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
         return;
     }
 
+    // Attach JIT code if the platform and pattern support it; failures are ignored because PCRE2
+    // falls back to the interpreter when no JIT code is present.  This is not just a speed-up:
+    // PCRE2's interpreter disables its required-code-unit start-of-match optimization once the
+    // remaining subject reaches 5,000,000 code units (REQ_CU_MAX * 1000 in pcre2_match.c), after
+    // which an unanchored pattern is retried at every offset -- quadratic in the text length.  The
+    // JIT has no such cutoff.  pcre2_jit_compile() modifies the pcre2_code block, so it must run
+    // here, before the pretokenizer is visible to other threads.
+    pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
+
     QoreValue bv = config->getKeyValue("behavior");
     std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);
     behavior = bs.empty() ? "Removed" : std::move(bs);

@@ -35,6 +35,40 @@ public namespace DataProvider {
     - WaitGroup-based thread lifecycle management
     - Condition-based sleep for instant wakeup on stop (no busy-wait polling)
     - Clean shutdown with @ref stopEventsIntern()
+
+    @par Dispatch order
+    A provider whose events represent an <b>ordered feed</b> must dispatch them in ascending source
+    order, and must declare that it does so with @ref getSourceOrdering() and
+    @ref hasAscendingDispatch(). Order is not a presentation detail: a watch cursor is monotonic, so
+    dispatching a newer item before an older one advances the cursor past an item that has not been
+    delivered, and a failure at that point drops the older item permanently. A provider whose feed
+    has no comparable order declares @ref WSO_UNORDERED; a provider whose upstream ordering has not
+    been established declares @ref WSO_UNKNOWN and therefore offers no ordering guarantee at all.
+
+    @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider" implements
+    the whole ordered sequence — fetch, sort, cursor filtering, optional collapse, in-order dispatch,
+    and advance-on-success — so a provider should only implement @ref pollOnce() directly when its
+    feed does not fit that shape.
+
+    @par Durability
+    Checkpoint persistence is optional at this layer because %Qore does not own a database:
+    - <b>with</b> a persistence callback configured through @ref setCheckpointPersistence(): the
+      cursor is durable, so delivery is at-least-once across host reloads and restarts;
+    - <b>without</b> one: the cursor lives only in memory and behavior after a restart is
+      provider-specific — typically the provider resumes from its configured start position, or from
+      the restart time when it has none.
+
+    @anchor watch_removal_semantics
+    @par Removal is dispatch-aware, not processing-aware
+    A watch provider observes one thing: that raising an event returned without an exception. It does
+    not, and at this layer cannot, observe whether the consumer went on to process the event
+    successfully. Any option that removes the source item after its event has been raised
+    (ex: deleting mail) therefore acts on <b>dispatch</b>, not on <b>completion</b>: a consumer that
+    receives the event and then fails, times out, or is restarted mid-processing has already lost the
+    source item. Providers must document such options in those terms and must not describe them as
+    processing-aware. Workloads that must not lose the source item leave those options unset and act
+    from the consumer once processing has succeeded, using the item identity that every event carries.
+
     @since DataProvider 3.4
 */
 public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObservable {
@@ -50,6 +84,12 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
 
         #! Stop flag
         bool stop_flag = False;
+
+        #! True once the polling thread has been started
+        bool started = False;
+
+        #! Optional callback that durably stores a provider-owned checkpoint
+        *code<nothing(hash<auto>)> checkpoint_saver;
 
         #! Poll interval in seconds
         int poll_interval_secs;
@@ -67,16 +107,53 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         return poll_interval_secs;
     }
 
+    #! Configures durable checkpoint persistence for the watch provider
+    /** The checkpoint is restored synchronously before this method returns. Watch providers call the
+        callback only after raising an event successfully, so they can offer at-least-once event
+        delivery across process restarts.
+
+        This method must be called before @ref observersReady(). A checkpoint is deliberately opaque
+        to this base class; subclasses validate and restore their own checkpoint format.
+
+        @param checkpoint the previously stored checkpoint, if any
+        @param saver a callback that durably stores a replacement checkpoint before returning
+
+        @throw WATCH-CHECKPOINT-ERROR if polling has already started
+        @throw any exception raised while validating the provider-owned checkpoint or storing a
+        replacement checkpoint
+
+        @par Example
+        A mail integration can restore its last delivered server message ID before observers start,
+        then store each new ID transactionally after the message event has been accepted.
+
+        @since DataProvider 3.4
+    */
+    setCheckpointPersistence(*hash<auto> checkpoint, code<nothing(hash<auto>)> saver) {
+        AutoLock al(sleep_m);
+        if (started) {
+            throw "WATCH-CHECKPOINT-ERROR", "checkpoint persistence cannot be configured after polling has started";
+        }
+        if (checkpoint) {
+            restoreCheckpoint(checkpoint);
+        }
+        checkpoint_saver = saver;
+    }
+
     #! Called when all observers have been added to the object
     /** Starts the background polling thread. Safe to call multiple times; only the first call
         starts a thread.
     */
     observersReady() {
         AutoLock al(sleep_m);
-        if (stop_flag) {
+        if (stop_flag || started) {
             return;
         }
+        started = True;
         wg.add();
+        on_error {
+            started = False;
+            wg.done();
+        }
         background pollThread();
     }
 
@@ -87,7 +164,8 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
 
     #! Returns @ref True if the polling thread is running
     bool isActive() {
-        return !stop_flag;
+        AutoLock al(sleep_m);
+        return started && !stop_flag;
     }
 
     #! Stops event generation and waits for the polling thread to exit
@@ -127,9 +205,45 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         }
     }
 
+    #! Returns the ordering of this provider's upstream feed
+    /** Used to tell an ordered feed from an unordered one without having to read the implementation.
+
+        The default is @ref WSO_UNKNOWN, which declares that the upstream ordering has not been
+        established and that the provider therefore offers no ordering guarantee; every provider
+        that raises events representing an ordered feed must override this.
+
+        @since DataProvider 3.6
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
+
+    #! Returns @ref True if this provider dispatches events in ascending source order
+    /** The default is @ref False, because a provider that implements @ref pollOnce() itself
+        dispatches in whatever order its upstream API returned. Providers using
+        @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider" get an
+        ascending guarantee from the shared template.
+
+        @since DataProvider 3.6
+    */
+    bool hasAscendingDispatch() {
+        return False;
+    }
+
     #! Performs a single polling operation
     /** Subclasses must implement this method to fetch records and call
         @ref notifyObservers() for each new record.
+
+        @par Ordering obligation
+        An implementation whose events represent an ordered feed must dispatch them in ascending
+        source order and must advance its cursor only after a successful dispatch, stopping the cycle
+        at the first failure rather than continuing with later items — continuing advances a
+        monotonic cursor past the failed item and drops it. An implementation that cannot meet that
+        obligation must declare @ref WSO_UNORDERED (its events have no comparable order) or
+        @ref WSO_UNKNOWN (its ordering is unverified, so consumers must not assume one).
+
+        @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider"
+        implements these obligations once; prefer it over implementing this method directly.
     */
     abstract private pollOnce();
 
@@ -162,6 +276,32 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     */
     private bool isStopping() {
         return stop_flag;
+    }
+
+    #! Persists a provider-owned checkpoint, if persistence has been configured
+    /** The persistence callback must not return until the checkpoint is durable. Exceptions are
+        propagated so a provider cannot silently advance beyond a checkpoint that was not stored.
+
+        @note The callback is configured before polling starts and is immutable while the polling
+        thread is active.
+    */
+    private persistCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint_saver) {
+            checkpoint_saver(checkpoint);
+        }
+    }
+
+    #! Restores a provider-owned checkpoint
+    /** Subclasses override this method to validate and apply their checkpoint format.
+
+        The default implementation rejects non-empty checkpoints because silently ignoring state
+        would give a false durability guarantee.
+    */
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint) {
+            throw "WATCH-CHECKPOINT-ERROR", sprintf("watch provider %y does not support checkpoints",
+                self.className());
+        }
     }
 }
 

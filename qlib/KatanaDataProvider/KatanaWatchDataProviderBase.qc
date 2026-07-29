@@ -15,7 +15,7 @@ public namespace KatanaDataProvider {
     \c last_check, and prunes \c seen_ids when it grows beyond 10000 entries.
 */
 public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractTimestampWatchDataProvider {
     public {
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -37,20 +37,12 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
         };
     }
 
-    private {
-        #! Last check timestamp; advanced each successful poll cycle
-        date last_check;
-
-        #! Set of seen record IDs to avoid duplicate notifications
-        hash<string, bool> seen_ids;
-    }
-
     #! Creates the object with an async REST client and options
     constructor(*RestClientIo::RestClientIo rest, *hash<auto> options)
             : KatanaDataProviderBase(rest),
-              AbstractWatchDataProviderBase(
-                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
-        last_check = options.start_date ?? now_us();
+              AbstractTimestampWatchDataProvider(
+                  max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
+                  options.start_date) {
     }
 
     #! Destructor — stops the polling thread
@@ -65,62 +57,22 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
         }
     }
 
-    #! Polls for new/updated records once and fires events for each
-    private pollOnce() {
-        try {
-            list<hash<auto>> records = fetchRecords(last_check);
-            date new_last_check = last_check;
+    #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery
+    /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
+        advances only after a record has been delivered successfully.
+    */
+    string getSourceOrdering() {
+        return WSO_UNKNOWN;
+    }
 
-            foreach hash<auto> record in (records) {
-                if (isStopping()) {
-                    break;
-                }
-                string id = string(record{getIdField()});
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getEventName(), ex.err, ex.desc);
+    }
 
-                # skip already-emitted records
-                if (seen_ids{id}) {
-                    continue;
-                }
-
-                # advance last_check based on record's timestamp if available
-                *date record_time;
-                *string ts_field = getTimestampField();
-                if (ts_field) {
-                    auto raw = record{ts_field};
-                    if (raw.typeCode() == NT_DATE) {
-                        record_time = raw;
-                    } else if (raw.typeCode() == NT_STRING && raw.val()) {
-                        record_time = date(raw);
-                    }
-                }
-                if (record_time) {
-                    if (record_time <= last_check) {
-                        continue;
-                    }
-                    if (record_time > new_last_check) {
-                        new_last_check = record_time;
-                    }
-                }
-
-                seen_ids{id} = True;
-                notifyObservers(getEventName(), record);
-            }
-
-            if (new_last_check > last_check) {
-                last_check = new_last_check;
-            }
-
-            # cap memory usage: prune oldest half of seen_ids beyond 10000
-            if (seen_ids.size() > 10000) {
-                list<string> all_keys = keys seen_ids;
-                int half = all_keys.size() / 2;
-                foreach string k in (all_keys[0..half-1]) {
-                    delete seen_ids{k};
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
-        }
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns the event types supported by this provider

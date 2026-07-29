@@ -39,10 +39,26 @@ public const EVENT_IMAP_ATTACHMENT_MATCHED = "IMAP-ATTACHMENT-MATCHED";
     so a message is reported exactly once even across reconnects. If the server resets \c uidvalidity the
     watch starts again from the current end of the mailbox rather than re-reporting the whole mailbox.
 
+    @par The first poll establishes a baseline
+    With no stored checkpoint, the first poll records the mailbox's current highest UID and reports
+    nothing, so <b>mail that was already in the mailbox when the watch first started is never
+    reported</b> — including mail that arrived while the watch was not running. This is deliberate:
+    without a cursor there is no way to tell mail that has already been handled from mail that has
+    not, and reporting a whole mailbox on first start would flood the consumer.
+
+    To make the gap disappear across restarts, configure
+    @ref DataProvider::AbstractWatchDataProviderBase::setCheckpointPersistence() "checkpoint persistence";
+    the cursor then survives a reload and mail that arrived while the watch was down is reported on
+    the next poll. Without it, the baseline is re-established on every start.
+
+    @par Removal is dispatch-aware
+    \c mark_seen and \c delete_messages act once a message's event has been <b>raised</b>, which is
+    not the same as the consumer having <b>processed</b> it; see @ref watch_removal_semantics.
+
     @since %ImapClientDataProvider 1.0
 */
 public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractOrderedWatchDataProvider {
     public {
         #! Constructor options shared by the watch providers
         const WatchOptions = ImapClientDataProviderBase::ConstructorOptions + {
@@ -127,13 +143,16 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
 
         #! True once IDLE has been entered on the connection
         bool idling = False;
+
+        #! True when messages were flagged \Deleted in the current cycle and must be expunged
+        bool expunge_needed = False;
     }
     #! @endcond
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options, hash<string, hash<DataProviderOptionInfo>> con_opts = WatchOptions)
             : ImapClientDataProviderBase(options, con_opts),
-              AbstractWatchDataProviderBase(options.poll_interval ?? 60) {
+              AbstractOrderedWatchDataProvider(options.poll_interval ?? 60) {
         setWatchOptions(options);
     }
 
@@ -143,7 +162,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
     */
     constructor(ImapClient::ImapClient imap, *hash<auto> options)
             : ImapClientDataProviderBase(imap),
-              AbstractWatchDataProviderBase(options.poll_interval ?? 60) {
+              AbstractOrderedWatchDataProvider(options.poll_interval ?? 60) {
         setWatchOptions(options);
     }
 
@@ -153,6 +172,32 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         criteria = options.criteria ?? "ALL";
         mark_seen = options.mark_seen ?? False;
         delete_messages = options.delete_messages ?? False;
+    }
+
+    #! Restores the mailbox UID checkpoint
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.uidvalidity.typeCode() != NT_INT || checkpoint.uidvalidity <= 0
+                || checkpoint.last_uid.typeCode() != NT_INT || checkpoint.last_uid < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid IMAP watch checkpoint; expecting version 1, a positive "
+                "uidvalidity, and a non-negative last_uid";
+        }
+        uidvalidity = checkpoint.uidvalidity;
+        last_uid = checkpoint.last_uid;
+    }
+
+    #! Durably stores and applies a mailbox UID checkpoint
+    private commitCheckpoint(int new_uidvalidity, int new_last_uid) {
+        if (new_uidvalidity <= 0 || new_last_uid < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist an IMAP checkpoint with invalid UID values";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "uidvalidity": new_uidvalidity,
+            "last_uid": new_last_uid,
+        });
+        uidvalidity = new_uidvalidity;
+        last_uid = new_last_uid;
     }
     #! @endcond
 
@@ -164,6 +209,25 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
     #! Returns the search criteria
     string getCriteria() {
         return criteria;
+    }
+
+    #! IMAP \c UID \c SEARCH returns UIDs in ascending order
+    string getSourceOrdering() {
+        return WSO_ASCENDING;
+    }
+
+    #! Returns the highest UID reported so far; -1 until the first poll establishes the baseline
+    /** @since %ImapClientDataProvider 1.0
+    */
+    int getLastUid() {
+        return last_uid;
+    }
+
+    #! Returns the mailbox UID validity value the baseline was established against
+    /** @since %ImapClientDataProvider 1.0
+    */
+    *int getUidValidity() {
+        return uidvalidity;
     }
 
     #! @cond nodoc
@@ -186,20 +250,19 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
 
         # a uidvalidity change means the server reassigned UIDs; the stored baseline no longer refers
         # to the same messages, so start again from the current end of the mailbox
-        if (exists uidvalidity && status.uidvalidity != uidvalidity) {
+        bool uidvalidity_changed = exists uidvalidity && status.uidvalidity != uidvalidity;
+        if (uidvalidity_changed) {
             logInfo("mailbox %y uidvalidity changed from %y to %y; resetting the watch baseline",
                 mailbox, uidvalidity, status.uidvalidity);
-            last_uid = -1;
         }
-        uidvalidity = status.uidvalidity;
-
-        if (last_uid < 0) {
+        if (last_uid < 0 || uidvalidity_changed) {
             # establish the baseline without reporting the mail that was already there
             list<int> existing = imap.uidSearch("ALL");
-            last_uid = existing ? existing.last() : 0;
+            commitCheckpoint(status.uidvalidity, existing ? existing.last() : 0);
             logInfo("watching mailbox %y from UID %d with criteria %y", mailbox, last_uid, criteria);
         } else {
-            processNewMessages();
+            uidvalidity = status.uidvalidity;
+            sweep();
         }
 
         # Wait for the server to push a change when it can. A pushed update is swept immediately
@@ -207,7 +270,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         # returns, so returning here without sweeping would delay every pushed message by up to that
         # interval — exactly what IDLE exists to avoid.
         if (waitForChange()) {
-            processNewMessages();
+            sweep();
         }
     }
 
@@ -215,47 +278,75 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
     /** @return the number of messages reported
 
         @note The baseline is advanced and the follow-up actions applied only for messages that were
-        reported successfully. Advancing past a message whose delivery failed would drop it
-        permanently on a transient error, and flagging or deleting a message that observers never
-        received would destroy mail that was never handled — so a failed message is left in place and
-        retried on the next cycle.
+        reported successfully, and the sweep stops at the first failure rather than continuing.
+        Advancing past a message whose delivery failed would drop it permanently on a transient
+        error, and flagging or deleting a message that observers never received would destroy mail
+        that was never handled — so a failed message is left in place and retried on the next cycle,
+        together with every message after it.
     */
-    private int processNewMessages() {
-        string search = sprintf("UID %d:* %s", last_uid + 1, criteria);
-        list<int> uids = imap.uidSearch(search);
-
-        int reported = 0;
-        bool expunge_needed = False;
-        foreach int uid in (uids) {
-            # "UID n:*" is inclusive of the baseline on some servers, so filter explicitly
-            if (uid <= last_uid) {
-                continue;
-            }
-            try {
-                reportMessage(uid);
-            } catch (hash<ExceptionInfo> ex) {
-                logPollError(ex);
-                # leave the baseline where it is so this message is retried
-                continue;
-            }
-            ++reported;
-            # max(): stay correct even if a server ever returns UIDs out of order
-            if (uid > last_uid) {
-                last_uid = uid;
-            }
-
-            if (mark_seen) {
-                imap.markSeen(uid);
-            }
-            if (delete_messages) {
-                imap.markDeleted(uid);
-                expunge_needed = True;
-            }
-        }
+    private int sweep() {
+        expunge_needed = False;
+        hash<WatchCycleInfo> info = runWatchCycle(fetchWatchItems());
         if (expunge_needed) {
+            # one expunge per sweep rather than one per message: expunge is a mailbox-wide operation
+            # and the UIDs already reported are durable, so batching it cannot lose a message
             imap.expunge();
+            expunge_needed = False;
         }
-        return reported;
+        return info.dispatched;
+    }
+
+    #! Returns the UIDs matching the criteria above the current baseline
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        string search = sprintf("UID %d:* %s", last_uid + 1, criteria);
+        list<hash<WatchItemInfo>> items = ();
+        foreach int uid in (imap.uidSearch(search)) {
+            push items, <WatchItemInfo>{
+                "id": string(uid),
+                "order_key": uid,
+                "data": uid,
+            };
+        }
+        return items;
+    }
+
+    #! Returns @ref True if the UID lies above the baseline
+    /** \c "UID n:*" is inclusive of the baseline on some servers, so the check is explicit
+    */
+    private bool isNewWatchItem(hash<WatchItemInfo> item) {
+        return item.order_key > last_uid;
+    }
+
+    #! Raises the provider's event(s) for one message
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        reportMessage(item.order_key);
+    }
+
+    #! Durably advances the mailbox baseline to the given UID
+    private advanceWatchCursor(hash<WatchItemInfo> item) {
+        commitCheckpoint(uidvalidity, item.order_key);
+    }
+
+    #! Applies the configured follow-up actions to a reported message
+    /** @note the message is flagged because its event was raised, which is not the same as the
+        consumer having processed it; see @ref watch_removal_semantics
+    */
+    private afterWatchItemDispatched(hash<WatchItemInfo> item, auto payload) {
+        int uid = item.order_key;
+        if (mark_seen) {
+            imap.markSeen(uid);
+        }
+        if (delete_messages) {
+            imap.markDeleted(uid);
+            expunge_needed = True;
+        }
+    }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        if (logger) {
+            logArgs(LoggerLevel::INFO, "ImapWatch: " + fmt, argv);
+        }
     }
 
     #! Waits for the server to report a mailbox change, when it supports doing so

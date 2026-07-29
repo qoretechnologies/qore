@@ -1210,9 +1210,143 @@ if (errors) {
 }
     @endcode
 
+    @section dataprovider_watch Watch Data Providers
+
+    A <b>watch data provider</b> polls an external system and raises an event for each new item it
+    finds. Getting that right is mostly about one question: what happens to an item when something
+    fails? The answers are contracts, not implementation details, so they are stated here.
+
+    @subsection dataprovider_watch_template The Shared Processing Sequence
+
+    @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider" implements
+    the sequence every ordered watch provider needs:
+
+    @code
+fetch
+  -> discard items at or before the durable cursor
+  -> sort ascending by the provider-defined ordering key
+  -> optionally collapse superseded items (snapshot mode)
+  -> optionally bound the batch from the oldest end (dispatch budget)
+  -> for each item: fetch payload -> dispatch -> persist and advance the cursor
+                    -> run the post-success hook -> apply the superseded action
+    @endcode
+
+    A provider supplies only the provider-specific pieces as typed hooks over
+    @ref DataProvider::WatchItemInfo "WatchItemInfo" descriptors. Items are cheap descriptors, not
+    payloads, so ordering and collapse decisions are made before anything expensive is retrieved.
+
+    @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider"
+    implements the common "records changed since <i>t</i>" cursor on top of it: a timestamp plus the
+    IDs already delivered at exactly that timestamp, which is what makes the cursor safe at its own
+    boundary.
+
+    @subsection dataprovider_watch_ordering Dispatch Order
+
+    Events representing an ordered feed are dispatched in ascending source order. This is a
+    correctness property, not a presentation one: a watch cursor is monotonic, so dispatching a newer
+    item before an older one advances the cursor past an item that has not been delivered, and a
+    failure at that point drops the older item permanently.
+
+    Every provider declares how its upstream feed is ordered with
+    @ref DataProvider::AbstractWatchDataProviderBase::getSourceOrdering() "getSourceOrdering()":
+
+    |!Classification|!Meaning
+    |@ref WSO_ASCENDING|the upstream API returns items in ascending source order
+    |@ref WSO_DESCENDING|the upstream API returns items newest-first; the provider reverses them
+    |@ref WSO_UNORDERED|the feed has no comparable source order, so no ordering can be guaranteed
+    |@ref WSO_UNKNOWN|the upstream ordering has not been established; the provider orders items \
+        itself before delivery, but makes no claim about the API
+
+    @ref DataProvider::AbstractWatchDataProviderBase::hasAscendingDispatch() "hasAscendingDispatch()"
+    answers the question a consumer actually cares about: whether events arrive oldest-first. Both
+    ascending and descending upstream feeds do; an unordered feed does not.
+
+    @subsection dataprovider_watch_failure Advance On Success Only
+
+    The cursor advances only after an item has been dispatched successfully, and a cycle <b>stops at
+    the first failure</b> rather than continuing with later items. Continuing would advance the
+    monotonic cursor past the failed item and lose it. The failed item and everything after it is
+    retried on the next cycle, so delivery is <b>at-least-once</b> and never at-most-once.
+
+    The same rule applies to the checkpoint write itself: the replacement checkpoint is stored before
+    the in-memory cursor changes, so a storage failure retries the item instead of silently advancing
+    past it.
+
+    @subsection dataprovider_watch_durability Durability
+
+    Checkpoint persistence is optional at this layer because %Qore does not own a database:
+    - <b>with</b> a callback configured through
+      @ref DataProvider::AbstractWatchDataProviderBase::setCheckpointPersistence() "setCheckpointPersistence()":
+      the cursor survives a host reload or restart, so an item that was never delivered is still
+      delivered afterwards;
+    - <b>without</b> one: the cursor lives only in memory, and behavior after a restart is
+      provider-specific — typically the provider resumes from its configured start position, or from
+      the restart time when it has none, which means items that arrived while it was down are never
+      reported.
+
+    The checkpoint value is opaque to the base class; each provider validates and restores its own
+    format and rejects one it does not recognize, so a stored checkpoint from a different provider or
+    an older format cannot be silently ignored.
+
+    @subsection dataprovider_watch_snapshot Snapshot Collapse
+
+    Some feeds are snapshots rather than logs: each item restates the current state, so after an
+    outage only the last one is worth processing. A provider that supports snapshot mode raises one
+    event per group carrying the newest item, reports what it collapsed away in the event metadata,
+    and can optionally remove the superseded items — see
+    @ref DataProvider::WatchSupersededAction "WatchSupersededAction". Superseded items are identified
+    before their payloads are retrieved, so a large backlog costs one payload retrieval per group
+    rather than one per item.
+
+    A superseded-item removal that fails is logged and the item is left in place; it is not retried,
+    because the retained event has already been raised and the cursor has already moved past it. The
+    item is therefore never raised as an event again, but it is also never lost silently.
+
+    @subsection dataprovider_watch_removal Removal Is Dispatch-Aware, Not Processing-Aware
+
+    A watch provider observes exactly one thing: that raising an event returned without an exception.
+    It does not — and at this layer cannot — observe whether the consumer went on to process the
+    event successfully.
+
+    Any option that removes the source item after its event has been raised (deleting mail, flagging
+    a message, emptying a queue) therefore acts on <b>dispatch</b>, not on <b>completion</b>. A
+    consumer that receives the event and then fails, times out, or is restarted mid-processing has
+    already lost the source item. Providers document such options in exactly those terms and must not
+    describe them as processing-aware.
+
+    For a workload that must not lose the source item, leave those options unset and act from the
+    consumer once processing has succeeded: every event carries the identity of its source item, and
+    providers expose first-class actions that take it.
+
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_6 DataProvider v3.6
+    - added @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider", which
+      implements the shared watch processing sequence — fetch, cursor filtering, ascending sort, optional
+      snapshot collapse, optional dispatch budget, in-order dispatch, advance-on-success, and the post-success
+      hook — with typed @ref DataProvider::WatchItemInfo "WatchItemInfo" item and cursor contracts; see
+      @ref dataprovider_watch
+    - added @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider", which
+      implements the common "records changed since <i>t</i>" cursor on top of the shared template, using a
+      durable timestamp plus the record IDs delivered at that timestamp so the cursor is safe at its own
+      boundary
+    - a watch cycle now <b>stops at the first dispatch failure</b> instead of continuing with later items;
+      continuing advanced the monotonic cursor past the failed item and dropped it permanently on what may
+      well have been a transient error
+    - added an explicit dispatch-order contract: every watch provider declares how its upstream feed is
+      ordered with @ref DataProvider::AbstractWatchDataProviderBase::getSourceOrdering() "getSourceOrdering()"
+      and whether its events arrive oldest-first with
+      @ref DataProvider::AbstractWatchDataProviderBase::hasAscendingDispatch() "hasAscendingDispatch()", so a
+      consumer no longer has to infer either from the implementation
+    - added optional snapshot collapse to the shared template: a backlog can be reduced to the latest item per
+      group, with the collapsed items reported in the event metadata and optionally removed according to
+      @ref DataProvider::WatchSupersededAction "WatchSupersededAction"; superseded items are identified before
+      their payloads are retrieved
+    - added an optional per-cycle dispatch budget, applied from the oldest end so that the durable cursor still
+      advances contiguously and the remainder is delivered by later cycles rather than skipped
+    - documented that checkpoint persistence is what makes delivery at-least-once across host reloads, that
+      without it a provider's restart behavior is provider-specific, and that watch options which remove the
+      source item act on event <b>dispatch</b> and not on consumer <b>processing</b>
     - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now case-folds
       words in all upper case, so that technical names in upper case produce readable display names (ex:
       \c "PAYMENT-DISPUTE-ADJUDICATE-28" -> \c "Payment Dispute Adjudicate 28"); acronyms are preserved, and an

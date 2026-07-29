@@ -624,6 +624,30 @@ int echoed = child.echo(value);
     - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
     @endparblock
 
+    @anchor qore_3_0_0_regex_errors
+    @par Regular Expression Resource Limits Now Raise an Exception
+    @parblock
+    When PCRE2 abandons a match because the pattern requires more backtracking than its limits allow, it reports
+    that it could not decide the match rather than that the subject did not match. %Qore previously treated this
+    as an ordinary "no match", so a pattern that was too expensive to evaluate silently produced a wrong answer.
+
+    Such matches now raise a \c REGEX-ERROR exception from every regular expression entry point: the
+    @ref regex_match_operator "=~", @ref regex_no_match_operator "!~", @ref regex_extract_operator "=~ x//",
+    and @ref regex_subst_operator "=~ s///" operators, the @ref Qore::regex() "regex()",
+    @ref Qore::regex_extract() "regex_extract()", and @ref Qore::regex_subst() "regex_subst()" functions, the
+    corresponding <tt>&lt;string&gt;</tt> pseudo-methods (such as @ref <string>::regex() "<string>::regex()"),
+    and the @ref Qore::Regex "Regex", @ref Qore::RegexSubst "RegexSubst", and @ref Qore::RegexExtract
+    "RegexExtract" classes.
+
+    This only affects patterns that could not be evaluated at all; a pattern that PCRE2 evaluates to completion
+    still reports "no match" as before, as do subjects that are not valid UTF-8.
+
+    <b>Workarounds:</b>
+    - Rewrite the pattern to avoid nested unbounded quantifiers (such as <tt>(a+)+</tt>), which are the usual
+      cause; possessive quantifiers or atomic groups remove the backtracking
+    - Catch \c REGEX-ERROR where an indeterminate result is acceptable and treat it as no match
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par New Required Libraries and Async Networking Stack
     @parblock
@@ -1705,6 +1729,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
+      - watch data providers can restore and durably persist provider-owned delivery checkpoints,
+        allowing integrations to preserve at-least-once event delivery across process restarts
 
     - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
       - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
@@ -1740,6 +1766,9 @@ foreach string module_name in (registry.getProcessModules()) {
         matched message as soon as its event is raised
       - attachment watch events carry the \c message_id of the source message, so a consumer can
         address the message the attachment came from
+      - message watches persist the last delivered timestamp and same-second message IDs when the host
+        application configures checkpoint storage, preventing retained messages from being processed again
+        after a service reload
 
     - @ref grokrestclientintro "GrokRestClient" module
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
@@ -2349,6 +2378,8 @@ foreach string module_name in (registry.getProcessModules()) {
         that supporting another email provider is connection configuration rather than new code;
         provides server-side search, message and single-MIME-part retrieval, flag changes, mailbox
         moves, \c APPEND, and events for new mail and new attachments
+      - message watches can persist the mailbox UID validity and last delivered UID through the shared
+        watch checkpoint API, preventing retained mail from being processed again after a service reload
 
     - @ref insightlydataproviderintro "InsightlyDataProvider" module
       - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
@@ -2839,6 +2870,19 @@ foreach string module_name in (registry.getProcessModules()) {
         with \c LOAD-MODULE-ERROR (\c "cannot resolve function ... in inline FUNC_CALL expression") depending on
         the order functions happened to be serialized in; these expressions are now resolved after all functions,
         methods, and classes in the module are registered
+      - fixed regular expression matching never completing on subject strings larger than 5,000,000 bytes; an
+        unanchored pattern that did not match spun a CPU core indefinitely and permanently wedged the calling
+        thread. PCRE2's interpreter switches off its required-code-unit start-of-match optimization once the
+        remaining subject reaches that size, after which the pattern is retried at every offset, which is
+        quadratic in the subject length. Regular expressions are now compiled with the PCRE2 just-in-time
+        compiler, which has no such cutoff; matching is linear at every subject size, and most patterns match
+        significantly faster (measured at up to 13x on a 4 MB subject)
+      - fixed regular expression matching silently reporting \c "no match" when PCRE2 abandoned the match because
+        the pattern required too much backtracking to decide it; such matches now raise a \c REGEX-ERROR
+        exception (see @ref qore_3_0_0_regex_errors)
+      - global regular expression matching, substitution, and splitting are now @ref Qore::cancel_thread()
+        "cancel_thread()" and @ref Qore::SandboxManager "SandboxManager" interrupt points, so a long-running
+        match over a large subject no longer holds its thread until it completes
 
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)

@@ -108,21 +108,19 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
         return false;
     }
 
-    int rc = pcre2_match(regex->getPattern(),
+    int rc = qore_pcre2_match(regex->getPattern(),
         reinterpret_cast<PCRE2_SPTR8>(subject->c_str()),
         src_len, offset,
         utf_validated ? PCRE2_NO_UTF_CHECK : 0,
-        md, nullptr);
+        md);
 
     if (rc < 1) {
         // NOMATCH (or benign PCRE2 error): trailing piece is the rest of
         // the subject.  Stop after yielding it.
-        if (!qore_pcre2_expected_match_error(rc) && rc != PCRE2_ERROR_NOMATCH) {
+        if (qore_pcre2_check_match_error(rc, xsink)) {
             // Unknown error — surface as an exception rather than silently
-            // truncating iteration.  Mirrors extractWithPattern's DEBUG
-            // assert but is checked at runtime too.
-            xsink->raiseException("REGEX-ERROR",
-                "pcre2_match returned unexpected error %d during iteration", rc);
+            // truncating iteration.
+            assert(*xsink);
             exhausted = true;
             m_valid = false;
             return false;

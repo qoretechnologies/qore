@@ -59,7 +59,7 @@ public const WatchConstructorOptions = BaseLinkerDataProviderBase::BaseConstruct
     (polling loop, cursor tracking, deduplication) is handled here.
 */
 public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase,
-        DataProvider::AbstractWatchDataProviderBase {
+        DataProvider::AbstractOrderedWatchDataProvider {
     private {
         #! Last journal `log_id` seen; BaseLinker returns entries strictly after this value
         softint last_log_id = 0;
@@ -71,7 +71,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     #! Creates the object with an async REST client
     constructor(*RestClientIo::RestClientIo rest, *hash<auto> options)
             : BaseLinkerDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
+              AbstractOrderedWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval,
                   MinPollInterval)) {
         since = options.since;
     }
@@ -79,7 +79,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     #! Creates the object with a connection
     constructor(BaseLinkerRestClient::BaseLinkerRestConnection conn, *hash<auto> options)
             : BaseLinkerDataProviderBase(conn),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
+              AbstractOrderedWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval,
                   MinPollInterval)) {
         since = options.since;
     }
@@ -87,7 +87,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     #! Creates the object with options
     constructor(*hash<auto> options)
             : BaseLinkerDataProviderBase(options),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
+              AbstractOrderedWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval,
                   MinPollInterval)) {
         since = options.since;
     }
@@ -102,33 +102,85 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
         rest.close();
     }
 
-    #! Performs a single polling operation
-    private pollOnce() {
-        try {
-            hash<auto> params = cast<hash>({
-                "logs_types": (getLogType(),),
-            });
-            if (last_log_id > 0) {
-                params.last_log_id = last_log_id;
-            } else if (exists since) {
-                params.date_from = int(get_epoch_seconds(since));
-            }
-            hash<auto> response = callMethod("getJournalList", params);
-            list<auto> logs = response.logs ?? ();
-            foreach hash<auto> entry in (logs) {
-                if (isStopping()) {
-                    break;
-                }
-                softint lid = int(entry.log_id);
-                if (lid > last_log_id) {
-                    last_log_id = lid;
-                }
-                notifyObservers(getEventName(), convertEpochFields(entry));
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "BaseLinker watch %s: poll failed: %s: %s",
-                getEventName(), ex.err, ex.desc);
+    #! The BaseLinker journal is returned in ascending `log_id` order
+    string getSourceOrdering() {
+        return WSO_ASCENDING;
+    }
+
+    #! Returns the highest journal `log_id` delivered so far
+    /** @since BaseLinkerDataProvider 1.0
+    */
+    softint getLastLogId() {
+        return last_log_id;
+    }
+
+    #! Restores the journal cursor
+    private restoreCheckpoint(hash<auto> checkpoint) {
+        if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
+                || checkpoint.last_log_id.typeCode() != NT_INT || checkpoint.last_log_id < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "invalid BaseLinker watch checkpoint; expecting version 1 and a "
+                "non-negative last_log_id";
         }
+        last_log_id = checkpoint.last_log_id;
+    }
+
+    #! Durably advances the journal cursor
+    private commitCheckpoint(softint log_id) {
+        if (log_id < 0) {
+            throw "WATCH-CHECKPOINT-ERROR", "cannot persist a negative BaseLinker journal log_id";
+        }
+        persistCheckpoint({
+            "version": 1,
+            "last_log_id": int(log_id),
+        });
+        last_log_id = log_id;
+    }
+
+    #! Fetches the journal entries after the current cursor
+    private list<hash<WatchItemInfo>> fetchWatchItems() {
+        hash<auto> params = cast<hash>({
+            "logs_types": (getLogType(),),
+        });
+        if (last_log_id > 0) {
+            params.last_log_id = last_log_id;
+        } else if (exists since) {
+            params.date_from = int(get_epoch_seconds(since));
+        }
+        hash<auto> response = callMethod("getJournalList", params);
+        list<hash<WatchItemInfo>> items = ();
+        foreach hash<auto> entry in (response.logs ?? ()) {
+            push items, <WatchItemInfo>{
+                "id": string(entry.log_id),
+                "order_key": int(entry.log_id),
+                "data": entry,
+            };
+        }
+        return items;
+    }
+
+    #! Returns @ref True if the journal entry lies beyond the cursor
+    private bool isNewWatchItem(hash<WatchItemInfo> item) {
+        return item.order_key > last_log_id;
+    }
+
+    #! Raises the event for one journal entry
+    private dispatchWatchItem(hash<WatchItemInfo> item, auto payload, list<hash<WatchItemInfo>> superseded) {
+        notifyObservers(getEventName(), convertEpochFields(payload));
+    }
+
+    #! Durably advances the cursor to the given journal entry
+    private advanceWatchCursor(hash<WatchItemInfo> item) {
+        commitCheckpoint(item.order_key);
+    }
+
+    #! Logs an error raised during a polling cycle
+    private logPollError(hash<ExceptionInfo> ex) {
+        log(LoggerLevel::ERROR, "BaseLinker watch %s: poll failed: %s: %s", getEventName(), ex.err, ex.desc);
+    }
+
+    #! Logs an informational message about a polling cycle
+    private logWatchInfo(string fmt, ...) {
+        log(LoggerLevel::INFO, "%s", vsprintf(fmt, argv));
     }
 
     #! Returns a hash of all supported event types

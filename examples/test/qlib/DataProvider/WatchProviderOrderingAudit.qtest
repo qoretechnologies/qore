@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%requires DataProvider
+%requires AftershipDataProvider
+%requires ApolloDataProvider
+%requires BaseLinkerDataProvider
+%requires BigCommerceDataProvider
+%requires BitlyDataProvider
+%requires Cin7CoreDataProvider
+%requires CircleDataProvider
+%requires ClickFunnelsDataProvider
+%requires CloseDataProvider
+%requires ConstantContactDataProvider
+%requires DeelDataProvider
+%requires EmpathicBuildingDataProvider
+%requires FreshBooksDataProvider
+%requires FreshsalesDataProvider
+%requires GmailDataProvider
+%requires GoHighLevelDataProvider
+%requires GorgiasDataProvider
+%requires ImapClientDataProvider
+%requires InsightlyDataProvider
+%requires KatanaDataProvider
+%requires KeapDataProvider
+%requires KitDataProvider
+%requires OneDriveDataProvider
+%requires SendCloudDataProvider
+%requires ShippoDataProvider
+%requires SmartSheetDataProvider
+%requires SquareDataProvider
+%requires SquarespaceDataProvider
+%requires SystemeIoDataProvider
+%requires TableauDataProvider
+%requires TallyDataProvider
+%requires UnbounceDataProvider
+%requires UnleashedDataProvider
+%requires ZohoBooksDataProvider
+%requires ZohoInventoryDataProvider
+%requires ZohoInvoiceDataProvider
+
+%exec-class WatchProviderOrderingAuditTest
+
+#! Verifies the ordering and durability contract across every watch data provider in the library
+/** A watch provider that quietly inherits the "ordering unknown" default gives a consumer no way to
+    tell an ordered feed from an unordered one, which is exactly the ambiguity the contract exists to
+    remove. This test walks every loaded watch provider class and fails on any that has not made a
+    declaration, so a new provider cannot be added without classifying its feed.
+*/
+public class WatchProviderOrderingAuditTest inherits QUnit::Test {
+    private {
+        #! The base every watch provider derives from
+        const WatchBase = "DataProvider::AbstractWatchDataProviderBase";
+
+        #! The abstract bases that deliberately leave the declaration to their subclasses
+        const DeclarationExempt = {
+            "DataProvider::AbstractOrderedWatchDataProvider": True,
+            "DataProvider::AbstractTimestampWatchDataProvider": True,
+        };
+
+        #! The valid ordering classifications
+        const ValidOrderings = {
+            WSO_ASCENDING: True,
+            WSO_DESCENDING: True,
+            WSO_UNORDERED: True,
+            WSO_UNKNOWN: True,
+        };
+    }
+
+    constructor() : Test("WatchProviderOrderingAuditTest", "1.0") {
+        addTestCase("every watch provider declares its feed ordering", \orderingDeclaredTest());
+        addTestCase("no concrete watch provider is left abstract", \concreteProvidersTest());
+        addTestCase("the ordering classifications are exhaustive", \orderingValuesTest());
+
+        set_return_value(main());
+    }
+
+    #! Returns every loaded class deriving from the watch provider base
+    private list<Class> getWatchClasses() {
+        list<Class> all = ();
+        code walk = sub (Namespace ns) {
+            all += ns.getClasses();
+            map walk($1), ns.getNamespaces();
+        };
+        walk(Namespace::forName("::"));
+
+        list<Class> watch = ();
+        foreach Class c in (all) {
+            if (c.getPathName() == WatchBase) {
+                continue;
+            }
+            foreach auto parent in (c.getClassHierarchy().iterator()) {
+                if (parent.getPathName() == WatchBase) {
+                    push watch, c;
+                    break;
+                }
+            }
+        }
+        return watch;
+    }
+
+    #! Returns @ref True if some class other than the base declares getSourceOrdering()
+    private bool declaresOrdering(Class c) {
+        foreach auto parent in (c.getClassHierarchy().iterator()) {
+            if (parent.getPathName() == WatchBase) {
+                continue;
+            }
+            try {
+                parent.getNormalMethod("getSourceOrdering");
+                return True;
+            } catch (hash<ExceptionInfo> ex) {
+                # this class does not declare it; keep looking up the hierarchy
+            }
+        }
+        return False;
+    }
+
+    private bool isAbstract(Class c) {
+        foreach string mod in (c.getModifierList()) {
+            if (mod == "abstract") {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Every watch provider must classify its upstream feed rather than inherit "unknown"
+    orderingDeclaredTest() {
+        list<Class> watch = getWatchClasses();
+        assertGt(200, watch.size(), "the library's watch providers were found");
+
+        list<string> undeclared = ();
+        foreach Class c in (watch) {
+            if (DeclarationExempt{c.getPathName()}) {
+                continue;
+            }
+            if (!declaresOrdering(c)) {
+                push undeclared, c.getPathName();
+            }
+        }
+        assertEq((), undeclared, "every watch provider declares the ordering of its feed");
+    }
+
+    #! A provider left abstract by an incomplete migration cannot be instantiated at all
+    concreteProvidersTest() {
+        list<string> broken = ();
+        foreach Class c in (getWatchClasses()) {
+            string name = c.getPathName();
+            # bases are abstract on purpose; everything else must be instantiable
+            if (name =~ /Base$/ || name =~ /::Abstract/) {
+                continue;
+            }
+            if (isAbstract(c)) {
+                push broken, name;
+            }
+        }
+        assertEq((), broken, "no concrete watch provider has unimplemented abstract methods");
+    }
+
+    #! The declared classifications must be values the contract defines
+    orderingValuesTest() {
+        assertEq(4, ValidOrderings.size(), "the contract defines four classifications");
+        assertTrue(ValidOrderings{WSO_ASCENDING});
+        assertTrue(ValidOrderings{WSO_DESCENDING});
+        assertTrue(ValidOrderings{WSO_UNORDERED});
+        assertTrue(ValidOrderings{WSO_UNKNOWN});
+        # ascending and descending feeds both dispatch ascending; an unordered feed cannot
+        assertNeq(WSO_ASCENDING, WSO_DESCENDING);
+    }
+}
