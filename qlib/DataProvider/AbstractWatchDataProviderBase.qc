@@ -126,7 +126,9 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         A mail integration can restore its last delivered server message ID before observers start,
         then store each new ID transactionally after the message event has been accepted.
 
-        @since DataProvider 3.4
+        @see getWatchStreamIdentity()
+
+        @since DataProvider 3.6
     */
     setCheckpointPersistence(*hash<auto> checkpoint, code<nothing(hash<auto>)> saver) {
         AutoLock al(sleep_m);
@@ -302,6 +304,52 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
             throw "WATCH-CHECKPOINT-ERROR", sprintf("watch provider %y does not support checkpoints",
                 self.className());
         }
+    }
+
+    #! Returns the configuration that defines which logical stream this provider follows
+    /** A framework storing checkpoints must key them by the stream they belong to, and only the
+        provider knows which of its options define that stream.  Without this, an embedder can only
+        key on the whole configuration, which makes editing an operational option — the poll interval,
+        whether attachments are fetched, whether consumed items are removed — look like a different
+        stream: the checkpoint becomes unreachable and the next poll rescans from the beginning.  For
+        a mailbox watch that means redelivering the entire mailbox after an ordinary tuning change.
+
+        Conversely, a key that ignores configuration entirely resumes one stream's cursor against
+        another: changing the search criteria would resume at a position established under the
+        previous criteria and silently skip everything older than it that the new criteria match.
+
+        Providers therefore declare only the options that define the stream itself — the mailbox, the
+        search criteria, the scan origin — and omit everything that only affects how the stream is
+        polled or what is done with an item after delivery.  Values must be the configured values, not
+        expanded runtime values, so that rotating a credential does not look like a new stream.
+
+        @return the stream-defining configuration, or @ref NOTHING if this provider does not declare
+        one, in which case the embedder has no choice but to fall back to the whole configuration
+
+        @note Implementations must report configuration fixed at construction time, so that this can
+        be called from any thread without synchronization; it is normally called alongside
+        @ref setCheckpointPersistence(), before the polling thread exists.
+
+        @see setCheckpointPersistence()
+
+        @since DataProvider 3.6
+    */
+    *hash<auto> getWatchStreamIdentity() {
+        return getWatchStreamIdentityImpl();
+    }
+
+    #! Returns the configuration that defines which logical stream this provider follows
+    /** The default implementation returns @ref NOTHING; every watch provider that keeps a cursor
+        should override this method.
+
+        @return the stream-defining configuration, or @ref NOTHING if not declared
+
+        @see getWatchStreamIdentity()
+
+        @since DataProvider 3.6
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        # intentionally empty: no declared stream identity
     }
 }
 

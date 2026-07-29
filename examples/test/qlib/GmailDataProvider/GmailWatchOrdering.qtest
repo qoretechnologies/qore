@@ -200,6 +200,7 @@ public class GmailWatchOrderingTest inherits QUnit::Test {
         addTestCase("a failed superseded removal does not cost the event", \supersededFailureTest());
         addTestCase("the per-cycle budget delivers the oldest messages first", \messageBudgetTest());
         addTestCase("watch option validation", \optionValidationTest());
+        addTestCase("stream identity covers only the scan-defining options", \streamIdentityTest());
 
         set_return_value(main());
     }
@@ -456,5 +457,37 @@ public class GmailWatchOrderingTest inherits QUnit::Test {
         assertEq(WSO_DESCENDING, plain.getSourceOrdering(), "Gmail lists newest-first");
         assertTrue(plain.hasAscendingDispatch(), "and the watch reverses that before delivery");
         assertFalse(plain.usesOrdering(), "a plain watch does not pay for a separate ordering pass");
+    }
+
+    #! The cursor must survive an operational edit and reset only when the scan itself changes
+    streamIdentityTest() {
+        MockGmailRestClient rest = getRest();
+        hash<auto> base_opts = {
+            "q": "in:inbox to:orders@example.com",
+            "poll_interval": 120,
+        };
+        *hash<auto> base = (new TestGmailWatch(rest, base_opts)).getWatchStreamIdentity();
+        assertEq({"q": "in:inbox to:orders@example.com", "start_date": NOTHING}, base);
+
+        # options that only change how the same mailbox is polled, or what is done with a message
+        # after it has been delivered, must not look like a different scan: a changed identity makes
+        # the stored checkpoint unreachable, and Gmail then rescans the whole mailbox
+        foreach hash<auto> opts in ((
+            base_opts + {"poll_interval": 60},
+            base_opts + {"retrieve_attachments": True},
+            base_opts + {"delete_messages": True},
+            base_opts + {"snapshot_mode": True},
+        )) {
+            assertEq(base, (new TestGmailWatch(rest, opts)).getWatchStreamIdentity(),
+                sprintf("operational options must not change the stream identity: %y", opts));
+        }
+
+        # the search criteria select the messages the cursor is a position in
+        assertNeq(base, (new TestGmailWatch(rest, base_opts + {"q": "in:inbox to:support@example.com"}))
+            .getWatchStreamIdentity(), "changed search criteria are a different scan");
+
+        # the start date sets where the scan begins
+        assertNeq(base, (new TestGmailWatch(rest, base_opts + {"start_date": 2026-01-01Z}))
+            .getWatchStreamIdentity(), "a changed start date is a different scan");
     }
 }
