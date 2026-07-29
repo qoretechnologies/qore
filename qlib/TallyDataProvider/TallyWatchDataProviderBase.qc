@@ -99,6 +99,19 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
     }
 
     #! Restores the submission cursor
+    #! Returns the configuration that defines which submission stream this provider follows
+    /** The form is the stream: submissions are scoped to it, so a different form is a different
+        stream and its cursor cannot carry over.  The poll interval is excluded: it changes how
+        often the same form is polled, not which submissions it covers.
+
+        @since TallyDataProvider 1.1
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "form_id": form_id,
+        };
+    }
+
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
                 || checkpoint.seen_ids.typeCode() != NT_LIST) {

@@ -60,6 +60,15 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
         #! Last poll time for filtering
         date since;
 
+        #! The configured lower bound, as given to the constructor
+        /** Kept separately from @ref since, which starts here but then moves with the cursor and is
+            replaced wholesale when a checkpoint is restored.  The stream identity must report the
+            configured value: reporting the cursor would make the identity change on every poll, and
+            reporting the @c now_us() default would make it change on every restart — either way the
+            checkpoint would never be found again.
+        */
+        *date configured_since;
+
         #! Set of seen IDs for deduplication
         hash<string, bool> seen_ids = {};
     }
@@ -68,6 +77,7 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     constructor(UnleashedRestClient::UnleashedRestClient rest, *hash<auto> options)
             : UnleashedDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        configured_since = options.since;
         since = options.since ?? now_us();
     }
 
@@ -75,6 +85,7 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     constructor(UnleashedRestClient::UnleashedRestConnection conn, *hash<auto> options)
             : UnleashedDataProviderBase(conn),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        configured_since = options.since;
         since = options.since ?? now_us();
     }
 
@@ -82,6 +93,7 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     constructor(*hash<auto> options)
             : UnleashedDataProviderBase(options),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        configured_since = options.since;
         since = options.since ?? now_us();
     }
 
@@ -109,6 +121,22 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     }
 
     #! Restores the poll-boundary cursor
+    #! Returns the configuration that defines which scan this provider follows
+    /** The lower bound decides where the feed is entered, so changing it defines a different scan
+        and must start a new cursor.  The poll interval is excluded: it changes how often the same
+        feed is polled, not which records it covers.
+
+        @return the lower bound as configured, which is @ref NOTHING when the provider starts from
+        the time it was created
+
+        @since UnleashedDataProvider 1.1
+    */
+    private *hash<auto> getWatchStreamIdentityImpl() {
+        return {
+            "since": configured_since,
+        };
+    }
+
     private restoreCheckpoint(hash<auto> checkpoint) {
         if (checkpoint.version.typeCode() != NT_INT || checkpoint.version != 1
                 || checkpoint.since.typeCode() != NT_DATE || !checkpoint.since.absolute()

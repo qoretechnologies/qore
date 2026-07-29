@@ -74,6 +74,8 @@ public class WatchProviderOrderingAuditTest inherits QUnit::Test {
 
     constructor() : Test("WatchProviderOrderingAuditTest", "1.0") {
         addTestCase("every watch provider declares its feed ordering", \orderingDeclaredTest());
+        addTestCase("every cursor-bearing watch provider declares its stream identity",
+            \streamIdentityDeclaredTest());
         addTestCase("no concrete watch provider is left abstract", \concreteProvidersTest());
         addTestCase("the ordering classifications are exhaustive", \orderingValuesTest());
 
@@ -118,6 +120,57 @@ public class WatchProviderOrderingAuditTest inherits QUnit::Test {
             }
         }
         return False;
+    }
+
+    #! Returns @ref True if some class other than the base declares \a method
+    private bool declaresMethod(Class c, string method) {
+        foreach auto parent in (c.getClassHierarchy().iterator()) {
+            if (parent.getPathName() == WatchBase) {
+                continue;
+            }
+            try {
+                parent.getNormalMethod(method);
+                return True;
+            } catch (hash<ExceptionInfo> ex) {
+                # this class does not declare it; keep looking up the hierarchy
+            }
+        }
+        return False;
+    }
+
+    #! A provider that keeps a durable cursor must say which configuration that cursor belongs to
+    /** Without a declared identity the embedder has to key the checkpoint on the provider's whole
+        configuration, so editing any option at all — the poll interval, whether attachments are
+        retrieved, whether messages are deleted — rotates the key, the stored cursor becomes
+        unreachable, and the next poll starts from scratch.  For a feed that is not consumed
+        destructively that redelivers everything the cursor had already covered.
+
+        The inverse failure is worse and is why the declaration belongs to the provider: if the
+        identity omits an option that selects which records the feed returns, changing that option
+        resumes the old cursor against the new selection and silently skips everything older than
+        it.
+
+        A durable cursor is exactly what restoreCheckpoint() restores, so any provider declaring
+        that method must declare an identity too.
+    */
+    streamIdentityDeclaredTest() {
+        list<Class> watch = getWatchClasses();
+        assertGt(200, watch.size(), "the library's watch providers were found");
+
+        list<string> undeclared = ();
+        int cursor_bearing = 0;
+        foreach Class c in (watch) {
+            if (!declaresMethod(c, "restoreCheckpoint")) {
+                continue;  # no durable cursor, so nothing to key
+            }
+            ++cursor_bearing;
+            if (!declaresMethod(c, "getWatchStreamIdentityImpl")) {
+                push undeclared, c.getPathName();
+            }
+        }
+        assertGt(0, cursor_bearing, "cursor-bearing watch providers were found");
+        assertEq((), undeclared,
+            "every watch provider with a durable cursor declares which configuration defines it");
     }
 
     private bool isAbstract(Class c) {
