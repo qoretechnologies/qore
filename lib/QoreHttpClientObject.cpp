@@ -6403,7 +6403,9 @@ public:
 
         // Check for deferred connection error
         if (!deferred_err.empty()) {
-            xsink->raiseException(deferred_err.c_str(), deferred_desc.c_str());
+            // deferred_desc is runtime-derived (it can carry a peer address or
+            // strerror() text), so it must never be used as a format string
+            xsink->raiseException(deferred_err.c_str(), "%s", deferred_desc.c_str());
             done = true;
             return nullptr;
         }
@@ -7398,8 +7400,44 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
                 desc_str = desc->c_str();
             }
         }
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-        return nullptr;
+        // Surface the error as a DEFERRED error on the returned poll op rather
+        // than raising synchronously — callers expect the error to arrive
+        // through drivePoll(), not from startPollConnect() itself.  Mirrors the
+        // acquireConnectionAsync() fast-fail path above and the isClosed() path
+        // in startPollSendRecvConnMgr().  Raising here made the connect-to-dead-
+        // port test case fail intermittently whenever the connection was decided
+        // in the window between the isReady() check above and
+        // registerReadyNotifier() — on loopback the RST is immediate, so which
+        // side of that window the failure lands on is pure thread timing.
+        ReferenceHolder<QoreEventNotifier> err_notifier_holder(
+            new QoreEventNotifier(xsink), xsink);
+        if (*xsink || !err_notifier_holder->isValid()) {
+            return nullptr;
+        }
+        // signal immediately so the first drivePoll() wakes up and sees the
+        // deferred error
+        err_notifier_holder->notify();
+
+        QoreEventNotifier* err_notifier_raw = *err_notifier_holder;
+        err_notifier_raw->ref();
+        ReferenceHolder<QoreObject> err_notifier_obj(
+            new QoreObject(QC_EVENTNOTIFIER, getProgram(), err_notifier_raw), xsink);
+
+        // the constructor refs the notifier; the holder derefs its own ref on
+        // scope exit
+        QoreEventNotifier* err_notifier_for_op = *err_notifier_holder;
+        ReferenceHolder<HttpClientConnMgrPollOp> err_poller(
+            new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
+                err_notifier_for_op, this, self), xsink);
+        SocketPollOperationBase* err_p = *err_poller;
+        ReferenceHolder<QoreObject> err_rv(
+            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), err_poller.release()), xsink);
+        if (!*xsink) {
+            err_p->setSelf(*err_rv);
+            err_rv->setValue("sock", err_notifier_obj.release(), xsink);
+            err_rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        }
+        return err_rv.release();
     }
 
     // Keep the connection alive until the connect-mode poll op observes the

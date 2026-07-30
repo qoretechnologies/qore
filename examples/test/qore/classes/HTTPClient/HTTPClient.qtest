@@ -624,7 +624,17 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     "url": "https://localhost:" + port,
                 });
 
-                SocketPollOperation spop = hc.startPollConnect();
+                # startPollConnect() must never raise the connect error synchronously, even when the
+                # connection fails before the poll op is returned (immediate RST on loopback); the
+                # error must always be delivered through the poll loop
+                *SocketPollOperation spop;
+                try {
+                    spop = hc.startPollConnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("startPollConnect() raised %s synchronously (%s); connect errors must be "
+                        "deferred to the poll loop", ex.err, ex.desc));
+                    return;
+                }
                 assertEq("connect", spop.getGoal());
                 assertEq("connecting", spop.getState());
                 assertThrows("SOCKET-CONNECT-ERROR", sub () {
