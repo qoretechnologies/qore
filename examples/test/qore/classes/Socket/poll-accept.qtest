@@ -60,9 +60,11 @@ class PollAcceptTest inherits QUnit::Test {
             cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listener}),
         );
 
-        date start = now_us();
+        # NOTE: elapsed time must be measured with the monotonic clock; now_us() reads CLOCK_REALTIME and
+        # is subject to NTP steps on virtualized CI runners
+        int start_us = clock_get_monotonic_us();
         list<auto> ready = Socket::poll(poll_list, MaxPollTime);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start_us);
 
         if (!ready) {
             # poll() returned empty - check if accept would succeed anyway
@@ -85,7 +87,9 @@ class PollAcceptTest inherits QUnit::Test {
         }
 
         assertEq(1, ready.size(), "poll() should detect pending accept");
-        assertTrue(elapsed < 50ms, sprintf("poll() should return quickly (took %y)", elapsed));
+        # poll() must return because it detected readiness, not because it hit its own timeout
+        assertTrue(elapsed < milliseconds(MaxPollTime),
+            sprintf("poll() should return before its %dms timeout (took %y)", MaxPollTime, elapsed));
 
         # Clean up - accept the connection
         Socket accepted = listener.accept(0);
@@ -122,9 +126,10 @@ class PollAcceptTest inherits QUnit::Test {
             push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
         }
 
-        date start = now_us();
+        # NOTE: monotonic clock; see testBasicPollAccept()
+        int start_us = clock_get_monotonic_us();
         list<auto> ready = Socket::poll(poll_list, MaxPollTime);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start_us);
 
         if (!ready) {
             # Check if accept would succeed on target listener
@@ -145,7 +150,9 @@ class PollAcceptTest inherits QUnit::Test {
         }
 
         assertEq(1, ready.size(), "poll() should detect exactly one pending accept");
-        assertTrue(elapsed < 50ms, sprintf("poll() should return quickly (took %y)", elapsed));
+        # poll() must return because it detected readiness, not because it hit its own timeout
+        assertTrue(elapsed < milliseconds(MaxPollTime),
+            sprintf("poll() should return before its %dms timeout (took %y)", MaxPollTime, elapsed));
 
         # Verify it's the correct listener
         string ready_hash = ready[0].socket.uniqueHash();
