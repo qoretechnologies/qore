@@ -1,0 +1,368 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QlipRestClient.qm Qore user module for calling Qlip REST API services
+
+/*  QlipRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+# enable all warnings
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module QlipRestClient {
+    version = "1.0";
+    desc = "User module for calling Qlip REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("qlip", QlipRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage QlipRestClient Module
+
+    @tableofcontents
+
+    @section qliprestclientintro QlipRestClient Introduction
+
+    The %QlipRestClient module provides an API for calling Qlip's REST API services.
+
+    Qlip is a visual-regression review platform for Storybook: it captures screenshots
+    of stories, diffs them against approved baselines, and manages the human/agent review
+    of the resulting builds.
+
+    To use this module, use \c "%requires QlipRestClient" in your code.
+
+    All the public symbols in the module are defined in the QlipRestClient namespace.
+
+    The main classes are:
+    - @ref QlipRestClient::QlipRestClient "QlipRestClient":
+      this class provides the REST client API for communication with the Qlip API;
+      it handles authentication via a Bearer token
+    - @ref QlipRestClient::QlipRestConnection "QlipRestConnection":
+      provides a connection object to Qlip services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires QlipRestClient
+
+QlipRestClient qlip({"token": ENV.QLIP_API_TOKEN});
+hash<auto> result = qlip.get("builds");
+printf("Builds: %Y\n", result.body);
+    @endcode
+
+    @section qliprestclientrelnotes Release Notes
+
+    @subsection qliprestclientv1_0 QlipRestClient v1.0
+    - the initial version of the %QlipRestClient module
+*/
+
+#! the QlipRestClient namespace contains all the objects in the QlipRestClient module
+public namespace QlipRestClient {
+
+#! Common base class for QlipRestClient functionality
+public class QlipRestClientBase {
+    public {
+        #! Qlip API base URL (the REST API is served under /api)
+        const DefaultApiUrl = "https://qlip.qoretechnologies.com/api";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default Qlip ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default Qlip ping path (returns the signed-in identity - lightweight, auth-gated)
+        const DefaultPingPath = "me";
+
+        #! Default Qlip ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! returns options for QlipRestClient constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Set API URL (use default unless caller provided an override)
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
+
+        # Validate token is provided
+        if (!opts.token) {
+            throw "QLIP-ERROR", "missing required option 'token' (Qlip API token, e.g. 'qlt_...')";
+        }
+
+        # Set Bearer token Authorization header and remove token from opts
+        # so that RestClient does not attempt to handle it specially
+        rv.headers.Authorization = "Bearer " + opts.token;
+        remove rv.token;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Qlip servers
+/** Qlip uses a REST API with Bearer token authentication.
+
+    Authentication is done via a Qlip API token passed as a Bearer token in the
+    Authorization header. Tokens are multi-project tokens (prefixed \c "qlt_"),
+    scoped by per-project grants and scopes (read/write/admin).
+
+    @par API Information:
+    - Base URL: https://qlip.qoretechnologies.com/api
+    - Generate tokens in the Qlip dashboard under "My Tokens"
+*/
+public class QlipRestClient inherits RestClient::RestClient, QlipRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+QlipRestClient qlip({"token": "qlt_..."});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c token: the Qlip API token (required)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw QLIP-ERROR missing required option 'token'
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(QlipRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for Qlip REST connections; returns @ref QlipRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c token: the Qlip API token
+
+    @see @ref QlipRestClient::QlipRestClient::constructor() for more information on the above options
+*/
+public class QlipRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Qlip connection URL
+        const DefaultConnectionUrl = "qlip://qlip.qoretechnologies.com/api";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Qlip REST Connection",
+            "short_desc": "A connection to the Qlip REST API",
+            "desc": "A connection to the Qlip REST API for visual-regression review.\n\n"
+                "Qlip captures Storybook screenshots, diffs them against approved baselines, "
+                "and manages the review of the resulting builds. This integration supports "
+                "listing and inspecting builds, snapshots, diffs, comments, and story history, "
+                "and (later) build-review event triggers.",
+            "cls": Class::forName("QlipRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "qlip": True,
+            },
+            "base_scheme_map": {
+                "https": "qlip",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": QlipRestClientBase::DefaultData,
+                },
+                "token": <ConnectionOptionInfo>{
+                    "display_name": "API Token",
+                    "short_desc": "Qlip API token",
+                    "type": "string",
+                    "desc": "The Qlip API token used for authentication (a multi-project token, "
+                        "prefixed `qlt_`).\n\n"
+                        "Generate a token in the Qlip dashboard under **My Tokens**. Tokens are "
+                        "scoped by per-project grants and scopes (read/write/admin), so create a "
+                        "**read**-scoped token for the projects this connection should see.",
+                    "sensitive": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": QlipRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": QlipRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": QlipRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "token",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Generate Your API Token",
+                    "intent": "info",
+                    "content": "1. Log in to Qlip at https://qlip.qoretechnologies.com\n"
+                        "2. Open **My Tokens** from the account menu\n"
+                        "3. Click **Create Token**, grant it the projects this connection should "
+                        "access, and choose the **read** scope\n"
+                        "4. Copy the token value (it starts with `qlt_`) and paste it into the "
+                        "**API Token** field\n\n"
+                        "**Important:**\n"
+                        "- The token is shown only once; store it securely and treat it like a "
+                        "password\n"
+                        "- The connection can only see the projects granted to the token",
+                },
+            ),
+        };
+    }
+
+    #! creates the QlipRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the QlipRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config, attr) {
+    }
+
+    #! returns \c "qlip"
+    string getType() {
+        return "qlip";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Qlip";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the QlipDataProvider and creates the data provider
+        # object dynamically
+        load_module("QlipDataProvider");
+        return create_object("QlipDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref QlipRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref QlipRestClient object
+    */
+    private QlipRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new QlipRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new QlipRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Qlip REST API using multiplexed HTTP connections
+/** @see QlipRestClient for more information
+*/
+public class QlipRestClientIo inherits RestClientIo::RestClientIo, QlipRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(QlipRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}

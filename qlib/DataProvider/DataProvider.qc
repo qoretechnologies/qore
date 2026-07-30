@@ -268,6 +268,7 @@ public class DataProvider {
             "powerpointread": "PowerPointDataProvider",
             "powerpointwrite": "PowerPointDataProvider",
             "qdrant": "QdrantDataProvider",
+            "qlip": "QlipDataProvider",
             "redis": "RedisDataProvider",
             "restclient": "RestClientDataProvider",
             "restschema": "RestSchemaDataProvider",

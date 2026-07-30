@@ -1,0 +1,255 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore QlipDataProvider module definition
+
+/*  QlipDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) QlipRestClient
+
+module QlipDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Qlip visual-regression review";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new QlipDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": QlipDataProvider::AppName,
+            "display_name": "Qlip",
+            "short_desc": "Visual-regression review for Storybook",
+            "desc": "Qlip is a visual-regression review platform for Storybook: it captures "
+                "screenshots of stories, diffs them against approved baselines, and manages the "
+                "human/agent review of the resulting builds.\n\n"
+                "This integration supports listing and inspecting builds; more resources "
+                "(snapshots, diffs, comments, story history) and build-review event triggers "
+                "will follow.",
+            "scheme": "qlip",
+            "logo": QlipDataProvider::QlipLogo,
+            "logo_file_name": "qlip-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::DevOps,),
+        });
+
+        # ========== BUILD ACTIONS ==========
+
+        # List/Search Builds
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QlipDataProvider::AppName,
+            "path": "/builds",
+            "action": "list-builds",
+            "groups": "Builds",
+            "display_name": "List Builds",
+            "short_desc": "List and search visual-regression builds in Qlip",
+            "desc": "List and search visual-regression builds in Qlip, optionally filtered by "
+                "project, branch, status, and creation date range",
+            "action_code": DPAT_FIND,
+            "options": {
+                "project": <ActionOptionInfo>{
+                    "display_name": "Project",
+                    "short_desc": "Filter by project name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Restrict the listing to a single project by name; when omitted, "
+                        "builds are listed across every project the token can see",
+                    "preselected": True,
+                },
+                "branch": <ActionOptionInfo>{
+                    "display_name": "Branch",
+                    "short_desc": "Filter by git branch",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter builds by the git branch they were captured from",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by build status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter builds by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending", "desc": "Builds awaiting review"},
+                        <AllowedValueInfo>{"value": "approved", "desc": "Fully approved builds"},
+                        <AllowedValueInfo>{"value": "rejected", "desc": "Builds with rejections"},
+                        <AllowedValueInfo>{"value": "mixed",
+                            "desc": "Builds with a mix of accepted and rejected snapshots"},
+                        <AllowedValueInfo>{"value": "uploading",
+                            "desc": "Builds still transferring blobs"},
+                    ),
+                },
+                "startDate": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only builds created on/after this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Only return builds created on or after this ISO 8601 date/time "
+                        "(e.g. `2026-02-01T00:00:00Z`)",
+                },
+                "endDate": <ActionOptionInfo>{
+                    "display_name": "End Date",
+                    "short_desc": "Only builds created on/before this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Only return builds created on or before this ISO 8601 date/time "
+                        "(e.g. `2026-02-28T23:59:59Z`)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of builds to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a single build by ID
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QlipDataProvider::AppName,
+            "path": "/builds",
+            "action": "get-build",
+            "groups": "Builds",
+            "display_name": "Get a Build",
+            "short_desc": "Fetch a single build by ID",
+            "desc": "Retrieve one visual-regression build by its ID, including its status, "
+                "statistics, reviewer assignees, and the agent-review summary",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "buildId": <ActionOptionInfo>{
+                    "display_name": "Build ID",
+                    "short_desc": "The build ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The unique identifier of the build (e.g. `20260730-105410`)",
+                },
+            },
+        });
+
+        # Find builds created since a given time (the polling primitive)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QlipDataProvider::AppName,
+            "path": "/builds",
+            "action": "find-new-builds",
+            "groups": "Builds",
+            "display_name": "Find New Builds",
+            "short_desc": "List builds created on or after a given time",
+            "desc": "List visual-regression builds created on or after a timestamp — the "
+                "building block for polling for new builds in an automation",
+            "action_code": DPAT_FIND,
+            "options": {
+                "startDate": <ActionOptionInfo>{
+                    "display_name": "Since",
+                    "short_desc": "Only builds created on/after this date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "Only return builds created on or after this ISO 8601 date/time "
+                        "(e.g. `2026-07-30T00:00:00Z`)",
+                    "example_value": "2026-07-30T00:00:00Z",
+                },
+                "project": <ActionOptionInfo>{
+                    "display_name": "Project",
+                    "short_desc": "Filter by project name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Restrict to a single project by name",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by build status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter builds by status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending", "desc": "Builds awaiting review"},
+                        <AllowedValueInfo>{"value": "approved", "desc": "Fully approved builds"},
+                        <AllowedValueInfo>{"value": "rejected", "desc": "Builds with rejections"},
+                        <AllowedValueInfo>{"value": "mixed",
+                            "desc": "Builds with a mix of accepted and rejected snapshots"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of builds to return",
+                },
+            },
+        });
+
+        # ========== TRIGGERS ==========
+
+        # Trigger: a new build was created/finalized (polling)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QlipDataProvider::AppName,
+            "path": "/events/" + EVENT_BUILD_CREATED,
+            "action": EVENT_BUILD_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Build",
+            "short_desc": "Trigger when a new build is created in Qlip",
+            "desc": "Fires when a new visual-regression build is created/finalized in Qlip. "
+                "Uses polling to detect new builds; a Qog can react to each one.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_BUILD_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new builds (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect builds after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect builds created after this date/time. If not set, "
+                        "polling starts from the current time.",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage QlipDataProvider Module
+
+    @tableofcontents
+
+    @section qlipdataproviderintro QlipDataProvider Introduction
+
+    The %QlipDataProvider module provides a @ref dataproviderintro "data provider" API for Qlip
+    visual-regression review services, along with app actions for use in Qorus automations and
+    Qogs.
+
+    To use this module, use \c "%requires QlipDataProvider" in your code.
+
+    @section qlipdataproviderrelnotes Release Notes
+
+    @subsection qlipdataproviderv1_0 QlipDataProvider v1.0
+    - the initial version of the %QlipDataProvider module
+*/
