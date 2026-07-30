@@ -24,11 +24,22 @@
     spelling made the aggregate reference `__qore_x_script_register` while
     every input defined `_qore_x_script_register`, and the native link failed
     with undefined symbols.
+
+    The collector must also accept only *exported* definitions.  The parallel
+    codegen path merges its partition objects with `ld -r`, and on Mach-O the
+    Darwin linker writes a STABS debug map into the merged symbol table: the
+    local `N_FUN` record for the registration function repeats the exported
+    definition's name and address.  Counting that local record as a second
+    export made `--link-qo` reject valid split-codegen objects with
+    "input has multiple exported *_script_register symbols".
 */
 class AOTQoLinkNativeSymbolsTest inherits QUnit::Test {
     public {
-        #! aggregate symbol used for all cases here
+        #! aggregate symbol used for the two-input cases here
         const AggSymbol = "QO_LINK_NATIVE_SYMBOLS";
+
+        #! aggregate symbol used for the split-codegen case
+        const SplitAggSymbol = "QO_LINK_SPLIT_DEBUG_MAP";
     }
 
     private {
@@ -57,6 +68,8 @@ class AOTQoLinkNativeSymbolsTest inherits QUnit::Test {
         addTestCase("aggregate references the symbols its inputs define",
             \testAggregateObjectSymbolsMatchInputs());
         addTestCase("aggregate native-links and registers", \testAggregateNativeLink());
+        addTestCase("split-codegen object exports one register symbol",
+            \testSplitCodegenRegisterSymbol());
 
         set_return_value(main());
     }
@@ -152,6 +165,119 @@ int sub qo_link_native_main() {
         return sort(rv);
     }
 
+    #! per-file `*_script_register` symbols of the given `qcc --dump-symbols` kind
+    /** `qcc --dump-symbols` reports the same LLVM object view
+        `collect_qo_register_symbols()` scans, with uppercase kinds for global
+        symbols and lowercase for local ones ("T" = exported text definition,
+        "n" = local debug record).  `nm -a` prints Mach-O STABS records in a
+        different column layout than ordinary symbols, so the object's own
+        dumper is both easier to parse and closer to the code under test.
+
+        The `qore_aot_script_register` runtime bridge also ends in
+        `_script_register`; it is not a per-file registration entry point and
+        is filtered out here.
+    */
+    private list<string> dumpedRegisterSymbols(string path, string kind) {
+        list<string> rv();
+        string dump = run(sprintf("%s %s --dump-symbols %s", env, qcc_bin, path));
+        foreach string raw_line in (dump.split("\n")) {
+            list<string> fields();
+            foreach string field in (raw_line.split(" ")) {
+                field = trim(field);
+                if (field != "") {
+                    fields += field;
+                }
+            }
+            # address, size, kind, [section], name
+            if (fields.size() < 4 || fields[2] != kind) {
+                continue;
+            }
+            string name = fields[fields.size() - 1];
+            if (!(name =~ /_script_register$/) || name =~ /qore_aot_script_register$/) {
+                continue;
+            }
+            rv += name;
+        }
+        return sort(rv);
+    }
+
+    #! compile @p src through the split/parallel codegen path and return the `.qo` path
+    /** `QCC_SPLIT_THRESHOLD=1` puts even a tiny module through
+        `SplitModule()` + per-partition codegen + the `ld -r` merge, which is
+        what produces the local debug-map records on Mach-O.  `--jobs=4` and an
+        empty `MAKEFLAGS` make the split deterministic: with a make jobserver in
+        the environment the codegen concurrency depends on available tokens, and
+        with one token qcc falls back to single-object codegen.
+    */
+    private string compileSplitObject(string tmp_dir, string src) {
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string compile_out = run(sprintf("%s MAKEFLAGS= QCC_SPLIT_THRESHOLD=1 %s --jobs=4 -c --output-dir=%s %s",
+            env, qcc_bin, qo_dir, src));
+        list<string> objects = glob(qo_dir + "/*.qo");
+        assertEq(1, objects.size(), "split codegen emitted one .qo: " + compile_out);
+        return objects[0];
+    }
+
+    #! link @p aggregate plus every `.qo` in @p qo_dir into a host executable and run it
+    /** @return the executable's combined output
+    */
+    private string nativeLinkAndRun(string tmp_dir, string agg_symbol, string aggregate,
+            string qo_dir, string callable) {
+        string glue = tmp_dir + "/host-" + agg_symbol + ".cpp";
+        string exe = tmp_dir + "/host-" + agg_symbol;
+
+        write(glue, "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+
+extern \"C\" void init_" + agg_symbol + "_qo(QoreProgram*);
+
+int main(int, char**) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        fprintf(stderr, \"qore_create_program failed\\n\");
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    init_" + agg_symbol + "_qo(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (rc != 0) {
+        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+        qore_destroy_program(pgm);
+        qore_cleanup();
+        return 1;
+    }
+    rc = qore_run_callable(pgm, \"" + callable + "\", NULL);
+    if (rc != 0) {
+        fprintf(stderr, \"" + callable + " failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
+}
+");
+
+        string cxx = ENV.CXX ?? "g++";
+        # qore-version.h is generated into the build dir (CMAKE_BINARY_DIR/include) rather
+        # than the source include tree, so the host TU needs both include dirs in-tree; a
+        # non-existent dir is harmlessly ignored for installed layouts.
+        string link_out = run(sprintf(
+            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s %s/*.qo -L%s -Wl,-rpath,%s -lqore -o %s",
+            libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
+            glue, aggregate, qo_dir, libqore_dir, libqore_dir, exe));
+        # the pre-fix failure mode: the aggregate references decorated names no
+        # input defines, so the native link fails on unresolved symbols
+        assertEq(-1, link_out.find("_script_register"),
+            "native link resolved every aggregate register symbol: " + link_out);
+        assertTrue(is_file(exe), "linked qo-link aggregate host: " + link_out);
+
+        return run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+    }
+
     testLinkMapLogicalSymbols() {
         TmpDir tmp("qore-aot-qo-link-symbols-");
         hash<auto> built = buildAggregate(tmp.path);
@@ -206,59 +332,94 @@ int sub qo_link_native_main() {
         TmpDir tmp("qore-aot-qo-link-symbols-");
         hash<auto> built = buildAggregate(tmp.path);
 
-        string glue = tmp.path + "/host.cpp";
-        string exe = tmp.path + "/qo-link-native-host";
-
-        write(glue, "#include <qore/Qore.h>
-#include <qore/QoreAOT.h>
-#include <stdio.h>
-
-extern \"C\" void init_" + AggSymbol + "_qo(QoreProgram*);
-
-int main(int, char**) {
-    qore_init(QL_GPL, \"UTF-8\", true);
-    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
-    if (!pgm) {
-        fprintf(stderr, \"qore_create_program failed\\n\");
-        qore_cleanup();
-        return 1;
-    }
-    qore_aot_script_begin_batch(pgm);
-    init_" + AggSymbol + "_qo(pgm);
-    int rc = qore_aot_script_end_batch(pgm);
-    if (rc != 0) {
-        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
-        qore_destroy_program(pgm);
-        qore_cleanup();
-        return 1;
-    }
-    rc = qore_run_callable(pgm, \"qo_link_native_main\", NULL);
-    if (rc != 0) {
-        fprintf(stderr, \"qo_link_native_main failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
-    }
-    qore_destroy_program(pgm);
-    qore_cleanup();
-    return rc;
-}
-");
-
-        string cxx = ENV.CXX ?? "g++";
-        # qore-version.h is generated into the build dir (CMAKE_BINARY_DIR/include) rather
-        # than the source include tree, so the host TU needs both include dirs in-tree; a
-        # non-existent dir is harmlessly ignored for installed layouts.
-        string link_out = run(sprintf(
-            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s %s/*.qo -L%s -Wl,-rpath,%s -lqore -o %s",
-            libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
-            glue, built.aggregate, built.qo_dir, libqore_dir, libqore_dir, exe));
-        # the pre-fix failure mode: the aggregate references decorated names no
-        # input defines, so the native link fails on unresolved symbols
-        assertEq(-1, link_out.find("_script_register"),
-            "native link resolved every aggregate register symbol: " + link_out);
-        assertTrue(is_file(exe), "linked qo-link aggregate host: " + link_out);
-
-        string out = run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
-            libqore_dir, libqore_dir, exe));
+        string out = nativeLinkAndRun(tmp.path, AggSymbol, built.aggregate, built.qo_dir,
+            "qo_link_native_main");
         assertTrue(out.find("qo-link native ok: 42") != -1,
             "aggregate registered both objects and ran the cross-object call: " + out);
+    }
+
+    #! a split-codegen `.qo` contributes exactly one register symbol and links natively
+    /** The `ld -r` merge that joins the codegen partitions adds a local
+        debug-map record for the registration function on Mach-O; only the
+        global definition is a registration entry point, so `--link-qo` must
+        collect one name, not one per symbol-table record.
+    */
+    testSplitCodegenRegisterSymbol() {
+        TmpDir tmp("qore-aot-qo-link-split-");
+        string src = tmp.path + "/qo_link_split_main.qr";
+        # several functions so SplitModule() has something to distribute over
+        # the codegen partitions the `ld -r` merge then joins
+        string body = "%modern
+int sub qo_link_split_main() {
+    int total = 0;
+";
+        int parts = 4;
+        for (int i = 0; i < parts; ++i) {
+            body += sprintf("    total += qo_link_split_part%d(%d);\n", i, i + 1);
+        }
+        body += "    printf(\"qo-link split ok: %d\\n\", total);
+    return 0;
+}
+";
+        # the value the compiled code must print, computed the same way here so
+        # the run assertion checks the AOT code's result, not just its output shape
+        int expected = 0;
+        for (int i = 0; i < parts; ++i) {
+            body += sprintf("int sub qo_link_split_part%d(int arg) {
+    int rv = 0;
+    for (int j = 0; j < arg; ++j) {
+        rv += j * %d + arg;
+    }
+    return rv;
+}
+", i, i + 2);
+            int arg = i + 1;
+            for (int j = 0; j < arg; ++j) {
+                expected += j * (i + 2) + arg;
+            }
+        }
+        write(src, body);
+
+        string obj = compileSplitObject(tmp.path, src);
+        string qo_dir = dirname(obj);
+
+        # the exported definition: exactly one, whatever the object format
+        list<string> exported = dumpedRegisterSymbols(obj, "T");
+        assertEq(1, exported.size(),
+            sprintf("split-codegen object exports one register symbol: %y", exported));
+
+        # the local debug-map record that made the collector see a duplicate;
+        # only the Darwin `ld -r` writes one, so its absence is not a failure
+        list<string> local_records = dumpedRegisterSymbols(obj, "n");
+        if (local_records.size()) {
+            assertEq(exported, local_records,
+                "the local debug-map record shadows the exported register definition");
+        }
+
+        string agg = tmp.path + "/qo-link-split.qo";
+        string link_out = run(sprintf("%s %s --link-qo -o %s --aggregate-symbol=%s %s",
+            env, qcc_bin, agg, SplitAggSymbol, obj));
+        # the pre-fix failure mode: "input has multiple exported
+        # *_script_register symbols", one per matching symbol-table record
+        assertEq(-1, link_out.find("multiple exported"),
+            "qo-link accepted the split-codegen object: " + link_out);
+        assertTrue(is_file(agg), "split-codegen aggregate was created: " + link_out);
+        assertTrue(is_file(agg + ".qolink.json"), "split-codegen link map was created: " + link_out);
+
+        string link_map = File::readTextFile(agg + ".qolink.json");
+        list<string> syms = mapRegisterSymbols(link_map);
+        assertEq(1, syms.size(),
+            "link map records one register symbol for the split-codegen input: " + link_map);
+        # the collected name is the logical IR identifier of the exported
+        # definition: the object spelling less any single-character target
+        # decoration (a leading "_" on Mach-O)
+        assertTrue(exported[0] == syms[0] || exported[0] == "_" + syms[0],
+            sprintf("collected symbol %y is the object's exported register definition %y",
+                syms[0], exported[0]));
+
+        string out = nativeLinkAndRun(tmp.path, SplitAggSymbol, agg, qo_dir,
+            "qo_link_split_main");
+        assertTrue(out.find(sprintf("qo-link split ok: %d", expected)) != -1,
+            "split-codegen aggregate registered the object and ran its code: " + out);
     }
 }

@@ -255,6 +255,19 @@ its inputs define `_qore..._script_register`, and the native link would fail
 with undefined symbols.  Only the qcc-generated `qore..._script_register`
 family is normalized.
 
+Only *exported* (global, defined) symbols qualify as registration entry points.
+The aggregate references them across a native link, so a local symbol-table
+record can never satisfy the reference, and accepting one makes a valid input
+look like it exports the registration function twice.  This matters on Mach-O:
+the parallel-codegen path merges its codegen partitions with `ld -r`, and the
+Darwin linker writes a STABS debug map into the merged symbol table
+(`N_SO`/`N_OSO`/`N_BNSYM`/`N_FUN`/`N_ENSYM`).  The `N_FUN` record for the
+registration function repeats the exported definition's name and address as a
+non-external entry, so filtering on "defined" alone rejected split-codegen
+objects with `input has multiple exported *_script_register symbols`.
+Identical logical names are additionally collapsed, so an object format that
+lists one exported definition more than once still contributes one name.
+
 The command also writes `<aggregate.qo>.qolink.json` by default, or the path
 given with `--qolink-map`.  The link map records input object hashes, register
 symbols in their logical (undecorated) spelling, provided Qore symbols,
