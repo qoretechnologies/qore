@@ -3126,6 +3126,12 @@ public:
     // aggregate paths after proving that every path operation is local.
     std::unordered_set<const void*> lvalue_path_locals;
 
+    // Locals kept AST-visible because a weak (":=") store assigns them through
+    // LValueHelper, which resolves the variable on the runtime local stack.
+    // LocalVar::getLValue() fails for a local that was never instantiated
+    // there, so an IR-only weak store target would abort execution.
+    std::unordered_set<const void*> weak_store_locals;
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.

@@ -1550,6 +1550,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
+    weak_store_locals.clear();
     ast_referenced_locals.clear();
     non_structured_ast_referenced_locals.clear();
     has_opaque_ast_local_access = false;
@@ -1582,6 +1583,11 @@ void QoreIRFunction::computeIROnlyLocals() {
                 auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
                 if (linst->local) {
                     all_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    // A weak (":=") store assigns through LValueHelper, which
+                    // requires the variable on the runtime local stack
+                    if (inst->opcode == QoreIROpcode::StoreLocal && linst->weak) {
+                        weak_store_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    }
                 }
             }
             // Collect locals from fused local int instructions
@@ -1758,6 +1764,13 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
         if (lvalue_path_locals.count(key)) {
             printd(5, "  local '%s' (%p): lvalue path (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        // Weak (":=") store targets are assigned through LValueHelper, which
+        // resolves the variable on the runtime local stack; LocalVar::getLValue()
+        // fails for a local that was never instantiated there.
+        if (weak_store_locals.count(key)) {
+            printd(5, "  local '%s' (%p): weak store target (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Closure-captured locals use the closure variable stack (not the regular

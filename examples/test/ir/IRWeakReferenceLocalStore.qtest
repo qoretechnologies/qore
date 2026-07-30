@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRWeakReferenceLocalStoreTest
+
+#! A weak (":=") store to a local must behave identically in every execution mode
+/** Regression: in a function whose only access to a local is a weak store — the
+    \c tmap_try_get shape from \c WSDL.qm in the module-xml repository — the local
+    was classified as IR-only.  The IR interpreter assigns a weak store through
+    @ref LValueHelper, and \c LocalVar::getLValue() fails for a local that was
+    never instantiated on the runtime local stack, so the interpreter gave up
+    with no exception raised:
+
+    @verbatim
+IR-EXECUTION-ERROR: IR interpreter execution of 'tmap_try_get' failed without
+raising an exception; this is a bug in the IR interpreter (silent AST fallback
+disabled)
+    @endverbatim
+
+    \c ast and \c jit modes returned the correct value throughout; only \c ir and
+    \c tiered failed, and only with \c "-p enable-debug" (which disables the
+    silent AST fallback that otherwise hides the gap as a lost optimization).
+
+    The same classification also dropped the assignment silently in \c jit mode
+    when the weak store was a statement of its own rather than a declaration
+    initializer: the store never reached the runtime local variable stack that
+    the return path reads, so the function returned @ref nothing instead of the
+    object — a wrong answer with no error at all.  Both shapes are covered here.
+
+    Three details of the shape matter and are preserved below:
+    - the local is declared \c "or nothing" (\c *Elem).  A non-optional object
+      type is kept AST-visible for timely destruction, which masked the bug in
+      the sibling \c tmap_get function
+    - the call site is inside a loop; a straight-line top-level call does not
+      lower the callee the same way
+    - the value assigned is held elsewhere (in the hash), as a weak reference
+      requires
+*/
+class IRWeakReferenceLocalStoreTest inherits QUnit::Test {
+    public {
+        #! Script under test: a weak store into an "or nothing" object local
+        const TestScript =
+            "%modern\n"
+            "%allow-weak-references\n"
+            "\n"
+            "class Elem {\n"
+            "    public { string name; }\n"
+            "    constructor(string n) { name = n; }\n"
+            "}\n"
+            "\n"
+            "# weak store as a declaration initializer\n"
+            "*Elem sub tmap_try_get(hash<string, Elem> tmap, string name) {\n"
+            "    *Elem rv := tmap{name};\n"
+            "    return rv;\n"
+            "}\n"
+            "\n"
+            "# weak store as a statement of its own\n"
+            "*Elem sub tmap_try_assign(hash<string, Elem> tmap, string name) {\n"
+            "    *Elem rv;\n"
+            "    rv := tmap{name};\n"
+            "    return rv;\n"
+            "}\n"
+            "\n"
+            "hash<string, Elem> tmap = {\"a\": new Elem(\"a\")};\n"
+            "int hits = 0;\n"
+            "int assigned = 0;\n"
+            "*string last;\n"
+            "for (int i = 0; i < 4; ++i) {\n"
+            "    *Elem e = tmap_try_get(tmap, i % 2 ? \"a\" : \"zz\");\n"
+            "    if (e) {\n"
+            "        ++hits;\n"
+            "        last = e.name;\n"
+            "    }\n"
+            "    if (tmap_try_assign(tmap, i % 2 ? \"a\" : \"zz\")) {\n"
+            "        ++assigned;\n"
+            "    }\n"
+            "}\n"
+            "printf(\"hits: %d assigned: %d last: %y\\n\", hits, assigned, last);\n";
+
+        #! Output the script must produce in every execution mode
+        const ExpectedOutput = "hits: 2 assigned: 2 last: \"a\"\n";
+
+        #! Every execution mode; the weak store must work in all of them
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("IRWeakReferenceLocalStoreTest", "1.0", \ARGV) {
+        addTestCase("weak store to a local works in every exec mode",
+            \testWeakLocalStoreAllExecModes());
+        set_return_value(main());
+    }
+
+    #! Returns the qore binary to test, or NOTHING when it cannot be determined
+    private *string getQoreBinary() {
+        return ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0];
+    }
+
+    #! The weak store must produce the same correct result in all execution modes
+    private testWeakLocalStoreAllExecModes() {
+        *string qore_bin = getQoreBinary();
+        if (!qore_bin.val()) {
+            testSkip("no qore binary path available");
+        }
+
+        TmpFile script(NOTHING, ".q");
+        script.file.write(TestScript);
+        script.file.close();
+
+        foreach string mode in (ExecModes) {
+            TmpFile out();
+            # "-p enable-debug" disables the silent AST fallback, so an IR gap
+            # is reported instead of being papered over
+            string cmd = sprintf("%s -p enable-debug --exec-mode=%s %s > %s 2>&1",
+                qore_bin, mode, script.path, out.path);
+            int rc = system(cmd);
+            string output = ReadOnlyFile::readTextFile(out.path);
+            if (rc != 0 && output =~ /valid long option/) {
+                testSkip("exec-mode option not supported by test qore binary");
+            }
+            assertEq(0, rc, sprintf("%y mode exits cleanly", mode));
+            assertFalse(output =~ /IR-EXECUTION-ERROR/,
+                sprintf("%y mode does not abandon execution", mode));
+            assertEq(ExpectedOutput, output,
+                sprintf("%y mode assigns the weak reference", mode));
+        }
+    }
+}
