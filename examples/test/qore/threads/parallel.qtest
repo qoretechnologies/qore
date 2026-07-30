@@ -278,33 +278,68 @@ class ParallelTest inherits QUnit::Test {
         assertEq((10, 20, 30), collected);
     }
 
+    # number of wakeup samples taken by testChannelSelectDeterministicWakeup()
+    const WakeupSamples = 11;
+    # the poll interval that a regression to interval polling would reintroduce; the median
+    # send -> return latency must stay far below it
+    const WakeupPollFloorUs = 100000;
+
     testChannelSelectDeterministicWakeup() {
-        # Verify channel_select wakes deterministically (not polling at 100ms intervals)
-        # A background thread sends after 20ms; select should return well under 100ms
-        Channel ch(10);
+        # Verify channel_select wakes on the send itself and not on a poll tick.
+        #
+        # NOTE: the property under test is the latency of the wakeup path only, so the interval is
+        # measured from the timestamp the sender takes immediately before Channel::send() to the return
+        # of channel_select().  Measuring from before the "background" statement instead (as this test
+        # originally did) folds in thread creation and usleep() overshoot, and CI containers run under
+        # a CFS bandwidth quota whose period is also 100ms: once the container exhausts its quota, every
+        # runnable thread in it stalls until the next period boundary, so each of those events can cost
+        # a full 100ms.  That is what made the old 80ms wall-clock ceiling fail intermittently
+        # (test-alpine-amd64 job 190494: 180433us == two throttle periods); reproduced locally under
+        # "systemd-run --scope -p CPUQuota=50%" at 7/20 runs, with per-phase timings snapping to 100ms
+        # multiples.  Timestamps use the monotonic clock, since now_us() reads CLOCK_REALTIME and is
+        # subject to NTP steps on virtualized runners.
+        #
+        # A single sample is still throttle-bound (getting the woken thread back onto a CPU), so the
+        # assertion is on the median of several samples: with deterministic wakeup that is well under
+        # 1ms even under throttling, while interval polling at WakeupPollFloorUs would put it at ~half
+        # the interval.
+        list<int> latencies_us = ();
 
-        # Start a background thread that sends after a brief delay
-        Counter cnt(1);
-        background sub() {
-            usleep(20ms);
-            ch.send(42);
-            cnt.dec();
-        }();
+        for (int i = 0; i < WakeupSamples; ++i) {
+            Channel ch(10);
+            # the sender publishes its pre-send timestamp here; the main thread blocks on get()
+            Queue sent();
+            Counter cnt(1);
 
-        date start = now_us();
-        auto result = channel_select((
-            {"channel": ch, "op": "recv"},
-        ), 2s);
-        date elapsed = now_us() - start;
+            background sub() {
+                on_exit cnt.dec();
+                # give the main thread time to park in channel_select(); if the send lands first the
+                # sample measures the non-blocking fast path, which is harmless but uninformative
+                usleep(20ms);
+                sent.push(clock_get_monotonic_us());
+                ch.send(42);
+            }();
 
-        assertEq(True, exists result, "should receive a value");
-        assertEq(0, result.index);
-        assertEq(42, result.value);
-        # With deterministic wakeup, elapsed should be close to 20ms, not 100ms+
-        # Use 80ms threshold to avoid flakiness while ensuring no 100ms polling
-        assertTrue(elapsed < 80ms, sprintf("elapsed %y should be < 80ms (was %y)", elapsed, elapsed));
+            auto result = channel_select((
+                {"channel": ch, "op": "recv"},
+            ), 2s);
+            int returned_us = clock_get_monotonic_us();
 
-        cnt.waitForZero();
+            assertEq(True, exists result, "should receive a value");
+            assertEq(0, result.index);
+            assertEq(42, result.value);
+
+            # the sender pushed before sending, so the value is already there; get() cannot block here
+            push latencies_us, returned_us - sent.get();
+            cnt.waitForZero();
+        }
+
+        latencies_us = sort(latencies_us);
+        int median_us = latencies_us[WakeupSamples / 2];
+        assertLt(WakeupPollFloorUs / 2, median_us,
+            sprintf("median send -> channel_select() return latency %y must stay far below the %y poll "
+                "floor (samples: %y)", microseconds(median_us), microseconds(WakeupPollFloorUs),
+                latencies_us));
     }
 
     testChannelSelectConcurrent() {

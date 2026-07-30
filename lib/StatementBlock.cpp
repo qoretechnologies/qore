@@ -977,10 +977,26 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 // Build set of pre-instantiated local variables from the IR function's
                 // all_body_locals.  This ensures the pointers match those embedded in
                 // the JIT-compiled code (captured at IR creation time).
+                //
+                // Nested closure-use locals must be EXCLUDED: the loop below deliberately does
+                // not instantiate them, because the cvstack is LIFO and block-scope cleanup pops
+                // from the top, so they are scoped by the IR's InstantiateLocal /
+                // UninstantiateLocal operations instead (same rule as the function/method path in
+                // UserFunctionVariant::evalTiered(), see cached_pre_instantiated in Function.cpp).
+                // Listing them here as pre-instantiated made ensureLocalInstantiated() skip them,
+                // so a captured block-scoped local whose declaration has no initializer never got
+                // a ClosureVarValue at all and closure creation dereferenced null
+                // (thread_get_closure_vars_for_vlist()).  Declarations *with* an initializer
+                // happened to work because StoreClosure instantiates on demand.
                 std::unordered_set<const LocalVar*> pre_instantiated;
                 for (LocalVar* lv : ir_func->all_body_locals) {
-                    pre_instantiated.insert(lv);
+                    if (!lv->closureUse()) {
+                        pre_instantiated.insert(lv);
+                    }
                 }
+                // The top-level block's own locals are program-scoped: QoreProgram instantiates
+                // them for every thread before the top-level block runs (closure-use ones land on
+                // the cvstack), so they are genuinely pre-instantiated.
                 if (const LVList* top_lvars = getLVList()) {
                     for (unsigned i = 0; i < top_lvars->size(); ++i) {
                         pre_instantiated.insert(top_lvars->lv[i]);

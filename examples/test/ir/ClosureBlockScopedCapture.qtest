@@ -1,0 +1,229 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Regression tests for closure capture of block-scoped top-level locals in IR mode.
+#
+# Bug: TopLevelStatementBlock::execImpl() built the IR interpreter's
+# `pre_instantiated` set from *every* entry in all_body_locals, while the loop
+# immediately below deliberately skipped instantiating the closure-use ones
+# (they are scoped by the IR's InstantiateLocal / UninstantiateLocal ops so that
+# cvstack LIFO ordering stays correct).  Because the set claimed they were
+# already on the stack, ensureLocalInstantiated() skipped them too, so a
+# block-scoped captured local never received a ClosureVarValue and closure
+# creation dereferenced null in thread_get_closure_vars_for_vlist():
+#
+#   lib/thread.cpp: Assertion `cvv' failed        (debug build, --exec-mode=ir)
+#   SIGSEGV                                       (release build, ir and tiered)
+#
+# Declarations *with* an initializer happened to work because StoreClosure
+# instantiates the variable on demand, so only uninitialized declarations
+# crashed.  Function and method bodies were unaffected: evalTiered() filters
+# closure-use vars out of cached_pre_instantiated (Function.cpp).
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class ClosureBlockScopedCaptureTest
+
+class ClosureBlockScopedCaptureTest inherits QUnit::Test {
+    # every execution mode must agree; the bug hit "ir" and (in release builds) "tiered"
+    const Modes = ("ast", "ir", "jit", "tiered");
+
+    # Modes for the top-level-loop case.  "jit" is excluded because of a SEPARATE, pre-existing
+    # bug in the LLVM lowering (QoreIRToLLVM), not in the CVV instantiation fixed here: when a
+    # top-level "for" loop has BOTH a closure-captured loop variable AND a closure-captured
+    # block-scoped body local, the JIT-compiled loop never advances its counter and spins
+    # forever.  Minimal repro (hangs under --exec-mode=jit, correct under ast/ir/tiered):
+    #
+    #   for (int i = 0; i < 3; ++i) {
+    #       string s = "init";
+    #       code<nothing()> c = sub() { s = sprintf("x%d", i); };
+    #       c();
+    #       printf("%s\n", s);
+    #   }
+    #
+    # Dropping either capture makes it pass, and the same shape inside a sub is fine.  Re-add
+    # "jit" here once that is fixed.
+    const LoopModes = ("ast", "ir", "tiered");
+
+    constructor() : QUnit::Test("ClosureBlockScopedCaptureTest", "1.0", \ARGV) {
+        addTestCase("uninitialized block-scoped local read by closure", \testUninitializedRead());
+        addTestCase("uninitialized block-scoped local written by closure", \testUninitializedWrite());
+        addTestCase("uninitialized block-scoped local in background closure", \testBackgroundWrite());
+        addTestCase("uninitialized block-scoped local in a top-level loop body", \testLoopBody());
+        addTestCase("several uninitialized captured locals in one block", \testMultipleCaptures());
+        addTestCase("uninitialized capture in doubly nested blocks", \testNestedBlocks());
+        addTestCase("initialized block-scoped local still works", \testInitializedDecl());
+        addTestCase("uninitialized capture in a sub and a method", \testFunctionAndMethodScope());
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return "";
+        }
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+            qore_bin, mode, script.path, out.path, err.path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+                testSkip("exec-mode option not supported");
+                return "";
+            }
+            # a crash produces no stdout at all, so the assertion below reports the mode and
+            # the exit status rather than an unexplained empty-string mismatch
+            assertEq(0, rc, sprintf("%s: qore exited %d: %s", mode, rc, err_output));
+        }
+        return ReadOnlyFile::readTextFile(out.path) ?? "";
+    }
+
+    private assertSameInAllModes(string code, string expected, string desc, *list<string> modes) {
+        foreach string mode in (modes ?? Modes) {
+            assertEq(expected, runInMode(code, mode), sprintf("%s (%s)", desc, mode));
+        }
+    }
+
+    testUninitializedRead() {
+        # the captured local is only read inside the closure, so nothing else can create its CVV
+        string code = "
+{
+    int t;
+    code<int()> c = int sub() { return t + 1; };
+    printf(\"%y %y\\n\", c(), t);
+}
+";
+        assertSameInAllModes(code, "1 null\n", "uninitialized capture, read only");
+    }
+
+    testUninitializedWrite() {
+        string code = "
+{
+    int t;
+    code<int()> c = int sub() { return ++t; };
+    printf(\"%y %y\\n\", c(), t);
+}
+";
+        assertSameInAllModes(code, "1 1\n", "uninitialized capture, written by closure");
+    }
+
+    testBackgroundWrite() {
+        # the shape that first surfaced the crash: a background thread writing a captured
+        # block-scoped hash that was declared without an initializer
+        string code = "
+{
+    Counter cnt(1);
+    hash<auto> t;
+    background sub() { t = {\"i\": 1}; cnt.dec(); }();
+    cnt.waitForZero();
+    printf(\"%y\\n\", t);
+}
+";
+        assertSameInAllModes(code, "{i: 1}\n", "uninitialized capture in background closure");
+    }
+
+    testLoopBody() {
+        # each iteration must instantiate a fresh CVV: the loop body's UninstantiateLocal pops
+        # the previous one, so the next iteration cannot rely on a pre-instantiated entry
+        string code = "
+for (int i = 0; i < 3; ++i) {
+    string s;
+    code<nothing()> c = sub() { s = sprintf(\"x%d\", i); };
+    c();
+    printf(\"%s\\n\", s);
+}
+";
+        assertSameInAllModes(code, "x0\nx1\nx2\n", "uninitialized capture per loop iteration", LoopModes);
+    }
+
+    testMultipleCaptures() {
+        # more than one uninitialized captured local in the same block: each needs its own CVV,
+        # and cvstack ordering must stay consistent with the block's UninstantiateLocal order
+        string code = "
+{
+    int a;
+    string b;
+    list<auto> c;
+    code<nothing()> f = sub() {
+        a = 7;
+        b = \"set\";
+        c = (1, 2);
+    };
+    f();
+    printf(\"%y %y %y\\n\", a, b, c);
+}
+";
+        assertSameInAllModes(code, "7 \"set\" [1, 2]\n", "several uninitialized captures in one block");
+    }
+
+    testNestedBlocks() {
+        # an inner block's capture must not disturb the outer block's captured local
+        string code = "
+{
+    int outer;
+    code<nothing()> setouter = sub() { outer = 1; };
+    {
+        int inner;
+        code<nothing()> setinner = sub() { inner = 2; };
+        setinner();
+        setouter();
+        printf(\"%y %y\\n\", outer, inner);
+    }
+    printf(\"%y\\n\", outer);
+}
+";
+        assertSameInAllModes(code, "1 2\n1\n", "uninitialized capture in doubly nested blocks");
+    }
+
+    testInitializedDecl() {
+        # this variant always worked (StoreClosure instantiates on demand); keep it covered so
+        # the on-demand path is not lost while fixing the uninitialized one
+        string code = "
+{
+    hash<auto> t = {\"pre\": 1};
+    code<nothing()> c = sub() { t.post = 2; };
+    c();
+    printf(\"%y\\n\", t);
+}
+";
+        assertSameInAllModes(code, "{pre: 1, post: 2}\n", "initialized block-scoped capture");
+    }
+
+    testFunctionAndMethodScope() {
+        # function/method bodies took a different path (cached_pre_instantiated) and were never
+        # broken; assert they stay correct
+        string code = "
+int sub f() {
+    {
+        int t;
+        code<int()> c = int sub() { return ++t; };
+        return c() + t;
+    }
+}
+class C {
+    int m() {
+        {
+            int t;
+            code<int()> c = int sub() { return t + 10; };
+            return c();
+        }
+    }
+}
+printf(\"%y %y\\n\", f(), (new C()).m());
+";
+        assertSameInAllModes(code, "2 10\n", "uninitialized capture in sub and method");
+    }
+}
