@@ -494,27 +494,31 @@ public class DataProvider {
         @throw PROVIDER-ERROR the given provider has already been registered
     */
     static registerFactory(AbstractDataProviderFactory factory) {
+        # Resolve object-backed metadata before taking the shared registry Gate. AOT module
+        # initialization can register factories concurrently in separate Programs, and these
+        # calls can acquire the factory class's Program parse lock. Holding the Gate while
+        # acquiring that lock inverts the order used by another module initializer that owns
+        # the parse lock and is waiting for the Gate.
+        string name = factory.getName();
+        string new_class_name = factory.className();
+        *string new_module_name = Class::getClass(factory).getModuleName();
+
         factory_cache_lock.enter();
         on_exit factory_cache_lock.exit();
 
-        string name = factory.getName();
         *AbstractDataProviderFactory previous_factory = factory_cache{name};
         *string previous_class_name;
         *string previous_module_name;
         if (previous_factory) {
             # check if factory is being re-registered after module injection
-            if (!DataProvider::checkInjection(factory, factory_module_map)) {
+            if (!(new_module_name && factory_module_map{new_class_name} == new_module_name)) {
                 throw "PROVIDER-ERROR", sprintf("provider %y has already been registered", name);
             }
             previous_class_name = previous_factory.className();
             previous_module_name = factory_module_map{previous_class_name};
         }
-        string new_class_name = factory.className();
-        {
-            *string module_name = Class::getClass(factory).getModuleName();
-            if (exists module_name) {
-                factory_module_map{new_class_name} = module_name;
-            }
+        if (exists new_module_name) {
+            factory_module_map{new_class_name} = new_module_name;
         }
         factory_cache{name} = factory;
 

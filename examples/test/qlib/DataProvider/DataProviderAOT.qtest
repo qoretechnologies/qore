@@ -25,6 +25,7 @@ public class DataProviderAOTTest inherits QUnit::Test {
     constructor() : Test("DataProvider AOT Test", "1.0") {
         addTestCase("provider index preserves type cache", \providerIndexPreservesTypeCache());
         addTestCase("child Program imports preserve type map", \childProgramImportsPreserveTypeMap());
+        addTestCase("concurrent factory module imports complete", \concurrentFactoryModuleImportsComplete());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -167,5 +168,35 @@ public class DataProviderAOTTest inherits QUnit::Test {
         assertEq((), failures, "concurrent child Program imports must not corrupt the DataProvider type map");
         assertEq(NT_OBJECT, AbstractDataProviderTypeMap."softint".typeCode(),
             "DataProvider type map remains initialized after child Program imports");
+    }
+
+    concurrentFactoryModuleImportsComplete() {
+        const int ThreadCount = 16;
+        const int ImportsPerThread = 8;
+
+        Counter start(1);
+        Counter done(ThreadCount);
+        list<string> failures = ();
+        Mutex mtx();
+
+        for (int thread_index = 0; thread_index < ThreadCount; ++thread_index) {
+            background sub (int idx) {
+                on_exit done.dec();
+                start.waitForZero();
+                try {
+                    for (int i = 0; i < ImportsPerThread; ++i) {
+                        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                        p.loadModule("GeneratorDataProvider");
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(mtx);
+                    push failures, sprintf("loader %d failed: %s: %s", idx, ex.err, ex.desc);
+                }
+            }(thread_index);
+        }
+
+        start.dec();
+        assertEq(0, done.waitForZero(30s), "concurrent factory module imports completed");
+        assertEq((), failures, "concurrent factory module imports did not fail");
     }
 }
