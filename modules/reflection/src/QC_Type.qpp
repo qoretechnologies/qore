@@ -32,8 +32,14 @@
 #include "QC_Type.h"
 #include "QC_TypedHash.h"
 #include "QC_AbstractReflectionFunction.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <memory>
+
+static QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
+    QoreProgram* pgm = runtime_cfg.getProgram();
+    return pgm ? pgm : getProgram();
+}
 
 void QoreType::setContainer(QoreObject* obj) {
     container = obj;
@@ -97,7 +103,6 @@ static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, 
 
 static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
         RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
-    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("type");
         if (val.getType() != NT_STRING) {
@@ -105,14 +110,14 @@ static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreD
             return;
         }
         QoreStringValueHelper type_name(val);
-        const QoreTypeInfo* type = qore_get_type_from_string(type_name->c_str(), *xsink);
+        QoreProgram* lookup_pgm = get_reflection_lookup_program(runtime_cfg);
+        const QoreTypeInfo* type = qore_reflection_get_type_from_string(lookup_pgm, type_name->c_str(), *xsink);
         if (*xsink) {
             return;
         }
         assert(type);
-        // Deserialized types don't have a source program reference since they come from
-        // serialized data. The type info is rebuilt from the string representation.
-        QoreType* qt = new QoreType(type);
+        // The string representation may reference program-owned classes or hashdecls.
+        QoreType* qt = new QoreType(type, lookup_pgm);
         self.setPrivate(CID_TYPE, qt);
         qt->setContainer(&self);
         return;
@@ -471,14 +476,18 @@ qclass Type [ns=Qore::Reflection; arg=QoreType* t; dom=REFLECTION; vparent=Seria
  */
 Type::constructor(string typestr) {
     TempEncodingHelper utf8_typestr(typestr, QCS_UTF8, xsink);
-    const QoreTypeInfo* type = qore_get_type_from_string(utf8_typestr->c_str(), *xsink);
+    if (*xsink) {
+        return;
+    }
+    QoreProgram* lookup_pgm = get_reflection_lookup_program(runtime_cfg);
+    const QoreTypeInfo* type = qore_reflection_get_type_from_string(lookup_pgm, utf8_typestr->c_str(), *xsink);
     if (*xsink) {
         return;
     }
     assert(type);
     // keep the current program alive while the Type object exists,
     // as the type may reference user-defined types from this program (issue #4816)
-    QoreType* qt = new QoreType(type, getProgram());
+    QoreType* qt = new QoreType(type, lookup_pgm);
     self->setPrivate(CID_TYPE, qt);
     qt->setContainer(self);
 }
@@ -753,12 +762,13 @@ Type Type::getBaseType() [flags=CONSTANT] {
         return QoreValue();
     }
 
-    const QoreTypeInfo* type = qore_get_type_from_string(typestr.c_str(), *xsink);
+    QoreProgram* lookup_pgm = t->source_pgm ? t->source_pgm : get_reflection_lookup_program(runtime_cfg);
+    const QoreTypeInfo* type = qore_reflection_get_type_from_string(lookup_pgm, typestr.c_str(), *xsink);
     if (*xsink) {
         return QoreValue();
     }
     // preserve the source program to keep it alive while the Type object exists (issue #4816)
-    return get_type_object(type, t->source_pgm);
+    return get_type_object(type, lookup_pgm);
 }
 
 //! Returns the "or nothing" type for the current type; if the type is already an "or nothing" type (i.e. it already accepts @ref nothing), then the same type is returned
@@ -869,7 +879,8 @@ list<Type> args = new Type("Queue<int>").getTypeArguments();
     if (!hashdecl) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPEDHASH, getProgram(), new QoreReflectionTypedHash(getProgram(), hashdecl));
+    QoreProgram* pgm = t->source_pgm ? t->source_pgm : get_reflection_lookup_program(runtime_cfg);
+    return new QoreObject(QC_TYPEDHASH, pgm, new QoreReflectionTypedHash(pgm, hashdecl));
 }
 
 //! Returns @ref Qore::True "True" if the type is a TypedHash type, @ref Qore::False "False" if not

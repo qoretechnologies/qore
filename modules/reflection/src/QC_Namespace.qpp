@@ -91,7 +91,8 @@ Namespace::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionNamespace> ns(new QoreReflectionNamespace(xsink, **npath), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionNamespace> ns(new QoreReflectionNamespace(xsink, **npath, lookup_pgm), xsink);
     if (*xsink) {
         return;
     }
@@ -915,12 +916,13 @@ static Namespace Namespace::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionNamespace> n(new QoreReflectionNamespace(xsink, **npath), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionNamespace> n(new QoreReflectionNamespace(xsink, **npath, lookup_pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_NAMESPACE, getProgram(), n.release());
+    return new QoreObject(QC_NAMESPACE, lookup_pgm, n.release());
 }
 
 //! Returns a %Namespace object from the namespace name or namespace-justified path as a string
@@ -964,7 +966,8 @@ list<Namespace> l = Namespace::findAllRegex("^g");
     @return a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match
 */
 static list<Namespace> Namespace::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_namespaces(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_namespaces(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match

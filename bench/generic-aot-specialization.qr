@@ -5,6 +5,7 @@
 %strict-args
 %require-types
 %enable-all-warnings
+%disable-warning non-existent-method-call
 
 %exec-class BenchGenericAotSpecialization
 
@@ -111,6 +112,52 @@ int sub benchPlainHashRecord(int inner) {
     return checksum;
 }
 
+int sub benchPlainHash3Record(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        hash<auto> result = ("first": i, "second": i + 1, "third": i + 2);
+        string key = i % 2 ? "first" : "third";
+        checksum += result{key};
+    }
+    return checksum;
+}
+
+int sub benchPlainHash3StaticRecord(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        hash<auto> result = ("first": i, "second": i + 1, "third": i + 2);
+        checksum += result.first + result.third;
+    }
+    return checksum;
+}
+
+hash<auto> sub makePlainHashReturned(int value) {
+    hash<auto> result = ("first": value, "second": value + 1,
+        "third": value + 2);
+    result.first += 1;
+    result.third += 2;
+    return result;
+}
+
+int sub benchPlainHashReturnProjection(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += makePlainHashReturned(i).first
+            + makePlainHashReturned(i).third;
+    }
+    return checksum;
+}
+
+int sub benchPlainHash3MixedConstruct(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1);
+        hash<auto> result = ("value": i, "values": values, "text": "x");
+        checksum += result ? i : 0;
+    }
+    return checksum;
+}
+
 int sub benchGenericHashdeclConstructOnly(int inner) {
     int checksum = 0;
     for (int i = 0; i < inner; i++) {
@@ -127,6 +174,64 @@ int sub benchGenericHashdeclAccessOnly(int inner) {
     int checksum = 0;
     for (int i = 0; i < inner; i++) {
         checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
+class BenchDynamicDispatchA {
+    int apply(int value) {
+        return value + 1;
+    }
+}
+
+class BenchDynamicDispatchB {
+    int apply(int value) {
+        return value + 2;
+    }
+}
+
+class BenchDynamicOverload {
+    int apply(int value) {
+        return value + 3;
+    }
+
+    int apply(string value) {
+        return value.size() + 5;
+    }
+}
+
+int sub benchDynamicDispatchCall(auto receiver, int value) {
+    return receiver.apply(value);
+}
+
+int sub benchDynamicOverloadCall(auto receiver, auto value) {
+    return receiver.apply(value);
+}
+
+int sub benchDynamicMonomorphicDispatch(int inner) {
+    BenchDynamicDispatchA receiver();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicDispatchCall(receiver, i);
+    }
+    return checksum;
+}
+
+int sub benchDynamicBimorphicDispatch(int inner) {
+    BenchDynamicDispatchA left();
+    BenchDynamicDispatchB right();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicDispatchCall(i % 2 ? left : right, i);
+    }
+    return checksum;
+}
+
+int sub benchDynamicOverloadDispatch(int inner) {
+    BenchDynamicOverload receiver();
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += benchDynamicOverloadCall(receiver, i % 2 ? i : "1234567");
     }
     return checksum;
 }
@@ -190,13 +295,14 @@ nothing sub printTiming(hash<BenchTiming> timing) {
 }
 
 nothing sub usage() {
-    printf("usage: generic-aot-specialization.qr [--mode=NAME] [--samples=N] [--warmup=N] [--inner=N] "
-        "[--hash-inner=N] [--no-header]\n");
+    printf("usage: generic-aot-specialization.qr [--mode=NAME] [--kernel=NAME] [--samples=N] [--warmup=N] "
+        "[--inner=N] [--hash-inner=N] [--no-header]\n");
 }
 
 class BenchGenericAotSpecialization {
     constructor() {
         string mode = "qore";
+        string kernel;
         int samples = 7;
         int warmup = 2;
         int inner = 400000;
@@ -206,6 +312,8 @@ class BenchGenericAotSpecialization {
         foreach string arg in (ARGV) {
             if (arg =~ /^--mode=/) {
                 mode = arg.substr(7);
+            } else if (arg =~ /^--kernel=/) {
+                kernel = arg.substr(9);
             } else if (arg =~ /^--samples=/) {
                 samples = arg.substr(10).toInt();
             } else if (arg =~ /^--warmup=/) {
@@ -230,26 +338,90 @@ class BenchGenericAotSpecialization {
             stderr.printf("samples, inner, and hash-inner must be positive; warmup must be non-negative\n");
             exit(2);
         }
+        if (kernel
+                && kernel != "generic_class_method"
+                && kernel != "method_generic_function"
+                && kernel != "static_generic_method"
+                && kernel != "generic_hashdecl_records"
+                && kernel != "typed_list_literal"
+                && kernel != "plain_hash_record"
+                && kernel != "plain_hash3_record"
+                && kernel != "plain_hash3_static_record"
+                && kernel != "plain_hash_return_projection"
+                && kernel != "plain_hash3_mixed_construct"
+                && kernel != "hashdecl_construct_only"
+                && kernel != "hashdecl_access_only"
+                && kernel != "dynamic_monomorphic_dispatch"
+                && kernel != "dynamic_bimorphic_dispatch"
+                && kernel != "dynamic_overload_dispatch") {
+            stderr.printf("unknown kernel: %s\n", kernel);
+            usage();
+            exit(2);
+        }
 
         if (header) {
             printHeader();
         }
 
-        printTiming(measureKernel(mode, "generic_class_method", inner, samples, warmup,
-            int sub () { return benchGenericClassMethod(inner); }));
-        printTiming(measureKernel(mode, "method_generic_function", inner, samples, warmup,
-            int sub () { return benchMethodGenericFunction(inner); }));
-        printTiming(measureKernel(mode, "static_generic_method", inner, samples, warmup,
-            int sub () { return benchStaticGenericMethod(inner); }));
-        printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclRecords(hash_inner); }));
-        printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
-            int sub () { return benchTypedListLiteral(hash_inner); }));
-        printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
-            int sub () { return benchPlainHashRecord(hash_inner); }));
-        printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
-        printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+        if (!kernel || kernel == "generic_class_method") {
+            printTiming(measureKernel(mode, "generic_class_method", inner, samples, warmup,
+                int sub () { return benchGenericClassMethod(inner); }));
+        }
+        if (!kernel || kernel == "method_generic_function") {
+            printTiming(measureKernel(mode, "method_generic_function", inner, samples, warmup,
+                int sub () { return benchMethodGenericFunction(inner); }));
+        }
+        if (!kernel || kernel == "static_generic_method") {
+            printTiming(measureKernel(mode, "static_generic_method", inner, samples, warmup,
+                int sub () { return benchStaticGenericMethod(inner); }));
+        }
+        if (!kernel || kernel == "generic_hashdecl_records") {
+            printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclRecords(hash_inner); }));
+        }
+        if (!kernel || kernel == "typed_list_literal") {
+            printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
+                int sub () { return benchTypedListLiteral(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash_record") {
+            printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
+                int sub () { return benchPlainHashRecord(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash3_record") {
+            printTiming(measureKernel(mode, "plain_hash3_record", hash_inner, samples, warmup,
+                int sub () { return benchPlainHash3Record(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash3_static_record") {
+            printTiming(measureKernel(mode, "plain_hash3_static_record", hash_inner, samples, warmup,
+                int sub () { return benchPlainHash3StaticRecord(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash_return_projection") {
+            printTiming(measureKernel(mode, "plain_hash_return_projection", hash_inner, samples, warmup,
+                int sub () { return benchPlainHashReturnProjection(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash3_mixed_construct") {
+            printTiming(measureKernel(mode, "plain_hash3_mixed_construct", hash_inner, samples, warmup,
+                int sub () { return benchPlainHash3MixedConstruct(hash_inner); }));
+        }
+        if (!kernel || kernel == "hashdecl_construct_only") {
+            printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
+        }
+        if (!kernel || kernel == "hashdecl_access_only") {
+            printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+        }
+        if (!kernel || kernel == "dynamic_monomorphic_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_monomorphic_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicMonomorphicDispatch(inner); }));
+        }
+        if (!kernel || kernel == "dynamic_bimorphic_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_bimorphic_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicBimorphicDispatch(inner); }));
+        }
+        if (!kernel || kernel == "dynamic_overload_dispatch") {
+            printTiming(measureKernel(mode, "dynamic_overload_dispatch", inner, samples, warmup,
+                int sub () { return benchDynamicOverloadDispatch(inner); }));
+        }
     }
 }

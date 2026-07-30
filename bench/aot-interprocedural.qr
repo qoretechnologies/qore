@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int context_offset = 3;
+int stable_context = 5;
+list<int> context_values = (3,);
+
+int sub pureLeaf(int value) {
+    return value + 1;
+}
+
+int sub pureMiddle(int value) {
+    return pureLeaf(value) + 1;
+}
+
+int sub contextLeaf(int value) {
+    return value + context_offset;
+}
+
+int sub contextListLeaf(int value) {
+    return value + context_values[0];
+}
+
+int sub mutatingLeaf(int value) {
+    context_offset += value & 1;
+    return value + context_offset;
+}
+
+int sub benchPure(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += pureLeaf(i);
+    }
+    return checksum;
+}
+
+int sub benchPureChain(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += pureMiddle(i);
+    }
+    return checksum;
+}
+
+int sub benchPureNested(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += pureLeaf(pureLeaf(i));
+    }
+    return checksum;
+}
+
+int sub benchContext(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += contextLeaf(i);
+    }
+    return checksum;
+}
+
+int sub benchContextList(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += contextListLeaf(i);
+    }
+    return checksum;
+}
+
+int sub benchMutating(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += mutatingLeaf(i) + stable_context;
+    }
+    return checksum;
+}
+
+int sub benchListRead(int rounds) {
+    list<int> values = (1, 2, 3, 4, 5, 6, 7, 8);
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        for (int j = 0; j < values.size(); ++j) {
+            checksum += values[j];
+        }
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "pure";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
+int checksum;
+switch (kernel) {
+    case "pure":
+        checksum = benchPure(rounds);
+        break;
+    case "pure-chain":
+        checksum = benchPureChain(rounds);
+        break;
+    case "pure-nested":
+        checksum = benchPureNested(rounds);
+        break;
+    case "context":
+        checksum = benchContext(rounds);
+        break;
+    case "context-list":
+        checksum = benchContextList(rounds);
+        break;
+    case "mutating":
+        checksum = benchMutating(rounds);
+        break;
+    case "list-read":
+        checksum = benchListRead(rounds);
+        break;
+    default:
+        throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+}
+printf("%d\n", checksum);

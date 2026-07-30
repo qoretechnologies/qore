@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub run(int rounds) {
+    int checksum = 1;
+    for (int i = 0; i < rounds; ++i) {
+        checksum = (checksum + wideExpression(
+            i & 1023, (i * 3) & 1023, (i * 5) & 1023,
+            (i * 7) & 1023)) & 0x7fffffff;
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 20000000;
+    printf("%d\n", run(rounds));
+    return 0;
+}
+
+main();

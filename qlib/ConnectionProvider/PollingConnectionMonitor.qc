@@ -510,12 +510,15 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             log(LoggerLevel::DEBUG, "%y: starting connect ping to %y; poll state: %y", name,
                 conn.getUrl(), spop.getState());
         } catch (hash<ExceptionInfo> ex) {
-            AutoLock al(m);
+            on_exit flushDeferredLogs();
+            m.lock();
+            on_exit m.unlock();
             if (!cache{name} || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
                 return;  # stale or superseded
             }
             cache{name}.ping_active = False;
-            log(LoggerLevel::ERROR, "%y: error handling ping start: %s", name, get_exception_string(ex));
+            deferLog(LoggerLevel::ERROR, sprintf("%y: error handling ping start: %s", name,
+                get_exception_string(ex)));
             failedToStartPing(name, ex);
             if (active) {
                 scheduleNextPing(name, ping_repeat);
@@ -527,7 +530,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         try {
             poll_info = spop.continuePoll();
         } catch (hash<ExceptionInfo> ex) {
-            AutoLock al(m);
+            on_exit flushDeferredLogs();
+            m.lock();
+            on_exit m.unlock();
             if (!cache{name} || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
                 return;  # stale or superseded
             }
@@ -542,7 +547,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         }
 
         # Step 2: re-acquire lock to finalise submission
-        AutoLock al(m);
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
         if (!cache{name} || !active || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
             # Stale: connection was removed/re-added or monitor was stopped while we
             # were outside the lock.  ping_active is already True in the surviving entry
@@ -597,6 +604,33 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         });
     }
 
+    #! Thread-local key under which ping-handler log messages are queued while `m` is held
+    const DeferredLogKey = "Qore::ConnectionProvider::PollingConnectionMonitor::deferred-logs";
+
+    #! Queues a log message to be emitted after the monitor lock `m` is released
+    /** The ping handlers run while `m` is held; emitting a log inline routes through
+        the Logger (and any global log-limiter), which would serialise the monitor
+        lock behind logging and, under load, stall every concurrent ping callback.
+        Queued messages are emitted by flushDeferredLogs() after `m` is unlocked. */
+    private deferLog(auto level, string msg) {
+        *list<auto> q = get_thread_data(DeferredLogKey);
+        q += {"level": level, "msg": msg};
+        save_thread_data(DeferredLogKey, q);
+    }
+
+    #! Emits and clears any messages queued by deferLog() on the current thread
+    /** Must be called only after the monitor lock `m` has been released. */
+    private flushDeferredLogs() {
+        *list<auto> q = get_thread_data(DeferredLogKey);
+        if (!q) {
+            return;
+        }
+        delete_thread_data(DeferredLogKey);
+        foreach hash<auto> e in (q) {
+            log(e.level, "%s", e.msg);
+        }
+    }
+
     #! Handles the result of a ping operation from the async I/O controller
     /** Runs in the controller's I/O thread.
 
@@ -604,9 +638,14 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         Contention is bounded by ping_repeat intervals and the critical section is
         short. Lock ordering is PCM.m -> controller.m (controller callbacks are
         delivered without holding the controller lock), so no deadlock is possible.
+        Log messages produced by the ping handlers are queued via deferLog() and
+        emitted by flushDeferredLogs() only after `m` is released, so logging
+        contention can never serialise the monitor lock.
     */
     private handlePingResult(string name, int gen, hash<SocketPollResultInfo> result) {
-        AutoLock al(m);
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
         if (!cache{name} || cache{name}.ping_gen != gen) {
             return;  # connection removed or replaced; stale result
         }
@@ -662,8 +701,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Handles a successful ping
     private handlePingSuccess(string name, date delta, *bool oldok) {
-        log(LoggerLevel::INFO, "%y (poll state %y was up: %y): successful ping (duration: %y)", name,
-            cache{name}.spop.getState(), oldok ?? False, delta);
+        deferLog(LoggerLevel::INFO, sprintf("%y (poll state %y was up: %y): successful ping (duration: %y)",
+            name, cache{name}.spop.getState(), oldok ?? False, delta));
         cache{name}.conn.handlePingSuccess(delta);
         delete cache{name}.spop;
         cache{name}.start = now_us();
@@ -672,8 +711,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     #! Handles a failed ping
     private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
         AbstractConnection c = cache{name}.conn;
-        log(LoggerLevel::ERROR, "%y (poll state %y was up: %y): error in ping (duration: %y): %s", name,
-            cache{name}.spop.getState(), c.up, delta, get_exception_string(ex));
+        deferLog(LoggerLevel::ERROR, sprintf("%y (poll state %y was up: %y): error in ping (duration: %y): %s",
+            name, cache{name}.spop.getState(), c.up, delta, get_exception_string(ex)));
         c.handlePingFailed(delta, ex);
         delete cache{name}.spop;
         cache{name}.start = now_us();
@@ -694,7 +733,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         string err = sprintf("(poll state %s): %s connection ping timed out after: %y",
             cache{name}.spop.getState(), c.getType(), delta);
         c.handlePingFailed(delta, err);
-        log(LoggerLevel::ERROR, "%y %s; restarting poll", name, err);
+        deferLog(LoggerLevel::ERROR, sprintf("%y %s; restarting poll", name, err));
     }
 }
 }

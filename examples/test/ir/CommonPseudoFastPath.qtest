@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptBody() {
+    return "int i = 7;
+int zero = 0;
+string s = \"abc\";
+string empty_s = \"\";
+list<int> l = (1, 2, 3);
+list<int> empty_l = ();
+
+printf(\"int:%y:%y:%y:%y:%y:%y\\n\", i.typeCode() == NT_INT, i.type(), i.empty(), i.val(),
+    zero.val(), i.size());
+printf(\"string:%y:%y:%y:%y:%y:%y:%y:%y\\n\", s.typeCode() == NT_STRING, s.type(), s.empty(),
+    s.val(), s.size(), empty_s.empty(), empty_s.val(), empty_s.size());
+printf(\"string-sizep:%y:%y\\n\", s.sizep(), empty_s.sizep());
+printf(\"string-case:%y:%y\\n\", s.lwr(), s.upr());
+printf(\"list:%y:%y:%y:%y:%y:%y:%y:%y\\n\", l.typeCode() == NT_LIST, l.type(), l.empty(),
+    l.val(), l.size(), empty_l.empty(), empty_l.val(), empty_l.size());
+printf(\"nothing:%y:%y:%y:%y:%y\\n\", NOTHING.typeCode() == NT_NOTHING, NOTHING.type(),
+    NOTHING.empty(), NOTHING.val(), NOTHING.size());
+
+*int maybe_int;
+printf(\"unassigned-int:%y:%y:%y:%y:%y\\n\", maybe_int.typeCode() == NT_NOTHING, maybe_int.type(),
+    maybe_int.empty(), maybe_int.val(), maybe_int.size());
+
+int removed_int = 99;
+remove removed_int;
+printf(\"removed-int:%y:%y:%y:%y:%y\\n\", removed_int.typeCode() == NT_NOTHING, removed_int.type(),
+    removed_int.empty(), removed_int.val(), removed_int.size());
+
+int deleted_int = 101;
+delete deleted_int;
+printf(\"deleted-int:%y:%y:%y:%y:%y\\n\", deleted_int.typeCode() == NT_NOTHING, deleted_int.type(),
+    deleted_int.empty(), deleted_int.val(), deleted_int.size());
+printf(\"builtin-type:%y:%y:%y:%y:%y\\n\", type(i), typename(s), type(maybe_int), type(removed_int),
+    typename(value: deleted_int));
+
+printf(\"char:%y:%d\\n\", c\"\\u{E9}\".val(), c\"\\u{E9}\".size());
+";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+" + scriptBody();
+}
+
+string sub linkedScriptCode() {
+    return "%modern
+
+int sub main() {
+" + scriptBody() + "    return 0;
+}
+";
+}
+
+string sub runMode(string script_path, string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-common-pseudo-fast-path-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string sub runLinkedAot() {
+    string base = "/tmp/qore-common-pseudo-fast-path-linked-" + string(getpid());
+    string qo_dir = base + "-qo";
+    string exe = base + "-exe";
+    string linked_script_path = base + ".qr";
+    mkdir(qo_dir);
+
+    File linked_script();
+    linked_script.open2(linked_script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    linked_script.write(linkedScriptCode());
+    linked_script.close();
+
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -c --output-dir=%s %s 2>&1",
+        libqore_dir, qcc_bin, qo_dir, linked_script_path));
+    if (compile_out.find("script-context .qo") == -1) {
+        printf("linked AOT .qo compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    string link_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s/*.qo 2>&1",
+        libqore_dir, qcc_bin, exe, qo_dir));
+    if (!is_file(exe)) {
+        printf("linked AOT link failed:\n%s", link_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+sub checkOutput(string label, string expected, string actual) {
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
+        exit(2);
+    }
+}
+
+string script_path = "/tmp/qore-common-pseudo-fast-path-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runMode(script_path, "ast");
+
+foreach string mode in (("ir", "tiered", "jit")) {
+    checkOutput(mode, ast, runMode(script_path, mode));
+}
+checkOutput("aot", ast, runAot(script_path));
+checkOutput("linked-aot", ast, runLinkedAot());

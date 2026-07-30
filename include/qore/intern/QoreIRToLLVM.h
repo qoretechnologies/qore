@@ -33,11 +33,14 @@
 #define _QORE_QOREIRTOLLVM_H
 
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreJIT.h"
 
 class LocalVar;
 class FunctionEntry;
@@ -54,8 +57,6 @@ class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
-struct BatchCalleeInfo;
-
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -67,12 +68,24 @@ public:
     //! Returns the NaN-boxed QoreValue as uint64_t.
     bool lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error);
 
+    //! Remove decref calls whose value is proven to be NOTHING.
+    //! @return the number of calls removed
+    static size_t pruneNoopDecrefs(llvm::Module& module);
+
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
     //! instead of inttoptr patterns with embedded pointers.
     void setAOTMode(const AOTSlotMap* slots) {
         aot_mode = true;
         aot_slots = slots;
+    }
+
+    //! Control immediate-closure dispatch lowering in AOT mode.
+    /** Init-function compilation does not emit native closure bodies, so its
+        lowerers must use the generic runtime helper instead of declaring a
+        dispatch symbol that will not be defined. */
+    void setAOTDirectClosureFastEntry(bool v) {
+        aot_direct_closure_fast_entry = v;
     }
 
     //! Set deopt counter pointer for profile-informed guard failure tracking.
@@ -96,10 +109,22 @@ public:
     //! arguments instead of being loaded from the thread-local variable stack.
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")
     //! @param args maps LocalVar* (as void*) → LLVM Value* for each parameter
+    //! @param arg_kinds maps parameters to their native or boxed ABI representation
+    //! @param borrowed_args boxed parameters proven not to escape the call
+    //! @param return_kind native or boxed fast-entry return ABI
+    //! @param rejects_nothing_return true when the declared return type rejects NOTHING
     void setFastEntryMode(const std::string& name,
-            const std::unordered_map<const void*, llvm::Value*>* args) {
+            const std::unordered_map<const void*, llvm::Value*>* args,
+            const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
+            const std::unordered_set<const void*>* borrowed_args = nullptr,
+            BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed,
+            bool rejects_nothing_return = false) {
         fast_entry_name = name;
         fast_entry_args = args;
+        fast_entry_arg_kinds = arg_kinds;
+        fast_entry_borrowed_args = borrowed_args;
+        fast_entry_return_kind = return_kind;
+        fast_entry_rejects_nothing_return = rejects_nothing_return;
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -111,9 +136,17 @@ public:
     //! name, avoiding cross-namespace mis-matches (`OMQ::foo` → `Util::foo`
     //! previously tripped the self-recursion path because base names match).
     void setAOTSelfRecursiveFastEntry(const std::string& name,
-            const FunctionEntry* fe = nullptr) {
+            const FunctionEntry* fe = nullptr,
+            const std::vector<BatchCalleeParamKind>* param_kinds = nullptr,
+            const std::vector<uint8_t>* param_rejects_nothing = nullptr,
+            BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed) {
         aot_self_recursive_fast_entry = name;
         aot_self_recursive_fe = fe;
+        aot_self_recursive_param_kinds = param_kinds ? *param_kinds
+            : std::vector<BatchCalleeParamKind>();
+        aot_self_recursive_param_rejects_nothing = param_rejects_nothing
+            ? *param_rejects_nothing : std::vector<uint8_t>();
+        aot_self_recursive_return_kind = return_kind;
     }
 
     //! Set shared debug info for multi-function module compilation (AOT/batch).
@@ -184,6 +217,7 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+    bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
     // function exit. Ordinary AOT code must keep this disabled to preserve Qore's
@@ -200,11 +234,33 @@ private:
     // direct LLVM calls to the fast entry function.
     const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* batch_callees = nullptr;
 
+    // Callee AOT contexts loaded once in the logical function entry, keyed by
+    // expression slot. The context mapping is immutable during an invocation.
+    std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
+
+    // Exact-class checks for stable local receivers, materialized once in the
+    // logical function entry. Object validity remains guarded at each call.
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+        aot_exact_class_guards;
+    std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
+
+    using NativeConversionCache =
+        std::unordered_map<const LocalVar*,
+            std::pair<llvm::BasicBlock*, llvm::Value*>>;
+    NativeConversionCache stable_int_conversions;
+    NativeConversionCache stable_float_conversions;
+
     // Approach B fast entry: LLVM function name override and parameter mapping.
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
+    const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
+    //! Proven noescape boxed parameters that borrow the caller's reference.
+    const std::unordered_set<const void*>* fast_entry_borrowed_args = nullptr;
+    BatchCalleeReturnKind fast_entry_return_kind = BatchCalleeReturnKind::Boxed;
+    bool fast_entry_rejects_nothing_return = false;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -215,6 +271,9 @@ private:
     // same-named function in another namespace (e.g. `OMQ::foo` calling
     // `Util::foo`) is not mis-identified as self-recursion.
     const FunctionEntry* aot_self_recursive_fe = nullptr;
+    std::vector<BatchCalleeParamKind> aot_self_recursive_param_kinds;
+    std::vector<uint8_t> aot_self_recursive_param_rejects_nothing;
+    BatchCalleeReturnKind aot_self_recursive_return_kind = BatchCalleeReturnKind::Boxed;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;
@@ -228,8 +287,54 @@ private:
     // each IR block's instructions end up, for correct PHI predecessor resolution.
     std::unordered_map<const QoreIRBasicBlock*, llvm::BasicBlock*> final_block_map;
 
+    // Per-edge block mapping: (IR predecessor block, IR successor block) → the LLVM
+    // block that outgoing edge actually originates from.  Required when lowering a
+    // block's terminator emits its outgoing branches from DIFFERENT LLVM blocks —
+    // e.g. TypedForeachNext*, where the done edge leaves the bounds-check block
+    // while the continue edge leaves the value-extraction block — so a single
+    // final_block_map entry cannot describe both edges for PHI wiring.
+    std::map<std::pair<const QoreIRBasicBlock*, const QoreIRBasicBlock*>,
+        llvm::BasicBlock*> edge_block_map;
+
     // Value mapping: QoreIR value IDs → LLVM values
     std::unordered_map<uint32_t, llvm::Value*> values;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
+
+    struct AOTHashStringExtractionCacheEntry {
+        const QoreIRBasicBlock* block = nullptr;
+        const LocalVar* local = nullptr;
+        std::vector<std::string> keys;
+        llvm::Value* success = nullptr;
+        std::vector<std::pair<llvm::Value*, size_t>> sources;
+        const QoreIRInstruction* instruction = nullptr;
+        llvm::BasicBlock* dominance_block = nullptr;
+        bool cross_call_eligible = false;
+        bool imported_across_block = false;
+    };
+
+    // Borrowed hash-string values shared by adjacent imported pure calls.
+    std::vector<AOTHashStringExtractionCacheEntry>
+        aot_hash_string_extraction_cache;
+    const QoreIRInstruction* aot_hash_string_extraction_instruction = nullptr;
+    size_t aot_hash_string_extraction_reuses = 0;
+    size_t aot_hash_string_extraction_overlap_reuses = 0;
+    size_t aot_hash_string_extraction_cross_block_reuses = 0;
+
+    // Typed collection state proven or materialized while lowering the current function.
+    std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
+    std::unordered_set<uint32_t> fixed_typed_list_outputs;
+    std::unordered_set<uint32_t> reserve_typed_list_outputs;
+    std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
+    std::unordered_set<uint32_t> direct_typed_list_read_sources;
+    std::unordered_set<uint32_t> elided_typed_foreach_refself_values;
+    std::unordered_set<uint32_t> reusable_hashdecl_literal_values;
+    // Single-use declaration initializers that can construct the target
+    // container representation directly.
+    std::unordered_map<uint32_t, const QoreTypeInfo*>
+        fresh_container_init_types;
+    std::unordered_set<uint32_t> exact_fresh_container_values;
+    size_t fused_fresh_container_inits = 0;
+    size_t assigned_hash_guard_elisions = 0;
 
     // Local variable allocas (LocalVar* address → alloca)
     std::unordered_map<const void*, llvm::Value*> local_allocas;
@@ -271,6 +376,21 @@ private:
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;
 
+    // Boxed source values retained when a typed collection read is unboxed.
+    // Generic calls and NOTHING guards must observe the source value rather
+    // than re-boxing a native zero produced from a sparse list entry.
+    std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
+    std::unordered_map<uint32_t, BatchCalleeParamKind>
+        native_boxed_source_kinds;
+
+    // Value IDs known not to be NOTHING.  This is intentionally narrower than
+    // assigned-state: only typed locals proven assigned on every load contribute
+    // here, so auto/any values assigned to NOTHING are not misclassified.
+    std::unordered_set<uint32_t> known_not_nothing_values;
+
+    // LocalVar* keys whose LoadLocal results can be marked known-not-NOTHING.
+    std::unordered_set<const void*> assigned_non_nothing_locals;
+
     // Set of LocalVar* (as void*) that are pre-instantiated by the caller (tiered
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
     const std::unordered_set<const void*>* pre_instantiated_locals = nullptr;
@@ -281,8 +401,8 @@ private:
     const std::unordered_set<const void*>* ir_only_locals_set = nullptr;
 
     // Original IR-only set used only for reload decisions. AOT may remove body
-    // locals from ir_only_locals_set so StoreLocal still syncs with the runtime
-    // stack for ownership, but those locals are still invisible to AST callbacks.
+    // locals that need runtime ownership from ir_only_locals_set so StoreLocal
+    // still syncs them, but those locals remain invisible to AST callbacks.
     const std::unordered_set<const void*>* reload_exempt_locals_set = nullptr;
 
     // Phase 4: True when ALL locals in the function are invisible to AST
@@ -290,26 +410,25 @@ private:
     // after calls.
     bool all_locals_reload_exempt = false;
 
-    // Sets of IR-only locals that use native (unboxed) allocas for typed int/float.
-    // LoadLocal from these returns native i64/double (NOT nanboxed).
-    // StoreLocal to these stores native i64/double (skips boxing).
+    // Sets of IR-only locals that use native (unboxed) allocas.
     std::unordered_set<const void*> native_int_locals;
     std::unordered_set<const void*> native_float_locals;
+    std::unordered_set<const void*> native_bool_locals;
 
     // Set of body locals that are IR-only — these can have their allocas initialized
     // to NOTHING directly instead of loading from the runtime stack (since the fast
     // call path skips their instantiation when all body locals are IR-only).
     std::unordered_set<const void*> ir_only_body_locals;
 
-    // AOT body locals are pre-instantiated by the runtime frame wrapper with
-    // an initial NOTHING value. LLVM allocas can therefore start as NOTHING
-    // without an entry qore_rt_load_local_aot(); StoreLocal/lvalue mutation
-    // paths force a reload after publishing a real value to the runtime stack.
+    // AOT body locals are pre-instantiated by the runtime frame wrapper with an
+    // initial NOTHING value. LLVM allocas can therefore start at their default
+    // without an entry qore_rt_load_local_aot(); runtime-owned StoreLocal/lvalue
+    // mutation paths reload after publishing a real value to the runtime stack.
     std::unordered_set<const void*> aot_body_locals;
 
-    // AOT-adjusted IR-only set: removes pre-instantiated body locals from the
-    // IR-only set so that StoreLocal syncs them to the runtime stack (fixing
-    // double-free when body locals are pre-instantiated by evalTiered).
+    // AOT-adjusted IR-only set: removes pre-instantiated body locals that need
+    // runtime-stack ownership. Proven-assigned native int/float locals can stay
+    // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
 
     // Lazy local-cache invalidation. Calls that can execute AST/Qore code bump
@@ -322,14 +441,20 @@ private:
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
-    // Saved catch-scope stack depth at function entry (qore_rt_catch_depth()).
-    // Only set for functions containing CatchException instructions.  The shared
-    // exception-exit paths (error_return_block, unwind LPs, deopt) pop the
-    // runtime catch stack back to this depth via qore_rt_catch_unwind() so
-    // catch scopes left active when an exception escapes a catch block (e.g., a
-    // call inside the catch block raising) are cleaned up and their caught
-    // exceptions deleted.
+    // Saved catch-scope stack depth.  With specialized tracking this is an i64
+    // alloca populated on the first dynamically entered catch scope; otherwise
+    // it is the legacy entry-time qore_rt_catch_depth() result.
     llvm::Value* catch_depth_saved = nullptr;
+
+    // Number of runtime catch scopes currently active in this native frame.
+    // Kept in an alloca so LLVM can promote it to SSA and remove unwind guards
+    // from exits statically known to be balanced.
+    llvm::AllocaInst* catch_scope_count = nullptr;
+
+    // LLVM blocks where this frame enters a runtime catch scope.  Final exit
+    // lowering uses forward reachability from these blocks to omit unwind
+    // guards on exits that cannot possibly own an active catch scope.
+    std::unordered_set<llvm::BasicBlock*> catch_entry_blocks;
 
     // True when the current function contains deferred on_block_exit handlers.
     bool has_on_block_exit_handlers = false;
@@ -434,6 +559,39 @@ private:
     // register's last use is reached, enabling early release of DotEval base
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
+
+    // Single-use or nonescaping stored closure values consumed directly by
+    // CallClosureDirect. Their creation can be fused into the call without
+    // changing the identity of any closure value visible to Qore code.
+    std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
+        immediate_closure_creates;
+    // Exact single-variant function call references that are immutable at
+    // their call sites.  AOT can dispatch these through the callee's typed
+    // fast entry while retaining ordinary call-reference creation semantics.
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+        known_function_call_refs;
+    // Native scalar captures cached at creation for entry-assigned stored
+    // closures whose captured parameters cannot be modified by the owner.
+    std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>
+        stored_closure_capture_allocas;
+    // Proven nonescaping immediate closures with read-only required scalar
+    // parameter captures can initialize the native cache once at owner entry.
+    std::unordered_set<uint32_t> entry_promoted_closure_captures;
+    // Top-level closure locals can be changed by called code outside the owner
+    // IR. Loads mapped here use a retained closure-identity guard before the
+    // native direct path and retain the ordinary dynamic fallback.
+    std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
+        guarded_stored_closure_creates;
+    // Function-lifetime retained references used for inline identity guards.
+    std::unordered_map<uint32_t, llvm::AllocaInst*>
+        guarded_stored_closure_identity_allocas;
+    // StoreLocal/LoadLocal instructions eliminated when an entry-assigned,
+    // nonescaping closure local is used only as a direct call target.
+    std::unordered_set<const QoreIRInstruction*> elided_closure_local_accesses;
+
+    // Comparison result IDs consumed exclusively by ToBool.  These can remain
+    // native i1 through LLVM lowering instead of being boxed and decoded again.
+    std::unordered_set<uint32_t> native_boolean_result_values;
 
     // Set of register IDs that are ONLY used as DotEval bases (operands[0]
     // of DotEvalMethodDirect, InvokeDotEvalMethodDirect, or Invoke with a
@@ -570,8 +728,140 @@ private:
             llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
 
-    // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
-    std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
+    // AOT batch fast entries are only valid when the callee's own AOT context
+    // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
+    // helper fallback for linked/source-stripped cases where the fast entry is
+    // visible but the callee context is not cached.
+    llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
+            llvm::Function* llvm_func, const QoreIRInstruction* inst,
+            int32_t slot, llvm::Function* fast_fn,
+            const BatchCalleeInfo& callee_info,
+            const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids,
+            const std::vector<llvm::Value*>& boxed_args,
+            llvm::Value* args_array, llvm::Value* arg_cleanups,
+            int nargs, bool has_arg_cleanups, const char* fallback_name,
+            const char* fallback_consume_name, std::string& error,
+            llvm::Value* object_base = nullptr,
+            uint32_t object_base_id = UINT32_MAX,
+            const char* fallback_throwing_name = nullptr,
+            const char* fallback_consume_throwing_name = nullptr,
+            bool require_exact_object_class = false);
+
+    // Emit an imported pure scalar leaf body. Returns nullptr when the summary
+    // is absent, disabled, or not valid for the supplied native arguments.
+    llvm::Value* emitAOTScalarLeaf(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args);
+
+    // Emit a bounded pure native-integer expression summary.
+    llvm::Value* emitAOTIntExpression(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            llvm::Function* fallback_fn, bool* proven_nothrow = nullptr);
+
+    // Emit a bounded pure native-float expression summary without fast-math flags.
+    llvm::Value* emitAOTFloatExpression(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args,
+            llvm::Function* fallback_fn,
+            bool* proven_nothrow = nullptr);
+
+    // Emit an imported encoding-aware string operation. Returns nullptr when
+    // no valid summary is available for the supplied fast-entry arguments.
+    llvm::Value* emitAOTStringOp(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+
+    //! Emit an imported bounded typed string expression.
+    llvm::Value* emitAOTStringExpression(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            const QoreIRStringConsumerCallInstruction* fused_call = nullptr,
+            llvm::Function* fallback_fn = nullptr);
+
+    //! Emit an imported string producer directly into a supported consumer.
+    llvm::Value* emitAOTStringProducerConsumer(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args,
+            const QoreIRStringConsumerCallInstruction& call,
+            llvm::Module& module, llvm::Function* fallback_fn = nullptr);
+
+    //! Append and validate dynamic integer operands used only by a fused string consumer.
+    bool appendAOTStringConsumerOperands(
+            const QoreIRStringConsumerCallInstruction& call,
+            std::vector<llvm::Value*>& raw_args,
+            std::vector<uint32_t>& raw_arg_ids, std::string& error);
+
+    // Emit an imported typed collection operation. Returns nullptr when no
+    // valid summary is available for the supplied fast-entry arguments.
+    llvm::Value* emitAOTCollectionOp(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            const QoreIRCallDirectInstruction* fused_call = nullptr);
+
+    // Emit a bounded affine composition over one exact size/length source.
+    llvm::Value* emitAOTComposedInt(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+
+    // Emit a bounded affine expression over one argument and one callee-context local.
+    llvm::Value* emitAOTContextInt(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn);
+
+    // Emit a bounded affine expression over one argument and one global lvalue.
+    llvm::Value* emitAOTGlobalInt(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn);
+
+    // Emit any importable callee summary through one shared dispatch path.
+    llvm::Value* emitAOTImportedSummary(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn,
+            bool* proven_nothrow = nullptr);
+
+    llvm::Value* emitAOTFixedHashRemap(const BatchCalleeInfo& info,
+            llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
+            llvm::Function* llvm_func, const QoreIRInstruction* inst);
+
+    // Load an imported exact self getter in its declared scalar representation.
+    llvm::Value* emitAOTSelfGetter(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
+    // Load an imported exact explicit-object getter in its declared scalar representation.
+    llvm::Value* emitAOTObjectGetter(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, int32_t slot,
+            llvm::Value* base, bool rejects_nothing, llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
+    // Assign an imported exact-object member and return its declared scalar representation.
+    llvm::Value* emitAOTObjectSetGet(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, int32_t slot,
+            llvm::Value* base, llvm::Value* args, int nargs,
+            bool rejects_nothing, BatchCalleeReturnKind proven_return_kind,
+            llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
+    BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
+            unsigned index) const;
+    bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,
+            unsigned index) const;
+    bool fastEntryArgumentKnownNotNothing(uint32_t value_id) const;
+    BatchCalleeParamKind getFastEntryArgKind(const void* key) const;
+    llvm::Value* getFastEntryCallArgument(const BatchCalleeInfo& info,
+            unsigned index, const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids,
+            const std::vector<llvm::Value*>& boxed_args,
+            llvm::Module& module);
+    bool fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& info,
+            const std::vector<uint32_t>& raw_arg_ids) const;
+    llvm::Constant* getNothingReturnValue() const;
+    bool selfRecursiveFastEntryArgsNeedNothingGuard(
+            const std::vector<uint32_t>& raw_arg_ids) const;
+
+    // Deferred PHI nodes to fixup after all blocks are lowered; ir_block is the IR
+    // block containing the PHI so incoming edges can be resolved via edge_block_map
+    struct PendingPhi {
+        llvm::PHINode* node;
+        const QoreIRPhiInstruction* inst;
+        const QoreIRBasicBlock* ir_block;
+        QoreIRPhiValueKind value_kind;
+    };
+    std::vector<PendingPhi> pending_phis;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
@@ -597,6 +887,7 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    llvm::Value* loc_frame_cache_ptr = nullptr; //!< Cached ptr to runtime_loc_sp TLS (JIT only)
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
 
     //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).
@@ -608,6 +899,15 @@ private:
     int32_t aot_loc_base = 0;
     //! AOT location table: owns location data captured during LLVM codegen.
     std::vector<AOTLocEntry> aot_loc_table;
+
+    //! AOT-mode debug-location encoding state: the loc-index currently encoded into
+    //! the DWARF column, advanced on source-line change (mirrors the eager updater's
+    //! line-change gate) so the emitted line table carries the exact active loc-index.
+    int last_aot_dbg_line = -1;
+    int32_t current_aot_loc_index = -1;
+
+    //! Return the AOT loc-index for `loc`, appending to aot_loc_table on first use.
+    int32_t getOrAddAotLocIndex(const QoreProgramLocation* loc);
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
@@ -654,10 +954,18 @@ private:
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
 
+    llvm::Value* getCachedStableConversion(
+        uint32_t value_id, const NativeConversionCache& cache) const;
+    void cacheStableConversion(
+        uint32_t value_id, llvm::Value* value, NativeConversionCache& cache);
+
     // Inline fast-path version of ensureIntType for typed int ops (NOT in PHI fixup context).
     // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
     // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
     llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
+
+    // Preserve timeout's relative-date-to-milliseconds assignment semantics.
+    llvm::Value* ensureTimeoutTypeInline(llvm::Value* val, uint32_t value_id);
 
     // Inline fast-path version of boxInt for StoreLocal (NOT in PHI fixup/boxValue context).
     // Uses LLVM branches for INT48 range check, falling back to runtime for big ints.
@@ -666,6 +974,10 @@ private:
     // Ensure a value is a native double for float operations
     // Handles NaN-boxed values (int or float), native i64, and native doubles
     llvm::Value* ensureFloatType(llvm::Value* val, uint32_t value_id, llvm::Module& module);
+
+    // Inline fast-path version for NaN-boxed floats, with runtime conversion for
+    // NOTHING and other representations.
+    llvm::Value* ensureFloatTypeInline(llvm::Value* val, uint32_t value_id, llvm::Module& module);
 
     // Get a declared runtime helper function
     llvm::FunctionCallee getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft);
@@ -691,9 +1003,14 @@ private:
     void emitOnBlockExitExec(llvm::Module& module);
 
     // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
-    // point to pop catch scopes left active by an escaping exception; no-op for
-    // functions without catch blocks (catch_depth_saved == nullptr)
+    // point only when specialized tracking proves a runtime catch scope remains
+    // active; no-op for functions without catch blocks.
     void emitCatchUnwind(llvm::Module& module);
+
+    // Update specialized runtime catch-scope state around CatchException,
+    // CatchCleanup, and Rethrow lowering.
+    void emitCatchScopeEnter(llvm::Module& module);
+    void emitCatchScopeExit(unsigned count);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.
@@ -847,11 +1164,13 @@ private:
             llvm::Function* llvm_func);
 
     // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
-    llvm::Value* boxValue(llvm::Value* val, uint32_t id);
+    llvm::Value* boxValue(llvm::Value* val, uint32_t id,
+        bool allow_dynamic_inline = true);
 
     // Emit exception check: if xsink has exception, branch to exception_target
+    // unless the caller requests the function-level error path.
     void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst);
+            const QoreIRInstruction* inst, bool force_function_error = false);
 
     // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
     // block-entry → dbgSyntheticBlockStep) or PushTempMark (synthetic=false,
@@ -990,11 +1309,41 @@ private:
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
 
+    // Emit the assigned branch of an argument-taking string pseudo-method
+    // whose statically typed operands may still contain NOTHING.  Leaves the
+    // builder on the generic fallback block when a fast path was emitted.
+    llvm::Value* emitGuardedStringPseudoFastPath(const QoreIRInstruction* inst,
+            QoreIRIntrinsic intrinsic, bool pseudo,
+            bool base_known_string, bool base_assigned_string,
+            bool arg0_known_string, bool arg0_assigned_string,
+            bool arg0_assigned_int, bool arg1_assigned_int,
+            llvm::Value* base_boxed, llvm::Module& module,
+            llvm::Function* llvm_func, llvm::BasicBlock*& fast_end,
+            llvm::BasicBlock*& merge_block, bool& result_needs_cleanup,
+            std::string& error);
+
+    // Collect fast-entry arguments without eagerly boxing native values.  When
+    // a runtime fallback is possible, args_array is allocated but native slots
+    // are populated only on the fallback edge.
+    bool buildAotFastEntryArgs(const QoreIRInstruction* inst, int arg_start,
+            llvm::Function* llvm_func, const BatchCalleeInfo& callee_info,
+            bool needs_fallback_array, llvm::Value*& args_array, int& nargs,
+            std::vector<llvm::Value*>& raw_args,
+            std::vector<uint32_t>& raw_arg_ids,
+            std::vector<llvm::Value*>& boxed_args, std::string& error,
+            int operand_count = -1);
+
     // Build an entry-block alloca'd array of cleanup slot pointers for
     // operands[arg_start..].  The runtime uses this to clear consumed
     // call-argument temporaries after callee parameter instantiation.
     llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
-            llvm::Function* llvm_func, int nargs, bool& has_cleanup);
+            llvm::Function* llvm_func, int nargs, bool& has_cleanup,
+            int borrowed_prefix = 0);
+
+    // Clear ownership slots after a direct fast-entry call.
+    void emitArgCleanupClear(llvm::Module& module,
+            llvm::Value* arg_cleanups, int nargs,
+            bool callee_proven_nothrow);
 
     // Returns true if a local can be lazily reloaded from the runtime stack.
     bool canReloadLocalFromRuntime(const void* key, bool honor_reload_exempt = true) const;
@@ -1011,6 +1360,9 @@ private:
     // can modify locals through the Qore runtime stack; actual reloads are lazy.
     void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func,
             bool honor_reload_exempt = true, bool eager = false);
+    void invalidateLocalsForCallee(const BatchCalleeInfo& info,
+            llvm::Module& module, llvm::Function* llvm_func,
+            bool honor_reload_exempt = true);
 
     // Phase 5b: Emit inline LLVM fast-path for .any comparisons (EqAny/NeAny/etc).
     // Type-checks operands for int-vs-int and float-vs-float, falls back to helper for mixed types.
@@ -1018,7 +1370,7 @@ private:
             llvm::CmpInst::Predicate float_pred, int opcode,
             const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
-            llvm::Function* llvm_func, llvm::Module& module);
+            llvm::Function* llvm_func, llvm::Module& module, bool native_result = false);
 
     // Emit inline LLVM fast-path for .any compound assignments (AddAssignAny/SubAssignAny/etc).
     // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
@@ -1102,6 +1454,17 @@ private:
             llvm::Function* llvm_func, const char* label, bool is_float,
             std::function<llvm::Value*(llvm::Value*, llvm::Value*)> accumulate,
             std::string& error);
+
+    enum class FusedMapMode {
+        Scale,
+        Square,
+        Offset,
+    };
+
+    //! Emit an AOT-native fused map/fold loop without an intermediate list.
+    bool emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func, const char* label, bool is_float,
+            bool product, FusedMapMode map_mode, std::string& error);
 
     //! Inline a small callee's IR directly into the caller's LLVM function
     //! Phase 3: Aggressive inlining for ≤20 instruction callees

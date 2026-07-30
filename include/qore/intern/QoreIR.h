@@ -38,6 +38,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -690,7 +691,72 @@ enum class QoreIROpcode : uint16_t {
     //! Convert a value to a native float.
     ToFloat            = 383,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (384, 385, ...)
+    //! Select hash elements whose constant-key value converts to a positive integer.
+    SelectHashKeyPositiveInt = 384,
+
+    //! Constant-key access on a value proven to be an assigned hash.
+    HashKeyAccessHash = 385,
+
+    //! Constant-key access on a typed hash value that may still be NOTHING.
+    HashKeyAccessHashGuarded = 386,
+
+    //! Advance a retained typed-list foreach source by native index.
+    //! These terminators produce a native scalar and branch to the body, or
+    //! branch to the done target at the captured or live list bound.
+    TypedForeachNextInt = 387,
+    TypedForeachNextFloat = 388,
+    TypedForeachNextBool = 389,
+    TypedForeachNextString = 390,
+
+    //! Fuse map-by-constant-offset with a sum fold without materializing the mapped list.
+    FusedMapFoldlSumOffsetInt = 391,
+    FusedMapFoldlSumOffsetFloat = 392,
+
+    //! Join an exact list<string> with a constant separator in one allocation-aware pass.
+    FoldlStringJoin = 393,
+
+    //! Start an owned string-join accumulator from the first two accepted pipeline values.
+    StringJoinStart = 394,
+
+    //! Append a separator and value to a compiler-owned string-join accumulator.
+    StringJoinAppend = 395,
+
+    //! Format an int with one compile-time-validated fixed %d conversion.
+    SprintfIntFixed = 396,
+
+    //! Append to a typed string using copy-on-write ownership checks.
+    AppendStringCow = 397,
+
+    //! Map a constant hash key plus an integer offset with dynamic addition semantics.
+    MapHashKeyOffsetAny = 398,
+
+    //! Set the logical length of a fresh scalar list after direct output stores.
+    ListSetLength = 399,
+
+    //! Load a boolean constant in the boxed QoreValue representation.
+    ConstBoolBoxed = 400,
+
+    //! Proven in-bounds borrowed boxed list read.  Emitted only when loop
+    //! analysis proves a stable exact typed list, a nonnegative bounded index,
+    //! and non-escaping uses of the result.
+    ListGetValueNoRefUnchecked = 401,
+
+    //! Join an assigned exact list<string> using the separator's encoding.
+    ListStringJoin = 402,
+
+    //! Reverse-fold an exact list<string> with a constant separator.
+    FoldrStringJoin = 403,
+
+    //! Join the dense result of an identity map over an exact list<string>.
+    ListStringJoinIdentityMap = 404,
+
+    //! Start a pseudo-method join accumulator in the separator's encoding.
+    StringMethodJoinStart = 405,
+
+    //! Format an exact list<int> with fixed sprintf metadata and join in one pass.
+    ListIntSprintfJoin = 406,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (407, 408, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -698,12 +764,14 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ToFloat);
-static_assert(QORE_IR_MAX_OPCODE == 383, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE
+    = static_cast<uint16_t>(QoreIROpcode::ListIntSprintfJoin);
+static_assert(QORE_IR_MAX_OPCODE == 406, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
 #include "qore/intern/QoreOpcodeRegistry.h"
+#include "qore/intern/QoreIRIntrinsic.h"
 
 //! PHASE 4: Opcode Coverage Documentation
 //!
@@ -791,6 +859,61 @@ struct QoreIRValue {
     }
 };
 
+//! Assignment state at the program point where an SSA value was produced.
+/** This is deliberately independent of the declared type: a typed lvalue is
+    NOTHING before its first assignment and after remove/delete operations. */
+enum class QoreIRAssignedState : uint8_t {
+    Unknown,
+    Unassigned,
+    MaybeAssigned,
+    Assigned,
+};
+
+//! Runtime representation known for an SSA value.
+enum class QoreIRValueRepresentation : uint8_t {
+    Unknown,
+    Boxed,
+    NativeInt,
+    NativeFloat,
+    NativeBool,
+};
+
+//! Known occupancy of list slots represented by an SSA value.
+enum class QoreIRListDensity : uint8_t {
+    Unknown,
+    Dense,
+};
+
+//! Reference ownership known for an SSA value.
+enum class QoreIRValueOwnership : uint8_t {
+    Unknown,
+    //! The SSA value owns a reference that must eventually be consumed.
+    Owned,
+    //! The SSA value aliases storage owned elsewhere and must not be consumed.
+    Borrowed,
+    //! Every possible runtime representation is non-reference-counted.
+    ReferenceFree,
+};
+
+//! Parse- and IR-derived facts attached to an SSA value.
+struct QoreIRValueFacts {
+    const QoreTypeInfo* type_info = nullptr;
+    QoreIRAssignedState assigned_state = QoreIRAssignedState::Unknown;
+    QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
+    QoreIRListDensity list_density = QoreIRListDensity::Unknown;
+    QoreIRValueOwnership ownership = QoreIRValueOwnership::Unknown;
+    bool never_nothing = false;
+    bool int_range_known = false;
+    int64_t int_range_min = 0;
+    int64_t int_range_max = 0;
+
+    bool hasInlineIntRange() const {
+        return int_range_known
+            && int_range_min >= QoreValue::InlineIntMin
+            && int_range_max <= QoreValue::InlineIntMax;
+    }
+};
+
 struct QoreIRConstant {
     enum class Kind {
         Int,
@@ -830,6 +953,16 @@ struct QoreIRPhiIncoming;
 
 class QoreIRInstruction {
 public:
+    enum class AOTStringCaseComparisonKind : uint8_t {
+        None,
+        Eq,
+        Ne,
+        Lt,
+        Le,
+        Gt,
+        Ge,
+    };
+
     explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {
     }
 
@@ -840,11 +973,25 @@ public:
     // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
     // debug line-change gate below reports the wrong line
     int32_t cached_start_line;
+    QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+    bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
+    bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
+    bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
+                                       // borrows the local's slot-cache reference so the node stays unique at the
+                                       // mutation site (native code borrows via alloca loads already)
+    bool typed_value_prevalidated = false;  // Transient: a dominating typed store validated this scalar value
+    bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
+    bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
+    bool aot_int_to_string_measure = false;  // Transient: ToString returns the native decimal width
+    AOTStringCaseComparisonKind aot_string_case_comparison =
+        AOTStringCaseComparisonKind::None;
+    uint8_t aot_string_case_comparison_operand = 0;
+    bool aot_string_case_comparison_upper = false;
 
     // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set
     // by the IR builder in correctly-nested call order during lowering, so the
@@ -937,6 +1084,8 @@ public:
     QoreIRValue switch_val{};                           //!< Value being switched on (string)
     QoreIRBasicBlock* default_target = nullptr;         //!< Default case target
     std::vector<QoreIRSwitchStringCase> cases;          //!< case string -> target block
+    bool aot_string_case_transform = false;             //!< Transient AOT stack case transform
+    bool aot_string_case_transform_upper = false;       //!< Transient transform direction
 };
 
 struct QoreIRPhiIncoming {
@@ -947,6 +1096,8 @@ struct QoreIRPhiIncoming {
 enum class QoreIRPhiValueKind : uint8_t {
     QoreValue = 0,
     NativeInt = 1,
+    NativeFloat = 2,
+    NativeBool = 3,
 };
 
 class QoreIRPhiInstruction : public QoreIRInstruction {
@@ -1625,7 +1776,9 @@ public:
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
 };
 
-//! Make hash instruction with optional parse-time type info
+//! Make hash instruction with optional parse-time type info.
+//! Operands normally alternate key/value pairs. An odd final operand is a
+//! native integer capacity hint used only for initially empty map results.
 class QoreIRMakeHashInstruction : public QoreIRInstruction {
 public:
     explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash) {
@@ -1639,9 +1792,22 @@ class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
 public:
     QoreIRMakeHashConstKeysInstruction(std::vector<std::string>&& n_keys)
             : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys), keys(std::move(n_keys)) {
+        if (keys.size() > 100) {
+            unique_keys = false;
+            return;
+        }
+        std::unordered_set<std::string_view> seen;
+        seen.reserve(keys.size());
+        for (const std::string& key : keys) {
+            if (!seen.insert(key).second) {
+                unique_keys = false;
+                break;
+            }
+        }
     }
 
     std::vector<std::string> keys;  //!< constant key names (one per value operand)
+    bool unique_keys = true;  //!< true when every key can be inserted without a lookup
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
 };
 
@@ -1678,9 +1844,11 @@ public:
 class QoreIRNewObjectInstruction : public QoreIRInstruction {
 public:
     QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
-            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr)
+            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr,
+            const char* n_class_path = nullptr, const char* n_variant_sig = nullptr)
             : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
-              expr(n_expr), object_type_info(n_object_type_info) {
+              expr(n_expr), object_type_info(n_object_type_info),
+              class_path(n_class_path ? n_class_path : ""), variant_sig(n_variant_sig ? n_variant_sig : "") {
         expr.ref();
     }
 
@@ -1692,6 +1860,11 @@ public:
     const QoreClass* qc;
     const AbstractQoreFunctionVariant* variant;
     const QoreTypeInfo* object_type_info;
+    // Runtime fallback metadata for AOT-deserialized IR.  Class resolution can
+    // be delayed until aggregate metadata is available, so unresolved
+    // deserialization must not discard the serialized constructor target.
+    std::string class_path;
+    std::string variant_sig;
     // Compile-time-only metadata: the original AST node (NewObjectCallNode,
     // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
     // compiler to serialize class_path/variant_sig as slot metadata so the
@@ -1943,6 +2116,7 @@ public:
 
 enum class QoreIRBackgroundKind : uint8_t {
     DotEval = 1,  //!< background obj.method(args), receiver in operand 0
+    StaticMethod = 2,  //!< background Class::method(args), args in operands
 };
 
 //! Native background-call instruction metadata.
@@ -1959,13 +2133,118 @@ public:
     std::string name;
 };
 
+//! Common metadata for exact calls whose string result is consumed in AOT lowering.
+class QoreIRStringConsumerCallInstruction : public QoreIRInstruction {
+public:
+    enum class AOTStringConsumerKind : uint8_t {
+        None,
+        Size,
+        Length,
+        StartsWith,
+        EndsWith,
+        Contains,
+        Find,
+        RFind,
+        Substr,
+    };
+
+    explicit QoreIRStringConsumerCallInstruction(QoreIROpcode opcode)
+            : QoreIRInstruction(opcode) {
+    }
+
+    AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
+    //! Producer operand reused as the pattern by a fused search consumer.
+    int16_t aot_string_consumer_pattern_operand = -1;
+    //! Producer operands reused as dynamic offset/start and optional length.
+    int16_t aot_string_consumer_arg0_operand = -1;
+    int16_t aot_string_consumer_arg1_operand = -1;
+    //! Constant offset/start and optional length when no operand is recorded.
+    int64_t aot_string_consumer_arg0 = 0;
+    int64_t aot_string_consumer_arg1 = 0;
+    bool aot_string_consumer_has_arg1 = false;
+    uint8_t aot_string_consumer_extra_operands = 0;
+    //! Apply lwr()/upr() before the fused search consumer.
+    bool aot_string_consumer_case_transform = false;
+    bool aot_string_consumer_case_transform_upper = false;
+    //! Leading operands borrowed by a cloned AOT consumer call.
+    size_t aot_borrow_call_operand_count = 0;
+};
+
 //! Direct function call instruction - bypasses AST round-trip for resolved function calls
 //! Stores function/variant/program pointers resolved at parse time
-class QoreIRCallDirectInstruction : public QoreIRInstruction {
+class QoreIRCallDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
+
+    enum class AOTCollectionConsumerKind : uint8_t {
+        None,
+        EqInt,
+        NeInt,
+    };
+
+    enum class AOTAggregateProjectionKind : uint8_t {
+        None,
+        Size,
+        NativeInt,
+        NativeFloat,
+        BoxedInt,
+        BoxedFloat,
+        BoxedBool,
+        NativeIntConstant,
+        NativeFloatConstant,
+        BoxedValue,
+        BoxedIntConstant,
+        BoxedFloatConstant,
+        BoxedBoolConstant,
+        BoxedNothingConstant,
+        NativeIntAddConstant,
+        NativeFloatAddConstant,
+        BoxedIntAddConstant,
+        BoxedFloatAddConstant,
+        NativeIntSelect,
+        NativeFloatSelect,
+        BoxedIntSelect,
+        BoxedFloatSelect,
+        BoxedBoolSelect,
+        NativeIntBinary,
+        BoxedIntBinary,
+        NativeIntMulConstant,
+        BoxedIntMulConstant,
+        BoxedBoolIntCompare,
+        BoxedValueMaybeNothing,
+        NativeIntConstantSelect,
+        BoxedIntConstantSelect,
+        BoxedBoolConstantSelect,
+        NativeIntExpressionSelect,
+        NativeFloatExpressionSelect,
+        BoxedExpressionSelect,
+    };
+
+    struct AOTAggregateProjectionDescriptor {
+        AOTAggregateProjectionKind kind = AOTAggregateProjectionKind::None;
+        int16_t operand = -1;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
+    };
+
+    enum class NativeLeafKind : uint8_t {
+        IntBinary,
+        FloatBinary,
+        DynamicBinary,
+        StringSize,
+        StringLength,
+        IntProgram,
+        ClosureIntIncrement,
+        ClosureIntBinary,
+        ClosureFloatBinary,
+        ClosureStringSize,
+        ClosureStringLength,
+    };
+
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
             QoreProgram* n_pgm, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CallDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallDirect),
               func(n_func), variant(n_variant), pgm(n_pgm), expr(n_expr) {
         expr.ref();
     }
@@ -1979,8 +2258,33 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (may be null)
     QoreProgram* pgm = nullptr;             //!< The program context
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
+    //! Direct projection from a fresh fixed aggregate returned by this call.
+    AOTAggregateProjectionKind aot_aggregate_projection =
+        AOTAggregateProjectionKind::None;
+    int16_t aot_aggregate_projection_operand = -1;
+    int64_t aot_aggregate_projection_size = 0;
+    int64_t aot_aggregate_projection_int = 0;
+    double aot_aggregate_projection_float = 0.0;
+    //! A final projection-only operand supplies a proven native-int list index.
+    bool aot_aggregate_projection_guarded_index = false;
+    //! The projection-only operand is an assigned boxed string hash key.
+    bool aot_aggregate_projection_guarded_hash_key = false;
+    bool aot_aggregate_projection_negative_offsets = false;
+    //! Heterogeneous native-scalar elements selected by a guarded list index.
+    std::vector<AOTAggregateProjectionDescriptor>
+        aot_aggregate_projection_guarded_descriptors;
+    //! Fixed hash keys corresponding to guarded projection descriptors.
+    std::vector<std::string> aot_aggregate_projection_guarded_keys;
+    //! Optional typed collection projection consumed directly as a native predicate.
+    AOTCollectionConsumerKind aot_collection_consumer =
+        AOTCollectionConsumerKind::None;
+    int16_t aot_collection_consumer_operand = -1;
+    int64_t aot_collection_consumer_constant = 0;
+    bool aot_collection_consumer_has_constant = false;
+    uint8_t aot_collection_consumer_extra_operands = 0;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)
@@ -1988,15 +2292,32 @@ public:
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
+
+    // Cached native leaf-call state. The release/acquire state publishes the
+    // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.
+    mutable std::atomic<int8_t> native_leaf_state{0};
+    mutable NativeLeafKind native_leaf_kind = NativeLeafKind::IntBinary;
+    mutable QoreIROpcode native_leaf_opcode = QoreIROpcode::AddInt;
+    mutable int8_t native_leaf_lhs_param = -1;
+    mutable int8_t native_leaf_rhs_param = -1;
+    mutable int64_t native_leaf_lhs_int = 0;
+    mutable int64_t native_leaf_rhs_int = 0;
+    mutable double native_leaf_lhs_float = 0.0;
+    mutable double native_leaf_rhs_float = 0.0;
+    mutable LocalVar* native_leaf_local = nullptr;
+    mutable int64_t native_leaf_delta = 0;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
 //! The method pointer is resolved at compile time and stored directly in the instruction
-class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
+class QoreIRCallMethodDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
+
     QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant = nullptr, const QoreValue& n_expr = QoreValue())
-            : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallMethodDirect),
               method(n_method),
               qc(n_qc),
               variant(n_variant),
@@ -2035,8 +2356,9 @@ public:
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception, const QoreValue& n_expr = QoreValue())
             : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
               method(n_method), qc(n_qc), variant(n_variant),
-              normal_target(n_normal), exception_target(n_exception),
+              normal_target(n_normal),
               expr(n_expr) {
+        exception_target = n_exception;
         if (expr) expr.ref();
     }
 
@@ -2051,7 +2373,6 @@ public:
     const QoreClass* qc = nullptr;              //!< The class containing the method
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
-    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
 
@@ -2065,11 +2386,14 @@ public:
 
 //! Direct static method call instruction - pre-evaluates arguments to bypass AST round-trip.
 //! Uses the Invoke + invoke_opcode pattern for try/catch (like CallDirect).
-class QoreIRCallStaticDirectInstruction : public QoreIRInstruction {
+class QoreIRCallStaticDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
+
     QoreIRCallStaticDirectInstruction(const QoreMethod* n_method,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CallStaticDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallStaticDirect),
               method(n_method), variant(n_variant), expr(n_expr) {
         expr.ref();
     }
@@ -2082,6 +2406,8 @@ public:
     const QoreMethod* method = nullptr;     //!< The resolved static method pointer
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
@@ -2096,6 +2422,20 @@ public:
 //! for obj.method(args) calls where the method is resolved at parse time.
 class QoreIRDotEvalMethodDirectInstruction : public QoreIRInstruction {
 public:
+    using AOTAggregateProjectionKind =
+        QoreIRCallDirectInstruction::AOTAggregateProjectionKind;
+
+    enum class AOTStringTransformConsumerKind : uint8_t {
+        None,
+        Size,
+        Length,
+        StartsWith,
+        EndsWith,
+        Contains,
+        Find,
+        RFind,
+    };
+
     QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
             : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
@@ -2115,8 +2455,31 @@ public:
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool pseudo = false;                    //!< True if this is a pseudo-method call
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+    bool pseudo_base_known_string = false;  //!< True if pseudo base is statically known as string/NOTHING
+    bool pseudo_base_known_assigned_string = false; //!< True if pseudo base is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_string = false;  //!< True if pseudo argument 0 is statically known as string/NOTHING
+    bool pseudo_arg0_known_assigned_string = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_assigned_int = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING int
+    bool pseudo_arg1_known_assigned_int = false; //!< True if pseudo argument 1 is proven assigned/non-NOTHING int
+    bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
+    bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
+
+    //! Transient AOT-only scalar projection from a pure fixed aggregate.
+    AOTAggregateProjectionKind aot_aggregate_projection =
+        AOTAggregateProjectionKind::None;
+    int16_t aot_aggregate_projection_operand = -1;
+    //! Transient scalar source for a proven nonescaping object getter.
+    QoreIRValue aot_object_scalar_projection_source;
+    bool aot_object_scalar_receiver_valid = false;
+    //! Transient parameter index for an exact receiver-independent
+    //! string(int-param).size()/length() composition.
+    int8_t aot_object_int_string_measure_param = -1;
+    //! Transient AOT-only scalar consumer of an exact case transformation.
+    AOTStringTransformConsumerKind aot_string_transform_consumer =
+        AOTStringTransformConsumerKind::None;
+    bool aot_string_transform_upper = false;
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
@@ -2139,7 +2502,8 @@ public:
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
             : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect),
               method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo),
-              normal_target(n_normal), exception_target(n_exception) {
+              normal_target(n_normal) {
+        exception_target = n_exception;
         expr.ref();
     }
 
@@ -2155,10 +2519,17 @@ public:
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool pseudo = false;                        //!< True if this is a pseudo-method call
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
+    bool pseudo_base_known_string = false;      //!< True if pseudo base is statically known as string/NOTHING
+    bool pseudo_base_known_assigned_string = false; //!< True if pseudo base is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_string = false;      //!< True if pseudo argument 0 is statically known as string/NOTHING
+    bool pseudo_arg0_known_assigned_string = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_assigned_int = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING int
+    bool pseudo_arg1_known_assigned_int = false; //!< True if pseudo argument 1 is proven assigned/non-NOTHING int
+    bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
+    bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
-    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
@@ -2198,15 +2569,28 @@ public:
               continue_target(n_continue_target) {
     }
 
+    QoreIRIteratorNextInstruction(QoreIROpcode op, QoreIRValue n_list, QoreIRValue n_index,
+            QoreIRValue n_limit, QoreIRBasicBlock* n_done_target, QoreIRBasicBlock* n_continue_target)
+            : QoreIRInstruction(op), iterator(n_list), index(n_index), limit(n_limit),
+              done_target(n_done_target), continue_target(n_continue_target) {
+        operands.push_back(n_list);
+        operands.push_back(n_index);
+        operands.push_back(n_limit);
+    }
+
     QoreIRValue iterator;                       //!< Iterator handle from IteratorCreate
+    QoreIRValue index;                          //!< Native index for typed-list foreach
+    QoreIRValue limit;                          //!< Source size captured at loop entry
     QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
     QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
 };
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt) {
+    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt,
+            uint32_t n_owner_scope_id = 0)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt),
+              owner_scope_id(n_owner_scope_id) {
     }
 
     //! Constructor for deserialized case (no AST statement available)
@@ -2221,6 +2605,11 @@ public:
     //! Compiled handler body; required for IR/JIT/AOT execution.
     //! Missing handler IR is a lowering/metadata error, not an AST fallback.
     std::unique_ptr<QoreIRFunction> handler_ir;
+    //! Transient scope ownership used by transforms that may split a function.
+    /** A zero value means that ownership metadata is unavailable. This field
+     *  is intentionally not part of the persistent IR format.
+     */
+    uint32_t owner_scope_id = 0;
 };
 
 //! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers
@@ -2351,8 +2740,8 @@ public:
     QoreIRInvokeInstruction(const QoreValue& n_expr, QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
             : QoreIRInstruction(QoreIROpcode::Invoke),
             expr(n_expr),
-            normal_target(n_normal),
-            exception_target(n_exception) {
+            normal_target(n_normal) {
+        exception_target = n_exception;
         expr.ref();
     }
 
@@ -2363,10 +2752,16 @@ public:
     QoreValue expr;
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
-    QoreIRBasicBlock* exception_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
     bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
     bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee
+    //! Resolved function for invoke_opcode == CallDirect, captured at IR-lowering time.
+    //! Codegen MUST use this rather than re-reading getFunction() on the AST node: for
+    //! runtime-created closures the node's resolved-function pointer can be cleared between
+    //! lowering and codegen, which would otherwise bake a null func into the direct call.
+    const QoreFunction* func = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
 };
 
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)
@@ -2531,7 +2926,31 @@ public:
     }
 
     QoreIRValue createValue() {
-        return QoreIRValue(next_value_id++);
+        QoreIRValue value(next_value_id++);
+        if (value_facts.size() <= value.id) {
+            value_facts.resize(static_cast<size_t>(value.id) + 1);
+        }
+        return value;
+    }
+
+    //! Attach facts to an SSA value.
+    //! @param value SSA value to annotate
+    //! @param facts facts valid at the value's definition point
+    void setValueFacts(QoreIRValue value, const QoreIRValueFacts& facts) {
+        if (!value.isValid()) {
+            return;
+        }
+        if (value_facts.size() <= value.id) {
+            value_facts.resize(static_cast<size_t>(value.id) + 1);
+        }
+        value_facts[value.id] = facts;
+    }
+
+    //! Return facts attached to an SSA value.
+    //! @param value SSA value to query
+    //! @return facts for @p value, or nullptr when no fact slot exists
+    const QoreIRValueFacts* getValueFacts(QoreIRValue value) const {
+        return value.isValid() && value.id < value_facts.size() ? &value_facts[value.id] : nullptr;
     }
 
     const std::string& getDisplayName() const {
@@ -2565,7 +2984,27 @@ public:
     //! (qore_program_private::getAttachedDebugProgramAddr()), used as the inline
     //! gate for the JIT debug-step hook.  Null in AOT mode / when unavailable.
     void* source_dpgm_addr = nullptr;
+    //! Owning program of this lowered IR function. Used by the per-Program background
+    //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
+    //! only the compiles referencing a Program being torn down. Set unconditionally at
+    //! lowering (independent of the #5352 debug context above). Null for AOT.
+    QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
+
+    //! Transient SSA facts used by IR optimization and native lowering.
+    /** AOT persists the optimized instruction stream; deserialized functions
+        can conservatively operate without these facts. */
+    std::vector<QoreIRValueFacts> value_facts{1};
+
+    //! LoadLocal values positively proven assigned and exact boxed by CFG analysis.
+    /** This is intentionally separate from value_facts: parse-derived facts can
+        reflect a declared type without proving that an lvalue is currently
+        assigned. Transient AOT shortcuts that omit NOTHING guards require this
+        stronger proof. */
+    std::unordered_set<uint32_t> exact_assigned_boxed_local_loads;
+    //! Enforced declared value type for each exact assigned boxed local load.
+    std::unordered_map<uint32_t, const QoreTypeInfo*>
+        exact_assigned_boxed_local_types;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
     uint32_t max_value_id = 0;
@@ -2676,6 +3115,52 @@ public:
     // (reload after calls), since no AST callback will ever look them up.
     std::unordered_set<const void*> ir_only_locals;
 
+    // Locals kept AST-visible because a direct hash/list element store can
+    // perform COW assign-back through the runtime local stack. Optimizations
+    // that eliminate every such store can combine this with the AST-reference
+    // inventory to identify otherwise IR-only containers.
+    std::unordered_set<const void*> cow_container_locals;
+
+    // Locals kept AST-visible because structured lvalue paths access the
+    // runtime local stack. Scalar replacement can eliminate simple exact
+    // aggregate paths after proving that every path operation is local.
+    std::unordered_set<const void*> lvalue_path_locals;
+
+    // Locals referenced by AST expression subtrees retained in otherwise
+    // lowered IR. This metadata lets native fast-entry eligibility distinguish
+    // an unused synthetic method self local from one that still requires TLS.
+    std::unordered_set<const void*> ast_referenced_locals;
+
+    // AST-visible locals excluding structured COW stores and lvalue paths.
+    // Fixed aggregate scalar replacement uses this narrower inventory to prove
+    // that eliminating all structured operations removes runtime-stack access.
+    std::unordered_set<const void*> non_structured_ast_referenced_locals;
+
+    //! Returns true when a local requires visibility through the runtime stack.
+    //! The split inventories let scalar replacement reason about structured
+    //! container operations without weakening general fast-entry safety.
+    //! @param key local variable identity
+    //! @return true if the local is visible to retained AST execution
+    bool isAstVisibleLocal(const void* key) const {
+        return ast_referenced_locals.count(key)
+            || cow_container_locals.count(key)
+            || lvalue_path_locals.count(key);
+    }
+
+    // True when delegate-to-AST statements or an unknown AST node prevent an
+    // exact local-reference inventory.
+    bool has_opaque_ast_local_access = false;
+
+    // True when lowered IR reads or writes the synthetic method `self` local
+    // as a value rather than only accessing members through self helpers.
+    bool has_explicit_self_local_access = false;
+
+    //! Runtime call-context requirements derived from final IR.
+    struct ContextUsage {
+        bool argv = false;
+        bool self = false;
+    };
+
     // Total number of unique locals referenced by LoadLocal/StoreLocal/UninstantiateLocal.
     // Used with ir_only_locals.size() to determine if ALL locals are IR-only
     // (enabling reloadAllLocalsFromRuntime to be skipped entirely).
@@ -2694,6 +3179,10 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Return the implicit argv/self contexts required by this function.
+    //! Opaque AST callbacks and closure captures are handled conservatively.
+    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid) const;
 
     //! Returns true if all body locals are IR-only (managed by LLVM allocas,
     //! never accessed via thread-local stack).  When true, callers can skip
@@ -2733,7 +3222,7 @@ public:
     // the IR function, so compute them once and reuse them across recursive and
     // hot call paths instead of rescanning the instruction stream per execute().
     mutable std::mutex interpreter_analysis_mutex;
-    mutable bool interpreter_analysis_ready = false;
+    mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
@@ -2743,9 +3232,12 @@ public:
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
+    mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;
     mutable bool interpreter_has_non_ir_only_locals = false;
-    mutable bool interpreter_may_invalidate_external_caches = true;
+    mutable bool interpreter_local_may_invalidate_external_caches = true;
+    mutable std::atomic<bool> interpreter_may_invalidate_external_caches{true};
+    mutable std::atomic<bool> interpreter_effect_summary_ready{false};
 
 private:
     uint32_t next_value_id = 1;

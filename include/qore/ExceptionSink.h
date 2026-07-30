@@ -493,6 +493,32 @@ protected:
     const QoreStackLocation* stack_next = nullptr;
 };
 
+//! Internal marker interface for stack-location frames that execute AOT-compiled native code
+/** Implemented only by libqore-internal stack-location types (CodeEvaluationHelper and
+    the JIT/AOT stack location).  The exception machinery cross-casts a QoreStackLocation*
+    to this interface to identify AOT frames.
+
+    This is deliberately a SEPARATE interface rather than a virtual method on
+    QoreStackLocation: QoreStackLocation is a public base class subclassed by external
+    binary modules (via QoreExternalStackLocation, e.g. the jni module's
+    QoreJniStackLocationHelper), so adding a virtual to it would shift the vtable layout
+    and crash any module compiled against the prior header when libqore invokes the new
+    slot.  Keeping the marker independent preserves QoreStackLocation's binary ABI.
+
+    @since %Qore 3.0
+*/
+class QoreAOTStackFrameMarker {
+public:
+    DLLLOCAL virtual ~QoreAOTStackFrameMarker() = default;
+
+    //! returns true if this frame is an AOT-compiled function executing natively
+    /** Used by the exception machinery to repair AOT callstack-frame call-site locations
+        via the lazy PC->loc registry (the eager updater could leave them at the aggregate
+        label).
+    */
+    DLLLOCAL virtual bool isAOTFrame() const = 0;
+};
+
 //! Stack location element abstract class for external binary modules
 /** @since %Qore 0.9
 */

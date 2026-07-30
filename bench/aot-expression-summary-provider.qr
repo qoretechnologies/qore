@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub bitwiseExpression(int a, int b, int c) {
+    return (a & b) ^ (b | c);
+}
+
+int sub compareSelectExpression(int a, int b, int c) {
+    return a < b ? a * 3 + c : b * 5 - c;
+}
+
+float sub floatExpression(float a, float b, float c) {
+    return (a * 1.5 + b) - c * 0.25;
+}
+
+int sub stringMeasureExpression(string value, int adjustment) {
+    return value.size() * 3 + value.length() * 5 + adjustment;
+}
+
+int sub listMeasureExpression(list<int> values, list<int> other, int adjustment) {
+    return values.size() * 7 + other.size() * 5 + adjustment * 3;
+}

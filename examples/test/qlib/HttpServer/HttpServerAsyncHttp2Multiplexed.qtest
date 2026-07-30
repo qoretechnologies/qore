@@ -379,6 +379,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         return new RestClient({
             "url": mSslUrl,
             "ssl_verify_cert": False,
+            "http_version": "2.0",
             "timeout": timeout_ms ?? 30000,
         });
     }
@@ -391,6 +392,20 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "ssl_verify_cert": False,
             "timeout": timeout_ms ?? 30000,
         });
+    }
+
+    private bool waitForZeroOrFail(Counter cnt, timeout to, string msg) {
+        if (cnt.waitForZero(to)) {
+            fail(msg);
+            return False;
+        }
+        return True;
+    }
+
+    private waitForZeroOrThrow(Counter cnt, timeout to, string msg) {
+        if (cnt.waitForZero(to)) {
+            throw "TEST-TIMEOUT", msg;
+        }
     }
 
     #! Test 1: WebSocket + concurrent regular HTTP/2 requests
@@ -453,14 +468,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         # Wait for WebSocket echo
-        ws_msg_cnt.waitForZero(10s);
-        ws_mtx.lock();
-        on_exit ws_mtx.unlock();
-        assertEq(1, ws_received.size(), "should receive WebSocket echo");
-        assertEq("ECHO:hello-mux", ws_received[0], "WebSocket echo content");
+        if (!waitForZeroOrFail(ws_msg_cnt, 10s, "timed out waiting for WebSocket echo")) {
+            return;
+        }
+        {
+            AutoLock al(ws_mtx);
+            assertEq(1, ws_received.size(), "should receive WebSocket echo");
+            assertEq("ECHO:hello-mux", ws_received[0], "WebSocket echo content");
+        }
 
         # Wait for HTTP requests
-        http_cnt.waitForZero(30s);
+        if (!waitForZeroOrFail(http_cnt, 30s, "timed out waiting for concurrent HTTP requests")) {
+            return;
+        }
         int http_success = 0;
         foreach hash<auto> r in (http_results) {
             if (r.success) {
@@ -551,7 +571,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }();
         }
 
-        all_cnt.waitForZero(60s);
+        if (!waitForZeroOrFail(all_cnt, 60s, "timed out waiting for streaming/HTTP requests")) {
+            return;
+        }
 
         int stream_ok = 0;
         int http_ok = 0;
@@ -590,9 +612,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             on_exit all_cnt.dec();
             try {
                 list<auto> ws_msgs();
+                Mutex ws_mtx();
                 Counter msg_cnt(1);
                 WebSocketClient wsc = getWsClient(sub (*data msg) {
                     if (exists msg) {
+                        AutoLock al(ws_mtx);
                         ws_msgs += msg;
                         msg_cnt.dec();
                     }
@@ -600,15 +624,22 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 on_exit delete wsc;
                 wsc.connect();
                 wsc.send("mixed-test");
-                msg_cnt.waitForZero(10s);
+                waitForZeroOrThrow(msg_cnt, 10s, "timed out waiting for mixed WebSocket echo");
                 wsc.disconnect();
+                int msg_count;
+                auto first_msg = NOTHING;
+                {
+                    AutoLock al(ws_mtx);
+                    msg_count = ws_msgs.size();
+                    first_msg = ws_msgs[0];
+                }
                 mtx.lock();
                 on_exit mtx.unlock();
                 results += {
                     "type": "ws",
                     "success": True,
-                    "msg_count": ws_msgs.size(),
-                    "first_msg": ws_msgs[0],
+                    "msg_count": msg_count,
+                    "first_msg": first_msg,
                 };
             } catch (hash<ExceptionInfo> ex) {
                 mtx.lock();
@@ -679,7 +710,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }
         }();
 
-        all_cnt.waitForZero(60s);
+        if (!waitForZeroOrFail(all_cnt, 60s, "timed out waiting for mixed multiplexing operations")) {
+            return;
+        }
 
         assertEq(3, results.size(), "all three operations should complete");
 
@@ -782,16 +815,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         int wait_rc = cnt.waitForZero(OperationWait);
-
-        list<string> expected_keys();
-        for (int i = 0; i < num_slow; ++i) {
-            expected_keys += sprintf("slow-%d", i);
+        if (wait_rc) {
+            list<string> expected_keys();
+            for (int i = 0; i < num_slow; ++i) {
+                expected_keys += sprintf("slow-%d", i);
+            }
+            for (int i = 0; i < num_fast; ++i) {
+                expected_keys += sprintf("fast-%d", num_slow + i);
+            }
+            fail(sprintf("all operations completed within %y; still running: %y",
+                OperationWait, getMissingOps(results, mx, expected_keys)));
+            return;
         }
-        for (int i = 0; i < num_fast; ++i) {
-            expected_keys += sprintf("fast-%d", num_slow + i);
-        }
-        assertEq(0, wait_rc, sprintf("all operations completed within %y; still running: %y",
-            OperationWait, getMissingOps(results, mx, expected_keys)));
 
         assertEq(total, results.size(), "all operations should complete");
 
@@ -865,9 +900,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # While streaming is active, do WebSocket exchange on a separate connection
         list<auto> ws_msgs();
+        Mutex ws_mtx();
         Counter ws_cnt(3);
         WebSocketClient wsc = getWsClient(sub (*data msg) {
             if (exists msg) {
+                AutoLock al(ws_mtx);
                 ws_msgs += msg;
                 ws_cnt.dec();
             }
@@ -882,16 +919,23 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         wsc.send("msg-2");
         wsc.send("msg-3");
 
-        ws_cnt.waitForZero(10s);
-        assertEq(3, ws_msgs.size(), "should receive 3 WebSocket echoes");
-        assertEq("ECHO:msg-1", ws_msgs[0], "WebSocket echo 1");
-        assertEq("ECHO:msg-2", ws_msgs[1], "WebSocket echo 2");
-        assertEq("ECHO:msg-3", ws_msgs[2], "WebSocket echo 3");
+        if (!waitForZeroOrFail(ws_cnt, 10s, "timed out waiting for WebSocket echoes during streaming")) {
+            return;
+        }
+        {
+            AutoLock al(ws_mtx);
+            assertEq(3, ws_msgs.size(), "should receive 3 WebSocket echoes");
+            assertEq("ECHO:msg-1", ws_msgs[0], "WebSocket echo 1");
+            assertEq("ECHO:msg-2", ws_msgs[1], "WebSocket echo 2");
+            assertEq("ECHO:msg-3", ws_msgs[2], "WebSocket echo 3");
+        }
 
         wsc.disconnect();
 
         # Wait for streaming to complete
-        stream_cnt.waitForZero(60s);
+        if (!waitForZeroOrFail(stream_cnt, 60s, "timed out waiting for streaming request")) {
+            return;
+        }
         assertTrue(stream_result.success,
             sprintf("streaming should succeed (error: %s)", stream_result.error ?? "none"));
         assertEq(200, stream_result.status, "streaming status during WebSocket");
@@ -923,9 +967,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Establish WebSocket connection
         list<auto> ws_msgs();
+        Mutex ws_mtx();
         Counter ws_cnt(1);
         WebSocketClient wsc(sub (*data msg) {
             if (exists msg) {
+                AutoLock al(ws_mtx);
                 ws_msgs += msg;
                 ws_cnt.dec();
             }
@@ -940,15 +986,21 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Verify WebSocket is working
         wsc.send("shutdown-test");
-        ws_cnt.waitForZero(10s);
-        assertEq(1, ws_msgs.size(), "should receive WebSocket echo before shutdown");
-        assertEq("ECHO:shutdown-test", ws_msgs[0], "echo content before shutdown");
+        if (!waitForZeroOrFail(ws_cnt, 10s, "timed out waiting for WebSocket echo before shutdown")) {
+            return;
+        }
+        {
+            AutoLock al(ws_mtx);
+            assertEq(1, ws_msgs.size(), "should receive WebSocket echo before shutdown");
+            assertEq("ECHO:shutdown-test", ws_msgs[0], "echo content before shutdown");
+        }
 
         # Verify regular HTTP/2 still works with active WebSocket
         {
             RestClient rc({
                 "url": "https://localhost:" + test_port,
                 "ssl_verify_cert": False,
+                "http_version": "2.0",
                 "timeout": 10000,
             });
             on_exit delete rc;
@@ -987,9 +1039,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 on_exit all_cnt.dec();
                 try {
                     list<auto> ws_msgs();
+                    Mutex ws_mtx();
                     Counter msg_cnt(1);
                     WebSocketClient wsc = getWsClient(sub (*data msg) {
                         if (exists msg) {
+                            AutoLock al(ws_mtx);
                             ws_msgs += msg;
                             msg_cnt.dec();
                         }
@@ -998,16 +1052,24 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     wsc.connect();
                     string test_msg = sprintf("ws-%d-test", idx);
                     wsc.send(test_msg);
-                    msg_cnt.waitForZero(10s);
+                    waitForZeroOrThrow(msg_cnt, 10s,
+                        sprintf("timed out waiting for WebSocket %d echo", idx));
                     wsc.disconnect();
+                    int msg_count;
+                    auto first_msg = NOTHING;
+                    {
+                        AutoLock al(ws_mtx);
+                        msg_count = ws_msgs.size();
+                        first_msg = ws_msgs[0];
+                    }
                     mtx.lock();
                     on_exit mtx.unlock();
                     results += {
                         "idx": idx,
                         "success": True,
                         "is_http2": wsc.isHttp2(),
-                        "msg_count": ws_msgs.size(),
-                        "first_msg": ws_msgs[0],
+                        "msg_count": msg_count,
+                        "first_msg": first_msg,
                         "expected_echo": "ECHO:" + test_msg,
                     };
                 } catch (hash<ExceptionInfo> ex) {
@@ -1022,7 +1084,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }();
         }
 
-        all_cnt.waitForZero(30s);
+        if (!waitForZeroOrFail(all_cnt, 30s, "timed out waiting for WebSocket connections")) {
+            return;
+        }
         assertEq(num_ws, results.size(), "all WebSocket connections should complete");
 
         int ws_ok = 0;
@@ -1043,10 +1107,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     #! Corner case: WebSocket binary message echo
     testWsBinaryMessages() {
         list<auto> ws_received();
+        Mutex ws_mtx();
         Counter ws_cnt(2);
 
         WebSocketClient wsc = getWsClient(sub (*data msg) {
             if (exists msg) {
+                AutoLock al(ws_mtx);
                 ws_received += msg;
                 ws_cnt.dec();
             }
@@ -1063,13 +1129,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Send a string message to verify both types work
         wsc.send("text-msg");
 
-        ws_cnt.waitForZero(10s);
+        if (!waitForZeroOrFail(ws_cnt, 10s, "timed out waiting for binary/text WebSocket echoes")) {
+            return;
+        }
 
-        assertEq(2, ws_received.size(), "should receive 2 messages");
-        # Binary messages are echoed back as binary
-        assertEq(bin_msg, ws_received[0], "binary message echo");
-        # String messages get the ECHO: prefix
-        assertEq("ECHO:text-msg", ws_received[1], "string message echo after binary");
+        {
+            AutoLock al(ws_mtx);
+            assertEq(2, ws_received.size(), "should receive 2 messages");
+            # Binary messages are echoed back as binary
+            assertEq(bin_msg, ws_received[0], "binary message echo");
+            # String messages get the ECHO: prefix
+            assertEq("ECHO:text-msg", ws_received[1], "string message echo after binary");
+        }
 
         wsc.disconnect();
     }
@@ -1194,9 +1265,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 on_exit all_cnt.dec();
                 try {
                     list<auto> msgs();
+                    Mutex msg_mtx();
                     Counter msg_cnt(1);
                     WebSocketClient wsc = getWsClient(sub (*data msg) {
                         if (exists msg) {
+                            AutoLock al(msg_mtx);
                             msgs += msg;
                             msg_cnt.dec();
                         }
@@ -1204,12 +1277,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     on_exit delete wsc;
                     wsc.connect();
                     wsc.send(sprintf("high-concurrency-%d", idx));
-                    msg_cnt.waitForZero(10s);
+                    waitForZeroOrThrow(msg_cnt, 10s,
+                        sprintf("timed out waiting for high-concurrency WebSocket %d echo", idx));
                     wsc.disconnect();
+                    int msg_count;
+                    {
+                        AutoLock al(msg_mtx);
+                        msg_count = msgs.size();
+                    }
                     mtx.lock();
                     on_exit mtx.unlock();
                     results += {"type": "ws", "idx": idx, "success": True,
-                        "msg_count": msgs.size()};
+                        "msg_count": msg_count};
                 } catch (hash<ExceptionInfo> ex) {
                     mtx.lock();
                     on_exit mtx.unlock();
@@ -1245,19 +1324,21 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         int wait_rc = all_cnt.waitForZero(OperationWait);
-
-        list<string> expected_keys();
-        for (int i = 0; i < num_http; ++i) {
-            expected_keys += sprintf("http-%d", i);
+        if (wait_rc) {
+            list<string> expected_keys();
+            for (int i = 0; i < num_http; ++i) {
+                expected_keys += sprintf("http-%d", i);
+            }
+            for (int i = 0; i < num_ws; ++i) {
+                expected_keys += sprintf("ws-%d", i);
+            }
+            for (int i = 0; i < num_stream; ++i) {
+                expected_keys += sprintf("stream-%d", i);
+            }
+            fail(sprintf("all operations completed within %y; still running: %y",
+                OperationWait, getMissingOps(results, mtx, expected_keys)));
+            return;
         }
-        for (int i = 0; i < num_ws; ++i) {
-            expected_keys += sprintf("ws-%d", i);
-        }
-        for (int i = 0; i < num_stream; ++i) {
-            expected_keys += sprintf("stream-%d", i);
-        }
-        assertEq(0, wait_rc, sprintf("all operations completed within %y; still running: %y",
-            OperationWait, getMissingOps(results, mtx, expected_keys)));
 
         int total_expected = num_http + num_ws + num_stream;
         assertEq(total_expected, results.size(), "all operations should complete");
@@ -1329,9 +1410,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     testErrorIsolation() {
         # Start a WebSocket connection
         list<auto> ws_msgs();
+        Mutex ws_mtx();
         Counter ws_cnt(1);
         WebSocketClient wsc = getWsClient(sub (*data msg) {
             if (exists msg) {
+                AutoLock al(ws_mtx);
                 ws_msgs += msg;
                 ws_cnt.dec();
             }
@@ -1354,9 +1437,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Verify WebSocket still works after errors on another connection
         wsc.send("after-errors");
-        ws_cnt.waitForZero(10s);
-        assertEq(1, ws_msgs.size(), "WebSocket should still work after errors on other connection");
-        assertEq("ECHO:after-errors", ws_msgs[0], "WebSocket echo after errors");
+        if (!waitForZeroOrFail(ws_cnt, 10s, "timed out waiting for WebSocket echo after errors")) {
+            return;
+        }
+        {
+            AutoLock al(ws_mtx);
+            assertEq(1, ws_msgs.size(), "WebSocket should still work after errors on other connection");
+            assertEq("ECHO:after-errors", ws_msgs[0], "WebSocket echo after errors");
+        }
 
         # Verify regular HTTP still works
         hash<auto> resp = rc.get("/simple");
@@ -1545,7 +1633,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         # Wait for all requests to reach the handler (in flight)
-        block_handler.getReadyCounter().waitForZero(15s);
+        if (!waitForZeroOrFail(block_handler.getReadyCounter(), 15s,
+                "timed out waiting for blocked H2 requests to reach handler")) {
+            return;
+        }
 
         # Now stop the server.  Release handler threads first so server
         # shutdown doesn't wait on them — we measure client-side cleanup,
@@ -1559,8 +1650,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # connection close, a client could wait its own request_timeout
         # (60s), so 3 streams would hang for up to 180s.  With proper
         # propagation this completes in seconds.
+        bool timed_out = False;
         foreach Counter c in (done) {
-            c.waitForZero(30s);
+            if (c.waitForZero(30s)) {
+                timed_out = True;
+            }
+        }
+        if (timed_out) {
+            fail("timed out waiting for all H2 shutdown client requests");
+            return;
         }
         int total_elapsed_ms = (now_us() - shutdown_time).durationMilliseconds();
 

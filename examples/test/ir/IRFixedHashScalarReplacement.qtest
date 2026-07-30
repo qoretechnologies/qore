@@ -1,0 +1,316 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub scalarInt(int base) {
+    hash<string, int> values = {\"left\": base, \"middle\": base + 1, \"right\": base + 2};
+    return values.middle + values.right;
+}
+
+float sub scalarFloat(float base) {
+    hash<string, float> values = {\"left\": base, \"right\": base + 1.0};
+    return values.right;
+}
+
+bool sub scalarBool(bool base) {
+    hash<string, bool> values = {\"left\": base, \"right\": False};
+    return values.left;
+}
+
+float sub scalarAutoMixed(int base) {
+    hash<auto> values = (\"integer\": base, \"ratio\": 2.5, \"enabled\": True);
+    return values.integer + values.ratio + (values.enabled ? 0.5 : 0.0);
+}
+
+int sub scalarAutoMutation() {
+    hash<auto> values = (\"left\": 1, \"right\": 2, \"enabled\": True);
+    values.left += 4;
+    values.enabled = False;
+    return values.left + values.right;
+}
+
+int sub scalarAutoOwnedList() {
+    list<int> nested = (3, 4, 5);
+    hash<auto> values = (\"base\": 2, \"nested\": nested);
+    return values.base + values.nested[1];
+}
+
+int sub scalarAutoOwnedHash() {
+    hash<string, int> nested = {\"left\": 3, \"right\": 4};
+    hash<auto> values = (\"base\": 2, \"nested\": nested);
+    return values.base + values.nested.right;
+}
+
+int sub scalarAutoOwnedAliasIsolation() {
+    list<int> nested = (1, 2);
+    hash<auto> values = (\"base\": 1, \"nested\": nested);
+    list<int> projected = values.nested;
+    projected[0] = 9;
+    return nested[0] * 100 + projected[0] * 10 + values.base;
+}
+
+bool sub autoNothing() {
+    hash<auto> values = (\"left\": NOTHING, \"right\": 2);
+    return values.left === NOTHING;
+}
+
+string sub autoTypeChange() {
+    hash<auto!> values = (\"left\": 1, \"right\": 2);
+    values.left = \"x\";
+    return values.left;
+}
+
+int sub dynamicKey(string key) {
+    hash<string, int> values = {\"left\": 7, \"middle\": 8, \"right\": 9};
+    return values{key};
+}
+
+int sub constantDynamicKey() {
+    string key = \"left\";
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values{key} += 4;
+    return values{key} + values.right;
+}
+
+int sub reassignedDynamicKey() {
+    string key = \"left\";
+    key = \"right\";
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    return values{key};
+}
+
+int sub mutatedHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.left = 7;
+    return values.left + values.right;
+}
+
+int sub compoundHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.left += 4;
+    return values.left + values.right;
+}
+
+int sub unaryHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    int old = values.left++;
+    int current = ++values.right;
+    int prior = values.left--;
+    int reduced = --values.right;
+    return old * 10000 + current * 1000 + prior * 100
+        + values.left * 10 + reduced;
+}
+
+int sub aliasedHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    hash<string, int> alias = values;
+    values.left = 7;
+    return alias.left + values.left;
+}
+
+int sub newKey() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.extra = 7;
+    return values.extra;
+}
+
+hash<string, int> sub escapedHash() {
+    hash<string, int> values = {\"left\": 3, \"right\": 4};
+    return values;
+}
+
+bool sub missingKey() {
+    hash<string, int> values = {\"left\": 5, \"right\": 6};
+    return values.missing === NOTHING;
+}
+
+string sub boxedElement() {
+    hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
+    return values.right;
+}
+
+int sub crossBlock(int base, bool first) {
+    hash<string, int> values = {\"left\": base, \"middle\": base + 1, \"right\": base + 2};
+    if (first) {
+        return values.left + values.right;
+    }
+    return values.middle + values.right;
+}
+
+int sub crossBlockMutation(bool first) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    if (first) {
+        values.left += 4;
+    } else {
+        values.right = 7;
+    }
+    int old = values.left++;
+    return old * 100 + values.left * 10 + values.right;
+}
+
+int sub cyclicMutation(int rounds) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < rounds; ++i) {
+        values.left += 1;
+    }
+    return values.left + values.right;
+}
+
+bool sub conditionalAssignment(bool assign) {
+    hash<string, int> values;
+    if (assign) {
+        values = {\"left\": 10, \"right\": 20};
+    }
+    return values.left === NOTHING;
+}
+
+bool sub removedKey() {
+    hash<string, int> values = {\"left\": 10, \"right\": 20};
+    remove values.left;
+    return values.left === NOTHING;
+}
+
+bool sub deletedKey() {
+    hash<string, int> values = {\"left\": 10, \"right\": 20};
+    delete values.left;
+    return values.left === NOTHING;
+}
+
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    scalarInt(4), scalarFloat(1.5), scalarBool(True), dynamicKey(\"right\"),
+    constantDynamicKey(), reassignedDynamicKey(),
+    mutatedHash(), compoundHash(), unaryHash(), aliasedHash(), newKey(),
+    escapedHash().size(), missingKey(), boxedElement(),
+    crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
+    conditionalAssignment(True), removedKey(), deletedKey(),
+    crossBlockMutation(True), crossBlockMutation(False), cyclicMutation(3));
+printf(\"%.1f:%d:%d:%d:%d:%d:%s\\n\", scalarAutoMixed(4), scalarAutoMutation(),
+    scalarAutoOwnedList(), scalarAutoOwnedHash(), scalarAutoOwnedAliasIsolation(),
+    autoNothing(), autoTypeChange());
+";
+
+string script_path = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(bool disabled, bool field_disabled, bool aggregate_disabled) {
+    string exe = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid())
+        + (disabled ? "-disabled" : "")
+        + (field_disabled ? "-field-disabled" : "")
+        + (aggregate_disabled ? "-aggregate-disabled" : "");
+    string compile_out = backquote(sprintf("%s%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 " : "",
+        field_disabled ? "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT=1 " : "",
+        aggregate_disabled ? "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION=1 " : "",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1:562:127:6\n"
+    + "7.0:7:6:6:191:1:x\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot(False, False, False);
+string disabled_aot = runAot(True, False, False);
+string field_disabled_aot = runAot(False, True, False);
+string aggregate_disabled_aot = runAot(False, False, True);
+if (aot != expected || disabled_aot != expected || field_disabled_aot != expected
+        || aggregate_disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%sfield-disabled AOT:\n%s"
+            + "aggregate-disabled AOT:\n%s",
+        expected, aot, disabled_aot, field_disabled_aot, aggregate_disabled_aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarFloat:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarBool:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-lists=1.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=2/
+        || stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: constantDynamicKey:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: unaryHash:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: cyclicMutation:.*scalar-hashes=1/) {
+    printf("missing fixed-hash scalar replacement:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: reassignedDynamicKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: aliasedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: newKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: escapedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: missingKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: autoNothing:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: autoTypeChange:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: conditionalAssignment:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: removedKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/) {
+    printf("unsafe fixed-hash scalar replacement:\n%s", stats);
+    exit(2);
+}
+
+string field_disabled_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT=1 QORE_IR_OPT_STATS=1 "
+        + "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (field_disabled_stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoMutation:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=0/
+        || field_disabled_stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=0/) {
+    printf("field-sensitive fixed-hash scalar replacement gate failed:\n%s",
+        field_disabled_stats);
+    exit(2);
+}
+
+string aggregate_disabled_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION=1 QORE_IR_OPT_STATS=1 "
+        + "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (aggregate_disabled_stats !~ /IR-OPT: scalarAutoMixed:.*scalar-hashes=1/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedList:.*scalar-hashes=0/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedHash:.*scalar-hashes=0/
+        || aggregate_disabled_stats !~ /IR-OPT: scalarAutoOwnedAliasIsolation:.*scalar-hashes=0/) {
+    printf("field-sensitive fixed-hash aggregate projection gate failed:\n%s",
+        aggregate_disabled_stats);
+    exit(2);
+}

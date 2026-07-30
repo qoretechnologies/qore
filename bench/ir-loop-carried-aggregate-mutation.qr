@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hashdecl LoopMutationRecord {
+    int left;
+    int right;
+}
+
+int sub hashKernel(int rounds) {
+    hash<string, int> values = {"left": 1, "right": 2};
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i % 2) {
+            values.left += 1;
+        } else {
+            values.right += 2;
+        }
+        checksum += values.left + values.right;
+    }
+    return checksum + values.left + values.right;
+}
+
+int sub hashdeclKernel(int rounds) {
+    LoopMutationRecord values(("left": 1, "right": 2));
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i % 2) {
+            values.left += 1;
+        } else {
+            values.right += 2;
+        }
+        checksum += values.left + values.right;
+    }
+    return checksum + values.left + values.right;
+}
+
+int sub listKernel(int rounds) {
+    list<int> values = (1, 2);
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i % 2) {
+            values[0] += 1;
+        } else {
+            values[1] += 2;
+        }
+        checksum += values[0] + values[1];
+    }
+    return checksum + values[0] + values[1];
+}
+
+hash<string, int> sub hashReturnProducer(int rounds) {
+    hash<string, int> values = {"left": 1, "right": 2};
+    for (int i = 0; i < rounds; ++i) {
+        values.left += 1;
+        values.right += 2;
+    }
+    return values;
+}
+
+int sub hashReturnKernel(int rounds) {
+    hash<string, int> values = hashReturnProducer(rounds);
+    return values.left + values.right;
+}
+
+LoopMutationRecord sub hashdeclReturnProducer(int rounds) {
+    LoopMutationRecord values(("left": 1, "right": 2));
+    for (int i = 0; i < rounds; ++i) {
+        values.left += 1;
+        values.right += 2;
+    }
+    return values;
+}
+
+int sub hashdeclReturnKernel(int rounds) {
+    LoopMutationRecord values = hashdeclReturnProducer(rounds);
+    return values.left + values.right;
+}
+
+list<int> sub listReturnProducer(int rounds) {
+    list<int> values = (1, 2);
+    for (int i = 0; i < rounds; ++i) {
+        values[0] += 1;
+        values[1] += 2;
+    }
+    return values;
+}
+
+int sub listReturnKernel(int rounds) {
+    list<int> values = listReturnProducer(rounds);
+    return values[0] + values[1];
+}
+
+string mode = ARGV.size() ? ARGV[0] : "hash";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 1000000;
+switch (mode) {
+    case "hash":
+        printf("%d\n", hashKernel(rounds));
+        break;
+    case "hashdecl":
+        printf("%d\n", hashdeclKernel(rounds));
+        break;
+    case "list":
+        printf("%d\n", listKernel(rounds));
+        break;
+    case "hash-return":
+        printf("%d\n", hashReturnKernel(rounds));
+        break;
+    case "hashdecl-return":
+        printf("%d\n", hashdeclReturnKernel(rounds));
+        break;
+    case "list-return":
+        printf("%d\n", listReturnKernel(rounds));
+        break;
+    default:
+        throw "BENCHMARK-ERROR", "unknown mode '%s'", mode;
+}

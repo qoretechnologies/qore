@@ -1,0 +1,980 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+class Holder {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    string get() {
+        return value;
+    }
+}
+
+class FinalMethodHolder {
+    private {
+        int value = 0;
+    }
+
+    final int add(int delta) {
+        value += delta;
+        return value;
+    }
+
+    int run() {
+        return self.add(2) * 10 + self.add(3);
+    }
+}
+
+class StaticHelper {
+    static int twice(int x) {
+        return x * 2;
+    }
+
+    static int combo(int x) {
+        return StaticHelper::twice(x) + StaticHelper::twice(1);
+    }
+
+    static int comboTry(int x) {
+        try {
+            return StaticHelper::combo(x);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+
+    static nothing bump(reference<int> x) {
+        ++x;
+    }
+
+    static int refTry() {
+        int x = 4;
+        try {
+            StaticHelper::bump(\\x);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+        return x;
+    }
+
+    static int fail(int x) {
+        if (x < 0) {
+            throw \"STATIC-FAST-TEST\", \"expected\";
+        }
+        return x;
+    }
+
+    static int failTry() {
+        try {
+            return StaticHelper::fail(-1);
+        } catch (hash<auto> ex) {
+            return ex.err == \"STATIC-FAST-TEST\" ? 12 : -1;
+        }
+    }
+}
+
+final class SelfHelper {
+    private {
+        int total = 0;
+    }
+
+    int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int pair(int a, int b) {
+        return a * 10 + b;
+    }
+
+    int named() {
+        return self.pair(b: 2, a: 1);
+    }
+
+    int defaulted(int x = 7) {
+        return x;
+    }
+
+    nothing bump(reference<int> x) {
+        ++x;
+    }
+
+    int refs() {
+        int x = 4;
+        self.bump(\\x);
+        return x;
+    }
+
+    int fail() {
+        throw \"SELF-FAST-TEST\", \"expected\";
+    }
+
+    int caught() {
+        try {
+            return self.fail();
+        } catch (hash<auto> ex) {
+            return ex.err == \"SELF-FAST-TEST\" ? 9 : -1;
+        }
+    }
+
+    SelfHelper identity() {
+        return self;
+    }
+
+    string run() {
+        return string(self.add(2)) + \":\" + string(self.add(3)) + \":\" + string(self.named())
+            + \":\" + string(self.defaulted()) + \":\" + string(self.refs()) + \":\" + string(self.caught())
+            + \":\" + string(self.identity() === self);
+    }
+}
+
+final class SelfEffects {
+    int leaf(int value) {
+        return value + 1;
+    }
+
+    *int maybe(bool assign_value) {
+        int value;
+        if (assign_value) {
+            value = 7;
+        }
+        return value;
+    }
+
+    string run() {
+        int value = 4;
+        code<int()> read_value = int sub () {
+            return value;
+        };
+        value = self.leaf(value);
+        *int absent = self.maybe(False);
+        return string(value) + \":\" + string(read_value()) + \":\"
+            + string(absent === NOTHING);
+    }
+}
+
+final class ObjectLeaf {
+    int pair(int a, int b) {
+        return a * 10 + b;
+    }
+
+    int affine(int value) {
+        return value * 3 + 1;
+    }
+
+    float scale(float value) {
+        return value * 1.5;
+    }
+}
+
+class SpeculativeObjectLeaf {
+    int affine(int value) {
+        return value * 3 + 1;
+    }
+}
+
+class SpeculativeObjectOverride inherits SpeculativeObjectLeaf {
+    int affine(int value) {
+        return value * 5 + 100;
+    }
+}
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub nested_helper(int x) {
+    return leaf(x) + leaf(x + 1);
+}
+
+nothing sub bump_ref(reference<int> x) {
+    ++x;
+}
+
+int sub ref_try() {
+    int x = 4;
+    try {
+        bump_ref(\\x);
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return x;
+}
+
+int sub fail_if_negative(int x) {
+    if (x < 0) {
+        throw \"FUNCTION-FAST-TEST\", \"expected\";
+    }
+    return x;
+}
+
+int sub fail_try() {
+    try {
+        return fail_if_negative(-1);
+    } catch (hash<auto> ex) {
+        return ex.err == \"FUNCTION-FAST-TEST\" ? 11 : -1;
+    }
+}
+
+int sub compound_try() {
+    int x = 1;
+    try {
+        x += 2;
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return x;
+}
+
+int sub rec_sum(int x) {
+    if (x <= 0) {
+        return 0;
+    }
+    return x + rec_sum(x - 1);
+}
+
+float sub fscale(float x) {
+    return x * 1.5;
+}
+
+float sub fcombo(float x) {
+    return fscale(x) + fscale(2.0);
+}
+
+int sub float_check() {
+    return int(fcombo(4.0) * 10.0);
+}
+
+string sub closure_leaf_checks() {
+    code<int(int)> add = int sub (int value) {
+        return value + 2;
+    };
+    code<float(float)> scale = float sub (float value) {
+        return value * 1.5;
+    };
+    code<auto(auto, auto)> dynamic_add = auto sub (auto left, auto right) {
+        return left + right;
+    };
+    code<int(string)> string_length = int sub (string value) {
+        return value.length();
+    };
+    int captured = 4;
+    code<int(int)> captured_add = int sub (int value) {
+        return value + captured;
+    };
+    float captured_float = 1.5;
+    code<float(float)> captured_float_add = float sub (float value) {
+        return value + captured_float;
+    };
+    string captured_text = \"abc\\u2500\\u2501\";
+    code<int()> captured_size = int sub () {
+        return captured_text.size();
+    };
+    code<int()> captured_length = int sub () {
+        return captured_text.length();
+    };
+    string text = \"abcd\";
+    return string(add(3)) + \":\" + string(int(scale(4.0) * 10.0))
+        + \":\" + string(dynamic_add(6, 7)) + \":\" + string(string_length(text))
+        + \":\" + string(captured_add(5)) + \":\" + string(int(captured_float_add(4.0) * 10.0))
+        + \":\" + string(captured_size()) + \":\" + string(captured_length());
+}
+
+string sub map_store_checks() {
+    list<int> input = (1, 2, 3);
+    list<int> ints = map $1 * 2, input;
+    list<float> floats = map float($1) * 1.5, input;
+    list<int> big = map $1 + 1125899906842624, input;
+    return string(ints[-1]) + \":\" + string(floats[-1]) + \":\" + string(big[-1]);
+}
+
+string sub object_leaf_checks() {
+    ObjectLeaf leaf();
+    SpeculativeObjectLeaf exact();
+    SpeculativeObjectLeaf overridden = new SpeculativeObjectOverride();
+    int caught;
+    try {
+        caught = leaf.affine(3);
+    } catch (hash<auto> ex) {
+        caught = -1;
+    }
+    return string(leaf.pair(1, 2)) + \":\" + string(caught)
+        + \":\" + string(int(leaf.scale(4.0) * 10.0))
+        + \":\" + string(exact.affine(4)) + \":\" + string(overridden.affine(4));
+}
+
+int sub default_helper(int x = 7) {
+    return x * 3;
+}
+
+string sub method_helper(Holder h) {
+    return h.get();
+}
+
+string sub caller() {
+    Holder h(\"ctx-ok\");
+    FinalMethodHolder final_method_holder();
+    SelfHelper sh();
+    SelfEffects effects();
+    return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(final_method_holder.run())
+        + \":\" + string(final_method_holder.add(4)) + \":\" + string(StaticHelper::combo(4))
+        + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
+        + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
+        + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
+        + \":\" + string(StaticHelper::refTry()) + \":\" + string(StaticHelper::failTry())
+        + \":\" + string(compound_try()) + \":\" + effects.run() + \":\" + map_store_checks()
+        + \":\" + object_leaf_checks();
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub unassignedScriptCode() {
+    return "%modern
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub caller() {
+    int x;
+    return leaf(x);
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub assignedNothingScriptCode() {
+    return "%modern
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub caller() {
+    auto x = NOTHING;
+    return leaf(x);
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub selfRecursiveUnassignedScriptCode() {
+    return "%modern
+
+int sub rec(int x) {
+    if (x <= 0) {
+        return 0;
+    }
+    int y;
+    return rec(y);
+}
+
+printf(\"%s\\n\", rec(1));
+";
+}
+
+string sub selfMethodUnassignedScriptCode() {
+    return "%modern
+
+class SelfUnassigned {
+    final int add(int x) {
+        return x + 1;
+    }
+
+    int run() {
+        int x;
+        return self.add(x);
+    }
+}
+
+SelfUnassigned obj();
+printf(\"%s\\n\", obj.run());
+";
+}
+
+string sub closureUnassignedScriptCode() {
+    return "%modern
+
+float captured;
+code<bool(float)> leaf = bool sub (float x) {
+    return captured == x;
+};
+
+printf(\"%s\\n\", leaf(0.0));
+";
+}
+
+string sub mapStoreUnassignedScriptCode() {
+    return "%modern
+
+list<int> input = (1, 2, 3);
+int absent;
+list<int> output = map absent, input;
+printf(\"%y\\n\", output);
+";
+}
+
+string sub crossFileLeafCode() {
+    return "%modern
+
+our int cross_global;
+
+int sub cross_global_affine(int value) {
+    return value + cross_global;
+}
+
+final class CrossGetter {
+    private {
+        int value;
+    }
+
+    constructor(int initial_value) {
+        value = initial_value;
+    }
+
+    int getValue() {
+        return value;
+    }
+}
+
+class CrossSpeculativeLeaf {
+    int affine(int value) {
+        return value * 3 + 7;
+    }
+}
+
+class CrossDeletableLeaf {
+    int invalidate() {
+        delete self;
+        return 1;
+    }
+
+    int read() {
+        return 2;
+    }
+}
+
+int sub cross_leaf(int x) {
+    return x + 1;
+}
+
+int sub cross_affine(int x) {
+    return cross_leaf(x) + 1;
+}
+
+int sub cross_affine_scaled(int x) {
+    return cross_affine(x * -3) - 4;
+}
+
+int sub cross_pair(int x) {
+    return cross_leaf(x) + cross_leaf(x + 1);
+}
+
+int sub cross_big() {
+    return 1125899906842624;
+}
+
+float sub cross_float(float value) {
+    return value * 1.5;
+}
+
+int sub cross_min(int lhs, int rhs) {
+    if (lhs < rhs) {
+        return lhs;
+    }
+    return rhs;
+}
+
+int sub cross_floor(int value) {
+    if (value < 4) {
+        return 4;
+    }
+    return value;
+}
+
+int sub cross_piecewise(int value) {
+    if (value < 4) {
+        return value * 2 + 1;
+    }
+    return value * 3 - 2;
+}
+
+int sub cross_string_size(string value) {
+    return value.size();
+}
+
+int sub cross_string_length(string value) {
+    return value.length();
+}
+
+bool sub cross_starts_with(string value, string pattern) {
+    return value.startsWith(pattern);
+}
+
+bool sub cross_ends_with(string value, string pattern) {
+    return value.endsWith(pattern);
+}
+
+bool sub cross_contains(string value, string pattern) {
+    return value.contains(pattern);
+}
+
+int sub cross_find(string value, string pattern, int offset) {
+    return value.find(pattern, offset);
+}
+
+int sub cross_rfind(string value, string pattern) {
+    return value.rfind(pattern);
+}
+
+string sub cross_substr(string value, int start, int length) {
+    return value.substr(start, length);
+}
+
+int sub cross_list_size(list<int> values) {
+    return values.size();
+}
+
+int sub cross_list_size_composed(list<int> values, int delta) {
+    return values.size() * 2 + delta * 3 - 4;
+}
+
+int sub cross_string_length_plus(string value, int delta) {
+    return value.length() + delta;
+}
+
+int sub cross_string_size_plus(string value, int delta) {
+    return value.size() + delta;
+}
+
+*int sub cross_list_get(list<int> values, int index) {
+    return values[index];
+}
+
+*int sub cross_hash_get(hash<string, int> values) {
+    return values.answer;
+}
+
+*string sub cross_hash_get_boxed(hash<string, string> values) {
+    return values.answer;
+}
+
+string sub cross_string(string value) {
+    return value + \"!\";
+}
+
+int sub cross_caught(int x) {
+    try {
+        return cross_pair(x);
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+}
+
+nothing sub cross_bump(reference<int> value) {
+    ++value;
+}
+
+*int sub cross_maybe(bool assign_value) {
+    int value;
+    if (assign_value) {
+        value = 7;
+    }
+    return value;
+}
+";
+}
+
+string sub crossFileMainCode() {
+    return "%modern
+
+class CrossSpeculativeOverride inherits CrossSpeculativeLeaf {
+    int affine(int value) {
+        return value * 5 + 100;
+    }
+}
+
+int sub reassigned_receiver_guard(CrossSpeculativeLeaf receiver) {
+    int first = receiver.affine(2);
+    receiver = new CrossSpeculativeOverride();
+    return first * 1000 + receiver.affine(2);
+}
+
+bool sub deleted_receiver_guard(CrossDeletableLeaf receiver) {
+    receiver.invalidate();
+    try {
+        receiver.read();
+    } catch (hash<auto> ex) {
+        return ex.err == \"OBJECT-ALREADY-DELETED\";
+    }
+    return False;
+}
+
+int sub main() {
+    cross_global = 7;
+    int global_assigned = cross_global_affine(5);
+    remove cross_global;
+    int global_absent = cross_global_affine(5);
+    int value = 3;
+    cross_bump(\\value);
+    CrossGetter getter(9);
+    CrossGetter unassigned;
+    bool getter_rejected = False;
+    try {
+        unassigned.getValue();
+    } catch (hash<auto> ex) {
+        getter_rejected = True;
+    }
+    string missing_string;
+    bool string_rejected = False;
+    try {
+        cross_contains(missing_string, \"x\");
+    } catch (hash<auto> ex) {
+        string_rejected = True;
+    }
+    string utf8 = \"aébcé\";
+    string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
+    list<int> collection = (10, 20, 30);
+    list<int> missing_list;
+    bool list_rejected = False;
+    try {
+        cross_list_size(missing_list);
+    } catch (hash<auto> ex) {
+        list_rejected = True;
+    }
+    bool composed_list_rejected = False;
+    try {
+        cross_list_size_composed(missing_list, 2);
+    } catch (hash<auto> ex) {
+        composed_list_rejected = True;
+    }
+    bool composed_string_rejected = False;
+    try {
+        cross_string_length_plus(missing_string, 2);
+    } catch (hash<auto> ex) {
+        composed_string_rejected = True;
+    }
+    hash<string, int> present_hash = (\"answer\": 42);
+    hash<string, int> missing_hash = {};
+    hash<string, string> present_string_hash =
+        (\"answer\": \"boxed\");
+    hash<string, string> missing_string_hash = {};
+    CrossSpeculativeLeaf exact_receiver();
+    CrossSpeculativeLeaf overridden_receiver = new CrossSpeculativeOverride();
+    printf(\"%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d\\n\",
+        global_assigned, global_absent,
+        cross_leaf(4), cross_affine(4),
+        cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
+        value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
+        cross_min(7, 3), cross_floor(2), cross_piecewise(2), cross_piecewise(5),
+        getter.getValue(), getter_rejected, cross_string_size(utf8), cross_string_length(utf8),
+        cross_starts_with(utf8, \"aé\"), cross_ends_with(utf8, \"cé\"),
+        cross_contains(utf8, \"éb\"), cross_find(utf8, \"é\", 2), cross_substr(utf8, 1, 2),
+        cross_rfind(utf8, \"é\"), cross_string_size(latin1), cross_string_length(latin1),
+        string_rejected, cross_list_size(collection), cross_list_get(collection, 1),
+        cross_list_get(collection, 8) === NOTHING, cross_hash_get(present_hash),
+        cross_hash_get(missing_hash) === NOTHING, list_rejected,
+        cross_list_size_composed(collection, 3), cross_string_length_plus(utf8, 2),
+        cross_string_size_plus(utf8, 2), cross_string_size_plus(latin1, 2),
+        composed_list_rejected, composed_string_rejected,
+        exact_receiver.affine(4), overridden_receiver.affine(4),
+        cross_hash_get_boxed(present_string_hash),
+        cross_hash_get_boxed(missing_string_hash) === NOTHING);
+    CrossDeletableLeaf deletable();
+    printf(\"%d:%d\\n\", reassigned_receiver_guard(exact_receiver),
+        deleted_receiver_guard(deletable));
+    return 0;
+}
+";
+}
+
+string sub crossFileUnassignedMainCode() {
+    return "%modern
+
+int sub main() {
+    int value;
+    printf(\"%s\\n\", cross_piecewise(value));
+    return 0;
+}
+";
+}
+
+string sub runScript(string script_path) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+        libqore_dir, qore_bin, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string script_path = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runScript(script_path);
+string aot = runAot(script_path);
+if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60:13:120\n"
+        || aot != ast) {
+    printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
+    exit(2);
+}
+
+string unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-unassigned-" + string(getpid()) + ".qr";
+File unassigned_script();
+unassigned_script.open2(unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+unassigned_script.write(unassignedScriptCode());
+unassigned_script.close();
+
+string ast_unassigned = runScript(unassigned_path);
+string aot_unassigned = runAot(unassigned_path);
+if (!(ast_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_unassigned, aot_unassigned);
+    exit(2);
+}
+
+string assigned_nothing_path = "/tmp/qore-aot-batch-callee-fast-path-nothing-" + string(getpid()) + ".qr";
+File assigned_nothing_script();
+assigned_nothing_script.open2(assigned_nothing_path, O_WRONLY | O_CREAT | O_TRUNC);
+assigned_nothing_script.write(assignedNothingScriptCode());
+assigned_nothing_script.close();
+
+string ast_assigned_nothing = runScript(assigned_nothing_path);
+string aot_assigned_nothing = runAot(assigned_nothing_path);
+if (!(ast_assigned_nothing =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_assigned_nothing =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for assigned NOTHING lvalue\nAST:\n%sAOT:\n%s",
+        ast_assigned_nothing, aot_assigned_nothing);
+    exit(2);
+}
+
+string self_rec_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-rec-unassigned-"
+    + string(getpid()) + ".qr";
+File self_rec_unassigned_script();
+self_rec_unassigned_script.open2(self_rec_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+self_rec_unassigned_script.write(selfRecursiveUnassignedScriptCode());
+self_rec_unassigned_script.close();
+
+string ast_self_rec_unassigned = runScript(self_rec_unassigned_path);
+string aot_self_rec_unassigned = runAot(self_rec_unassigned_path);
+if (!(ast_self_rec_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_self_rec_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for self-recursive unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_self_rec_unassigned, aot_self_rec_unassigned);
+    exit(2);
+}
+
+string self_method_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-method-unassigned-"
+    + string(getpid()) + ".qr";
+File self_method_unassigned_script();
+self_method_unassigned_script.open2(self_method_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+self_method_unassigned_script.write(selfMethodUnassignedScriptCode());
+self_method_unassigned_script.close();
+
+string ast_self_method_unassigned = runScript(self_method_unassigned_path);
+string aot_self_method_unassigned = runAot(self_method_unassigned_path);
+if (!(ast_self_method_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_self_method_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for self-method unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_self_method_unassigned, aot_self_method_unassigned);
+    exit(2);
+}
+
+string closure_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-closure-unassigned-"
+    + string(getpid()) + ".qr";
+File closure_unassigned_script();
+closure_unassigned_script.open2(closure_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+closure_unassigned_script.write(closureUnassignedScriptCode());
+closure_unassigned_script.close();
+
+string ast_closure_unassigned = runScript(closure_unassigned_path);
+string aot_closure_unassigned = runAot(closure_unassigned_path);
+if (ast_closure_unassigned != "1\n" || aot_closure_unassigned != ast_closure_unassigned) {
+    printf("unexpected result for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_closure_unassigned, aot_closure_unassigned);
+    exit(2);
+}
+
+string map_store_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-map-store-unassigned-"
+    + string(getpid()) + ".qr";
+File map_store_unassigned_script();
+map_store_unassigned_script.open2(map_store_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+map_store_unassigned_script.write(mapStoreUnassignedScriptCode());
+map_store_unassigned_script.close();
+
+string ast_map_store_unassigned = runScript(map_store_unassigned_path);
+string aot_map_store_unassigned = runAot(map_store_unassigned_path);
+if (!(ast_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)
+        || !(aot_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)) {
+    printf("expected rejection for unassigned typed map result\nAST:\n%sAOT:\n%s",
+        ast_map_store_unassigned, aot_map_store_unassigned);
+    exit(2);
+}
+
+string cross_leaf_path = "/tmp/qore-aot-cross-file-leaf-" + string(getpid()) + ".qr";
+string cross_main_path = "/tmp/qore-aot-cross-file-main-" + string(getpid()) + ".qr";
+string cross_exe_path = "/tmp/qore-aot-cross-file-" + string(getpid());
+File cross_leaf_script();
+cross_leaf_script.open2(cross_leaf_path, O_WRONLY | O_CREAT | O_TRUNC);
+cross_leaf_script.write(crossFileLeafCode());
+cross_leaf_script.close();
+File cross_main_script();
+cross_main_script.open2(cross_main_path, O_WRONLY | O_CREAT | O_TRUNC);
+cross_main_script.write(crossFileMainCode());
+cross_main_script.close();
+
+string cross_compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, cross_exe_path, cross_leaf_path, cross_main_path));
+if (!is_file(cross_exe_path)) {
+    printf("cross-file AOT compile failed:\n%s", cross_compile_out);
+    exit(2);
+}
+string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
+if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120:boxed:1\n13110:1\n") {
+    printf("unexpected cross-file AOT output: %s", cross_out);
+    exit(2);
+}
+
+string separate_root = "/tmp/qore-aot-cross-file-separate-" + string(getpid());
+string separate_provider_dir = separate_root + "/provider";
+string separate_consumer_dir = separate_root + "/consumer";
+mkdir(separate_root);
+mkdir(separate_provider_dir);
+mkdir(separate_consumer_dir);
+string separate_provider_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, cross_leaf_path));
+string provider_qo = separate_provider_dir + "/"
+    + regex_subst(basename(cross_leaf_path), "\\.qr$", ".qo");
+if (!is_file(provider_qo)) {
+    printf("separate provider AOT compile failed:\n%s", separate_provider_out);
+    exit(2);
+}
+string separate_consumer_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, separate_consumer_dir, cross_main_path));
+string consumer_qo = separate_consumer_dir + "/"
+    + regex_subst(basename(cross_main_path), "\\.qr$", ".qo");
+if (!is_file(consumer_qo)) {
+    printf("separate consumer AOT compile failed:\n%s", separate_consumer_out);
+    exit(2);
+}
+string separate_exe = separate_root + "/cross-file";
+string separate_link_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, separate_exe, provider_qo, consumer_qo));
+if (!is_file(separate_exe)) {
+    printf("separate AOT link failed:\n%s", separate_link_out);
+    exit(2);
+}
+string separate_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, separate_exe));
+if (separate_out != cross_out) {
+    printf("unexpected separate cross-file AOT output: %s", separate_out);
+    exit(2);
+}
+string provider_index = backquote(sprintf("%s --dump-index-json %s",
+    qcc_bin, provider_qo));
+if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
+        || !(provider_index =~ /\"fast_entry_num_params\": 1/)
+        || !(provider_index =~ /\"fast_param_rejects_nothing\": \[1\]/)
+        || !(provider_index =~ /\"fast_return_kind\": 1/)
+        || !(provider_index =~ /\"fast_return_kind\": 2/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 1/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 2/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 3/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 4/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 5/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 6/)
+        || !(provider_index =~ /\"scalar_leaf_true_scale\": 2/)
+        || !(provider_index =~ /\"scalar_leaf_true_offset\": 1/)
+        || !(provider_index =~ /\"scalar_leaf_false_scale\": 3/)
+        || !(provider_index =~ /\"scalar_leaf_false_offset\": -2/)
+        || !(provider_index =~ /\"object_getter_member\": \"value\"/)
+        || !(provider_index =~ /\"string_op_kind\": 5/)
+        || !(provider_index =~ /\"string_op_base_param\": 0/)
+        || !(provider_index =~ /\"string_op_arg0_param\": 1/)
+        || !(provider_index =~ /\"collection_op_kind\": 1/)
+        || !(provider_index =~ /\"collection_op_kind\": 2/)
+        || !(provider_index =~ /\"collection_op_kind\": 3/)
+        || !(provider_index =~ /\"collection_op_kind\": 4/)
+        || !(provider_index =~ /\"collection_op_key\": \"answer\"/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 1/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 2/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 3/)
+        || !(provider_index =~ /\"composed_int_base_param\": 0/)
+        || !(provider_index =~ /\"composed_int_value_param\": 1/)
+        || !(provider_index =~ /\"composed_int_source_scale\": 2/)
+        || !(provider_index =~ /\"composed_int_value_scale\": 3/)
+        || !(provider_index =~ /\"composed_int_offset\": -4/)
+        || !(provider_index =~ /\"global_int_value_param\": 0/)
+        || !(provider_index =~ /\"global_int_slot\": 0/)
+        || !(provider_index =~ /\"global_int_value_scale\": 1/)
+        || !(provider_index =~ /\"global_int_global_scale\": 1/)
+        || !(provider_index =~ /\"global_int_offset\": 0/)) {
+    printf("missing serialized fast-entry metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string unassigned_main_path = separate_root + "/unassigned-main.qr";
+File unassigned_main_script();
+unassigned_main_script.open2(unassigned_main_path, O_WRONLY | O_CREAT | O_TRUNC);
+unassigned_main_script.write(crossFileUnassignedMainCode());
+unassigned_main_script.close();
+string unassigned_compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, separate_consumer_dir,
+    unassigned_main_path));
+string unassigned_qo = separate_consumer_dir + "/unassigned-main.qo";
+if (!is_file(unassigned_qo)) {
+    printf("unassigned consumer AOT compile failed:\n%s", unassigned_compile_out);
+    exit(2);
+}
+string unassigned_exe = separate_root + "/unassigned";
+string unassigned_link_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, unassigned_exe, provider_qo, unassigned_qo));
+if (!is_file(unassigned_exe)) {
+    printf("unassigned consumer AOT link failed:\n%s", unassigned_link_out);
+    exit(2);
+}
+string unassigned_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, unassigned_exe));
+if (!(unassigned_out =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for imported fast-entry unassigned lvalue:\n%s",
+        unassigned_out);
+    exit(2);
+}

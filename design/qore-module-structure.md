@@ -42,6 +42,12 @@ Rules:
   here and must not be added. If a module ships asset types other than
   `*.qm`/`*.qc`/`*.yaml`/`*.svg`, extend the install glob in the
   `QORE_USER_MODULE` macro in `cmake/QoreMacros.cmake`.
+  With `QORE_BUILD_AOT_MODULES=ON` (the default) the same macro also AOT-compiles the
+  module to a `.qmod` via `qcc`. Projects that drive `qcc` compilation/linking directly
+  (pre-compiled `.qo` objects, C/C++ hosts) use the lower-level AOT build macros
+  (`qore_qcc_compile_objects`, `qore_qcc_link_objects`, `qore_qcc_script_aggregate`, and
+  helpers) also in `cmake/QoreMacros.cmake` — documented under "AOT Module-Build Macros"
+  in the CMake API guide (`doxygen/lib/90_cmake.doxygen`).
 
 ### 2) Single-File Modules (for small modules)
 

@@ -1,0 +1,276 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-object-member-set-get-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+int reference_value = 2;
+
+class GenericBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T echo(T value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class OptionalBox {
+    private {
+        *int value;
+    }
+
+    *int echo(*int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class FloatBox {
+    private {
+        float value;
+    }
+
+    float echo(float value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class BoolBox {
+    private {
+        bool value;
+    }
+
+    bool echo(bool value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class InheritedMemberBase {
+    public {
+        int value;
+    }
+}
+
+class InheritedMemberBox inherits InheritedMemberBase {
+    int echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class ReferenceBox {
+    private {
+        reference<int> value;
+    }
+
+    constructor() {
+        self.value = \\reference_value;
+    }
+
+    reference<int> echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class OverrideBase {
+    private {
+        int value;
+    }
+
+    int echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class OverrideChild inherits OverrideBase {
+    int echo(int value) {
+        return value + 1000;
+    }
+}
+
+class NearMiss {
+    private {
+        int value;
+        int writes;
+    }
+
+    int echo(int value) {
+        self.value = value;
+        ++self.writes;
+        return self.value;
+    }
+
+    int getWrites() {
+        return self.writes;
+    }
+}
+
+class LocalNoNarrowNearMiss {
+    private {
+        auto value;
+    }
+
+    auto echo(hash<auto> value) {
+        hash<auto!> local = value;
+        self.value = local;
+        return self.value;
+    }
+}
+
+int sub callOverride(OverrideBase object) {
+    return object.echo(4);
+}
+
+int sub concurrentWorker(int id) {
+    GenericBox<int> box(0);
+    int value = 0;
+    for (int i = 0; i < 1000; ++i) {
+        value = box.echo(id + i);
+    }
+    return value;
+}
+
+int sub concurrentChecksum() {
+    const int Threads = 8;
+    Counter done(Threads);
+    Mutex lock();
+    int checksum = 0;
+    for (int i = 0; i < Threads; ++i) {
+        background sub (int id) {
+            on_exit done.dec();
+            int value = concurrentWorker(id);
+            lock.lock();
+            on_exit lock.unlock();
+            checksum += value;
+        }(i);
+    }
+    done.waitForZero();
+    return checksum;
+}
+
+int sub main() {
+    GenericBox<int> generic(1);
+    OptionalBox optional();
+    FloatBox float_box();
+    BoolBox bool_box();
+    InheritedMemberBox inherited();
+    OverrideBase base = new OverrideChild();
+    NearMiss near_miss();
+    LocalNoNarrowNearMiss local_no_narrow();
+    ReferenceBox reference_box();
+    *int absent = NOTHING;
+    auto flexible = local_no_narrow.echo({\"n\": 1});
+    flexible.s = \"x\";
+    reference<int> reference_result = reference_box.echo(13);
+    printf(\"%d:%y:%y:%y:%d:%d:%d:%s:%d:%d:%d:%d\\n\", generic.echo(7),
+        optional.echo(absent) === NOTHING, float_box.echo(1.25) == 1.25,
+        !bool_box.echo(False), callOverride(base),
+        near_miss.echo(9), near_miss.getWrites(), flexible.fullType(),
+        inherited.echo(11), reference_result, reference_value,
+        concurrentChecksum());
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, source_path));
+
+string enabled_exe = root + "/enabled";
+string enabled_compile = backquote(sprintf("%s %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+if (!is_file(enabled_exe)) {
+    printf("enabled compile failed:\n%s", enabled_compile);
+    exit(2);
+}
+
+string disabled_exe = root + "/disabled";
+string disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_SET_GET_IMPORT=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, disabled_exe, source_path));
+if (!is_file(disabled_exe)) {
+    printf("disabled compile failed:\n%s", disabled_compile);
+    exit(2);
+}
+
+string native_disabled_exe = root + "/native-disabled";
+string native_disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_NATIVE_OBJECT_SET_GET=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, native_disabled_exe, source_path));
+if (!is_file(native_disabled_exe)) {
+    printf("native-disabled compile failed:\n%s", native_disabled_compile);
+    exit(2);
+}
+
+string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
+string disabled_symbols = backquote(sprintf("nm -u %s 2>&1", disabled_exe));
+string native_disabled_symbols = backquote(sprintf(
+    "nm -u %s 2>&1", native_disabled_exe));
+if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_float_aot")
+        || !enabled_symbols.regex("qore_rt_object_member_set_get_bool_aot")
+        || disabled_symbols.regex("qore_rt_object_member_set_get_aot")
+        || disabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || !native_disabled_symbols.regex("qore_rt_object_member_set_get_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_int_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_float_aot")
+        || native_disabled_symbols.regex("qore_rt_object_member_set_get_bool_aot")) {
+    printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s"
+        "native-disabled:\n%s", enabled_symbols, disabled_symbols,
+        native_disabled_symbols);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string separate_read = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s 2>&1",
+    env, enabled_exe));
+string direct_scalar_disabled = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR=1 %s 2>&1",
+    env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+string native_disabled = backquote(sprintf(
+    "%s %s 2>&1", env, native_disabled_exe));
+if (ast != "7:True:True:True:1004:9:1:hash<auto>:11:13:13:8020\n"
+        || enabled != ast || separate_read != ast
+        || direct_scalar_disabled != ast || disabled != ast
+        || native_disabled != ast) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
+        "Separate read:\n%sDirect scalar disabled:\n%s"
+        "Disabled:\n%sNative-disabled:\n%s",
+        ast, enabled, separate_read, direct_scalar_disabled, disabled,
+        native_disabled);
+    exit(2);
+}

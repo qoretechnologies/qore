@@ -63,6 +63,21 @@ int QoreDeleteOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     if (!err && exp && checkLValue(exp, parse_context.pflag)) {
         err = -1;
     }
+
+    // If delete is applied to a simple variable reference, reset its assignment
+    // tracking since delete unassigns the variable (sets it to NOTHING).
+    if (exp && exp.getType() == NT_VARREF && !err) {
+        VarRefNode* vrn = exp.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar) {
+                lvar->parseUnassigned();
+                lvar->parseResetNarrowedType();
+            }
+        }
+    }
+
     parse_context.typeInfo = nothingTypeInfo;
     parse_context.analysis.clear();
     parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);

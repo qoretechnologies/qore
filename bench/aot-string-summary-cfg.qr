@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub pair(string left, string right) {
+    return left + right;
+}
+
+string sub triple(string left, string middle, string right) {
+    return left + middle + right;
+}
+
+int sub localSizeKernel(int rounds) {
+    string left = "record-";
+    string right = "value";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string value = pair(left, right);
+        int adjustment;
+        if (i & 1) {
+            adjustment = 1;
+        } else {
+            adjustment = 2;
+        }
+        checksum += value.size() + adjustment;
+    }
+    return checksum;
+}
+
+int sub localLengthKernel(int rounds) {
+    string left = "Dvo\u0159";
+    string right = "\u00e1k";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string value = pair(left, right);
+        int adjustment;
+        if (i & 1) {
+            adjustment = 1;
+        } else {
+            adjustment = 2;
+        }
+        checksum += value.length() + adjustment;
+    }
+    return checksum;
+}
+
+int sub phiSizeKernel(int rounds) {
+    string left = "record-";
+    string right = "value";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (i & 1
+            ? pair(left, right)
+            : triple(left, "-", right)).size();
+    }
+    return checksum;
+}
+
+int sub phiLengthKernel(int rounds) {
+    string left = "Dvo\u0159";
+    string right = "\u00e1k";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (i & 1
+            ? pair(left, right)
+            : triple(left, "-", right)).length();
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+string mode = ARGV.size() > 1 ? ARGV[1] : "local-size";
+int result = mode == "local-length"
+    ? localLengthKernel(rounds)
+    : mode == "phi-size"
+        ? phiSizeKernel(rounds)
+        : mode == "phi-length"
+            ? phiLengthKernel(rounds)
+            : localSizeKernel(rounds);
+printf("%d\n", result);

@@ -46,6 +46,7 @@
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreJITException.h"
 
 
 #include <atomic>
@@ -811,7 +812,13 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
             }
 
-            uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+            uint64_t result_bits = 0;
+            try {
+                result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+            } catch (const QoreJITException&) {
+                // The raise site has already populated xsink. Keep the normal
+                // top-level cleanup and Qore exception propagation path intact.
+            }
 
             // Uninstantiate nested locals after AOT execution (reverse order)
             for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
@@ -840,8 +847,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
-        // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
-        // but only for %modern programs — legacy parse options are not supported by IR
+        // QEM_TIERED uses IR immediately for top-level code and leaves native
+        // promotion to functions. Top-level code is commonly one-shot, so
+        // synchronous native JIT compile cost usually cannot be amortized.
+        // Only %modern programs are supported by IR.
         if (exec_mode == QEM_IR || exec_mode == QEM_JIT
             || (exec_mode == QEM_TIERED
                 && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
@@ -864,7 +873,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         + std::to_string((uintptr_t)this) + "_"
                         + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
-                    // Debug-step hook context (issue #5352): the top-level block runs as
+                    // Owning program for the per-Program background-compile drain (always).
+                    func->pgm = pgm;
+                    // Debug-step hook context (issue #5352): the top-level block can run as
                     // JIT-compiled native code (executeWithFallback), so record its own
                     // StatementBlock and the program's attached-debugger slot to enable the
                     // per-statement dbgStep hook for top-level code too.  Skip entirely when
@@ -976,7 +987,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     }
                 }
 
-                // Instantiate nested non-closure body locals before JIT execution.
+                // Instantiate nested non-closure body locals before optimized execution.
                 // Closure-use nested locals are scoped by explicit IR
                 // InstantiateLocal / UninstantiateLocal operations.
                 const LVList* toplevel_lvars = getLVList();
@@ -995,7 +1006,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
 
                 std::string error;
-                if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                if (exec_mode == QEM_JIT) {
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
 
@@ -1283,5 +1294,76 @@ void NarrowedTypeHelper::mergeAndApply() {
                 lvar->parseResetNarrowedType();
             }
         }
+    }
+}
+
+static void qore_set_lvar_parse_assigned(LocalVar* lvar, bool assigned) {
+    if (assigned) {
+        lvar->parseAssigned();
+    } else {
+        lvar->parseUnassigned();
+    }
+}
+
+void AssignedStateHelper::saveState() {
+    saved_states.clear();
+    VNode* vnode = getVStack();
+    while (vnode) {
+        if (vnode->lvar) {
+            saved_states.push_back({vnode->lvar, vnode->lvar->isAssigned()});
+        }
+        vnode = vnode->nextSearch();
+    }
+}
+
+void AssignedStateHelper::restoreState() {
+    for (const auto& entry : saved_states) {
+        qore_set_lvar_parse_assigned(entry.first, entry.second);
+    }
+}
+
+void AssignedStateHelper::recordBranchAndRestore() {
+    state_map_t branch;
+    branch.reserve(saved_states.size());
+    for (const auto& entry : saved_states) {
+        branch.push_back({entry.first, entry.first->isAssigned()});
+    }
+    branch_states.push_back(std::move(branch));
+    restoreState();
+}
+
+void AssignedStateHelper::recordSavedAsImplicitBranch() {
+    branch_states.push_back(saved_states);
+}
+
+void AssignedStateHelper::mergeAndApply() {
+    if (branch_states.empty()) {
+        return;
+    }
+
+    for (const auto& saved_entry : saved_states) {
+        bool assigned_in_all_branches = true;
+        for (const auto& branch : branch_states) {
+            bool found = false;
+            bool assigned = false;
+            for (const auto& branch_entry : branch) {
+                if (branch_entry.first == saved_entry.first) {
+                    found = true;
+                    assigned = branch_entry.second;
+                    break;
+                }
+            }
+            if (!found || !assigned) {
+                assigned_in_all_branches = false;
+                break;
+            }
+        }
+        qore_set_lvar_parse_assigned(saved_entry.first, assigned_in_all_branches);
+    }
+}
+
+void AssignedStateHelper::markSavedUnassigned() {
+    for (const auto& saved_entry : saved_states) {
+        saved_entry.first->parseUnassigned();
     }
 }

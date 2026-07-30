@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub transformSwitch(string value, int rounds) {
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        switch (value.lwr()) {
+            case "red":
+                result += 1;
+                break;
+            case "green":
+                result += 2;
+                break;
+            case "blue":
+                result += 3;
+                break;
+            case "orange":
+                result += 4;
+                break;
+            case "yellow":
+                result += 5;
+                break;
+            case "purple":
+                result += 6;
+                break;
+            case "black":
+                result += 7;
+                break;
+            case "white":
+                result += 8;
+                break;
+            default:
+                break;
+        }
+    }
+    return result;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    printf("%d\n", transformSwitch("PURPLE", rounds));
+    return 0;
+}
+
+main();

@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<string> sub makeWords(string left, string right) {
+    return (left, right);
+}
+
+int sub boxedProjectionKernel(int rounds) {
+    string left = "alpha";
+    string right = "beta";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += makeWords(left, right)[0].size();
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", boxedProjectionKernel(rounds));

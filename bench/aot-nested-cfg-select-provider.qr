@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub nestedCfgScore(int value) {
+    if (value < 0) {
+        return -value + 3;
+    }
+    if (value > 700) {
+        return value - 699;
+    }
+    return value * 2 + 1;
+}

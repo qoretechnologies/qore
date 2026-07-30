@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+list<string> regular = (\"alpha\", \"beta\", \"gamma\");
+list<string> sparse = (\"alpha\", \"beta\", \"gamma\");
+delete sparse[1];
+list<string> first_missing = (\"alpha\", \"beta\");
+delete first_missing[0];
+list<string> all_missing = (\"alpha\", \"beta\", \"gamma\");
+delete all_missing[0];
+delete all_missing[1];
+delete all_missing[2];
+list<string> missing;
+list<string> empty = ();
+list<string> removed = (\"removed\",);
+remove removed;
+list<string> singleton = (\"solo\",);
+list<string> singleton_missing = (\"solo\",);
+delete singleton_missing[0];
+*list<string> optional = (\"optional\", \"value\");
+*list<string> optional_missing;
+
+auto regular_result = (foldl \$1 + \", \" + \$2, regular);
+auto sparse_result = (foldl \$1 + \", \" + \$2, sparse);
+auto first_missing_result = (foldl \$1 + \", \" + \$2, first_missing);
+auto all_missing_result = (foldl \$1 + \", \" + \$2, all_missing);
+auto missing_result = (foldl \$1 + \", \" + \$2, missing);
+auto empty_result = (foldl \$1 + \", \" + \$2, empty);
+auto removed_result = (foldl \$1 + \", \" + \$2, removed);
+auto singleton_result = (foldl \$1 + \", \" + \$2, singleton);
+auto singleton_missing_result = (foldl \$1 + \", \" + \$2, singleton_missing);
+auto optional_result = (foldl \$1 + \", \" + \$2, optional);
+auto optional_missing_result = (foldl \$1 + \", \" + \$2, optional_missing);
+auto iterator_result = (foldl \$1 + \", \" + \$2, regular.iterator());
+string dynamic_separator = \" / \";
+auto dynamic_result = (foldl \$1 + dynamic_separator + \$2, regular);
+auto map_regular_result = (foldl \$1 + \", \" + \$2, (map \$1, regular));
+auto map_first_missing_result = (foldl \$1 + \", \" + \$2, (map \$1, first_missing));
+auto map_all_missing_result = (foldl \$1 + \", \" + \$2, (map \$1, all_missing));
+auto map_missing_result = (foldl \$1 + \", \" + \$2, (map \$1, missing));
+auto map_empty_result = (foldl \$1 + \", \" + \$2, (map \$1, empty));
+auto map_singleton_result = (foldl \$1 + \", \" + \$2, (map \$1, singleton));
+auto map_singleton_missing_result = (foldl \$1 + \", \" + \$2, (map \$1, singleton_missing));
+auto map_index_result = (foldl \$1 + \", \" + \$2, (map sprintf(\"%d:%s\", \$#, \$1), regular));
+auto select_map_result = (foldl \$1 + \", \" + \$2,
+    (map sprintf(\"%d:%s\", \$#, \$1), (select regular, \$# % 2 == 0)));
+auto select_first_result = (foldl \$1 + \", \" + \$2, (map \$1, (select regular, \$# > 0)));
+auto select_none_result = (foldl \$1 + \", \" + \$2, (map \$1, (select regular, False)));
+auto select_sparse_result = (foldl \$1 + \", \" + \$2, (map \$1, (select all_missing, \$# % 2 == 0)));
+auto map_select_result = (foldl \$1 + \", \" + \$2, (map sprintf(\"%d:%s\", \$#, \$1),
+    regular, \$# % 2 == 0));
+
+string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
+list<string> mixed = (latin1, \"d\\u00e9j\\u00e0\");
+string mixed_result = (foldl \$1 + \", \" + \$2, mixed);
+string map_mixed_result = (foldl \$1 + \", \" + \$2, (map \$1, mixed));
+
+string exception = \"none\";
+string map_exception = \"none\";
+try {
+    list<string> incompatible = (convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
+    auto incompatible_result = (foldl \$1 + \", \" + \$2, incompatible);
+    exception = string(incompatible_result);
+} catch (hash<ExceptionInfo> ex) {
+    exception = ex.err;
+}
+try {
+    list<string> incompatible = (convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
+    auto incompatible_result = (foldl \$1 + \", \" + \$2, (map \$1, incompatible));
+    map_exception = string(incompatible_result);
+} catch (hash<ExceptionInfo> ex) {
+    map_exception = ex.err;
+}
+
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|\"
+    + \"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+    regular_result, sparse_result, first_missing_result, all_missing_result,
+    exists missing_result ? string(missing_result) : \"NOTHING\",
+    exists empty_result ? string(empty_result) : \"NOTHING\",
+    exists removed_result ? string(removed_result) : \"NOTHING\",
+    singleton_result,
+    exists singleton_missing_result ? string(singleton_missing_result) : \"NOTHING\",
+    optional_result,
+    exists optional_missing_result ? string(optional_missing_result) : \"NOTHING\",
+    iterator_result, dynamic_result, convert_encoding(mixed_result, \"UTF-8\"),
+    mixed_result.encoding(), exception,
+    map_regular_result, map_first_missing_result, map_all_missing_result,
+    exists map_missing_result ? string(map_missing_result) : \"NOTHING\",
+    exists map_empty_result ? string(map_empty_result) : \"NOTHING\",
+    map_singleton_result,
+    exists map_singleton_missing_result ? string(map_singleton_missing_result) : \"NOTHING\",
+    map_index_result, convert_encoding(map_mixed_result, \"UTF-8\"), map_exception,
+    select_map_result, select_first_result,
+    exists select_none_result ? string(select_none_result) : \"NOTHING\",
+    select_sparse_result, map_select_result);
+";
+
+string script_path = "/tmp/qore-aot-string-fold-join-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string suffix, string env) {
+    string exe = "/tmp/qore-aot-string-fold-join-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "alpha, beta, gamma|alpha, , gamma|, beta|, , |NOTHING|NOTHING|NOTHING|solo|NOTHING|"
+    + "optional, value|NOTHING|alpha, beta, gamma|alpha / beta / gamma|caf\u00e9, d\u00e9j\u00e0|"
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|"
+    + "alpha, beta, gamma|, beta|, , |NOTHING|NOTHING|solo|NOTHING|"
+    + "0:alpha, 1:beta, 2:gamma|caf\u00e9, d\u00e9j\u00e0|ENCODING-CONVERSION-ERROR|"
+    + "0:alpha, 1:gamma|beta, gamma|NOTHING|, |0:alpha, 2:gamma\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (ir_dump !~ /foldl\.string\.join/) {
+    printf("specialized foldl string join opcode missing from IR dump:\n%s", ir_dump);
+    exit(2);
+}
+if (ir_dump !~ /string\.join\.start/ || ir_dump !~ /string\.join\.append/) {
+    printf("fused map string join opcodes missing from IR dump:\n%s", ir_dump);
+    exit(2);
+}
+
+hash<string, string> aot_modes = {
+    "-enabled": "",
+    "-filtered-fallback": "QORE_DISABLE_IR_FUSED_FILTERED_STRING_JOIN=1",
+    "-fallback": "QORE_DISABLE_IR_FOLDL_STRING_JOIN=1 QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN=1",
+};
+foreach string suffix in (keys aot_modes) {
+    string actual = runAot(suffix, aot_modes{suffix});
+    if (actual != expected) {
+        printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
+        exit(2);
+    }
+}

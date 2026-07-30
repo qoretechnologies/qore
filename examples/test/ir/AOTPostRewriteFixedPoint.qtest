@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+*string sub exactString(bool alternate) {
+    return alternate ? \"Dvo\\u0159\\u00e1k\" : \"abcdef\";
+}
+";
+
+string consumer_source = "%modern
+
+string sub threeHopStringOps(bool alternate, bool branch) {
+    *string first = exactString(alternate);
+    *string second;
+    if (branch) {
+        second = first;
+    } else {
+        second = first;
+    }
+    *string third;
+    if (branch) {
+        third = second;
+    } else {
+        third = second;
+    }
+    return sprintf(\"%d:%d:%y\", third.size(), third.length(),
+        third.contains(\"a\"));
+}
+
+int sub threeHopStringKernel(int rounds, bool branch) {
+    *string first = exactString(False);
+    *string second;
+    if (branch) {
+        second = first;
+    } else {
+        second = first;
+    }
+    *string third;
+    if (branch) {
+        third = second;
+    } else {
+        third = second;
+    }
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        result += third.size();
+        result += third.length();
+        result += third.contains(\"a\");
+    }
+    return result;
+}
+
+int sub main() {
+    *string rounds_arg = ENV.QORE_POST_REWRITE_FIXED_POINT_ROUNDS;
+    int rounds = rounds_arg ? rounds_arg.toInt() : 1000;
+    printf(\"%s\\n%s\\n%d\\n\", threeHopStringOps(False, True),
+        threeHopStringOps(True, False), threeHopStringKernel(rounds, True));
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-post-rewrite-fixed-point-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string single_round_dir = root + "/single-round";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(single_round_dir);
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+unlink(provider_path);
+
+string sub compileConsumer(string output_dir, string env) {
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+        env, libqore_dir, qcc_bin, provider_dir, output_dir,
+        consumer_path));
+    if (!is_file(output_dir + "/consumer.qo")) {
+        printf("consumer compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compileConsumer(enabled_dir, "");
+string single_round_compile = compileConsumer(single_round_dir,
+    "QORE_DISABLE_AOT_POST_REWRITE_FIXED_POINT=1");
+if (!(enabled_compile =~ /IR-OPT-AOT-EFFECTS: threeHopStringOps[^:]*:.*post-rewrite-rounds=3.*cross-block-boxed-facts=[1-9].*boxed-specializations=[1-9]/)
+        || !(enabled_compile =~ /IR-OPT-AOT-EFFECTS: threeHopStringKernel[^:]*:.*post-rewrite-rounds=3.*cross-block-boxed-facts=[1-9].*boxed-specializations=[1-9]/)
+        || !(single_round_compile =~ /IR-OPT-AOT-EFFECTS: (threeHopStringOps|threeHopStringKernel)[^:]*:.*post-rewrite-rounds=1.*cross-block-boxed-facts=[1-9]/)
+        || single_round_compile =~ /IR-OPT-AOT-EFFECTS: (threeHopStringOps|threeHopStringKernel)[^:]*:.*boxed-specializations=[1-9]/) {
+    printf("unexpected post-rewrite fixed-point stats:\nenabled:\n%ssingle round:\n%s",
+        enabled_compile, single_round_compile);
+    exit(2);
+}
+
+string sub link(string output, string consumer_qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+        libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+string expected = "6:6:True\n8:6:False\n13000\n";
+foreach string path in ((link(root + "/enabled-exe",
+        enabled_dir + "/consumer.qo"), link(root + "/single-round-exe",
+        single_round_dir + "/consumer.qo"))) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+exit(0);

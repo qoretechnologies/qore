@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ListObserver {
+    int observe(list<int> values) {
+        return values.size();
+    }
+
+    int run(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = ();
+            push values, i;
+            checksum += self.observe(values);
+            push values, i + 1;
+            checksum += values[1];
+        }
+        return checksum;
+    }
+}
+
+int sub runClosure(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = ();
+        push values, i;
+        checksum += (int sub(list<int> observed) {
+            return observed.size();
+        })(values);
+        push values, i + 1;
+        checksum += values[1];
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    string mode = ENV.QORE_BENCH_MODE ?? "method";
+    if (mode == "closure") {
+        printf("%d\n", runClosure(rounds));
+    } else {
+        ListObserver observer();
+        printf("%d\n", observer.run(rounds));
+    }
+    return 0;
+}
+
+main();

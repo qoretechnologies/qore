@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+list<int> function_alias;
+list<int> method_alias;
+list<int> closure_alias;
+
+int sub escapeFunction(list<int> values) {
+    function_alias = values;
+    return values.size();
+}
+
+final class ListEscaper {
+    int escape(list<int> values) {
+        method_alias = values;
+        return values.size();
+    }
+
+    string run() {
+        list<int> values = (1,);
+        self.escape(values);
+        push values, 2;
+        return sprintf(\"%d:%d\", method_alias.size(), values.size());
+    }
+}
+
+list<int> direct_values = (1,);
+escapeFunction(direct_values);
+push direct_values, 2;
+
+list<int> local_values = (1,);
+list<int> local_alias = local_values;
+push local_values, 2;
+
+list<int> closure_values = (1,);
+(int sub(list<int> values) {
+    closure_alias = values;
+    return values.size();
+})(closure_values);
+push closure_values, 2;
+
+ListEscaper escaper();
+printf(\"%d:%d|%d:%d|%s|%d:%d\\n\",
+    function_alias.size(), direct_values.size(),
+    local_alias.size(), local_values.size(), escaper.run(),
+    closure_alias.size(), closure_values.size());
+";
+
+string script_path = "/tmp/qore-ir-list-push-cow-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string expected = "1:2|1:2|1:2|1:2\n";
+foreach string mode in ("ast", "ir", "tiered", "jit") {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string exe_path = "/tmp/qore-ir-list-push-cow-" + string(getpid());
+string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, script_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}

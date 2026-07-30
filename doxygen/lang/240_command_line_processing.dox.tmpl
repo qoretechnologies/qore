@@ -121,6 +121,13 @@
     Other non-\c .q source extensions, such as \c .qc and \c .qm, enable
     \c %%modern by default.
 
+    A generated AOT executable invokes the Qore function named by \c --entry
+    (or \c -e), which defaults to \c main. This differs from running a parsed
+    script with \c qore: top-level executable statements do not replace the
+    entry function. The input must therefore define \c main(), or define the
+    function explicitly selected with \c --entry; otherwise the executable
+    exits with a \c NO-FUNCTION exception.
+
     Multi-file applications can be compiled directly to an executable:
 
     @code{.sh}

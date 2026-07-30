@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub readMiddle(hash<string, int> values) {
+    return values.middle;
+}
+
+int sub freshHashQueryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += readMiddle({
+            "left": i,
+            "middle": i + 1,
+            "right": i + 2,
+        });
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", freshHashQueryKernel(rounds));

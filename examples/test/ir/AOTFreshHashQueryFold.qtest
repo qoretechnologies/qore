@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub readMiddle(hash<string, int> values) {
+    return values.middle;
+}
+
+int sub readDynamic(hash<string, int> values, string key) {
+    return values{key};
+}
+
+int sub mutateThenRead(hash<string, int> values) {
+    values.middle = 99;
+    return values.middle;
+}
+
+int sub readMissing(hash<string, int> values) {
+    return values.missing;
+}
+
+int sub freshQuery() {
+    return readMiddle({\"left\": 4, \"middle\": 5, \"right\": 6});
+}
+
+int sub sideEffectFields() {
+    int side_effect_count = 0;
+    int value = readMiddle({
+        \"left\": (side_effect_count = 1),
+        \"middle\": (side_effect_count = 2),
+        \"right\": (side_effect_count = 3),
+    });
+    return value * 10 + side_effect_count;
+}
+
+bool sub missingKey() {
+    try {
+        readMissing({\"left\": 1, \"middle\": 2, \"right\": 3});
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+bool sub unassignedElement(*int value) {
+    bool was_nothing = value === NOTHING;
+    try {
+        readMiddle({\"middle\": value});
+    } catch (hash<auto> ex) {
+        return was_nothing && (ex.err == \"RUNTIME-TYPE-ERROR\"
+            || ex.err == \"RUNTIME-OVERLOAD-ERROR\");
+    }
+    return was_nothing;
+}
+
+int sub dynamicKey() {
+    return readDynamic({\"left\": 7, \"middle\": 8, \"right\": 9}, \"middle\");
+}
+
+int sub mutatedCallee() {
+    return mutateThenRead({\"left\": 7, \"middle\": 8, \"right\": 9});
+}
+
+int sub sharedAggregate() {
+    hash<string, int> values = {\"left\": 1, \"middle\": 2, \"right\": 3};
+    return readMiddle(values) + readMiddle(values);
+}
+
+printf(\"%d:%d:%d:%d:%d:%d\\n\", freshQuery(), sideEffectFields(),
+    unassignedElement(NOTHING), dynamicKey(), mutatedCallee(), sharedAggregate());
+";
+
+string src = "/tmp/qore-aot-fresh-hash-query-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-fresh-hash-query-" + string(getpid());
+string disabled = exe + "-disabled";
+string noescape_disabled = exe + "-noescape-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_FRESH_HASH_KEY_CALL_FOLD=1");
+string noescape_disabled_compile = compile(noescape_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NOESCAPE_PARAMS=1");
+if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: freshQuery[^\n]*:.*fresh-hash-key-calls=1/
+        || enabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: sideEffectFields[^\n]*:.*fresh-hash-key-calls=1/) {
+    printf("missing fresh-hash query fold:\n%s", enabled_compile);
+    exit(2);
+}
+if (enabled_compile =~ /IR-OPT-AOT-EFFECTS: (missingKey|unassignedElement|dynamicKey|mutatedCallee|sharedAggregate)[^\n]*:.*fresh-hash-key-calls=[1-9]/
+        || disabled_compile =~ /fresh-hash-key-calls=[1-9]/
+        || noescape_disabled_compile =~ /fresh-hash-key-calls=[1-9]/) {
+    printf("unsafe or disabled fresh-hash query fold:\n%s",
+        enabled_compile + disabled_compile + noescape_disabled_compile);
+    exit(2);
+}
+
+string expected = "5:23:1:8:99:4\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled, noescape_disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);
+unlink(noescape_disabled);

@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTParallelCodegenTest
+
+# Validates Phase 3 split-after-opt parallel codegen (qcc --jobs N): a module compiled with
+# parallel backend codegen must be load-equivalent to the single-object build — same exported
+# API, same runtime results — and the parallel build must be byte-deterministic across
+# same-binary runs wherever the single-object build is (macOS qcc output is non-deterministic
+# regardless of --jobs, a pre-existing property, so there byte-determinism is not asserted).
+class AOTParallelCodegenTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string tmp_dir;
+    }
+
+    constructor() : QUnit::Test("AOTParallelCodegenTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("parallel codegen is load-equivalent to single-object", \testLoadEquivalence());
+        addTestCase("parallel codegen is deterministic (same binary)", \testDeterminism());
+        # The externalized-local re-internalization (symbol equivalence) is ELF-only:
+        # on Mach-O the final .qmod link strips the extras and GNU objcopy corrupts Mach-O.
+        if (Qore::PlatformOS != "Darwin" && PlatformOS != "Windows") {
+            addTestCase("split .qo has no extra global symbols vs single", \testQoSymbolEquivalence());
+        }
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    # A self-contained module with enough public functions + a class for llvm::SplitModule to
+    # actually partition into several pieces at --jobs N.
+    private string makeModuleSource() {
+        string src = "%modern\n"
+            "module ParallelCgMod {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"parallel codegen test module\";\n"
+            "    author = \"Qore Test\";\n"
+            "    url = \"http://qore.org\";\n"
+            "    license = \"MIT\";\n"
+            "}\n";
+        for (int i = 0; i < 24; ++i) {
+            src += sprintf("public int sub pcg_func%d(int x) { return (x * %d) + %d; }\n", i, i + 1, i);
+        }
+        src += "public class PcgClass {\n"
+            "    int compute(int a, int b) { return pcg_func7(a) + pcg_func13(b); }\n"
+            "    static string tag() { return \"pcg\"; }\n"
+            "}\n";
+        return src;
+    }
+
+    # Run a child qore that loads the built .qmod and prints a deterministic API+result digest.
+    private string probe(string qmod_dir) {
+        string script = tmp_dir + "/probe.qr";
+        write(script,
+            "%modern\n"
+            "%requires ParallelCgMod\n"
+            "int total = 0;\n"
+            "for (int i = 0; i < 24; ++i) { total += call_function(sprintf(\"pcg_func%d\", i), i); }\n"
+            "PcgClass o();\n"
+            "printf(\"total=%d compute=%d tag=%s class=%s\\n\", total, o.compute(3, 4), "
+            "PcgClass::tag(), o.className());\n");
+        # Prepend the built-module dir to the inherited module path so deps still resolve.
+        return run(sprintf("QORE_MODULE_DIR=%s:${QORE_MODULE_DIR} %s %s", qmod_dir, qore_bin, script));
+    }
+
+    private TmpDir initDirs() {
+        TmpDir tmp();
+        tmp_dir = tmp.path;
+        return tmp;
+    }
+
+    # cmp two files for byte-equality (portable to Linux + macOS).
+    private bool sameBytes(string a, string b) {
+        return run(sprintf("cmp -s %s %s && echo SAME || echo DIFF", a, b)) =~ /SAME/;
+    }
+
+    # Sorted set of an object's defined global symbol names (via nm; "" = nm unavailable).
+    private list<string> globalSyms(string obj) {
+        string out = run(sprintf("nm -g --defined-only %s", obj));
+        hash<string, bool> seen;
+        foreach string line in (out.split("\n")) {
+            # "<value> <type> <name>" for a defined symbol
+            *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(\S+)\s*$/);
+            if (m && exists m[0]) {
+                seen{m[0]} = True;
+            }
+        }
+        return sort(keys seen);
+    }
+
+    private testQoSymbolEquivalence() {
+        TmpDir tmp = initDirs();
+        # Source with internal helpers + switch tables so SplitModule has locals to externalize.
+        string src = tmp_dir + "/qoe.qr";
+        string body = "%new-style\n";
+        for (int i = 0; i < 22; ++i) {
+            body += sprintf("int sub qoe_f%d(int x) { switch (x) { case 1: return %d; default: "
+                "return x * %d; } }\n", i, i, i + 1);
+        }
+        write(src, body);
+
+        # Same basename in two dirs so registration-symbol names (which embed the basename)
+        # match; the only difference would be the externalized locals re-internalization closes.
+        string sg = tmp_dir + "/sg";
+        string sp = tmp_dir + "/sp";
+        mkdir(sg);
+        mkdir(sp);
+        run(sprintf("QCC_JOBS=1 %s -c %s -o %s/x.qo", qcc_bin, src, sg));
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -c %s -o %s/x.qo", qcc_bin, src, sp));
+
+        list<string> single_syms = globalSyms(sg + "/x.qo");
+        list<string> split_syms = globalSyms(sp + "/x.qo");
+        assertTrue(single_syms.size() > 0, "nm read global symbols from the single-object .qo");
+        assertEq(single_syms, split_syms,
+            "split .qo exports the same global symbols as single (externalized locals re-internalized)");
+    }
+
+    private testLoadEquivalence() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/ParallelCgMod.qm";
+        write(src, makeModuleSource());
+
+        string single_dir = tmp_dir + "/single";
+        string par_dir = tmp_dir + "/par";
+        mkdir(single_dir);
+        mkdir(par_dir);
+
+        string s_out = run(sprintf("QCC_JOBS=1 %s -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, single_dir));
+        assertTrue(is_file(single_dir + "/ParallelCgMod.qmod"),
+            "single-object module compiles: " + s_out);
+        string p_out = run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, par_dir));
+        assertTrue(is_file(par_dir + "/ParallelCgMod.qmod"),
+            "parallel (--jobs 4) module compiles: " + p_out);
+
+        string single_digest = probe(single_dir);
+        string par_digest = probe(par_dir);
+        assertTrue(single_digest =~ /total=/, "single-object module loads and runs: " + single_digest);
+        assertEq(single_digest, par_digest,
+            "parallel-built module is load-equivalent to single-object build");
+    }
+
+    private testDeterminism() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/ParallelCgMod.qm";
+        write(src, makeModuleSource());
+
+        string a = tmp_dir + "/a.qmod";
+        string b = tmp_dir + "/b.qmod";
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s", qcc_bin, src, a));
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s", qcc_bin, src, b));
+        assertTrue(is_file(a) && is_file(b), "both parallel builds produced output");
+
+        string s1 = tmp_dir + "/s1.qmod";
+        string s2 = tmp_dir + "/s2.qmod";
+        run(sprintf("QCC_JOBS=1 %s -m %s -o %s", qcc_bin, src, s1));
+        run(sprintf("QCC_JOBS=1 %s -m %s -o %s", qcc_bin, src, s2));
+
+        if (sameBytes(s1, s2)) {
+            # Where the single-object build is byte-reproducible, the parallel build must be too.
+            assertTrue(sameBytes(a, b),
+                "parallel build is byte-deterministic across same-binary runs");
+        } else {
+            # Pre-existing platform non-determinism (e.g. macOS): assert the two parallel
+            # builds are at least functionally identical instead of byte-identical.
+            string sa = tmp_dir + "/ra";
+            string sb = tmp_dir + "/rb";
+            mkdir(sa);
+            mkdir(sb);
+            run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sa));
+            run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sb));
+            assertEq(probe(sa), probe(sb),
+                "parallel builds are functionally identical (platform byte-non-deterministic)");
+        }
+    }
+}

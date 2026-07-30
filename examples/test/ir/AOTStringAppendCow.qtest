@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+string value = \"a\";
+string append_result = (value += \"b\");
+string alias_source = \"left\";
+string alias = alias_source;
+alias_source += \"-right\";
+string self = \"xy\";
+self += self;
+string unset;
+unset += \"assigned\";
+string removed = \"old\";
+remove removed;
+removed += \"new\";
+*string optional_suffix;
+string optional = \"kept\";
+optional += optional_suffix;
+string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
+latin1 += convert_encoding(\" d\\u00e9j\\u00e0\", \"UTF-8\");
+
+string encoding_exception = \"none\";
+try {
+    string ascii = convert_encoding(\"ascii\", \"US-ASCII\");
+    ascii += \"\\u00df\";
+} catch (hash<ExceptionInfo> ex) {
+    encoding_exception = ex.err;
+}
+
+string referenced = \"ref\";
+reference<string> referenced_ref = \\referenced;
+referenced_ref += \"-append\";
+
+string captured = \"closure\";
+code<nothing()> append_closure = sub () {
+    captured += \"-append\";
+};
+append_closure();
+
+string sub makeBuilder() {
+    string value = \"\";
+    for (int i = 0; i < 256; ++i) {
+        value += \"ab\";
+    }
+    return value;
+}
+string sub aliasBuilder(bool escape) {
+    string value = \"\";
+    string value_alias;
+    if (escape) {
+        value_alias = value;
+    }
+    value += \"x\";
+    return value + \"/\" + value_alias;
+}
+# same-statement pseudo-method reads keep the builder node non-unique in the
+# IR interpreter (the intrinsic's base load holds its own reference until the
+# statement's temps are discarded): the marked in-place append must fall back
+# to CoW and the paired store-back must store the fresh node through
+string sub chainedBuilder() {
+    string value = \"AbC\";
+    value += value.lwr();
+    value += value.upr();
+    return value;
+}
+string builder = makeBuilder();
+string chained = chainedBuilder();
+string branch_alias = aliasBuilder(True);
+string branch_no_alias = aliasBuilder(False);
+string escaped_builder = \"\";
+string escaped_alias = escaped_builder;
+for (int i = 0; i < 4; ++i) {
+    escaped_builder += \"x\";
+}
+
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s|%s/%s|%s|%s\\n\",
+    value, append_result, alias_source, alias, self, unset, removed, optional,
+    convert_encoding(latin1, \"UTF-8\"), latin1.encoding(), encoding_exception,
+    referenced + \"/\" + captured, builder.size(), chained, escaped_builder, escaped_alias,
+    branch_alias, branch_no_alias);
+";
+
+string script_path = "/tmp/qore-aot-string-append-cow-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string suffix, string env) {
+    string exe = "/tmp/qore-aot-string-append-cow-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "ab|ab|left-right|left|xyxy|assigned|new|kept|café déjà|"
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|512|AbCabcABCABC|xxxx/|x/|x/\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (ir_dump !~ /string\.append\.cow/) {
+    printf("copy-on-write string append opcode missing from IR dump:\n%s", ir_dump);
+    exit(2);
+}
+
+string opt_stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (opt_stats !~ /IR-OPT: makeBuilder:.*inplace-string=1/) {
+    printf("in-place string append optimization missing:\n%s", opt_stats);
+    exit(2);
+}
+# with borrowed loads disabled, every marked in-place append in the IR
+# interpreter sees a non-unique builder node and must take the runtime CoW
+# fallback with the paired store-back storing the fresh node through; the
+# output must be identical (and debug builds must not trip the string
+# mutation-uniqueness assertion)
+foreach string mode in (("ir", "tiered")) {
+    string actual = backquote(sprintf(
+        "QORE_DISABLE_IR_BORROWED_STRING_LOAD=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s with borrowed string loads disabled\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+if (opt_stats =~ /IR-OPT: aliasBuilder:.*inplace-string=[1-9][0-9]*/) {
+    printf("in-place string append incorrectly accepted a branch-dependent alias:\n%s",
+        opt_stats);
+    exit(2);
+}
+string fallback_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_IN_PLACE_STRING_APPEND=1 QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s "
+        + "%s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (fallback_stats =~ /inplace-string=[1-9][0-9]*/) {
+    printf("in-place string append fallback did not disable the optimization:\n%s",
+        fallback_stats);
+    exit(2);
+}
+
+hash<string, string> aot_modes = {
+    "-enabled": "",
+    "-inplace-fallback": "QORE_DISABLE_IR_IN_PLACE_STRING_APPEND=1",
+    "-cow-fallback": "QORE_DISABLE_IR_STRING_APPEND_COW=1",
+};
+foreach string suffix in (keys aot_modes) {
+    string actual = runAot(suffix, aot_modes{suffix});
+    if (actual != expected) {
+        printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
+        exit(2);
+    }
+}

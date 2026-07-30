@@ -1,0 +1,257 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-object-member-compound-get-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+class CompoundBox {
+    private {
+        int value = 10;
+    }
+
+    int add(int operand) {
+        self.value += operand;
+        return self.value;
+    }
+
+    int subtract(int operand) {
+        self.value -= operand;
+        return self.value;
+    }
+
+    int multiply(int operand) {
+        self.value *= operand;
+        return self.value;
+    }
+
+    int divide(int operand) {
+        self.value /= operand;
+        return self.value;
+    }
+
+    int modulo(int operand) {
+        self.value %= operand;
+        return self.value;
+    }
+
+    int bitOr(int operand) {
+        self.value |= operand;
+        return self.value;
+    }
+
+    int bitAnd(int operand) {
+        self.value &= operand;
+        return self.value;
+    }
+
+    int bitXor(int operand) {
+        self.value ^= operand;
+        return self.value;
+    }
+
+    int shiftLeft(int operand) {
+        self.value <<= operand;
+        return self.value;
+    }
+
+    int shiftRight(int operand) {
+        self.value >>= operand;
+        return self.value;
+    }
+}
+
+class StringBox {
+    private {
+        string value = \"a\";
+    }
+
+    string append(string operand) {
+        self.value += operand;
+        return self.value;
+    }
+}
+
+class OptionalBox {
+    private {
+        *int value;
+    }
+
+    *int add(int operand) {
+        self.value += operand;
+        return self.value;
+    }
+}
+
+class InheritedValueBase {
+    public {
+        int value;
+    }
+}
+
+class InheritedValueBox inherits InheritedValueBase {
+    int add(int operand) {
+        self.value += operand;
+        return self.value;
+    }
+}
+
+class OverrideBase {
+    private {
+        int value;
+    }
+
+    int add(int operand) {
+        self.value += operand;
+        return self.value;
+    }
+}
+
+class OverrideChild inherits OverrideBase {
+    int add(int operand) {
+        return operand + 1000;
+    }
+}
+
+class NearMiss {
+    private {
+        int value;
+        int writes;
+    }
+
+    int add(int operand) {
+        self.value += operand;
+        ++self.writes;
+        return self.value;
+    }
+
+    int getWrites() {
+        return self.writes;
+    }
+}
+
+class ConcurrentBox {
+    private {
+        int value;
+    }
+
+    int add(int operand) {
+        self.value += operand;
+        return self.value;
+    }
+
+    int getValue() {
+        return self.value;
+    }
+}
+
+int sub callOverride(OverrideBase object) {
+    return object.add(4);
+}
+
+int sub concurrentChecksum() {
+    const int Threads = 8;
+    const int Iterations = 1000;
+    ConcurrentBox box();
+    Counter done(Threads);
+    for (int i = 0; i < Threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            for (int j = 0; j < Iterations; ++j) {
+                box.add(1);
+            }
+        }();
+    }
+    done.waitForZero();
+    return box.getValue();
+}
+
+int sub main() {
+    CompoundBox box();
+    StringBox string_box();
+    OptionalBox optional_box();
+    InheritedValueBox inherited_box();
+    OverrideBase override = new OverrideChild();
+    NearMiss near_miss();
+    bool caught = False;
+    string values = sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+        box.add(5), box.subtract(3), box.multiply(2), box.divide(3),
+        box.modulo(3), box.bitOr(8), box.bitAnd(6), box.bitXor(7),
+        box.shiftLeft(2), box.shiftRight(1));
+    try {
+        box.divide(0);
+    } catch (hash<auto> ex) {
+        caught = True;
+    }
+    printf(\"%s:%s:%d:%d:%d:%d:%y:%d\\n\", values,
+        string_box.append(\"bc\"), optional_box.add(4),
+        inherited_box.add(11), callOverride(override), near_miss.add(9),
+        caught, concurrentChecksum());
+    if (near_miss.getWrites() != 1) {
+        return 1;
+    }
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, source_path));
+
+string enabled_exe = root + "/enabled";
+string enabled_compile = backquote(sprintf(
+    "%s %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+if (!is_file(enabled_exe)) {
+    printf("enabled compile failed:\n%s", enabled_compile);
+    exit(2);
+}
+
+string disabled_exe = root + "/disabled";
+string disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_COMPOUND_GET_IMPORT=1"
+    " %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, disabled_exe, source_path));
+if (!is_file(disabled_exe)) {
+    printf("disabled compile failed:\n%s", disabled_compile);
+    exit(2);
+}
+
+string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
+string disabled_symbols = backquote(sprintf("nm -u %s 2>&1", disabled_exe));
+if (!enabled_symbols.regex("qore_rt_object_member_compound_get_aot")
+        || disabled_symbols.regex("qore_rt_object_member_compound_get_aot")) {
+    printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s",
+        enabled_symbols, disabled_symbols);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

@@ -32,8 +32,10 @@
 #ifndef _QORE_QOREAOT_H
 #define _QORE_QOREAOT_H
 
+#include <array>
 #include <cassert>
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -47,19 +49,24 @@
 #include <vector>
 #include <qore/QoreParseOptions.h>
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
 
 class AbstractQoreFunctionVariant;
 class CaseNodeRegex;
 class ExceptionSink;
+class FunctionEntry;
 class LocalVar;
 class QoreClass;
 class QoreFunction;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
+class QoreMemberInfo;
+class QoreClass;
 class QoreNamespace;
+class QoreParseListNode;
 class QoreProgram;
 class QoreRecursiveThreadLock;
 class QoreStringNode;
@@ -67,11 +74,33 @@ class QoreTypeInfo;
 class QoreValue;
 struct QoreModuleInitContext;
 struct QoreAOTDebugMetadata;
+struct QoreAOTLazyClosureIR;
 class StatementBlock;
 class TypedHashDecl;
 class UserVariantBase;
 class Var;
 class qore_class_private;
+
+/** Materialize a lazily retained source-stripped closure IR body.
+    @param lazy_ir immutable serialized IR metadata
+    @param uvb closure variant receiving the reconstructed IR
+    @param xsink exception sink
+    @param error output for structural deserialization errors
+    @return reconstructed IR, or nullptr on error
+*/
+std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
+    const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
+    ExceptionSink* xsink, std::string& error);
+
+//! Resolve an AOT-serialized function name during runtime metadata reconstruction.
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
+
+//! Resolve a namespace function for a serialized class-qualified call after method lookup fails.
+const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
+    QoreProgram* pgm, const QoreClass* qc, const char* class_ref, const char* method_name);
+
+//! Create a dynamic call_function() fallback for an unresolved serialized function call.
+QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args);
 
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same
@@ -93,6 +122,47 @@ struct QoreAOTHashDeclPathCacheKeyHash {
     }
 };
 
+//! Immutable object-member metadata resolved for one AOT call site.
+struct QoreAOTObjectMemberDescriptor {
+    const QoreMemberInfo* info = nullptr;
+    const qore_class_private* member_class_ctx = nullptr;
+    size_t key_hash = 0;
+};
+
+//! One immutable entry in a bounded AOT object-method dispatch cache.
+struct QoreAOTMethodDispatchCacheEntry {
+    static constexpr size_t MAX_ARGS = 8;
+
+    const QoreClass* receiver_class = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const qore_class_private* class_ctx = nullptr;
+    const QoreProgram* caller_program = nullptr;
+    const QoreProgram* object_program = nullptr;
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreParseOptions parse_options;
+    uint64_t dispatch_epoch = 0;
+    std::array<const QoreTypeInfo*, MAX_ARGS> arg_types{};
+    std::array<uint8_t, MAX_ARGS> arg_states{};
+    uint8_t nargs = 0;
+};
+
+//! Bounded polymorphic cache owned by one AOT call target.
+struct QoreAOTMethodDispatchCache {
+    static constexpr size_t SIZE = 4;
+    std::atomic<const QoreAOTMethodDispatchCacheEntry*> entries[SIZE];
+    std::mutex write_mutex;
+    std::vector<std::unique_ptr<const QoreAOTMethodDispatchCacheEntry>>
+        owned_entries;
+
+    QoreAOTMethodDispatchCache() {
+        for (auto& entry : entries) {
+            entry.store(nullptr, std::memory_order_relaxed);
+        }
+    }
+
+};
+
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
@@ -103,16 +173,27 @@ struct QoreAOTCallTarget {
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
     const QoreTypeInfo* object_type_info = nullptr; //!< instantiated object type for constructor calls
     const QoreTypeInfo* receiver_type_info = nullptr; //!< parameterized receiver type for generic static calls
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution
     const qore_class_private* class_ctx = nullptr; //!< class context for self/base method calls
+    //! Lazily resolved immutable metadata for object member summary lowering.
+    std::atomic<const QoreAOTObjectMemberDescriptor*> object_member_descriptor{
+        nullptr};
+    //! Lazily populated bounded cache for polymorphic object method calls.
+    std::atomic<QoreAOTMethodDispatchCache*> method_dispatch_cache{nullptr};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
     bool self_ns_single = false;           //!< unqualified self call; false for explicit base/namespace call
     bool self_is_copy = false;             //!< implicit self copy() call
     bool self_is_abstract = false;         //!< abstract self call requiring virtual dispatch
+
+    ~QoreAOTCallTarget() {
+        delete object_member_descriptor.load(std::memory_order_relaxed);
+        delete method_dispatch_cache.load(std::memory_order_relaxed);
+    }
 };
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
@@ -122,12 +203,18 @@ struct QoreAOTCallTarget {
     native code uses index-based lookups instead of embedded pointers.
 */
 struct QoreAOTContext {
+    QoreAOTContext();
+
     QoreProgram* pgm = nullptr;     //!< Program owning the deserialized AOT symbols for type/name resolution
+    QoreProgram* local_owner_pgm = nullptr;  //!< Optional owner for lazily deserialized LocalVars
 
     LocalVar** locals = nullptr;    //!< LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
     int num_locals = 0;
     Var** globals = nullptr;        //!< LoadGlobal/StoreGlobal/LoadThreadLocal/StoreThreadLocal
     int num_globals = 0;
+    std::vector<std::string> global_names; //!< Runtime fallback names for lazily resolving globals
+    std::vector<uint8_t> global_required_imports; //!< Nonzero when missing globals are required imports
+    std::mutex global_resolution_mutex; //!< Guards lazy global slot resolution
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
     const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers
@@ -143,6 +230,10 @@ struct QoreAOTContext {
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     bool all_body_locals_ir_only = false;
 
+    //! Runtime implicit contexts required by the compiled function.
+    bool uses_argv = true;
+    bool uses_self = true;
+
     //! True if this context owns the regex_cases (created by buildContextFromSlotMap).
     //! False when regex_cases are borrowed pointers from the IR function (buildAOTContext).
     bool owns_regex_cases = true;
@@ -153,13 +244,20 @@ struct QoreAOTContext {
     QoreAOTCallTarget* call_targets = nullptr;
 
     //! Lazily resolved hashdecl paths used by source-stripped AOT typed-container helpers.
+    //! The generation distinguishes TLS front-cache entries after context address reuse.
+    uint64_t hashdecl_cache_generation = 0;
     std::mutex hashdecl_path_cache_mutex;
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;
 
+    //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
+    std::mutex type_path_cache_mutex;
+    std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
+        type_path_cache;
+
     //! Source locations for per-line runtime_loc tracking in AOT mode.
     //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
-    //! location table at load time. Used by qore_rt_set_runtime_loc_aot().
+    //! location table at load time. Used by the AOT runtime-location helpers.
     const QoreProgramLocation** locs = nullptr;
     int num_locs = 0;
 
@@ -170,10 +268,12 @@ struct QoreAOTContext {
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
-    //! Offset of this function's debug IR payload from the start of the SLOT_MAPS section.
-    uint32_t debug_ir_slot_map_offset = 0;
+    //! Offset of this function's debug IR payload from its containing metadata section.
+    uint32_t debug_ir_offset = 0;
     //! Serialized debug IR payload size. Zero means no lazy debug IR is available.
     uint32_t debug_ir_size = 0;
+    //! True when debug_ir_offset addresses the separately compressed DEBUG_IR section.
+    bool debug_ir_separate_section = false;
 
     //! Owned IR function kept alive for LValuePath instruction pointers.
     //! LValuePath instructions reference path data in the IR function; the function must
@@ -227,8 +327,7 @@ struct QoreAOTContext {
         }
         if (num_exprs > 0) {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
-            call_targets = static_cast<QoreAOTCallTarget*>(
-                calloc(num_exprs, sizeof(QoreAOTCallTarget)));
+            call_targets = new QoreAOTCallTarget[num_exprs]();
         }
         if (num_stmts > 0) {
             stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
@@ -361,6 +460,24 @@ struct QoreAOTFunc {
     int num_stmts;                              //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
 };
+
+//! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context-elision metadata.
+constexpr uint32_t QORE_AOT_FUNC_NO_ARGV_CONTEXT = 1U << 30;
+constexpr uint32_t QORE_AOT_FUNC_NO_SELF_CONTEXT = 1U << 31;
+constexpr uint32_t QORE_AOT_FUNC_REGEX_COUNT_MASK = (1U << 30) - 1;
+
+inline int qore_aot_func_num_regex_cases(const QoreAOTFunc& func) {
+    return static_cast<int>(static_cast<uint32_t>(func.num_regex_cases)
+        & QORE_AOT_FUNC_REGEX_COUNT_MASK);
+}
+
+inline bool qore_aot_func_uses_argv(const QoreAOTFunc& func) {
+    return !(static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_NO_ARGV_CONTEXT);
+}
+
+inline bool qore_aot_func_uses_self(const QoreAOTFunc& func) {
+    return !(static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_NO_SELF_CONTEXT);
+}
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()
 /** Initializes the Qore runtime, re-parses the embedded source to build the AST/type system,
@@ -783,15 +900,20 @@ public:
         @p output_path containing:
 
         - one aggregate AOT metadata blob for all target-file declarations;
-        - a function table with external references to the native bodies in
-          the corresponding per-file `.qo` objects;
+        - no aggregate native function table; per-file `.qo` objects keep
+          ownership of their native bodies and matching slot maps;
         - an exported `init_<aggregate_symbol>_qo(QoreProgram*)` register
           function that calls `qore_aot_script_register()` once.
+          When @p register_native_inputs is true, the same entry point then
+          calls each linked per-file object's native-only register entry so
+          native bodies are bound from their own slot maps without
+          re-deserializing per-file declarations.
 
         The aggregate object is linked alongside the per-file `.qo` objects.
-        Missing native symbols therefore fail in the normal link phase, while
-        runtime startup sees one metadata deserialization session instead of
-        one session per source file.
+        Runtime startup sees one declaration metadata deserialization session
+        plus the per-file native registration sessions. This avoids pairing
+        aggregate slot maps with per-file native bodies compiled from a
+        different slot layout.
 
         @param target_files source files represented by the linked `.qo` set
         @param output_path path for the aggregate relocatable object
@@ -809,6 +931,9 @@ public:
         @param parse_option_flags parse-option flag names to apply to every target
         @param compiled_count_out optional output for the total number of
                 emitted Qore code variants
+        @param register_native_inputs emit calls to each per-file
+                `*_script_native_register` symbol after aggregate metadata
+                registration
         @return true on success, false on failure
     */
     static bool compileScriptAggregate(
@@ -824,7 +949,8 @@ public:
             const std::vector<std::string>& stub_files = {},
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
-            int* compiled_count_out = nullptr);
+            int* compiled_count_out = nullptr,
+            bool register_native_inputs = false);
 
     //! Compile an object-driven script register aggregate for existing `.qo` inputs.
     /**
@@ -898,6 +1024,8 @@ public:
         @param require_modules modules to require before parsing
         @param stub_files source files that provide declarations only
         @param parse_defines parse-time defines to apply to the target
+        @param source_symbols build-group source symbols that should be
+                        deferred instead of binding same-name loaded symbols
         @return true on success, false on failure
     */
     static bool compileScriptFile(const char* target_file,
@@ -911,7 +1039,8 @@ public:
                                   const std::vector<std::string>& require_modules = {},
                                   const std::vector<std::string>& stub_files = {},
                                   const std::vector<std::string>& parse_defines = {},
-                                  std::vector<std::string>* parsed_files = nullptr);
+                                  std::vector<std::string>* parsed_files = nullptr,
+                                  const QoreAOTSourceSymbolManifest* source_symbols = nullptr);
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/StatementBlock.h"
 //#include <qore/intern/qore_program_private.h>
 
 QoreString QoreNullCoalescingOperatorNode::null_coalescing_str("null coalescing operator");
@@ -72,6 +73,9 @@ int QoreNullCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         left_analysis = parse_context.analysis;
     }
 
+    AssignedStateHelper ash;
+    ash.saveState();
+
     parse_context.typeInfo = nullptr;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
@@ -80,6 +84,9 @@ int QoreNullCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         }
         right_analysis = parse_context.analysis;
     }
+    ash.recordBranchAndRestore();
+    ash.recordSavedAsImplicitBranch();
+    ash.mergeAndApply();
 
     parse_context.typeInfo = nullptr;
     set_coalescing_analysis_null(parse_context, left_analysis, right_analysis);

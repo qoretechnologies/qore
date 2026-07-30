@@ -1,0 +1,383 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub providerCode() {
+    return "hash<string, int> sub identityHash(hash<string, int> value) {
+    return value;
+}
+
+list<int> sub identityList(list<int> value) {
+    return value;
+}
+
+string sub identityString(string value) {
+    return value;
+}
+
+hash<string, int> sub selectHash(
+        int required, hash<string, int> value) {
+    return value;
+}
+
+hash<string, int> sub selectHashOptional(
+        *int ignored, hash<string, int> value) {
+    return value;
+}
+
+*hash<string, int> sub optionalIdentity(*hash<string, int> value) {
+    return value;
+}
+
+hash<string, int> sub mutatingIdentity(hash<string, int> value) {
+    value.extra = 2;
+    return value;
+}
+
+hash<string, int> sub wrapperHash(hash<string, int> value) {
+    return identityHash(value);
+}
+
+hash<string, int> sub localWrapperHash(hash<string, int> value) {
+    hash<string, int> result = wrapperHash(value);
+    return result;
+}
+
+hash<string, int> sub phiWrapperHash(
+        bool first, hash<string, int> value) {
+    hash<string, int> result;
+    if (first) {
+        result = localWrapperHash(value);
+    } else {
+        result = wrapperHash(value);
+    }
+    return result;
+}
+
+hash<string, int> sub mutatingWrapperHash(hash<string, int> value) {
+    value.extra = 3;
+    return identityHash(value);
+}
+";
+}
+
+string sub consumerCode() {
+    return "final class ExactIdentity {
+    static string staticIdentity(string value) {
+        return value;
+    }
+
+    string identity(string value) {
+        return value;
+    }
+
+    int selfCall() {
+        string value = \"method\";
+        return self.identity(value).size();
+    }
+}
+
+int sub localCalls() {
+    hash<string, int> row = {\"value\": 7};
+    list<int> values = (3, 4);
+    string text = \"abc\";
+    return identityHash(row).value * 100
+        + identityList(values)[1].toInt() * 10
+        + identityString(text).size();
+}
+
+int sub temporaryCall() {
+    return identityHash({\"value\": 5}).value;
+}
+
+int sub chainedCall() {
+    hash<string, int> row = {\"value\": 8};
+    return identityHash(identityHash(row)).value;
+}
+
+int sub aliasing() {
+    hash<string, int> row = {\"value\": 1};
+    hash<string, int> alias = identityHash(row);
+    row.value = 9;
+    return alias.value * 10 + row.value;
+}
+
+int sub sideEffectArgument() {
+    int effect = 0;
+    int value = identityHash({\"value\": (effect = 6)}).value;
+    return value * 10 + effect;
+}
+
+int sub multiParamCall() {
+    hash<string, int> row = {\"value\": 9};
+    return selectHash(1, row).value;
+}
+
+int sub multiParamSideEffect() {
+    int effect = 0;
+    hash<string, int> row = {\"value\": 9};
+    int value = selectHash((effect = 4), row).value;
+    return value * 10 + effect;
+}
+
+bool sub multiParamUnassignedRejected() {
+    int required;
+    hash<string, int> row = {\"value\": 9};
+    try {
+        selectHash(required, row);
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+int sub multiParamOptionalNothing() {
+    *int ignored;
+    hash<string, int> row = {\"value\": 6};
+    return selectHashOptional(ignored, row).value;
+}
+
+int sub wrapperCalls() {
+    hash<string, int> row = {\"value\": 7};
+    return wrapperHash(row).value * 100
+        + localWrapperHash(row).value * 10
+        + phiWrapperHash(True, row).value;
+}
+
+int sub staticCall() {
+    string value = \"static\";
+    return ExactIdentity::staticIdentity(value).size();
+}
+
+int sub invokeCall() {
+    string value = \"invoke\";
+    try {
+        return identityString(value).size();
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
+bool sub unassignedRejected() {
+    hash<string, int> value;
+    try {
+        identityHash(value);
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+bool sub removedRejected() {
+    hash<string, int> value = {\"value\": 1};
+    remove value;
+    try {
+        identityHash(value);
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+int sub main() {
+    *hash<string, int> missing;
+    ExactIdentity exact();
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d:%d\\n\",
+        localCalls(), temporaryCall(), chainedCall(), aliasing(),
+        sideEffectArgument(), staticCall(), invokeCall(), exact.selfCall(),
+        optionalIdentity(missing),
+        unassignedRejected(), removedRejected(),
+        mutatingIdentity({\"value\": 4}).extra,
+        multiParamCall(), multiParamSideEffect(),
+        multiParamUnassignedRejected(), multiParamOptionalNothing(),
+        wrapperCalls());
+    return 0;
+}
+";
+}
+
+string root = "/tmp/qore-aot-boxed-return-param-" + string(getpid());
+string provider_dir = root + "/provider";
+string composition_disabled_dir = root + "/composition-disabled";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(composition_disabled_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write("%modern\n\n" + providerCode());
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write("%modern\n\n" + consumerCode());
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write("%modern\n\n" + providerCode() + consumerCode()
+    + "\nmain();\n");
+combined_file.close();
+
+string expected = "743:5:8:19:66:6:6:6:null:True:True:2:9:94:True:6:777\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, provider_qo));
+foreach string function in (("identityHash", "identityList", "identityString")) {
+    if (!provider_index.regex(sprintf(
+            "\"qore_path\": \"%s\\([^\\n]*\"boxed_return_param\": 0",
+            function))) {
+        printf("missing boxed return-parameter metadata for %s:\n%s",
+            function, provider_index);
+        exit(2);
+    }
+}
+foreach string function in (("selectHash", "selectHashOptional")) {
+    if (provider_index.regex(sprintf(
+            "\"qore_path\": \"%s\\([^\\n]*\"boxed_return_param\": 1",
+            function))) {
+        continue;
+    }
+    printf("missing multi-parameter boxed return metadata:\n%s",
+        provider_index);
+    exit(2);
+}
+foreach string function in (("wrapperHash", "localWrapperHash")) {
+    if (!provider_index.regex(sprintf(
+            "\"qore_path\": \"%s\\([^\\n]*\"boxed_return_param\": 0",
+            function))) {
+        printf("missing composed boxed return metadata for %s:\n%s",
+            function, provider_index);
+        exit(2);
+    }
+}
+if (!provider_index.regex(
+        "\"qore_path\": \"phiWrapperHash\\([^\\n]*\"boxed_return_param\": 1")
+        || provider_index
+            =~ /\"qore_path\": \"mutatingWrapperHash\([^\n]*\"boxed_return_param\": 0/) {
+    printf("invalid composed boxed return metadata:\n%s", provider_index);
+    exit(2);
+}
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"35\"/)
+        || provider_index
+            =~ /\"qore_path\": \"(optionalIdentity|mutatingIdentity)\([^\n]*\"boxed_return_param\": 0/) {
+    printf("invalid boxed return-parameter metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string composition_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, composition_disabled_dir, provider_path));
+string composition_disabled_qo =
+    composition_disabled_dir + "/provider.qo";
+if (!is_file(composition_disabled_qo)) {
+    printf("composition-disabled provider compile failed:\n%s",
+        composition_disabled_compile);
+    exit(2);
+}
+string composition_disabled_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, composition_disabled_qo));
+if (composition_disabled_index
+        =~ /\"qore_path\": \"(wrapperHash|localWrapperHash|phiWrapperHash)\([^\n]*\"boxed_return_param\": [01]/) {
+    printf("boxed return composition was not disabled:\n%s",
+        composition_disabled_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+foreach string function in (("localCalls", "temporaryCall", "chainedCall",
+        "aliasing", "sideEffectArgument", "multiParamCall",
+        "multiParamSideEffect", "multiParamOptionalNothing",
+        "wrapperCalls", "staticCall", "invokeCall", "selfCall")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*boxed-return-calls=[1-9]",
+            function))) {
+        printf("missing boxed return-parameter fold for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (unassignedRejected|removedRejected|multiParamUnassignedRejected|main)[^\n]*:.*boxed-return-calls=[1-9]/
+        || disabled_compile =~ /boxed-return-calls=[1-9]/) {
+    printf("unsafe or disabled boxed return-parameter fold:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

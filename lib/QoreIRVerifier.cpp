@@ -283,7 +283,16 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         }
     }
     for (const auto& block : func.blocks) {
+        bool saw_non_phi = false;
         for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::Phi) {
+                if (saw_non_phi) {
+                    error = "phi instruction not grouped at beginning of block '" + block->name + "'";
+                    return false;
+                }
+            } else {
+                saw_non_phi = true;
+            }
             if (inst->opcode == QoreIROpcode::Invoke) {
                 auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (!invoke_inst || !invoke_inst->normal_target
@@ -388,10 +397,23 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "iterator.create missing iterable";
                     return false;
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+            } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::TypedForeachNextInt
+                    || inst->opcode == QoreIROpcode::TypedForeachNextFloat
+                    || inst->opcode == QoreIROpcode::TypedForeachNextBool
+                    || inst->opcode == QoreIROpcode::TypedForeachNextString) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (!iter || !iter->iterator.isValid()) {
                     error = "iterator.next missing iterator";
+                    return false;
+                }
+                if (inst->opcode != QoreIROpcode::IteratorNext
+                        && (!iter->index.isValid() || !iter->limit.isValid()
+                            || inst->operands.size() != 3
+                            || inst->operands[0].id != iter->iterator.id
+                            || inst->operands[1].id != iter->index.id
+                            || inst->operands[2].id != iter->limit.id)) {
+                    error = "typed foreach.next missing list/index/limit operands";
                     return false;
                 }
                 if (!iter->done_target || !iter->continue_target) {
@@ -621,8 +643,11 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bg_inst) {
-                    if (bg_inst->kind != QoreIRBackgroundKind::DotEval || bg_inst->name.empty()
-                            || bg_inst->operands.empty()) {
+                    if ((bg_inst->kind != QoreIRBackgroundKind::DotEval
+                                && bg_inst->kind != QoreIRBackgroundKind::StaticMethod)
+                            || bg_inst->name.empty()
+                            || (bg_inst->kind == QoreIRBackgroundKind::DotEval
+                                && bg_inst->operands.empty())) {
                         error = "background instruction missing native metadata";
                         return false;
                     }
@@ -851,6 +876,26 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // A closure body does not execute in the enclosing function's AST frame.
+    // Only its explicit capture list can reference enclosing locals.
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        if (const LVarSet* vlist = closure->getVList()) {
+            size_t capture_i = 0;
+            for (LocalVar* lv : *vlist) {
+                if (capture_i++ && !(capture_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "IR closure capture local analysis")) {
+                    unknown_node_found = true;
+                    return;
+                }
+                if (lv) {
+                    ast_locals.insert(reinterpret_cast<const void*>(lv));
+                }
+            }
+        }
+        return;
+    }
+
     // Object method reference: \obj.method() — recurse into the object expression
     if (ntype == NT_OBJMETHREF) {
         if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
@@ -865,6 +910,16 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (ntype == NT_PARSEREFERENCE) {
         auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
         collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Function and class/self method call-reference literals have no local
+    // expression children. Object method references are handled above through
+    // their receiver expression.
+    if (dynamic_cast<const LocalFunctionCallReferenceNode*>(node)
+            || dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)
+            || dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)
+            || dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
         return;
     }
 
@@ -1155,7 +1210,6 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallClosureDirect:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
@@ -1164,6 +1218,7 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         // AST-visible locals, allowing parameters to be properly classified as IR-only.
         case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::DotEvalMethodDirect:
         case QoreIROpcode::InvokeDotEvalMethodDirect:
             return nullptr;
@@ -1493,6 +1548,12 @@ bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
 
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
+    cow_container_locals.clear();
+    lvalue_path_locals.clear();
+    ast_referenced_locals.clear();
+    non_structured_ast_referenced_locals.clear();
+    has_opaque_ast_local_access = false;
+    has_explicit_self_local_access = false;
 
     // Collect all locals referenced by LoadLocal/StoreLocal/UninstantiateLocal
     std::unordered_set<const void*> all_locals;
@@ -1500,8 +1561,6 @@ void QoreIRFunction::computeIROnlyLocals() {
     // Collect all locals referenced by AST expression trees in Call/Invoke/Lvalue
     // instructions.  These locals are accessed through the runtime stack (not through
     // LoadLocal/StoreLocal) and MUST remain AST-visible.
-    std::unordered_set<const void*> ast_referenced_locals;
-
     // Track whether the function has any delegate-to-AST statements
     bool has_delegate_to_ast = false;
 
@@ -1562,7 +1621,7 @@ void QoreIRFunction::computeIROnlyLocals() {
                     if ((step.kind == LVPathStepKind::LocalVar
                             || step.kind == LVPathStepKind::ClosureVar)
                             && step.ref_ptr) {
-                        ast_referenced_locals.insert(step.ref_ptr);
+                        lvalue_path_locals.insert(step.ref_ptr);
                     }
                 }
             }
@@ -1579,23 +1638,26 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (inst->opcode == QoreIROpcode::HashKeyStore) {
                 auto* hks = static_cast<const QoreIRHashKeyStoreInstruction*>(inst.get());
                 if (hks->container_lv) {
-                    ast_referenced_locals.insert(
+                    cow_container_locals.insert(
                         reinterpret_cast<const void*>(hks->container_lv));
                 } else if (hks->container && hks->container->ref.id) {
-                    ast_referenced_locals.insert(hks->container->ref.id);
+                    cow_container_locals.insert(hks->container->ref.id);
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
                 auto* hksd = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
                 if (hksd->container_lv) {
-                    ast_referenced_locals.insert(
+                    cow_container_locals.insert(
                         reinterpret_cast<const void*>(hksd->container_lv));
                 } else if (hksd->container && hksd->container->ref.id) {
-                    ast_referenced_locals.insert(hksd->container->ref.id);
+                    cow_container_locals.insert(hksd->container->ref.id);
                 }
             } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
                 auto* lis = static_cast<const QoreIRListIndexStoreInstruction*>(inst.get());
-                if (lis->container && lis->container->ref.id) {
-                    ast_referenced_locals.insert(lis->container->ref.id);
+                if (lis->container_lv) {
+                    cow_container_locals.insert(
+                        reinterpret_cast<const void*>(lis->container_lv));
+                } else if (lis->container && lis->container->ref.id) {
+                    cow_container_locals.insert(lis->container->ref.id);
                 }
             }
 
@@ -1646,12 +1708,19 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
     }
 
+    non_structured_ast_referenced_locals = ast_referenced_locals;
+    ast_referenced_locals.insert(
+        cow_container_locals.begin(), cow_container_locals.end());
+    ast_referenced_locals.insert(
+        lvalue_path_locals.begin(), lvalue_path_locals.end());
+
     // Store total local count for Phase 4 optimization (selective reload skip)
     total_local_count = all_locals.size();
 
     // If the function has delegate-to-AST statements, ALL locals are AST-visible
     // because the AST execution could access any local through the thread-local stack.
     if (has_delegate_to_ast) {
+        has_opaque_ast_local_access = true;
         ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': has_delegate_to_ast, all AST-visible\n", name.c_str());
         return;  // ir_only_locals stays empty — all locals are AST-visible
@@ -1660,6 +1729,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the AST walker hit an unknown node type, conservatively treat all locals
     // as AST-visible.  This ensures correctness even for unhandled AST structures.
     if (unknown_node_found) {
+        has_opaque_ast_local_access = true;
         ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': unknown_node_found, all AST-visible\n", name.c_str());
         return;
@@ -1674,9 +1744,20 @@ void QoreIRFunction::computeIROnlyLocals() {
     // 3. It is NOT a reference type (which can alias other variables)
     for (const void* key : all_locals) {
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+        if (lv && lv->isSelf()) {
+            has_explicit_self_local_access = true;
+        }
         // Local appears in AST expression trees — must stay AST-visible
         if (ast_referenced_locals.count(key)) {
             printd(5, "  local '%s' (%p): AST-referenced (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        if (cow_container_locals.count(key)) {
+            printd(5, "  local '%s' (%p): COW container (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        if (lvalue_path_locals.count(key)) {
+            printd(5, "  local '%s' (%p): lvalue path (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Closure-captured locals use the closure variable stack (not the regular
@@ -1722,6 +1803,130 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
     }
 
+}
+
+QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
+        const LocalVar* argvid, const LocalVar* selfid) const {
+    ContextUsage usage;
+    if (has_opaque_ast_local_access) {
+        usage.argv = argvid != nullptr;
+        usage.self = selfid != nullptr;
+    }
+
+    const void* argv_key = reinterpret_cast<const void*>(argvid);
+    const void* self_key = reinterpret_cast<const void*>(selfid);
+    if (argvid && (argvid->closureUse() || ast_referenced_locals.count(argv_key))) {
+        usage.argv = true;
+    }
+    if (selfid && (selfid->closureUse() || ast_referenced_locals.count(self_key)
+            || has_explicit_self_local_access)) {
+        usage.self = true;
+    }
+
+    size_t check_count = 0;
+    for (const auto& block : blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "IR call context analysis")) {
+                usage.argv = argvid != nullptr;
+                usage.self = selfid != nullptr;
+                return usage;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const LocalVar* lv =
+                    static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                usage.argv |= argvid && lv == argvid;
+                usage.self |= selfid && lv == selfid;
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* local =
+                    static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                usage.argv |= argvid
+                    && (local->target == argvid || local->source == argvid);
+                usage.self |= selfid
+                    && (local->target == selfid || local->source == selfid);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                const LocalVar* lv =
+                    static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local;
+                usage.argv |= argvid && lv == argvid;
+                usage.self |= selfid && lv == selfid;
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                const auto* local =
+                    static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                usage.argv |= argvid && (local->lhs == argvid || local->rhs == argvid);
+                usage.self |= selfid && (local->lhs == selfid || local->rhs == selfid);
+            }
+
+            QoreIROpcode op = inst->opcode;
+            if (op == QoreIROpcode::Invoke) {
+                op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+            }
+            if (op == QoreIROpcode::LoadImplicitArg
+                    || op == QoreIROpcode::LoadImplicitArgv) {
+                usage.argv = true;
+            }
+            if (op == QoreIROpcode::LoadSelfMember
+                    || op == QoreIROpcode::CallMethod
+                    || op == QoreIROpcode::CallMethodDirect
+                    || op == QoreIROpcode::InvokeMethodDirect) {
+                usage.self = selfid != nullptr;
+            }
+            if (op == QoreIROpcode::CreateMethodRef && inst->operands.empty()) {
+                usage.self = selfid != nullptr;
+            }
+            if (op == QoreIROpcode::CreateClosure) {
+                const QoreClosureParseNode* closure = nullptr;
+                if (inst->opcode == QoreIROpcode::CreateClosure) {
+                    const auto* create =
+                        static_cast<const QoreIRCreateClosureInstruction*>(inst);
+                    closure = create->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            create->expr.getInternalNode());
+                    }
+                } else {
+                    const auto* invoke =
+                        static_cast<const QoreIRInvokeInstruction*>(inst);
+                    closure = dynamic_cast<const QoreClosureParseNode*>(
+                        invoke->expr.getInternalNode());
+                }
+                if (closure && closure->isInMethod()) {
+                    usage.self = selfid != nullptr;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                const auto* path =
+                    static_cast<const QoreIRLValuePathInstruction*>(inst);
+                for (const LVPathStep& step : path->path) {
+                    if (step.kind == LVPathStepKind::SelfMember) {
+                        usage.self = selfid != nullptr;
+                        break;
+                    }
+                }
+            }
+
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* block_exit =
+                    static_cast<const QoreIROnBlockExitInstruction*>(inst);
+                if (block_exit->handler_ir) {
+                    ContextUsage handler =
+                        block_exit->handler_ir->getContextUsage(argvid, selfid);
+                    usage.argv |= handler.argv;
+                    usage.self |= handler.self;
+                }
+            }
+        }
+    }
+    return usage;
 }
 
 void QoreIRFunction::computeSlotIdsAndEmbed() {

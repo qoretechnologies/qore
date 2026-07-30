@@ -1,0 +1,10 @@
+%modern
+
+int sub aggregateHashScore(hash<string, int> row) {
+    return row.a + row.b + row.c + row.d;
+}
+
+int sub aggregateStringScore(string value, string pattern) {
+    return value.size() + value.length() + value.find(pattern)
+        + value.rfind(pattern) + (value.contains(pattern) ? 1 : 0);
+}

@@ -1,0 +1,17 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub wideExpression(int a, int b, int c, int d) {
+    int value = a;
+    value = (value * 3 + b) & 0x7fffffff;
+    value = (value * 5 + c) & 0x7fffffff;
+    value = (value * 7 + d) & 0x7fffffff;
+    value = (value * 11 + a) & 0x7fffffff;
+    value = (value * 13 + b) & 0x7fffffff;
+    value = (value * 17 + c) & 0x7fffffff;
+    value = (value * 19 + d) & 0x7fffffff;
+    value = (value * 23 + a) & 0x7fffffff;
+    return value;
+}

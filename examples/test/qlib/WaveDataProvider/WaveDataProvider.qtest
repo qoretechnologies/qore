@@ -95,7 +95,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
         try {
             return new WaveDataProvider::WaveDataProvider({"token": "x"});
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Wave API: %s", ex.desc));
             }
@@ -365,7 +365,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
             AbstractDataProvider emptyProv = factory.create({});
             assertEq("wave", emptyProv.getName());
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 # Skip this assertion if connection fails
             } else {

@@ -187,7 +187,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping sanity tests");
             }
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Zoho Invoice API: %s", ex.desc));
             }
@@ -237,7 +237,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping metadata tests");
             }
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Zoho Invoice API: %s", ex.desc));
             }
@@ -262,7 +262,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping child provider tests");
             }
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Zoho Invoice API: %s", ex.desc));
             }
@@ -462,7 +462,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping negative tests");
             }
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Zoho Invoice API: %s", ex.desc));
             }

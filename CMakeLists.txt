@@ -541,6 +541,16 @@ unset(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
+# llvm-objcopy is used to embed the relink-surviving qore_aot_pcloc section into AOT
+# objects on Mach-O (GNU objcopy corrupts Mach-O; LLVM's objcopy handles it correctly).
+# Prefer the tool shipped with the LLVM we build against; fall back to PATH.
+find_program(QORE_LLVM_OBJCOPY NAMES llvm-objcopy HINTS ${LLVM_TOOLS_BINARY_DIR})
+if (QORE_LLVM_OBJCOPY)
+    message(STATUS "Found llvm-objcopy: ${QORE_LLVM_OBJCOPY}")
+else()
+    message(STATUS "llvm-objcopy not found; Mach-O AOT lazy-location sections will be unavailable")
+endif()
+
 # Homebrew LLVM loads zstd before Arrow, but can leave the zstd export set
 # without the aggregate target that a later Arrow find_dependency(zstd) expects.
 if (TARGET zstd::libzstd_shared AND NOT TARGET zstd::libzstd)
@@ -1441,7 +1451,14 @@ if(NOT DEFINED NO_SIGNAL_HANDLING)
 endif()
 
 # prepare scanner and parser targets
-bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
+# The separate CHECK_GRAMMAR_CONFLICTS target validates the one documented
+# reduce/reduce conflict, so do not duplicate that expected diagnostic here.
+if(BISON_VERSION VERSION_GREATER_EQUAL 3.0)
+    bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+        COMPILE_FLAGS "-Wno-deprecated -Wno-conflicts-rr")
+else()
+    bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
+endif()
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
@@ -1664,7 +1681,9 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
     lib/QoreIRInterpreter.cpp
+    lib/QoreIRIntrinsic.cpp
     lib/QoreIRBuilder.cpp
+    lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
     lib/QoreIRVerifier.cpp
@@ -2287,7 +2306,9 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreJIT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/JITRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRIntrinsic.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRAnalysis.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
@@ -2383,6 +2404,9 @@ target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (QORE_LLVM_OBJCOPY)
+    target_compile_definitions(libqore PRIVATE QORE_LLVM_OBJCOPY="${QORE_LLVM_OBJCOPY}")
+endif()
 option(ENABLE_ASYNC_IO_TRACE "Enable async I/O controller trace instrumentation" OFF)
 if (ENABLE_ASYNC_IO_TRACE)
     target_compile_definitions(libqore PRIVATE DEBUG_ASYNC_IO)
@@ -2648,7 +2672,8 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
-target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+target_include_directories(qcc PRIVATE ${ZSTD_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
+target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${ZSTD_LIBRARIES} ${ZSTD_LIBRARY} ${CMAKE_DL_LIBS})
 target_compile_definitions(qcc PRIVATE
     QORE_QCC_SOURCE_INCLUDE_DIR="${CMAKE_SOURCE_DIR}/include"
     QORE_QCC_BUILD_INCLUDE_DIR="${CMAKE_BINARY_DIR}/include"
@@ -2686,6 +2711,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprSlotRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTInstRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRAnalysis.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRIntrinsic.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRBuilder.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
@@ -2705,6 +2732,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRAnalysis.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRIntrinsic.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
@@ -2738,6 +2767,7 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
+add_dependencies(qcc qcc-format-version)
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(
@@ -2788,10 +2818,16 @@ install(TARGETS qore qcc qpp libqore
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+install(FILES ${QCC_FORMAT_STAMP}
+        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake
+        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc
@@ -3420,7 +3456,7 @@ qore_user_module("qlib/WaveDataProvider" "wave-logo.svg")
 qore_user_module("qlib/WooCommerceDataProvider" "woocommerce-logo.svg")
 qore_user_module("qlib/JotformDataProvider" "jotform-logo.svg")
 qore_user_module("qlib/MailgunDataProvider" "mailgun-logo.svg")
-qore_user_module("qlib/MewsRestDataProvider" "mews-logo-white.svg")
+qore_user_module("qlib/MewsRestDataProvider" "../../doxygen/mews-logo-white.svg")
 qore_user_module("qlib/AftershipDataProvider" "aftership-logo.svg")
 qore_user_module("qlib/BaseLinkerDataProvider" "baselinker-logo.svg")
 qore_user_module("qlib/AnthropicDataProvider" "anthropic-logo.svg")
@@ -3524,20 +3560,28 @@ add_custom_target(install-qore-qlib-aot
     USES_TERMINAL
     VERBATIM)
 
-# Keep the source-tree links available even when a previous cleanup removed
-# them without making the qmod output itself stale. CI test jobs also invoke
-# this script directly after unpacking the prebuilt build/ artifact.
-if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES)
+# Self-healing guarantee for the in-tree source qmod symlinks.  The per-qmod
+# create_symlink command only recreates a symlink when its qmod target rebuilds,
+# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes the
+# symlinks unconditionally — so a partial build, or up-to-date qmods, after a
+# format-changing change can leave a module without its symlink and silently fall
+# back to slow source parsing at load.  This idempotent step recreates any
+# missing/incorrect symlink from the already-built qmods, both on (re)configure
+# and as an always-run build step after all qmod targets.
+get_property(_qore_source_qmod_link_targets GLOBAL PROPERTY QORE_SOURCE_QMOD_LINK_TARGETS)
+if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES
+        AND _qore_source_qmod_link_targets)
     add_custom_target(qore-ensure-source-qmod-symlinks ALL
         COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
             -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
             -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
-        DEPENDS qore-qlib-aot
         COMMENT "Ensuring in-tree source qmod symlinks"
         VERBATIM)
-
-    if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/qlib-qmod")
+    add_dependencies(qore-ensure-source-qmod-symlinks ${_qore_source_qmod_link_targets})
+    # Also heal on (re)configure so an existing build tree is corrected even
+    # before the next build runs.
+    if (IS_DIRECTORY ${CMAKE_BINARY_DIR}/qlib-qmod)
         execute_process(COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
             -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod

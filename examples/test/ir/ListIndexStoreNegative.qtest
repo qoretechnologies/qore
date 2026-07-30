@@ -13,8 +13,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class ListIndexStoreNegativeTest

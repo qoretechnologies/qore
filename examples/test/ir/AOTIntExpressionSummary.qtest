@@ -1,0 +1,727 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub providerCode() {
+    return "our int side_effect_value;
+
+int sub leaf(int value) {
+    return value * 3 + 1;
+}
+
+int sub pair(int left, int right) {
+    return leaf(left) + leaf(right);
+}
+
+bool sub positive_bool_expr(int value, int threshold) {
+    return value > threshold;
+}
+
+bool sub nested_positive_bool_expr(int value, int threshold) {
+    return positive_bool_expr(value, threshold);
+}
+
+int sub bounded_expr(int a, int b, int c) {
+    return (a * 3 + b * 5) - (c * 7) + (a * b) - 11;
+}
+
+int sub bitwise_expr(int a, int b, int c) {
+    return (a & b) ^ (b | c);
+}
+
+int sub nested_bitwise_expr(int a, int b, int c) {
+    return bitwise_expr(a, b, c) + leaf(a);
+}
+
+int sub compare_select_expr(int a, int b, int c) {
+    return a < b ? a * 3 + c : b * 5 - c;
+}
+
+int sub nested_compare_select_expr(int a, int b, int c) {
+    return compare_select_expr(a, b, c) + 1;
+}
+
+float sub bounded_float_expr(float a, float b, float c) {
+    return (a * 1.5 + b) - c * 0.25;
+}
+
+float sub nested_float_expr(float a, float b, float c) {
+    return bounded_float_expr(a, b, c) + a * 0.125;
+}
+
+float sub hash_float_expr(
+        hash<string, float> row, float adjustment) {
+    return row.a * 1.5 + row.b * 0.25 + adjustment;
+}
+
+float sub nested_hash_float_expr(
+        hash<string, float> row, float adjustment) {
+    return hash_float_expr(row, adjustment) * 2.0 + 1.0;
+}
+
+int sub hash_string_measure(
+        hash<string, string> row, int adjustment) {
+    return row.first.length() + row.second.size() + adjustment;
+}
+
+int sub nested_hash_string_measure(
+        hash<string, string> row, int adjustment) {
+    return hash_string_measure(row, adjustment) * 2 + 1;
+}
+
+float sub divide_float_expr(float a, float b) {
+    return a / b;
+}
+
+float sub negate_float_expr(float value) {
+    return -value;
+}
+
+float sub nested_divide_float_expr(float a, float b, float adjustment) {
+    return -divide_float_expr(a, b) + adjustment;
+}
+
+float sub multiple_divide_float_expr(float a, float b, float c) {
+    return a / b + b / c;
+}
+
+float sub wide_float_expr(float value) {
+    return ((((((((((((((((((value * 1.125 + 0.25) * 0.875 - 0.5)
+        * 1.0625 + 0.75) * 0.9375 - 1.0) * 1.03125 + 1.25)
+        * 0.96875 - 1.5) * 1.015625 + 1.75) * 0.984375 - 2.0)
+        * 1.0078125 + 2.25) * 0.9921875 - 2.5) * 1.00390625
+        + 2.75) * 0.99609375 - 3.0) * 1.001953125 + 3.25)
+        * 0.998046875 - 3.5)))));
+}
+
+float sub cfg_float_expr(bool outer, bool inner, float value) {
+    if (outer) {
+        if (inner) {
+            return value * 1.25 + 0.5;
+        }
+        return value * 0.875 - 0.25;
+    }
+    return value * 0.625 + 1.5;
+}
+
+float sub cfg_float_div(bool divide, float value, float divisor) {
+    if (divide) {
+        return value / divisor;
+    }
+    return value + 1.0;
+}
+
+int sub string_measure_expr(string value, int adjustment) {
+    return value.size() * 3 + value.length() * 5 + adjustment;
+}
+
+int sub nested_string_measure_expr(string value, int adjustment) {
+    return string_measure_expr(value, adjustment) + value.size();
+}
+
+int sub optional_string_measure_expr(*string value, int adjustment) {
+    return value.size() * 3 + value.length() * 5 + adjustment;
+}
+
+int sub string_starts_expr(string value, string pattern, int adjustment) {
+    return value.startsWith(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_ends_expr(string value, string pattern, int adjustment) {
+    return value.endsWith(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_contains_expr(string value, string pattern, int adjustment) {
+    return value.contains(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_find_expr(string value, string pattern, int offset, int adjustment) {
+    return value.find(pattern, offset) + adjustment;
+}
+
+int sub string_rfind_expr(string value, string pattern, int adjustment) {
+    return value.rfind(pattern) + adjustment;
+}
+
+int sub multiple_string_ops_expr(string value, string pattern, int adjustment) {
+    return value.find(pattern) + value.rfind(pattern) + adjustment;
+}
+
+int sub nested_string_expr(string value, string pattern, int adjustment) {
+    return string_contains_expr(value, pattern, adjustment) * 3
+        + value.length() * 2 + adjustment;
+}
+
+int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
+    return left.size() * 7 + right.size() * 5 + adjustment * 3;
+}
+
+int sub hash_value_expr(hash<string, int> row, int adjustment) {
+    return row.value * 3 + adjustment;
+}
+
+int sub nested_hash_value_expr(hash<string, int> row, int adjustment) {
+    return hash_value_expr(row, adjustment) * 2 + 1;
+}
+
+int sub multi_hash_value_expr(hash<string, int> row, int adjustment) {
+    return row.a * 3 + row.b * 5 + row.c * 7 + row.d * 11
+        + adjustment;
+}
+
+int sub nested_multi_hash_value_expr(
+        hash<string, int> row, int adjustment) {
+    return multi_hash_value_expr(row, adjustment) * 2 + 1;
+}
+
+int sub two_hash_value_expr(
+        hash<string, int> left, hash<string, int> right) {
+    return left.a + left.b + right.c + right.d;
+}
+
+int sub divide_expr(int left, int right) {
+    return left / right;
+}
+
+int sub nested_divide_expr(int left, int right, int adjustment) {
+    return divide_expr(left, right) * 3 - -adjustment;
+}
+
+int sub modulo_expr(int left, int right) {
+    return left % right;
+}
+
+int sub constant_shift_expr(int value) {
+    return (value << 3) + (value >> 2);
+}
+
+int sub dynamic_shift_expr(int value, int amount) {
+    return value << amount;
+}
+
+int sub negative_shift_expr(int value) {
+    return value << -1;
+}
+
+int sub wide_shift_expr(int value) {
+    return value >> 64;
+}
+
+int sub negate_expr(int value) {
+    return -value;
+}
+
+int sub multiple_divide_expr(int left, int right) {
+    return left / right + left / (right + 1);
+}
+
+int sub conditional_divide_expr(int left, int right) {
+    return left > 0 ? left / right : right;
+}
+
+int sub local_branch_expr(int value) {
+    int local = value + 1;
+    if (local % 2) {
+        local *= 3;
+    } else {
+        local += 7;
+    }
+    return local * local - value;
+}
+
+int sub asymmetric_param_expr(int value, int choose) {
+    if (choose) {
+        value += 5;
+    } else {
+    }
+    return value * 2;
+}
+
+int sub maybe_unassigned_local(int choose) {
+    int local;
+    if (choose) {
+        local = 9;
+    }
+    return local;
+}
+
+int sub maybe_removed_local(int choose) {
+    int local = 4;
+    if (choose) {
+        remove local;
+    } else {
+        local += 3;
+    }
+    return local;
+}
+
+int sub maybe_removed_param(int value, int choose) {
+    if (choose) {
+        remove value;
+    } else {
+        value += 3;
+    }
+    return value;
+}
+
+int sub side_effect_expr(int value) {
+    side_effect_value = value;
+    return value + 1;
+}
+
+bool sub side_effect_bool_expr(int value) {
+    side_effect_value = value;
+    return value > 0;
+}
+
+int sub too_large(int value) {
+    return value + 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+        + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20;
+}
+";
+}
+
+string sub consumerCode() {
+    return "int sub main() {
+    int missing;
+    bool missing_rejected = False;
+    try {
+        bounded_expr(missing, 2, 3);
+    } catch (hash<auto> ex) {
+        missing_rejected = True;
+    }
+    int removed = 4;
+    remove removed;
+    bool removed_rejected = False;
+    try {
+        pair(removed, 2);
+    } catch (hash<auto> ex) {
+        removed_rejected = True;
+    }
+    bool missing_bool_rejected = False;
+    try {
+        positive_bool_expr(missing, 0);
+    } catch (hash<auto> ex) {
+        missing_bool_rejected = True;
+    }
+    string missing_string;
+    bool missing_string_rejected = False;
+    try {
+        string_measure_expr(missing_string, 1);
+    } catch (hash<auto> ex) {
+        missing_string_rejected = True;
+    }
+    bool optional_nothing_rejected = False;
+    try {
+        optional_string_measure_expr(NOTHING, 7);
+    } catch (hash<auto> ex) {
+        optional_nothing_rejected = True;
+    }
+    bool string_expression_rejected = False;
+    try {
+        string_contains_expr(missing_string, \"x\", 1);
+    } catch (hash<auto> ex) {
+        string_expression_rejected = True;
+    }
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%d:%d:%d:%.17g:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+        bounded_expr(2, 3, 4),
+        bounded_expr(9223372036854775807, 2, -3),
+        pair(5, -2), bitwise_expr(6, 3, 12),
+        nested_bitwise_expr(6, 3, 12),
+        compare_select_expr(-5, 3, 7),
+        compare_select_expr(8, -3, 7),
+        nested_compare_select_expr(-5, 3, 7),
+        bounded_float_expr(2.0, 3.0, 4.0),
+        nested_float_expr(-2.0, 3.0, 4.0), too_large(1),
+        missing_rejected, removed_rejected,
+        bounded_float_expr(-0.0, -0.0, 0.0),
+        bounded_float_expr(@nan@, 1.0, 2.0).nanp(),
+        bounded_float_expr(@inf@, 1.0, 2.0).infp(),
+        string_measure_expr(\"ascii\", 2),
+        string_measure_expr(\"Dvo\\u0159\\u00e1k\", 3),
+        nested_string_measure_expr(\"Dvo\\u0159\\u00e1k\", 3),
+        optional_string_measure_expr(\"ascii\", 4),
+        optional_nothing_rejected,
+        missing_string_rejected,
+        list_measure_expr((1, 2, 3), (4, 5), 6));
+    printf(\"bool-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        positive_bool_expr(5, 2),
+        positive_bool_expr(-1, 2),
+        nested_positive_bool_expr(7, 3),
+        1 + nested_positive_bool_expr(7, 3),
+        nested_positive_bool_expr(7, 3) + 1,
+        nested_positive_bool_expr(7, 3) + positive_bool_expr(5, 2),
+        missing_bool_rejected);
+    string utf8 = \"a\u00e9bc\u00e9\";
+    string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
+    bool encoding_rejected = False;
+    try {
+        string_contains_expr(convert_encoding(\"ascii\", \"US-ASCII\"), \"\u00df\", 1);
+    } catch (hash<auto> ex) {
+        encoding_rejected = True;
+    }
+    printf(\"string-expr:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+        string_starts_expr(utf8, \"a\u00e9\", 2),
+        string_ends_expr(utf8, \"c\u00e9\", 3),
+        string_contains_expr(utf8, \"\u00e9b\", 4),
+        string_contains_expr(utf8, \"zz\", 4),
+        string_find_expr(utf8, \"\u00e9\", 2, 5),
+        string_rfind_expr(utf8, \"\u00e9\", 5),
+        multiple_string_ops_expr(utf8, \"\u00e9\", 5),
+        nested_string_expr(utf8, \"\u00e9\", 2),
+        string_contains_expr(latin1, convert_encoding(\"\u00e9b\", \"ISO-8859-1\"), 4),
+        string_find_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 2, 5),
+        string_rfind_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 5),
+        string_expression_rejected, encoding_rejected);
+    bool divide_zero = False;
+    try {
+        divide_expr(1, 0);
+    } catch (hash<auto> ex) {
+        divide_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool modulo_zero = False;
+    try {
+        modulo_expr(1, 0);
+    } catch (hash<auto> ex) {
+        modulo_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool float_zero = False;
+    try {
+        divide_float_expr(1.0, 0.0);
+    } catch (hash<auto> ex) {
+        float_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool float_negative_zero = False;
+    try {
+        divide_float_expr(1.0, -0.0);
+    } catch (hash<auto> ex) {
+        float_negative_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    printf(\"scalar-expr:%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%.17g:%.17g:%d:%d:%d:%d:%d\\n\",
+        divide_expr(17, 3),
+        nested_divide_expr(17, 3, 4),
+        modulo_expr(17, 5),
+        constant_shift_expr(9),
+        dynamic_shift_expr(9, 3),
+        negate_expr(-17),
+        multiple_divide_expr(24, 3),
+        conditional_divide_expr(24, 3),
+        divide_float_expr(7.0, 2.0),
+        nested_divide_float_expr(7.0, 2.0, 1.25),
+        negate_float_expr(0.0),
+        multiple_divide_float_expr(12.0, 3.0, 2.0),
+        divide_float_expr(1.0, @nan@).nanp(),
+        divide_zero, modulo_zero, float_zero, float_negative_zero);
+    printf(\"wide-float-expr:%.17g:%d:%d\\n\",
+        wide_float_expr(17.25),
+        wide_float_expr(@nan@).nanp(),
+        wide_float_expr(@inf@).infp());
+    printf(\"cfg-float-expr:%.17g:%.17g:%.17g:%d:%d\\n\",
+        cfg_float_expr(True, True, 8.0),
+        cfg_float_expr(True, False, 8.0),
+        cfg_float_expr(False, False, 8.0),
+        cfg_float_expr(True, True, @nan@).nanp(),
+        cfg_float_div(False, 1.0, 0.0) == 2.0);
+    bool unassigned_local_rejected = False;
+    try {
+        maybe_unassigned_local(0);
+    } catch (hash<auto> ex) {
+        unassigned_local_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool removed_local_rejected = False;
+    try {
+        maybe_removed_local(1);
+    } catch (hash<auto> ex) {
+        removed_local_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool removed_param_rejected = False;
+    try {
+        maybe_removed_param(4, 1);
+    } catch (hash<auto> ex) {
+        removed_param_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"local-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        local_branch_expr(3), local_branch_expr(4),
+        asymmetric_param_expr(10, 0), asymmetric_param_expr(10, 1),
+        unassigned_local_rejected, removed_local_rejected,
+        removed_param_rejected);
+    hash<string, int> hash_present = {\"value\": 7};
+    hash<string, int> hash_missing = {};
+    hash<string, int> hash_removed = {\"value\": 9};
+    remove hash_removed.value;
+    printf(\"hash-expr:%d:%d:%d:%d\\n\",
+        hash_value_expr(hash_present, 2),
+        nested_hash_value_expr(hash_present, 2),
+        hash_value_expr(hash_missing, 2),
+        hash_value_expr(hash_removed, 3));
+    hash<string, float> float_present = {\"a\": 4.0, \"b\": 8.0};
+    hash<string, float> float_missing = {\"a\": 4.0};
+    hash<string, float> float_removed = {\"a\": 4.0, \"b\": 8.0};
+    remove float_removed.b;
+    hash<string, float> float_unassigned;
+    bool float_unassigned_rejected = False;
+    try {
+        hash_float_expr(float_unassigned, 2.0);
+    } catch (hash<auto> ex) {
+        float_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, float> float_removed_lvalue = float_present;
+    remove float_removed_lvalue;
+    bool float_removed_lvalue_rejected = False;
+    try {
+        hash_float_expr(float_removed_lvalue, 2.0);
+    } catch (hash<auto> ex) {
+        float_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"float-hash-expr:%.17g:%.17g:%.17g:%.17g:%d:%d\\n\",
+        hash_float_expr(float_present, 2.0),
+        nested_hash_float_expr(float_present, 2.0),
+        hash_float_expr(float_missing, 2.0),
+        hash_float_expr(float_removed, 3.0),
+        float_unassigned_rejected, float_removed_lvalue_rejected);
+    hash<string, string> hash_string_present = {
+        \"first\": \"Dvo\u0159\u00e1k\", \"second\": \"ascii\"};
+    hash<string, string> hash_string_missing = {\"first\": \"Dvo\u0159\u00e1k\"};
+    hash<string, string> hash_string_removed = hash_string_present;
+    remove hash_string_removed.second;
+    hash<string, string> hash_string_unassigned;
+    bool hash_string_unassigned_rejected = False;
+    try {
+        hash_string_measure(hash_string_unassigned, 2);
+    } catch (hash<auto> ex) {
+        hash_string_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, string> hash_string_removed_lvalue =
+        hash_string_present;
+    remove hash_string_removed_lvalue;
+    bool hash_string_removed_lvalue_rejected = False;
+    try {
+        hash_string_measure(hash_string_removed_lvalue, 2);
+    } catch (hash<auto> ex) {
+        hash_string_removed_lvalue_rejected =
+            ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"hash-string-measure:%d:%d:%d:%d:%d:%d\\n\",
+        hash_string_measure(hash_string_present, 2),
+        nested_hash_string_measure(hash_string_present, 2),
+        hash_string_measure(hash_string_missing, 2),
+        hash_string_measure(hash_string_removed, 3),
+        hash_string_unassigned_rejected,
+        hash_string_removed_lvalue_rejected);
+    hash<string, int> multi_present = {
+        \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
+    hash<string, int> multi_missing = {\"a\": 1, \"b\": 2, \"d\": 4};
+    hash<string, int> multi_removed = {
+        \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
+    remove multi_removed.d;
+    hash<string, int> multi_unassigned;
+    bool multi_unassigned_rejected = False;
+    try {
+        multi_hash_value_expr(multi_unassigned, 5);
+    } catch (hash<auto> ex) {
+        multi_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, int> multi_removed_lvalue = multi_present;
+    remove multi_removed_lvalue;
+    bool multi_removed_lvalue_rejected = False;
+    try {
+        multi_hash_value_expr(multi_removed_lvalue, 5);
+    } catch (hash<auto> ex) {
+        multi_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"multi-hash-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        multi_hash_value_expr(multi_present, 5),
+        nested_multi_hash_value_expr(multi_present, 5),
+        two_hash_value_expr(multi_present, multi_present),
+        multi_hash_value_expr(multi_missing, 5),
+        multi_hash_value_expr(multi_removed, 5),
+        multi_unassigned_rejected, multi_removed_lvalue_rejected);
+    printf(\"bool-side-effect:%d:%d\\n\",
+        side_effect_bool_expr(-4), side_effect_value);
+    return 0;
+}
+";
+}
+
+string root = "/tmp/qore-aot-int-expression-summary-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write("%modern\n\n" + providerCode());
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write("%modern\n\n" + consumerCode());
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write("%modern\n\n" + providerCode() + consumerCode() + "\nmain();\n");
+combined_file.close();
+
+string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"35\"/)
+        || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 10[^\n]*\"key\": \"a\"/)
+        || !(provider_index =~ /\"qore_path\": \"hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"second\"/)
+        || !(provider_index =~ /\"kind\": 31[^\n]*\"key\": \"first\"/)
+        || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"wide_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"cfg_float_expr\(bool,bool,float\)\"[^\n]*\"float_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"kind\": 9/)
+        || !(provider_index =~ /\"qore_path\": \"cfg_float_div\(bool,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_starts_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_ends_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_contains_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_find_expr\(string,string,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_rfind_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_string_ops_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"nested_string_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 19/)
+        || !(provider_index =~ /\"kind\": 20/)
+        || !(provider_index =~ /\"kind\": 21/)
+        || !(provider_index =~ /\"kind\": 22/)
+        || !(provider_index =~ /\"kind\": 23/)
+        || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"two_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 29[^\n]*\"key\": \"value\"/)
+        || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_divide_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"modulo_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"constant_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"dynamic_shift_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"negative_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"wide_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"negate_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"conditional_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"local_branch_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"asymmetric_param_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_unassigned_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_removed_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_removed_param\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"kind\": 24/)
+        || !(provider_index =~ /\"kind\": 25/)
+        || !(provider_index =~ /\"kind\": 26/)
+        || !(provider_index =~ /\"kind\": 27/)
+        || !(provider_index =~ /\"kind\": 28/)
+        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 6/)
+        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 7/)
+        || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"side_effect_bool_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
+    printf("unexpected integer expression metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_hash_key_access_int_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_int_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_float_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_string_measure_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_key_access_int_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_int_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_float_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_string_measure_prehashed/) {
+    printf("hash projection import mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

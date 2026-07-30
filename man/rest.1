@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH REST 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH REST 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 rest \- command-line REST client
 .SH SYNOPSIS
@@ -111,6 +111,9 @@ Ping the URL and exit.
 Ping the URL using polling and exit.
 .SS "General"
 .TP
+.BR \-C ", " \-\-no\-color
+Disable colored output.
+.TP
 .BR \-v ", " \-\-verbose
 Increase verbosity (repeatable).
 .TP
@@ -133,7 +136,7 @@ Simple GET request:
 .PP
 POST with JSON body:
 .RS
-.B rest post http://api.example.com/users '{"name": "foo"}'
+.B rest post http://api.example.com/users '{\(dqname\(dq: \(dqfoo\(dq}'
 .RE
 .PP
 Use a Swagger schema with verbose output:

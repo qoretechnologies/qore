@@ -183,7 +183,18 @@ int typed_hash_decl_private::resolveParseParent() {
     int err = 0;
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
-        const QoreTypeInfo* parent_type = QoreParseTypeInfo::resolveAny(parse_parent, loc, err);
+        qore_root_ns_private* rns = qore_root_ns_private::get(*getRootNS());
+        const bool known_parent_name = rns->parseTryFindHashDecl(*parse_parent->cscope)
+            || qore_root_ns_private::parseFindScopedClass(loc, *parse_parent->cscope, false)
+            || qore_root_ns_private::parseFindTypedef(*parse_parent->cscope)
+            || rns->parseTryFindEnum(*parse_parent->cscope);
+        const QoreTypeInfo* parent_type = nullptr;
+        if (known_parent_name) {
+            parent_type = QoreParseTypeInfo::resolveAny(parse_parent, loc, err);
+        } else {
+            rns->parseFindHashDecl(loc, *parse_parent->cscope);
+            err = -1;
+        }
         if (!err) {
             const TypedHashDecl* parent = QoreTypeInfo::getUniqueReturnHashDecl(parent_type);
             if (parent) {
@@ -658,6 +669,103 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
     return *xsink ? nullptr : h.release();
 }
 
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
+        bool runtime_check, ExceptionSink* xsink) const {
+    if (runtime_check) {
+        for (const QoreHashNode* source : {init, overrides}) {
+            ConstHashIterator i(source);
+            size_t key_count = 0;
+            while (i.next()) {
+                if (++key_count % 100 == 0
+                        && qore_check_cancel(xsink, "typed hash override initializer validation")) {
+                    return nullptr;
+                }
+                if (!findMember(i.getKey())) {
+                    xsink->raiseException("HASHDECL-INIT-ERROR",
+                        "hashdecl '%s' hash initializer value contains unknown key '%s'", name.c_str(), i.getKey());
+                    return nullptr;
+                }
+            }
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
+    initHash(*h, init, overrides, xsink);
+    return *xsink ? nullptr : h.release();
+}
+
+QoreHashNode* typed_hash_decl_private::newHashFromTemporary(QoreHashNode* init, bool runtime_check,
+        ExceptionSink* xsink, bool values_prechecked, bool layout_prechecked) const {
+    if (!init || !init->is_unique()) {
+        return newHash(init, runtime_check, xsink);
+    }
+
+    if (runtime_check) {
+        ConstHashIterator i(init);
+        size_t key_count = 0;
+        while (i.next()) {
+            if (key_count++ && !(key_count % 100)
+                    && qore_check_cancel(xsink,
+                        "temporary hashdecl initializer validation")) {
+                return nullptr;
+            }
+            if (!findMember(i.getKey())) {
+                xsink->raiseException("HASHDECL-INIT-ERROR",
+                    "hashdecl '%s' hash initializer value contains unknown key '%s'",
+                    name.c_str(), i.getKey());
+                return nullptr;
+            }
+        }
+    }
+
+    if (!layout_prechecked
+            && initHashInPlace(init, xsink, values_prechecked)) {
+        return nullptr;
+    }
+    qore_hash_private::get(*init)->setHashDecl(thd);
+    return static_cast<QoreHashNode*>(init->refSelf());
+}
+
+bool typed_hash_decl_private::matchesLiteralMemberOrder(
+        const std::vector<std::string>& keys) const {
+    if (parentHashDecl || keys.size() != members.size()) {
+        return false;
+    }
+    size_t offset = 0;
+    size_t member_count = 0;
+    for (const auto& member : members.member_list) {
+        if (++member_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "hashdecl literal member order analysis")) {
+            return false;
+        }
+        if (keys[offset] != member.first) {
+            return false;
+        }
+        ++offset;
+    }
+    return true;
+}
+
+int typed_hash_decl_private::getDirectMemberOffset(const char* key) const {
+    if (!key || parentHashDecl) {
+        return -1;
+    }
+    int offset = 0;
+    for (const auto& member : members.member_list) {
+        if (offset && !(offset % 100)
+                && qore_check_cancel(nullptr,
+                    "hashdecl direct member offset analysis")) {
+            return -1;
+        }
+        if (!strcmp(member.first, key)) {
+            return offset;
+        }
+        ++offset;
+    }
+    return -1;
+}
+
 int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
     int rc = initHashIntern(h, init, xsink);
     // xsink may be nullptr when being executed in a try block
@@ -668,7 +776,30 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
     return rc;
 }
 
+int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+        ExceptionSink* xsink) const {
+    int rc = initHashIntern(h, init, overrides, xsink);
+    if (rc && xsink && *xsink) {
+        xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+    }
+    return rc;
+}
+
+int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
+        bool values_prechecked) const {
+    int rc = initHashInternInPlace(h, xsink, values_prechecked);
+    if (rc && xsink && *xsink) {
+        xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+    }
+    return rc;
+}
+
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
+    return initHashIntern(h, init, nullptr, xsink);
+}
+
+int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
@@ -677,15 +808,24 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
     // Initialize parent members first
     if (parentHashDecl) {
-        if (get(*parentHashDecl)->initHashIntern(h, init, xsink)) {
+        if (get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink)) {
             return -1;
         }
     }
 
+    size_t member_count = 0;
     for (auto& i : members.member_list) {
-        // first try to use value given in init hash
-        if (init) {
-            const qore_hash_private* hi = qore_hash_private::get(*init);
+        if (++member_count % 100 == 0
+                && qore_check_cancel(xsink, "typed hash initialization")) {
+            return -1;
+        }
+        // First try the override hash, then the base initializer.
+        bool initialized = false;
+        for (const QoreHashNode* source : {overrides, init}) {
+            if (!source) {
+                continue;
+            }
+            const qore_hash_private* hi = qore_hash_private::get(*source);
             bool exists;
             ValueHolder val(hi->getReferencedKeyValueIntern(i.first, exists), xsink);
             if (exists) {
@@ -704,8 +844,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 if (needs_scan(v)) {
                     h_priv->incScanCount(1);
                 }
-                continue;
+                initialized = true;
+                break;
             }
+        }
+
+        if (initialized) {
+            continue;
         }
 
         if (!i.second) {
@@ -741,6 +886,76 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 h_priv->incScanCount(1);
             }
         }
+    }
+
+    return 0;
+}
+
+int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink,
+        bool values_prechecked) const {
+#ifdef QORE_MANAGE_STACK
+    if (xsink && check_stack(xsink)) {
+        return -1;
+    }
+#endif
+
+    if (parentHashDecl
+            && get(*parentHashDecl)->initHashInternInPlace(
+                h, xsink, values_prechecked)) {
+        return -1;
+    }
+
+    qore_hash_private* hp = qore_hash_private::get(*h);
+    // Match newHash()'s declaration-order iteration without reallocating members.
+    auto move_member_to_back = [&](const char* key) {
+        auto member = hp->hm.find(key);
+        assert(member != hp->hm.end());
+        hp->member_list.splice(hp->member_list.end(),
+            hp->member_list, member->second);
+    };
+    size_t member_count = 0;
+    for (auto& i : members.member_list) {
+        if (member_count++ && !(member_count % 100)
+                && qore_check_cancel(xsink,
+                    "temporary hashdecl initialization")) {
+            return -1;
+        }
+        if (values_prechecked && hp->findMember(i.first)) {
+            move_member_to_back(i.first);
+            continue;
+        }
+        bool exists;
+        ValueHolder val(hp->swapKeyValueIfExists(
+            i.first, QoreValue(), nullptr, exists), xsink);
+        if (exists) {
+            QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
+            assert(old.isNothing());
+            move_member_to_back(i.first);
+            continue;
+        }
+
+        if (!i.second || !i.second->exp) {
+            continue;
+        }
+
+        ValueEvalOptimizedRefHolder default_val(i.second->exp, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        default_val.ensureReferencedValue();
+        QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *default_val, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        QoreValue old = hp->swapKeyValue(i.first,
+            default_val.takeReferencedValue(), nullptr);
+        assert(old.isNothing());
+        move_member_to_back(i.first);
     }
 
     return 0;
@@ -834,6 +1049,11 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
     return priv->newHash(h, true, xsink);
+}
+
+QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,
+        ExceptionSink* xsink) const {
+    return priv->newHash(h, overrides, true, xsink);
 }
 
 const TypedHashDecl* TypedHashDecl::getParentHashDecl() const {

@@ -1,0 +1,1138 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Derive deterministic standalone .qo compile prerequisites for one qcc object
+# group from source-level parse/build dependencies.  Linkable symbol references
+# are intentionally not prerequisites; they are resolved from .qo indexes by the
+# linker.  The CMake source list is used only as a stable tie breaker, not as
+# the source of dependency truth.
+
+# Defer annotation evaluation (PEP 563) so PEP 604 unions like `set[str] | None` parse on
+# Python 3.9 (e.g. macOS system Python), where they would otherwise raise at def time.
+from __future__ import annotations
+
+import argparse
+import hashlib
+import heapq
+import json
+import os
+import re
+import sys
+from collections import defaultdict
+
+
+IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
+QUAL_IDENT = rf"{IDENT}(?:::{IDENT})*"
+TYPE_TOKEN = r"[A-Za-z_][A-Za-z0-9_:]*"
+TYPE_EXPR = r"[A-Za-z_][A-Za-z0-9_:]*(?:[ \t]*<[A-Za-z0-9_:<>,* \t]+>)?"
+
+
+CLASS_RE = re.compile(rf"\b(?:public\s+|private\s+|abstract\s+|final\s+)*class\s+({IDENT})\b")
+CLASS_INHERITS_RE = re.compile(
+    rf"\b(?:public\s+|private\s+|abstract\s+|final\s+)*class\s+{IDENT}\b[^\{{;]*\binherits\s+([^\{{;]+)"
+)
+ENUM_RE = re.compile(rf"\b(?:public\s+|private\s+)*enum\s+({IDENT})\b")
+HASHDECL_RE = re.compile(rf"\bhashdecl\s+({IDENT})\b")
+SUB_RE = re.compile(rf"\b(?:[\w:*<>]+\s+)*sub\s+({IDENT})\s*\(")
+CONST_RE = re.compile(rf"\bconst\s+({IDENT})\b")
+CONST_INIT_RE = re.compile(rf"\bconst\s+{IDENT}\s*=\s*(.*?);", re.S)
+GLOBAL_TYPE_FRAGMENT = rf"\*?{TYPE_EXPR}"
+GLOBAL_KEYWORD = r"(?<![-A-Za-z0-9_])(?:our|thread_local)\b"
+GLOBAL_SCALAR_RE = re.compile(rf"{GLOBAL_KEYWORD}\s+(?!\()(?:(?:{GLOBAL_TYPE_FRAGMENT})\s+)+\*?({IDENT})\b")
+GLOBAL_GROUP_RE = re.compile(rf"{GLOBAL_KEYWORD}\s*\(")
+NAMESPACE_EVENT_RE = re.compile(rf"\b(?:public\s+|private\s+|internal\s+)*namespace\s+({QUAL_IDENT})\s*\{{|[{{}}]")
+INCLUDE_RE = re.compile(r"^[ \t]*%include[ \t]+([^ \t\r\n#]+)", re.M)
+PARSE_DEFINE_RE = re.compile(rf"^[ \t]*%define[ \t]+({IDENT})\b", re.M)
+PARSE_DEFINE_CONSUMER_RE = re.compile(rf"^[ \t]*%ifn?def[ \t]+({IDENT})\b", re.M)
+CALL_REF_RE = re.compile(rf"\\[ \t]*({QUAL_IDENT})[ \t]*\(")
+STATIC_CALL_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})[ \t]*\(")
+STATIC_REF_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})\b(?![ \t]*\()")
+NEW_OBJECT_RE = re.compile(rf"\bnew[ \t]+({QUAL_IDENT})[ \t]*\(")
+NEW_HASH_RE = re.compile(r"\bnew[ \t]+hash\b")
+CREATE_OBJECT_RE = re.compile(rf"\bcreate_object[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
+CLASS_FOR_NAME_RE = re.compile(rf"\b(?:Reflection::)?Class::forName[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
+QUAL_RE = re.compile(rf"\b({QUAL_IDENT})\b")
+TOKEN_RE = re.compile(rf"\b({IDENT})\b")
+CASE_RE = re.compile(r"\bcase\b")
+DECL_TYPE_RE = re.compile(rf"^[ \t]*(?:public|private|internal|static|our|thread_local)?[ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
+CONSTRUCTED_DECL_TYPE_RE = re.compile(
+    rf"^(?:(?:public|private|internal)[ \t]*\{{[ \t]*)?"
+    rf"(?:(?:public|private|internal|static|our|thread_local)[ \t]+)*\*?[ \t]*"
+    rf"({TYPE_EXPR})[ \t]+{IDENT}[ \t]*\([ \t]*\)[ \t]*(?:;|=)"
+)
+PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
+QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
+DECL_LINE_CHARS = frozenset("(;=")
+CACHE_VERSION = 32
+KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
+
+
+def parse_context(path: str) -> tuple[list[str], list[str]]:
+    inputs: list[str] = []
+    outputs: list[str] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.startswith("input="):
+                inputs.append(line[len("input="):])
+            elif line.startswith("output="):
+                outputs.append(line[len("output="):])
+    if len(inputs) != len(outputs):
+        raise ValueError(f"context has {len(inputs)} inputs but {len(outputs)} outputs: {path}")
+    return inputs, outputs
+
+
+def parse_define_name(value: str) -> str:
+    return value.split("=", 1)[0]
+
+
+def parse_context_parse_defines(path: str) -> set[str]:
+    defines: set[str] = set()
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.startswith("parse_define="):
+                name = parse_define_name(line[len("parse_define="):])
+                if name:
+                    defines.add(name)
+    return defines
+
+
+def mask_qore_source(text: str, preserve_strings: bool = False) -> str:
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    state = "code"
+    quote = ""
+    while i < n:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+
+        if state == "code":
+            if c == "#" and (i == 0 or text[i - 1] != "$"):
+                state = "line"
+                out.append(" ")
+            elif c == "/" and nxt == "/" and (i == 0 or text[i - 1] != "\\"):
+                state = "line"
+                out.extend("  ")
+                i += 1
+            elif c == "/" and nxt == "*":
+                state = "block"
+                out.extend("  ")
+                i += 1
+            elif c in ("'", '"'):
+                state = "string"
+                quote = c
+                out.append(c if preserve_strings else " ")
+            else:
+                out.append(c)
+        elif state == "line":
+            if c == "\n":
+                state = "code"
+                out.append("\n")
+            else:
+                out.append(" ")
+        elif state == "block":
+            if c == "*" and nxt == "/":
+                state = "code"
+                out.extend("  ")
+                i += 1
+            else:
+                out.append("\n" if c == "\n" else " ")
+        elif state == "string":
+            if c == "\\" and i + 1 < n:
+                if preserve_strings:
+                    out.append(c)
+                    out.append(text[i + 1])
+                else:
+                    out.extend("  ")
+                i += 1
+            elif c == quote:
+                state = "code"
+                out.append(c if preserve_strings else " ")
+            else:
+                out.append(c if preserve_strings else ("\n" if c == "\n" else " "))
+        i += 1
+    return "".join(out)
+
+
+def read_masked(path: str, true_parse_defines: set[str] | None = None) -> str:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return apply_known_parse_conditionals(mask_qore_source(f.read()), true_parse_defines)
+
+
+def read_literal_masked(path: str, true_parse_defines: set[str] | None = None) -> str:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return apply_known_parse_conditionals(mask_qore_source(f.read(), preserve_strings=True), true_parse_defines)
+
+
+def inactive_line(line: str) -> str:
+    return "\n" if line.endswith("\n") else ""
+
+
+def apply_known_parse_conditionals(code: str, true_parse_defines: set[str] | None = None) -> str:
+    known_true_parse_defines = set(KNOWN_TRUE_PARSE_DEFINES)
+    if true_parse_defines:
+        known_true_parse_defines.update(true_parse_defines)
+
+    out: list[str] = []
+    stack: list[dict[str, bool]] = []
+
+    def current_active() -> bool:
+        return all(frame["active"] for frame in stack)
+
+    for line in code.splitlines(keepends=True):
+        m = re.match(r"^[ \t]*%(ifn?def)[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b", line)
+        if m:
+            parent_active = current_active()
+            directive = m.group(1)
+            symbol = m.group(2)
+            known = symbol in known_true_parse_defines
+            if known:
+                condition = symbol in known_true_parse_defines
+                if directive == "ifndef":
+                    condition = not condition
+                stack.append({
+                    "known": True,
+                    "parent_active": parent_active,
+                    "condition": condition,
+                    "active": parent_active and condition,
+                })
+                out.append(inactive_line(line))
+            else:
+                stack.append({
+                    "known": False,
+                    "parent_active": parent_active,
+                    "condition": True,
+                    "active": parent_active,
+                })
+                out.append(line if parent_active else inactive_line(line))
+            continue
+
+        m = re.match(r"^[ \t]*%else\b", line)
+        if m and stack:
+            frame = stack[-1]
+            if frame["known"]:
+                frame["active"] = frame["parent_active"] and not frame["condition"]
+                out.append(inactive_line(line))
+            else:
+                frame["active"] = frame["parent_active"]
+                out.append(line if frame["parent_active"] else inactive_line(line))
+            continue
+
+        m = re.match(r"^[ \t]*%endif\b", line)
+        if m and stack:
+            frame = stack.pop()
+            out.append(line if not frame["known"] and current_active() else inactive_line(line))
+            continue
+
+        out.append(line if current_active() else inactive_line(line))
+
+    return "".join(out)
+
+
+def simple_name(path: str) -> str:
+    return path.rsplit("::", 1)[-1]
+
+
+def split_top_level(text: str, sep: str = ",") -> list[str]:
+    parts: list[str] = []
+    start = 0
+    angle = 0
+    paren = 0
+    bracket = 0
+    brace = 0
+    for pos, ch in enumerate(text):
+        if ch == "<":
+            angle += 1
+        elif ch == ">" and angle:
+            angle -= 1
+        elif ch == "(":
+            paren += 1
+        elif ch == ")" and paren:
+            paren -= 1
+        elif ch == "[":
+            bracket += 1
+        elif ch == "]" and bracket:
+            bracket -= 1
+        elif ch == "{":
+            brace += 1
+        elif ch == "}" and brace:
+            brace -= 1
+        elif ch == sep and not angle and not paren and not bracket and not brace:
+            parts.append(text[start:pos])
+            start = pos + 1
+    parts.append(text[start:])
+    return parts
+
+
+def find_balanced_close(code: str, open_pos: int, open_ch: str = "(", close_ch: str = ")") -> int:
+    depth = 0
+    pos = open_pos
+    while pos < len(code):
+        ch = code[pos]
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return pos
+        pos += 1
+    return -1
+
+
+def iter_global_names(code: str):
+    consumed_ranges: list[tuple[int, int]] = []
+    for m in GLOBAL_GROUP_RE.finditer(code):
+        open_pos = code.find("(", m.start(), m.end())
+        if open_pos < 0:
+            continue
+        close_pos = find_balanced_close(code, open_pos)
+        if close_pos < 0:
+            continue
+        consumed_ranges.append((m.start(), close_pos + 1))
+        body = code[open_pos + 1:close_pos]
+        for entry in split_top_level(body):
+            candidate = entry.strip()
+            if not candidate:
+                continue
+            candidate = candidate.split("=", 1)[0].strip()
+            m_name = re.search(rf"\*?({IDENT})\s*$", candidate)
+            if m_name:
+                yield m_name.group(1)
+
+    def in_consumed_range(pos: int) -> bool:
+        return any(start <= pos < end for start, end in consumed_ranges)
+
+    for m in GLOBAL_SCALAR_RE.finditer(code):
+        if not in_consumed_range(m.start()):
+            yield m.group(1)
+
+
+def qualify_symbol(namespace: str, name: str) -> str:
+    return f"{namespace}::{name}" if namespace else name
+
+
+def namespace_child_path(parent: str, child: str) -> str:
+    child = child[2:] if child.startswith("::") else child
+    if not parent or "::" in child:
+        return child
+    return f"{parent}::{child}"
+
+
+def iter_namespace_segments(code: str):
+    frames: list[tuple[int, str]] = []
+    brace_depth = 0
+    last = 0
+
+    def current_namespace() -> str:
+        return frames[-1][1] if frames else ""
+
+    for m in NAMESPACE_EVENT_RE.finditer(code):
+        if m.start() > last:
+            yield code[last:m.start()], current_namespace()
+
+        namespace_name = m.group(1)
+        if namespace_name:
+            brace_depth += 1
+            frames.append((brace_depth, namespace_child_path(current_namespace(), namespace_name)))
+        elif m.group(0) == "{":
+            brace_depth += 1
+        elif brace_depth:
+            brace_depth -= 1
+            while frames and frames[-1][0] > brace_depth:
+                frames.pop()
+
+        last = m.end()
+
+    if last < len(code):
+        yield code[last:], current_namespace()
+
+
+def collect_provides(code: str) -> set[str]:
+    provides: set[str] = set()
+    for regex in (CLASS_RE, ENUM_RE, HASHDECL_RE, SUB_RE, CONST_RE):
+        provides.update(m.group(1) for m in regex.finditer(code))
+    provides.update(iter_global_names(code))
+    return provides
+
+
+def collect_source_symbol_providers(inputs: list[str],
+        true_parse_defines: set[str] | None = None
+        ) -> dict[str, dict[str, set[str]]]:
+    providers: dict[str, dict[str, set[str]]] = {
+        "class": defaultdict(set),
+        "hashdecl": defaultdict(set),
+        "function": defaultdict(set),
+        "global": defaultdict(set),
+    }
+    for source in inputs:
+        source_path = os.path.realpath(os.path.abspath(source))
+        code = read_masked(source, true_parse_defines)
+        for segment, namespace in iter_namespace_segments(code):
+            for m in CLASS_RE.finditer(segment):
+                providers["class"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for m in HASHDECL_RE.finditer(segment):
+                providers["hashdecl"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for m in SUB_RE.finditer(segment):
+                providers["function"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for name in iter_global_names(segment):
+                providers["global"][qualify_symbol(namespace, name)].add(source_path)
+    return providers
+
+
+def build_source_symbol_manifest(context: str, inputs: list[str]) -> str:
+    true_parse_defines = parse_context_parse_defines(context)
+    providers = collect_source_symbol_providers(inputs, true_parse_defines)
+    lines = ["format=1"]
+    for kind in ("class", "hashdecl", "function", "global"):
+        for symbol in sorted(providers[kind]):
+            sources = sorted(providers[kind][symbol])
+            # Ambiguous simple names are not safe to use as precedence hints.
+            if len(sources) != 1:
+                continue
+            lines.append(f"{kind}\t{symbol}\t{sources[0]}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_if_changed(path: str, content: str) -> None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            if f.read() == content:
+                return
+    except OSError:
+        pass
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(tmp, path)
+
+
+def collect_parse_defines(code: str) -> set[str]:
+    return {m.group(1) for m in PARSE_DEFINE_RE.finditer(code)}
+
+
+def collect_includes(code: str) -> set[str]:
+    includes: set[str] = set()
+    for m in INCLUDE_RE.finditer(code):
+        name = m.group(1).strip("\"'<>")
+        if name:
+            includes.add(name)
+    return includes
+
+
+def collect_mentions(code: str) -> set[str]:
+    mentions = {m.group(1) for m in TOKEN_RE.finditer(code)}
+    for m in QUAL_RE.finditer(code):
+        mentions.add(simple_name(m.group(1)))
+    return mentions
+
+
+def collect_unqualified_mentions(code: str) -> set[str]:
+    code = QUALIFIED_REF_RE.sub(lambda m: " " * len(m.group(0)), code)
+    return {m.group(1) for m in TOKEN_RE.finditer(code)}
+
+
+def iter_angle_args(code: str, name: str):
+    regex = re.compile(rf"\b{name}\b")
+    for m in regex.finditer(code):
+        pos = m.end()
+        while pos < len(code) and code[pos].isspace():
+            pos += 1
+        if pos >= len(code) or code[pos] != "<":
+            continue
+        pos += 1
+        start = pos
+        depth = 1
+        while pos < len(code):
+            c = code[pos]
+            if c == "<":
+                depth += 1
+            elif c == ">":
+                depth -= 1
+                if depth == 0:
+                    yield code[start:pos]
+                    break
+            pos += 1
+
+
+def collect_hash_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for args in iter_angle_args(code, "hash"):
+        mentions.update(collect_mentions(args))
+    return mentions
+
+
+def collect_new_hash_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in NEW_HASH_RE.finditer(code):
+        pos = m.end()
+        while pos < len(code) and code[pos].isspace():
+            pos += 1
+        if pos >= len(code) or code[pos] != "<":
+            continue
+        pos += 1
+        start = pos
+        depth = 1
+        while pos < len(code):
+            c = code[pos]
+            if c == "<":
+                depth += 1
+            elif c == ">":
+                depth -= 1
+                if depth == 0:
+                    mentions.update(collect_mentions(code[start:pos]))
+                    break
+            pos += 1
+    return mentions
+
+
+def collect_enum_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for args in iter_angle_args(code, "enum"):
+        mentions.update(collect_mentions(args))
+    return mentions
+
+
+def collect_decl_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for line in code.splitlines():
+        if any(c in line for c in DECL_LINE_CHARS):
+            m = DECL_TYPE_RE.match(line)
+            if m:
+                mentions.add(simple_name(m.group(1)))
+        if "(" in line or "," in line:
+            for m in PARAM_TYPE_RE.finditer(line):
+                mentions.add(simple_name(m.group(1)))
+    return mentions
+
+
+def collect_constructed_decl_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for line in code.splitlines():
+        if "(" not in line or ")" not in line:
+            continue
+        m = CONSTRUCTED_DECL_TYPE_RE.match(line.strip())
+        if m:
+            mentions.update(collect_mentions(m.group(1)))
+    return mentions
+
+
+def collect_call_ref_mentions(code: str) -> tuple[set[str], set[str]]:
+    class_mentions: set[str] = set()
+    function_mentions: set[str] = set()
+    for m in CALL_REF_RE.finditer(code):
+        path = m.group(1)
+        parts = path.split("::")
+        if len(parts) == 1:
+            function_mentions.add(parts[0])
+        else:
+            class_mentions.update(parts[:-1])
+            function_mentions.add(parts[-1])
+    return class_mentions, function_mentions
+
+
+def collect_static_call_mentions(code: str) -> set[str]:
+    return {simple_name(m.group(1)) for m in STATIC_CALL_RE.finditer(code)}
+
+
+def collect_static_ref_mentions(code: str) -> set[str]:
+    return {simple_name(m.group(1)) for m in STATIC_REF_RE.finditer(code)}
+
+
+def collect_const_init_static_call_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in CONST_INIT_RE.finditer(code):
+        mentions.update(collect_static_call_mentions(m.group(1)))
+    return mentions
+
+
+def collect_new_object_mentions(code: str) -> set[str]:
+    return {simple_name(m.group(1)) for m in NEW_OBJECT_RE.finditer(code)}
+
+
+def collect_create_object_mentions(code: str) -> set[str]:
+    return {simple_name(m.group(1)) for m in CREATE_OBJECT_RE.finditer(code)}
+
+
+def collect_class_for_name_mentions(code: str) -> set[str]:
+    return {simple_name(m.group(1)) for m in CLASS_FOR_NAME_RE.finditer(code)}
+
+
+def iter_case_expressions(code: str):
+    for m in CASE_RE.finditer(code):
+        pos = m.end()
+        while pos < len(code) and code[pos].isspace():
+            pos += 1
+
+        start = pos
+        paren_depth = 0
+        bracket_depth = 0
+        brace_depth = 0
+        while pos < len(code):
+            c = code[pos]
+            nxt = code[pos + 1] if pos + 1 < len(code) else ""
+            if c == "(":
+                paren_depth += 1
+            elif c == ")" and paren_depth:
+                paren_depth -= 1
+            elif c == "[":
+                bracket_depth += 1
+            elif c == "]" and bracket_depth:
+                bracket_depth -= 1
+            elif c == "{":
+                brace_depth += 1
+            elif c == "}" and brace_depth:
+                brace_depth -= 1
+            elif (
+                c == ":"
+                and nxt != ":"
+                and not (pos > 0 and code[pos - 1] == ":")
+                and paren_depth == 0
+                and bracket_depth == 0
+                and brace_depth == 0
+            ):
+                yield code[start:pos]
+                break
+            elif c in ";\n" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+                break
+            pos += 1
+
+
+def collect_inheritance_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in CLASS_INHERITS_RE.finditer(code):
+        for base in QUAL_RE.finditer(m.group(1)):
+            mentions.add(simple_name(base.group(1)))
+    return mentions
+
+
+def collect_hard_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in CONST_INIT_RE.finditer(code):
+        mentions.update(collect_unqualified_mentions(m.group(1)))
+
+    for expr in iter_case_expressions(code):
+        mentions.update(collect_mentions(expr))
+
+    return mentions
+
+
+def build_hard_graph(inputs: list[str],
+        true_parse_defines: set[str] | None = None
+        ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]]:
+    masked: list[str] = []
+    literal_masked: list[str] = []
+    provides_by_source: list[set[str]] = []
+    provider_sources: dict[str, set[int]] = defaultdict(set)
+    class_provider_sources: dict[str, set[int]] = defaultdict(set)
+    enum_provider_sources: dict[str, set[int]] = defaultdict(set)
+    hashdecl_provider_sources: dict[str, set[int]] = defaultdict(set)
+    function_provider_sources: dict[str, set[int]] = defaultdict(set)
+    parse_define_provider_sources: dict[str, set[int]] = defaultdict(set)
+
+    for i, source in enumerate(inputs):
+        code = read_masked(source, true_parse_defines)
+        masked.append(code)
+        literal_masked.append(read_literal_masked(source, true_parse_defines))
+        provides = collect_provides(code)
+        provides_by_source.append(provides)
+        for symbol in provides:
+            provider_sources[symbol].add(i)
+        for m in CLASS_RE.finditer(code):
+            class_provider_sources[m.group(1)].add(i)
+        for m in ENUM_RE.finditer(code):
+            enum_provider_sources[m.group(1)].add(i)
+        for m in HASHDECL_RE.finditer(code):
+            hashdecl_provider_sources[m.group(1)].add(i)
+        for m in SUB_RE.finditer(code):
+            function_provider_sources[m.group(1)].add(i)
+        for symbol in collect_parse_defines(code):
+            parse_define_provider_sources[symbol].add(i)
+
+    unique_provider = {
+        symbol: next(iter(sources))
+        for symbol, sources in provider_sources.items()
+        if len(sources) == 1
+    }
+    provider_symbols = set(unique_provider)
+    unique_class_symbols = {
+        symbol for symbol, sources in class_provider_sources.items()
+        if len(sources) == 1 and symbol in unique_provider
+    }
+    unique_enum_symbols = {
+        symbol for symbol, sources in enum_provider_sources.items()
+        if len(sources) == 1 and symbol in unique_provider
+    }
+    unique_hashdecl_symbols = {
+        symbol for symbol, sources in hashdecl_provider_sources.items()
+        if len(sources) == 1 and symbol in unique_provider
+    }
+    unique_function_symbols = {
+        symbol for symbol, sources in function_provider_sources.items()
+        if len(sources) == 1 and symbol in unique_provider
+    }
+    unique_parse_define = {
+        symbol: next(iter(sources))
+        for symbol, sources in parse_define_provider_sources.items()
+        if len(sources) == 1
+    }
+    input_basename_sources: dict[str, list[int]] = defaultdict(list)
+    for index, path in enumerate(inputs):
+        input_basename_sources[os.path.basename(path)].append(index)
+    unique_input_basename = {
+        name: sources[0]
+        for name, sources in input_basename_sources.items()
+        if len(sources) == 1
+    }
+
+    outgoing: dict[int, set[int]] = defaultdict(set)
+    incoming: dict[int, set[int]] = defaultdict(set)
+    required_edges: set[tuple[int, int]] = set()
+
+    def add_edge(provider: int, consumer: int, required: bool = False) -> None:
+        if provider == consumer:
+            return
+        if consumer not in outgoing[provider]:
+            outgoing[provider].add(consumer)
+            incoming[consumer].add(provider)
+        if required:
+            required_edges.add((provider, consumer))
+
+    for consumer, code in enumerate(masked):
+        for symbol in collect_inheritance_mentions(code) & provider_symbols:
+            provider = unique_provider[symbol]
+            if symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer, required=True)
+
+        for symbol in collect_hard_mentions(code) & provider_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer, required=True)
+
+        mentions = set()
+        mentions.update(collect_decl_type_mentions(code) & (unique_class_symbols | unique_hashdecl_symbols))
+        mentions.update(collect_hash_type_mentions(code) & unique_hashdecl_symbols)
+        for symbol in collect_enum_type_mentions(code) & unique_enum_symbols:
+            provider = unique_provider[symbol]
+            if symbol in provides_by_source[consumer]:
+                continue
+            # Enum type annotations (`enum<Foo>`) must resolve while parsing
+            # the consumer; unlike class/hashdecl type imports, unresolved enum
+            # types are not link-deferred today.
+            add_edge(provider, consumer, required=True)
+        call_ref_classes, call_ref_functions = collect_call_ref_mentions(code)
+        for symbol in call_ref_functions & unique_function_symbols:
+            provider = unique_provider[symbol]
+            if symbol in provides_by_source[consumer]:
+                continue
+            # Function call references require the target function during
+            # parse/commit today; direct calls can be deferred to the linker.
+            add_edge(provider, consumer, required=True)
+        for symbol in call_ref_classes & unique_class_symbols:
+            provider = unique_provider[symbol]
+            if symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer)
+        mentions.update(collect_constructed_decl_type_mentions(code)
+            & (unique_class_symbols | unique_hashdecl_symbols))
+        mentions.update(collect_new_hash_type_mentions(code) & unique_hashdecl_symbols)
+        for symbol in collect_new_object_mentions(code) & unique_class_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer)
+        for symbol in collect_class_for_name_mentions(literal_masked[consumer]) & unique_class_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer)
+        mentions.update(collect_create_object_mentions(literal_masked[consumer]) & unique_class_symbols)
+        mentions.update(collect_static_call_mentions(code) & unique_class_symbols)
+        mentions.update(collect_static_ref_mentions(code) & unique_class_symbols)
+        for symbol in collect_static_ref_mentions(code) & unique_enum_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            # Enum members (`Foo::Bar`) are compile-time constants and require
+            # the enum declaration during parse/commit so switch/case and enum
+            # value checks see the real enum.
+            add_edge(provider, consumer, required=True)
+        for symbol in mentions:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer)
+
+        for included in collect_includes(code):
+            provider = unique_input_basename.get(os.path.basename(included))
+            if provider is None or provider == consumer:
+                continue
+            add_edge(provider, consumer, required=True)
+
+        for symbol in PARSE_DEFINE_CONSUMER_RE.findall(code):
+            provider = unique_parse_define.get(symbol)
+            if provider is None or provider == consumer:
+                continue
+            add_edge(provider, consumer, required=True)
+
+    return outgoing, incoming, required_edges
+
+
+def graph_to_lists(graph: dict[int, set[int]], count: int) -> list[list[int]]:
+    return [sorted(graph.get(i, ())) for i in range(count)]
+
+
+def lists_to_graph(values: list[list[int]]) -> dict[int, set[int]]:
+    graph: dict[int, set[int]] = defaultdict(set)
+    for i, items in enumerate(values):
+        if items:
+            graph[i] = set(items)
+    return graph
+
+
+def compute_scc_ids(outgoing: dict[int, set[int]], count: int) -> list[int]:
+    indices: list[int] = [-1] * count
+    lowlinks: list[int] = [0] * count
+    on_stack: list[bool] = [False] * count
+    stack: list[int] = []
+    scc_ids: list[int] = [-1] * count
+    next_index = 0
+    next_scc = 0
+
+    def strongconnect(node: int) -> None:
+        nonlocal next_index, next_scc
+        indices[node] = next_index
+        lowlinks[node] = next_index
+        next_index += 1
+        stack.append(node)
+        on_stack[node] = True
+
+        for consumer in sorted(outgoing.get(node, ())):
+            if indices[consumer] == -1:
+                strongconnect(consumer)
+                lowlinks[node] = min(lowlinks[node], lowlinks[consumer])
+            elif on_stack[consumer]:
+                lowlinks[node] = min(lowlinks[node], indices[consumer])
+
+        if lowlinks[node] != indices[node]:
+            return
+
+        while True:
+            member = stack.pop()
+            on_stack[member] = False
+            scc_ids[member] = next_scc
+            if member == node:
+                break
+        next_scc += 1
+
+    for node in range(count):
+        if indices[node] == -1:
+            strongconnect(node)
+
+    return scc_ids
+
+
+def edge_pairs_to_lists(required_edges: set[tuple[int, int]], count: int) -> list[list[int]]:
+    values: list[list[int]] = [[] for _ in range(count)]
+    for provider, consumer in sorted(required_edges):
+        values[provider].append(consumer)
+    return values
+
+
+def edge_lists_to_pairs(values: list[list[int]]) -> set[tuple[int, int]]:
+    pairs: set[tuple[int, int]] = set()
+    for provider, consumers in enumerate(values):
+        for consumer in consumers:
+            pairs.add((provider, consumer))
+    return pairs
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def file_record(path: str) -> dict[str, object]:
+    return {
+        "path": os.path.abspath(path),
+        "size": os.path.getsize(path),
+        "sha256": sha256_file(path),
+    }
+
+
+def file_records(paths: list[str]) -> list[dict[str, object]]:
+    return [file_record(path) for path in paths]
+
+
+def file_records_current(old_records: object, paths: list[str]) -> bool:
+    if not isinstance(old_records, list) or len(old_records) != len(paths):
+        return False
+    try:
+        current = file_records(paths)
+    except OSError:
+        return False
+    return old_records == current
+
+
+def order_edge_usable(provider: int, consumer: int, scc_ids: list[int],
+        required_edges: set[tuple[int, int]]) -> bool:
+    # The build graph may only include true compile prerequisites.  Other
+    # source-level references are linkable .qo imports and must not serialize
+    # clean or delta builds by forcing provider metadata to be present.
+    return (provider, consumer) in required_edges
+
+
+def cache_current(cache_file: str, context: str, inputs: list[str]) -> bool:
+    try:
+        cache_mtime = os.path.getmtime(cache_file)
+        if os.path.getmtime(context) > cache_mtime:
+            return False
+        if os.path.getmtime(__file__) > cache_mtime:
+            return False
+        for path in inputs:
+            if os.path.getmtime(path) > cache_mtime:
+                return False
+    except OSError:
+        return False
+    return True
+
+
+def load_graph_cache(cache_file: str, context: str, inputs: list[str], outputs: list[str],
+        true_parse_defines: set[str]
+        ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]] | None:
+    fast_current = cache_current(cache_file, context, inputs)
+    try:
+        with open(cache_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if data.get("version") != CACHE_VERSION:
+        return None
+    if data.get("inputs") != inputs or data.get("outputs") != outputs:
+        return None
+    if data.get("parse_defines") != sorted(true_parse_defines):
+        return None
+    outgoing_data = data.get("outgoing")
+    incoming_data = data.get("incoming")
+    required_data = data.get("required")
+    if not isinstance(outgoing_data, list) or not isinstance(incoming_data, list):
+        return None
+    if not isinstance(required_data, list):
+        return None
+    if len(outgoing_data) != len(inputs) or len(incoming_data) != len(inputs):
+        return None
+    if len(required_data) != len(inputs):
+        return None
+    if not fast_current:
+        try:
+            cache_mtime = os.path.getmtime(cache_file)
+            if os.path.getmtime(__file__) > cache_mtime:
+                return None
+        except OSError:
+            return None
+        if not file_records_current(data.get("input_records"), inputs):
+            return None
+    return lists_to_graph(outgoing_data), lists_to_graph(incoming_data), edge_lists_to_pairs(required_data)
+
+
+def save_graph_cache(cache_file: str, inputs: list[str], outputs: list[str], true_parse_defines: set[str],
+        outgoing: dict[int, set[int]], incoming: dict[int, set[int]],
+        required_edges: set[tuple[int, int]]) -> None:
+    data = {
+        "version": CACHE_VERSION,
+        "inputs": inputs,
+        "outputs": outputs,
+        "parse_defines": sorted(true_parse_defines),
+        "input_records": file_records(inputs),
+        "outgoing": graph_to_lists(outgoing, len(inputs)),
+        "incoming": graph_to_lists(incoming, len(inputs)),
+        "required": edge_pairs_to_lists(required_edges, len(inputs)),
+    }
+    tmp = f"{cache_file}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"))
+        os.replace(tmp, cache_file)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def load_or_build_hard_graph(context: str, inputs: list[str],
+        outputs: list[str]) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]]:
+    cache_file = context + ".source-order-v2.json"
+    true_parse_defines = parse_context_parse_defines(context)
+    cached = load_graph_cache(cache_file, context, inputs, outputs, true_parse_defines)
+    if cached:
+        return cached
+    outgoing, incoming, required_edges = build_hard_graph(inputs, true_parse_defines)
+    save_graph_cache(cache_file, inputs, outputs, true_parse_defines, outgoing, incoming, required_edges)
+    return outgoing, incoming, required_edges
+
+
+def collect_prerequisites(target: int, incoming: dict[int, set[int]], scc_ids: list[int],
+        required_edges: set[tuple[int, int]]) -> set[int]:
+    prerequisites: set[int] = set()
+    stack = [(target, provider) for provider in incoming.get(target, ())]
+    while stack:
+        consumer, provider = stack.pop()
+        if not order_edge_usable(provider, consumer, scc_ids, required_edges):
+            continue
+        if provider in prerequisites:
+            continue
+        prerequisites.add(provider)
+        stack.extend((provider, next_provider) for next_provider in incoming.get(provider, ()))
+    return prerequisites
+
+
+def topo_subset(nodes: set[int], outgoing: dict[int, set[int]], target: int, scc_ids: list[int],
+        required_edges: set[tuple[int, int]]) -> list[int]:
+    incoming_count = {node: 0 for node in nodes}
+    for provider in nodes:
+        for consumer in outgoing.get(provider, ()):
+            if consumer in nodes and order_edge_usable(provider, consumer, scc_ids, required_edges):
+                incoming_count[consumer] += 1
+
+    ready = [node for node, count in incoming_count.items() if count == 0]
+    heapq.heapify(ready)
+    remaining = set(nodes)
+    order: list[int] = []
+
+    while remaining:
+        if ready:
+            node = heapq.heappop(ready)
+            if node not in remaining:
+                continue
+        else:
+            # Hard dependency cycle.  Keep the requested target last so that any
+            # usable provider metadata is still available before compiling it.
+            cycle_choices = remaining - {target}
+            node = min(cycle_choices or remaining)
+        remaining.remove(node)
+        order.append(node)
+        for consumer in sorted(outgoing.get(node, ())):
+            if consumer not in remaining or not order_edge_usable(node, consumer, scc_ids, required_edges):
+                continue
+            incoming_count[consumer] -= 1
+            if incoming_count[consumer] == 0:
+                heapq.heappush(ready, consumer)
+
+    return order
+
+
+def build_direct_prerequisite_order(context: str, inputs: list[str], outputs: list[str], target: int) -> list[int]:
+    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
+    scc_ids = compute_scc_ids(outgoing, len(inputs))
+    return sorted(
+        provider for provider in incoming.get(target, ())
+        if order_edge_usable(provider, target, scc_ids, required_edges)
+    )
+
+
+def build_all_direct_prerequisite_orders(context: str, inputs: list[str], outputs: list[str]) -> list[list[int]]:
+    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
+    scc_ids = compute_scc_ids(outgoing, len(inputs))
+    return [
+        sorted(
+            provider for provider in incoming.get(target, ())
+            if order_edge_usable(provider, target, scc_ids, required_edges)
+        )
+        for target in range(len(inputs))
+    ]
+
+
+def cmake_quote(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def emit_cmake_direct_map(prefix: str, context: str, inputs: list[str], outputs: list[str]) -> None:
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", prefix):
+        raise ValueError(f"invalid CMake variable prefix: {prefix!r}")
+    for target, order in enumerate(build_all_direct_prerequisite_orders(context, inputs, outputs)):
+        deps = ";".join(cmake_quote(outputs[index]) for index in order)
+        print(f'set({prefix}_{target} "{deps}")')
+
+
+def build_prerequisite_order(context: str, inputs: list[str], outputs: list[str], target: int) -> list[int]:
+    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
+    scc_ids = compute_scc_ids(outgoing, len(inputs))
+    prerequisites = collect_prerequisites(target, incoming, scc_ids, required_edges)
+    if not prerequisites:
+        return []
+    nodes = prerequisites | {target}
+    return [node for node in topo_subset(nodes, outgoing, target, scc_ids, required_edges) if node != target]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Print source-scanned .qo prerequisites before a target output")
+    parser.add_argument(
+        "--direct",
+        action="store_true",
+        help="print only direct prerequisite outputs for build-graph dependencies",
+    )
+    parser.add_argument(
+        "--direct-map-cmake",
+        metavar="PREFIX",
+        help="emit CMake set() statements with all direct prerequisite outputs for the context",
+    )
+    parser.add_argument(
+        "--source-symbol-manifest",
+        metavar="FILE",
+        help="write a qcc source-symbol precedence manifest for all context inputs",
+    )
+    parser.add_argument("context")
+    parser.add_argument("target_output", nargs="?")
+    args = parser.parse_args()
+
+    inputs, outputs = parse_context(args.context)
+    if args.source_symbol_manifest:
+        write_if_changed(args.source_symbol_manifest, build_source_symbol_manifest(args.context, inputs))
+        return 0
+
+    if args.direct_map_cmake:
+        try:
+            emit_cmake_direct_map(args.direct_map_cmake, args.context, inputs, outputs)
+        except ValueError as exc:
+            print(f"{sys.argv[0]}: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if not args.target_output:
+        print(f"{sys.argv[0]}: target output is required unless --direct-map-cmake is used", file=sys.stderr)
+        return 2
+
+    normalized_outputs = [os.path.realpath(os.path.abspath(path)) for path in outputs]
+    target = os.path.realpath(os.path.abspath(args.target_output))
+    try:
+        target_index = normalized_outputs.index(target)
+    except ValueError:
+        print(f"{sys.argv[0]}: target output not present in context: {args.target_output}", file=sys.stderr)
+        return 1
+
+    if args.direct:
+        order = build_direct_prerequisite_order(args.context, inputs, outputs, target_index)
+    else:
+        order = build_prerequisite_order(args.context, inputs, outputs, target_index)
+    for index in order:
+        print(outputs[index])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

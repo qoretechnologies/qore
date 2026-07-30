@@ -171,6 +171,12 @@ public:
 
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 
+    DLLLOCAL QoreValue getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue getKeyValueExistencePrehashed(const char* key, size_t hash,
+            bool& exists, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue getKeyValueExistencePrehashedIntern(const char* key, size_t hash,
+            bool& exists) const;
+
     DLLLOCAL QoreValue getKeyValueExistence(const char* key, bool& exists, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getKeyValueExistenceIntern(const char* key, bool& exists) const;
@@ -193,6 +199,18 @@ public:
 
         exists = false;
         return QoreValue();
+    }
+
+    DLLLOCAL QoreValue getReferencedKeyValuePrehashedIntern(
+            const char* key, size_t hash) const {
+        assert(key);
+#ifdef HAVE_QORE_HASH_MAP
+        hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
+#else
+        (void)hash;
+        hm_hm_t::const_iterator i = hm.find(key);
+#endif
+        return i != hm.end() ? (*(i->second))->val.refSelf() : QoreValue();
     }
 
     DLLLOCAL int64 getKeyAsBigInt(const char* key, bool &found) const {
@@ -240,13 +258,33 @@ public:
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
-   DLLLOCAL HashMember* findCreateMember(const char* key) {
+    DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) {
+        assert(key);
+#ifdef HAVE_QORE_HASH_MAP
+        hm_hm_t::iterator i = hm.find(qore_prehashed_str{key, hash});
+#else
+        (void)hash;
+        hm_hm_t::iterator i = hm.find(key);
+#endif
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    DLLLOCAL HashMember* findCreateMember(const char* key) {
         // otherwise create the new hash entry
         HashMember* om = findMember(key);
         if (om)
             return om;
 
-        om = new HashMember(key);
+        return createMemberKnownAbsent(key);
+    }
+
+    DLLLOCAL HashMember* findCreateMemberPrehashed(const char* key, size_t hash) {
+        HashMember* om = findMemberPrehashed(key, hash);
+        return om ? om : createMemberKnownAbsent(key);
+    }
+
+    DLLLOCAL HashMember* createMemberKnownAbsent(const char* key) {
+        HashMember* om = new HashMember(key);
         assert(om->val.isNothing());
         member_list.push_back(om);
 
@@ -486,6 +524,19 @@ public:
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, ExceptionSink* xsink) {
         hash_assignment_priv ha(*this, key);
         ha.assign(val, xsink);
+    }
+
+    DLLLOCAL void setKeyValueKnownAbsent(const char* key, QoreValue val, ExceptionSink* xsink) {
+        hash_assignment_priv ha(*this, createMemberKnownAbsent(key));
+        ha.assign(val, xsink);
+    }
+
+    DLLLOCAL void setKeyValueKnownAbsentIntern(const char* key, QoreValue val) {
+        HashMember* member = createMemberKnownAbsent(key);
+        member->val = val;
+        if (needs_scan(val)) {
+            incScanCount(1);
+        }
     }
 
     DLLLOCAL void setKeyValue(const std::string& key, QoreValue val, ExceptionSink* xsink) {

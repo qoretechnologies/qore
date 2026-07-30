@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class AOTDotEvalOverloadTest
@@ -50,17 +50,56 @@ public namespace AOTDotEvalOverloadMod {
         }
     }
 
+    class DispatchA {
+        public int apply(int value) {
+            return value + 1;
+        }
+    }
+
+    class DispatchB {
+        public int apply(int value) {
+            return value + 2;
+        }
+    }
+
+    class Overloaded {
+        public int apply(int value) {
+            return value + 10;
+        }
+
+        public int apply(string value) {
+            return value.size() + 100;
+        }
+    }
+
+    public int sub dynamicApply(auto receiver, auto value) {
+        return receiver.apply(value);
+    }
+
     public string sub verify(softint wfiid) {
         B b();
-        return b.put(\"orders/\" + wfiid + \"/cancel\");
+        DispatchA left();
+        DispatchB right();
+        Overloaded overloaded();
+        int polymorphic = 0;
+        int overload = 0;
+        for (int i = 0; i < 8; ++i) {
+            polymorphic += dynamicApply(i % 2 ? left : right, i);
+            overload += dynamicApply(overloaded, i % 2 ? i : \"test\");
+        }
+        auto original = new A();
+        auto copied = original.copy();
+        return sprintf(\"%s|%d|%d|%s\", b.put(\"orders/\" + wfiid + \"/cancel\"),
+            polymorphic, overload, copied.put(\"copy\"));
     }
 }
 ";
     }
 
-    private string runModule(string module_dir, string script_path) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
-            libqore_dir, module_dir, qore_bin, script_path));
+    private string runModule(string module_dir, string script_path, bool disable_cache = False) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s%s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, disable_cache ? "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 " : "",
+            qore_bin, script_path));
     }
 
     testAOTQmodDotEvalOverloadDispatch() {
@@ -89,10 +128,12 @@ public namespace AOTDotEvalOverloadMod {
             libqore_dir, qore_bin, qmod_path, qm_path));
         assertTrue(is_file(qmod_path), "compiled dot-eval overload module: " + compile_out);
 
-        string expected = "base:orders/1/cancel\n";
+        string expected = "base:orders/1/cancel|40|472|base:copy\n";
         assertEq(expected, runModule(src_dir, script_path),
             "source module uses runtime overload dispatch");
         assertEq(expected, runModule(qmod_dir, script_path),
-            "AOT qmod uses runtime overload dispatch");
+            "AOT qmod uses cached runtime overload dispatch");
+        assertEq(expected, runModule(qmod_dir, script_path, True),
+            "AOT qmod cache-disabled fallback preserves runtime dispatch");
     }
 }

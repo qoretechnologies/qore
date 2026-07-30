@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-direct-int-to-string-" + string(getpid());
+mkdir(root);
+string source = root + "/test.qr";
+string enabled = root + "/enabled";
+string disabled = root + "/disabled";
+string boxed = root + "/boxed";
+
+File source_file();
+source_file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write("%modern
+list<int> values = (
+    -9223372036854775807 - 1, -1000000, -1, 0, 1, 1000000,
+    9223372036854775807);
+foreach int value in (values) {
+    printf(\"%s:%d:%d\\n\", string(value), string(value).size(),
+        string(value).length());
+}
+");
+source_file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source));
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, source));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_DIRECT_INT_TO_STRING=1"
+        + " QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, source));
+if (!is_file(enabled) || !is_file(disabled)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_output = backquote(
+    sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled));
+string disabled_output = backquote(
+    sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled));
+string jit_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=jit %s 2>&1",
+    libqore_dir, qore_bin, source));
+if (enabled_output != ast || disabled_output != ast || jit_output != ast) {
+    printf("output mismatch:\nast:\n%senabled:\n%sdisabled:\n%sjit:\n%s",
+        ast, enabled_output, disabled_output, jit_output);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled));
+if (enabled_undefined !~ /qore_rt_int_to_string/
+        || enabled_undefined =~ /qore_rt_to_string/
+        || disabled_undefined !~ /qore_rt_to_string/
+        || disabled_undefined =~ /qore_rt_int_to_string/) {
+    printf("unexpected conversion lowering:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string boxed_source = root + "/boxed.qr";
+File boxed_file();
+boxed_file.open2(boxed_source, O_WRONLY | O_CREAT | O_TRUNC);
+boxed_file.write("%modern
+auto value = ARGV[0];
+printf(\"%s\\n\", string(value));
+");
+boxed_file.close();
+string boxed_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, boxed, boxed_source));
+string boxed_undefined = is_file(boxed)
+    ? backquote(sprintf("nm -u %s 2>&1", boxed)) : "";
+if (!is_file(boxed) || boxed_undefined !~ /qore_rt_to_string/) {
+    printf("boxed conversion did not retain generic lowering:\n%s\n%s",
+        boxed_compile, boxed_undefined);
+    exit(2);
+}
+
+string measure_source = root + "/measure.qr";
+string measure_enabled = root + "/measure-enabled";
+string measure_disabled = root + "/measure-disabled";
+File measure_file();
+measure_file.open2(measure_source, O_WRONLY | O_CREAT | O_TRUNC);
+measure_file.write("%modern
+int sub measureSize(int value) {
+    return string(value).size();
+}
+int sub measureLength(int value) {
+    return string(value).length();
+}
+list<int> values = (
+    -9223372036854775807 - 1, -1000000, -1, 0, 1, 1000000,
+    9223372036854775807);
+foreach int value in (values) {
+    printf(\"%d:%d\\n\", measureSize(value), measureLength(value));
+}
+");
+measure_file.close();
+string measure_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, measure_source));
+string measure_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, measure_enabled, measure_source));
+string measure_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, measure_disabled, measure_source));
+string measure_enabled_output = is_file(measure_enabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, measure_enabled)) : "";
+string measure_disabled_output = is_file(measure_disabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, measure_disabled)) : "";
+string measure_enabled_undefined = is_file(measure_enabled)
+    ? backquote(sprintf("nm -u %s 2>&1", measure_enabled)) : "";
+string measure_disabled_undefined = is_file(measure_disabled)
+    ? backquote(sprintf("nm -u %s 2>&1", measure_disabled)) : "";
+if (!is_file(measure_enabled) || !is_file(measure_disabled)
+        || measure_enabled_output != measure_ast
+        || measure_disabled_output != measure_ast
+        || measure_enabled_undefined !~ /qore_rt_int_to_string_measure/
+        || measure_disabled_undefined !~ /qore_rt_int_to_string/
+        || measure_disabled_undefined =~ /qore_rt_int_to_string_measure/) {
+    printf("unexpected measurement lowering:\nenabled compile:\n%s"
+        + "disabled compile:\n%senabled output:\n%sdisabled output:\n%s"
+        + "AST output:\n%senabled symbols:\n%sdisabled symbols:\n%s",
+        measure_enabled_compile, measure_disabled_compile,
+        measure_enabled_output, measure_disabled_output, measure_ast,
+        measure_enabled_undefined, measure_disabled_undefined);
+    exit(2);
+}
+
+string facts_source = root + "/facts.qr";
+string facts_enabled = root + "/facts-enabled";
+string facts_disabled = root + "/facts-disabled";
+File facts_file();
+facts_file.open2(facts_source, O_WRONLY | O_CREAT | O_TRUNC);
+facts_file.write("%modern
+int sub main() {
+    int total = 0;
+    for (int i = 1; i <= 10; ++i) {
+        total += string(i).size();
+        total += string(-i).length();
+    }
+    printf(\"%d\\n\", total);
+    return 0;
+}
+main();
+");
+facts_file.close();
+string facts_ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, facts_source));
+string facts_enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, facts_enabled, facts_source));
+string facts_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, facts_disabled, facts_source));
+string facts_enabled_output = is_file(facts_enabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, facts_enabled)) : "";
+string facts_disabled_output = is_file(facts_disabled)
+    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, facts_disabled)) : "";
+string facts_enabled_measure = is_file(facts_enabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep 'qore_rt_int_to_string_measure$'",
+        facts_enabled)) : "";
+string facts_enabled_materialize = is_file(facts_enabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep 'qore_rt_int_to_string$'",
+        facts_enabled)) : "";
+string facts_disabled_measure = is_file(facts_disabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep 'qore_rt_int_to_string_measure$'",
+        facts_disabled)) : "";
+string facts_disabled_materialize = is_file(facts_disabled)
+    ? backquote(sprintf(
+        "nm -u %s | grep 'qore_rt_int_to_string$'",
+        facts_disabled)) : "";
+if (!is_file(facts_enabled) || !is_file(facts_disabled)
+        || facts_enabled_output != facts_ast
+        || facts_disabled_output != facts_ast
+        || !facts_enabled_measure || facts_enabled_materialize
+        || !facts_disabled_measure || !facts_disabled_materialize) {
+    printf("unexpected read-only fact preservation:\nenabled compile:\n%s"
+        + "disabled compile:\n%senabled output:\n%sdisabled output:\n%s"
+        + "AST output:\n%senabled measure:\n%senabled materialize:\n%s"
+        + "disabled measure:\n%sdisabled materialize:\n%s",
+        facts_enabled_compile, facts_disabled_compile,
+        facts_enabled_output, facts_disabled_output, facts_ast,
+        facts_enabled_measure, facts_enabled_materialize,
+        facts_disabled_measure, facts_disabled_materialize);
+    exit(2);
+}

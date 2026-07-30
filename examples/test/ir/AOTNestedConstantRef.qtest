@@ -6,6 +6,7 @@
 
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires Util
 %requires FsUtil
 
 %exec-class AOTNestedConstantRefTest

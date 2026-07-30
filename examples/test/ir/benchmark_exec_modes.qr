@@ -17,13 +17,17 @@
 #   LD_LIBRARY_PATH  Library path for the qore binary
 #   BENCH_MODES      Comma-separated list of modes to run (default: ast,ir,tiered,jit,aot)
 #   BENCH_ITERS      Base iteration count (default: 10000000 for extended benchmarks)
+#   BENCH_SAMPLES    Timed process samples per mode (default: 5)
+#   BENCH_WARMUP     Untimed process warmups per mode (default: 1)
+#   BENCH_TESTS      Optional comma-separated list of benchmark names
 #
 # Note: This is the extended benchmark suite with 10x longer iterations for more
 # reliable measurements. Compilation time is separated from execution time for AOT.
 
 const DEFAULT_ITERATIONS = 10000000;  # 10x longer than original (1M -> 10M)
 
-hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path) {
+hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path,
+        int samples, int warmup) {
     # Write code to temp file
     string tmp = sprintf("/tmp/bench_%s.qr", name);
     {
@@ -54,18 +58,45 @@ hash<auto> sub run_benchmark(string name, string code, string mode, string qore_
             ld_path, qore_bin, mode, tmp);
     }
 
-    # Time the execution (for all modes)
-    date start = now_us();
-    string output = backquote(cmd);
-    date end = now_us();
+    for (int i = 0; i < warmup; ++i) {
+        backquote(cmd);
+    }
 
-    int elapsed_us = (end - start).durationMicroseconds();
-    float elapsed_ms = elapsed_us / 1000.0;
+    list<float> timings;
+    bool samples_match = True;
+    string first_output;
+    for (int i = 0; i < samples; ++i) {
+        date start = now_us();
+        string sample_output = trim(backquote(cmd));
+        date end = now_us();
+        timings += (end - start).durationMicroseconds() / 1000.0;
+        if (!i) {
+            first_output = sample_output;
+        } else if (sample_output != first_output) {
+            samples_match = False;
+        }
+    }
+
+    list<auto> sorted = sort(timings);
+    float median_ms = samples % 2
+        ? sorted[samples / 2].toFloat()
+        : (sorted[samples / 2 - 1].toFloat() + sorted[samples / 2].toFloat()) / 2.0;
+    float sum_ms = 0.0;
+    foreach float timing in (timings) {
+        sum_ms += timing;
+    }
+    float mean_ms = sum_ms / samples;
+    float sq_sum = 0.0;
+    foreach float timing in (timings) {
+        sq_sum += (timing - mean_ms) * (timing - mean_ms);
+    }
 
     return {
-        "elapsed_ms": elapsed_ms,
+        "elapsed_ms": median_ms,
+        "stdev_ms": sqrt(sq_sum / samples),
         "compile_ms": compile_ms,  # Only non-zero for AOT
-        "output": trim(output),
+        "output": first_output,
+        "samples_match": samples_match,
     };
 }
 
@@ -76,6 +107,12 @@ class BenchmarkRunner {
 
     private main() {
         int iterations = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
+        int samples = int(ENV.BENCH_SAMPLES ?? 5);
+        int warmup = int(ENV.BENCH_WARMUP ?? 1);
+        if (samples <= 0 || warmup < 0) {
+            stderr.printf("BENCH_SAMPLES must be positive and BENCH_WARMUP must be non-negative\n");
+            exit(2);
+        }
 
     # ==========================================================================
     # Test 1: Simple integer loop (baseline - tests typed int ops)
@@ -130,6 +167,61 @@ printf(\"%%d\\n\", a.compute());
 ", iterations / 10);
 
     # ==========================================================================
+    # Test 3a: implicit-self exact getter calls
+    # ==========================================================================
+    string self_getter_code = sprintf("%%modern
+
+final class SelfGetter {
+    private {
+        int value = 8;
+    }
+
+    int getValue() {
+        return value;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result += getValue();
+        }
+        return result;
+    }
+}
+
+SelfGetter getter();
+printf(\"%%d\\n\", getter.compute());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 3b: final method in a non-final class
+    # ==========================================================================
+    string final_method_code = sprintf("%%modern
+
+class FinalMethodAccum {
+    private {
+        int total = 0;
+    }
+
+    final int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result = self.add(1);
+        }
+        return result;
+    }
+}
+
+FinalMethodAccum a();
+printf(\"%%d\\n\", a.compute());
+", iterations / 10);
+
+    # ==========================================================================
     # Test 4: obj.method() calls - DotEvalMethodDirect
     # ==========================================================================
     string dot_eval_code = sprintf("%%modern
@@ -153,6 +245,25 @@ MyProcessor p();
 int result = 0;
 for (int i = 0; i < %d; ++i) {
     result = p.process(1);
+}
+printf(\"%%d\\n\", result);
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 4b: guarded non-final obj.method() call with a context-free body
+    # ==========================================================================
+    string dot_eval_pure_code = sprintf("%%modern
+
+class PureProcessor {
+    int process(int x) {
+        return x * 3 + 1;
+    }
+}
+
+PureProcessor p();
+int result = 0;
+for (int i = 0; i < %d; ++i) {
+    result += p.process(i %% 7);
 }
 printf(\"%%d\\n\", result);
 ", iterations / 10);
@@ -214,7 +325,7 @@ printf(\"%%d\\n\", sum);
 list<int> nums = range(%d);
 int sum = (foldl $1 + $2, nums, 0);
 printf(\"%%d\\n\", sum);
-", iterations / 100);
+", iterations);
 
     # ==========================================================================
     # Test 8: Functional operators - map (int list)
@@ -239,6 +350,41 @@ list<hash<auto>> sub build_data(int n) {
 list<hash<auto>> data = build_data(%d);
 list<auto> vals = (map $1.value + 1, data);
 printf(\"%%d\\n\", vals.size());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 9b: repeated hash-key map over prebuilt data
+    # ==========================================================================
+    string map_hash_lookup_code = sprintf("%%modern
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"value\": i};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(10000);
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    list<auto> vals = (map $1.value + 1, data);
+    total += vals[0] + vals[-1];
+}
+printf(\"%%d\\n\", total);
+", iterations / 10000);
+
+    # ==========================================================================
+    # Test 9c: direct function with guarded typed hash-key arithmetic
+    # ==========================================================================
+    string function_hash_expression_code = sprintf("%%modern
+int sub project(hash<string, int> row, int delta) {
+    return row.value * 3 + delta;
+}
+hash<string, int> row = {\"value\": 7};
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    total += project(row, i %% 5);
+}
+printf(\"%%d\\n\", total);
 ", iterations / 10);
 
     # ==========================================================================
@@ -273,6 +419,26 @@ list<hash<auto>> data = build_data(%d);
 list<hash<auto>> result = (select data, $1.value > 0);
 printf(\"%%d\\n\", result.size());
 ", iterations / 10);
+
+    # ==========================================================================
+    # Test 11b: repeated hash predicate over prebuilt data
+    # ==========================================================================
+    string select_hash_lookup_code = sprintf("%%modern
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"value\": i};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(10000);
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    list<hash<auto>> result = (select data, $1.value > 0);
+    total += result.size();
+}
+printf(\"%%d\\n\", total);
+", iterations / 10000);
 
     # ==========================================================================
     # Test 12: closure basic - closure captures variable, called in tight loop
@@ -311,7 +477,7 @@ for (int i = 0; i < %d; ++i) {
 }
 int sum = (foldl $1 + $2, (map $1(), closures), 0);
 printf(\"%%d\\n\", sum);
-", iterations / 10000);
+", iterations / 100);
 
     # ==========================================================================
     # Test 15: closure as comparator - closure used as sort/map callback
@@ -326,22 +492,153 @@ for (int i = 0; i < %d; ++i) {
 printf(\"%%d\\n\", sum);
 ", iterations / 10);
 
+    # ==========================================================================
+    # Test 16: noncapturing scalar closure - typed direct-closure candidate
+    # ==========================================================================
+    string closure_noncapturing_code = sprintf("%%modern
+code<int(int)> increment = int sub(int x) { return x + 2; };
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += increment(i);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    # ==========================================================================
+    # Tests 17-18: equivalent nonleaf direct function and closure bodies
+    # ==========================================================================
+    string function_noncapturing_branch_code = sprintf("%%modern
+int sub transform(int x) {
+    int value = x + 1;
+    if (value %% 2) {
+        value *= 3;
+    } else {
+        value += 7;
+    }
+    return value * value - x;
+}
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += transform(i %% 1000);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    string closure_noncapturing_branch_code = sprintf("%%modern
+code<int(int)> transform = int sub(int x) {
+    int value = x + 1;
+    if (value %% 2) {
+        value *= 3;
+    } else {
+        value += 7;
+    }
+    return value * value - x;
+};
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += transform(i %% 1000);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 18b: function-local noncapturing closure with direct-only uses
+    # ==========================================================================
+    string closure_noncapturing_local_code = sprintf("%%modern
+int sub run(int iterations) {
+    code<int(int)> transform = int sub(int x) {
+        int value = x + 1;
+        if (value %% 2) {
+            value *= 3;
+        } else {
+            value += 7;
+        }
+        return value * value - x;
+    };
+    int sum = 0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += transform(i %% 1000);
+    }
+    return sum;
+}
+printf(\"%%d\\n\", run(%d));
+", iterations / 10);
+
+    # ==========================================================================
+    # Tests 19-21: typed noncapturing closure call ABI
+    # ==========================================================================
+    string closure_native_float_code = sprintf("%%modern
+float sub run(int iterations, float seed) {
+    code<float(float)> adjust = float sub(float value) {
+        return value * 1.25 + 0.5;
+    };
+    float sum = 0.0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += adjust(seed);
+    }
+    return sum;
+}
+printf(\"%%.1f\\n\", run(%d, 2.5));
+", iterations / 10);
+
+    string closure_native_bool_code = sprintf("%%modern
+int sub run(int iterations) {
+    code<bool(bool)> invert = bool sub(bool value) {
+        return !value;
+    };
+    int count = 0;
+    for (int i = 0; i < iterations; ++i) {
+        count += int(invert((i %% 3) == 0));
+    }
+    return count;
+}
+printf(\"%%d\\n\", run(%d));
+", iterations / 10);
+
+    string closure_native_mixed_code = sprintf("%%modern
+int sub run(int iterations, float seed, string label) {
+    code<int(float, bool, string)> score = int sub(float value, bool add, string text) {
+        int result = int(value) + text.size();
+        return add ? result : -result;
+    };
+    int sum = 0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += score(seed, (i %% 2) == 0, label);
+    }
+    return sum;
+}
+printf(\"%%d\\n\", run(%d, 2.5, \"abcd\"));
+", iterations / 10);
+
     hash<string, string> tests = {
         "loop": loop_code,
         "fibonacci": fib_code,
         "self_method": self_method_code,
+        "self_getter": self_getter_code,
+        "final_method": final_method_code,
         "dot_eval": dot_eval_code,
+        "dot_eval_pure": dot_eval_pure_code,
         "dot_eval_try": dot_eval_try_code,
         "static_call": static_call_code,
         "foldl": foldl_code,
         "map_int": map_int_code,
         "map_hash_expr": map_hash_expr_code,
+        "map_hash_lookup": map_hash_lookup_code,
+        "function_hash_expression": function_hash_expression_code,
         "map_hash_body": map_hash_body_code,
         "select_hash": select_hash_code,
+        "select_hash_lookup": select_hash_lookup_code,
         "closure_basic": closure_basic_code,
         "closure_writeback": closure_writeback_code,
         "closure_loop_var": closure_loop_var_code,
         "closure_callback": closure_callback_code,
+        "closure_noncapturing": closure_noncapturing_code,
+        "function_noncapturing_branch": function_noncapturing_branch_code,
+        "closure_noncapturing_branch": closure_noncapturing_branch_code,
+        "closure_noncapturing_local": closure_noncapturing_local_code,
+        "closure_native_float": closure_native_float_code,
+        "closure_native_bool": closure_native_bool_code,
+        "closure_native_mixed": closure_native_mixed_code,
     };
 
     string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
@@ -355,11 +652,19 @@ printf(\"%%d\\n\", sum);
         modes = ("ast", "ir", "tiered", "jit", "aot");
     }
 
+    hash<string, bool> selected_tests;
+    if (ENV.BENCH_TESTS) {
+        foreach string test_name in (ENV.BENCH_TESTS.split(",")) {
+            selected_tests{test_name} = True;
+        }
+    }
+
     printf("================================================================================\n");
     printf("Extended Performance Benchmark (10x longer iterations for reliable measurements)\n");
     printf("================================================================================\n");
     printf("Modes: %s\n", modes.join(" vs "));
     printf("Base iterations: %d\n", iterations);
+    printf("Samples: %d timed, %d warmup\n", samples, warmup);
     printf("Binary: %s\n", qore_bin);
     printf("Note: AOT shows execution time (compilation time shown separately)\n");
     printf("================================================================================\n\n");
@@ -368,6 +673,9 @@ printf(\"%%d\\n\", sum);
     hash<string, hash<string, float>> results;
 
     foreach string test_name in (keys tests) {
+        if (!selected_tests.empty() && !selected_tests{test_name}) {
+            continue;
+        }
         string code = tests{test_name};
         printf("Test: %s\n", test_name);
         printf("------------------------------------------------------------------------\n");
@@ -377,19 +685,19 @@ printf(\"%%d\\n\", sum);
         bool have_expected = False;
 
         foreach string mode in (modes) {
-            hash<auto> r = run_benchmark(test_name, code, mode, qore_bin, ld_path);
+            hash<auto> r = run_benchmark(test_name, code, mode, qore_bin, ld_path, samples, warmup);
             test_results{mode} = r.elapsed_ms;
             if (!have_expected) {
                 expected_output = r.output;
                 have_expected = True;
             }
-            string status = r.output == expected_output ? "OK" : "MISMATCH";
+            string status = r.samples_match && r.output == expected_output ? "OK" : "MISMATCH";
             if (mode == "aot" && r.compile_ms > 0) {
                 # Show AOT as: execution time (compilation time)
-                printf("  %-7s: %8.1f ms (compile: %6.1f ms)  [%s]\n",
-                    mode, r.elapsed_ms, r.compile_ms, status);
+                printf("  %-7s: %8.1f ms (+/-%6.1f, compile: %6.1f ms)  [%s]\n",
+                    mode, r.elapsed_ms, r.stdev_ms, r.compile_ms, status);
             } else {
-                printf("  %-7s: %8.1f ms  [%s]\n", mode, r.elapsed_ms, status);
+                printf("  %-7s: %8.1f ms (+/-%6.1f)  [%s]\n", mode, r.elapsed_ms, r.stdev_ms, status);
             }
         }
 
@@ -433,23 +741,23 @@ printf(\"%%d\\n\", sum);
     }
     printf("------------------------------------------------------------------------\n");
 
-    # Average speedups
-    printf("\nAverage Speedup vs AST:\n");
+    # Geometric-mean speedups avoid overweighting isolated short kernels.
+    printf("\nGeometric Mean Speedup vs AST:\n");
     foreach string mode in (modes) {
         if (mode == "ast") {
             continue;
         }
-        float total_speedup = 0.0;
+        float speedup_product = 1.0;
         int count = 0;
         foreach string test_name in (keys results) {
             hash<string, float> r = results{test_name};
             if (r.ast > 0 && r{mode} > 0) {
-                total_speedup += r.ast / r{mode};
+                speedup_product *= r.ast / r{mode};
                 ++count;
             }
         }
         if (count > 0) {
-            printf("  %-7s: %.2fx\n", mode, total_speedup / count);
+            printf("  %-7s: %.2fx\n", mode, pow(speedup_product, 1.0 / count));
         }
     }
 
@@ -459,7 +767,7 @@ printf(\"%%d\\n\", sum);
     printf("  - All times are EXECUTION times (how fast the code runs)\n");
     printf("  - AOT compilation times are shown separately per test and NOT included above\n");
     printf("  - JIT/tiered compilation happens during first execution and is included\n");
-    printf("  - 10x longer iterations than original for more reliable measurements\n");
+    printf("  - Summary values are medians from repeated process executions\n");
     printf("================================================================================\n");
 }
 }

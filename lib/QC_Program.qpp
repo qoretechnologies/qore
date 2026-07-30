@@ -3169,7 +3169,8 @@ static nothing Program::issueModuleCmd(string module_name, string command) [dom=
     @since %Qore 2.0
 */
 static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
-    return runtime_get_parse_options().getLo();
+    QoreProgram* pgm = getProgram();
+    return pgm ? pgm->getParseOptions().getLo() : runtime_get_parse_options().getLo();
 }
 
 //! Checks if a parse option is set in the current Program by name
@@ -3233,4 +3234,84 @@ static ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
  */
 static *hash<auto> Program::getAllDefines() [flags=CONSTANT;dom=PROCESS] {
    return qore_program_private::runTimeGetAllDefines(getProgram());
+}
+
+//! Saves a %Qore object in the %Program's object cache, holding a strong reference to it
+/** Objects created from languages without deterministic garbage collection (such as Java via the
+    \c jni module or Python via the \c python module) have non-deterministic lifetimes governed by
+    the foreign runtime's garbage collector.  Saving such an object in the %Program's object cache
+    gives it a deterministic lifetime: the object is held with a strong reference until it is
+    explicitly cleared (with @ref Qore::Program::clearObject() "Program::clearObject()" or
+    @ref Qore::Program::clearObjectCache() "Program::clearObjectCache()") or until the %Program is
+    destroyed, at which point the object's destructor runs while the %Program is still valid.
+
+    @param obj the object to save in the cache; saving the same object more than once has no
+    additional effect
+
+    @see
+    - @ref Qore::Program::clearObject() "Program::clearObject()"
+    - @ref Qore::Program::clearObjectCache() "Program::clearObjectCache()"
+    - @ref Qore::Program::objectCacheSize() "Program::objectCacheSize()"
+
+    @since %Qore 3.0
+*/
+nothing Program::saveObject(object obj) {
+    qore_program_private::get(*p)->saveObject(const_cast<QoreObject*>(obj));
+}
+
+//! Removes an object from the %Program's object cache and dereferences it
+/** @param obj the object to remove from the object cache
+
+    @return @ref True if the object was present in the cache and was removed, @ref False if not
+
+    @see @ref Qore::Program::saveObject() "Program::saveObject()"
+
+    @since %Qore 3.0
+*/
+bool Program::clearObject(object obj) {
+    return qore_program_private::get(*p)->clearObject(const_cast<QoreObject*>(obj), xsink);
+}
+
+//! Returns the date/time the object was saved in the object cache, or @ref nothing if not cached
+/** @param obj the object to check
+
+    @return the date/time the object was cached, or @ref nothing if the object is not in the cache
+
+    @since %Qore 3.0
+*/
+*date Program::checkObjectCache(object obj) {
+    int64 epoch = qore_program_private::get(*p)->checkSavedObject(const_cast<QoreObject*>(obj));
+    // the stored timestamp is a UTC epoch (q_epoch()); present it as an absolute date in the
+    // current time zone
+    return epoch ? DateTimeNode::makeAbsolute(currentTZ(), epoch, 0) : QoreValue();
+}
+
+//! Clears the entire object cache, dereferencing all saved objects
+/** @return the number of objects cleared from the cache
+
+    @since %Qore 3.0
+*/
+int Program::clearObjectCache() {
+    return qore_program_private::get(*p)->clearSavedObjects(xsink);
+}
+
+//! Clears all objects saved in the cache at or before the given date/time
+/** @param cutoff objects saved at or before this date/time are cleared from the cache
+
+    @return the number of objects cleared from the cache
+
+    @since %Qore 3.0
+*/
+int Program::clearObjectCache(date cutoff) {
+    // the stored timestamps are UTC epochs (q_epoch()); compare against the cutoff's UTC epoch
+    return qore_program_private::get(*p)->clearSavedObjectsBefore(cutoff->getEpochSecondsUTC(), xsink);
+}
+
+//! Returns the number of objects in the %Program's object cache
+/** @return the number of objects in the %Program's object cache
+
+    @since %Qore 3.0
+*/
+int Program::objectCacheSize() {
+    return (int64)qore_program_private::get(*p)->getSavedObjectCount();
 }

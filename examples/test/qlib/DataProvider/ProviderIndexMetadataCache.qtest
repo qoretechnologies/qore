@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexMetadataCacheTest
+
+public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
+    constructor() : Test("ProviderIndex metadata cache test", "1.0") {
+        addTestCase("corrupt cache falls back to canonical index", \corruptCacheFallsBackToCanonicalIndex());
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    corruptCacheFallsBackToCanonicalIndex() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        string indexed_app = "QoreTestCachedApp";
+        string indexed_action = "cached-action";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {
+                indexed_app: {
+                    "name": indexed_app,
+                },
+            },
+            "actioninfomap": {
+                indexed_app: {
+                    indexed_action: {
+                        "app": indexed_app,
+                        "action": indexed_action,
+                    },
+                },
+            },
+            "top_actioninfomap": {},
+        }, 0s, {});
+
+        string cache_path = dir + DirSep + "qore-data-index.msgpack";
+        assertTrue(hstat(cache_path) != NOTHING, "provider index writer creates the optional metadata cache");
+        File cache();
+        cache.open2(path: cache_path, flags: O_WRONLY | O_TRUNC);
+        cache.write(<deadbeef>);
+        cache.close();
+
+        assertFalse(ProviderIndexUtil::checkAppModule("QoreTestUnknownApp"),
+            "routing-only lookup validates the sidecar before deferred metadata loading");
+        assertEq(indexed_app, ProviderIndexUtil::tryGetAppInfo(indexed_app).name,
+            "cache digest failure falls back to canonical app metadata");
+        assertEq(indexed_action,
+            ProviderIndexUtil::tryGetApproximateAppAction(indexed_app, indexed_action).action,
+            "cache digest failure falls back to canonical action metadata");
+    }
+}

@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-direct-self-member-mutation-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+hashdecl RefInfo {
+    int refs;
+}
+
+int ref_assign_target = 1;
+int ref_compound_target = 2;
+int ref_pre_inc_target = 3;
+int ref_post_inc_target = 4;
+int ref_pre_dec_target = 5;
+int ref_post_dec_target = 6;
+hash<string, hash<RefInfo>> ref_lock_map;
+
+class MutationBase {
+    public {
+        int inherited;
+    }
+}
+
+class MutationCase inherits MutationBase {
+    private {
+        int value;
+        float float_value;
+        number number_value;
+        reference<int> assign_ref;
+        reference<int> compound_ref;
+        reference<int> pre_inc_ref;
+        reference<int> post_inc_ref;
+        reference<int> pre_dec_ref;
+        reference<int> post_dec_ref;
+        reference<hash<RefInfo>> info;
+    }
+
+    constructor() {
+        self.assign_ref = \\ref_assign_target;
+        self.compound_ref = \\ref_compound_target;
+        self.pre_inc_ref = \\ref_pre_inc_target;
+        self.post_inc_ref = \\ref_post_inc_target;
+        self.pre_dec_ref = \\ref_pre_dec_target;
+        self.post_dec_ref = \\ref_post_dec_target;
+        self.info = \\ref_lock_map{\"workflow\"};
+    }
+
+    string assignedState() {
+        bool initially_unassigned = self.value === NOTHING;
+        auto initial_result = (self.value += 7);
+        auto removed_value = remove self.value;
+        bool removed = self.value === NOTHING;
+        auto removed_result = (self.value -= 2);
+        delete self.value;
+        bool deleted = self.value === NOTHING;
+        auto deleted_result = (self.value += 9);
+        return sprintf(\"%y:%d:%d:%y:%d:%y:%d:%d\", initially_unassigned,
+            initial_result, removed_value, removed, removed_result, deleted,
+            deleted_result, self.value);
+    }
+
+    string compoundOps() {
+        self.value = 6;
+        auto mul = (self.value *= 3);
+        auto div = (self.value /= 2);
+        auto mod = (self.value %= 7);
+        auto and_value = (self.value &= 6);
+        auto or_value = (self.value |= 8);
+        auto xor_value = (self.value ^= 3);
+        auto shl = (self.value <<= 2);
+        auto shr = (self.value >>= 1);
+        return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\", mul, div, mod,
+            and_value, or_value, xor_value, shl, shr, self.value);
+    }
+
+    string unaryOps() {
+        self.value = 5;
+        auto pre_inc = ++self.value;
+        auto post_inc = self.value++;
+        auto pre_dec = --self.value;
+        auto post_dec = self.value--;
+        return sprintf(\"%d:%d:%d:%d:%d\", pre_inc, post_inc, pre_dec,
+            post_dec, self.value);
+    }
+
+    string numericOps() {
+        self.float_value = 1.5;
+        auto float_mul = (self.float_value *= 2.0);
+        auto float_div = (self.float_value /= 4.0);
+        auto float_inc = ++self.float_value;
+        self.number_value = 2.5n;
+        auto number_mul = (self.number_value *= 2n);
+        auto number_div = (self.number_value /= 4n);
+        auto number_post = self.number_value++;
+        return sprintf(\"%.2f:%.2f:%.2f:%n:%n:%n:%n\", float_mul,
+            float_div, float_inc, number_mul, number_div, number_post,
+            self.number_value);
+    }
+
+    string inheritedOps() {
+        bool initially_unassigned = self.inherited === NOTHING;
+        auto assigned = (self.inherited = 4);
+        auto updated = (self.inherited += 3);
+        return sprintf(\"%y:%d:%d:%d\", initially_unassigned, assigned,
+            updated, self.inherited);
+    }
+
+    string exceptionPath() {
+        self.value = 12;
+        int zero = 0;
+        try {
+            self.value /= zero;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + \":\" + string(self.value);
+        }
+        return \"accepted\";
+    }
+
+    string referenceScalarOps() {
+        auto assigned = (self.assign_ref = 11);
+        auto compound = (self.compound_ref += 20);
+        auto pre_inc = ++self.pre_inc_ref;
+        auto post_inc = self.post_inc_ref++;
+        auto pre_dec = --self.pre_dec_ref;
+        auto post_dec = self.post_dec_ref--;
+        return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+            assigned, ref_assign_target, compound, ref_compound_target,
+            pre_inc, ref_pre_inc_target, post_inc, ref_post_inc_target,
+            pre_dec, ref_pre_dec_target, post_dec, ref_post_dec_target);
+    }
+
+    string referenceHashOps() {
+        bool initially_missing = !self.info;
+        auto assigned = (self.info = <RefInfo>{\"refs\": 42});
+        return sprintf(\"%y:%d:%d\", initially_missing, assigned.refs,
+            ref_lock_map{\"workflow\"}.refs);
+    }
+
+    code<int()> makeUpdater() {
+        self.value = 20;
+        return int sub () {
+            return self.value += 2;
+        };
+    }
+}
+
+MutationCase mutation();
+string assigned_state = mutation.assignedState();
+string compound_ops = mutation.compoundOps();
+string unary_ops = mutation.unaryOps();
+string numeric_ops = mutation.numericOps();
+string inherited_ops = mutation.inheritedOps();
+string exception_path = mutation.exceptionPath();
+string reference_scalar_ops = mutation.referenceScalarOps();
+string reference_hash_ops = mutation.referenceHashOps();
+code<int()> updater = mutation.makeUpdater();
+printf(\"%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%d:%d\\n\",
+    assigned_state, compound_ops, unary_ops, numeric_ops, inherited_ops,
+    exception_path, reference_scalar_ops, reference_hash_ops, updater(),
+    updater());
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+}
+
+hash<string, string> sub runAot(bool disabled) {
+    string suffix = disabled ? "disabled" : "enabled";
+    string exe = root + "/" + suffix;
+    string compile_out = backquote(sprintf(
+        "%sQORE_AOT_DEBUG=1 LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_DIRECT_SELF_MEMBER_MUTATION=1 " : "",
+        libqore_dir, qcc_bin, exe, source_path));
+    if (!is_file(exe)) {
+        printf("%s AOT compile failed:\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return ("compile": compile_out,
+        "output": backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+}
+
+string expected = "True:7:7:True:-2:True:9:9\n"
+    + "18:9:2:2:10:9:36:18:18\n"
+    + "6:6:6:6:5\n"
+    + "3.00:0.75:1.75:5:1.25:1.25:2.25\n"
+    + "True:4:7:7\n"
+    + "DIVISION-BY-ZERO:12\n"
+    + "11:11:22:22:4:4:4:5:4:4:6:5\n"
+    + "True:42:42\n"
+    + "22:24\n";
+
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+hash<string, string> enabled = runAot(False);
+hash<string, string> disabled = runAot(True);
+if (enabled.output != expected || disabled.output != expected) {
+    printf("AOT mismatch\nexpected:\n%sEnabled:\n%sDisabled:\n%s",
+        expected, enabled.output, disabled.output);
+    exit(2);
+}
+if (enabled.compile !~ /AOT: direct self member mutation lowered in /
+        || disabled.compile =~ /AOT: direct self member mutation lowered in /) {
+    printf("unexpected lowering diagnostics:\nenabled:\n%sdisabled:\n%s",
+        enabled.compile, disabled.compile);
+    exit(2);
+}

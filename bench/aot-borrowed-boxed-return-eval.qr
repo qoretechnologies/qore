@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+string sub identity(string value) {
+    return value;
+}
+
+int sub callInTry(string value, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        try {
+            checksum += identity(value).size();
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex;
+        }
+    }
+    return checksum;
+}
+
+int sub directInTry(string value, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        try {
+            checksum += value.size();
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex;
+        }
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 2000000;
+printf("%d\n", ARGV.size() && ARGV[0] == "direct"
+    ? directInTry("abcdefghijklmnop", rounds)
+    : callInTry("abcdefghijklmnop", rounds));

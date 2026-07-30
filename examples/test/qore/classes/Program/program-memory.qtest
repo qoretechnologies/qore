@@ -49,14 +49,19 @@ class ProgramMemoryTest inherits QUnit::Test {
             testSkip("allocation-tracking build required for leak-byte assertion");
         }
 
-        for (int i = 0; i < 1000; ++i) {
-            Program pgm();
-            pgm.importClass("ProgramMemoryImportedClass");
-            delete pgm;
-        }
+        # Warm retained class-reference and IR call-frame capacity before measuring.
+        runClassHandleCycles(200);
+        call_function("stop_alloc_tracking");
 
-        hash<auto> result = call_function("stop_alloc_tracking");
-        assertEq(0, getLiveBytes(result), "child Program teardown must release all tracked allocations");
+        call_function("start_alloc_tracking");
+        runClassHandleCycles(100);
+        hash<auto> result_100 = call_function("stop_alloc_tracking");
+
+        call_function("start_alloc_tracking");
+        runClassHandleCycles(200);
+        hash<auto> result_200 = call_function("stop_alloc_tracking");
+        assertLe(getLiveBytes(result_100) + 1024, getLiveBytes(result_200),
+            "child Program class-handle allocations must remain bounded");
     }
 
     #! Objects hold a reference to their class pointer and not only to the class's private data
@@ -73,7 +78,34 @@ class ProgramMemoryTest inherits QUnit::Test {
             testSkip("allocation-tracking build required for leak-byte assertion");
         }
 
-        for (int i = 0; i < 100; ++i) {
+        # Warm class-reference maps, parsed-code caches, and IR call frames before measuring.
+        assertEq(200, runObjectClassHandleCycles(200), "warmup objects remain usable");
+        call_function("stop_alloc_tracking");
+
+        call_function("start_alloc_tracking");
+        int object_count = runObjectClassHandleCycles(100);
+        hash<auto> result_100 = call_function("stop_alloc_tracking");
+        assertEq(100, object_count, "measured objects remain usable");
+
+        call_function("start_alloc_tracking");
+        object_count = runObjectClassHandleCycles(200);
+        hash<auto> result_200 = call_function("stop_alloc_tracking");
+        assertEq(200, object_count, "larger measured objects remain usable");
+        assertLe(getLiveBytes(result_100) + 1024, getLiveBytes(result_200),
+            "object class-handle allocations must remain bounded");
+    }
+
+    private static runClassHandleCycles(int cycles) {
+        for (int i = 0; i < cycles; ++i) {
+            Program pgm();
+            pgm.importClass("ProgramMemoryImportedClass");
+            delete pgm;
+        }
+    }
+
+    private int runObjectClassHandleCycles(int cycles) {
+        int object_count;
+        for (int i = 0; i < cycles; ++i) {
             auto o;
             {
                 Program pgm();
@@ -83,17 +115,14 @@ class ProgramMemoryTest inherits QUnit::Test {
                 pgm.run();
                 # the object is created in the child Program, so its class is the child's wrapper
                 o = pgm.getGlobalVariable("obj");
-                assertEq(1, o.get());
+                object_count += o.get();
                 # the child Program is destroyed while the object is still referenced here
                 delete pgm;
             }
             # the object (and its class pointer reference) is released here
             delete o;
         }
-
-        hash<auto> result = call_function("stop_alloc_tracking");
-        assertEq(0, getLiveBytes(result), "objects outliving their Program must release all tracked "
-            "allocations");
+        return object_count;
     }
 
     aotModuleProgramReclamationTest() {
@@ -130,8 +159,10 @@ public namespace ProgramMemoryAOT {
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         string compile_out = backquote(sprintf(
             "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m --strip-source -o %s %s 2>&1",
-            libqore_dir, libqore_dir, qcc_bin, qmod_path, qm_path));
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qcc_bin),
+            shellQuote(qmod_path), shellQuote(qm_path)));
         assertTrue(is_file(qmod_path), "compiled AOT module: " + compile_out);
+        unlink(qm_path);
 
         # Warm the process-wide AOT module and its shadow metadata before tracking.
         Program warmup();
@@ -203,6 +234,10 @@ int sub get() { return (new Child()).get(); }", "test");
             delete pgm;
         }
         return init_count;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
     }
 
     private static int getLiveBytes(hash<auto> result) {

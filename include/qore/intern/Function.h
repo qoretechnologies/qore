@@ -50,6 +50,7 @@
 class qore_class_private;
 class QoreIRFunction;
 struct QoreAOTContext;
+struct QoreAOTLazyClosureIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
@@ -239,6 +240,18 @@ DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
     const QoreTypeParamInstantiation* inst);
+//! Returns the process-local identity key for a concrete generic specialization.
+//! @param receiver_type_info concrete parameterized receiver type, if any
+//! @param type_param_instantiation concrete function or method type arguments, if any
+DLLLOCAL std::string qore_make_generic_specialization_key(
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* type_param_instantiation);
+//! Returns the portable dispatch key for a concrete generic specialization.
+//! Unlike the process-local cache key, this key contains no pointer identity;
+//! callers must compare it only after resolving the exact function variant.
+DLLLOCAL std::string qore_make_generic_specialization_dispatch_key(
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* type_param_instantiation);
 
 // used to store return type info during parsing for user code
 class RetTypeInfo {
@@ -440,7 +453,8 @@ class RuntimeConfig;
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
-class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
+class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper,
+        public QoreAOTStackFrameMarker {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -460,7 +474,8 @@ public:
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool n_defer_domain_po = false);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -481,7 +496,8 @@ public:
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool n_defer_domain_po = false);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -564,8 +580,16 @@ public:
         return pgm;
     }
 
+    DLLLOCAL QoreProgram* getExecutionProgram() const {
+        return exec_pgm;
+    }
+
     DLLLOCAL virtual const AbstractStatement* getStatement() const {
         return stmt;
+    }
+
+    DLLLOCAL bool isAOTFrame() const override {
+        return is_aot;
     }
 
     //! Returns the method / function name only without any class
@@ -593,6 +617,8 @@ protected:
     const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
     QoreParseOptions old_runtime_po;
     QoreParseOptions old_rc_po;
+    QoreProgram* exec_pgm = nullptr;
+    QoreProgram* old_call_program_context = nullptr;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
@@ -605,6 +631,17 @@ protected:
     bool restore_receiver_type_info = false;
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
+    bool restore_call_program_context = false;
+    //! true when the called variant has a cached AOT function (frame executes natively),
+    //! so the exception machinery can repair its call-site location via the lazy registry
+    bool is_aot = false;
+    // when true, defer switching the runtime parse options to the called Program until *after* argument
+    // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
+    // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
+    // options (the cross-Program privilege model).  For everything else (direct calls, method calls,
+    // call references, closures) the switch happens before the dom check, so the check runs against the
+    // target/creation Program's options.
+    bool defer_domain_po = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
@@ -815,6 +852,10 @@ protected:
     //! Source-stripped AOT has no executable AST body, but ProgramControl and
     //! debugger APIs still need a stable function-entry statement identity.
     StatementBlock* aot_entry_statement = nullptr;
+    //! Source function owning this variant. Used by IR lowering to identify
+    //! self-recursive direct calls by pointer identity even when JIT symbol names
+    //! are uniquified.
+    const QoreFunction* source_qf = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
 
@@ -855,6 +896,11 @@ protected:
     mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
+    //! Serialized fallback IR installed before AOT publication and protected during materialization.
+    mutable std::shared_ptr<const QoreAOTLazyClosureIR> aot_lazy_closure_ir;
+    mutable std::mutex aot_lazy_closure_ir_mutex;
+    //! Lock-free closure-call guard; publishes aot_lazy_closure_ir before first invocation.
+    mutable std::atomic<bool> has_aot_lazy_closure_ir{false};
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -872,7 +918,8 @@ protected:
         under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
         rather than silently falling back to AST.
     */
-    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false) const;
+    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false,
+            bool promote_to_ir = true) const;
     DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
@@ -887,6 +934,9 @@ protected:
     //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
     DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
 
+    //! Materialize source-stripped closure fallback IR if one is installed.
+    DLLLOCAL bool materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const;
+
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
     //! Attempt JIT recompilation with updated type profiles after deopt
@@ -896,6 +946,31 @@ public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
             RetTypeInfo* rv, bool synced);
     DLLLOCAL virtual ~UserVariantBase();
+
+    /** Install serialized closure IR during single-threaded AOT registration, before publication.
+        @param lazy_ir immutable metadata required to reconstruct the fallback IR
+    */
+    DLLLOCAL void setLazyAOTClosureIR(std::shared_ptr<const QoreAOTLazyClosureIR> lazy_ir) const {
+        aot_lazy_closure_ir = std::move(lazy_ir);
+        has_aot_lazy_closure_ir.store(true, std::memory_order_release);
+    }
+
+    //! @return true when this closure has deferred fallback IR to materialize
+    DLLLOCAL bool hasLazyAOTClosureIR() const {
+        return has_aot_lazy_closure_ir.load(std::memory_order_acquire);
+    }
+
+    /** Returns cached IR specialized for the concrete generic call context, creating it when needed.
+        @param name call name used to label newly lowered IR
+        @param receiver_type_info concrete parameterized receiver type
+        @param type_param_instantiation optional concrete method or function type arguments
+        @return the cached specialized IR, or nullptr when specialization is unavailable
+    */
+    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIRForFastCall(const char* name,
+            const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
+        return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
+    }
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }
@@ -926,6 +1001,14 @@ public:
             QoreObject* self, ExceptionSink* xsink) const {
         return evalTiered(name, argv, self, xsink);
     }
+
+    //! Account for one execution reached via the fast-call runtime path
+    //! (qore_rt_call_fast), which bypasses evalTiered().  Increments the
+    //! execution counter and triggers background JIT promotion when the function
+    //! becomes hot, so tiered-mode functions called only as callees (from IR or
+    //! native code) still get promoted to native.  No-op once native, after a
+    //! failed compile, or when there is no cached IR.
+    DLLLOCAL void recordFastCallExecution() const;
 
     DLLLOCAL bool hasBody() const {
         return (bool)statements;
@@ -958,12 +1041,7 @@ public:
     }
 
     //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
-    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
-        cached_aot_fn = fn;
-        cached_aot_ctx = ctx;
-        jit_compile_state.store(2, std::memory_order_relaxed);
-        current_tier.store(TIER_JIT, std::memory_order_release);
-    }
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx);
 
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
     DLLLOCAL bool hasCachedFunction() const {
@@ -1021,6 +1099,11 @@ public:
         return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
     }
 
+    //! Returns the cached AOT context for direct AOT fast-entry dispatch.
+    DLLLOCAL QoreAOTContext* getCachedAOTContext() const {
+        return cached_aot_ctx;
+    }
+
     //! Returns true if argv is actually used in the function body
     DLLLOCAL bool usesArgv() const {
         return uses_argv;
@@ -1046,10 +1129,12 @@ public:
     }
 
     //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
-    //! to ensure callees have IR before the root function is JIT-compiled.
-    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false) const {
-        std::call_once(ir_lower_once, [this, name, raise_on_failure]() {
-            attemptIRLowering(name, raise_on_failure);
+    //! to ensure callees have IR before the root function is JIT-compiled.  Set
+    //! promote_to_ir=false when the IR is only an internal batch body.
+    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false,
+            bool promote_to_ir = true) const {
+        std::call_once(ir_lower_once, [this, name, raise_on_failure, promote_to_ir]() {
+            attemptIRLowering(name, raise_on_failure, promote_to_ir);
         });
     }
 
@@ -1060,11 +1145,12 @@ public:
     //! Returns true if this variant is statically eligible for the fast call path
     //! (no default args, not synchronized). Runtime readiness (has cached function)
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
-    DLLLOCAL bool isStaticallyFastCallEligible() const {
+    //! @param allow_type_parameters allow a separately validated concrete specialization
+    DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
         if (isSynchronized()) {
             return false;
         }
-        if (signature.hasTypeParameters()) {
+        if (!allow_type_parameters && signature.hasTypeParameters()) {
             return false;
         }
         // Check for default args
@@ -1104,12 +1190,15 @@ protected:
     const UserVariantBase* uvb;
     ReferenceHolder<QoreListNode> argv;
     ExceptionSink* xsink;
+    QoreProgram* exec_pgm;
 
 public:
+    DLLLOCAL static QoreProgram* getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh);
+
     DLLLOCAL UserVariantExecHelper(const UserVariantBase* n_uvb, CodeEvaluationHelper* ceh, ExceptionSink* n_xsink) :
-            ProgramThreadCountContextHelper(n_xsink, n_uvb->pgm, true),
+            ProgramThreadCountContextHelper(n_xsink, getExecutionProgram(n_uvb, ceh), true),
             ThreadFrameBoundaryHelper(!*n_xsink),
-            uvb(n_uvb), argv(n_xsink), xsink(n_xsink) {
+            uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
         if (*xsink || uvb->setupCall(ceh, argv, xsink))
             uvb = nullptr;
@@ -1123,6 +1212,10 @@ public:
 
     DLLLOCAL ReferenceHolder<QoreListNode>& getArgv() {
         return argv;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const {
+        return exec_pgm;
     }
 };
 
@@ -1461,13 +1554,15 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool defer_domain_po = false) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool defer_domain_po = false) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -1482,6 +1577,12 @@ public:
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const type_vec_t* explicit_type_args = nullptr) const;
+
+    //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
+    DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
+            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr) const;
 
@@ -1797,6 +1898,18 @@ public:
 #endif
             (*i).func = mfb->new_copy;
         }
+    }
+
+    DLLLOCAL const MethodFunctionBase* findVariantOwnerFunction(const AbstractQoreFunctionVariant* variant) const {
+        for (ilist_t::const_iterator ai = ilist.begin(), ae = ilist.end(); ai != ae; ++ai) {
+            const MethodFunctionBase* mfb = METHFB_const((*ai).func);
+            for (vlist_t::const_iterator vi = mfb->vlist.begin(), ve = mfb->vlist.end(); vi != ve; ++vi) {
+                if (*vi == variant) {
+                    return mfb;
+                }
+            }
+        }
+        return nullptr;
     }
 
     DLLLOCAL bool parseHasAmbiguousSignature(const MethodFunctionBase& other, bool relaxed_match) const;

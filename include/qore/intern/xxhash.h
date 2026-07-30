@@ -155,11 +155,17 @@ When you are done, don't forget to free XXH state space, using typically XXHnn_f
 #endif
 
 struct qore_hash_str {
+    using is_transparent = void;
+
     DLLLOCAL size_t operator()(const char* s1) const {
 #if TARGET_BITS == 64
 return XXH64(s1, strlen(s1), 0);
 #else
 return XXH32(s1, strlen(s1), 0);
 #endif
+    }
+
+    DLLLOCAL size_t operator()(const qore_prehashed_str& key) const {
+        return key.hash;
     }
 };

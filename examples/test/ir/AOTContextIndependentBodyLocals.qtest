@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub adjusted(int value) {
+    int local = value * 3 + 1;
+    return local + (local >> 2);
+}
+
+int sub mix(int seed, int iteration) {
+    return adjusted((seed ^ iteration) & 1023)
+        ^ adjusted((seed + iteration) & 1023)
+        ^ adjusted((seed - iteration) & 1023);
+}
+
+float sub adjustedFloat(float value) {
+    float local = value * 1.5;
+    return local + 0.25;
+}
+
+bool sub adjustedBool(bool value) {
+    bool local = !value;
+    return local;
+}
+
+*int sub maybeAssigned(bool assign_value) {
+    int local;
+    if (assign_value) {
+        local = 7;
+    }
+    return local;
+}
+
+int checksum = 1;
+for (int i = 0; i < 1000; ++i) {
+    checksum = mix(checksum, i);
+}
+printf(\"%d:%.2f:%y:%y\\n\", checksum, adjustedFloat(2.0),
+    adjustedBool(True), maybeAssigned(False) === NOTHING);
+";
+
+string root = "/tmp/qore-aot-context-independent-body-locals-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected;
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (!expected) {
+        expected = actual;
+    } else if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, src));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1"
+        + " QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_BODY_LOCALS=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, src));
+if (!(enabled_compile =~ /context-independent fast entry 'adjusted_int/)
+        || !(enabled_compile =~ /context-independent fast entry 'mix_int_int/)
+        || !(enabled_compile =~ /context-independent fast entry 'adjustedFloat_float/)
+        || !(enabled_compile =~ /context-independent fast entry 'adjustedBool_bool/)
+        || enabled_compile =~ /context-independent fast entry 'maybeAssigned_bool/
+        || disabled_compile =~ /context-independent fast entry 'adjusted_int/
+        || disabled_compile =~ /context-independent fast entry 'mix_int_int/
+        || disabled_compile =~ /context-independent fast entry 'adjustedFloat_float/
+        || disabled_compile =~ /context-independent fast entry 'adjustedBool_bool/) {
+    printf("unexpected context-independent analysis:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled, disabled)) {
+    if (!is_file(path)) {
+        printf("AOT compile failed for %s:\n%s%s",
+            path, enabled_compile, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(enabled);
+unlink(disabled);

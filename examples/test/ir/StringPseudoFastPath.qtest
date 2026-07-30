@@ -1,0 +1,355 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+string heap = \"abcdefghijklmnopqrstuvwxyz\";
+string short = \"abc\";
+string empty = \"\";
+
+printf(\"assigned:%y:%y:%y:%y:%y:%y\\n\",
+    heap.val(), heap.empty(), short.val(), short.empty(), empty.val(), empty.empty());
+printf(\"sizep:%y:%y:%y\\n\", heap.sizep(), short.sizep(), empty.sizep());
+
+string u_short = \"éx\";
+string u_heap = \"éabcdefghijklmnopqrstuvwxyz\";
+printf(\"case:%y:%y:%y:%y\\n\", short.lwr(), short.upr(), u_short.lwr(), u_short.upr());
+printf(\"global-case:%y:%y:%y:%y\\n\", tolower(short), toupper(short), tolower(u_short), toupper(u_short));
+*string sub optionalCaseValue(bool assigned) {
+    return assigned ? \"MiXeD\" : NOTHING;
+}
+sub clearCaseValue(reference<string> value) {
+    remove value;
+}
+string sub clearViaFunction() {
+    string value = \"MiXeD\";
+    clearCaseValue(\\value);
+    try {
+        return toupper(value);
+    } catch (hash<auto> ex) {
+        return ex.err;
+    }
+}
+final class CaseClearer {
+    static nothing clearStatic(reference<string> value) {
+        remove value;
+    }
+
+    final nothing clearMember(reference<string> value) {
+        remove value;
+    }
+
+    string clearViaSelf() {
+        string value = \"MiXeD\";
+        self.clearMember(\\value);
+        try {
+            return toupper(value);
+        } catch (hash<auto> ex) {
+            return ex.err;
+        }
+    }
+}
+string strict_case = optionalCaseValue(True);
+printf(\"global-case.strict-store:%y:%y\\n\", tolower(strict_case), toupper(strict_case));
+try {
+    printf(\"global-case.strict-store.try:%y:%y\\n\",
+        tolower(strict_case), toupper(strict_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.strict-store.try:EX:%s\\n\", ex.err);
+}
+string missing_case;
+try {
+    printf(\"global-case.missing:%y\\n\", tolower(missing_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.missing:EX:%s\\n\", ex.err);
+}
+string cleared_case = \"MiXeD\";
+clearCaseValue(\\cleared_case);
+try {
+    printf(\"global-case.ref-cleared:%y\\n\", toupper(cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.ref-cleared:EX:%s\\n\", ex.err);
+}
+string static_cleared_case = \"MiXeD\";
+CaseClearer::clearStatic(\\static_cleared_case);
+try {
+    printf(\"global-case.static-ref-cleared:%y\\n\", tolower(static_cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.static-ref-cleared:EX:%s\\n\", ex.err);
+}
+CaseClearer clearer();
+string member_cleared_case = \"MiXeD\";
+clearer.clearMember(\\member_cleared_case);
+try {
+    printf(\"global-case.member-ref-cleared:%y\\n\", toupper(member_cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.member-ref-cleared:EX:%s\\n\", ex.err);
+}
+printf(\"global-case.self-ref-cleared:EX:%s\\n\", clearer.clearViaSelf());
+printf(\"global-case.function-ref-cleared:EX:%s\\n\", clearViaFunction());
+printf(\"lengths:%d:%d:%d:%d:%d:%d\\n\",
+    short.size(), short.strlen(), short.length(),
+    heap.size(), heap.strlen(), heap.length());
+printf(\"unicode-lengths:%d:%d:%d:%d:%d:%d\\n\",
+    u_short.size(), u_short.strlen(), u_short.length(),
+    u_heap.size(), u_heap.strlen(), u_heap.length());
+printf(\"global-lengths:%d:%d:%d:%d\\n\",
+    length(short), strlen(short), length(u_short), strlen(u_short));
+string global_missing;
+string global_removed = \"abc\";
+remove global_removed;
+printf(\"global-nothing-lengths:%d:%d:%d:%d\\n\",
+    length(global_missing), strlen(global_missing), length(global_removed), strlen(global_removed));
+
+string pred = \"éabcdef\";
+string pred_prefix = \"éa\";
+string pred_suffix = \"def\";
+string pred_middle = \"bcd\";
+printf(\"predicates:%y:%y:%y:%y:%y:%y\\n\",
+    pred.startsWith(pred_prefix), pred.endsWith(pred_suffix), pred.contains(pred_middle),
+    pred.startsWith(pred_suffix), pred.endsWith(pred_prefix), pred.contains(\"zz\"));
+printf(\"predicates.named:%y:%y:%y\\n\",
+    pred.startsWith(prefix: pred_prefix), pred.endsWith(suffix: pred_suffix),
+    pred.contains(substring: pred_middle));
+printf(\"find.substr:%d:%d:%d:%y:%y:%y\\n\",
+    pred.find(pred_middle), pred.find(pred_middle, 3), pred.find(\"zz\"),
+    pred.substr(1), pred.substr(2, 3), pred.substr(start: 0, length: 2));
+
+string pred_missing_arg;
+try {
+    printf(\"predicate.missing_arg:%y\\n\", pred.startsWith(pred_missing_arg));
+} catch (hash<auto> ex) {
+    printf(\"predicate.missing_arg:EX:%s\\n\", ex.err);
+}
+string pred_removed_arg = \"abc\";
+remove pred_removed_arg;
+try {
+    printf(\"predicate.removed_arg:%y\\n\", pred.contains(pred_removed_arg));
+} catch (hash<auto> ex) {
+    printf(\"predicate.removed_arg:EX:%s\\n\", ex.err);
+}
+string pred_missing_base;
+try {
+    printf(\"predicate.missing_base:%y\\n\", pred_missing_base.startsWith(pred_prefix));
+} catch (hash<auto> ex) {
+    printf(\"predicate.missing_base:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"find.missing_arg:%d\\n\", pred.find(pred_missing_arg));
+} catch (hash<auto> ex) {
+    printf(\"find.missing_arg:EX:%s\\n\", ex.err);
+}
+int pred_missing_offset;
+try {
+    printf(\"find.missing_offset:%d\\n\", pred.find(pred_middle, pred_missing_offset));
+} catch (hash<auto> ex) {
+    printf(\"find.missing_offset:EX:%s\\n\", ex.err);
+}
+int pred_missing_start;
+try {
+    printf(\"substr.missing_start:%y\\n\", pred.substr(pred_missing_start));
+} catch (hash<auto> ex) {
+    printf(\"substr.missing_start:EX:%s\\n\", ex.err);
+}
+
+string sub optionalStringOps(*string value, *string pattern) {
+    return sprintf(\"%y:%y:%y:%d:%d:%y\", value.startsWith(pattern),
+        value.endsWith(pattern), value.contains(pattern), value.find(pattern),
+        value.rfind(pattern), value.substr(1, 2));
+}
+printf(\"optional.assigned:%s\\n\", optionalStringOps(\"abcdef\", \"bc\"));
+try {
+    printf(\"optional.missing_base:%s\\n\", optionalStringOps(NOTHING, \"bc\"));
+} catch (hash<auto> ex) {
+    printf(\"optional.missing_base:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"optional.missing_arg:%s\\n\", optionalStringOps(\"abcdef\", NOTHING));
+} catch (hash<auto> ex) {
+    printf(\"optional.missing_arg:EX:%s\\n\", ex.err);
+}
+
+string removed = \"removed\";
+remove removed;
+printf(\"removed.val:%y\\n\", removed.val());
+printf(\"removed.empty:%y\\n\", removed.empty());
+printf(\"removed.sizep:%y\\n\", removed.sizep());
+
+string deleted = \"deleted\";
+delete deleted;
+printf(\"deleted.val:%y\\n\", deleted.val());
+printf(\"deleted.empty:%y\\n\", deleted.empty());
+printf(\"deleted.sizep:%y\\n\", deleted.sizep());
+
+string unassigned;
+printf(\"unassigned.val:%y\\n\", unassigned.val());
+printf(\"unassigned.empty:%y\\n\", unassigned.empty());
+printf(\"unassigned.sizep:%y\\n\", unassigned.sizep());
+
+bool sub choose() {
+    return False;
+}
+
+string conditional;
+if (choose()) {
+    conditional = \"abc\";
+}
+try {
+    printf(\"conditional.length:%d\\n\", conditional.length());
+} catch (hash<auto> ex) {
+    printf(\"conditional.length:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"conditional.strlen:%d\\n\", conditional.strlen());
+} catch (hash<auto> ex) {
+    printf(\"conditional.strlen:EX:%s\\n\", ex.err);
+}
+printf(\"conditional:%y:%y:%d\\n\", conditional.val(), conditional.empty(), conditional.size());
+
+string looped;
+while (choose()) {
+    looped = \"abc\";
+}
+try {
+    printf(\"looped.length:%d\\n\", looped.length());
+} catch (hash<auto> ex) {
+    printf(\"looped.length:EX:%s\\n\", ex.err);
+}
+printf(\"looped:%y:%y:%d\\n\", looped.val(), looped.empty(), looped.size());
+";
+}
+
+string sub expectedOutput() {
+    return "assigned:True:False:True:False:False:True
+sizep:True:True:True
+case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
+global-case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
+global-case.strict-store:\"mixed\":\"MIXED\"
+global-case.strict-store.try:\"mixed\":\"MIXED\"
+global-case.missing:EX:RUNTIME-OVERLOAD-ERROR
+global-case.ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.static-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.member-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.self-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.function-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+lengths:3:3:3:26:26:26
+unicode-lengths:3:3:2:28:28:27
+global-lengths:3:3:2:3
+global-nothing-lengths:0:0:0:0
+predicates:True:True:True:False:False:False
+predicates.named:True:True:True
+find.substr:2:-1:-1:\"abcdef\":\"bcd\":\"éa\"
+predicate.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
+predicate.removed_arg:EX:RUNTIME-OVERLOAD-ERROR
+predicate.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+find.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
+find.missing_offset:2
+substr.missing_start:EX:RUNTIME-OVERLOAD-ERROR
+optional.assigned:False:False:True:1:1:\"bc\"
+optional.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+optional.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
+removed.val:False
+removed.empty:True
+removed.sizep:False
+deleted.val:False
+deleted.empty:True
+deleted.sizep:False
+unassigned.val:False
+unassigned.empty:True
+unassigned.sizep:False
+conditional.length:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+conditional.strlen:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+conditional:False:True:0
+looped.length:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+looped:False:True:0
+";
+}
+
+string sub runMode(string script_path, string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-string-pseudo-fast-path-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string sub runLinkedAot() {
+    string base = "/tmp/qore-string-pseudo-fast-path-linked-" + string(getpid());
+    string qo_dir = base + "-qo";
+    string exe = base + "-exe";
+    string script_path = base + ".qr";
+    mkdir(qo_dir);
+
+    File script();
+    script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    script.write("%modern
+
+int sub main() {
+    string value = \"éabcdef\";
+    string prefix = \"éa\";
+    string suffix = \"def\";
+    string middle = \"bcd\";
+    printf(\"%y:%y:%y:%d:%y\\n\", value.startsWith(prefix), value.endsWith(suffix),
+        value.contains(middle), value.find(middle), value.substr(2, 3));
+    return 0;
+}
+");
+    script.close();
+
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -c --output-dir=%s %s 2>&1",
+        libqore_dir, qcc_bin, qo_dir, script_path));
+    if (compile_out.find("script-context .qo") == -1) {
+        printf("linked AOT .qo compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    string link_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s/*.qo 2>&1",
+        libqore_dir, qcc_bin, exe, qo_dir));
+    if (!is_file(exe)) {
+        printf("linked AOT link failed:\n%s", link_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+sub checkOutput(string label, string expected, string actual) {
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
+        exit(2);
+    }
+}
+
+string script_path = "/tmp/qore-string-pseudo-fast-path-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string expected = expectedOutput();
+string ast = runMode(script_path, "ast");
+checkOutput("ast", expected, ast);
+
+foreach string mode in (("ir", "tiered", "jit")) {
+    checkOutput(mode, ast, runMode(script_path, mode));
+}
+checkOutput("aot", ast, runAot(script_path));
+checkOutput("linked-aot", "True:True:True:2:\"bcd\"\n", runLinkedAot());

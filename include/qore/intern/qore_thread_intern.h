@@ -276,11 +276,19 @@ DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, c
 struct RuntimeLocationCache {
     const QoreProgramLocation** loc_ptr;
     const AbstractStatement** stmt_ptr;
+    uintptr_t* sp_ptr;   //!< runtime_loc_sp slot (innermost non-AOT frame address)
 };
 
 //! Returns cached pointers to the current thread's runtime location fields.
 //! Call once at function entry, then write through the pointers directly.
 DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
+
+//! Returns the current thread's runtime_loc_sp (innermost live non-AOT frame address,
+//! 0 if owned by an AOT frame). Read at throw by the AOT lazy-location resolver.
+DLLLOCAL uintptr_t get_runtime_loc_sp();
+//! Sets the current thread's runtime_loc_sp. Used by the per-statement RAII helpers to
+//! mark/restore the innermost non-AOT execution frame.
+DLLLOCAL void set_runtime_loc_sp(uintptr_t sp);
 
 //! Returns a ref'd SandboxManager for the first program on the current thread's
 //! program-context (call) stack that has an active manager, starting with the current
@@ -305,6 +313,17 @@ DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, 
 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
+
+class RuntimeParseOptionsOverrideHelper {
+public:
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
+    DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
+
+private:
+    QoreParseOptions old_mask;
+    QoreParseOptions old_value;
+    QoreParseOptions old_po;
+};
 
 DLLLOCAL RootQoreNamespace* getRootNS();
 DLLLOCAL void updateCVarStack(CVNode* ncvs);
@@ -673,6 +692,8 @@ DLLLOCAL ClosureVarValue* thread_try_find_closure_var_in_current_frame(const cha
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 //! Safe version that returns nullptr when no runtime closure environment is set
 DLLLOCAL ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id);
+//! Resolve a closure variable using the current-frame versus captured-environment rules.
+DLLLOCAL ClosureVarValue* thread_resolve_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
 //! Returns true if a runtime closure environment is set on the current thread
 DLLLOCAL bool thread_has_runtime_closure_env();

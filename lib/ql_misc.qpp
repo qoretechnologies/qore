@@ -36,6 +36,7 @@
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
@@ -62,6 +63,28 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 }
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
+
+// Single definition; declared DLLLOCAL in qore_program_private.h and also called from
+// ql_object.cpp.
+QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
+    // The authoritative thread-current Program is the correct target for builtins
+    // that operate on "the Program this call is running in" (set_return_value(),
+    // call_function(), get_global_vars(), ...).  runtime_cfg.getProgram() is a
+    // threaded optimization that is NOT restored when a nested cross-Program call
+    // returns (ProgramThreadCountContextHelper restores td->current_pgm but leaves
+    // rc.pgm pointing at the callee), so reading it here can return the wrong
+    // Program.  This regressed set_return_value() in --exec-mode=ast for any
+    // %exec-class test deriving from a module class such as QUnit::Test: the
+    // inherited main() call left rc.pgm in QUnit's Program, so set_return_value
+    // targeted a non-%exec-class Program and threw SETRETURNVALUE-ERROR.  Prefer
+    // getProgram(); fall back to the threaded/context Program only when there is
+    // no current Program (e.g. non-Qore threads).
+    if (QoreProgram* pgm = getProgram()) {
+        return pgm;
+    }
+    QoreProgram* pgm = runtime_cfg.getProgram();
+    return pgm ? pgm : qore_get_call_program_context();
+}
 
 int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
     switch (v.getType()) {
@@ -730,7 +753,7 @@ auto call_function(string name, ...) {
         vargs = args->copyListFrom(1);
     }
 
-    return getProgram()->callFunction(name->c_str(), *vargs, xsink);
+    return q_get_runtime_call_program(runtime_cfg)->callFunction(name->c_str(), *vargs, xsink);
 }
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, passing the remaining arguments to the @ref call_reference "call reference" or @ref closure "closure"
@@ -759,6 +782,7 @@ auto call_function(code callable, ...) {
         vargs = args->copyListFrom(1);
     }
 
+    ProgramCallContextHelper pch(callable->getProgram());
     return callable->execValue(*vargs, xsink);
 }
 
@@ -787,7 +811,7 @@ auto result = call_function_args("func_name", (arg1, arg2));
     - call_object_method_args()
 */
 auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
-    return getProgram()->callFunction(name->c_str(), arguments, xsink);
+    return q_get_runtime_call_program(runtime_cfg)->callFunction(name->c_str(), arguments, xsink);
 }
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, using the optional second argument as a list of arguments to the @ref call_reference "call reference" or @ref closure "closure"
@@ -810,6 +834,7 @@ auto result = call_function_args(call_ref, (arg1, arg2));
     - call_object_method_args()
 */
 auto call_function_args(code callable, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    ProgramCallContextHelper pch(callable->getProgram());
     return callable->execValue(arguments, xsink);
 }
 
@@ -897,7 +922,7 @@ bool exists(...) [flags=CONSTANT] {
     @deprecated use exists_function(); camel-case function names were deprecated in %Qore 0.8.12
 */
 bool existsFunction(string name) [flags=CONSTANT,DEPRECATED] {
-    return getProgram()->existsFunction(name->c_str());
+    return q_get_runtime_call_program(runtime_cfg)->existsFunction(name->c_str());
 }
 
 //! Always returns @ref True
@@ -932,7 +957,7 @@ bool b = exists_function("func_name");
     @since %Qore 0.8.12 as a replacement for deprecated camel-case existsFunction()
 */
 bool exists_function(string name) [flags=CONSTANT,NAMED_ARGS] {
-    return getProgram()->existsFunction(name->c_str());
+    return q_get_runtime_call_program(runtime_cfg)->existsFunction(name->c_str());
 }
 
 //! Always returns @ref True
@@ -1080,7 +1105,7 @@ parse(code, filename);
 *hash<auto> parse(string code, string label, *softint warning_mask, *string source, *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC,IN_MODULE;flags=NAMED_ARGS] {
     if (warning_mask) {
         ExceptionSink wsink;
-        getProgram()->parse(code, label, xsink, &wsink, warning_mask, source, offset);
+        q_get_runtime_call_program(runtime_cfg)->parse(code, label, xsink, &wsink, warning_mask, source, offset);
         if (!wsink.isException())
             return QoreValue();
 
@@ -1088,7 +1113,7 @@ parse(code, filename);
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
-    getProgram()->parse(code, label, xsink, 0, 0, source, offset);
+    q_get_runtime_call_program(runtime_cfg)->parse(code, label, xsink, 0, 0, source, offset);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1822,7 +1847,7 @@ hash<string, hash<auto>> get_module_hash() {
     @deprecated use get_feature_list(); camel-case function names were deprecated in %Qore 0.8.12
 */
 list<string> getFeatureList() [flags=DEPRECATED] {
-   return getProgram()->getFeatureList();
+   return q_get_runtime_call_program(runtime_cfg)->getFeatureList();
 }
 
 //! Returns a list of strings of the builtin and module-supplied features of Qore
@@ -1838,7 +1863,7 @@ list<string> l = get_feature_list();
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getFeatureList()
 */
 list<string> get_feature_list() {
-   return getProgram()->getFeatureList();
+   return q_get_runtime_call_program(runtime_cfg)->getFeatureList();
 }
 
 //! Returns a list of all the values in the hash argument passed
@@ -2730,7 +2755,8 @@ load_module("mysql");
     - %Qore 0.9 added the \c warning_mask parameter
 */
 nothing load_module(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), getProgram(), nullptr, QMLO_NONE, warning_mask);
+    QoreProgram* pgm = q_get_runtime_call_program(runtime_cfg);
+    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), pgm, nullptr, QMLO_NONE, warning_mask);
 }
 
 //! Loads in a %Qore module at run-time
@@ -2758,7 +2784,8 @@ load_module("mysql");
 */
 *hash<ExceptionInfo> load_module_warn(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
     ExceptionSink wsink;
-    QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), getProgram(), nullptr, QMLO_NONE, warning_mask);
+    QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), nullptr, QMLO_NONE,
+        warning_mask);
     if (!*xsink && wsink) {
         return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
     }
@@ -2832,7 +2859,7 @@ load_user_module_with_program("MyModule", p);
     @since %Qore 0.8.12
  */
 nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), getProgram(), program);
+    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), program);
 }
 
 //! Reloads an already-loaded %Qore module subject to code injection at run-time into %Qore; the module's code is not imported into the current Program object
@@ -3013,7 +3040,7 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @endcode
 */
 *string get_script_path() {
-   return getProgram()->getScriptPath();
+   return q_get_runtime_call_program(runtime_cfg)->getScriptPath();
 }
 
 //! Returns the name of the directory from which the current script was executed or @ref nothing if unknown (i.e. no parent script, script read from stdin, etc)
@@ -3025,7 +3052,7 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @endcode
 */
 *string get_script_dir() {
-   return getProgram()->getScriptDir();
+   return q_get_runtime_call_program(runtime_cfg)->getScriptDir();
 }
 
 //! Returns the filename of the current script if known or @ref nothing if unknown (i.e. no parent script, script read from stdin, etc)
@@ -3037,7 +3064,7 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @endcode
 */
 *string get_script_name() {
-   return getProgram()->getScriptName();
+   return q_get_runtime_call_program(runtime_cfg)->getScriptName();
 }
 
 //! Returns a list of hashes giving information about %Qore library options for the current build
@@ -3172,7 +3199,7 @@ set_return_value(1);
     @since %Qore 0.8.12
  */
 set_return_value(auto value) [dom=PROCESS;flags=NAMED_ARGS] {
-    qore_program_private::setReturnValue(*getProgram(), value.refSelf(), xsink);
+    qore_program_private::setReturnValue(*q_get_runtime_call_program(runtime_cfg), value.refSelf(), xsink);
 }
 
 //! returns a descriptive string for an exception location; the \c source and \c offset information will also be included in the string returned if present in the @ref Qore::ExceptionInfo "ExceptionInfo" hash argument
@@ -3279,7 +3306,7 @@ hash<auto> h = get_global_vars();
     @since %Qore 0.8.13
  */
 hash<auto> get_global_vars() [flags=CONSTANT] {
-   return getProgram()->getGlobalVars();
+   return q_get_runtime_call_program(runtime_cfg)->getGlobalVars();
 }
 
 //! set the value of a global variable
@@ -3300,7 +3327,7 @@ set_global_var_value("a", 1);
     @since %Qore 0.8.13
  */
 nothing set_global_var_value(string name, auto value) [flags=NAMED_ARGS] {
-   getProgram()->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
+   q_get_runtime_call_program(runtime_cfg)->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
 }
 
 //! returns the given global module option

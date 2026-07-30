@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub stridedBoundedListRead(int rounds) {
+    list<bool> flags = (True, False, True, True, False, True, False, True);
+    list<string> words =
+        ("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < flags.size(); i += 2) {
+            if (flags[i]) {
+                ++total;
+            }
+        }
+        for (int i = 1; i < words.size(); i += 2) {
+            if (words[i] !== "") {
+                ++total;
+            }
+        }
+        for (int i = flags.size() - 1; i >= 0; i -= 2) {
+            if (flags[i]) {
+                ++total;
+            }
+        }
+    }
+    return total;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+    printf("%d\n", stridedBoundedListRead(rounds));
+    return 0;
+}
+
+main();

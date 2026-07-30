@@ -1,0 +1,606 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub boundedInt() {
+    list<int> values = (1, 2, 3, 4);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+float sub boundedFloat() {
+    list<float> values = (1.5, 2.5, 3.5);
+    float total = 0.0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub boundedBool() {
+    list<bool> values = (True, False, True);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub boundedString() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i] !== \"\") {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub boundedStringSizePseudo() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i].size();
+    }
+    return total;
+}
+
+int sub boundedStringContainsPseudo() {
+    list<string> values = (\"alpha\", \"beta\", \"gamma\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i].contains(\"ta\")) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub boundedStringFamilyPseudo() {
+    list<string> values = (\"alpha\", \"beta\", \"gamma\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i].startsWith(\"a\") ? 1 : 0;
+        total += values[i].endsWith(\"a\") ? 1 : 0;
+        total += values[i].find(\"m\");
+        total += values[i].substr(1).size();
+    }
+    return total;
+}
+
+int sub parameterStringPseudo(list<string> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i].size();
+        if (values[i].contains(\"b\")) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+string sub sparseStringPseudo(list<string> values) {
+    for (int i = 0; i < values.size(); ++i) {
+        values[i].contains(\"b\");
+    }
+    return \"NONE\";
+}
+
+string sub sparseStringPseudoError(list<string> values) {
+    try {
+        return sparseStringPseudo(values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+nothing sub appendString(reference<list<string>> values) {
+    values += \"x\";
+}
+
+int sub mutatedStringPseudo() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[0] = values[0];
+        total += values[i].size();
+    }
+    return total;
+}
+
+int sub aliasedStringPseudo() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int bound = values.size();
+    int total = 0;
+    for (int i = 0; i < bound; ++i) {
+        appendString(\\values);
+        total += values[i].size();
+    }
+    return total;
+}
+
+int sub parameterInt(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub parameterBigInt(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+float sub parameterFloat(list<float> values) {
+    float total = 0.0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub parameterBool(list<bool> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub parameterString(list<string> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+string sub escapingString(list<string> values) {
+    string result = \"\";
+    for (int i = 0; i < values.size(); ++i) {
+        result = values[i];
+    }
+    return result;
+}
+
+int sub optionalParameter(*list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub mutatedParameter(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[0] = values[0];
+        total += values[i];
+    }
+    return total;
+}
+
+int sub removedParameter(list<int> values) {
+    remove values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub cachedBoundInt() {
+    list<int> values = (4, 5, 6);
+    int bound = values.size();
+    int total = 0;
+    for (int i = 0; i < bound; ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+float sub cachedBoundFloat() {
+    list<float> values = (1.25, 2.75);
+    int bound = values.size();
+    float total = 0.0;
+    int i = 0;
+    while (i < bound) {
+        total += values[i];
+        ++i;
+    }
+    return total;
+}
+
+int sub inclusiveBound() {
+    list<int> values = (1, 2, 3);
+    int total = 0;
+    for (int i = 0; i <= values.size() - 1; ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub affineForwardInt() {
+    list<int> values = (1, 2, 3, 4);
+    int total = 0;
+    for (int i = 0; i < values.size() - 1; ++i) {
+        total += values[i + 1];
+    }
+    return total;
+}
+
+int sub affineBackwardInt() {
+    list<int> values = (1, 2, 3, 4);
+    int total = 0;
+    for (int i = 1; i < values.size(); ++i) {
+        total += values[i - 1];
+    }
+    return total;
+}
+
+int sub stridedForwardInt() {
+    list<int> values = (1, 2, 3, 4, 5);
+    int total = 0;
+    for (int i = 0; i < values.size(); i += 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub stridedForwardString() {
+    list<string> values = (\"a\", \"bb\", \"ccc\", \"dddd\");
+    int total = 0;
+    for (int i = 1; i < values.size(); i += 2) {
+        if (values[i] !== \"\") {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub reverseStridedInt() {
+    list<int> values = (1, 2, 3, 4, 5);
+    int total = 0;
+    for (int i = values.size() - 1; i >= 0; i -= 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub parameterStridedInt(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); i += 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+auto sub unsafeStridedOverflow() {
+    list<int> values = (1, 2);
+    auto last;
+    for (int i = 1; i < values.size();
+            i += 9223372036854775807) {
+        last = values[i];
+    }
+    return last;
+}
+
+int sub swappedBoundInt() {
+    list<int> values = (1, 2, 3);
+    int total = 0;
+    for (int i = 0; values.size() > i; ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub reverseInt() {
+    list<int> values = (1, 2, 3);
+    int total = 0;
+    for (int i = values.size() - 1; i >= 0; --i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub reverseString() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int total = 0;
+    for (int i = values.size() - 1; i >= 0; --i) {
+        if (values[i] !== \"\") {
+            ++total;
+        }
+    }
+    return total;
+}
+
+auto sub negativeStart() {
+    list<int> values = (5, 6);
+    auto first;
+    for (int i = -1; i < values.size(); ++i) {
+        if (i == -1) {
+            first = values[i];
+        }
+    }
+    return first;
+}
+
+auto sub affinePastEnd() {
+    list<int> values = (1, 2, 3);
+    auto last;
+    for (int i = 0; i < values.size() - 1; ++i) {
+        last = values[i + 2];
+    }
+    return last;
+}
+
+auto sub affineBeforeStart() {
+    list<int> values = (1, 2, 3);
+    auto first;
+    for (int i = 0; i < values.size(); ++i) {
+        if (i == 0) {
+            first = values[i - 1];
+        }
+    }
+    return first;
+}
+
+auto sub reversePastEnd() {
+    list<int> values = (1, 2, 3);
+    auto first;
+    for (int i = values.size(); i >= 0; --i) {
+        if (i == values.size()) {
+            first = values[i];
+        }
+    }
+    return first;
+}
+
+auto sub advancedBeforeRead() {
+    list<int> values = (1, 2, 3);
+    auto last;
+    int i = 0;
+    while (i < values.size()) {
+        ++i;
+        last = values[i];
+    }
+    return last;
+}
+
+int sub reverseMutatedList() {
+    list<int> values = (1, 2, 3);
+    int total = 0;
+    for (int i = values.size() - 1; i >= 0; --i) {
+        values[0] = values[0];
+        total += values[i];
+    }
+    return total;
+}
+
+int sub mutatedList() {
+    list<int> values = (7, 8);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[0] = values[0];
+        total += values[i];
+    }
+    return total;
+}
+
+int sub maybeAssigned(bool assign_value) {
+    *list<int> values;
+    if (assign_value) {
+        values = (9, 10);
+    }
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub removedList() {
+    list<int> values = (11, 12);
+    remove values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub deletedList() {
+    list<int> values = (13, 14);
+    delete values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+auto sub outOfRange() {
+    list<int> values = (15, 16);
+    return values[values.size()];
+}
+
+auto sub oversizedCachedBound() {
+    list<int> values = (17, 18);
+    int bound = values.size() + 1;
+    auto last;
+    for (int i = 0; i < bound; ++i) {
+        last = values[i];
+    }
+    return last;
+}
+
+auto sub reassignedCachedBound() {
+    list<int> values = (19, 20);
+    int bound = values.size();
+    ++bound;
+    auto last;
+    for (int i = 0; i < bound; ++i) {
+        last = values[i];
+    }
+    return last;
+}
+
+auto sub staleCachedBound() {
+    list<int> values = (21, 22);
+    int bound = values.size();
+    values = ();
+    auto last;
+    for (int i = 0; i < bound; ++i) {
+        last = values[i];
+    }
+    return last;
+}
+
+list<int> sparse_int = ();
+sparse_int[2] = 7;
+list<float> sparse_float = ();
+sparse_float[2] = 2.5;
+list<bool> sparse_bool = ();
+sparse_bool[2] = True;
+list<string> sparse_string = ();
+sparse_string[2] = \"abc\";
+
+printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y:%d:%.1f:%d:%d:%d:%d:%d:%.1f:%d:%d:%d:%d:%s:%d:%d\\n\", boundedInt(),
+    boundedFloat(), cachedBoundInt(), cachedBoundFloat(), inclusiveBound(), negativeStart(), mutatedList(),
+    maybeAssigned(False), removedList(), deletedList(), outOfRange(), oversizedCachedBound(),
+    reassignedCachedBound(), staleCachedBound(), parameterInt((1, 2, 3)), parameterFloat((1.5, 2.5)),
+    optionalParameter(NOTHING), mutatedParameter((4, 5)), removedParameter((6, 7)),
+    parameterBigInt((281474976710656, 3)), parameterInt(sparse_int), parameterFloat(sparse_float), boundedBool(),
+    boundedString(), parameterBool((True, False, True)), parameterString((\"ab\", \"cde\")), escapingString((\"x\", \"last\")),
+    parameterBool(sparse_bool), parameterString(sparse_string));
+printf(\"broader:%d:%d:%d:%d:%d:%y:%y:%y:%y:%d:%d:%d:%d:%d\\n\",
+    affineForwardInt(), affineBackwardInt(), swappedBoundInt(), reverseInt(), reverseString(),
+    affinePastEnd(), affineBeforeStart(), reversePastEnd(), advancedBeforeRead(), reverseMutatedList(),
+    stridedForwardInt(), stridedForwardString(), reverseStridedInt(),
+    parameterStridedInt((1, 2, 3, 4, 5)));
+printf(\"string-pseudo:%d:%d:%d:%s:%d:%d:%d\\n\", boundedStringSizePseudo(),
+    boundedStringContainsPseudo(), boundedStringFamilyPseudo(),
+    sparseStringPseudoError(sparse_string),
+    parameterStringPseudo((\"a\", \"bb\", \"ccc\")), mutatedStringPseudo(),
+    aliasedStringPseudo());
+";
+
+string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null:6:4.0:0:9:0:281474976710659:7:2.5:2:3:2:2:last:1:1\n"
+    + "broader:9:6:6:6:3:null:3:null:null:6:9:2:9:9\n"
+    + "string-pseudo:6:1:15:PSEUDO-METHOD-DOES-NOT-EXIST:7:6:6\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: boundedFloat:.*bounded-list=1/
+        || stats !~ /IR-OPT: cachedBoundInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: cachedBoundFloat:.*bounded-list=1/
+        || stats !~ /IR-OPT: inclusiveBound:.*bounded-list=1/
+        || stats !~ /IR-OPT: affineForwardInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: affineBackwardInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: stridedForwardInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: stridedForwardString:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: reverseStridedInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: swappedBoundInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: reverseInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: reverseString:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: parameterInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterBigInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterFloat:.*bounded-list=1/
+        || stats !~ /IR-OPT: boundedBool:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: boundedString:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: boundedStringSizePseudo:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: boundedStringContainsPseudo:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: boundedStringFamilyPseudo:.*bounded-list=4.*boxed-direct=4/
+        || stats !~ /IR-OPT: parameterBool:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: parameterString:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: parameterStringPseudo:.*bounded-list=2.*boxed-direct=2/
+        || stats !~ /IR-OPT: sparseStringPseudo:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: escapingString:.*bounded-list=1.*boxed-direct=0/) {
+    printf("missing bounded typed-list optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
+        || stats !~ /IR-OPT: affinePastEnd:.*bounded-list=0/
+        || stats !~ /IR-OPT: affineBeforeStart:.*bounded-list=0/
+        || stats !~ /IR-OPT: reversePastEnd:.*bounded-list=0/
+        || stats !~ /IR-OPT: advancedBeforeRead:.*bounded-list=0/
+        || stats !~ /IR-OPT: reverseMutatedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: mutatedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: maybeAssigned:.*bounded-list=0/
+        || stats !~ /IR-OPT: removedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: deletedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: outOfRange:.*bounded-list=0/
+        || stats !~ /IR-OPT: oversizedCachedBound:.*bounded-list=0/
+        || stats !~ /IR-OPT: reassignedCachedBound:.*bounded-list=0/
+        || stats !~ /IR-OPT: staleCachedBound:.*bounded-list=0/
+        || stats !~ /IR-OPT: parameterStridedInt:.*bounded-list=0/
+        || stats !~ /IR-OPT: unsafeStridedOverflow:.*bounded-list=0/
+        || stats !~ /IR-OPT: optionalParameter:.*bounded-list=0/
+        || stats !~ /IR-OPT: mutatedParameter:.*bounded-list=0/
+        || stats !~ /IR-OPT: removedParameter:.*bounded-list=0/
+        || stats !~ /IR-OPT: mutatedStringPseudo:.*bounded-list=0/
+        || stats !~ /IR-OPT: aliasedStringPseudo:.*bounded-list=0/) {
+    printf("unsafe bounded typed-list selection:\n%s", stats);
+    exit(2);
+}

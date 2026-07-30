@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub constantBranches(int value) {
+    int result = 0;
+    if (True) {
+        int selected = value + 1;
+        result += selected;
+    } else {
+        int skipped = value + 100;
+        result += skipped;
+    }
+    if (False) {
+        int skipped = value + 200;
+        result += skipped;
+    } else {
+        int selected = value + 2;
+        result += selected;
+    }
+    int selected = True ? value + 3 : value + 300;
+    int selected_false = False ? value + 400 : value + 4;
+    return result + selected + selected_false;
+}
+
+printf(\"%d\\n\", constantBranches(5));
+";
+
+string script_path = "/tmp/qore-ir-constant-branch-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-constant-branch-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "30
+";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}

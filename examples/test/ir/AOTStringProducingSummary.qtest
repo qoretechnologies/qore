@@ -1,0 +1,460 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub providerCode() {
+    return "string sub concatPair(string left, string right) {
+    return left + right;
+}
+
+string sub concatTriple(string first, string second, string third) {
+    return first + second + third;
+}
+
+string sub convertInt(int value) {
+    return string(value);
+}
+
+string sub sliceString(string value, int start, int length) {
+    return value.substr(start, length);
+}
+
+string sub formatRecord(string prefix, int value, string suffix) {
+    return prefix + \":\" + string(value) + \":\" + suffix;
+}
+
+string sub wideStringExpression(string left, int value, string right) {
+    return \"<\" + left + \":\" + string(value) + \":\" + right + \":\"
+        + left + \":\" + right + \":\" + string(value) + \">\";
+}
+
+string sub wrappedPair(string left, string right) {
+    return concatPair(left, right);
+}
+
+string sub wrappedPairTwice(string left, string right) {
+    return wrappedPair(left, right);
+}
+
+string sub wrappedRecord(string prefix, int value, string suffix) {
+    return formatRecord(prefix, value, suffix);
+}
+
+string sub unsafeNestedRecord(string prefix, int value, string suffix) {
+    return concatPair(\"[\", formatRecord(prefix, value, suffix));
+}
+
+int wrapper_effects;
+
+string sub effectfulWrapper(string left, string right) {
+    ++wrapper_effects;
+    return concatPair(left, right);
+}
+
+string sub recursiveWrapper(string value, int depth) {
+    return depth ? recursiveWrapper(value, depth - 1)
+        : concatPair(value, \"!\");
+}
+
+final class ComposedStringFactory {
+    static string joinStatic(string left, string right) {
+        return left + right;
+    }
+
+    static string wrapStatic(string left, string right) {
+        return ComposedStringFactory::joinStatic(left, right);
+    }
+
+    string joinInstance(string left, string right) {
+        return left + right;
+    }
+
+    string wrapInstance(string left, string right) {
+        return self.joinInstance(left, right);
+    }
+}
+
+string sub concatSlice(string left, string right, int start, int length) {
+    return (left + right).substr(start, length);
+}
+
+string sub concatSliceTail(string left, string right, int start) {
+    return (left + right).substr(start);
+}
+
+string sub optionalConcat(*string left, *string right) {
+    return left + right;
+}
+
+string sub optionalConvert(*int value) {
+    return string(value);
+}
+
+string sub formatHashRecord(hash<string, string> row, int value) {
+    return row.first + \":\" + row.second + \":\" + string(value);
+}
+
+string sub wrappedHashRecord(hash<string, string> row, int value) {
+    return formatHashRecord(row, value);
+}
+
+string sub wrappedHashRecordTwice(hash<string, string> row, int value) {
+    return wrappedHashRecord(row, value);
+}
+
+string sub mergeHashRecords(hash<string, string> left,
+        hash<string, string> right) {
+    return left.first + \":\" + right.second;
+}
+";
+}
+
+string sub consumerCode() {
+    return "int sub main() {
+    string missing;
+    bool missing_rejected = False;
+    try {
+        concatPair(missing, \"tail\").size();
+    } catch (hash<auto> ex) {
+        missing_rejected = True;
+    }
+    string removed = \"old\";
+    remove removed;
+    bool removed_rejected = False;
+    try {
+        concatTriple(\"head\", removed, \"tail\").length();
+    } catch (hash<auto> ex) {
+        removed_rejected = True;
+    }
+    int missing_int;
+    bool missing_int_rejected = False;
+    try {
+        convertInt(missing_int);
+    } catch (hash<auto> ex) {
+        missing_int_rejected = True;
+    }
+    bool composed_missing_rejected = False;
+    try {
+        formatRecord(\"head\", missing_int, \"tail\").size();
+    } catch (hash<auto> ex) {
+        composed_missing_rejected = True;
+    }
+    bool composed_removed_rejected = False;
+    try {
+        formatRecord(removed, 1, \"tail\").length();
+    } catch (hash<auto> ex) {
+        composed_removed_rejected = True;
+    }
+    bool wrapped_missing_rejected = False;
+    try {
+        wrappedPairTwice(missing, \"tail\").size();
+    } catch (hash<auto> ex) {
+        wrapped_missing_rejected = True;
+    }
+
+    string utf8 = \"Dvo\\u0159\\u00e1k\";
+    string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
+    bool encoding_rejected = False;
+    try {
+        concatPair(convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\").size();
+    } catch (hash<auto> ex) {
+        encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    bool composed_encoding_rejected = False;
+    try {
+        formatRecord(convert_encoding(\"ascii\", \"US-ASCII\"), 1, \"\u00df\").length();
+    } catch (hash<auto> ex) {
+        composed_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    bool wrapped_encoding_rejected = False;
+    try {
+        wrappedRecord(convert_encoding(\"ascii\", \"US-ASCII\"), 1, \"\u00df\").length();
+    } catch (hash<auto> ex) {
+        wrapped_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    bool unsafe_nested_encoding_rejected = False;
+    try {
+        unsafeNestedRecord(convert_encoding(\"ascii\", \"US-ASCII\"), 1, \"\u00df\").length();
+    } catch (hash<auto> ex) {
+        unsafe_nested_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    bool concat_slice_encoding_rejected = False;
+    try {
+        concatSlice(convert_encoding(\"ascii\", \"US-ASCII\"), \"\u00df\", 0, 1);
+    } catch (hash<auto> ex) {
+        concat_slice_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    *string optional_string;
+    *int optional_int;
+    ComposedStringFactory factory();
+    printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%y|%y|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d\\n\",
+        concatPair(\"left\", \"right\"),
+        concatPair(latin1, convert_encoding(\" d\\u00e9j\\u00e0\", \"ISO-8859-1\")),
+        concatTriple(\"one\", \"two\", \"three\"),
+        convertInt(9223372036854775807),
+        convertInt(-9223372036854775807 - 1),
+        sliceString(utf8, 1, 3),
+        sliceString(latin1, 1, 3),
+        formatRecord(\"item\", 42, \"done\"),
+        concatSlice(utf8, \" tail\", 1, 3),
+        concatSliceTail(\"abcdef\", \"gh\", 5),
+        wrappedPair(\"wrapped-\", \"once\"),
+        wrappedPairTwice(\"wrapped-\", \"twice\"),
+        wrappedRecord(\"item\", 42, \"done\"),
+        ComposedStringFactory::wrapStatic(\"static-\", \"value\"),
+        factory.wrapInstance(\"instance-\", \"value\"),
+        recursiveWrapper(\"recursive\", 2),
+        optionalConcat(optional_string, \"tail\"),
+        optionalConvert(optional_int),
+        missing_rejected, removed_rejected, missing_int_rejected,
+        composed_missing_rejected, composed_removed_rejected, wrapped_missing_rejected,
+        encoding_rejected, composed_encoding_rejected, wrapped_encoding_rejected,
+        unsafe_nested_encoding_rejected, concat_slice_encoding_rejected,
+        effectfulWrapper(\"effect-\", \"value\").size(),
+        concatPair(\"left\", \"right\").size(),
+        concatPair(utf8, \"\").size(),
+        concatPair(utf8, \"\").length(),
+        concatTriple(\"one\", \"two\", \"three\").length(),
+        convertInt(9223372036854775807).size(),
+        convertInt(-9223372036854775807 - 1).length());
+    printf(\"wide:%s:%d:%d\\n\",
+        wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\"),
+        wideStringExpression(\"left\", 42, \"right\").size(),
+        wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\").length());
+    hash<string, string> hash_present = {
+        \"first\": \"Dvo\u0159\u00e1k\", \"second\": \"Smetana\"};
+    hash<string, string> hash_missing = {\"first\": \"Dvo\u0159\u00e1k\"};
+    hash<string, string> hash_missing_first = {\"second\": \"Smetana\"};
+    hash<string, string> hash_removed = hash_present;
+    remove hash_removed.second;
+    hash<string, string> hash_unassigned;
+    bool hash_unassigned_rejected = False;
+    try {
+        formatHashRecord(hash_unassigned, 42);
+    } catch (hash<auto> ex) {
+        hash_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, string> hash_removed_lvalue = hash_present;
+    remove hash_removed_lvalue;
+    bool hash_removed_lvalue_rejected = False;
+    try {
+        formatHashRecord(hash_removed_lvalue, 42);
+    } catch (hash<auto> ex) {
+        hash_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool hash_encoding_rejected = False;
+    try {
+        wrappedHashRecordTwice({
+            \"first\": convert_encoding(\"ascii\", \"US-ASCII\"),
+            \"second\": \"\u00df\"}, 42).length();
+    } catch (hash<auto> ex) {
+        hash_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    printf(\"hash:%s:%s:%s:%s:%s:%d:%d:%d\\n\",
+        formatHashRecord(hash_present, 42),
+        formatHashRecord(hash_missing, 42),
+        formatHashRecord(hash_removed, 42),
+        wrappedHashRecord(hash_present, 42),
+        wrappedHashRecordTwice(hash_present, 42),
+        hash_unassigned_rejected, hash_removed_lvalue_rejected,
+        hash_encoding_rejected);
+    printf(\"hash-consumers:%d:%d:%d:%d:%y:%y:%y:%d:%d:%s\\n\",
+        wrappedHashRecordTwice(hash_present, 42).size(),
+        wrappedHashRecordTwice(hash_present, 42).length(),
+        wrappedHashRecordTwice(hash_missing, 42).size(),
+        wrappedHashRecordTwice(hash_removed, 42).length(),
+        wrappedHashRecordTwice(hash_present, 42).startsWith(\"Dvo\"),
+        wrappedHashRecordTwice(hash_present, 42).endsWith(\"42\"),
+        wrappedHashRecordTwice(hash_present, 42).contains(\"Smetana\"),
+        wrappedHashRecordTwice(hash_present, 42).find(\":\"),
+        wrappedHashRecordTwice(hash_present, 42).rfind(\":\"),
+        wrappedHashRecordTwice(hash_present, 42).substr(1, 3));
+    bool multi_hash_unassigned_rejected = False;
+    try {
+        mergeHashRecords(hash_present, hash_unassigned).size();
+    } catch (hash<auto> ex) {
+        multi_hash_unassigned_rejected =
+            ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+                || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"multi-hash:%d:%d:%d:%d:%d\\n\",
+        mergeHashRecords(hash_present, hash_present).size(),
+        mergeHashRecords(hash_missing_first, hash_present).size(),
+        mergeHashRecords(hash_present, hash_missing).size(),
+        mergeHashRecords(hash_present, hash_removed).size(),
+        multi_hash_unassigned_rejected);
+    return 0;
+}
+";
+}
+
+string root = "/tmp/qore-aot-string-producing-summary-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+string hash_disabled_dir = root + "/hash-disabled";
+string borrowed_disabled_dir = root + "/borrowed-disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+mkdir(hash_disabled_dir);
+mkdir(borrowed_disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write("%modern\n\n" + providerCode());
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write("%modern\n\n" + consumerCode());
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write("%modern\n\n" + providerCode() + consumerCode() + "\nmain();\n");
+combined_file.close();
+
+string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s", libqore_dir, qcc_bin, provider_qo));
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"35\"/)
+        || !(provider_index =~ /\"qore_path\": \"concatPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 9/)
+        || !(provider_index =~ /\"qore_path\": \"concatTriple\(string,string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 10/)
+        || !(provider_index =~ /\"qore_path\": \"convertInt\(int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 11/)
+        || !(provider_index =~ /\"qore_path\": \"sliceString\(string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 8/)
+        || !(provider_index =~ /\"qore_path\": \"formatRecord\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"wideStringExpression\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedPairTwice\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedRecord\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"ComposedStringFactory::wrapStatic\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"ComposedStringFactory::wrapInstance\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"concatSlice\(string,string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"concatSliceTail\(string,string,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"formatHashRecord\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedHashRecord\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedHashRecordTwice\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"mergeHashRecords\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"param\": 0[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"param\": 1[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"optionalConcat\(\*string,\*string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
+        || !(provider_index =~ /\"qore_path\": \"optionalConvert\(\*int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
+        || provider_index =~ /\"qore_path\": \"effectfulWrapper\(string,string\)\"[^\n]*\"string_expression_nodes\": \[\{/
+        || provider_index =~ /\"qore_path\": \"unsafeNestedRecord\(string,int,string\)\"[^\n]*\"string_expression_nodes\": \[\{/
+        || provider_index =~ /\"qore_path\": \"recursiveWrapper\(string,int\)\"[^\n]*\"string_expression_nodes\": \[\{/) {
+    printf("unexpected string-producing metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string hash_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, hash_disabled_dir, consumer_path));
+string borrowed_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_BORROWED_HASH_STRING_VALUES=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, borrowed_disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+string hash_disabled_qo = hash_disabled_dir + "/consumer.qo";
+string borrowed_disabled_qo = borrowed_disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)
+        || !is_file(hash_disabled_qo)
+        || !is_file(borrowed_disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_compile, disabled_compile, hash_disabled_compile,
+        borrowed_disabled_compile);
+    exit(2);
+}
+if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
+    printf("string producer-consumer fusion was not applied:\n%s",
+        enabled_compile);
+    exit(2);
+}
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string hash_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", hash_disabled_qo));
+string borrowed_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", borrowed_disabled_qo));
+if (enabled_undefined !~ /qore_rt_hash_keys_string_borrowed_prehashed/
+        || enabled_undefined =~ /qore_rt_hash_keys_string_prehashed/
+        || hash_disabled_undefined =~ /qore_rt_hash_keys_string_(borrowed_)?prehashed/
+        || borrowed_disabled_undefined !~ /qore_rt_hash_keys_string_prehashed/
+        || borrowed_disabled_undefined =~ /qore_rt_hash_keys_string_borrowed_prehashed/) {
+    printf("hash string expression import mismatch:\nenabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_undefined, hash_disabled_undefined,
+        borrowed_disabled_undefined);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string hash_disabled_exe = root + "/hash-disabled-aot";
+string borrowed_disabled_exe = root + "/borrowed-disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+string hash_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, hash_disabled_exe, provider_qo, hash_disabled_qo));
+string borrowed_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, borrowed_disabled_exe, provider_qo,
+    borrowed_disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)
+        || !is_file(hash_disabled_exe)
+        || !is_file(borrowed_disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
+        enabled_link, disabled_link, hash_disabled_link,
+        borrowed_disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, enabled_exe));
+string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe));
+string hash_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, hash_disabled_exe));
+string borrowed_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, borrowed_disabled_exe));
+if (ast != enabled || ast != disabled || ast != hash_disabled
+        || ast != borrowed_disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%sBorrowed disabled:\n%s",
+        ast, enabled, disabled, hash_disabled, borrowed_disabled);
+    exit(2);
+}

@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+string root = "/tmp/qore-aot-stored-capture-cache-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/stored-capture.qr";
+string runner_path = root + "/stored-capture-runner.q";
+string source = "%modern
+
+int sub stableCaptures(int iterations, int base, float scale, bool positive) {
+    code<int(int)> transform = int sub(int value) {
+        int result = int(float(value + base) * scale);
+        return positive ? result : -result;
+    };
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += transform(i % 100);
+    }
+    return result;
+}
+
+int sub reassignedCapture(int base) {
+    code<int(int)> transform = int sub(int value) {
+        return value + base;
+    };
+    base = 40;
+    return transform(2);
+}
+
+bool sub unassignedCaptureFails() {
+    int base;
+    code<int(int)> transform = int sub(int value) {
+        return value + base;
+    };
+    try {
+        transform(2);
+    } catch (hash<auto> ex) {
+        return True;
+    }
+    return False;
+}
+
+int sub main() {
+    printf(\"%d:%d:%d:%d\\n\", stableCaptures(1000, 7, 1.5, True),
+        stableCaptures(1000, 7, 1.5, False), reassignedCapture(3),
+        unassignedCaptureFails());
+    return 0;
+}
+";
+
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+source_file.write(source);
+source_file.close();
+File runner_file();
+runner_file.open2(runner_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+runner_file.write(source + "\nmain();\n");
+runner_file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, runner_path));
+string enabled_compile = backquote(sprintf(
+    "%s %s -O3 -c --output-dir=%s %s 2>&1",
+    env, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_STORED_CLOSURE_FUSION=1 %s -O3 -c --output-dir=%s %s 2>&1",
+    env, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/stored-capture.qo";
+string disabled_qo = disabled_dir + "/stored-capture.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf("%s %s -O3 -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, enabled_qo));
+string disabled_link = backquote(sprintf("%s %s -O3 -o %s %s 2>&1",
+    env, qcc_bin, disabled_exe, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

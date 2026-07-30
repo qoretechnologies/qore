@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int calls;
+
+int sub addOne(int value) {
+    return value + 1;
+}
+
+int sub addTwo(int left, int right) {
+    return left + right;
+}
+
+int sub subtract(int left, int right) {
+    return left - right;
+}
+
+int sub fromTen(int value) {
+    return 10 - value;
+}
+
+int sub multiply(int left, int right) {
+    return left * right;
+}
+
+int sub bitAnd(int left, int right) {
+    return left & right;
+}
+
+int sub bitOr(int left, int right) {
+    return left | right;
+}
+
+int sub bitXor(int left, int right) {
+    return left ^ right;
+}
+
+bool sub equal(int left, int right) {
+    return left == right;
+}
+
+bool sub notEqual(int left, int right) {
+    return left != right;
+}
+
+bool sub lessThan(int left, int right) {
+    return left < right;
+}
+
+bool sub lessOrEqual(int left, int right) {
+    return left <= right;
+}
+
+bool sub greaterThan(int left, int right) {
+    return left > right;
+}
+
+bool sub greaterOrEqual(int left, int right) {
+    return left >= right;
+}
+
+int sub intCompare(int left, int right) {
+    return left <=> right;
+}
+
+float sub addFloat(float left, float right) {
+    return left + right;
+}
+
+float sub subtractFloat(float left, float right) {
+    return left - right;
+}
+
+float sub multiplyFloat(float left, float right) {
+    return left * right;
+}
+
+bool sub floatLess(float left, float right) {
+    return left < right;
+}
+
+bool sub floatGreaterOrEqual(float left, float right) {
+    return left >= right;
+}
+
+int sub byteSize(string value) {
+    return value.size();
+}
+
+int sub charLength(string value) {
+    return value.length();
+}
+
+auto sub addDynamic(auto left, auto right) {
+    return left + right;
+}
+
+auto sub subtractDynamic(auto left, auto right) {
+    return left - right;
+}
+
+auto sub multiplyDynamic(auto left, auto right) {
+    return left * right;
+}
+
+bool sub lessDynamic(auto left, auto right) {
+    return left < right;
+}
+
+auto sub compareDynamic(auto left, auto right) {
+    return left <=> right;
+}
+
+auto sub bitAndDynamic(auto left, auto right) {
+    return left & right;
+}
+
+auto sub bitOrDynamic(auto left, auto right) {
+    return left | right;
+}
+
+auto sub bitXorDynamic(auto left, auto right) {
+    return left ^ right;
+}
+
+bool sub equalDynamic(auto left, auto right) {
+    return left == right;
+}
+
+bool sub notEqualDynamic(auto left, auto right) {
+    return left != right;
+}
+
+bool sub lessOrEqualDynamic(auto left, auto right) {
+    return left <= right;
+}
+
+bool sub greaterDynamic(auto left, auto right) {
+    return left > right;
+}
+
+bool sub greaterOrEqualDynamic(auto left, auto right) {
+    return left >= right;
+}
+
+int sub addOneWithEffect(int value) {
+    ++calls;
+    return value + 1;
+}
+
+int sub conditionalAdd(int value) {
+    if (value > 0) {
+        return value + 1;
+    }
+    return value;
+}
+
+int unassigned;
+float unassigned_float;
+string unassigned_string;
+int removed = 4;
+remove removed;
+int deleted = 5;
+delete deleted;
+
+printf(\"values:%d:%d:%d:%d:%d\\n\", addOne(4), addOne(-2),
+    addOne(9223372036854775807), addOneWithEffect(8), conditionalAdd(3));
+printf(\"arithmetic:%d:%d:%d:%d\\n\", addTwo(9, 4), subtract(9, 4),
+    fromTen(4), multiply(9, 4));
+printf(\"bitwise:%d:%d:%d\\n\", bitAnd(13, 6), bitOr(13, 6), bitXor(13, 6));
+printf(\"compare:%y:%y:%y:%y:%y:%y:%d\\n\", equal(4, 4), notEqual(4, 5),
+    lessThan(4, 5), lessOrEqual(5, 5), greaterThan(6, 5), greaterOrEqual(5, 5),
+    intCompare(4, 5));
+printf(\"float:%.2f:%.2f:%.2f:%y:%y\\n\", addFloat(1.5, 2.25),
+    subtractFloat(5.5, 2.25), multiplyFloat(1.5, 2.0), floatLess(1.5, 2.0),
+    floatGreaterOrEqual(2.0, 2.0));
+printf(\"string:%d:%d:%d:%d\\n\", byteSize(\"abcdef\"), charLength(\"abcdef\"),
+    byteSize(\"Příliš\"), charLength(\"Příliš\"));
+printf(\"dynamic-arithmetic:%d:%d:%d:%.2f:%.2f:%.2f\\n\", addDynamic(4, 5),
+    subtractDynamic(9, 4), multiplyDynamic(9, 4), addDynamic(1.25, 2.5),
+    subtractDynamic(5.5, 2.25), multiplyDynamic(1.5, 2.0));
+printf(\"dynamic-bitwise:%d:%d:%d\\n\", bitAndDynamic(13, 6),
+    bitOrDynamic(13, 6), bitXorDynamic(13, 6));
+printf(\"dynamic-compare:%y:%y:%y:%y:%y:%y:%d\\n\", equalDynamic(4, 4),
+    notEqualDynamic(4, 5), lessDynamic(4, 5), lessOrEqualDynamic(5, 5),
+    greaterDynamic(6, 5), greaterOrEqualDynamic(5, 5), compareDynamic(4, 5));
+printf(\"dynamic-float-compare:%y:%y:%y:%y:%y:%y\\n\", equalDynamic(1.5, 1.5),
+    notEqualDynamic(1.5, 2.0), lessDynamic(1.5, 2.0), lessOrEqualDynamic(2.0, 2.0),
+    greaterDynamic(2.0, 1.5), greaterOrEqualDynamic(2.0, 2.0));
+printf(\"dynamic-fallback:%s:%.2f:%s\\n\", addDynamic(\"a\", \"b\"),
+    addDynamic(1, 2.5), addDynamic(1, unassigned));
+printf(\"dynamic-edges:%d:%y:%y\\n\", addDynamic(9223372036854775807, 1),
+    equalDynamic(@nan@, @nan@), lessDynamic(@nan@, 1.0));
+try {
+    compareDynamic(@nan@, 1.0);
+    printf(\"dynamic-nan-compare:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"dynamic-nan-compare:%s\\n\", ex.err);
+}
+printf(\"effects:%d\\n\", calls);
+foreach hash<auto> test in ((\"name\": \"unassigned\", \"value\": unassigned),
+        (\"name\": \"removed\", \"value\": removed),
+        (\"name\": \"deleted\", \"value\": deleted)) {
+    try {
+        addOne(test.value);
+        printf(\"%s:accepted\\n\", test.name);
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s:%s\\n\", test.name, ex.err);
+    }
+}
+try {
+    addTwo(1, unassigned);
+    printf(\"binary-unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"binary-unassigned:rejected\\n\");
+}
+try {
+    addFloat(1.0, unassigned_float);
+    printf(\"float-unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"float-unassigned:rejected\\n\");
+}
+try {
+    byteSize(unassigned_string);
+    printf(\"string-unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"string-unassigned:rejected\\n\");
+}
+";
+
+string script_path = "/tmp/qore-ir-native-int-leaf-inline-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode, bool disabled = False) {
+    string disable = disabled ? "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 " : "";
+    return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        disable, libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-native-int-leaf-inline-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = runMode("ast");
+if (!expected.contains("values:5:-1:-9223372036854775808:9:4\n")
+        || !expected.contains("arithmetic:13:5:6:36\n")
+        || !expected.contains("bitwise:4:15:11\n")
+        || !expected.contains("compare:True:True:True:True:True:True:-1\n")
+        || !expected.contains("float:3.75:3.25:3.00:True:True\n")
+        || !expected.contains("string:6:6:9:6\n")
+        || !expected.contains("dynamic-arithmetic:9:5:36:3.75:3.25:3.00\n")
+        || !expected.contains("dynamic-bitwise:4:15:11\n")
+        || !expected.contains("dynamic-compare:True:True:True:True:True:True:-1\n")
+        || !expected.contains("dynamic-float-compare:True:True:True:True:True:True\n")
+        || !expected.contains("dynamic-fallback:ab:3.50:1\n")
+        || !expected.contains("dynamic-edges:-9223372036854775808:False:False\n")
+        || !expected.contains("dynamic-nan-compare:NAN-COMPARE-ERROR\n")
+        || !expected.contains("effects:1\n")
+        || !expected.contains("unassigned:RUNTIME-OVERLOAD-ERROR\n")
+        || !expected.contains("removed:RUNTIME-OVERLOAD-ERROR\n")
+        || !expected.contains("deleted:RUNTIME-OVERLOAD-ERROR\n")
+        || !expected.contains("binary-unassigned:rejected\n")
+        || !expected.contains("float-unassigned:rejected\n")
+        || !expected.contains("string-unassigned:rejected\n")) {
+    printf("unexpected AST baseline:\n%s", expected);
+    exit(2);
+}
+foreach hash<auto> test in (("mode": "ir", "disabled": True),
+        ("mode": "ir", "disabled": False), ("mode": "tiered", "disabled": False),
+        ("mode": "jit", "disabled": False)) {
+    string actual = runMode(test.mode, test.disabled);
+    if (actual != expected) {
+        printf("mismatch in %s%s\nexpected:\n%sactual:\n%s", test.mode,
+            test.disabled ? " (disabled)" : "", expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+bool sub simpleContains(string value, string pattern) {
+    return value.lwr().contains(pattern);
+}
+
+bool sub selectedContains(string value, string first, string second,
+        bool select_first) {
+    return value.lwr().contains(select_first ? first : second);
+}
+
+bool sub selectedEqual(string value, string first, string second,
+        bool select_first) {
+    return value.upr() == (select_first ? first : second);
+}
+
+int sub selectedFind(string value, string first, string second,
+        bool select_first, int offset) {
+    return value.lwr().find(
+        select_first ? first : second, offset);
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        result += simpleContains("A NEEDLE Z", "needle");
+        result += selectedContains(
+            "A NEEDLE Z", "needle", "missing", i % 2 == 0);
+        result += selectedEqual("needle", "NEEDLE", "MISSING", i % 2 == 0);
+        result += selectedFind(
+            "A NEEDLE Z", "needle", "missing", i % 2 == 0, 1);
+    }
+    printf("%d\n", result);
+    return 0;
+}
+
+main();

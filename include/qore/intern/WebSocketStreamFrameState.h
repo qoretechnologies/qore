@@ -84,7 +84,7 @@ class Queue;
 
     @since %Qore 3.0
 */
-class DLLLOCAL WebSocketStreamFrameState {
+class WebSocketStreamFrameState {
 public:
     //! Callback type for outgoing encoded frame bytes
     /** The callback takes ownership of the BinaryNode reference and must
@@ -109,8 +109,8 @@ public:
         @param is_server true for server-side (we receive masked frames from
             client, send unmasked to client); false for client-side.
     */
-    WebSocketStreamFrameState(Queue* msg_queue, SendCallback send_cb, bool is_server);
-    ~WebSocketStreamFrameState();
+    DLLLOCAL WebSocketStreamFrameState(Queue* msg_queue, SendCallback send_cb, bool is_server);
+    DLLLOCAL ~WebSocketStreamFrameState();
 
     //! Feeds raw stream bytes (decoded H2/H3 DATA payload) into the state machine
     /** Pushes any newly-completed messages to msg_queue and invokes the send
@@ -121,52 +121,52 @@ public:
         @return number of messages pushed to msg_queue during this call
                 (useful for dispatch-notification counters)
     */
-    int feedData(const void* data, size_t len);
+    DLLLOCAL int feedData(const void* data, size_t len);
 
     //! Returns and clears the messages-pushed counter
     /** For integration with AsyncIoController's `getAndClearItemsPushed()`
         dispatch path (mirrors HttpWebSocketPollOperationPriv).
     */
-    int getAndClearMessagesPushed();
+    DLLLOCAL int getAndClearMessagesPushed();
 
     //! Returns true if the remote peer has sent a CLOSE frame
-    bool peerClosed() const { return peer_closed; }
+    DLLLOCAL bool peerClosed() const { return peer_closed; }
 
     //! Close code from the peer's CLOSE frame (only valid after peerClosed())
-    uint16_t getCloseCode() const { return close_code; }
+    DLLLOCAL uint16_t getCloseCode() const { return close_code; }
 
     //! Close reason from the peer's CLOSE frame
-    const std::string& getCloseReason() const { return close_reason; }
+    DLLLOCAL const std::string& getCloseReason() const { return close_reason; }
 
     //! Returns true if an unrecoverable protocol error has been observed
-    bool hasError() const { return error_state; }
+    DLLLOCAL bool hasError() const { return error_state; }
 
     //! Error message (only valid after hasError())
-    const std::string& getErrorMessage() const { return error_msg; }
+    DLLLOCAL const std::string& getErrorMessage() const { return error_msg; }
 
     //! Sets the maximum per-message (post-reassembly) payload size in bytes
     /** Defaults to @ref WS_DEFAULT_MAX_FRAME_SIZE.  When exceeded, the
         state machine transitions to error and sends a close with code 1009.
     */
-    void setMaxMessageSize(size_t size) { max_message_size = size; }
+    DLLLOCAL void setMaxMessageSize(size_t size) { max_message_size = size; }
 
     //! Encodes and enqueues (via send callback) a text message from the caller
     /** Thread-safe: uses the send callback which the caller must make
         thread-safe on their side.
     */
-    void sendText(const char* text, size_t len);
+    DLLLOCAL void sendText(const char* text, size_t len);
 
     //! Encodes and enqueues a binary message from the caller
-    void sendBinary(const void* data, size_t len);
+    DLLLOCAL void sendBinary(const void* data, size_t len);
 
     //! Encodes and enqueues a ping from the caller
-    void sendPing(const void* data, size_t len);
+    DLLLOCAL void sendPing(const void* data, size_t len);
 
     //! Encodes and enqueues a close handshake initiation from the caller
     /** After calling this, further sends are suppressed and incoming
         frames will be processed until the peer's CLOSE is received.
     */
-    void sendClose(uint16_t code, const char* reason);
+    DLLLOCAL void sendClose(uint16_t code, const char* reason);
 
     //! Pushes a NOTHING sentinel to msg_queue to signal transport close
     /** Called from the transport layer (e.g. QuicSession::streamCloseCallback)
@@ -174,7 +174,7 @@ public:
         close handshake completed.  The handler uses the sentinel to detect
         stream termination alongside the normal "close" message kind.
     */
-    void pushCloseSentinel();
+    DLLLOCAL void pushCloseSentinel();
 
     //! Returns the (non-owning) msg_queue pointer
     /** Callers may use the pointer to push auxiliary entries (e.g., error
@@ -182,7 +182,7 @@ public:
         the typed frame hashes produced by the state machine itself.  The
         queue stays alive as long as the frame state does.
     */
-    Queue* getMsgQueue() const { return msg_queue; }
+    DLLLOCAL Queue* getMsgQueue() const { return msg_queue; }
 
 private:
     Queue* msg_queue;
@@ -204,11 +204,11 @@ private:
     std::string error_msg;
 
     //! Drains any complete frames from the decoder and dispatches them
-    int processFrames();
+    DLLLOCAL int processFrames();
 
     //! Handles a single decoded frame (control frames handled here;
     //! data frames passed to reassembler)
-    void handleFrame(WsFrame& frame);
+    DLLLOCAL void handleFrame(WsFrame& frame);
 
     //! Pushes a message hash {type, data, rsv1?, rsv2?, rsv3?, code?, reason?} to msg_queue
     /** For Text/Binary messages the rsv1/rsv2/rsv3 keys carry the RSV bits
@@ -225,15 +225,15 @@ private:
                         bit 1 = RSV2, bit 0 = RSV3) — only used for data frames
         @param code     close status code (Close only)
         @param reason   close reason string (Close only) */
-    void pushMessage(MessageKind kind, BinaryNode* payload /* ref transferred */,
+    DLLLOCAL void pushMessage(MessageKind kind, BinaryNode* payload /* ref transferred */,
         uint8_t rsv = 0, uint16_t code = 0, const char* reason = nullptr);
 
     //! Transitions to error state with the given message
-    void setError(const std::string& msg, uint16_t wire_code = WSCC_ProtocolError);
+    DLLLOCAL void setError(const std::string& msg, uint16_t wire_code = WSCC_ProtocolError);
 
     //! Non-copyable
-    WebSocketStreamFrameState(const WebSocketStreamFrameState&) = delete;
-    WebSocketStreamFrameState& operator=(const WebSocketStreamFrameState&) = delete;
+    DLLLOCAL WebSocketStreamFrameState(const WebSocketStreamFrameState&) = delete;
+    DLLLOCAL WebSocketStreamFrameState& operator=(const WebSocketStreamFrameState&) = delete;
 };
 
 #endif // _QORE_WEBSOCKETSTREAMFRAMESTATE_H

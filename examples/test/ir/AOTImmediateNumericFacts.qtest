@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub consume(auto value) {
+    return value;
+}
+
+int sub bounded(int value) {
+    return consume(value & 1023);
+}
+
+int sub boundedAdd(int value) {
+    return consume((value & 1023) + 17);
+}
+
+int sub boundedSub(int value) {
+    return consume((value & 1023) - 2048);
+}
+
+int sub boundedMul(int value) {
+    return consume((value & 1023) * 3);
+}
+
+int sub boundedOr(int value) {
+    return consume((value & 1023) | 2048);
+}
+
+int sub boundedXor(int value) {
+    return consume((value & 1023) ^ 255);
+}
+
+int sub boundedCmp(int value) {
+    return consume(value <=> 0);
+}
+
+int sub boundedPhi(int value, bool wide) {
+    int result = wide ? value & 2047 : value & 1023;
+    return consume(result);
+}
+
+int sub boundedModulo(int value) {
+    return consume(value % 1024);
+}
+
+int sub unbounded(int value) {
+    return consume(value | 9007199254740992);
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    bounded(9223372036854775807),
+    bounded(-9223372036854775807),
+    boundedAdd(9223372036854775807),
+    boundedSub(-9223372036854775807),
+    boundedMul(9223372036854775807),
+    boundedOr(-9223372036854775807),
+    boundedXor(9223372036854775807),
+    boundedCmp(-9223372036854775807),
+    boundedPhi(9223372036854775807, False),
+    boundedPhi(9223372036854775807, True),
+    boundedModulo(9223372036854775807),
+    boundedModulo(-9223372036854775807),
+    unbounded(7));
+";
+
+string root = "/tmp/qore-aot-immediate-numeric-" + string(getpid());
+mkdir(root);
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+string source_path = root + "/immediate-numeric.qr";
+File source();
+source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s 2>&1",
+    env, qore_bin, source_path));
+
+hash<string, string> sub compile(string suffix, string compile_env) {
+    string exe = root + "/immediate-numeric-" + suffix;
+    string output = backquote(sprintf(
+        "%s %s QORE_DUMP_LLVM_IR=1 %s -O3 -o %s %s 2>&1",
+        compile_env, env, qcc_bin, exe, source_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, output);
+        exit(2);
+    }
+    return {
+        "compile": output,
+        "run": backquote(sprintf("%s %s 2>&1", env, exe)),
+    };
+}
+
+hash<string, string> enabled = compile("enabled", "");
+hash<string, string> disabled = compile("disabled",
+    "QORE_DISABLE_AOT_IMMEDIATE_NUMERIC_FACTS=1");
+hash<string, string> helper_boxing = compile("helper-boxing",
+    "QORE_DISABLE_AOT_IMMEDIATE_NUMERIC_FACTS=1 "
+        + "QORE_DISABLE_AOT_INLINE_DYNAMIC_INT_BOXING=1");
+if (enabled.run != expected || disabled.run != expected
+        || helper_boxing.run != expected) {
+    printf("execution mismatch:\nexpected:\n%sEnabled:\n%sDisabled:\n%s"
+        + "Helper boxing:\n%s",
+        expected, enabled.run, disabled.run, helper_boxing.run);
+    exit(2);
+}
+
+string sub functionIr(string ir, string name) {
+    int start = ir.find("define i64 @" + name);
+    int end = start < 0 ? -1 : ir.find("\ndefine i64 @", start + 1);
+    if (start < 0) {
+        return "";
+    }
+    return end < 0 ? ir.substr(start) : ir.substr(start, end - start);
+}
+
+Regex box_call("call i64 @qore_rt_box_big_int");
+foreach string name in (
+        "bounded_int",
+        "boundedAdd_int",
+        "boundedSub_int",
+        "boundedMul_int",
+        "boundedOr_int",
+        "boundedXor_int",
+        "boundedCmp_int",
+        "boundedPhi_int_bool",
+        "boundedModulo_int") {
+    string enabled_ir = functionIr(enabled.compile, name);
+    string disabled_ir = functionIr(disabled.compile, name);
+    if (!enabled_ir || !disabled_ir
+            || box_call.count(enabled_ir) >= box_call.count(disabled_ir)) {
+        printf("immediate numeric facts did not reduce boxing in %s:\n"
+            + "enabled:\n%s\ndisabled:\n%s",
+            name, enabled_ir, disabled_ir);
+        exit(2);
+    }
+}
+
+string guarded_phi = functionIr(disabled.compile, "boundedPhi_int_bool");
+string helper_phi = functionIr(helper_boxing.compile, "boundedPhi_int_bool");
+if (guarded_phi.find("box_inline") < 0
+        || helper_phi.find("box_inline") >= 0) {
+    printf("guarded dynamic integer boxing was not isolated correctly:\n"
+        + "guarded:\n%s\nhelper:\n%s", guarded_phi, helper_phi);
+    exit(2);
+}

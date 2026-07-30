@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub runInt(int rounds, string mode) {
+    ExpressionComposer composer();
+    int checksum;
+    for (int i = 0; i < rounds; ++i) {
+        int value = i & 1023;
+        checksum += mode == "static-int"
+            ? ExpressionComposer::staticIntWrapper(value)
+            : mode == "method-int"
+                ? composer.methodIntWrapper(value)
+                : closureIntWrapper(value);
+    }
+    return checksum;
+}
+
+float sub runFloat(int rounds, string mode) {
+    ExpressionComposer composer();
+    float checksum;
+    for (int i = 0; i < rounds; ++i) {
+        float value = float(i & 1023);
+        checksum += mode == "static-float"
+            ? ExpressionComposer::staticFloatWrapper(value)
+            : mode == "method-float"
+                ? composer.methodFloatWrapper(value)
+                : closureFloatWrapper(value);
+    }
+    return checksum;
+}
+
+int sub main() {
+    string mode = ENV.QORE_BENCH_KERNEL
+        ?? (ARGV.size() ? ARGV[0] : "static-int");
+    int rounds = (ENV.QORE_BENCH_ROUNDS
+        ?? (ARGV.size() > 1 ? ARGV[1] : "5000000")).toInt();
+    if (mode.contains("float")) {
+        printf("%.2f\n", runFloat(rounds, mode));
+    } else {
+        printf("%d\n", runInt(rounds, mode));
+    }
+    return 0;
+}

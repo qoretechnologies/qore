@@ -50,6 +50,27 @@ static void set_binary_analysis_minus(QoreParseContext& parse_context,
     }
 }
 
+static bool qore_minus_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
+    ExceptionSink* es = *xsink;
+    if (!es->isException()) {
+        return false;
+    }
+
+    QoreValue ex_err = es->getExceptionErr();
+    if (ex_err.getType() != NT_STRING) {
+        return false;
+    }
+
+    QoreStringValueHelper ex_err_str(ex_err);
+    return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
+        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
+        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
+}
+
+static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {
+    return !QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo;
+}
+
 QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) {
@@ -168,9 +189,13 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder rv(this, *xsink);
         QoreValue result = rv.takeReferencedValue();
-        // only use parse-time folding if we got a valid result
-        // (constants may not be fully resolved at parse time, resulting in NOTHING)
-        if (!result.isNothing() || **xsink) {
+        if (**xsink && qore_minus_parse_fold_exception_is_deferred(xsink)) {
+            result.discard(nullptr);
+            (*xsink)->clear();
+        } else if (!result.isNothing() || **xsink) {
+            // Only use parse-time folding if we got a valid result. Some
+            // constants are not fully resolved at parse time and evaluate to
+            // NOTHING; those must remain runtime expressions.
             val = result;
             parse_context.typeInfo = val.getFullTypeInfo();
             set_binary_analysis_minus(parse_context, left_analysis, right_analysis);
@@ -227,7 +252,9 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
                     && (QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
                     || QoreTypeInfo::isType(rightTypeInfo, NT_LIST))) {
                 returnTypeInfo = autoHashTypeInfo;
-            } else if (QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
+            } else if (!qore_minus_parse_type_is_unknown(leftTypeInfo)
+                    && !qore_minus_parse_type_is_unknown(rightTypeInfo)
+                    && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
                 QoreStringNode* edesc = new QoreStringNode("subtracting ");
                 QoreTypeInfo::getThisType(rightTypeInfo, *edesc);
                 edesc->concat(" from ");

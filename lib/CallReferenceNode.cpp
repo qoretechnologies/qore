@@ -36,6 +36,8 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -701,6 +703,97 @@ QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, Exc
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
+DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
+        const char* n_class_path, const char* n_method_name)
+        : ResolvedCallReferenceNodeIntern(loc, true), class_path(n_class_path ? n_class_path : ""),
+        method_name(n_method_name ? n_method_name : "") {
+}
+
+bool DeferredStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const DeferredStaticMethodCallReferenceNode* d = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(v);
+    return d && class_path == d->class_path && method_name == d->method_name;
+}
+
+ResolvedCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    if (class_path.empty() || method_name.empty()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    if (!pgm) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve method call reference '%s::%s()': no program context",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, class_path.c_str(), false);
+    if (!qc) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve class '%s' for method call reference '%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    ClassAccess access = Public;
+    const QoreMethod* method = qc->findStaticMethod(method_name.c_str(), access);
+    if (!method) {
+        method = qc->findMethod(method_name.c_str(), access);
+    }
+    if (!method) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve method call reference '%s::%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+    if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*qc)) {
+        xsink->raiseException("ILLEGAL-CALL-REFERENCE",
+            "cannot create a call reference to %s %s::%s() from outside the class",
+            privpub(access), class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
+    if (method->isStatic()) {
+        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+    }
+
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    if (!obj) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot create instance method call reference '%s::%s()': no current object",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+    return new RunTimeResolvedMethodReferenceNode(loc, obj, method, cls);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return resolve(rc, xsink);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    ResolvedCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->execValue(args, xsink);
+    ref->deref(xsink);
+    return rv;
+}
+
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
         QoreProgram* n_pgm) : LocalMethodCallReferenceNode(loc, n_method, false), obj(runtime_get_stack_object()) {
     assert(obj);
@@ -739,6 +832,46 @@ UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNod
 int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = callReferenceTypeInfo;
 
+    std::string source_receiver_path;
+    if (scope->size() >= 2) {
+        for (unsigned i = 0; i < (scope->size() - 1); ++i) {
+            if (i) {
+                source_receiver_path += "::";
+            }
+            source_receiver_path += (*scope)[i];
+        }
+    }
+    std::string deferred_source_receiver_path;
+    if (!source_receiver_path.empty()) {
+        deferred_source_receiver_path = qore_aot_get_deferred_source_symbol_path(loc, source_receiver_path.c_str(),
+            QoreAOTSourceSymbolKind::Class);
+    }
+    const bool defer_source_static_receiver = !deferred_source_receiver_path.empty();
+    bool defer_source_function = false;
+    std::string deferred_source_function_path;
+    if (scope->size() >= 2) {
+        deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, scope->ostr,
+            QoreAOTSourceSymbolKind::Function);
+        defer_source_function = !deferred_source_function_path.empty();
+        if (!defer_source_function && !defer_source_static_receiver) {
+            deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, scope->getIdentifier(),
+                QoreAOTSourceSymbolKind::Function);
+            defer_source_function = !deferred_source_function_path.empty();
+        }
+    }
+    if (defer_source_static_receiver && !defer_source_function) {
+        std::string method_path = deferred_source_receiver_path;
+        method_path += "::";
+        method_path += scope->getIdentifier();
+        if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+            qore_program_private::recordSourceParseMethodImport(pgm, loc, method_path.c_str());
+        }
+        val = new DeferredStaticMethodCallReferenceNode(loc, deferred_source_receiver_path.c_str(),
+            scope->getIdentifier());
+        deref();
+        return 0;
+    }
+
     QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
@@ -748,6 +881,33 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
             deref();
             val = fr;
             return fr->parseInit(val, parse_context);
+        }
+        if (qore_aot_source_parse_active() && scope->size() >= 2) {
+            if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                if (defer_source_function) {
+                    qore_program_private::recordSourceParseFunctionImport(pgm, loc,
+                        deferred_source_function_path.c_str());
+                } else {
+                    if (defer_source_static_receiver) {
+                        std::string method_path = deferred_source_receiver_path;
+                        method_path += "::";
+                        method_path += scope->getIdentifier();
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, method_path.c_str());
+                    } else {
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                    }
+                }
+            }
+            if (defer_source_function) {
+                val = new DeferredFunctionCallReferenceNode(loc, deferred_source_function_path.c_str());
+                deref();
+                return 0;
+            }
+            val = new DeferredStaticMethodCallReferenceNode(loc,
+                defer_source_static_receiver ? deferred_source_receiver_path.c_str() : source_receiver_path.c_str(),
+                scope->getIdentifier());
+            deref();
+            return 0;
         }
         parse_error(*loc, "reference to undefined class '%s' in '%s()'", scope->get(scope->size() - 2), scope->ostr);
         return -1;
@@ -847,6 +1007,65 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return uf->evalFunction(0, args, pgm, rc, xsink);
+}
+
+DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc,
+        const char* n_function_name)
+        : ResolvedCallReferenceNodeIntern(loc, true), function_name(n_function_name ? n_function_name : "") {
+}
+
+bool DeferredFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const DeferredFunctionCallReferenceNode* d = dynamic_cast<const DeferredFunctionCallReferenceNode*>(v);
+    return d && function_name == d->function_name;
+}
+
+FunctionCallReferenceNode* DeferredFunctionCallReferenceNode::resolve(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    if (function_name.empty()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
+            function_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    if (!pgm) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve function call reference '%s()': no program context", function_name.c_str());
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, function_name.c_str());
+    QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
+    if (!func) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
+            function_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    return new FunctionCallReferenceNode(loc, func, call_pgm);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return resolve(rc, xsink);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    FunctionCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->execValue(args, xsink);
+    ref->deref(xsink);
+    return rv;
 }
 
 ResolvedCallReferenceNode::ResolvedCallReferenceNode() : AbstractCallReferenceNode(false, NT_FUNCREF) {

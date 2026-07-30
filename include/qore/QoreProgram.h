@@ -107,6 +107,7 @@ class ParamList;
 class AbstractQoreZoneInfo;
 class qore_program_private;
 class AbstractQoreProgramExternalData;
+class QoreObject;
 class QoreBreakpoint;
 class AbstractQoreFunctionVariant;
 class QoreRWLock;
@@ -669,6 +670,18 @@ public:
     */
     DLLEXPORT AbstractQoreProgramExternalData* removeExternalData(const char* owner);
 
+    //! saves an object in the Program's object cache, holding a strong reference to it
+    /** Gives a deterministic lifetime to objects created from languages without deterministic
+        garbage collection (e.g. jni, python): the object is held with a strong reference until the
+        Program is destroyed, at which point its destructor runs while the Program is still valid.
+        Saving the same object more than once has no additional effect.
+
+        @param obj the object to save in the Program's object cache
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void saveObject(QoreObject* obj);
+
     //! retrieves a hash of global variables and their values
     /** @return a hash of global variable information; keys are namespace-justified global variable names, values are the values
 
@@ -1153,7 +1166,7 @@ private:
     QoreObject* qo; // reference to Qore script object, it's private object but we cannot
     static QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
     static QoreBreakpointList_t breakpointList;
-    static volatile unsigned breakpointIdCounter;   // to generate breakpointId
+    static unsigned breakpointIdCounter;   // to generate breakpointId
     unsigned breakpointId;
 
     DLLLOCAL void unassignAllStatements();

@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+
+%modern
+
+const int DATA_SIZE = 1000;
+const int DEFAULT_ROUNDS = 5000;
+
+list<hash<auto>> sub makeData() {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, {"key": sprintf("key%d", i), "value": i, "enabled": i % 2 == 0};
+    }
+    return data;
+}
+
+int sub benchMap(list<hash<auto>> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = map $1.value + 1, data;
+        checksum += values[DATA_SIZE - 1];
+    }
+    return checksum;
+}
+
+int sub benchSelect(list<hash<auto>> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<hash<auto>> values = (select data, $1.enabled);
+        checksum += values.size();
+    }
+    return checksum;
+}
+
+int sub benchMapSelect(list<hash<auto>> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = map $1.value, data, $1.enabled;
+        checksum += values[values.size() - 1];
+    }
+    return checksum;
+}
+
+int sub benchHashMap(list<hash<auto>> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<auto> values = map {$1.key: $1.value}, data;
+        checksum += values{"key999"};
+    }
+    return checksum;
+}
+
+int sub benchPushInt(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, j;
+        }
+        checksum += values[DATA_SIZE - 1];
+    }
+    return checksum;
+}
+
+int sub benchPushFloat(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, float(j) + 0.5;
+        }
+        checksum += int(values[DATA_SIZE - 1]);
+    }
+    return checksum;
+}
+
+int sub benchPushBool(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, (j & 1) == 1;
+        }
+        checksum += values[DATA_SIZE - 1] ? 1 : 0;
+    }
+    return checksum;
+}
+
+int sub benchPushSoft(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<softint> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, "1";
+        }
+        checksum += values.size();
+    }
+    return checksum;
+}
+
+int sub benchConstruct(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<hash<auto>> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, {"value": j, "enabled": j % 2 == 0};
+        }
+        checksum += values[DATA_SIZE - 1].value;
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "map";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : DEFAULT_ROUNDS;
+list<hash<auto>> data = makeData();
+int checksum;
+switch (kernel) {
+    case "map":
+        checksum = benchMap(data, rounds);
+        break;
+    case "select":
+        checksum = benchSelect(data, rounds);
+        break;
+    case "map-select":
+        checksum = benchMapSelect(data, rounds);
+        break;
+    case "hash-map":
+        checksum = benchHashMap(data, rounds);
+        break;
+    case "push-int":
+        checksum = benchPushInt(rounds);
+        break;
+    case "push-float":
+        checksum = benchPushFloat(rounds);
+        break;
+    case "push-bool":
+        checksum = benchPushBool(rounds);
+        break;
+    case "push-soft":
+        checksum = benchPushSoft(rounds);
+        break;
+    case "construct":
+        checksum = benchConstruct(rounds);
+        break;
+    default:
+        throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+}
+printf("%d\n", checksum);

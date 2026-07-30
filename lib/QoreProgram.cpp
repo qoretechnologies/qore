@@ -309,7 +309,7 @@ unsigned qore_num_warnings = NUM_WARNINGS;
 qore_program_private::qore_program_to_object_map_t qore_program_private::qore_program_to_object_map;
 qore_program_private::programid_to_program_map_t qore_program_private::programid_to_program_map;
 QoreRWLock qore_program_private::lck_programMap;
-volatile unsigned qore_program_private::programIdCounter = 1;
+unsigned qore_program_private::programIdCounter = 1;
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
@@ -1114,6 +1114,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
 
+        // release objects captured from languages without deterministic GC (jni, python) while the
+        // program is still valid (data not yet cleared, ptid == tid), so their destructors run in a
+        // valid program context instead of failing against a half-destroyed program
+        clearSavedObjects(xsink);
+
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 
@@ -1217,6 +1222,8 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // Deferred AOT module initialization is scoped to this Program. Release
         // the per-Program markers together with the parse data so repeated
         // short-lived Program imports cannot retain module-name allocations.
+        std::unordered_set<std::string>().swap(merged_aot_modules);
+        std::unordered_set<std::string>().swap(initializing_aot_modules);
         std::unordered_set<std::string>().swap(initialized_aot_modules);
 
         // clear program location
@@ -1224,13 +1231,25 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 }
 
-// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified
-static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified.
+// Returns the number of the program's own functions/methods submitted for eager compilation, used to
+// decide whether the --exec-mode=jit synchronous barrier is affordable for this program's size.
+static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+    size_t eager_count = 0;
     // Walk functions in this namespace
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
         QoreFunction* func = fe->getFunction();
         if (!func) {
+            continue;
+        }
+
+        // Skip functions imported from modules: eager compilation must cover only
+        // the program's OWN code.  Eager-compiling entire module trees (e.g. the
+        // DataProvider/Util/ConnectionProvider stacks) at parse-commit is
+        // impractically slow; module hot code is promoted to native at runtime
+        // via the tiered execution-count threshold instead.
+        if (func->getModuleName()) {
             continue;
         }
 
@@ -1245,6 +1264,7 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
 
             // Eagerly compile to IR/JIT as requested
             uvb->eagerlyCompileForExecMode(func->getName(), exec_mode);
+            ++eager_count;
         }
     }
 
@@ -1280,6 +1300,7 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+                ++eager_count;
             }
         }
 
@@ -1297,18 +1318,27 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+                ++eager_count;
             }
         }
     }
 
-    // Recursively compile functions in child namespaces
+    // Recursively compile functions in child namespaces, skipping namespaces
+    // imported from modules — their functions/methods belong to the module, not
+    // the program's own code, and eager-compiling the whole module namespace tree
+    // at parse-commit is impractically slow.  Module hot code promotes to native
+    // at runtime via the tiered threshold.
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
-            eagerlyCompileAllFunctions(child_priv, exec_mode);
+            if (child_priv->imported) {
+                continue;
+            }
+            eager_count += eagerlyCompileAllFunctions(child_priv, exec_mode);
         }
     }
+    return eager_count;
 }
 
 // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
@@ -1349,8 +1379,15 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             parsing_in_progress = false;
             parsing_done = true;
 
-            // merge pending namespace additions
-            qore_root_ns_private::parseCommit(*RootNS);
+            // merge pending namespace additions and run namespace-level runtime init
+            parse_commit_in_progress = true;
+            try {
+                qore_root_ns_private::parseCommit(*RootNS);
+            } catch (...) {
+                parse_commit_in_progress = false;
+                throw;
+            }
+            parse_commit_in_progress = false;
 
             // commit pending statements
             sb.parseCommit(pgm);
@@ -1385,6 +1422,13 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
                     && standard_parse
                     && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
+                // Eagerly lower the program's own functions to IR (cheap, no LLVM)
+                // so they run as IR from the first call.  Native (LLVM) compilation
+                // is NOT done here: it happens on demand at runtime when a function
+                // is first called (--exec-mode=jit) or once it gets hot (tiered),
+                // via the execution-count promotion path.  Compiling everything up
+                // front floods the background compile queue and stalls program
+                // teardown, so it is intentionally avoided (see eagerlyCompileForExecMode).
                 qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
                 eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
             }
@@ -1896,9 +1940,13 @@ void qore_program_private::del(ExceptionSink* xsink) {
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
 
-    // drain any pending background JIT compilations before deleting namespace data;
-    // the bg thread holds raw pointers to QoreIRFunction objects owned by this program
-    QoreJIT::instance().waitForBgCompileQueue();
+    // drain background JIT compilations that reference THIS program before
+    // deleting namespace data: the bg thread holds raw pointers to QoreIRFunction
+    // objects (and the program-owned LocalVars/AST they reference) owned by this
+    // program.  Only this program's compiles need draining — other programs'
+    // queued/in-progress compiles are left running, so teardown is not serialized
+    // behind the entire global compile queue.
+    QoreJIT::instance().waitForBgCompileQueue(pgm);
 
     // delete the namespace and all data
     qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
@@ -2646,7 +2694,12 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
         return QoreValue();
     }
 
-    // we assign the args to 0 below so that they will not be deleted
+    // Evaluate the call through the standard FunctionCallNode path with this (the target) Program
+    // bound as the call's Program: this is what correctly resolves the cross-Program context and parse
+    // options for every kind of target (user function defined in the target, Program-internal builtin
+    // like load_module() operating on the target, and privileged builtins like set_save_object_callback()
+    // invoked by a trusted caller on a sandboxed target).  Hand-rolling the parse-option handling here
+    // gets one of those cases wrong; the shared path handles all of them.
     fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
@@ -3004,6 +3057,10 @@ AbstractQoreProgramExternalData* QoreProgram::removeExternalData(const char* own
    return priv->removeExternalData(owner);
 }
 
+void QoreProgram::saveObject(QoreObject* obj) {
+    priv->saveObject(obj);
+}
+
 QoreHashNode* QoreProgram::getGlobalVars() const {
    return priv->getGlobalVars();
 }
@@ -3281,6 +3338,16 @@ const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
 }
 
 const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+    pns = nullptr;
+
+    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
+        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*priv->RootNS, path);
+        if (hd) {
+            pns = hd->getNamespace();
+            return hd;
+        }
+    }
+
     const qore_ns_private* pns_priv;
     const TypedHashDecl* th = qore_root_ns_private::runtimeFindHashDecl(*priv->RootNS, path, pns_priv);
     if (th) {
@@ -3290,6 +3357,16 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
 }
 
 const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    pns = nullptr;
+
+    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
+        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*priv->RootNS, path);
+        if (e) {
+            pns = e->getNamespace();
+            return e;
+        }
+    }
+
     const qore_ns_private* pns_priv;
     const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
     if (e) {
@@ -3338,7 +3415,7 @@ int QoreProgram::issueModuleCmd(const char* module, const char* cmd, ExceptionSi
 
 QoreRWLock QoreBreakpoint::lck_breakpoint;
 QoreBreakpointList_t QoreBreakpoint::breakpointList;
-volatile unsigned QoreBreakpoint::breakpointIdCounter = 1;
+unsigned QoreBreakpoint::breakpointIdCounter = 1;
 
 void QoreBreakpoint::unassignAllStatements() {
     for (std::list<AbstractStatement*>::iterator it = statementList.begin(); it != statementList.end(); ++it) {

@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+*string sub getValue(bool assigned) {
+    return assigned ? "Dvo\u0159\u00e1k-Performance-Case" : NOTHING;
+}
+
+int sub stringCaseKernel(int rounds) {
+    string value = getValue(True);
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        result += tolower(value).size();
+        result += toupper(value).size();
+    }
+    return result;
+}
+
+int rounds = ENV.QORE_STRING_CASE_ROUNDS
+    ? ENV.QORE_STRING_CASE_ROUNDS.toInt() : 1000000;
+printf("%d\n", stringCaseKernel(rounds));

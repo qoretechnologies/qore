@@ -41,6 +41,7 @@
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QuicCommon.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -1003,6 +1004,86 @@ private:
     SimpleRefHolder<BinaryNode> data;
     int64_t session_id;
     int64_t stream_id;
+    bool done = false;
+};
+
+class QoreSocketObjectQuicFlushPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectQuicFlushPollOperation(QoreSocketObject* sock, int64_t session_id)
+            : sock(sock), session_id(session_id) {
+        sock->ref();
+    }
+
+    DLLLOCAL ~QoreSocketObjectQuicFlushPollOperation() override {
+        ExceptionSink xsink;
+        sock->deref(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                static_cast<long long>(session_id));
+            done = true;
+            return nullptr;
+        }
+        if (session->isClosed()) {
+            done = true;
+            return nullptr;
+        }
+
+        QuicPacketBatch pkt_batch;
+        auto tw = session->processTimerAndWrite(pkt_batch, xsink);
+        if (tw.error || *xsink) {
+            done = true;
+            return nullptr;
+        }
+
+        if (!pkt_batch.empty()) {
+            struct sockaddr_storage peer_addr;
+            socklen_t peer_addrlen;
+            session->getRemoteAddrCopy(peer_addr, peer_addrlen);
+
+            struct sockaddr_storage local_addr;
+            socklen_t local_addrlen;
+            session->getLocalAddrCopy(local_addr, local_addrlen);
+
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            int fd = priv->socket->getSocket();
+            int sent = sendQuicPacketsBatch(fd, pkt_batch,
+                reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
+                reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
+            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+            }
+        }
+
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "quic-pending-data-flushed" : "flushing-quic-pending-data";
+    }
+
+private:
+    QoreSocketObject* sock;
+    int64_t session_id;
     bool done = false;
 };
 
@@ -2937,6 +3018,23 @@ static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* 
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping, missing_h2_ok), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, owner_name, "done", xsink);
+}
+
+static int qore_socket_object_exec_quic_flush(QoreSocketObject* s, int64_t session_id,
+        const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new QoreSocketObjectQuicFlushPollOperation(s, session_id), xsink);
     if (*xsink) {
         return -1;
     }
@@ -6652,6 +6750,14 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(this, session_id, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
+}
+
+int QoreSocketObject::flushQuicPendingData(int64_t session_id, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "flushQuicPendingData", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return qore_socket_object_exec_quic_flush(this, session_id, "flushQuicPendingData", xsink);
 }
 
 int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stream_id,

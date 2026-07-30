@@ -123,12 +123,32 @@ int DoWhileStatement::parseInitImpl(QoreParseContext& parse_context) {
     int err = 0;
 
     if (code) {
+        // Breaks can skip later body statements and the condition, so do not
+        // let loop-local parse facts unconditionally escape the statement.
+        NarrowedTypeHelper nth;
+        AssignedStateHelper ash;
+        nth.saveState();
+        ash.saveState();
+
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
 
         err = code->parseInitImpl(parse_context);
-    }
-    if (cond) {
+
+        if (cond) {
+            parse_context.typeInfo = nullptr;
+            if (parse_init_value(cond, parse_context) && !err) {
+                err = -1;
+            }
+        }
+
+        nth.recordBranchAndRestore();
+        ash.recordBranchAndRestore();
+        nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
+        nth.mergeAndApply();
+        ash.mergeAndApply();
+    } else if (cond) {
         parse_context.typeInfo = nullptr;
         if (parse_init_value(cond, parse_context) && !err) {
             err = -1;

@@ -88,13 +88,17 @@ static bool write_slot_args_prefer_call(AOTExprSlotWriteCtx& ctx) {
 //! NEW_OBJECT and SCOPED_NEW_OBJECT
 //! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ),
 //! ref3 = instantiated object type path when QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO is set.
-//! No inline args — constructor args are computed by separate IR instructions
-//! that feed the NewObject's operand values at runtime.
+//! Normal constructor args are computed by separate IR instructions. The
+//! deferred create_object sentinel is used for VarRefNewObjectNode implied
+//! constructors, whose args live only in the expression slot.
 static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
         ctx.writer.writeStringRef(ctx.expr.ref3.c_str());
+    }
+    if (ctx.expr.ref2 == QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT) {
+        return write_slot_args_prefer_call(ctx);
     }
     return true;
 }
@@ -668,6 +672,38 @@ static bool write_slot_SHIFT_RIGHT(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftRightOperatorNode>(ctx);
 }
 
+// Compound-assignment operators (native AOTExprKind slot encodings; lvalue + value children).
+static bool write_slot_PLUS_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QorePlusEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MINUS_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreMinusEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MULTIPLY_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreMultiplyEqualsOperatorNode>(ctx);
+}
+static bool write_slot_DIVIDE_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreDivideEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MODULO_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreModuloEqualsOperatorNode>(ctx);
+}
+static bool write_slot_AND_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreAndEqualsOperatorNode>(ctx);
+}
+static bool write_slot_OR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreOrEqualsOperatorNode>(ctx);
+}
+static bool write_slot_XOR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreXorEqualsOperatorNode>(ctx);
+}
+static bool write_slot_SHL_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftLeftEqualsOperatorNode>(ctx);
+}
+static bool write_slot_SHR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftRightEqualsOperatorNode>(ctx);
+}
+
 static bool write_slot_LOG_AND(AOTExprSlotWriteCtx& ctx) {
     if (dynamic_cast<const QoreLogicalOrOperatorNode*>(
             ctx.expr.child_expr.getInternalNode())) {
@@ -918,6 +954,9 @@ static bool write_slot_HASH_DEREF(AOTExprSlotWriteCtx& ctx) {
     if (!hd) {
         return false;
     }
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(hd->getTypeInfo()).c_str());
+    }
     return classifyAndWriteExpr(ctx.writer, hd->getLeft(),
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
         && classifyAndWriteExpr(ctx.writer, hd->getRight(),
@@ -972,6 +1011,19 @@ static bool write_slot_CAST(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    // Serialize call args (u8 num_args + N inline exprs) so AST/IR-interpreter fallback
+    // evaluation of the reconstructed self-call dispatches with its arguments.  Gated by the
+    // feature flag for wire-format compatibility with older qmods (which carry no slot args).
+    // Source selection mirrors EN_SELF_CALL's serializeArgs(): use the parse-arg list when it is
+    // present (even if empty), otherwise the runtime arg list.  A self call may carry its args in
+    // either list depending on parse state; preferring parse args avoids serializing the
+    // runtime-evaluated list when a valid parse list exists.
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS) != 0) {
+        if (ctx.expr.parse_args) {
+            return write_slot_parse_args(ctx, ctx.expr.parse_args);
+        }
+        return write_slot_call_args(ctx, ctx.expr.call_args);
+    }
     return true;
 }
 
@@ -1011,6 +1063,9 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     // Write flags and class type path
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());  // "lambda,in_method"
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());  // class_type_path
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+        ctx.writer.writeStringRef(ctx.expr.ref3.c_str());  // native AOT body key
+    }
 
     // Serialize closure signature metadata
     const UserClosureFunction* ucf = ctx.expr.closure_func;
@@ -1054,18 +1109,20 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
 
     // Lower closure before writing captures so embedded expression payloads
     // can contribute parent locals not present in the parser's closure vlist.
-    const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
-    QoreIRFunction* owned_ir = nullptr;
+    QoreIRFunction* closure_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
+    std::unique_ptr<QoreIRFunction> owned_ir;
     if (!closure_ir) {
         // Lower on the fly for serialization
-        owned_ir = ::lowerClosureForSerialization(variant);
-        closure_ir = owned_ir;
+        owned_ir.reset(::lowerClosureForSerialization(variant));
+        closure_ir = owned_ir.get();
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-    ::qoreAOTPruneClosureIRBodyLocals(const_cast<QoreIRFunction*>(closure_ir), sig, vlist);
+    if (!::qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
+        return false;
+    }
+    ::qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
     if (!::qoreAOTWriteClosureCaptures(ctx.writer, vlist, closure_ir, ctx.parent_locals)) {
-        delete owned_ir;
         return false;
     }
 
@@ -1109,10 +1166,8 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         uint32_t end_pos = ctx.writer.position();
         ctx.writer.patchU32(size_pos, end_pos - size_pos - 4);
     } else {
-        delete owned_ir;
         return false;
     }
-    delete owned_ir;
     return true;
 }
 

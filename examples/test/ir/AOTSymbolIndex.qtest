@@ -30,6 +30,56 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("symbol hash behavior", \testHashBehavior());
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
         addTestCase("symbol index JSON dump", \testDumpIndexJson());
+        addTestCase("slot-map dump parses global slot flags", \testDumpInfoGlobalSlotFlags());
+        addTestCase("source parse defines in symbol index", \testSourceParseDefines());
+        addTestCase("standalone global import resolves at link time", \testStandaloneGlobalImport());
+        addTestCase("standalone deferred global lvalue paths resolve at link time",
+            \testStandaloneDeferredGlobalLValuePathImport());
+        addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
+        addTestCase("source symbol manifest defers shadowed loaded classes",
+            \testSourceSymbolManifestDefersShadowedLoadedClasses());
+        addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
+            \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
+        addTestCase("standalone abstract returns match deferred class types",
+            \testStandaloneDeferredAbstractReturnTypes());
+        addTestCase("standalone deferred class overload types stay distinct",
+            \testStandaloneDeferredClassOverloadTypes());
+        addTestCase("standalone static complex defaults preserve nested object types",
+            \testStandaloneStaticComplexDefaultTypeImport());
+        addTestCase("sibling object defaults resolve during source preload",
+            \testSiblingObjectDefaultPreloadImport());
+        addTestCase("sibling namespaced object type import resolves at link time",
+            \testSiblingNamespacedObjectTypeImport());
+        addTestCase("standalone hashdecl type import resolves at link time", \testStandaloneHashdeclTypeImport());
+        addTestCase("standalone hashdecl implied constructor resolves at link time",
+            \testStandaloneHashdeclImpliedConstructorImport());
+        addTestCase("standalone constructor import resolves at link time", \testStandaloneConstructorImport());
+        addTestCase("standalone cast import resolves at link time", \testStandaloneCastImport());
+        addTestCase("standalone implied constructor import resolves at link time",
+            \testStandaloneImpliedConstructorImport());
+        addTestCase("standalone static method import resolves at link time", \testStandaloneStaticMethodImport());
+        addTestCase("standalone static method call reference resolves at link time",
+            \testStandaloneStaticMethodCallReferenceImport());
+        addTestCase("standalone static member import resolves at link time", \testStandaloneStaticMemberImport());
+        addTestCase("inherited static class members are linkable aliases",
+            \testInheritedStaticMemberAliases());
+        addTestCase("standalone deferred switch constants resolve at link time",
+            \testStandaloneDeferredSwitchConstantImport());
+        addTestCase("static member constant initializer resolves at link time",
+            \testStaticMemberConstantInitializerImport());
+        addTestCase("pending static constant base constructor args stay typed",
+            \testPendingStaticConstantBaseConstructorArgs());
+        addTestCase("static member variable initializer resolves at link time",
+            \testStaticMemberVariableInitializerImport());
+        addTestCase("static member object initializer resolves at link time",
+            \testStaticMemberObjectInitializerImport());
+        addTestCase("reflection class initializer resolves at link time",
+            \testReflectionClassInitializerImport());
+        addTestCase("standalone namespaced suffix imports resolve at link time",
+            \testStandaloneNamespacedSuffixImports());
+        addTestCase("standalone function import resolves at link time", \testStandaloneFunctionImport());
+        addTestCase("serialized constructor function calls defer during preload",
+            \testSerializedConstructorFunctionCallPreload());
         addTestCase("qo link aggregate", \testQoLinkAggregate());
         addTestCase("prelinked call disable switch", \testPrelinkedCallDisableSwitch());
 
@@ -49,7 +99,12 @@ class AOTSymbolIndexTest inherits QUnit::Test {
     private TmpDir initDirs() {
         TmpDir tmp("qore-aot-symbol-index-");
         tmp_dir = tmp.path;
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string module_dir = libqore_dir + "/modules/reflection";
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
+            libqore_dir, libqore_dir, module_dir);
         return tmp;
     }
 
@@ -64,7 +119,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         last_out = out;
 
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, out));
-        assertTrue(dump.find("symbol index: version=1") != -1,
+        assertTrue(dump.find("symbol index: version=") != -1,
             "dump includes symbol-index summary: " + dump);
         return dump;
     }
@@ -189,6 +244,81 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "JSON dump includes native body hash: " + json);
     }
 
+    testDumpInfoGlobalSlotFlags() {
+        TmpDir tmp = initDirs();
+        string dump = compileAndDump("global-slots",
+            "our string AOTDumpInfoGlobalSlot = \"ok\";\n"
+            "string sub readAOTDumpInfoGlobalSlot() { return AOTDumpInfoGlobalSlot; }\n");
+        assertTrue(dump.find("globals=1") != -1,
+            "dump summary includes the global slot: " + dump);
+        assertTrue(dump.find("malformed=0") != -1,
+            "dump parser handles GLOBAL_SLOT_FLAGS records: " + dump);
+    }
+
+    testSourceParseDefines() {
+        TmpDir tmp = initDirs();
+        compileAndDump("source-defines",
+            "%define AOTSourceMacro\n"
+            "%define AOTSourceMacroNumber 42\n"
+            "%define AOTSourceMacroString \"macro value\"\n"
+            "class SourceDefineIndexTest {\n"
+            "    int f() { return 1; }\n"
+            "}\n");
+
+        string json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, last_out));
+        assertTrue(json.find("\"source_parse_defines\"") != -1,
+            "JSON dump includes source parse defines: " + json);
+        assertTrue(json.find("AOTSourceMacro") != -1,
+            "JSON dump includes bare source parse define: " + json);
+        assertTrue(json.find("AOTSourceMacroNumber=42") != -1,
+            "JSON dump includes numeric source parse define: " + json);
+        assertTrue(json.find("AOTSourceMacroString=\\\"macro value\\\"") != -1,
+            "JSON dump includes quoted string source parse define: " + json);
+        assertTrue(json.find("\"key\": \"source_parse_define\"") != -1,
+            "raw context includes source_parse_define entries: " + json);
+
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string provider_src = tmp_dir + "/provider.qc";
+        string consumer_src = tmp_dir + "/consumer.qc";
+        write(provider_src,
+            "%new-style\n"
+            "%define AOTBatchShared\n"
+            "class AOTBatchDefineProvider { int f() { return 1; } }\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTBatchDefineConsumer { int f() { return 2; } }\n");
+
+        string compile_out = run(sprintf("%s %s -c --output-dir=%s %s %s",
+            env, qcc_bin, qo_dir, provider_src, consumer_src));
+        assertTrue(compile_out.find("script-context .qo") != -1,
+            "batch compile emitted script objects: " + compile_out);
+
+        string provider_qo;
+        string consumer_qo;
+        foreach string raw_line in (compile_out.split("\n")) {
+            int pos = raw_line.find(qo_dir);
+            if (pos == -1) {
+                continue;
+            }
+            string path = raw_line.substr(pos);
+            if (raw_line.find("provider_qc.qo") != -1) {
+                provider_qo = path;
+            } else if (raw_line.find("consumer_qc.qo") != -1) {
+                consumer_qo = path;
+            }
+        }
+        assertTrue(is_file(provider_qo), "batch compile emitted provider .qo: " + compile_out);
+        assertTrue(is_file(consumer_qo), "batch compile emitted consumer .qo: " + compile_out);
+
+        string provider_json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, provider_qo));
+        string consumer_json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(provider_json.find("AOTBatchShared") != -1,
+            "provider object exports its source parse define: " + provider_json);
+        assertTrue(consumer_json.find("AOTBatchShared") == -1,
+            "consumer object does not claim sibling source parse define: " + consumer_json);
+    }
+
     testQoLinkAggregate() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo";
@@ -232,6 +362,20 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertTrue(main_dump.find("LinkQoLib::add(int,int)") != -1,
             "main object call relocations include static call target: " + main_dump);
 
+        string main_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, main_qo));
+        assertTrue(main_index.find("\"call_relocations\"") != -1,
+            "index JSON includes call relocation records: " + main_index);
+        assertTrue(main_index.find("\"requires\"") != -1,
+            "index JSON includes requires records: " + main_index);
+        assertTrue(main_index.find("\"flags\": 2") != -1,
+            "call-derived import is marked optional: " + main_index);
+        assertTrue(main_index.find("\"consumer_source_file\"") != -1,
+            "call-derived import records its consumer source: " + main_index);
+        assertTrue(main_index.find("\"target_kind\": \"static_method\"") != -1,
+            "index JSON includes call relocation target kind: " + main_index);
+        assertTrue(main_index.find("\"fallback_descriptor\"") != -1,
+            "index JSON includes call relocation fallback descriptor: " + main_index);
+
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, agg));
         assertTrue(dump.find("init_LINK_QO_TEST_qo") != -1,
             "aggregate exports the requested init symbol: " + dump);
@@ -247,14 +391,2153 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "link map includes provided Qore method: " + link_map);
         assertTrue(link_map.find("\"resolved_call_relocations\"") != -1,
             "link map includes resolved call relocations: " + link_map);
+        assertTrue(link_map.find("\"call_relocation_summary\"") != -1,
+            "link map includes call relocation summary: " + link_map);
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "link map includes call relocation resolution: " + link_map);
+        assertTrue(link_map.find("\"reason\": \"resolved\"") != -1,
+            "link map includes call relocation reason: " + link_map);
+        assertTrue(link_map.find("\"fallback_descriptor\"") != -1,
+            "link map includes fallback descriptor metadata: " + link_map);
         assertTrue(link_map.find("\"target_kind\": \"static_method\"") != -1,
             "link map resolves the static method call relocation: " + link_map);
+        assertTrue(link_map.find("\"path_scope\": \"external_namespace\"") != -1,
+            "link map classifies call relocation path scope: " + link_map);
+        assertTrue(link_map.find("\"dependency_class\": \"qore_api\"") != -1,
+            "link map records provider dependency class: " + link_map);
+        assertTrue(link_map.find("\"provider_kind\": \"static_method\"") != -1,
+            "link map records provider kind: " + link_map);
+        assertTrue(link_map.find("\"provider_source\"") != -1,
+            "link map records provider source: " + link_map);
         assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
             "link map has no unresolved imports: " + link_map);
         assertTrue(link_map.find("\"ambiguous_imports\": []") != -1,
             "link map has no ambiguous imports: " + link_map);
         assertTrue(link_map.find("\"hash_mismatches\": []") != -1,
             "link map has no hash mismatches: " + link_map);
+    }
+
+    testStandaloneGlobalImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-global";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-provider.qo";
+        string app = tmp_dir + "/global-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "string sub aot_global_link_message() {\n"
+            "    if (Qorus) {\n"
+            "        return Qorus.getMessage();\n"
+            "    }\n"
+            "    return \"missing\";\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTLinkedGlobalProvider {\n"
+            "    string getMessage() { return \"linked\"; }\n"
+            "}\n"
+            "our AOTLinkedGlobalProvider Qorus;\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    Qorus = new AOTLinkedGlobalProvider();\n"
+            "    printf(\"%s\\n\", aot_global_link_message());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "standalone consumer compiled without Qorus provider: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"kind\": \"global\"") != -1,
+            "consumer index records a deferred global import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"Qorus\"") != -1,
+            "consumer index records Qorus as the required symbolic import: " + consumer_index);
+        assertTrue(consumer_index.find("\"flags\": 0") != -1,
+            "Qorus symbolic import is required, not optional: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_GLOBAL_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required Qorus provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1 && missing_out.find("Qorus") != -1,
+            "qo-link diagnostic names the missing Qorus global: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "provider defines Qorus global: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded consumer/provider: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts consumer before provider: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("linked\n", out, "linked executable lazily resolves Qorus global: " + out);
+    }
+
+    testStandaloneDeferredGlobalLValuePathImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-global-lvalue";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer-lvalue.qc";
+        string provider_src = tmp_dir + "/provider-lvalue.qc";
+        string main_src = tmp_dir + "/main-lvalue.qr";
+        string consumer_qo = qo_dir + "/consumer-lvalue.qo";
+        string provider_qo = qo_dir + "/provider-lvalue.qo";
+        string main_qo = qo_dir + "/main-lvalue.qo";
+        string missing_agg = tmp_dir + "/missing-lvalue-provider.qo";
+        string app = tmp_dir + "/global-lvalue-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "string sub aot_deferred_lvalue_path_update() {\n"
+            "    AOTDeferredGlobalLValue.status = (AOTDeferredGlobalLValue.status ?? \"global\") + \"-ok\";\n"
+            "    AOTDeferredThreadLValue.status = (AOTDeferredThreadLValue.status ?? \"thread\") + \"-ok\";\n"
+            "    return AOTDeferredGlobalLValue.status + \":\" + AOTDeferredThreadLValue.status;\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "our hash<auto> AOTDeferredGlobalLValue;\n"
+            "thread_local hash<auto> AOTDeferredThreadLValue;\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTDeferredGlobalLValue = {};\n"
+            "    AOTDeferredThreadLValue = {};\n"
+            "    printf(\"%s\\n\", aot_deferred_lvalue_path_update());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "lvalue-path consumer compiles before provider: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredGlobalLValue\"") != -1,
+            "consumer index records deferred global lvalue import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredThreadLValue\"") != -1,
+            "consumer index records deferred thread-local lvalue import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_GLOBAL_LVALUE_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without lvalue root providers: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTDeferredGlobalLValue") != -1,
+            "qo-link diagnostic names the missing lvalue root: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "lvalue root provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+            " --parse-option=PO_REQUIRE_OUR -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded lvalue roots: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred global lvalue roots: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("global-ok:thread-ok\n", out,
+            "linked executable resolves deferred global and thread-local lvalue roots: " + out);
+    }
+
+    testStandaloneClassTypeImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-type";
+        mkdir(qo_dir);
+        string a_src = tmp_dir + "/a.qc";
+        string b_src = tmp_dir + "/b.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string a_qo = qo_dir + "/a.qo";
+        string b_qo = qo_dir + "/b.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-class-provider.qo";
+        string app = tmp_dir + "/class-type-import-app";
+
+        write(a_src,
+            "%new-style\n"
+            "class AOTDeferredTypeA {\n"
+            "    private { AOTDeferredTypeB b; }\n"
+            "    constructor(AOTDeferredTypeB b) { self.b = b; }\n"
+            "    string callName() { return b.name(); }\n"
+            "}\n");
+        write(b_src,
+            "%new-style\n"
+            "class AOTDeferredTypeB {\n"
+            "    private { *AOTDeferredTypeA a; }\n"
+            "    constructor() {}\n"
+            "    string name() { return \"B\"; }\n"
+            "    setA(AOTDeferredTypeA a) { self.a = a; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTDeferredTypeB b = new AOTDeferredTypeB();\n"
+            "    AOTDeferredTypeA a = new AOTDeferredTypeA(b);\n"
+            "    b.setA(a);\n"
+            "    printf(\"%s\\n\", a.callName());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string a_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, a_qo, a_src));
+        assertTrue(is_file(a_qo), "class A compiles standalone before class B exists: " + a_out);
+
+        string a_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, a_qo));
+        assertTrue(a_index.find("\"kind\": \"class\"") != -1,
+            "class A index records a class import: " + a_index);
+        assertTrue(a_index.find("\"qore_path\": \"AOTDeferredTypeB\"") != -1,
+            "class A index records B as the required class import: " + a_index);
+        assertTrue(a_index.find("\"flags\": 0") != -1,
+            "B class type import is required, not optional: " + a_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CLASS_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, a_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required B provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1 && missing_out.find("AOTDeferredTypeB") != -1,
+            "qo-link diagnostic names the missing B class: " + missing_out);
+
+        string b_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, b_qo, b_src));
+        assertTrue(is_file(b_qo), "class B compiles against preloaded class A metadata: " + b_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against linked class metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, a_qo, b_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts cyclic class type imports: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("B\n", out, "linked executable resolves cross-class type call: " + out);
+    }
+
+    testSourceSymbolManifestDefersShadowedLoadedClasses() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-source-manifest";
+        mkdir(qo_dir);
+        string stub_src = tmp_dir + "/shadow-stub.qc";
+        string provider_src = tmp_dir + "/shadow-provider.qc";
+        string consumer_src = tmp_dir + "/shadow-consumer.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string manifest = tmp_dir + "/source-symbols.manifest";
+        string bad_consumer_qo = qo_dir + "/bad-consumer.qo";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/source-manifest-shadow-app";
+
+        write(stub_src,
+            "%new-style\n"
+            "class AOTManifestShadowLogger {\n"
+            "    log(string fmt, ...) {}\n"
+            "    static string staticLabel(string value) { return value; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTManifestShadowLogger {\n"
+            "    log(int level, string fmt, ...) {}\n"
+            "    static string staticLabel(int value) { return sprintf(\"static-%d\", value); }\n"
+            "    string value() { return \"provider\"; }\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTManifestShadowConsumer {\n"
+            "    string run(AOTManifestShadowLogger logger) {\n"
+            "        logger.log(1, \"message %s\", \"ok\");\n"
+            "        return AOTManifestShadowLogger::staticLabel(7) + \":\" + logger.value();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTManifestShadowConsumer c = new AOTManifestShadowConsumer();\n"
+            "    AOTManifestShadowLogger logger = new AOTManifestShadowLogger();\n"
+            "    printf(\"%s\\n\", c.run(logger));\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+        write(manifest,
+            "format=1\n"
+            "class\tAOTManifestShadowLogger\t" + provider_src + "\n");
+
+        string bad_out = run(sprintf("%s %s -c -L %s --stub=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, stub_src, bad_consumer_qo, consumer_src));
+        assertTrue(!is_file(bad_consumer_qo),
+            "without source manifest the consumer binds the loaded stub and fails: " + bad_out);
+        assertTrue(bad_out.find("AOTManifestShadowLogger::log") != -1
+                || bad_out.find("PARSE-TYPE-ERROR") != -1,
+            "failure diagnoses the shadowed loaded class overload: " + bad_out);
+
+        string consumer_out = run(sprintf(
+            "%s %s -c -L %s --stub=%s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, stub_src, manifest, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "source manifest defers the local class instead of binding the loaded stub: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTManifestShadowLogger\"") != -1,
+            "consumer index records the deferred local class import: " + consumer_index);
+        assertTrue(consumer_index.find("AOTManifestShadowLogger::staticLabel") != -1,
+            "consumer index records the deferred static call import: " + consumer_index);
+
+        string provider_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo),
+            "provider source resolves its own class while the manifest is active: " + provider_out);
+
+        string main_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against linked shadow metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts source-manifest deferred class: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("static-7:provider\n", out,
+            "linked executable resolves the source-local shadowed class: " + out);
+    }
+
+    testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-source-ns";
+        mkdir(qo_dir);
+        string provider_src = tmp_dir + "/source-ns-provider.qc";
+        string consumer_src = tmp_dir + "/source-ns-consumer.qc";
+        string main_src = tmp_dir + "/source-ns-main.qr";
+        string provider_qo = qo_dir + "/source-ns-provider.qo";
+        string consumer_qo = qo_dir + "/source-ns-consumer.qo";
+        string main_qo = qo_dir + "/source-ns-main.qo";
+        string context_file = tmp_dir + "/.qcc-context";
+        string manifest = tmp_dir + "/source-symbols.manifest";
+        string app = tmp_dir + "/source-ns-app";
+        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
+            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+
+        write(provider_src,
+            "%new-style\n"
+            "public namespace OMQ {\n"
+            "public namespace UserApi {\n"
+            "auto sub keepNamespaceAfterListIndexToken(list<auto> v, list<auto> dot_info_list) {\n"
+            "    if (v.lsize() > 1 && $# < (dot_info_list.size() - 1)) {\n"
+            "        return v;\n"
+            "    }\n"
+            "    return NOTHING;\n"
+            "}\n"
+            "int sub _priv_get_pgm_ctx() { return 42; }\n"
+            "string sub normalizePath(string path) {\n"
+            "    if (path && path !~ /^\\//) {\n"
+            "        path = \"/\" + path;\n"
+            "    }\n"
+            "    return path;\n"
+            "}\n"
+            "public class UserApi {\n"
+            "    static int classValue() { return 7; }\n"
+            "}\n"
+            "}\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "public namespace OMQ {\n"
+            "public namespace Fsm {\n"
+            "int sub getProgramContextValue() {\n"
+            "    return _priv_get_pgm_ctx();\n"
+            "}\n"
+            "}\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    printf(\"%d\\n\", OMQ::Fsm::getProgramContextValue());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+        write(context_file,
+            "format=1\n"
+            "kind=qcc-object-group\n"
+            "group=SOURCE_NS\n"
+            "input=" + provider_src + "\n"
+            "input=" + consumer_src + "\n"
+            "input=" + main_src + "\n"
+            "output=" + provider_qo + "\n"
+            "output=" + consumer_qo + "\n"
+            "output=" + main_qo + "\n");
+
+        string manifest_out = run(sprintf("%s --source-symbol-manifest %s %s",
+            source_order, manifest, context_file));
+        assertTrue(is_file(manifest), "source-symbol manifest was written: " + manifest_out);
+        string manifest_text = File::readTextFile(manifest);
+        assertTrue(manifest_text.find("function\tOMQ::UserApi::_priv_get_pgm_ctx\t") != -1,
+            "source-symbol scanner keeps the UserApi namespace after a $# token:\n" + manifest_text);
+        assertTrue(manifest_text.find("function\tOMQ::_priv_get_pgm_ctx\t") == -1,
+            "source-symbol scanner must not flatten UserApi symbols into OMQ:\n" + manifest_text);
+        assertTrue(manifest_text.find("class\tOMQ::UserApi::UserApi\t") != -1,
+            "source-symbol scanner keeps the UserApi namespace after an escaped-slash regex:\n" + manifest_text);
+        assertTrue(manifest_text.find("class\tOMQ::UserApi\t") == -1,
+            "source-symbol scanner must not emit a namespace path as the UserApi class:\n" + manifest_text);
+
+        string consumer_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "consumer with unqualified cross-namespace function call compiles: " + consumer_out);
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"OMQ::UserApi::_priv_get_pgm_ctx\"") != -1,
+            "consumer index records the valid provider path for the unqualified call: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"OMQ::_priv_get_pgm_ctx\"") == -1,
+            "consumer index must not record the invalid current-namespace path: " + consumer_index);
+
+        string provider_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "provider compiles: " + provider_out);
+        string main_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable resolves unqualified source-symbol call: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("42\n", out, "linked executable resolves the unqualified cross-namespace function call");
+    }
+
+    testStandaloneDeferredAbstractReturnTypes() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-abstract-return";
+        mkdir(qo_dir);
+        string parent_src = tmp_dir + "/abstract-parent.qc";
+        string child_src = tmp_dir + "/abstract-child.qc";
+        string main_src = tmp_dir + "/abstract-main.qr";
+        string parent_qo = qo_dir + "/abstract-parent.qo";
+        string child_qo = qo_dir + "/abstract-child.qo";
+        string main_qo = qo_dir + "/abstract-main.qo";
+        string app = tmp_dir + "/abstract-return-app";
+
+        write(parent_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTDeferredAbstractParent {\n"
+            "    AOTDeferredAbstractReturn make() { return makeImpl(); }\n"
+            "    private abstract AOTDeferredAbstractReturn makeImpl();\n"
+            "}\n"
+            "class AOTDeferredAbstractReturn {\n"
+            "    string value() { return \"linked\"; }\n"
+            "}\n");
+        write(child_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTDeferredAbstractChild inherits AOTDeferredAbstractParent {\n"
+            "    private AOTDeferredAbstractReturn makeImpl() {\n"
+            "        return new AOTDeferredAbstractReturn();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTDeferredAbstractChild c();\n"
+            "    printf(\"%s\\n\", c.make().value());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string parent_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, parent_qo, parent_src));
+        assertTrue(is_file(parent_qo),
+            "abstract parent compiles with a later sibling return type: " + parent_out);
+
+        string child_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, child_qo, child_src));
+        assertTrue(is_file(child_qo),
+            "child override resolves the deferred abstract return type: " + child_out);
+        assertEq(-1, child_out.find("ABSTRACT-CLASS-ERROR"),
+            "child is concrete after matching the deferred return type: " + child_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against abstract return classes: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, parent_qo, child_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred abstract return classes: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("linked\n", out,
+            "linked executable dispatches the concrete abstract-return override: " + out);
+    }
+
+    testSiblingNamespacedObjectTypeImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-ns-object-type";
+        mkdir(qo_dir);
+        string holder_src = tmp_dir + "/holder.qc";
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string holder_qo = qo_dir + "/holder.qo";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string agg = tmp_dir + "/ns-object-type.qo";
+
+        write(holder_src,
+            "%new-style\n"
+            "public namespace OMQ {\n"
+            "    public class AOTNamespacedHolder {\n"
+            "        private { object<OMQ::AOTNamespacedService> svc; }\n"
+            "        constructor(object<OMQ::AOTNamespacedService> svc) { self.svc = svc; }\n"
+            "    }\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTNamespacedConsumer {\n"
+            "    int f() { return 1; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "public namespace OMQ {\n"
+            "    public class AOTNamespacedService {\n"
+            "        string name() { return \"service\"; }\n"
+            "    }\n"
+            "}\n");
+
+        string holder_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, holder_qo, holder_src));
+        assertTrue(is_file(holder_qo), "holder compiles before namespaced service exists: " + holder_out);
+
+        string holder_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, holder_qo));
+        assertTrue(holder_index.find("\"qore_path\": \"OMQ::AOTNamespacedService\"") != -1,
+            "holder index records the namespaced class import: " + holder_index);
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "sibling preload accepts unresolved namespaced object member type: " + consumer_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "namespaced service provider compiles: " + provider_out);
+
+        string link_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_NS_OBJECT_TYPE"
+            " -o %s %s %s %s", env, qcc_bin, agg, holder_qo, consumer_qo, provider_qo));
+        assertTrue(is_file(agg), "qo-link resolves the namespaced service provider: " + link_out);
+        string link_map = File::readTextFile(agg + ".qolink.json");
+        assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
+            "namespaced object type import is resolved in link map: " + link_map);
+    }
+
+    testStandaloneDeferredClassOverloadTypes() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-deferred-overloads";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_a_src = tmp_dir + "/provider-a.qc";
+        string provider_b_src = tmp_dir + "/provider-b.qc";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_a_qo = qo_dir + "/provider-a.qo";
+        string provider_b_qo = qo_dir + "/provider-b.qo";
+        string agg = tmp_dir + "/deferred-overloads.qo";
+
+        write(consumer_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTDeferredOverloadConsumer {\n"
+            "    constructor(AOTDeferredOverloadA a) {}\n"
+            "    constructor(AOTDeferredOverloadB b) {}\n"
+            "}\n");
+        write(provider_a_src,
+            "%new-style\n"
+            "class AOTDeferredOverloadA {}\n");
+        write(provider_b_src,
+            "%new-style\n"
+            "class AOTDeferredOverloadB {}\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "consumer compiles with distinct unresolved class overload types: " + consumer_out);
+        assertEq(-1, consumer_out.find("DUPLICATE-SIGNATURE"),
+            "unresolved class overloads are not collapsed to generic object: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredOverloadA\"") != -1,
+            "consumer index records first class import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredOverloadB\"") != -1,
+            "consumer index records second class import: " + consumer_index);
+
+        string provider_a_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_a_qo, provider_a_src));
+        assertTrue(is_file(provider_a_qo), "provider A compiles: " + provider_a_out);
+        string provider_b_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_b_qo, provider_b_src));
+        assertTrue(is_file(provider_b_qo), "provider B compiles: " + provider_b_out);
+
+        string link_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_DEFERRED_OVERLOADS"
+            " -o %s %s %s %s", env, qcc_bin, agg, consumer_qo, provider_a_qo, provider_b_qo));
+        assertTrue(is_file(agg), "qo-link resolves both deferred overload type imports: " + link_out);
+    }
+
+    testStandaloneStaticComplexDefaultTypeImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-complex-default";
+        mkdir(qo_dir);
+        string process_src = tmp_dir + "/process.qc";
+        string client_src = tmp_dir + "/client.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string process_qo = qo_dir + "/process.qo";
+        string client_qo = qo_dir + "/client.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/static-complex-default-app";
+
+        write(process_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTStaticComplexDefaultProcess {\n"
+            "    private { hash<string, AOTStaticComplexDefaultClient> client_map(); }\n"
+            "    int size() { return client_map.size(); }\n"
+            "}\n");
+        write(client_src,
+            "%new-style\n"
+            "class AOTStaticComplexDefaultClient {}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticComplexDefaultProcess p();\n"
+            "    printf(\"%d\\n\", p.size());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string process_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, process_qo, process_src));
+        assertTrue(is_file(process_qo),
+            "process compiles before nested object type provider exists: " + process_out);
+
+        string process_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, process_qo));
+        assertTrue(process_index.find("\"qore_path\": \"AOTStaticComplexDefaultClient\"") != -1,
+            "process index records nested object class import: " + process_index);
+
+        string client_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, client_qo, client_src));
+        assertTrue(is_file(client_qo),
+            "client compiles while preloading process with deferred complex default: " + client_out);
+        assertEq(-1, client_out.find("complex default kind=1"),
+            "preload resolves deferred hash<string, object<Client>> default type: " + client_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo),
+            "main compiles against process and nested object provider metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, process_qo, client_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts static complex default: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("0\n", out, "static complex default initializes an empty typed hash: " + out);
+    }
+
+    testSiblingObjectDefaultPreloadImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-sibling-object-default";
+        mkdir(qo_dir);
+        string target_src = tmp_dir + "/z-target.qc";
+        string holder_src = tmp_dir + "/a-holder.qc";
+        string trigger_src = tmp_dir + "/m-trigger.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string target_qo = qo_dir + "/z-target.qo";
+        string holder_qo = qo_dir + "/a-holder.qo";
+        string trigger_qo = qo_dir + "/m-trigger.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/sibling-object-default-app";
+
+        write(target_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultTarget {\n"
+            "    string value() { return \"target\"; }\n"
+            "}\n");
+        write(holder_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultHolder {\n"
+            "    private { AOTSiblingObjectDefaultTarget target(); }\n"
+            "    object getTarget() { return target; }\n"
+            "}\n");
+        write(trigger_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultTrigger {\n"
+            "    int run() { return 1; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTSiblingObjectDefaultHolder h = new AOTSiblingObjectDefaultHolder();\n"
+            "    h.getTarget();\n"
+            "    printf(\"ok\\n\");\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string target_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, target_qo, target_src));
+        assertTrue(is_file(target_qo), "object-default target compiles: " + target_out);
+
+        string holder_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, holder_qo, holder_src));
+        assertTrue(is_file(holder_qo), "object-default holder compiles against target metadata: " + holder_out);
+
+        string trigger_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, trigger_qo, trigger_src));
+        assertTrue(is_file(trigger_qo),
+            "sibling preload resolves holder object default through target metadata: " + trigger_out);
+        assertEq(-1, trigger_out.find("new-object default class"),
+            "preload did not report an unresolved object-default class: " + trigger_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against sibling object-default metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s %s",
+            env, qcc_bin, app, holder_qo, target_qo, trigger_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts sibling object defaults: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("ok\n", out, "linked executable constructs holder object default: " + out);
+    }
+
+    testStandaloneHashdeclTypeImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-hashdecl-type";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-hashdecl-provider.qo";
+        string app = tmp_dir + "/hashdecl-type-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "hash<AOTDeferredInfo> sub aot_hashdecl_passthrough(hash<AOTDeferredInfo> h) {\n"
+            "    return h;\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "hashdecl AOTDeferredInfo {\n"
+            "    string name;\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    hash<AOTDeferredInfo> h = <AOTDeferredInfo>{\"name\": \"hashdecl\"};\n"
+            "    printf(\"%s\\n\", aot_hashdecl_passthrough(h).name);\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "hashdecl consumer compiles standalone before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"kind\": \"hashdecl\"") != -1,
+            "consumer index records a hashdecl import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredInfo\"") != -1,
+            "consumer index records AOTDeferredInfo as the required hashdecl import: " + consumer_index);
+        assertTrue(consumer_index.find("\"flags\": 0") != -1,
+            "hashdecl type import is required, not optional: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_HASHDECL_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required hashdecl provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1 && missing_out.find("AOTDeferredInfo") != -1,
+            "qo-link diagnostic names the missing hashdecl: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "hashdecl provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded hashdecl metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone hashdecl type imports: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("hashdecl\n", out, "linked executable resolves hashdecl type import: " + out);
+    }
+
+    testStandaloneHashdeclImpliedConstructorImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-hashdecl-constructor";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-hashdecl-constructor-provider.qo";
+        string app = tmp_dir + "/hashdecl-constructor-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "hash<AOTDeferredConstructInfo> sub aot_make_hashdecl_constructor() {\n"
+            "    hash<AOTDeferredConstructInfo> h();\n"
+            "    h.name = \"constructed\";\n"
+            "    return h;\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "hashdecl AOTDeferredConstructInfo {\n"
+            "    string name;\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    printf(\"%s\\n\", aot_make_hashdecl_constructor().name);\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "hashdecl implied-constructor consumer compiles before provider exists: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredConstructInfo\"") != -1,
+            "consumer index records the deferred hashdecl import: " + consumer_index);
+        assertTrue(consumer_index.find("\"kind\": \"hashdecl\"") != -1,
+            "consumer index marks the deferred hashdecl import as hashdecl: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_HASHDECL_CTOR_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required hashdecl constructor provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTDeferredConstructInfo") != -1,
+            "qo-link diagnostic names the missing hashdecl constructor provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "hashdecl constructor provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded hashdecl constructor metadata: "
+            + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred hashdecl implied constructor: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("constructed\n", out, "linked executable resolves deferred hashdecl constructor: " + out);
+    }
+
+    testStandaloneStaticMethodImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-method";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-provider.qo";
+        string app = tmp_dir + "/static-method-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticConsumer {\n"
+            "    auto run() { return AOTStaticProvider::message(\"call\"); }\n"
+            "    nothing runNoop() { return AOTStaticProvider::noop(); }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticProvider {\n"
+            "    static string message(string value) { return \"static-\" + value; }\n"
+            "    static noop() {}\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticConsumer c = new AOTStaticConsumer();\n"
+            "    c.runNoop();\n"
+            "    printf(\"%s\\n\", c.run());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "static-method consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticProvider::message\"") != -1,
+            "consumer index records the deferred static method import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required static method provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticProvider::message") != -1,
+            "qo-link diagnostic names the missing static method: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static method provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded static method metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone static method import: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("static-call\n", out, "linked executable resolves deferred static method call: " + out);
+    }
+
+    testStandaloneStaticMethodCallReferenceImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-method-callref";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-callref-provider.qo";
+        string app = tmp_dir + "/static-callref-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticCallRefConsumer {\n"
+            "    string run() {\n"
+            "        code c = \\AOTStaticCallRefProvider::message();\n"
+            "        return c(\"ref\");\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticCallRefProvider {\n"
+            "    static string message(string value) { return \"callref-\" + value; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticCallRefConsumer c = new AOTStaticCallRefConsumer();\n"
+            "    printf(\"%s\\n\", c.run());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "static-method callref consumer compiles before provider exists: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticCallRefProvider::message\"") != -1,
+            "consumer index records the deferred static method callref import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_CALLREF_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required static callref provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticCallRefProvider::message") != -1,
+            "qo-link diagnostic names the missing static callref method: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static callref provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded static callref metadata: "
+            + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone static method callref: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("callref-ref\n", out, "linked executable resolves deferred static method callref: " + out);
+    }
+
+    testStandaloneStaticMemberImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-member";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-member-provider.qo";
+        string app = tmp_dir + "/static-member-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticMemberConsumer {\n"
+            "    string run() {\n"
+            "        AOTStaticMemberProvider::StaticText = AOTStaticMemberProvider::StaticText + \"-set\";\n"
+            "        AOTMemberNS::NSVar = AOTMemberNS::NSVar + \"-set\";\n"
+            "        return AOTStaticMemberProvider::StaticConst + \":\""
+            " + AOTStaticMemberProvider::StaticText + \":\""
+            " + AOTMemberNS::NSConst + \":\" + AOTMemberNS::NSVar;\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "public namespace AOTMemberNS {\n"
+            "    public const NSConst = \"ns-const\";\n"
+            "    public our string NSVar;\n"
+            "}\n"
+            "class AOTStaticMemberProvider {\n"
+            "    public {\n"
+            "        const StaticConst = \"class-const\";\n"
+            "        static string StaticText = \"class-var\";\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTMemberNS::NSVar = \"ns-var\";\n"
+            "    AOTStaticMemberConsumer c = new AOTStaticMemberConsumer();\n"
+            "    printf(\"%s\\n\", c.run());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "static-member consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticMemberProvider::StaticConst\"") != -1,
+            "consumer index records the deferred class constant import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticMemberProvider::StaticText\"") != -1,
+            "consumer index records the deferred static var import: " + consumer_index);
+        assertTrue(consumer_index.find("\"kind\": \"static_var\"") != -1,
+            "consumer index marks deferred static vars as static_var imports: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTMemberNS::NSConst\"") != -1,
+            "consumer index records the deferred namespace constant import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTMemberNS::NSVar\"") != -1,
+            "consumer index records the deferred namespace global import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_MEMBER_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required static-member providers: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticMemberProvider::StaticText") != -1,
+            "qo-link diagnostic names a missing static member: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static-member provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded static-member metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone static-member imports: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("class-const:class-var-set:ns-const:ns-var-set\n", out,
+            "linked executable resolves deferred static members and scoped globals: " + out);
+    }
+
+    testInheritedStaticMemberAliases() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-inherited-static-member";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string base_src = tmp_dir + "/base.qc";
+        string child_src = tmp_dir + "/child.qc";
+        string builtin_consumer_src = tmp_dir + "/builtin-consumer.qc";
+        string builtin_child_src = tmp_dir + "/builtin-child.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string base_qo = qo_dir + "/base.qo";
+        string child_qo = qo_dir + "/child.qo";
+        string builtin_consumer_qo = qo_dir + "/builtin-consumer.qo";
+        string builtin_child_qo = qo_dir + "/builtin-child.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string agg = tmp_dir + "/inherited-static-member-agg.qo";
+        string builtin_agg = tmp_dir + "/inherited-builtin-static-method-agg.qo";
+        string app = tmp_dir + "/inherited-static-member-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTInheritedAliasConsumer {\n"
+            "    static string run() {\n"
+            "        AOTInheritedAliasChild::BaseVar = AOTInheritedAliasChild::BaseVar + \"-set\";\n"
+            "        return AOTInheritedAliasChild::BaseConst + \":\""
+            " + AOTInheritedAliasChild::BaseVar + \":\""
+            " + AOTInheritedAliasChild::label(\"call\");\n"
+            "    }\n"
+            "}\n");
+        write(base_src,
+            "%new-style\n"
+            "class AOTInheritedAliasBase {\n"
+            "    public {\n"
+            "        const BaseConst = \"base-const\";\n"
+            "        static string BaseVar;\n"
+            "    }\n"
+            "    static string label(string value) { return \"base-\" + value; }\n"
+            "}\n");
+        write(child_src,
+            "%new-style\n"
+            "class AOTInheritedAliasChild inherits AOTInheritedAliasBase {\n"
+            "}\n");
+        write(builtin_consumer_src,
+            "%new-style\n"
+            "class AOTBuiltinInheritedAliasConsumer {\n"
+            "    static auto run(binary b) {\n"
+            "        return AOTBuiltinInheritedAliasChild::deserialize(b);\n"
+            "    }\n"
+            "}\n");
+        write(builtin_child_src,
+            "%new-style\n"
+            "class AOTBuiltinInheritedAliasChild inherits Serializable {\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTInheritedAliasChild::BaseVar = \"base-var\";\n"
+            "    printf(\"%s\\n\", AOTInheritedAliasConsumer::run());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "inherited-alias consumer compiles before provider exists: "
+            + consumer_out);
+
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, base_qo, base_src));
+        assertTrue(is_file(base_qo), "inherited-alias base provider compiles: " + base_out);
+
+        string child_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, child_qo, child_src));
+        assertTrue(is_file(child_qo), "inherited-alias child provider compiles: " + child_out);
+
+        string child_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, child_qo));
+        assertTrue(child_index.find("\"qore_path\": \"AOTInheritedAliasChild::BaseConst\"") != -1,
+            "child index provides inherited class constant alias: " + child_index);
+        assertTrue(child_index.find("\"qore_path\": \"AOTInheritedAliasChild::BaseVar\"") != -1,
+            "child index provides inherited static var alias: " + child_index);
+        assertTrue(child_index.find("\"qore_path\": \"AOTInheritedAliasChild::label(string)\"") != -1,
+            "child index provides inherited static method alias: " + child_index);
+        assertTrue(child_index.find("\"abi_kind\": \"inherited_alias\"") != -1,
+            "child index marks inherited alias records: " + child_index);
+
+        string builtin_consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, builtin_consumer_qo, builtin_consumer_src));
+        assertTrue(is_file(builtin_consumer_qo), "builtin inherited-alias consumer compiles before provider exists: "
+            + builtin_consumer_out);
+
+        string builtin_child_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, builtin_child_qo, builtin_child_src));
+        assertTrue(is_file(builtin_child_qo), "builtin inherited-alias child provider compiles: "
+            + builtin_child_out);
+
+        string builtin_child_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, builtin_child_qo));
+        assertTrue(builtin_child_index.find("\"qore_path\": \"AOTBuiltinInheritedAliasChild::deserialize(") != -1,
+            "child index provides inherited builtin static method aliases: " + builtin_child_index);
+        assertTrue(builtin_child_index.find("\"abi_kind\": \"inherited_alias\"") != -1,
+            "child index marks inherited builtin aliases: " + builtin_child_index);
+
+        string builtin_linkcheck_out = run(sprintf("%s %s --link-qo"
+            " --aggregate-symbol=AOT_INHERITED_BUILTIN_ALIAS -o %s %s %s",
+            env, qcc_bin, builtin_agg, builtin_consumer_qo, builtin_child_qo));
+        assertTrue(is_file(builtin_agg), "qo-link accepts inherited builtin static method aliases: "
+            + builtin_linkcheck_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against inherited aliases: " + main_out);
+
+        string linkcheck_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_INHERITED_ALIAS"
+            " -o %s %s %s %s %s", env, qcc_bin, agg, consumer_qo, child_qo, base_qo, main_qo));
+        assertTrue(is_file(agg), "qo-link accepts inherited static member aliases: " + linkcheck_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, child_qo, base_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts inherited aliases: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("base-const:base-var-set:base-call\n", out,
+            "linked executable resolves inherited aliases: " + out);
+    }
+
+    testStandaloneDeferredSwitchConstantImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-switch-constants";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-switch-constant-provider.qo";
+        string app = tmp_dir + "/switch-constant-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTSwitchConstantClient {\n"
+            "    string check(string v) {\n"
+            "        switch (v) {\n"
+            "            case AOTSwitchBareRep:\n"
+            "                return \"bare\";\n"
+            "            case AOTSwitchConstantProcess::ClassRep:\n"
+            "                return \"class\";\n"
+            "        }\n"
+            "        return AOTSwitchConstantProcess::StaticText;\n"
+            "    }\n"
+            "    list<string> frames() {\n"
+            "        return (AOTSwitchBareRep, AOTSwitchConstantProcess::ClassRep);\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "const AOTSwitchBareRep = \"REP\";\n"
+            "class AOTSwitchConstantProcess {\n"
+            "    public {\n"
+            "        const ClassRep = \"CREP\";\n"
+            "        static string StaticText = \"fallback\";\n"
+            "    }\n"
+            "    private { AOTSwitchConstantClient client; }\n"
+            "    string marker() { return AOTSwitchBareRep; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTSwitchConstantClient c = new AOTSwitchConstantClient();\n"
+            "    printf(\"%s:%s:%s\\n\", c.check(\"REP\"), c.check(\"CREP\"), c.frames().join(\",\"));\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "switch-constant consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTSwitchBareRep\"") != -1,
+            "consumer index records the deferred bare constant import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTSwitchConstantProcess::ClassRep\"") != -1,
+            "consumer index records the deferred class constant import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_SWITCH_CONST_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required switch constant providers: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTSwitchConstantProcess::ClassRep") != -1,
+            "qo-link diagnostic names a missing switch constant: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "switch-constant provider compiles with consumer preload: "
+            + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against switch-constant metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred switch constants: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("bare:class:REP,CREP\n", out,
+            "linked executable resolves deferred switch and frame constants: " + out);
+    }
+
+    testStaticMemberConstantInitializerImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-const-init";
+        mkdir(qo_dir);
+        string base_src = tmp_dir + "/base.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string base_qo = qo_dir + "/base.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-const-init-provider.qo";
+        string app = tmp_dir + "/static-const-init-app";
+
+        write(base_src,
+            "%new-style\n"
+            "class AOTConstInitBase {\n"
+            "    public {\n"
+            "        const ProfileMap = {\n"
+            "            \"provider\": AOTConstInitProvider::ProfileOptions,\n"
+            "        };\n"
+            "    }\n"
+            "    string getKind() { return ProfileMap.provider.kind; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTConstInitProvider inherits AOTConstInitBase {\n"
+            "    public {\n"
+            "        const ProfileOptions = {\n"
+            "            \"kind\": \"profile\",\n"
+            "        };\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTConstInitProvider p = new AOTConstInitProvider();\n"
+            "    printf(\"%s\\n\", p.getKind());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, base_qo, base_src));
+        assertTrue(is_file(base_qo), "static constant initializer compiles before provider exists: "
+            + base_out);
+
+        string base_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, base_qo));
+        assertTrue(base_index.find("\"qore_path\": \"AOTConstInitProvider::ProfileOptions\"") != -1,
+            "constant initializer index records deferred static constant import: " + base_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_CONST_INIT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, base_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without static constant initializer provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTConstInitProvider::ProfileOptions") != -1,
+            "qo-link diagnostic names missing static constant initializer provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static constant initializer provider compiles against base: "
+            + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against static constant initializer metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, base_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred static constant initializer: "
+            + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("profile\n", out, "linked executable resolves deferred static constant initializer: " + out);
+    }
+
+    testPendingStaticConstantBaseConstructorArgs() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-pending-const-bca";
+        mkdir(qo_dir);
+        string base_src = tmp_dir + "/base.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string child_src = tmp_dir + "/child.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string base_qo = qo_dir + "/base.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string child_qo = qo_dir + "/child.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/pending-const-bca-app";
+
+        write(base_src,
+            "%new-style\n"
+            "class AOTPendingConstBcaBase {\n"
+            "    private { string type; }\n"
+            "    public {\n"
+            "        const BaseMetadata = AOTPendingConstBcaProvider::SeedMetadata + {\n"
+            "            \"base\": { \"name\": \"base\" },\n"
+            "        };\n"
+            "    }\n"
+            "    private constructor(string type, hash<string, hash<auto>> metadata) {\n"
+            "        self.type = type;\n"
+            "    }\n"
+            "    constructor() { self.type = \"base\"; }\n"
+            "    string getType() { return type; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTPendingConstBcaProvider {\n"
+            "    public {\n"
+            "        const SeedMetadata = {\n"
+            "            \"seed\": { \"name\": \"seed\" },\n"
+            "        };\n"
+            "    }\n"
+            "}\n");
+        write(child_src,
+            "%new-style\n"
+            "class AOTPendingConstBcaChild inherits AOTPendingConstBcaBase {\n"
+            "    public {\n"
+            "        const ChildMetadata = AOTPendingConstBcaBase::BaseMetadata + {\n"
+            "            \"child\": { \"name\": \"child\" },\n"
+            "        };\n"
+            "    }\n"
+            "    constructor() : AOTPendingConstBcaBase(\"child\", ChildMetadata) {}\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTPendingConstBcaChild c = new AOTPendingConstBcaChild();\n"
+            "    printf(\"%s\\n\", c.getType());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, base_qo, base_src));
+        assertTrue(is_file(base_qo), "base compiles before pending constant provider exists: " + base_out);
+
+        string base_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, base_qo));
+        assertTrue(base_index.find("\"qore_path\": \"AOTPendingConstBcaProvider::SeedMetadata\"") != -1,
+            "base index records pending static constant dependency: " + base_index);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "provider compiles after pending base: " + provider_out);
+
+        string child_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, child_qo, child_src));
+        assertTrue(is_file(child_qo),
+            "child compiles with pending base constant in typed base constructor args: " + child_out);
+        assertEq(-1, child_out.find("constructor(string, nothing)"),
+            "pending static constant is not exposed as NOTHING during overload resolution: " + child_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against pending constant BCA metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s %s",
+            env, qcc_bin, app, base_qo, provider_qo, child_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts pending constant BCA graph: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("child\n", out, "linked executable resolves pending static constants in BCA: " + out);
+    }
+
+    testStaticMemberVariableInitializerImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-var-init";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-var-init-provider.qo";
+        string app = tmp_dir + "/static-var-init-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticVarInitConsumer {\n"
+            "    public {\n"
+            "        static string FromConst = AOTStaticVarInitProvider::SeedConst;\n"
+            "        static string FromVar = AOTStaticVarInitProvider::SeedVar;\n"
+            "    }\n"
+            "    string get() { return FromConst + \":\" + FromVar; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticVarInitProvider {\n"
+            "    public {\n"
+            "        const SeedConst = \"const-seed\";\n"
+            "        static string SeedVar = \"var-seed\";\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticVarInitConsumer c = new AOTStaticVarInitConsumer();\n"
+            "    printf(\"%s\\n\", c.get());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "static-var initializer consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticVarInitProvider::SeedConst\"") != -1,
+            "static-var initializer index records deferred class constant import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticVarInitProvider::SeedVar\"") != -1,
+            "static-var initializer index records deferred static var import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_VAR_INIT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without static-var initializer provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticVarInitProvider::SeedVar") != -1,
+            "qo-link diagnostic names missing static-var initializer provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static-var initializer provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against static-var initializer metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred static-var initializer: "
+            + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("const-seed:var-seed\n", out,
+            "linked executable resolves deferred static-var initializer: " + out);
+    }
+
+    testStaticMemberObjectInitializerImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-object-init";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-object-init-provider.qo";
+        string app = tmp_dir + "/static-object-init-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticObjectInitConsumer {\n"
+            "    private { static AOTStaticObjectInitProvider provider(); }\n"
+            "    string get() { return provider.value(); }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticObjectInitProvider {\n"
+            "    string value() { return \"object-init\"; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticObjectInitConsumer c = new AOTStaticObjectInitConsumer();\n"
+            "    printf(\"%s\\n\", c.get());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "static-object initializer consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticObjectInitProvider\"") != -1,
+            "static-object initializer index records deferred class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_OBJECT_INIT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without static-object initializer provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticObjectInitProvider") != -1,
+            "qo-link diagnostic names missing static-object initializer provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static-object initializer provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against static-object initializer metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred static-object initializer: "
+            + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("object-init\n", out,
+            "linked executable resolves deferred static-object initializer: " + out);
+    }
+
+    testReflectionClassInitializerImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-reflection-class-init";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-reflection-class-provider.qo";
+        string app = tmp_dir + "/reflection-class-init-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "%requires reflection\n"
+            "class AOTReflectionClassInitConsumer {\n"
+            "    private {\n"
+            "        static Class provider = Class::forName(\"AOTReflectionClassInitProvider\");\n"
+            "        const ProviderMap = {\"provider\": Class::forName(\"AOTReflectionClassInitProvider\")};\n"
+            "    }\n"
+            "    string get() {\n"
+            "        Class map_provider = ProviderMap{\"provider\"};\n"
+            "        return provider.getPathName() + \":\" + map_provider.getPathName();\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTReflectionClassInitProvider {\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "%requires reflection\n"
+            "int sub main() {\n"
+            "    AOTReflectionClassInitConsumer c = new AOTReflectionClassInitConsumer();\n"
+            "    printf(\"%s\\n\", c.get());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "reflection class initializer consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTReflectionClassInitProvider\"") != -1,
+            "reflection class initializer index records deferred class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_REFLECTION_CLASS_INIT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without reflection class initializer provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTReflectionClassInitProvider") != -1,
+            "qo-link diagnostic names missing reflection class initializer provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "reflection class initializer provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against reflection class initializer metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred reflection class initializer: "
+            + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("AOTReflectionClassInitProvider:AOTReflectionClassInitProvider\n", out,
+            "linked executable resolves deferred reflection class initializer: " + out);
+    }
+
+    testStandaloneConstructorImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-constructor";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-constructor-provider.qo";
+        string app = tmp_dir + "/constructor-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTConstructorConsumer {\n"
+            "    auto make() { return new AOTConstructorProvider(\"constructed\"); }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTConstructorProvider {\n"
+            "    private { string value; }\n"
+            "    constructor(string value) { self.value = value; }\n"
+            "    string getValue() { return value; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTConstructorConsumer c = new AOTConstructorConsumer();\n"
+            "    object p = c.make();\n"
+            "    printf(\"%s\\n\", p.getValue());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "constructor consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTConstructorProvider\"") != -1,
+            "consumer index records the deferred constructor class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CTOR_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required constructor provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTConstructorProvider") != -1,
+            "qo-link diagnostic names the missing constructor class: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "constructor provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded constructor metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone constructor import: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("constructed\n", out, "linked executable resolves deferred constructor call: " + out);
+    }
+
+    testStandaloneCastImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-cast";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-cast-provider.qo";
+        string app = tmp_dir + "/cast-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "auto sub aot_cast_provider(object o) {\n"
+            "    return cast<AOTCastProvider>(o);\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTCastProvider {\n"
+            "    private { string value; }\n"
+            "    constructor(string value) { self.value = value; }\n"
+            "    string getValue() { return value; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    object p = new AOTCastProvider(\"casted\");\n"
+            "    object c = aot_cast_provider(p);\n"
+            "    printf(\"%s\\n\", c.getValue());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "cast consumer compiles before provider exists: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTCastProvider\"") != -1,
+            "consumer index records the deferred cast class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_CAST_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required cast provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTCastProvider") != -1,
+            "qo-link diagnostic names the missing cast class: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "cast provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded cast provider metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone cast import: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("casted\n", out, "linked executable resolves deferred cast class: " + out);
+    }
+
+    testStandaloneImpliedConstructorImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-implied-constructor";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-implied-constructor-provider.qo";
+        string app = tmp_dir + "/implied-constructor-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTImpliedConstructorConsumer {\n"
+            "    auto make() {\n"
+            "        AOTImpliedConstructorProvider p(\"implied\");\n"
+            "        return p;\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTImpliedConstructorProvider {\n"
+            "    private { string value; }\n"
+            "    constructor(string value) { self.value = value; }\n"
+            "    string getValue() { return value; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTImpliedConstructorConsumer c = new AOTImpliedConstructorConsumer();\n"
+            "    object p = c.make();\n"
+            "    printf(\"%s\\n\", p.getValue());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "implied constructor consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTImpliedConstructorProvider\"") != -1,
+            "consumer index records the deferred implied-constructor class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_IMPLIED_CTOR_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required implied-constructor provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTImpliedConstructorProvider") != -1,
+            "qo-link diagnostic names the missing implied-constructor class: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "implied-constructor provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded implied-constructor metadata: "
+            + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone implied-constructor import: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("implied\n", out, "linked executable resolves deferred implied-constructor class: " + out);
+    }
+
+    testStandaloneNamespacedSuffixImports() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-namespaced-suffix";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-namespaced-provider.qo";
+        string full_agg = tmp_dir + "/full-namespaced-provider.qo";
+        string app = tmp_dir + "/namespaced-suffix-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "string sub aot_namespaced_suffix_consumer() {\n"
+            "    return AOTLinkToken + \":\" + AOTNamespacedProvider::label() + \":\" + aotNamespacedFunction();\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "public namespace OMQ {\n"
+            "const AOTLinkToken = \"ns\";\n"
+            "namespace UserApi { namespace RbacModule { const AOTLinkToken = \"nested\"; } }\n"
+            "class AOTNamespacedProvider {\n"
+            "    static string label() { return AOTLinkToken; }\n"
+            "}\n"
+            "string sub aotNamespacedFunction() { return AOTNamespacedProvider::label(); }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    printf(\"%s\\n\", aot_namespaced_suffix_consumer());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "namespaced suffix consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTLinkToken\"") != -1,
+            "consumer index records the bare constant import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTNamespacedProvider::label\"") != -1,
+            "consumer index records the unqualified static method import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"aotNamespacedFunction\"") != -1,
+            "consumer index records the unqualified function import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_NAMESPACED_SUFFIX_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required namespaced providers: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTLinkToken") != -1
+                && missing_out.find("AOTNamespacedProvider::label") != -1
+                && missing_out.find("aotNamespacedFunction") != -1,
+            "qo-link diagnostic names missing namespaced suffix imports: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "namespaced suffix provider compiles: " + provider_out);
+
+        string full_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_NAMESPACED_SUFFIX_FULL"
+            " -o %s %s %s", env, qcc_bin, full_agg, consumer_qo, provider_qo));
+        assertTrue(is_file(full_agg), "qo-link resolves unique namespaced suffix providers: " + full_out);
+        string full_map = File::readTextFile(full_agg + ".qolink.json");
+        assertTrue(full_map.find("\"unresolved_imports\": []") != -1,
+            "namespaced suffix qo-link has no unresolved imports: " + full_map);
+        assertTrue(full_map.find("\"ambiguous_imports\": []") != -1,
+            "namespaced suffix qo-link has no ambiguous imports: " + full_map);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against namespaced suffix metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts namespaced suffix imports: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("ns:ns:ns\n", out, "linked executable resolves namespaced suffix imports: " + out);
+    }
+
+    testStandaloneFunctionImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-function";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-function-provider.qo";
+        string partial_agg = tmp_dir + "/partial-function-provider.qo";
+        string full_agg = tmp_dir + "/full-function-provider.qo";
+        string app = tmp_dir + "/function-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "auto sub aot_deferred_call_message() {\n"
+            "    return aot_function_provider();\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "string sub aot_function_provider() {\n"
+            "    return \"function\";\n"
+            "}\n"
+            "string sub aot_function_provider(string suffix) {\n"
+            "    return \"function-\" + suffix;\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    printf(\"%s\\n\", aot_deferred_call_message());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "function consumer compiles standalone before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"kind\": \"function\"") != -1,
+            "consumer index records a function import: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"aot_function_provider\"") != -1,
+            "consumer index records the bare function import: " + consumer_index);
+        assertTrue(consumer_index.find("\"flags\": 0") != -1,
+            "function import is required, not optional: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_FUNCTION_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required function provider: " + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1 && missing_out.find("aot_function_provider") != -1,
+            "qo-link diagnostic names the missing function: " + missing_out);
+
+        string partial_out = run(sprintf("%s %s --link-qo --allow-unresolved-imports"
+            " --aggregate-symbol=AOT_FUNCTION_IMPORT_PARTIAL -o %s %s",
+            env, qcc_bin, partial_agg, consumer_qo));
+        assertTrue(is_file(partial_agg), "partial qo-link can carry unresolved required imports: "
+            + partial_out);
+        string partial_map = File::readTextFile(partial_agg + ".qolink.json");
+        assertTrue(partial_map.find("\"allow_unresolved_imports\": true") != -1,
+            "partial qo-link map records the unresolved-import policy: " + partial_map);
+        assertTrue(partial_map.find("\"unresolved_imports\"") != -1
+                && partial_map.find("aot_function_provider") != -1,
+            "partial qo-link map records the carried function import: " + partial_map);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "function provider compiles: " + provider_out);
+
+        string full_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_FUNCTION_IMPORT_FULL"
+            " -o %s %s %s", env, qcc_bin, full_agg, consumer_qo, provider_qo));
+        assertTrue(is_file(full_agg), "qo-link accepts overloads from the same provider source: " + full_out);
+        string full_map = File::readTextFile(full_agg + ".qolink.json");
+        assertTrue(full_map.find("\"ambiguous_imports\": []") != -1,
+            "same-source overloads do not create ambiguous imports: " + full_map);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded function metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone function import: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("function\n", out, "linked executable resolves function import: " + out);
+    }
+
+    testSerializedConstructorFunctionCallPreload() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-bca-function";
+        string isolated_dir = tmp_dir + "/qo-bca-isolated";
+        mkdir(qo_dir);
+        mkdir(isolated_dir);
+        string provider_src = tmp_dir + "/provider.qc";
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string probe_src = tmp_dir + "/probe.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string provider_qo = qo_dir + "/provider.qo";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string isolated_consumer_qo = isolated_dir + "/consumer.qo";
+        string probe_qo = tmp_dir + "/probe.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/bca-function-app";
+
+        write(provider_src,
+            "%new-style\n"
+            "string sub aot_bca_function_provider() {\n"
+            "    return \"bca-function\";\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTBcaFunctionBase {\n"
+            "    public { string value; }\n"
+            "    constructor(string value) { self.value = value; }\n"
+            "}\n"
+            "class AOTBcaFunctionConsumer inherits AOTBcaFunctionBase {\n"
+            "    constructor() : AOTBcaFunctionBase(aot_bca_function_provider()) {}\n"
+            "    string get() { return value; }\n"
+            "}\n");
+        write(probe_src,
+            "%new-style\n"
+            "class AOTBcaFunctionProbe {\n"
+            "    string run() {\n"
+            "        AOTBcaFunctionConsumer c = new AOTBcaFunctionConsumer();\n"
+            "        return c.get();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTBcaFunctionConsumer c = new AOTBcaFunctionConsumer();\n"
+            "    printf(\"%s\\n\", c.get());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "function provider compiles for constructor metadata: " + provider_out);
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "consumer compiles with resolved constructor function call: "
+            + consumer_out);
+
+        string copy_out = run(sprintf("cp %s %s", consumer_qo, isolated_consumer_qo));
+        assertTrue(is_file(isolated_consumer_qo), "isolated consumer copy created: " + copy_out);
+
+        string probe_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, isolated_dir, probe_qo, probe_src));
+        assertTrue(is_file(probe_qo),
+            "preloading consumer defers missing serialized constructor function call: " + probe_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against constructor metadata provider: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, provider_qo, consumer_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts constructor function call metadata: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("bca-function\n", out, "linked executable resolves constructor function call: " + out);
     }
 
     testPrelinkedCallDisableSwitch() {

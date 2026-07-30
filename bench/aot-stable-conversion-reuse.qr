@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub mix(*int value) {
+    return ((value * 3) + (value * 5) + (value * 7) + (value * 11)
+        + (value * 13) + (value * 17)) & 0x7fffffff;
+}
+
+int sub run(int rounds, *int value) {
+    int checksum = 1;
+    for (int i = 0; i < rounds; ++i) {
+        checksum = (checksum + mix(value) + (i & 1023)) & 0x7fffffff;
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 20000000;
+    *int value = ARGV.size() > 1 ? ARGV[1].toInt() : 7;
+    printf("%d\n", run(rounds, value));
+    return 0;
+}
+
+main();

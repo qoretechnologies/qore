@@ -48,6 +48,7 @@
 
 class qore_root_ns_private;
 class qore_ns_private;
+class qore_class_private;
 class QoreModuleContext;
 
 typedef std::list<const qore_ns_private*> nslist_t;
@@ -1381,6 +1382,13 @@ protected:
             }
         }
 
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreClass* qc = nscx->parseFindLocalClass(name)) {
+                ns = nscx;
+                return qc;
+            }
+        }
+
         clmap_t::const_iterator i = clmap.find(name);
 
         if (i != clmap.end()) {
@@ -1402,6 +1410,13 @@ protected:
             }
         }
 
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (TypedHashDecl* hd = nscx->parseFindLocalHashDecl(name)) {
+                ns = nscx;
+                return hd;
+            }
+        }
+
         thdmap_t::iterator i = thdmap.find(name);
 
         if (i != thdmap.end()) {
@@ -1417,6 +1432,13 @@ protected:
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
+                return ed;
+            }
+        }
+
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreEnumDecl* ed = nscx->parseFindLocalEnum(name)) {
+                ns = nscx;
                 return ed;
             }
         }
@@ -1712,6 +1734,8 @@ protected:
     DLLLOCAL QoreClass* parseFindScopedClassWithMethodInternError(const QoreProgramLocation* loc,
             const NamedScope& name, bool error);
     DLLLOCAL QoreClass* parseFindScopedClassWithMethodIntern(const NamedScope& name, unsigned& matched);
+    DLLLOCAL QoreClass* parseFindClassWithStaticMethodIntern(const char* cname, const char* mname,
+            const qore_class_private* class_ctx, const QoreMethod** method);
 
     DLLLOCAL QoreClass* parseFindClassIntern(const char* cname) {
         assert(cname);
@@ -1752,6 +1776,12 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
+                return qc;
+            }
+        }
+
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreClass* qc = nscx->parseFindLocalClass(name)) {
                 return qc;
             }
         }
@@ -2446,6 +2476,16 @@ public:
         return rns.rpriv->runtimeFindHashDeclIntern(name, ns);
     }
 
+    DLLLOCAL static TypedHashDecl* parseTryFindHashDecl(RootQoreNamespace& rns, const char* name) {
+        NamedScope nscope(name);
+        return rns.rpriv->parseTryFindHashDecl(nscope);
+    }
+
+    DLLLOCAL static const QoreEnumDecl* parseTryFindEnum(RootQoreNamespace& rns, const char* name) {
+        NamedScope nscope(name);
+        return rns.rpriv->parseTryFindEnum(nscope);
+    }
+
     DLLLOCAL static const QoreEnumDecl* runtimeFindEnum(RootQoreNamespace& rns, const char* name,
             const qore_ns_private*& ns) {
         if (strstr(name, "::")) {
@@ -2487,6 +2527,15 @@ public:
         return fe ? fe->getFunction() : nullptr;
     }
 
+    DLLLOCAL static const FunctionEntry* parseFindFunctionEntry(const char* fname) {
+        return getRootNS()->rpriv->parseFindFunctionEntryIntern(fname);
+    }
+
+    DLLLOCAL static void parseMaybeWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
+            const FunctionEntry* resolved) {
+        getRootNS()->rpriv->parseWarnAmbiguousFunctionCall(loc, fname, resolved);
+    }
+
     DLLLOCAL static const FunctionEntry* parseResolveFunctionEntry(const QoreProgramLocation* loc, const char* fname) {
         return getRootNS()->rpriv->parseResolveFunctionEntryIntern(loc, fname);
     }
@@ -2502,6 +2551,31 @@ public:
 
     DLLLOCAL static void parseCommit(RootQoreNamespace& rns) {
         rns.rpriv->parseCommit();
+    }
+
+    DLLLOCAL static QoreClass* parseFindClass(RootQoreNamespace& rns, const QoreProgramLocation* loc,
+            const char* name) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->parseFindScopedClassIntern(loc, nscope, false);
+        }
+        return rns.rpriv->parseFindClassIntern(name);
+    }
+
+    DLLLOCAL static TypedHashDecl* parseFindHashDecl(RootQoreNamespace& rns, const char* name,
+            const QoreNamespace*& ns) {
+        TypedHashDecl* th = nullptr;
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            unsigned matched = 0;
+            th = rns.rpriv->parseFindScopedHashDeclIntern(nscope, matched);
+        } else {
+            th = rns.rpriv->parseFindHashDeclIntern(name);
+        }
+        if (th) {
+            ns = th->getNamespace();
+        }
+        return th;
     }
 
     DLLLOCAL static QoreValue parseFindConstantValue(const QoreProgramLocation* loc, const char* name,
@@ -2545,6 +2619,11 @@ public:
     DLLLOCAL static QoreClass* parseFindScopedClassWithMethod(const QoreProgramLocation* loc, const NamedScope& name,
             bool error) {
         return getRootNS()->rpriv->parseFindScopedClassWithMethodInternError(loc, name, error);
+    }
+
+    DLLLOCAL static QoreClass* parseFindClassWithStaticMethod(const char* cname, const char* mname,
+            const qore_class_private* class_ctx, const QoreMethod** method = nullptr) {
+        return getRootNS()->rpriv->parseFindClassWithStaticMethodIntern(cname, mname, class_ctx, method);
     }
 
     DLLLOCAL static TypedefEntry* parseFindTypedef(const NamedScope& name) {

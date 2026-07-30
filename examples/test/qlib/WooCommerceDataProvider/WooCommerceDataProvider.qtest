@@ -144,7 +144,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
                 "consumer_secret": "cs_test",
             });
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to WooCommerce API: %s", ex.desc));
             }
@@ -405,7 +405,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
             assertTrue(result.hasKey("environment") || result.hasKey("database"),
                 "system-status has expected fields");
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "REST-RESPONSE-ERROR") {
                 testSkip(sprintf("cannot connect to WooCommerce: %s", ex.desc));
             }

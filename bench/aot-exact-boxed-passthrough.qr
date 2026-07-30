@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ExactPassthrough {
+    static string staticIdentity(string value) {
+        return value;
+    }
+
+    string identity(string value) {
+        return value;
+    }
+
+    int run(int rounds) {
+        string text = "abcdefghijklmnop";
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += ExactPassthrough::staticIdentity(text).size();
+            checksum += self.identity(text).size();
+        }
+        return checksum;
+    }
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+ExactPassthrough test();
+printf("%d\n", test.run(rounds));

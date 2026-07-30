@@ -101,6 +101,7 @@ fi
 QORE=""
 QR=""
 LIBQORE=""
+QORE_IS_BUILD_TREE=0
 QORE_LIB_PATH="./lib/.libs:./qlib:$LD_LIBRARY_PATH"
 
 set_qore_build_dir () {
@@ -117,6 +118,7 @@ set_qore_build_dir () {
     fi
     QORE="$d/qore"
     QR=""
+    QORE_IS_BUILD_TREE=1
     if [ -f "$d/qr" ]; then
         QR="$d/qr"
     fi
@@ -131,6 +133,9 @@ if [ -n "$QORE_BINARY" ]; then
         LIBQORE="$QORE_DIR/libqore.so"
     elif [ -f "$QORE_DIR/libqore.dylib" ]; then
         LIBQORE="$QORE_DIR/libqore.dylib"
+    fi
+    if [ -f "$QORE_DIR/CMakeCache.txt" ]; then
+        QORE_IS_BUILD_TREE=1
     fi
     if [ -f "$QORE_DIR/qr" ]; then
         QR="$QORE_DIR/qr"
@@ -262,12 +267,25 @@ if [ $MEASURE_TIME -eq 1 ]; then
     fi
 fi
 
-# Put the libqore directory at the front of LD_LIBRARY_PATH so the build's
-# qore binary picks up the build's libqore.so before any installed copy.
-# This replaces the old LD_PRELOAD approach which caused "multiple libqore
-# images loaded" when an installed copy also existed on the RPATH.
+# Put the libqore directory at the front of LD_LIBRARY_PATH only for build-tree
+# binaries so they pick up the matching build libqore.so before any installed
+# copy.  For installed/system binaries, do not prepend system library dirs:
+# doing so can override the loader's normal dependency order for libraries such
+# as ngtcp2/nghttp3/OpenSSL and mix incompatible stacks.
 LIBQORE_DIR=$(dirname "$LIBQORE")
-export LD_LIBRARY_PATH="${LIBQORE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+if [ "$QORE_IS_BUILD_TREE" = "1" ]; then
+    export LD_LIBRARY_PATH="${LIBQORE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+else
+    case "$LIBQORE_DIR" in
+        /lib|/lib/*|/usr/lib|/usr/lib/*) ;;
+        *)
+            case ":$LD_LIBRARY_PATH:" in
+                *":$LIBQORE_DIR:"*) ;;
+                *) export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:}${LIBQORE_DIR}" ;;
+            esac
+            ;;
+    esac
+fi
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null

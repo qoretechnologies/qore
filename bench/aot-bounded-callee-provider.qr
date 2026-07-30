@@ -1,0 +1,10 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub boundedExpression(int a, int b, int c, int d) {
+    int mixed0 = (a * 3 + b * 5) ^ (c * 7 + d * 11);
+    int mixed1 = ((a & 255) << 3) | ((b & 255) >> 2);
+    return (mixed0 + mixed1) & 0x7fffffff;
+}

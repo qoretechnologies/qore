@@ -2,19 +2,19 @@
 .\"
 .\" Copyright (C) 2026 Qore Technologies, s.r.o.
 .\"
-.TH QPATCH 1 "2026 May 14" "Qore 3.0" "Qore Programming Language"
+.TH QPATCH 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qpatch \- command-line patch tool powered by the Qore Diff module
 .SH SYNOPSIS
 .B qpatch
 [\fIoptions\fP]
-\fIpatch-file\fP
-[\fItarget-file\fP]
+\fItarget-file\fP
+[\fIpatch-file\fP]
 .SH DESCRIPTION
 \fBqpatch\fR applies a unified diff produced by \fBqdiff\fR(1) or any other
 unified\-diff source to a target file using the Qore \fBDiff\fR module.
 .PP
-With no target file the patch's own file header is used.
+If \fIpatch-file\fP is omitted, the patch is read from standard input.
 With \fB\-d\fP / \fB\-\-dry\-run\fP the patch is only validated against the target
 and no changes are written.
 .SH OPTIONS
@@ -49,6 +49,21 @@ Patch failed (context mismatch).
 .TP
 .B 2
 Error (missing file, invalid options).
+.SH EXAMPLES
+Apply a patch file:
+.RS
+.B qpatch myfile.txt changes.patch
+.RE
+.PP
+Apply a patch read from standard input:
+.RS
+.B qdiff old.txt new.txt | qpatch old.txt
+.RE
+.PP
+Validate a patch without changing the target file:
+.RS
+.B qpatch \-d myfile.txt changes.patch
+.RE
 .SH SEE ALSO
 .BR qdiff (1),
 .BR qore (1)

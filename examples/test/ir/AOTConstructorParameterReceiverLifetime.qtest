@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstructorParameterReceiverLifetimeTest
+
+class AOTConstructorParameterReceiverLifetimeTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTConstructorParameterReceiverLifetimeTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s",
+            libqore_dir, libqore_dir, source_root + "/include");
+
+        addTestCase("inherited AOT constructor receiver preserves defining class context",
+            \testConstructorParameterReceiverLifetime());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+        f.write(body);
+    }
+
+    private runCase(string root, string optimization) {
+        string case_dir = root + "/" + optimization;
+        string qo_dir = case_dir + "/qo";
+        mkdir(case_dir);
+        mkdir(qo_dir);
+
+        string process = case_dir + "/process.qr";
+        string client = case_dir + "/client.qr";
+        string entry = case_dir + "/entry.qr";
+        string aggregate = case_dir + "/aggregate.qo";
+        string glue = case_dir + "/host.cpp";
+        string exe = case_dir + "/constructor-receiver";
+
+        write(process, "%modern
+%allow-weak-references
+
+class AOTReceiverProcessBase {
+    private:internal {
+        Mutex mutex();
+        hash<string, object> clients;
+        hash<string, list<string>> urls = {\"server\": (\"initialized\",)};
+    }
+
+    registerClient(object client) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        clients{\"client\"} := client;
+    }
+
+    *list<string> getThreadSafeUrls(string id) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        return urls{id};
+    }
+}
+
+class AOTReceiverClusterBase {
+    private {
+        Mutex proc_lck();
+        hash<string, hash<auto>> proc_info;
+    }
+}
+
+class AOTReceiverThreadMixin {
+}
+
+class AOTReceiverUrlContract {
+    abstract *list<string> getThreadSafeUrls(string id);
+}
+
+class AOTReceiverDerivedProcess inherits AOTReceiverProcessBase, AOTReceiverUrlContract,
+        AOTReceiverClusterBase, AOTReceiverThreadMixin {
+    *list<string> getThreadSafeUrls() {
+        return (\"derived\",);
+    }
+}
+
+");
+        write(client, "%modern
+
+class AOTReceiverClientBase {
+    private {
+        AOTReceiverProcessBase process;
+        string result;
+    }
+
+    constructor(AOTReceiverProcessBase process) {
+        self.process = process;
+        process.registerClient(self);
+        *list<string> urls = process.getThreadSafeUrls(\"server\");
+        result = urls[0];
+    }
+
+    string getResult() {
+        return result;
+    }
+}
+
+class AOTReceiverDerivedClient inherits AOTReceiverClientBase {
+    constructor(AOTReceiverDerivedProcess process) : AOTReceiverClientBase(process) {
+    }
+}
+");
+        write(entry, "%modern
+
+int sub main() {
+    AOTReceiverDerivedProcess process();
+    AOTReceiverDerivedClient first(process);
+    AOTReceiverDerivedClient second(process);
+    printf(\"%s:%s\\n\", first.getResult(), second.getResult());
+    return 0;
+}
+");
+        write(glue, "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+
+extern \"C\" void init_AOT_CTOR_RECEIVER_qo(QoreProgram*);
+
+int main(int, char**) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    init_AOT_CTOR_RECEIVER_qo(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (!rc) {
+        rc = qore_run_callable(pgm, \"main\", NULL);
+    }
+    if (rc) {
+        fprintf(stderr, \"%s\\n\", qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
+}
+");
+
+        string qo_out = run(sprintf("%s %s -%s -c --output-dir=%s %s %s %s",
+            env, qcc_bin, optimization, qo_dir, process, client, entry));
+        assertTrue(qo_out.find("script-context .qo") != -1,
+            optimization + " split objects compiled: " + qo_out);
+
+        string aggregate_out = run(sprintf(
+            "%s %s -%s -c --script-aggregate=AOT_CTOR_RECEIVER"
+            " --script-aggregate-native-registers -o %s %s %s %s",
+            env, qcc_bin, optimization, aggregate, process, client, entry));
+        assertTrue(is_file(aggregate),
+            optimization + " native-register aggregate compiled: " + aggregate_out);
+
+        string cxx = ENV.CXX ?? "g++";
+        string link_out = run(sprintf(
+            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s"
+            " -L%s -Wl,-rpath,%s -lqore -o %s",
+            libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
+            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe));
+        assertTrue(is_file(exe), optimization + " aggregate host linked: " + link_out);
+
+        string out = run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertEq("initialized:initialized\n", out,
+            optimization + " constructor parameter survives consecutive native calls");
+    }
+
+    testConstructorParameterReceiverLifetime() {
+        TmpDir tmp("qore-aot-constructor-receiver-");
+        runCase(tmp.path, "O0");
+        runCase(tmp.path, "O3");
+    }
+}

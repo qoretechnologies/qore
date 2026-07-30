@@ -54,10 +54,48 @@ void QoreCallStack::add(qore_call_t type, const char* label, int start, int end,
 
 QoreExceptionBase::QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg, qore_call_t n_type)
         : type(n_type), err(n_err), desc(n_desc), arg(n_arg) {
+    // AOT full-backtrace: collect every AOT native frame's lazily-resolved location,
+    // innermost-first (R[]). The eager updater could leave an AOT callstack frame's
+    // call-site location pointing at the aggregate label (e.g. QORUS_CORE_MAIN_ALL_QO_AGG)
+    // instead of the real .qc; repair it here. A callstack entry "F called at LOC" shows
+    // where F was CALLED, i.e. its CALLER's current position. The j-th AOT chain frame
+    // corresponds to R[j] (its own current PC); its caller's position is R[j+1]. So when
+    // an AOT frame's immediate caller is ALSO an AOT frame, override its location with
+    // R[j+1]. Frames whose caller is non-AOT (interp/JIT/builtin set runtime_loc
+    // correctly) are left untouched. No AOT on the stack => R is empty => no change.
+    std::vector<const QoreProgramLocation*> aot_bt;
+    qore_aot_collect_backtrace_locs(aot_bt);
+
+    // The AOT call-site repair below only changes anything when there are AOT native frames
+    // on the stack (aot_bt non-empty).  When it is empty — every pure-interpreted/JIT program,
+    // the common case — skip all per-frame AOT detection entirely so no extra work is done.
+    const bool repair_aot_locs = !aot_bt.empty();
+
+    // Identify AOT native frames without depending on any virtual on QoreStackLocation:
+    // QoreStackLocation is a public base subclassed by external modules (jni etc.), so a
+    // virtual added there would shift their vtables and crash on invocation. Only the
+    // libqore-internal frame types implement QoreAOTStackFrameMarker; a cross-cast yields
+    // nullptr for external/non-AOT frames, so they are safely treated as non-AOT.  The
+    // dynamic_cast runs only on the (already heavyweight) exception-construction path and
+    // only when repair_aot_locs is set.
+    auto is_aot_frame = [](const QoreStackLocation* loc) -> bool {
+        const QoreAOTStackFrameMarker* m = dynamic_cast<const QoreAOTStackFrameMarker*>(loc);
+        return m && m->isAOTFrame();
+    };
+
     // populate call stack
+    size_t aot_j = 0;
     const QoreStackLocation* w = get_runtime_stack_location();
     while (w) {
-        callStack->push(QoreThreadList::getCallStackHash(*w), nullptr);
+        const QoreProgramLocation* override_loc = nullptr;
+        if (repair_aot_locs && is_aot_frame(w)) {
+            const QoreStackLocation* caller = w->getNext();
+            if (caller && is_aot_frame(caller) && (aot_j + 1) < aot_bt.size()) {
+                override_loc = aot_bt[aot_j + 1];
+            }
+            ++aot_j;
+        }
+        callStack->push(QoreThreadList::getCallStackHash(*w, override_loc), nullptr);
         w = w->getNext();
     }
 }

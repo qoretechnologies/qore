@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hash<string, int> sub identityHash(hash<string, int> value) {
+    return value;
+}
+
+hash<string, int> sub wrapperHash(hash<string, int> value) {
+    return identityHash(value);
+}
+
+hash<string, int> sub localWrapperHash(hash<string, int> value) {
+    hash<string, int> result = wrapperHash(value);
+    return result;
+}
+
+hash<string, int> sub phiWrapperHash(
+        bool first, hash<string, int> value) {
+    hash<string, int> result;
+    if (first) {
+        result = localWrapperHash(value);
+    } else {
+        result = wrapperHash(value);
+    }
+    return result;
+}
+
+int sub wrapperKernel(int rounds) {
+    hash<string, int> row = {"value": 7};
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += phiWrapperHash(i % 2 == 0, row).value;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 5000000;
+printf("%d\n", wrapperKernel(rounds));

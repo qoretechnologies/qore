@@ -2,6 +2,11 @@
 
 # Ensures that in-tree qmod symlinks point to the built AOT modules.
 #
+# The in-tree test suite anchors module lookup at the source qlib/ directory.
+# Per-qmod build rules normally create these links, but format cleanup and CI
+# artifact unpacking can leave built qmods without their source-tree links.
+# This script is idempotent and only replaces symlinks, never real files.
+#
 # Inputs:
 #   QORE_SOURCE_QLIB_DIR - source qlib directory
 #   QORE_BUILD_QMOD_DIR  - build directory containing the AOT qmods

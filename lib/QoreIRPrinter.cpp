@@ -48,6 +48,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstInt: return "const.int";
         case QoreIROpcode::ConstFloat: return "const.float";
         case QoreIROpcode::ConstBool: return "const.bool";
+        case QoreIROpcode::ConstBoolBoxed: return "const.bool.boxed";
         case QoreIROpcode::ConstChar: return "const.char";
         case QoreIROpcode::ConstNothing: return "const.nothing";
         case QoreIROpcode::ConstNull: return "const.null";
@@ -66,9 +67,12 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ListGetFloat: return "list.get.float";
         case QoreIROpcode::ListGetValue: return "list.get.value";
         case QoreIROpcode::ListGetValueNoRef: return "list.get.value.noref";
+        case QoreIROpcode::ListGetValueNoRefUnchecked:
+            return "list.get.value.noref.unchecked";
         case QoreIROpcode::ListSetInt: return "list.set.int";
         case QoreIROpcode::ListSetFloat: return "list.set.float";
         case QoreIROpcode::ListSetValue: return "list.set.value";
+        case QoreIROpcode::ListSetLength: return "list.set.length";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";
@@ -189,6 +193,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IteratorCreate: return "iterator.create";
         case QoreIROpcode::IteratorCreateIterate: return "iterator.create.iterate";
         case QoreIROpcode::IteratorNext: return "iterator.next";
+        case QoreIROpcode::TypedForeachNextInt: return "foreach.next.int";
+        case QoreIROpcode::TypedForeachNextFloat: return "foreach.next.float";
+        case QoreIROpcode::TypedForeachNextBool: return "foreach.next.bool";
+        case QoreIROpcode::TypedForeachNextString: return "foreach.next.string";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
         case QoreIROpcode::Context: return "context.init";
@@ -279,7 +287,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MapHashKeyInt: return "map.hashkey.int";
         case QoreIROpcode::MapHashKeyOffsetInt: return "map.hashkey.offset.int";
         case QoreIROpcode::MapHashKeyScaleInt: return "map.hashkey.scale.int";
+        case QoreIROpcode::MapHashKeyOffsetAny: return "map.hashkey.offset.any";
         case QoreIROpcode::HashMapTwoKeys: return "hashmap.twokeys";
+        case QoreIROpcode::SelectHashKeyPositiveInt: return "select.hashkey.positive.int";
         case QoreIROpcode::SelectAny: return "select.any";
         case QoreIROpcode::SelectInt: return "select.int";
         case QoreIROpcode::SelectFloat: return "select.float";
@@ -299,6 +309,18 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FusedMapFoldlSumSquareFloat: return "fused.map.foldl.sum.square.float";
         case QoreIROpcode::FusedMapFoldlProdScaleInt: return "fused.map.foldl.prod.scale.int";
         case QoreIROpcode::FusedMapFoldlProdScaleFloat: return "fused.map.foldl.prod.scale.float";
+        case QoreIROpcode::FusedMapFoldlSumOffsetInt: return "fused.map.foldl.sum.offset.int";
+        case QoreIROpcode::FusedMapFoldlSumOffsetFloat: return "fused.map.foldl.sum.offset.float";
+        case QoreIROpcode::FoldlStringJoin: return "foldl.string.join";
+        case QoreIROpcode::StringJoinStart: return "string.join.start";
+        case QoreIROpcode::StringJoinAppend: return "string.join.append";
+        case QoreIROpcode::ListStringJoin: return "list.string.join";
+        case QoreIROpcode::FoldrStringJoin: return "foldr.string.join";
+        case QoreIROpcode::ListStringJoinIdentityMap: return "list.string.join.identity-map";
+        case QoreIROpcode::StringMethodJoinStart: return "string.method.join.start";
+        case QoreIROpcode::ListIntSprintfJoin: return "list.int.sprintf.join";
+        case QoreIROpcode::SprintfIntFixed: return "sprintf.int.fixed";
+        case QoreIROpcode::AppendStringCow: return "string.append.cow";
         case QoreIROpcode::MapSelectAny: return "map.select.any";
         case QoreIROpcode::HashMapAny: return "hash.map.any";
         case QoreIROpcode::HashMapSelectAny: return "hash.map.select.any";
@@ -343,6 +365,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
         case QoreIROpcode::HashKeyAccess: return "hash.key.access";
         case QoreIROpcode::HashKeyAccessInt: return "hash.key.access.int";
+        case QoreIROpcode::HashKeyAccessHash: return "hash.key.access.hash";
+        case QoreIROpcode::HashKeyAccessHashGuarded: return "hash.key.access.hash.guarded";
         case QoreIROpcode::LoadSelfMember: return "load.self.member";
         case QoreIROpcode::LoadStaticVar: return "load.static.var";
         case QoreIROpcode::NewObject: return "new.object";
@@ -419,6 +443,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MakeHashConstKeys: return "make.hash.const.keys";
         case QoreIROpcode::ToString: return "to.string";
         case QoreIROpcode::Sprintf: return "sprintf";
+        case QoreIROpcode::RefSelf: return "ref.self";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::CheckException: return "check.exception";
         case QoreIROpcode::PluginUnary: return "plugin.unary";
@@ -523,7 +548,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " <lvalue>";
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyAccess
-                    || inst->opcode == QoreIROpcode::HashKeyAccessInt) {
+                    || inst->opcode == QoreIROpcode::HashKeyAccessInt
+                    || inst->opcode == QoreIROpcode::HashKeyAccessHash
+                    || inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded) {
                 auto* hka_inst = dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
                 if (hka_inst) {
                     out << " ." << hka_inst->key_name;
@@ -532,7 +559,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::MapHashKeyInt
                     || inst->opcode == QoreIROpcode::MapHashKeyOffsetInt
                     || inst->opcode == QoreIROpcode::MapHashKeyScaleInt
-                    || inst->opcode == QoreIROpcode::HashMapTwoKeys) {
+                    || inst->opcode == QoreIROpcode::MapHashKeyOffsetAny
+                    || inst->opcode == QoreIROpcode::HashMapTwoKeys
+                    || inst->opcode == QoreIROpcode::SelectHashKeyPositiveInt) {
                 auto* mhk_inst = dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst.get());
                 if (mhk_inst) {
                     out << " ." << mhk_inst->key1;
@@ -645,8 +674,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
-                out << " " << (bg_inst->kind == QoreIRBackgroundKind::DotEval ? "dot-eval" : "unknown")
-                    << " " << bg_inst->name;
+                const char* kind = "unknown";
+                if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+                    kind = "dot-eval";
+                } else if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
+                    kind = "static-method";
+                }
+                out << " " << kind << " " << bg_inst->name;
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod
@@ -704,6 +738,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             if (inst->opcode == QoreIROpcode::ConstInt
                     || inst->opcode == QoreIROpcode::ConstFloat
                     || inst->opcode == QoreIROpcode::ConstBool
+                    || inst->opcode == QoreIROpcode::ConstBoolBoxed
                     || inst->opcode == QoreIROpcode::ConstChar
                     || inst->opcode == QoreIROpcode::ConstNothing
                     || inst->opcode == QoreIROpcode::ConstNull
@@ -746,6 +781,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (phi) {
                     if (phi->value_kind == QoreIRPhiValueKind::NativeInt) {
                         out << "<native-int>";
+                    } else if (phi->value_kind
+                            == QoreIRPhiValueKind::NativeFloat) {
+                        out << "<native-float>";
+                    } else if (phi->value_kind
+                            == QoreIRPhiValueKind::NativeBool) {
+                        out << "<native-bool>";
                     }
                     out << " ";
                     for (size_t i = 0; i < phi->incoming.size(); ++i) {
@@ -773,10 +814,17 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << " <functional>";
                     }
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+            } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::TypedForeachNextInt
+                    || inst->opcode == QoreIROpcode::TypedForeachNextFloat
+                    || inst->opcode == QoreIROpcode::TypedForeachNextBool
+                    || inst->opcode == QoreIROpcode::TypedForeachNextString) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterator.id;
+                    if (inst->opcode != QoreIROpcode::IteratorNext) {
+                        out << " index %" << iter->index.id << " limit %" << iter->limit.id;
+                    }
                     if (iter->continue_target) {
                         out << " body " << iter->continue_target->name;
                     }

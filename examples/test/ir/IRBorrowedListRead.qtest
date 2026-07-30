@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+hash<auto> sub throughCall(hash<auto> value) {
+    return value;
+}
+
+class BorrowedScopeMarker {
+}
+
+class BorrowedFuture {
+    hash<auto> get() {
+        return {\"value\": 1};
+    }
+}
+
+class BorrowedClient {
+    BorrowedFuture make() {
+        return new BorrowedFuture();
+    }
+}
+
+list<hash<auto>> sub safeIdentity(list<hash<auto>> input) {
+    return map $1, input;
+}
+
+list<hash<auto>> sub safeSelect(list<hash<auto>> input) {
+    return (select input, $1.enabled);
+}
+
+list<int> sub safeMap(list<hash<auto>> input) {
+    return map $1.value + 1, input;
+}
+
+list<hash<auto>> sub callBarrier(list<hash<auto>> input) {
+    return map throughCall($1), input;
+}
+
+int sub scopedBorrowedRead(list<hash<auto>> input) {
+    int total = 0;
+    for (int i = 0; i < 100; ++i) {
+        BorrowedScopeMarker marker();
+        list<int> mapped = map $1.value + 1, input;
+        total += mapped[0];
+    }
+    return total;
+}
+
+int sub scopedInPlacePush() {
+    BorrowedScopeMarker marker();
+    list<hash<auto>> output = ();
+    for (int i = 0; i < 100; ++i) {
+        push output, {\"value\": i};
+    }
+    return output.size();
+}
+
+int sub scopedObjectPush() {
+    BorrowedClient client();
+    list<BorrowedFuture> futures = ();
+    for (int i = 0; i < 10; ++i) {
+        push futures, client.make();
+    }
+    int total = 0;
+    for (int i = 0; i < 10; ++i) {
+        total += futures[i].get().value;
+    }
+    return total;
+}
+
+list<hash<auto>> input = (
+    {\"value\": 10, \"enabled\": True},
+    {\"value\": 20, \"enabled\": False},
+    {\"value\": 30, \"enabled\": True}
+);
+list<hash<auto>> identity = safeIdentity(input);
+list<hash<auto>> selected = safeSelect(input);
+list<int> mapped = safeMap(input);
+list<hash<auto>> called = callBarrier(input);
+int scoped = scopedBorrowedRead(input);
+int pushed = scopedInPlacePush();
+int object_pushed = scopedObjectPush();
+input = ();
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
+    selected.size(), selected[1].value, mapped[2], called[1].value, scoped, pushed, object_pushed);
+";
+
+string script_path = "/tmp/qore-ir-borrowed-list-read-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-borrowed-list-read-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "10:30:2:30:31:20:1100:100:10\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}
+
+# Keep the borrowed-read pass observable when the map expression can otherwise be
+# fused into MapHashKeyOffsetAny before its inner loop is emitted.
+string stats = backquote(sprintf("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY=1 QORE_IR_OPT_STATS=1 "
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1", libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: safeIdentity:.*borrowed-list=1/
+        || stats !~ /IR-OPT: safeSelect:.*borrowed-list=1/
+        || stats !~ /IR-OPT: safeMap:.*borrowed-list=1/
+        || stats !~ /IR-OPT: scopedBorrowedRead:.*borrowed-list=1/) {
+    printf("missing borrowed-list optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: callBarrier:.*borrowed-list=0/) {
+    printf("call barrier did not retain owned list reads:\n%s", stats);
+    exit(2);
+}

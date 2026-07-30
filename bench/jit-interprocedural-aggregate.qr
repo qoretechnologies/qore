@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%strict-args
+%require-types
+
+hash<auto> sub makeRecord(int value) {
+    hash<auto> result = (
+        "first": value,
+        "second": value + 1,
+        "third": value + 2
+    );
+    result.first += 1;
+    result.third += 2;
+    return result;
+}
+
+int sub projectRecords(int count) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        checksum += makeRecord(i).first + makeRecord(i).third;
+    }
+    return checksum;
+}
+
+int count = ARGV ? ARGV[0].toInt() : 1000000;
+int warmup_ms = ARGV.size() > 1 ? ARGV[1].toInt() : 2000;
+projectRecords(1);
+sleep(warmup_ms * 1ms);
+
+date start = now_us();
+int checksum = projectRecords(count);
+int elapsed_us = get_duration_microseconds(now_us() - start);
+int expected = count * (count - 1) + 5 * count;
+if (checksum != expected) {
+    stderr.printf("checksum mismatch: expected %d, got %d\n", expected, checksum);
+    exit(2);
+}
+printf("%d:%d\n", elapsed_us, checksum);

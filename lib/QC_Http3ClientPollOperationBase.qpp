@@ -456,10 +456,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
                 // Signal stream data ready for registered stream listeners
                 // (WebSocket/SSE consumers that use the onStreamData dispatch)
-                if (!notify_streams.empty()
-                        && notify_streams.count(stream_id_val)) {
-                    if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
-                            stream_id_val) == data_ready_streams.end()) {
+                {
+                    AutoLocker al(stream_lock);
+                    if (!notify_streams.empty()
+                            && notify_streams.count(stream_id_val)
+                            && std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                                stream_id_val) == data_ready_streams.end()) {
                         data_ready_streams.push_back(stream_id_val);
                     }
                 }

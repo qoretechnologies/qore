@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+*bool sub maybeBool(bool assign_value, bool value) {
+    *bool result;
+    if (assign_value) {
+        result = value;
+    }
+    return result;
+}
+
+*float sub maybeFloat(bool assign_value) {
+    *float result;
+    if (assign_value) {
+        result = -@nan@;
+    }
+    return result;
+}
+
+*int sub maybeInt(bool assign_value) {
+    *int result;
+    if (assign_value) {
+        result = 9223372036854775807;
+    }
+    return result;
+}
+
+*bool sub selectBool(bool select_assigned) {
+    return select_assigned
+        ? maybeBool(True, True) : maybeBool(False, True);
+}
+
+int sub runFunctions() {
+    int checksum = 0;
+    checksum += maybeBool(True, True);
+    checksum += maybeBool(False, True) === NOTHING;
+    checksum += selectBool(True);
+    checksum += selectBool(False) === NOTHING;
+    checksum += maybeInt(True) == 9223372036854775807;
+    checksum += maybeInt(False) === NOTHING;
+    *float negative_nan = maybeFloat(True);
+    checksum += negative_nan.nanp();
+    checksum += maybeFloat(False) === NOTHING;
+    try {
+        checksum += maybeBool(True, True);
+        *float caught_nan = maybeFloat(True);
+        checksum += caught_nan.nanp();
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
+final class ResultSource {
+    *bool methodBool(bool assign_value, bool value) {
+        return maybeBool(assign_value, value);
+    }
+
+    *float methodFloat(bool assign_value) {
+        return maybeFloat(assign_value);
+    }
+
+    static *bool staticBool(bool assign_value, bool value) {
+        return maybeBool(assign_value, value);
+    }
+
+    static *float staticFloat(bool assign_value) {
+        return maybeFloat(assign_value);
+    }
+
+    int run() {
+        int checksum = 0;
+        checksum += self.methodBool(True, True);
+        checksum += self.methodBool(False, True) === NOTHING;
+        checksum += ResultSource::staticBool(True, False) === False;
+        checksum += ResultSource::staticBool(False, True) === NOTHING;
+        *float method_nan = self.methodFloat(True);
+        checksum += method_nan.nanp();
+        checksum += ResultSource::staticFloat(False) === NOTHING;
+        try {
+            checksum += self.methodBool(True, True);
+            checksum += ResultSource::staticBool(False, True) === NOTHING;
+            *float caught_method_nan = self.methodFloat(True);
+            checksum += caught_method_nan.nanp();
+            checksum += ResultSource::staticFloat(False) === NOTHING;
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+        return checksum;
+    }
+}
+
+int sub exerciseHeapFloatCleanup() {
+    int checksum = 0;
+    for (int i = 0; i < 1000; ++i) {
+        *float value = maybeFloat(True);
+        checksum += value.nanp();
+    }
+    return checksum;
+}
+
+printf(\"%d:%d:%d\\n\", runFunctions(), new ResultSource().run(),
+    exerciseHeapFloatCleanup());
+";
+
+string root = "/tmp/qore-aot-reference-free-result-" + string(getpid());
+mkdir(root);
+string script_path = root + "/reference-free-result.qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, script_path));
+
+string sub runAot(string suffix, string compile_env) {
+    string exe = root + "/reference-free-result-" + suffix;
+    string compile_out = backquote(sprintf(
+        "%s %s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        compile_env, env, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("%s %s 2>&1", env, exe));
+}
+
+string expected = "10:10:1000\n";
+string enabled = runAot("enabled", "");
+string disabled = runAot("disabled",
+    "QORE_DISABLE_AOT_REFERENCE_FREE_CLEANUP_ELISION=1");
+if (ast != expected || enabled != expected || disabled != expected) {
+    printf("execution mismatch:\nexpected:\n%sAST:\n%sEnabled:\n%sDisabled:\n%s",
+        expected, ast, enabled, disabled);
+    exit(2);
+}

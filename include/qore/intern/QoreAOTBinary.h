@@ -39,7 +39,9 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <functional>
+#include <deque>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -52,15 +54,21 @@ class AbstractQoreNode;
 class QoreValue;
 class QoreProgram;
 class QoreTypeInfo;
+class qore_class_private;
 class qore_ns_private;
 class QoreIRFunction;
 class LocalVar;
 class Var;
 class UserVariantBase;
+class UserSignature;
+class QoreFunction;
+class AbstractQoreFunctionVariant;
 class QoreParseListNode;
+struct QoreTypeParamInstantiation;
 class ExceptionSink;
 class RuntimeConstantRefNode;
 struct QoreProgramLocation;
+struct AOTCompiledFuncWithSlots;
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation);
 
@@ -82,6 +90,37 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
 
+//! Marker for method-ref payloads that carry deferred call argument type metadata.
+constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
+constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
+
+struct QoreAOTStaticMethodRef {
+    const char* method_name = nullptr;
+    const char* variant_class_path = nullptr;
+    const char* sig_text = nullptr;
+    const char* arg_type_sig = nullptr;
+    bool explicit_type_args_present = false;
+    bool explicit_type_args_valid = true;
+    std::vector<std::string> explicit_type_arg_paths;
+    std::string encoded_storage;
+    std::string method_name_storage;
+    std::string variant_class_storage;
+
+    QoreAOTStaticMethodRef(const char* encoded);
+};
+
+//! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
+std::string qore_aot_encode_static_method_ref(const char* method_name,
+    const AbstractQoreFunctionVariant* variant = nullptr,
+    const type_vec_t* arg_types = nullptr,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+
+//! Resolves a static-call argument type signature and uses it to find a method variant.
+const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,
+    QoreFunction* func, const char* arg_type_sig, const qore_class_private* class_ctx,
+    const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_instantiation,
+    std::string& error);
+
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
 
@@ -98,7 +137,22 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v7: serialized Find instructions include the explicit find mode
 //! v8: serialized Phi instructions include the PHI value representation kind
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 9;
+//! v10: callable generic type-parameter declarations are preserved in variant signatures
+//! v11: all serialized source line numbers use signed 32-bit values
+//! v12: whole-body and sectioned Zstandard metadata compression are supported
+//! v13: lazy debugger IR is stored in a separate section referenced by SLOT_MAPS ranges
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 13;
+//! First format version storing lazy debugger IR in a separate section.
+constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
+
+constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
+constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
+constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
+constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
+
+//! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
+constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -134,7 +188,7 @@ constexpr uint64_t QORE_AOT_FEAT_LIST_SELECTOR_RANGE = 1ULL << 22; //!< ListInde
 constexpr uint64_t QORE_AOT_FEAT_ENTRY_STMT_LINES = 1ULL << 23; //!< per-variant function-entry StatementBlock start/end line pair follows signature lines
 constexpr uint64_t QORE_AOT_FEAT_PARSE_REF_TYPE = 1ULL << 24; //!< PARSE_REF records include the parse-time reference type path before the lvalue expression
 constexpr uint64_t QORE_AOT_FEAT_STMT_LOC_TABLE = 1ULL << 25; //!< SLOT_MAPS entries may carry source-stripped metadata-only statement locations
-constexpr uint64_t QORE_AOT_FEAT_DEBUG_IR = 1ULL << 26; //!< SLOT_MAPS entries may carry full function IR for source-stripped debugging
+constexpr uint64_t QORE_AOT_FEAT_DEBUG_IR = 1ULL << 26; //!< Function metadata carries full IR for source-stripped debugging
 constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_ARGS = 1ULL << 27; //!< inline SELF_METHOD_CALL expression payloads include serialized argument expressions
 constexpr uint64_t QORE_AOT_FEAT_BODY_LOCAL_SLOT = 1ULL << 28; //!< body-local records include their local slot id for duplicate-name disambiguation
 constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records include source line ranges for parent-constructor argument callstacks
@@ -167,9 +221,13 @@ constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS varian
 constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
 constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
-constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_LINES = 1ULL << 59; //!< all serialized source line numbers are u32, not legacy u16 (which truncated files with more than 65535 lines and reported lines 32768 - 65535 as negative)
+constexpr uint64_t QORE_AOT_FEAT_HASH_DEREF_TYPEINFO = 1ULL << 59; //!< HASH_DEREF records preserve parse-time result typeInfo
+constexpr uint64_t QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS = 1ULL << 60; //!< SLOT_MAPS global records preserve required import flags
+constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS = 1ULL << 61; //!< SLOT_MAPS SELF_METHOD_CALL records carry serialized call args (u8 num_args + N×expr), so AST/IR-interpreter fallback evaluation dispatches the self call with its arguments
+constexpr uint64_t QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS = 1ULL << 62; //!< DotEvalMethodDirect records preserve pseudo analysis flags for safe LLVM fast paths
+constexpr uint64_t QORE_AOT_FEAT_NATIVE_CLOSURE_BODY = 1ULL << 63; //!< Closure records carry an optional native AOT body key
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x0FFFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -185,7 +243,7 @@ enum class QoreAOTSectionType : uint16_t {
     METHODS       = 10,
     SLOT_MAPS     = 11,
     TOPLEVEL      = 12,
-    FUNC_SOURCES  = 13,
+    FUNC_SOURCES  = 13,  //!< Embedded source plus the legacy source-fallback function list
     DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
     REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
     PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
@@ -200,6 +258,7 @@ enum class QoreAOTSectionType : uint16_t {
     PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
     SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
+    DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -234,9 +293,77 @@ enum class QoreAOTDependencyClass : uint8_t {
 
 //! SYMBOL_INDEX record flag: native symbol is defined by this object.
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
+//! SYMBOL_INDEX record flag: import is advisory/optional and may fall back to runtime lookup.
+constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 1;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 35;
+
+//! Maximum serialized nodes in a bounded pure native-integer expression summary.
+constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 64;
+
+//! Serialized node in a bounded pure native-integer expression summary.
+struct QoreAOTIntExpressionNodeRecord {
+    uint8_t kind = 0;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    uint8_t third = UINT8_MAX;
+    int8_t param = -1;
+    int64_t constant = 0;
+    std::string key;
+};
+
+//! Maximum serialized nodes in a bounded pure native-float expression summary.
+constexpr size_t QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES = 64;
+
+//! Serialized node in a bounded pure native-float expression summary.
+struct QoreAOTFloatExpressionNodeRecord {
+    uint8_t kind = 0;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    int8_t param = -1;
+    double constant = 0.0;
+    std::string key;
+};
+
+//! Serialized node in a bounded typed string expression summary.
+constexpr size_t QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES = 64;
+
+struct QoreAOTStringExpressionNodeRecord {
+    uint8_t kind = 0;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    uint8_t third = UINT8_MAX;
+    int8_t param = -1;
+    int64_t int_constant = 0;
+    std::string string_constant;
+};
+
+struct QoreAOTAggregateReturnValueRecord {
+    uint8_t kind = 0;
+    int8_t param = -1;
+    int64_t int_value = 0;
+    double float_value = 0.0;
+};
+
+struct QoreAOTAggregateReturnSelectRecord {
+    uint8_t value_index = 0;
+    int8_t condition_param = -1;
+    QoreAOTAggregateReturnValueRecord true_value;
+    QoreAOTAggregateReturnValueRecord false_value;
+};
+
+constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
+constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
+constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_INVALIDATE = 0x0004; //!< Callee may mutate caller-visible state
+constexpr uint32_t QORE_AOT_FAST_ENTRY_NEVER_NOTHING = 0x0008; //!< All normal returns are non-NOTHING
+constexpr uint32_t QORE_AOT_FAST_ENTRY_IMPLICIT_SELF = 0x0010; //!< Entry reuses caller self/class context
+//! Runtime-local effect metadata is present; without this bit readers fall back
+//! to QORE_AOT_FAST_ENTRY_MAY_INVALIDATE.
+constexpr uint32_t QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS = 0x0020;
+constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS = 0x0040;
+//! Entry is valid only for the serialized generic specialization dispatch key.
+constexpr uint32_t QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION = 0x0080;
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
@@ -254,6 +381,135 @@ struct QoreAOTSymbolIndexRecord {
     std::string abi_kind;
     std::string consumer_source_file;
     std::string provider_source_file;
+    uint32_t fast_entry_flags = 0;
+    uint32_t fast_entry_num_params = 0;
+    uint8_t fast_return_kind = 0;
+    std::vector<uint8_t> fast_param_kinds;
+    std::vector<uint8_t> fast_param_rejects_nothing;
+    std::vector<uint8_t> fast_param_noescape;
+    std::vector<uint8_t> fast_param_may_modify;
+    uint8_t scalar_leaf_kind = 0;
+    uint16_t scalar_leaf_opcode = 0;
+    int8_t scalar_leaf_lhs_param = -1;
+    int8_t scalar_leaf_rhs_param = -1;
+    int64_t scalar_leaf_lhs_int = 0;
+    int64_t scalar_leaf_rhs_int = 0;
+    double scalar_leaf_lhs_float = 0.0;
+    double scalar_leaf_rhs_float = 0.0;
+    int64_t scalar_leaf_true_scale = 0;
+    int64_t scalar_leaf_true_offset = 0;
+    int64_t scalar_leaf_false_scale = 0;
+    int64_t scalar_leaf_false_offset = 0;
+    std::string object_getter_member;
+    std::string object_set_get_member;
+    int8_t object_set_get_param = -1;
+    std::string object_compound_get_member;
+    int8_t object_compound_get_param = -1;
+    uint8_t object_compound_get_op = 0;
+    uint8_t string_op_kind = 0;
+    int8_t string_op_base_param = -1;
+    int8_t string_op_arg0_param = -1;
+    int8_t string_op_arg1_param = -1;
+    uint8_t collection_op_kind = 0;
+    int8_t collection_op_base_param = -1;
+    int8_t collection_op_index_param = -1;
+    bool collection_op_string_index_char = false;
+    std::string collection_op_key;
+    uint8_t composed_int_source_kind = 0;
+    int8_t composed_int_base_param = -1;
+    int8_t composed_int_value_param = -1;
+    int64_t composed_int_source_scale = 0;
+    int64_t composed_int_value_scale = 0;
+    int64_t composed_int_offset = 0;
+    int8_t global_int_value_param = -1;
+    int32_t global_int_slot = -1;
+    int64_t global_int_value_scale = 0;
+    int64_t global_int_global_scale = 0;
+    int64_t global_int_offset = 0;
+    std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
+    std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
+    std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
+    uint8_t aggregate_return_kind = 0;
+    std::vector<int8_t> aggregate_return_value_params;
+    std::vector<uint8_t> aggregate_return_value_kinds;
+    std::vector<int64_t> aggregate_return_value_ints;
+    std::vector<double> aggregate_return_value_floats;
+    std::vector<std::string> aggregate_return_keys;
+    int8_t aggregate_return_shape_condition_param = -1;
+    uint8_t aggregate_return_shape_true_size = 0;
+    uint8_t aggregate_return_shape_false_size = 0;
+    std::vector<QoreAOTAggregateReturnSelectRecord>
+        aggregate_return_value_selects;
+    int8_t boxed_return_param = -1;
+    std::string fast_specialization_key;
+    uint8_t boxed_return_kind = 0;
+};
+
+//! Compile-time fast-entry metadata keyed by the resolved variant.
+struct QoreAOTFastEntryIndexInfo {
+    std::string native_symbol;
+    uint32_t flags = 0;
+    uint32_t num_params = 0;
+    uint8_t return_kind = 0;
+    std::vector<uint8_t> param_kinds;
+    std::vector<uint8_t> param_rejects_nothing;
+    std::vector<uint8_t> param_noescape;
+    std::vector<uint8_t> param_may_modify;
+    uint8_t scalar_leaf_kind = 0;
+    uint16_t scalar_leaf_opcode = 0;
+    int8_t scalar_leaf_lhs_param = -1;
+    int8_t scalar_leaf_rhs_param = -1;
+    int64_t scalar_leaf_lhs_int = 0;
+    int64_t scalar_leaf_rhs_int = 0;
+    double scalar_leaf_lhs_float = 0.0;
+    double scalar_leaf_rhs_float = 0.0;
+    int64_t scalar_leaf_true_scale = 0;
+    int64_t scalar_leaf_true_offset = 0;
+    int64_t scalar_leaf_false_scale = 0;
+    int64_t scalar_leaf_false_offset = 0;
+    std::string object_getter_member;
+    std::string object_set_get_member;
+    int8_t object_set_get_param = -1;
+    std::string object_compound_get_member;
+    int8_t object_compound_get_param = -1;
+    uint8_t object_compound_get_op = 0;
+    uint8_t string_op_kind = 0;
+    int8_t string_op_base_param = -1;
+    int8_t string_op_arg0_param = -1;
+    int8_t string_op_arg1_param = -1;
+    uint8_t collection_op_kind = 0;
+    int8_t collection_op_base_param = -1;
+    int8_t collection_op_index_param = -1;
+    bool collection_op_string_index_char = false;
+    std::string collection_op_key;
+    uint8_t composed_int_source_kind = 0;
+    int8_t composed_int_base_param = -1;
+    int8_t composed_int_value_param = -1;
+    int64_t composed_int_source_scale = 0;
+    int64_t composed_int_value_scale = 0;
+    int64_t composed_int_offset = 0;
+    int8_t global_int_value_param = -1;
+    int32_t global_int_slot = -1;
+    int64_t global_int_value_scale = 0;
+    int64_t global_int_global_scale = 0;
+    int64_t global_int_offset = 0;
+    std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
+    std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
+    std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
+    uint8_t aggregate_return_kind = 0;
+    std::vector<int8_t> aggregate_return_value_params;
+    std::vector<uint8_t> aggregate_return_value_kinds;
+    std::vector<int64_t> aggregate_return_value_ints;
+    std::vector<double> aggregate_return_value_floats;
+    std::vector<std::string> aggregate_return_keys;
+    int8_t aggregate_return_shape_condition_param = -1;
+    uint8_t aggregate_return_shape_true_size = 0;
+    uint8_t aggregate_return_shape_false_size = 0;
+    std::vector<QoreAOTAggregateReturnSelectRecord>
+        aggregate_return_value_selects;
+    int8_t boxed_return_param = -1;
+    std::string specialization_key;
+    uint8_t boxed_return_kind = 0;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.
@@ -364,9 +620,9 @@ enum class QoreAOTContainerValueType : uint8_t {
 //! Section header in the binary format
 struct QoreAOTSectionHeader {
     uint16_t type;      //!< QoreAOTSectionType
-    uint16_t reserved;  //!< reserved for future use
+    uint16_t reserved;  //!< per-section QORE_AOT_COMPRESSION_* value in sectioned metadata
     uint32_t offset;    //!< byte offset from start of data area
-    uint32_t size;      //!< size in bytes
+    uint32_t size;      //!< stored size on disk; exposed as decompressed size by the reader
 };
 
 //! Binary file header (60 bytes total, no version dispatch needed)
@@ -382,8 +638,8 @@ struct QoreAOTBinaryHeader {
     uint8_t qore_version_major;  //!< Qore version major that compiled this binary
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
-    uint8_t compression;         //!< compression method (0=none, 1=zlib)
-    uint8_t reserved;            //!< reserved for future use (must be 0)
+    uint8_t compression;         //!< QORE_AOT_COMPRESSION_* value
+    uint8_t reserved;            //!< string-pool codec for sectioned metadata; otherwise 0
     int64_t parse_options_hi;    //!< high 64 bits of parse options (64-127)
     uint64_t source_hash;        //!< xxHash64 of source file bytes (0 = not set)
     uint64_t feature_flags;      //!< QORE_AOT_FEAT_* bitset of required IR features
@@ -684,6 +940,10 @@ public:
 };
 
 //! Binary format reader for AOT metadata
+/** Reader instances are confined to one metadata deserialization session and
+    are not thread-safe. Sectioned metadata populates lazy decompression buffers
+    from getSectionData().
+*/
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
     uint32_t total_size = 0;
@@ -705,14 +965,21 @@ class QoreAOTBinaryReader {
     // Holds decompressed data if compression was used
     std::vector<uint8_t> decompressed_body;
 
+    // Holds the eagerly decompressed shared string pool for sectioned metadata.
+    std::vector<uint8_t> decompressed_string_pool;
+
+    // Physical section sizes and lazily decompressed section payloads for
+    // QORE_AOT_COMPRESSION_SECTIONED_ZSTD metadata.
+    std::vector<uint32_t> section_stored_sizes;
+    mutable std::vector<std::vector<uint8_t>> decompressed_sections;
+
 public:
     //! Releases the decompressed metadata pool and invalidates the reader
-    /** The AOT metadata blob is stored compressed in the binary and inflated into
-        @ref decompressed_body at open() time; every section pointer (@ref data,
-        @ref data_area, @ref string_pool) points INTO that buffer.  For a large
-        program the inflated pool is substantial (it dominates the process's heap
-        at startup), and it is only needed while the namespace tree, classes,
-        functions, and slot maps are being deserialized.
+    /** Whole-body compressed metadata is inflated into @ref decompressed_body at
+        open() time. Sectioned metadata uses @ref decompressed_string_pool and
+        lazily populated @ref decompressed_sections instead. For a large program
+        these buffers are substantial, and they are only needed while the namespace
+        tree, classes, functions, and slot maps are being deserialized.
 
         Once deserialization and function registration are complete, nothing may
         reference the pool any more: string refs that outlive it (e.g.
@@ -727,6 +994,9 @@ public:
     DLLLOCAL void releaseDecompressedBody() {
         // free the buffer's storage (clear() alone would keep the capacity)
         std::vector<uint8_t>().swap(decompressed_body);
+        std::vector<uint8_t>().swap(decompressed_string_pool);
+        std::vector<uint32_t>().swap(section_stored_sizes);
+        std::vector<std::vector<uint8_t>>().swap(decompressed_sections);
         data = nullptr;
         total_size = 0;
         data_area = nullptr;
@@ -805,12 +1075,7 @@ public:
     /** @param section the section header
         @return pointer to the section data, or nullptr if invalid
     */
-    const uint8_t* getSectionData(const QoreAOTSectionHeader& section) const {
-        if (!data_area || section.offset + section.size > data_area_size) {
-            return nullptr;
-        }
-        return data_area + section.offset;
-    }
+    const uint8_t* getSectionData(const QoreAOTSectionHeader& section) const;
 
     //! Get a string from the string pool
     /** @param offset byte offset into the string pool
@@ -896,20 +1161,15 @@ public:
     }
 };
 
-//! Serializes a source line number
+//! Serializes a source line number in the current wire format.
 /** Source line numbers were originally written as u16, which silently truncated any file with more than 65535 lines
     and made lines 32768 - 65535 deserialize as negative numbers (Qorus generates single source files well over
-    32767 lines).  Blobs advertising QORE_AOT_FEAT_WIDE_LOC_LINES use u32; the legacy encoding is retained for
-    reading blobs written before the feature existed.
+    32767 lines). Version 11 and later use u32; the legacy encoding is retained when reading older blobs.
 
     -1 (unknown location) round-trips in both encodings.
 */
-DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
-    if ((writer.feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0) {
-        writer.writeU32(static_cast<uint32_t>(line));
-    } else {
-        writer.writeU16(static_cast<uint16_t>(line));
-    }
+static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
+    writer.writeU32(static_cast<uint32_t>(line));
 }
 
 //! Deserializes a source line number written by qore_aot_write_line()
@@ -917,9 +1177,9 @@ DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int
     value in an int16_t); if false, it is zero-extended (matching the call sites that stored it in a uint16_t).  The
     distinction only affects legacy blobs; the wide encoding is always sign-preserving.
 */
-DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         bool signed_legacy = true) {
-    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0) {
+    if (reader.getHeader().version >= 11) {
         return static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
     }
     uint16_t v = QoreAOTBinaryReader::readU16(ptr);
@@ -927,8 +1187,8 @@ DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader,
 }
 
 //! Returns the serialized size in bytes of a single source line number in the given blob
-DLLLOCAL static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
-    return (reader.getHeader().feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0 ? 4 : 2;
+static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
+    return reader.getHeader().version >= 11 ? 4 : 2;
 }
 
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
@@ -949,6 +1209,7 @@ class QoreAOTTypeResolver {
     QoreProgram* pgm;
     cache_t owned_cache;
     cache_t* cache_ptr = &owned_cache;  // default: own our own cache
+    const UserSignature* signature_type_param_owner = nullptr;
 
 public:
     explicit QoreAOTTypeResolver(QoreProgram* pgm) : pgm(pgm) {}
@@ -960,9 +1221,24 @@ public:
     */
     const QoreTypeInfo* resolve(const char* path, std::string& error);
 
+    //! Resolve a type path containing callable-owned type parameters.
+    /** Signature-owned type parameters cannot use the shared path cache because
+        equal serialized paths belong to distinct UserSignature instances.
+
+        @param path the serialized type path
+        @param error receives an error message on failure
+        @param signature the callable that owns any signature type parameters
+        @return the resolved type, or nullptr on failure
+    */
+    const QoreTypeInfo* resolveForSignature(const char* path, std::string& error,
+        const UserSignature* signature);
+
     //! Swap in a caller-owned cache (for cross-session sharing).
     //! The caller must keep the map alive for the resolver's lifetime.
     void setSharedCache(cache_t* shared) { cache_ptr = shared ? shared : &owned_cache; }
+
+    //! Returns the Program used for program-local type and class resolution.
+    QoreProgram* getProgram() const { return pgm; }
 
 private:
     const QoreTypeInfo* resolveBuiltin(const char* path);
@@ -1015,8 +1291,10 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     @param compile_file optional single-source filter matching serializeNamespaceTree()
     @param native_symbol_map optional Qore body key -> LLVM/native symbol map
     @param init_native_symbol_map optional init function key -> LLVM/native symbol map
+    @param func_slots optional compiled slot identities used to emit advisory call imports
     @param error optional output diagnostic
     @param compile_files optional multi-source filter matching serializeNamespaceTree()
+    @param fast_entry_map optional resolved variant -> native fast-entry ABI/effect metadata
     @return true on success, false on cancellation or serialization failure
 */
 bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
@@ -1025,8 +1303,11 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     const char* compile_file = nullptr,
     const std::unordered_map<std::string, std::string>* native_symbol_map = nullptr,
     const std::unordered_map<std::string, std::string>* init_native_symbol_map = nullptr,
+    const std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr,
     std::string* error = nullptr,
-    const std::unordered_set<std::string>* compile_files = nullptr);
+    const std::unordered_set<std::string>* compile_files = nullptr,
+    const std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>*
+        fast_entry_map = nullptr);
 
 //! Read the optional SYMBOL_INDEX section.
 /** @return true on success or if the section is absent, false on corrupt data
@@ -1199,7 +1480,7 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
         std::vector<std::pair<std::string, std::string>>& info,
         std::string& error);
 
-/** Read embedded source from a v2 AOT binary metadata blob without full deserialization.
+/** Read embedded source from an AOT binary metadata blob without full deserialization.
     @param data pointer to the metadata blob
     @param size size of the metadata blob
     @param source receives the embedded source text (empty if not present)
@@ -1207,7 +1488,8 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
     @param error receives error message on failure
     @return true on success, false on failure
 */
-bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len, std::string& error);
+bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,
+    std::string& error);
 
 // ---- Slot Map Serialization (Phase 5) ----
 
@@ -1235,7 +1517,7 @@ enum class AOTExprKind : uint8_t {
     CONST_ENUM         = 19,  //!< Enum constant: ref1=enum_path, ref2=member_name
     CONST_STRING       = 20,  //!< String constant: ref1=string content
     HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
-    HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
+    HASH_DEREF         = 22,  //!< Hash/object dereference: [type_path if QORE_AOT_FEAT_HASH_DEREF_TYPEINFO] + left(AOTExprKind) + right(AOTExprKind)
     PARSE_REF          = 23,  //!< Parse reference (\var): [type_path if QORE_AOT_FEAT_PARSE_REF_TYPE] + inner_lvalue(AOTExprKind)
     CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing, u8 has_inner, inner?
     CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
@@ -1323,6 +1605,20 @@ enum class AOTExprKind : uint8_t {
     COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
     ITERATE            = 108, //!< Iterate operator: source expression
     STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
+    DEFERRED_STATIC_METHOD_REF = 110, //!< Deferred static method reference: ref1=class_path, ref2=method_name
+    DEFERRED_FUNCTION_REF = 111, //!< Deferred function call reference: ref1=function_name
+    // Compound-assignment operators: lvalue(AOTExprKind) + value(AOTExprKind).  Native encodings so
+    // these expressions round-trip without the legacy EXPR_TREE fallback (e.g. as call args).
+    PLUS_EQ            = 112, //!< += operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MINUS_EQ           = 113, //!< -= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MULTIPLY_EQ        = 114, //!< *= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    DIVIDE_EQ          = 115, //!< /= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MODULO_EQ          = 116, //!< %= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    AND_EQ             = 117, //!< &= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    OR_EQ              = 118, //!< |= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    XOR_EQ             = 119, //!< ^= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    SHL_EQ             = 120, //!< <<= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    SHR_EQ             = 121, //!< >>= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -1499,6 +1795,7 @@ struct AOTGlobalSlotId {
     std::string name;        //!< qualified variable name
     std::string type_path;   //!< type path
     bool is_thread_local = false; //!< true if thread-local variable
+    bool is_aot_import = false; //!< true if this slot must resolve from the linked/loaded context
 };
 
 //! Identity for an expression slot
@@ -1576,12 +1873,15 @@ struct AOTSlotIdentities {
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
+    bool uses_argv = true;                //!< function requires the caller's implicit argv context
+    bool uses_self = true;                //!< function requires the caller's implicit self context
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
 
 //! Descriptor for a compiled function with slot identities
 struct AOTCompiledFuncWithSlots {
     std::string name;                //!< AOT function name (e.g. "myFunc", "MyClass::method")
+    std::string llvm_symbol;         //!< LLVM/native symbol name in the emitted object (for PC->loc mapping)
     int num_locals = 0;              //!< number of local variable slots
     int num_globals = 0;             //!< number of global variable slots
     int num_exprs = 0;               //!< number of expression slots
@@ -1608,6 +1908,10 @@ struct AOTCompiledFuncWithSlots {
     };
     //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
     std::vector<AOTLocEntry> aot_locs;
+    //! Native-PC map: sorted (function-relative native offset -> loc-index into aot_locs).
+    //! Built post-emission from the object's DWARF line table (column carries the exact
+    //! loc-index). Drives lazy on-throw source-location recovery (replaces the eager updater).
+    std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int32_t start_line = 0;
@@ -1618,6 +1922,110 @@ struct AOTCompiledFuncWithSlots {
     };
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
+
+//! AOT PC->loc trailer: appended to the END of the final loaded AOT artifact
+//! (.qo/.qmod/exe) after object emission and any debug-info stripping, carrying
+//! the per-function native-PC -> loc-index maps used for lazy on-throw source
+//! location recovery. Independent of the metadata blob (which is baked into the
+//! module before object emission, so it cannot carry post-emission native offsets).
+//!
+//! File layout: [payload][footer]. The fixed 16-byte footer sits at EOF:
+//!   uint64 payload_len; uint32 magic('QPCM'); uint32 version
+//! Payload (little-endian):
+//!   uint32 num_funcs
+//!   repeat: uint32 sym_len; char[sym_len] symbol;
+//!           uint32 num_entries; repeat: uint32 offset; uint32 loc_index
+//! Absence/garbage in the last 16 bytes simply means "no map" (graceful for
+//! pre-feature artifacts) — the loader falls back to the eager location path.
+static constexpr uint32_t QORE_AOT_PCMAP_MAGIC = 0x4d435051u;   //!< 'QPCM' little-endian
+static constexpr uint32_t QORE_AOT_PCMAP_VERSION = 1u;
+static constexpr size_t QORE_AOT_PCMAP_FOOTER_SIZE = 16;
+
+//! One function's parsed PC->loc map (symbol-keyed).
+struct AOTPcLocFuncEntry {
+    std::string symbol;                                  //!< native/LLVM symbol name
+    std::vector<std::pair<uint32_t, uint32_t>> entries;  //!< sorted (offset -> loc-index)
+};
+
+//! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
+//! Returns the number of functions written (functions with an empty map or symbol
+//! are skipped).
+size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::vector<uint8_t>& out);
+
+//! Parse a trailer payload (without footer) into per-function entries. Returns false
+//! on truncation/corruption.
+bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
+        std::vector<AOTPcLocFuncEntry>& out);
+
+//! Append a PC->loc trailer (payload + footer) to the file at `path`. No-op (returns
+//! true) when `payload` is empty. Sets `error` and returns false on I/O failure.
+bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_t>& payload,
+        std::string& error);
+
+//! Read and parse the PC->loc trailer from the file at `path`. Returns false (and
+//! leaves `out` empty) when the file has no valid trailer.
+bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
+
+//! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
+//! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
+//! per-file .qo's into the qorus-core executable via the system linker), a real ELF
+//! section survives every link: the linker concatenates same-named input sections
+//! into the output artifact. So qcc adds this section to every object it emits and the
+//! map rides through arbitrary downstream linking with ZERO changes required of qore's
+//! users. Read from the loaded artifact file at throw time (the section is non-alloc /
+//! not mapped, so it is read from `dli_fname`, like the trailer). C-identifier name so
+//! it stays a clean section label.
+#define QORE_AOT_PCLOC_SECTION_NAME "qore_aot_pcloc"
+
+//! Mach-O equivalent of QORE_AOT_PCLOC_SECTION_NAME. Mach-O section names are
+//! (segment, section) pairs, each <=16 chars; GNU objcopy corrupts Mach-O, so the
+//! section is added with llvm-objcopy as "__QORE,__pcloc". The Mach-O linker
+//! concatenates same-named input sections exactly like ELF, so the relink-surviving
+//! contract holds identically. The framed-record payload format is the same on both.
+#define QORE_AOT_PCLOC_MACHO_SEG "__QORE"
+#define QORE_AOT_PCLOC_MACHO_SECT "__pcloc"
+
+//! Frame a serialized PC->loc payload as one self-delimiting section record:
+//! [uint32 magic('QPCM')][uint32 payload_len][payload]. Multiple objects' records are
+//! concatenated by the linker into one section; the reader walks them sequentially.
+//! No-op (leaves `out` empty) when `payload` is empty.
+void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out);
+
+//! Read + parse the qore_aot_pcloc section from the artifact at `path`, walking all
+//! concatenated records and accumulating their per-function entries into `out`. Handles
+//! both 64-bit ELF (`qore_aot_pcloc`) and 64-bit Mach-O (`__QORE,__pcloc`, thin or FAT)
+//! via self-contained parses (no libLLVM dependency on the throw path's TU). Returns
+//! false (and leaves `out` empty) when the artifact has no such section.
+bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
+
+//! One ELF static-symbol-table FUNC entry: link-time value + size + name.
+struct AOTElfFuncSym {
+    uint64_t value;   //!< st_value (link-time address / offset within the image)
+    uint64_t size;    //!< st_size
+    std::string name; //!< symbol name
+};
+
+//! Read all STT_FUNC symbols from the artifact's static symbol table (`.symtab`). This
+//! is needed because dladdr/dladdr1 only see the DYNAMIC table (`.dynsym`): functions
+//! AOT-linked into an EXECUTABLE (e.g. qorus-core) live only in `.symtab`, so dladdr
+//! cannot name them and the symbol-keyed PC->loc map can't be matched without this.
+//! `out_is_et_dyn` receives true for ET_DYN images (PIE exe / .so — st_value is a
+//! load-relative offset, runtime addr = dli_fbase + st_value) and false for ET_EXEC
+//! (st_value is absolute). Self-contained 64-bit-ELF parse. Returns false (out empty)
+//! when no `.symtab`.
+bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_et_dyn);
+
+//! Mach-O counterpart of qoreAOTReadElfFuncSymbols: read __TEXT function symbols from the
+//! LC_SYMTAB of a thin/FAT 64-bit Mach-O. macOS dladdr provides no symbol size, so the
+//! PC->loc range would be bounded too tightly (return addresses past the last mapped
+//! offset fall outside, defeating lazy resolution); this recovers per-function sizes (gap
+//! to the next function symbol). `value` is the offset from the image base and `out_is_pie`
+//! is always true, so the runtime applies bias = dli_fbase exactly as for ELF ET_DYN. Names
+//! have the Mach-O leading '_' stripped to match the dladdr/dli_sname spelling.
+bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_pie);
 
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {
@@ -1676,7 +2084,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     @param source_text the full source text to embed
     @param source_len the length of the source text
 */
-void serializeFallbackSources(QoreAOTBinaryWriter& writer,
+void serializeEmbeddedSource(QoreAOTBinaryWriter& writer,
     const std::vector<AOTCompiledFuncWithSlots>& funcs,
     const char* source_text, int source_len);
 
@@ -1728,6 +2136,39 @@ class QoreClass;
 */
 class UserConstructorVariant;
 
+//! Non-owning view of a serialized value in an open AOT metadata reader.
+struct QoreAOTDeferredValueBlob {
+    const uint8_t* ptr = nullptr;
+    size_t len = 0;
+
+    bool empty() const { return !len; }
+    const uint8_t* data() const { return ptr; }
+    size_t size() const { return len; }
+    void assign(const uint8_t* data, size_t size) {
+        ptr = data;
+        len = size;
+    }
+    void clear() {
+        ptr = nullptr;
+        len = 0;
+    }
+};
+
+//! Null-terminated string view backed by an open AOT metadata reader.
+struct QoreAOTStringRef {
+    const char* ptr = "";
+
+    QoreAOTStringRef() = default;
+    QoreAOTStringRef(const char* value) : ptr(value ? value : "") {
+    }
+    QoreAOTStringRef& operator=(const char* value) {
+        ptr = value ? value : "";
+        return *this;
+    }
+    bool empty() const { return !*ptr; }
+    const char* c_str() const { return ptr; }
+};
+
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
     QoreAOTTypeResolver* type_resolver = nullptr;
@@ -1737,11 +2178,32 @@ class QoreAOTBinaryDeserializer {
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
     std::vector<std::string> class_signature_hashes;
-    std::vector<std::string> class_injected_paths;
+    std::vector<QoreAOTStringRef> class_injected_paths;
+
+    // Exact native slot key -> variant bindings populated while functions and
+    // methods are deserialized.  Slot registration can consume these pointers
+    // directly instead of walking the namespace/class tree and rebuilding each
+    // variant signature a second time.  Only variants that have SLOT_MAPS
+    // entries are retained, and the map lives no longer than this session.
+    struct SlotVariantBinding {
+        UserVariantBase* variant = nullptr;
+        const qore_class_private* class_ctx = nullptr;
+    };
+    // Views borrow immutable names from reader's string pool and remain valid
+    // through slot registration, when these lookup tables are consumed.
+    std::unordered_set<std::string_view> slot_map_names;
+    bool has_slot_map_section = false;
+    bool cache_slot_variant_bindings = true;
+    std::unordered_map<std::string_view, SlotVariantBinding> slot_variant_bindings;
+
+    //! Batch-wide class lookup map installed by QoreAOTBinaryMultiDeserializer.
+    //! Pending defaults can reference classes from sibling .qo sessions; the
+    //! per-session class_list map is not sufficient for those references.
+    const std::unordered_map<std::string, QoreClass*>* batch_class_lookup_map = nullptr;
 
     // Embedded source data (from FUNC_SOURCES section)
-    const char* fallback_source = nullptr;       //!< embedded source text
-    size_t fallback_source_len = 0;              //!< length of embedded source text
+    const char* embedded_source = nullptr;       //!< embedded source text
+    size_t embedded_source_len = 0;              //!< length of embedded source text
     std::vector<std::string> fallback_func_names; //!< legacy names of functions needing source fallback
 
     // Classes that already existed in the program (from module loading)
@@ -1750,8 +2212,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending base class info for two-pass class resolution
     struct PendingBaseClass {
-        std::string base_path;
-        std::string type_path;
+        QoreAOTStringRef base_path;
+        QoreAOTStringRef type_path;
         uint8_t access;  //!< ClassAccess value for the base class inheritance
         bool is_virtual;
     };
@@ -1763,8 +2225,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending instance member info for two-pass class resolution
     struct PendingInstanceMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         uint8_t flags = 0;  // bit 0 = transient
         QoreValue default_val;
@@ -1803,14 +2265,14 @@ class QoreAOTBinaryDeserializer {
         //! Serialized default payload.  Member records are read while only
         //! declaration shells exist; nested const refs inside values must be
         //! materialized after the batch-wide constant registration phase.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
     // Pending static member info for two-pass class resolution
     struct PendingStaticMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
@@ -1831,20 +2293,20 @@ class QoreAOTBinaryDeserializer {
         //! Same deferred-native-expression channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_native_blob;
         //! Same serialized-default channel as PendingInstanceMember.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
     // Pending class constant info for two-pass class resolution
     struct PendingClassConstant {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
         //! Serialized value payload. Class constants are registered as shells
         //! before this blob is deserialized so nested VT_CONST_REF entries can
         //! resolve against same-class or same-module constants.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
@@ -1859,8 +2321,8 @@ class QoreAOTBinaryDeserializer {
     // default (`hash<X>()`, `list<X>()`, `hash<string, X>()`) need to
     // wait until resolveHashdeclMembers to produce a final QoreValue.
     struct PendingHashdeclMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         QoreValue default_val;
 
         // Deferred VT_ENUM: pending_enum_path::pending_enum_member.
@@ -1894,8 +2356,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending typedef info for two-pass resolution
     struct PendingTypedef {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint32_t ns_idx;
         bool is_pub;
     };
@@ -1904,7 +2366,7 @@ class QoreAOTBinaryDeserializer {
     // Pending enum base type info for two-pass resolution
     struct PendingEnumBaseType {
         QoreEnumDecl* ed;
-        std::string base_type_path;
+        QoreAOTStringRef base_type_path;
     };
     std::vector<PendingEnumBaseType> pending_enum_base_types;
 
@@ -1968,6 +2430,12 @@ private:
     std::vector<PendingStaticMethodDefault> pending_smd;
     std::vector<PendingNativeExprDefault> pending_ned;
 
+    //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
+    //! The pointed-to vector buffers remain stable when the outer vector grows.
+    std::unique_ptr<std::vector<std::vector<uint8_t>>> deferred_value_copies;
+    //! Legacy owned strings used only for deterministic reader-string A/B tests.
+    std::unique_ptr<std::deque<std::string>> deferred_string_copies;
+
     //! Pre-resolved per-blob type table.  Populated at the start of
     //! phase 2b (deserializeFunctionsAndMethods) by reading the
     //! TYPE_TABLE section and resolving every entry via `type_resolver`.
@@ -1976,6 +2444,8 @@ private:
     //! cuts ~3.3 M resolver calls on qwf's 656 k variants.  Empty when
     //! loading a pre-feature-flag .qmod or a blob with no variants.
     std::vector<const QoreTypeInfo*> type_table_resolved;
+    //! Non-owning raw paths into reader storage for signature-owned generic types.
+    std::vector<const char*> type_table_paths;
 
     //! Set when the blob's header advertises QORE_AOT_FEAT_TYPE_TABLE.
     //! Signatures emit a u32 index rather than an inline string for
@@ -1996,6 +2466,9 @@ private:
     //! cross-blob complex types resolve correctly.
     bool resolveTypeTable(std::string& error);
     bool resolvePluginImports(std::string& error);
+    QoreAOTStringRef makeDeferredStringRef(const char* value);
+    bool readDeferredValueBlob(const uint8_t*& ptr, const uint8_t* end,
+        std::string& error, QoreAOTDeferredValueBlob& value_blob);
 
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
@@ -2021,8 +2494,11 @@ private:
     bool deserializeGlobals(std::string& error);
     bool deserializeFunctions(std::string& error);
     bool deserializeMethods(std::string& error);
-    bool deserializeFallbackSources(std::string& error);
+    bool deserializeEmbeddedSource(std::string& error);
     bool commitDeserializedClasses(std::string& error);
+    const QoreClass* resolveClassRefForSession(const char* class_ref,
+        const std::unordered_map<std::string, QoreClass*>* local_class_map = nullptr,
+        bool pseudo = false) const;
     const QoreProgramLocation* getBlobLocation(int32_t start_line = 0, int32_t end_line = 0) const;
     bool deserializeShellsFromOpenReader(std::string& error);
 
@@ -2058,6 +2534,35 @@ public:
         if (type_resolver) {
             type_resolver->setSharedCache(shared);
         }
+    }
+
+    /** Return the exact deserialized variant for a native SLOT_MAPS key.
+        @param key the exact native slot key
+        @param class_ctx receives the owning class for method variants, or nullptr for functions
+        @return the matching variant, or nullptr if no exact binding was cached
+    */
+    UserVariantBase* findSlotMapVariant(const char* key,
+            const qore_class_private*& class_ctx) const {
+        class_ctx = nullptr;
+        if (!key) {
+            return nullptr;
+        }
+        auto i = slot_variant_bindings.find(std::string_view(key));
+        if (i == slot_variant_bindings.end()) {
+            return nullptr;
+        }
+        class_ctx = i->second.class_ctx;
+        return i->second.variant;
+    }
+
+    //! Add this session's class shells to a caller-owned lookup map, including
+    //! anchored/unanchored aliases used by serialized class references.
+    void appendClassesToLookupMap(std::unordered_map<std::string, QoreClass*>& map) const;
+
+    //! Install/clear a caller-owned batch class map for the duration of a
+    //! multi-blob resolution pass.
+    void setBatchClassLookupMap(const std::unordered_map<std::string, QoreClass*>* map) {
+        batch_class_lookup_map = map;
     }
 
     //! Phase 4 slice 10: phase-2 entry point — run all resolution
@@ -2200,6 +2705,9 @@ public:
     bool commitClassesImportAbstract(std::string& error);
     bool commitClassesResolveAbstract(std::string& error);
     bool commitClassesValidate(std::string& error);
+    bool resolveBCAExpressionsPhase(std::string& error) {
+        return resolveBCAExpressions(error);
+    }
 
     //! Phase-split 2d — resolve pending static-method defaults,
     //! embedded source metadata, rebuild indexes, and resolve BCA
@@ -2251,6 +2759,9 @@ public:
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }
 
+    //! Transfer the open reader after all deserialization work is complete.
+    QoreAOTBinaryReader takeReader() { return std::move(reader); }
+
     //! Releases the reader's decompressed metadata pool
     /** Call once deserialization and function registration are complete and the
         reader will not be used again; see
@@ -2269,13 +2780,13 @@ public:
     QoreAOTTypeResolver* getTypeResolver() const { return type_resolver; }
 
     //! Check if explicit --include-source data is present.
-    bool hasEmbeddedSource() const { return fallback_source != nullptr; }
+    bool hasEmbeddedSource() const { return embedded_source != nullptr; }
 
     //! Get the embedded source text.
-    const char* getEmbeddedSource() const { return fallback_source; }
+    const char* getEmbeddedSource() const { return embedded_source; }
 
     //! Get the embedded source text length.
-    size_t getEmbeddedSourceLen() const { return fallback_source_len; }
+    size_t getEmbeddedSourceLen() const { return embedded_source_len; }
 
     //! Check if this legacy object names functions that require disabled source fallback.
     bool hasLegacyFallbackFunctions() const { return !fallback_func_names.empty(); }
@@ -2493,6 +3004,30 @@ public:
             return true;
         };
 
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
+
+        // Shell creation may add namespace/class/hashdecl declarations before
+        // the root lookup indexes are rebuilt.  Cross-blob type and base-class
+        // resolution below uses those indexes, so publish the full shell set
+        // before any session resolves names.
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+
         // 2a: types/bases first, then constants, methods, static members,
         // and each session's OWN instance members.  Methods must be added
         // before static/default resolution can observe or initialize class
@@ -2644,6 +3179,30 @@ public:
             return true;
         };
 
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
+
+        // Publish all preloaded shell declarations before resolving sibling
+        // types and bases.  The source parser also needs this when it runs
+        // before resolveForSourceParse(), so compileScriptFile() calls
+        // rebuildShellIndexes() after the preload loop.
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+
         if (!runSessionPhase("AOT type resolution",
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.resolveTypes(error);
@@ -2719,10 +3278,18 @@ public:
         if (!sessions.empty()) {
             rebuildRootIndexesOnce();
         }
-        return runSessionPhase("AOT source-parse BCA resolution",
-            [&error](QoreAOTBinaryDeserializer& sess) {
-                return sess.finalizePostIndex(error);
-            });
+
+        // Install BCA expression blobs before the following source parseCommit().
+        // Source constants may instantiate preloaded sibling classes during
+        // that commit, so their explicit base-constructor calls must already
+        // be present on the pending constructor variants.
+        if (!runSessionPhase("AOT BCA expression resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveBCAExpressionsPhase(error);
+                })) {
+            return false;
+        }
+        return true;
     }
 
     //! Finish AOT-only post-commit work after source parseCommit().
@@ -2741,6 +3308,22 @@ public:
             }
             return true;
         };
+
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
 
         if (!runSessionPhase("AOT abstract import",
                 [&error](QoreAOTBinaryDeserializer& sess) {
@@ -2777,6 +3360,14 @@ public:
 
     //! Number of blobs currently in-session.
     size_t sessionCount() const { return sessions.size(); }
+
+    //! Rebuild root namespace indexes after shell preload so source parsing can
+    //! resolve sibling `.qo` declarations before the later resolution pass.
+    void rebuildShellIndexes() {
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+    }
 
     //! Access a specific session by insertion index (slice 10g).
     //! Used by the batch-register end path to pull each session's
@@ -2949,7 +3540,12 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     const std::vector<LocalVar*>* direct_body_locals = nullptr,
     //! Optional Program that owns newly created LocalVars. Namespace and type
     //! resolution still use pgm.
-    QoreProgram* local_owner_pgm = nullptr);
+    QoreProgram* local_owner_pgm = nullptr,
+    //! If true, reconstruct only the function header and local tables, then
+    //! advance ptr to end without deserializing blocks or instructions.
+    bool metadata_only = false,
+    //! Optional sink used for cooperative cancellation during lazy runtime materialization.
+    ExceptionSink* cancel_xsink = nullptr);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.
@@ -2964,6 +3560,11 @@ bool compressMetadata(const std::vector<uint8_t>& input,
     std::vector<uint8_t>& output,
     std::string& error);
 
+//! Compress metadata using Zstandard
+bool compressMetadataZstd(const std::vector<uint8_t>& input,
+    std::vector<uint8_t>& output,
+    std::string& error);
+
 //! Decompress metadata blob using zlib
 /** Decompresses metadata previously compressed by compressMetadata().
 
@@ -2974,6 +3575,11 @@ bool compressMetadata(const std::vector<uint8_t>& input,
     @return true on success, false on decompression failure
 */
 bool decompressMetadata(const uint8_t* input, size_t input_len,
+    std::vector<uint8_t>& output,
+    std::string& error);
+
+//! Decompress metadata encoded by compressMetadataZstd()
+bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
     std::vector<uint8_t>& output,
     std::string& error);
 

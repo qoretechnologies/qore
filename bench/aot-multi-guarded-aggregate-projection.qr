@@ -1,0 +1,35 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        "left": left,
+        "middle": middle,
+        "right": right,
+    };
+}
+
+int sub projectionKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int left_index = i % 2;
+        int right_index = left_index + 1;
+        list<int> values = makeValues(i, i + 1, i + 2);
+        checksum += values[left_index] + values[right_index];
+
+        string left_key = left_index ? "middle" : "left";
+        string right_key = left_index ? "right" : "middle";
+        hash<string, int> row = makeRow(i, i + 1, i + 2);
+        checksum += row{left_key} + row{right_key};
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", projectionKernel(rounds));

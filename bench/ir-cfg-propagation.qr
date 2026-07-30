@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub typedListKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1, i + 2);
+        checksum += values[1];
+    }
+    return checksum;
+}
+
+int sub branchKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int value = i + 7;
+        if (i & 1) {
+            checksum += value + (i + 7);
+        } else {
+            checksum += value - (i + 7);
+        }
+    }
+    return checksum;
+}
+
+int sub parameterListKernel(list<int> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        for (int j = 0; j < values.size(); ++j) {
+            checksum += values[j];
+        }
+    }
+    return checksum;
+}
+
+int sub foreachListKernel(list<int> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach int value in (values) {
+            checksum += value;
+        }
+    }
+    return checksum;
+}
+
+int sub foreachBoolKernel(list<bool> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach bool value in (values) {
+            if (value) {
+                ++checksum;
+            }
+        }
+    }
+    return checksum;
+}
+
+int sub foreachStringKernel(list<string> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach string value in (values) {
+            checksum += value.size();
+        }
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "typed-list";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
+int checksum;
+switch (kernel) {
+    case "branch":
+        checksum = branchKernel(rounds);
+        break;
+    case "parameter-list":
+        checksum = parameterListKernel((1, 2, 3, 4, 5, 6, 7, 8), rounds);
+        break;
+    case "foreach-list":
+        checksum = foreachListKernel((1, 2, 3, 4, 5, 6, 7, 8), rounds);
+        break;
+    case "foreach-bool":
+        checksum = foreachBoolKernel((True, False, True, True, False, True, False, True), rounds);
+        break;
+    case "foreach-string":
+        checksum = foreachStringKernel(("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh"),
+            rounds);
+        break;
+    default:
+        checksum = typedListKernel(rounds);
+}
+printf("%d\n", checksum);

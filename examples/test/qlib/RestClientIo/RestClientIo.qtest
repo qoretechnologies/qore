@@ -3254,11 +3254,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testPingPollNonExistentHost() {
-        # Connection to non-existent host — startPollConnect() creates the
-        # asynchronous ping operation; DNS failure is reported when the poll
-        # operation is driven.
+        # Use an overlong DNS label so c-ares rejects it locally.  A syntactically
+        # valid .invalid name still depends on the CI resolver responding before
+        # connect_timeout expires.
         RestConnection rc("ping-nohost", "ping-nohost",
-            "http://nonexistent.invalid:9999", {}, {
+            "http://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.invalid:9999", {}, {
                 "ping_method": "GET",
                 "ping_path": "/",
                 "connect_timeout": 1s,

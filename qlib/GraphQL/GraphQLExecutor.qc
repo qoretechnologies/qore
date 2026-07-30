@@ -865,6 +865,20 @@ class ExecutionState {
 
     #! coerces a leaf scalar result value to its serialized form
     private auto completeLeafScalar(auto result, string tname, list<auto> path) {
+        # a structured (hash/list/object) value can never represent a built-in leaf scalar;
+        # reject it as a field error rather than silently coercing it (for example int(hash)
+        # yields 0 and boolean(hash) yields True, masking a resolver bug as a valid result)
+        switch (result.typeCode()) {
+            case NT_HASH:
+            case NT_LIST:
+            case NT_OBJECT: {
+                if (tname == "Int" || tname == "Float" || tname == "Boolean"
+                        || tname == "String" || tname == "ID") {
+                    throw GRAPHQL_EXECUTION_ERROR, sprintf("%s field at path %s cannot represent "
+                        "the value %y", tname, pathToString(path), result);
+                }
+            }
+        }
         switch (tname) {
             case "Int": {
                 int iv = int(result);

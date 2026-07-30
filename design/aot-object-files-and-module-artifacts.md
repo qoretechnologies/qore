@@ -176,6 +176,32 @@ Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol
 index.
 
+## PC→Location Section (`qore_aot_pcloc`)
+
+To report real source locations in exceptions thrown from AOT-compiled native code,
+qcc emits a per-function PC→location map into a dedicated **object section** rather
+than into the QORD metadata blob. Unlike the metadata blob (which is consumed when a
+`.qmod`/`.qo`/executable is loaded), this section must survive *arbitrary downstream
+linking* — a `.qo` fragment gets `ld -r`-merged, aggregated into a `.qmod`, or linked
+into a host executable — so the map has to ride through relinking with no cooperation
+from the linker or the user.
+
+- Both ELF and Mach-O linkers concatenate same-named input sections into the output
+  artifact, so qcc adds the map as its own section to every object it emits and the
+  data is preserved verbatim across relinks.
+  - ELF: a non-alloc section named `qore_aot_pcloc` (added with GNU `objcopy`).
+  - Mach-O: `__QORE,__pcloc` (segment/section pair; added with `llvm-objcopy`, since
+    GNU objcopy corrupts Mach-O).
+- The payload is a sequence of self-delimiting framed records
+  (`[uint32 magic 'QPCM'][uint32 payload_len][payload]`); each object contributes one
+  record, and the reader walks all concatenated records, accumulating per-function
+  entries. The framed-record and per-function payload format is identical on ELF and
+  Mach-O.
+- The section is non-alloc / not mapped at runtime; it is read from the artifact file
+  (via `dladdr`'s `dli_fname`) lazily at throw time, so it adds no steady-state cost.
+  See [`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md) for how the
+  map is consumed during exception construction.
+
 ## Inspection
 
 `qcc --dump-info <path>` inspects executables, `.qmod`, `.qo`, `.qoa`, and
@@ -186,15 +212,19 @@ Optional flags:
 - `--dump-symbols`: print an nm-like symbol table.
 - `--dump-sections`: print object and AOT section tables.
 - `--dump-index-json`: print build-consumable JSON for the AOT symbol index.
+- `--write-index-json=<path>`: write the same JSON sidecar after a successful
+  single-output build.
 
 With `--dump-symbols`, AOT metadata dumps also include `SYMBOL_INDEX` defined,
 imported, native, and context records when the section is present.
 
 Build tools can materialize the JSON output next to an object as
-`<object>.idx.json`. The sidecar mirrors the binary index with `defines`,
-`provides`, `requires`, `native`, `source_text`, and `native_body_hash` fields
-so planners can distinguish source/API/value rebuilds from relink-only native
-body changes without parsing the human dump format.
+`<object>.idx.json` by passing `--write-index-json=<object>.idx.json` in the
+same qcc invocation that produces the object. The sidecar mirrors the binary
+index with `defines`, `provides`, `requires`, `native`, `source_text`, and
+`native_body_hash` fields so planners can distinguish source/API/value rebuilds
+from relink-only native body changes without parsing the human dump format or
+starting a second qcc process.
 
 The dump path is for diagnostics only; runtimes ignore `BUILD_INFO` and do not
 require `SYMBOL_INDEX`.
@@ -229,3 +259,24 @@ default.
 
 The `qcc-format` stamp controls mass qmod rebuilds. Only changes that can alter
 qmod output or qcc compile semantics should update that stamp.
+
+`qcc` owns the reusable build-sidecar contract for `.qo` and aggregate outputs.
+Build systems should prefer qcc options over external scanners when the needed
+information comes from parsed Qore metadata:
+
+- `--depfile=<path>` emits Make/Ninja dependencies for single-source compile,
+  `--script-aggregate`, and `--link-qo` single-output commands.
+- `--write-index-json=<path>` emits the AOT symbol index JSON for the generated
+  object or aggregate.
+- `--write-manifest=<path>` emits a deterministic manifest containing qcc
+  options, selected environment, sidecar paths, output hash/size, and hashes of
+  all known inputs.
+- `--manifest-input=<path>` adds build-system-owned files, such as response
+  files or ABI stamps, to the manifest.
+- `--skip-if-manifest-current` exits successfully without rebuilding when the
+  manifest content already matches current output/input state.
+
+The manifest skip check intentionally runs before Qore initialization when the
+output and sidecars are current. This makes no-op delta builds cheap and keeps
+the correctness decision close to the compiler state that can affect generated
+artifacts.

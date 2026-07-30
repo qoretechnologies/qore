@@ -31,7 +31,7 @@
 #include <qore/Qore.h>
 
 QoreImplicitArgumentNode::QoreImplicitArgumentNode(const QoreProgramLocation* loc, int n_offset)
-        : ParseNode(loc, NT_IMPLICIT_ARG), offset(n_offset) {
+        : ParseNode(loc, NT_IMPLICIT_ARG, true, false), offset(n_offset) {
     if (!offset) {
         parse_error(*loc, "implicit argument offsets must be greater than 0 (first implicit argument is $1)");
         err = -1;
@@ -46,6 +46,7 @@ QoreImplicitArgumentNode::~QoreImplicitArgumentNode() {
 int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = parse_get_implicit_arg_type_info();
     parse_context.analysis.clear();
+    parse_context.markExpressionNeverThrows();
     if (parse_context.typeInfo) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
         parse_context.analysis.known_type = parse_context.typeInfo;

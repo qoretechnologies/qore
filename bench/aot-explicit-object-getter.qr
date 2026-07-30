@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ScalarGetter {
+    private {
+        int int_value;
+        float float_value;
+        bool bool_value;
+    }
+
+    constructor(int int_value, float float_value, bool bool_value) {
+        self.int_value = int_value;
+        self.float_value = float_value;
+        self.bool_value = bool_value;
+    }
+
+    int getInt() {
+        return int_value;
+    }
+
+    float getFloat() {
+        return float_value;
+    }
+
+    bool getBool() {
+        return bool_value;
+    }
+}
+
+const int Iterations = 10000000;
+
+int sub main() {
+    ScalarGetter getter(7, 2.5, True);
+    int int_sum = 0;
+    float float_sum = 0.0;
+    int bool_sum = 0;
+    for (int i = 0; i < Iterations; ++i) {
+        int_sum += getter.getInt();
+    }
+    for (int i = 0; i < Iterations; ++i) {
+        float_sum += getter.getFloat();
+    }
+    for (int i = 0; i < Iterations; ++i) {
+        bool_sum += getter.getBool();
+    }
+    printf("%d:%.1f:%d\n", int_sum, float_sum, bool_sum);
+    return 0;
+}
+
+main();

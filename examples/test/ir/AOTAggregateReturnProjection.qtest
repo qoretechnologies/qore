@@ -1,0 +1,2059 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+%disable-warning duplicate-hash-key
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        \"left\": left,
+        \"middle\": middle,
+        \"right\": right,
+    };
+}
+
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+
+int guarded_reference_index = 0;
+int aggregate_projection_effects = 0;
+string aggregate_projection_key_marker;
+
+list<int> sub makeValuesAndSetGuard(
+        int left, int middle, int right) {
+    guarded_reference_index = 1;
+    return (left, middle, right);
+}
+
+list<int> sub repeatValue(int value) {
+    return (value, value, value);
+}
+
+list<int> sub repeatComputedValue(int value) {
+    return (value + 7, value + 7, value + 7);
+}
+
+list<float> sub repeatFloat(float value) {
+    return (value, value);
+}
+
+list<float> sub signedZeroValues() {
+    return (-0.0, 0.0);
+}
+
+list<bool> sub repeatBool(bool value) {
+    return (value, value, value);
+}
+
+list<auto> sub makeMixedValues(int value, float ratio, bool enabled) {
+    return (value, ratio, enabled);
+}
+
+list<int> sub repeatConstant() {
+    return (17, 17);
+}
+
+list<int> sub repeatWithUnusedBoxed(int value, string unused) {
+    return (value, value);
+}
+
+list<float> sub makeFloats(float left, float right) {
+    return (left, right);
+}
+
+list<string> sub makeWords(string left, string right) {
+    return (left, right);
+}
+
+list<auto> sub forwardAuto(auto value) {
+    return (value,);
+}
+
+list<hash<auto>> sub forwardNoNarrow(hash<auto!> value) {
+    return (value,);
+}
+
+list<*int> sub forwardOptional(*int value) {
+    return (value,);
+}
+
+list<*int> sub forwardOptionalDefault(*int value = 43) {
+    return (value,);
+}
+
+hash<string, string> sub makeWordMap(string left, string right) {
+    return {
+        \"left\": left,
+        \"right\": right,
+    };
+}
+
+hash<string, int> sub makeDuplicate(int first, int second) {
+    return {
+        \"same\": first,
+        \"same\": second,
+    };
+}
+
+hash<string, int> sub makeTagged(int value) {
+    return {
+        \"value\": value,
+        \"scale\": 3,
+        \"bias\": 7,
+    };
+}
+
+hash<string, int> sub makeComputedRow(int left, int middle, int right) {
+    return {
+        \"left\": left,
+        \"middle\": middle + 0,
+        \"right\": right,
+    };
+}
+
+list<int> sub makeComputedValues(int value) {
+    return (value + 7,);
+}
+
+list<float> sub makeComputedFloats(float value) {
+    return (value + 1.25,);
+}
+
+list<int> sub makeTwoParamComputedValues(int left, int right) {
+    return (left + right,);
+}
+
+list<int> sub makeBoundedValues(int left, int right) {
+    return (left + right, left - right, left * right, left * 3);
+}
+
+list<bool> sub makeComparedValues(int left, int right) {
+    return (left == right, left != right, left < right, left <= right,
+        left > right, left >= right);
+}
+
+list<float> sub makeFloatConstant(float value) {
+    return (value, 2.5);
+}
+
+list<int> sub makeIntConstant(int value) {
+    return (value, 42);
+}
+
+list<bool> sub makeBoolConstant(bool value) {
+    return (value, True);
+}
+
+list<int> sub makeConditionalValues(bool reverse, int left, int right) {
+    if (reverse) {
+        return (right, left, 7);
+    }
+    return (left, right, 9);
+}
+
+list<float> sub makeConditionalFloats(
+        bool reverse, float left, float right) {
+    if (reverse) {
+        return (right, left);
+    }
+    return (left, right);
+}
+
+list<bool> sub makeConditionalBools(
+        bool reverse, bool left, bool right) {
+    if (reverse) {
+        return (right, left);
+    }
+    return (left, right);
+}
+
+list<int> sub makeConditionalComputedValues(bool reverse,
+        int left, int right, int invariant) {
+    if (reverse) {
+        return (right, left, invariant + 7, invariant * 3,
+            left + right, 11);
+    }
+    return (left, right, invariant + 7, invariant * 3,
+        left + right, 11);
+}
+
+list<float> sub makeConditionalComputedFloats(bool reverse,
+        float left, float right, float invariant) {
+    if (reverse) {
+        return (right, invariant + 0.25, -0.0);
+    }
+    return (left, invariant + 0.25, -0.0);
+}
+
+list<bool> sub makeConditionalComparedValues(bool reverse,
+        bool left, bool right, int lhs, int rhs) {
+    if (reverse) {
+        return (right, left, lhs < rhs, True);
+    }
+    return (left, right, lhs < rhs, True);
+}
+
+list<auto> sub makeConditionalAutoValues(bool reverse,
+        int left, int right, int invariant) {
+    if (reverse) {
+        return (right, invariant + 7);
+    }
+    return (left, invariant + 7);
+}
+
+list<int> sub makeConditionalDifferentComputed(
+        bool alternate, int value) {
+    if (alternate) {
+        return (value + 1,);
+    }
+    return (value + 2,);
+}
+
+list<float> sub makeConditionalDifferentZero(bool negative) {
+    if (negative) {
+        return (-0.0,);
+    }
+    return (0.0,);
+}
+
+list<int> sub makeConditionalDifferentIntExpressions(
+        bool alternate, int left, int right) {
+    if (alternate) {
+        return (left * 3, left + right, 11);
+    }
+    return (left * 5, left - right, 13);
+}
+
+list<float> sub makeConditionalDifferentFloatExpression(
+        bool alternate, float value) {
+    if (alternate) {
+        return (value + 0.25,);
+    }
+    return (value + 0.5,);
+}
+
+list<bool> sub makeConditionalDifferentBoolExpressions(
+        bool alternate, int left, int right) {
+    if (alternate) {
+        return (left < right, True);
+    }
+    return (left > right, False);
+}
+
+list<int> sub makeVariableShape(bool long_value, int value) {
+    if (long_value) {
+        return (value, value + 1, value + 2);
+    }
+    return (value, value + 1);
+}
+
+list<int> sub makeMaybeValues(bool present, int value) {
+    if (present) {
+        return (value,);
+    }
+    return ();
+}
+
+int conditional_shape_effects = 0;
+
+list<int> sub makeConditionalSideEffect(bool reverse, int value) {
+    ++conditional_shape_effects;
+    if (reverse) {
+        return (value + 1, value);
+    }
+    return (value, value + 1);
+}
+
+list<int> sub makePotentiallyLooping(bool loop, bool alternate) {
+    while (loop) {
+    }
+    if (alternate) {
+        return (1, 2);
+    }
+    return (3, 4);
+}
+
+list<int> sub makeEmptyValues() {
+    return ();
+}
+
+hash<string, int> sub makeEmptyRow() {
+    return {};
+}
+
+list<int> sub makeConstantValues() {
+    return (3, 5, 7);
+}
+
+hash<string, int> sub makeConstantRow() {
+    return {
+        \"left\": 11,
+        \"right\": 13,
+    };
+}
+
+hash<string, int> sub remapRow(int left, int middle, int right) {
+    return makeRow(right, left, middle);
+}
+
+hash<string, int> sub forwardRow(int left, int middle, int right) {
+    return remapRow(middle, right, left);
+}
+
+hash<string, int> sub taggedWrapper(int value) {
+    return makeTagged(value);
+}
+
+list<string> sub wordWrapper(string left, string right) {
+    return makeWords(right, left);
+}
+
+list<int> sub valuesWrapper(int left, int middle, int right) {
+    return makeValues(right, middle, left);
+}
+
+hash<string, int> sub computedWrapper(int left, int middle, int right) {
+    return makeRow(left + 7, middle, right);
+}
+
+list<int> sub nestedComputedWrapper(int value) {
+    return makeComputedValues(value + 3);
+}
+
+list<float> sub computedFloatWrapper(float left, float right) {
+    return makeFloats(left + 0.25, right);
+}
+
+hash<string, hash<string, int>> sub wrapRow(
+        hash<string, int> row, hash<string, int> unused) {
+    return {
+        \"row\": row,
+        \"unused\": unused,
+    };
+}
+
+hash<string, hash<string, hash<string, int>>> sub wrapRows(
+        hash<string, hash<string, int>> rows,
+        hash<string, hash<string, int>> unused) {
+    return {
+        \"rows\": rows,
+        \"unused\": unused,
+    };
+}
+
+hash<string, list<string>> sub wrapWords(
+        list<string> words, list<string> unused) {
+    return {
+        \"words\": words,
+        \"unused\": unused,
+    };
+}
+
+list<string> sub makeFirstWord(string value, string ignored) {
+    return (value,);
+}
+
+list<string> sub bindingWrapper(string value, softstring ignored) {
+    return makeFirstWord(value, ignored);
+}
+
+int sub freshHashProjection() {
+    return makeRow(4, 5, 6).middle;
+}
+
+int sub sideEffectProjection() {
+    int projection_effects = 0;
+    int value = makeRow((projection_effects = 1),
+        (projection_effects = 2), (projection_effects = 3)).middle;
+    return value * 10 + projection_effects;
+}
+
+int sub freshListSize() {
+    return makeValues(7, 8, 9).size();
+}
+
+int sub freshListProjection() {
+    return makeValues(4, 5, 6)[-1];
+}
+
+bool sub freshFloatProjection() {
+    return makeFloats(1.25, 2.5)[-1] == 2.5;
+}
+
+int sub duplicateKeyProjection() {
+    return makeDuplicate(10, 11).same;
+}
+
+int sub constantHashProjection() {
+    return makeTagged(10).scale;
+}
+
+bool sub constantFloatProjection() {
+    return makeFloatConstant(1.25)[1] == 2.5;
+}
+
+int sub constantIntProjection() {
+    return makeIntConstant(1)[1];
+}
+
+bool sub constantBoolProjection() {
+    return makeBoolConstant(False)[1];
+}
+
+string sub boxedListProjection() {
+    return makeWords(\"alpha\", \"beta\")[0];
+}
+
+string sub boxedHashProjection() {
+    return makeWordMap(\"alpha\", \"beta\").right;
+}
+
+string sub appendMark(string value) {
+    return value + \"!\";
+}
+
+string sub boxedTemporaryProjection() {
+    return makeWords(appendMark(\"left\"), appendMark(\"right\"))[0];
+}
+
+string sub boxedMultiListProjection() {
+    string left = \"left-projection-value\";
+    string right = \"right-projection-value\";
+    list<string> words = makeWords(left, right);
+    return words[0] + \"/\" + words[1] + \"/\" + words[0];
+}
+
+string sub boxedMultiHashProjection() {
+    string left = \"hash-left-projection-value\";
+    string right = \"hash-right-projection-value\";
+    hash<string, string> words = makeWordMap(left, right);
+    return words.left + \"/\" + words.right + \"/\" + words.left;
+}
+
+int sub wrapperProjection() {
+    return forwardRow(10, 11, 12).middle;
+}
+
+int sub wrapperConstantProjection() {
+    return taggedWrapper(9).scale;
+}
+
+string sub wrapperBoxedProjection() {
+    return wordWrapper(\"left\", \"right\")[0];
+}
+
+int sub wrapperListSize() {
+    return valuesWrapper(1, 2, 3).size();
+}
+
+int sub computedWrapperProjection(int value) {
+    return computedWrapper(value, 2, 3).left;
+}
+
+bool sub computedWrapperOverflowProjection() {
+    return computedWrapperProjection(9223372036854775807)
+        == -9223372036854775802;
+}
+
+int sub nestedComputedWrapperProjection(int value) {
+    return nestedComputedWrapper(value)[0];
+}
+
+bool sub nestedComputedWrapperOverflowProjection() {
+    return nestedComputedWrapperProjection(9223372036854775807)
+        == -9223372036854775799;
+}
+
+bool sub computedFloatWrapperProjection() {
+    return computedFloatWrapper(1.25, 2.5)[0] == 1.5;
+}
+
+string sub nonComposedBindingProjection() {
+    return bindingWrapper(\"kept\", 42)[0];
+}
+
+int sub nestedNativeProjection() {
+    return wrapRow(makeRow(1, 2, 3), makeRow(4, 5, 6)).row.middle;
+}
+
+int sub nestedSideEffectProjection() {
+    int effects = 0;
+    int value = wrapRow(
+        makeRow((effects = 1), (effects = 2), (effects = 3)),
+        makeRow((effects = 4), (effects = 5), (effects = 6))).row.middle;
+    return value * 10 + effects;
+}
+
+int sub deepNestedProjection() {
+    return wrapRows(
+        wrapRow(makeRow(7, 8, 9), makeRow(10, 11, 12)),
+        wrapRow(makeRow(13, 14, 15), makeRow(16, 17, 18)))
+        .rows.row.middle;
+}
+
+string sub nestedBoxedProjection() {
+    return wrapWords(
+        makeWords(\"alpha\", \"beta\"),
+        makeWords(\"unused-left\", \"unused-right\")).words[1];
+}
+
+int sub nestedLocalProjection() {
+    hash<string, hash<string, int>> wrapper = wrapRow(
+        makeRow(1, 2, 3), makeRow(4, 5, 6));
+    return wrapper.row.middle;
+}
+
+int sub nestedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? wrapRow(makeRow(1, 2, 3), makeRow(4, 5, 6))
+        : wrapRow(makeRow(7, 8, 9), makeRow(10, 11, 12))).row.middle;
+}
+
+int sub sharedNestedInput() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return wrapRow(row, makeRow(4, 5, 6)).row.middle + row.left;
+}
+
+int sub nonNestedComputedProjection() {
+    return wrapRow(
+        makeComputedRow(1, 2, 3), makeRow(4, 5, 6)).row.middle;
+}
+
+int sub listFirstProjection() {
+    return makeValues(4, 5, 6).first();
+}
+
+int sub listLastProjection() {
+    return makeValues(4, 5, 6).last();
+}
+
+bool sub listEmptyProjection() {
+    return makeValues(4, 5, 6).empty();
+}
+
+bool sub listValProjection() {
+    return makeValues(4, 5, 6).val();
+}
+
+int sub listElementsProjection() {
+    return elements makeValues(4, 5, 6);
+}
+
+int sub hashElementsProjection() {
+    return elements makeRow(4, 5, 6);
+}
+
+int sub duplicateHashElementsProjection() {
+    return elements makeDuplicate(4, 5);
+}
+
+bool sub listExistsProjection() {
+    return exists makeValues(4, 5, 6);
+}
+
+bool sub hashExistsProjection() {
+    return exists makeRow(4, 5, 6);
+}
+
+int sub aggregateConsumerSideEffects() {
+    int effects = 0;
+    int count = elements makeValues(
+        (effects = 1), (effects = 2), (effects = 3));
+    return count * 10 + effects;
+}
+
+int sub nonConsumerComputedProjection() {
+    return elements makeComputedRow(1, 2, 3);
+}
+
+int sub computedIntProjection(int value) {
+    return makeComputedValues(value)[0];
+}
+
+int sub computedBoxedIntProjection(int value) {
+    return makeComputedValues(value).first();
+}
+
+bool sub computedIntOverflowProjection() {
+    return computedIntProjection(9223372036854775807)
+        == -9223372036854775802;
+}
+
+bool sub computedFloatProjection() {
+    return makeComputedFloats(2.5)[0] == 3.75;
+}
+
+int sub twoParamComputedProjection() {
+    return makeTwoParamComputedValues(2, 3)[0];
+}
+
+bool sub boundedExpressionProjection() {
+    return makeBoundedValues(2, 3)[0] == 5
+        && makeBoundedValues(2, 3)[1] == -1
+        && makeBoundedValues(2, 3)[2] == 6
+        && makeBoundedValues(2, 3)[3] == 6
+        && makeBoundedValues(2, 3).first() == 5
+        && makeBoundedValues(9223372036854775807, 2)[2] == -2
+        && makeComparedValues(2, 3)[0] == False
+        && makeComparedValues(2, 3)[1] == True
+        && makeComparedValues(2, 3)[2] == True
+        && makeComparedValues(2, 3)[3] == True
+        && makeComparedValues(2, 3)[4] == False
+        && makeComparedValues(2, 3)[5] == False;
+}
+
+bool sub optionalAggregateConsumer(*int value) {
+    try {
+        return (elements makeValues(1, value, 3)) == 3;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
+int sub hashSizeProjection() {
+    return makeRow(1, 2, 3).size();
+}
+
+bool sub hashEmptyProjection() {
+    return makeRow(1, 2, 3).empty();
+}
+
+bool sub hashValProjection() {
+    return makeRow(1, 2, 3).val();
+}
+
+hash<auto> sub makeSizeOverride(code<string()> size_call) {
+    return {
+        \"size\": size_call,
+    };
+}
+
+auto sub hashSizeOverride() {
+    return makeSizeOverride(
+        string sub () { return \"callref-size\"; }).size();
+}
+
+int sub sharedResult() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + row.right;
+}
+
+int sub singleLocalProjection() {
+    int effects = 0;
+    hash<string, int> row = makeRow(
+        (effects = 1), (effects = 2), (effects = 3));
+    return row.middle * 10 + effects;
+}
+
+int sub boxedIntLocalProjection() {
+    int effects = 0;
+    list<int> values = makeValues(
+        (effects = 1), (effects = 2), (effects = 3));
+    return values[1] * 10 + effects;
+}
+
+bool sub boxedFloatLocalProjection() {
+    list<float> values = makeFloatConstant(1.25);
+    return values[1] == 2.5;
+}
+
+bool sub boxedBoolLocalProjection() {
+    list<bool> values = makeBoolConstant(False);
+    return values[1];
+}
+
+int sub boxedIntMultiLocalProjection() {
+    list<int> values = makeValues(4, 5, 7);
+    return values[0] + values[1] + values[2];
+}
+
+bool sub boxedFloatMultiLocalProjection() {
+    list<float> values = makeFloats(1.25, 1.5);
+    return values[0] + values[1] + values[0] == 4.0;
+}
+
+bool sub boxedBoolMultiLocalProjection() {
+    list<bool> values = makeBoolConstant(False);
+    return values[0] + values[1] + values[1] == 2;
+}
+
+int sub boxedSizeMultiLocalProjection() {
+    list<int> values = makeValues(4, 5, 6);
+    return values.size() + values[0] + values[2];
+}
+
+int sub conditionalShapeProjection(bool reverse) {
+    return makeConditionalValues(reverse, 4, 5).size();
+}
+
+int sub conditionalElementProjection(bool reverse) {
+    return makeConditionalValues(reverse, 4, 5)[0];
+}
+
+bool sub conditionalFloatElementProjection(bool reverse) {
+    return makeConditionalFloats(reverse, 1.25, 2.5)[0]
+        == (reverse ? 2.5 : 1.25);
+}
+
+bool sub conditionalBoolElementProjection(bool reverse) {
+    return makeConditionalBools(reverse, False, True)[0]
+        == reverse;
+}
+
+bool sub conditionalComputedIntProjection(bool reverse) {
+    return makeConditionalComputedValues(reverse, 2, 3, 5)[2] == 12
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[3] == 15
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[4] == 5
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[5] == 11;
+}
+
+bool sub conditionalComputedFloatProjection(bool reverse) {
+    return makeConditionalComputedFloats(reverse, 1.25, 2.5, 3.75)[1]
+            == 4.0
+        && sprintf(\"%.1f\",
+            makeConditionalComputedFloats(
+                reverse, 1.25, 2.5, 3.75)[2]) == \"-0.0\";
+}
+
+bool sub conditionalComputedBoolProjection(bool reverse) {
+    return makeConditionalComparedValues(
+            reverse, False, True, 2, 3)[2]
+        && makeConditionalComparedValues(
+            reverse, False, True, 2, 3)[3];
+}
+
+bool sub conditionalComputedOverflowProjection(bool reverse, int value) {
+    return makeConditionalComputedValues(
+            reverse, value, 2, value)[2] == -9223372036854775802
+        && makeConditionalComputedValues(
+            reverse, value, 2, value)[3] == 9223372036854775805
+        && makeConditionalComputedValues(
+            reverse, value, 2, value)[4] == -9223372036854775807;
+}
+
+bool sub conditionalComputedSideEffectOrder() {
+    int effects = 0;
+    bool result = makeConditionalComputedValues(
+        (effects = 1) == 1, 2, 3, 5)[2] == 12;
+    return result && effects == 1;
+}
+
+bool sub conditionalAutoComputedProjection(bool reverse) {
+    return makeConditionalAutoValues(reverse, 2, 3, 5)[1] == 12;
+}
+
+bool sub conditionalDifferentComputedProjection(bool alternate) {
+    return makeConditionalDifferentComputed(alternate, 5)[0]
+        == (alternate ? 6 : 7);
+}
+
+bool sub conditionalDifferentZeroProjection(bool negative) {
+    return sprintf(\"%.1f\",
+        makeConditionalDifferentZero(negative)[0])
+        == (negative ? \"-0.0\" : \"0.0\");
+}
+
+bool sub conditionalDifferentIntExpressionsProjection(bool alternate) {
+    return makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[0] == (alternate ? 15 : 25)
+        && makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[1] == (alternate ? 7 : 3)
+        && makeConditionalDifferentIntExpressions(
+            alternate, 5, 2)[2] == (alternate ? 11 : 13);
+}
+
+bool sub conditionalDifferentFloatExpressionProjection(bool alternate) {
+    return makeConditionalDifferentFloatExpression(
+        alternate, 1.25)[0] == (alternate ? 1.5 : 1.75);
+}
+
+bool sub conditionalDifferentBoolExpressionsProjection(bool alternate) {
+    return makeConditionalDifferentBoolExpressions(
+            alternate, 2, 3)[0] == alternate
+        && makeConditionalDifferentBoolExpressions(
+            alternate, 2, 3)[1] == alternate;
+}
+
+int sub variableShapeProjection(bool long_value) {
+    return makeVariableShape(long_value, 4).size();
+}
+
+bool sub variableEmptyProjection(bool present) {
+    return makeMaybeValues(present, 4).empty();
+}
+
+bool sub variableValProjection(bool present) {
+    return makeMaybeValues(present, 4).val();
+}
+
+int sub variableElementsProjection(bool present) {
+    return elements makeMaybeValues(present, 4);
+}
+
+bool sub variableExistsProjection(bool present) {
+    return exists makeMaybeValues(present, 4);
+}
+
+int sub conditionalSideEffectProjection(bool reverse) {
+    conditional_shape_effects = 0;
+    int size = makeConditionalSideEffect(reverse, 4).size();
+    return size * 10 + conditional_shape_effects;
+}
+
+int sub potentiallyLoopingProjection(bool alternate) {
+    return makePotentiallyLooping(False, alternate).size();
+}
+
+int sub crossBlockProjection(bool left_branch) {
+    hash<string, int> row = makeRow(1, 2, 3);
+    list<int> values = makeValues(4, 5, 6);
+    if (left_branch) {
+        return row.left + row.right + values[0] + values[2];
+    }
+    return row.middle + row.right + values[1] + values[2];
+}
+
+bool sub nonDominatingAssignment(bool assign) {
+    hash<string, int> row;
+    if (assign) {
+        row = makeRow(1, 2, 3);
+    }
+    try {
+        return row.left == 1;
+    } catch (hash<auto> ex) {
+        return !assign;
+    }
+}
+
+int sub phiProjection(bool left_branch) {
+    return (left_branch
+        ? makeRow(1, 2, 3)
+        : makeRow(4, 5, 6)).middle;
+}
+
+int sub phiSideEffectProjection(bool left_branch) {
+    int effects = 0;
+    int value = (left_branch
+        ? makeRow((effects = 1), (effects = 2), (effects = 3))
+        : makeRow((effects = 4), (effects = 5), (effects = 6))).middle;
+    return value * 10 + effects;
+}
+
+string sub boxedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeWords(\"left-unused\", \"left-selected\")
+        : makeWords(\"right-unused\", \"right-selected\"))[1];
+}
+
+bool sub boxedConstantPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeBoolConstant(False)
+        : makeBoolConstant(True))[1];
+}
+
+int sub boxedSizePhiProjection(bool left_branch) {
+    return elements (left_branch
+        ? makeValues(1, 2, 3)
+        : makeValues(4, 5, 6));
+}
+
+bool sub nativeFloatPhiProjection(bool left_branch) {
+    float selected = (left_branch
+        ? makeFloats(1.25, 2.5)
+        : makeFloats(3.75, 5.0))[1];
+    return selected == (left_branch ? 2.5 : 5.0);
+}
+
+int sub mixedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeRow(1, 2, 3)
+        : makeComputedRow(4, 5, 6)).middle;
+}
+
+bool sub nothingPhiProjection(bool left_branch) {
+    *hash<string, int> row = left_branch ? makeRow(1, 2, 3) : NOTHING;
+    return left_branch ? row.middle == 2 : row === NOTHING;
+}
+
+int sub sharedMutated() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    row.left = 10;
+    return row.left + row.right;
+}
+
+int sub consumeRow(hash<string, int> row) {
+    return row.middle;
+}
+
+int sub consumeListSize(list<int> values) {
+    return values.size();
+}
+
+int sub consumeMutatingRow(hash<string, int> row) {
+    row.middle = 10;
+    return row.middle;
+}
+
+int sub consumeRowWithRequiredUnused(
+        hash<string, int> row, int required_unused) {
+    return row.middle;
+}
+
+string sub consumeWords(list<string> words) {
+    return words[1];
+}
+
+string sub consumeWordMap(hash<string, string> words) {
+    return words.right;
+}
+
+int sub sharedEscapes() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + consumeRow(row);
+}
+
+int sub sharedListSizeConsumer() {
+    list<int> values = makeValues(1, 2, 3);
+    return values[0] + consumeListSize(values);
+}
+
+int sub sharedMutatingConsumer() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + consumeMutatingRow(row) + row.middle;
+}
+
+bool sub requiredUnsetConsumer() {
+    int required_unused;
+    try {
+        consumeRowWithRequiredUnused(
+            makeRow(1, 2, 3), required_unused);
+    } catch (hash<auto> ex) {
+        return True;
+    }
+    return False;
+}
+
+string sub boxedMixedUse() {
+    list<string> words =
+        makeWords(appendMark(\"alpha\"), appendMark(\"beta\"));
+    return words[0] + \"/\" + consumeWords(words);
+}
+
+int sub sharedBoxedHashConsumer() {
+    string left = \"alpha\";
+    string right = \"beta\";
+    hash<string, string> words = makeWordMap(left, right);
+    return words.left.size() + consumeWordMap(words).size();
+}
+
+int sub dynamicListIndex(int index) {
+    return makeValues(4, 5, 6)[index].toInt();
+}
+
+*int sub guardedListIndex(int value, int index) {
+    return repeatValue(value)[index];
+}
+
+*int sub guardedComputedListIndex(int value, int index) {
+    return repeatComputedValue(value)[index];
+}
+
+*float sub guardedFloatListIndex(float value, int index) {
+    return repeatFloat(value)[index];
+}
+
+string sub dynamicSignedZeroListIndex(int index) {
+    return sprintf(\"%.1f\", signedZeroValues()[index]);
+}
+
+string sub dynamicMixedListIndex(int index) {
+    return sprintf(\"%y\", makeMixedValues(11, 2.5, True)[index]);
+}
+
+*bool sub guardedBoolListIndex(bool value, int index) {
+    return repeatBool(value)[index];
+}
+
+*int sub guardedConstantListIndex(int index) {
+    return repeatConstant()[index];
+}
+
+*int sub guardedMultiLocalProjection(int index) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[index];
+    *int second = values[index];
+    *int third = values[index];
+    return first === second && second === third ? first : NOTHING;
+}
+
+bool sub guardedMutableLocalProjection() {
+    list<int> values = makeValues(4, 5, 6);
+    int index = 0;
+    *int first = values[index];
+    ++index;
+    *int second = values[index];
+    return first == 4 && second == 5;
+}
+
+bool sub guardedDifferentIndexProjection(int left, int right) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[left];
+    *int second = values[right];
+    return first == 4 && second == 6;
+}
+
+bool sub guardedDifferentIndexBounds(int left, int right) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[left];
+    *int second = values[right];
+    return first === NOTHING && second == 6;
+}
+
+bool sub guardedFixedAndDynamicIndexProjection(int index) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[0];
+    *int second = values[index];
+    return first == 4 && second == 6;
+}
+
+bool sub guardedDifferentIndexSideEffectOrder() {
+    aggregate_projection_effects = 0;
+    list<int> values =
+        makeValues((aggregate_projection_effects = 1), 5, 6);
+    *int first = values[(aggregate_projection_effects = 11) - 11];
+    *int second = values[(aggregate_projection_effects = 113) - 111];
+    return first == 1 && second == 6
+        && aggregate_projection_effects == 113;
+}
+
+*int sub guardedPhiProjection(bool left_branch, int index) {
+    list<int> values = left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6);
+    *int first = values[index];
+    *int second = values[index];
+    return first === second ? first : NOTHING;
+}
+
+*int sub guardedDirectPhiProjection(bool left_branch, int index) {
+    return (left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6))[index];
+}
+
+*float sub guardedDirectFloatPhiProjection(
+        bool left_branch, int index) {
+    return (left_branch
+        ? makeFloats(1.25, 2.5) : makeFloats(3.75, 5.0))[index];
+}
+
+*int sub guardedMutableDirectPhiProjection(
+        bool left_branch, int index) {
+    ++index;
+    return (left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6))[index];
+}
+
+bool sub guardedDirectPhiSideEffectOrder(bool left_branch) {
+    int effects = 0;
+    *int selected = (left_branch
+        ? makeValues((effects = 1), 2, 3)
+        : makeValues((effects = 1), 5, 6))[(effects = 2) - 1];
+    return selected == (left_branch ? 2 : 5) && effects == 2;
+}
+
+*int sub guardedReferenceDirectPhiProjection(
+        bool left_branch, reference<int> index) {
+    return (left_branch
+        ? makeValuesAndSetGuard(1, 2, 3)
+        : makeValuesAndSetGuard(4, 5, 6))[index];
+}
+
+bool sub guardedReferenceDirectPhiOrder(bool left_branch) {
+    guarded_reference_index = 0;
+    *int selected = guardedReferenceDirectPhiProjection(
+        left_branch, \\guarded_reference_index);
+    return selected == (left_branch ? 2 : 5)
+        && guarded_reference_index == 1;
+}
+
+bool sub guardedSideEffectOrder() {
+    int effects = 0;
+    *int selected = repeatValue((effects = 1))[(effects = 2) - 1];
+    return selected == 1 && effects == 2;
+}
+
+*int sub optionalGuardedListIndex(int value, *int index) {
+    return repeatValue(value)[index];
+}
+
+*int sub guardedUnusedBoxedListIndex(
+        int value, string unused, int index) {
+    return repeatWithUnusedBoxed(value, unused)[index];
+}
+
+bool sub missingHashProjection(int value) {
+    return makeRow(value, value + 1, value + 2).missing === NOTHING;
+}
+
+bool sub repeatedMissingLocalProjection(int value) {
+    hash<string, int> row = makeRow(value, value + 1, value + 2);
+    *int first = row.missing;
+    *int second = row.missing;
+    *int third = row.missing;
+    return first === NOTHING
+        && second === NOTHING && third === NOTHING;
+}
+
+*int sub dynamicHashKeyProjection(int value, string key) {
+    return makeRow(value, value + 1, value + 2){key};
+}
+
+*int sub repeatedDynamicHashKeyProjection(int value, string key) {
+    hash<string, int> row = makeRow(value, value + 1, value + 2);
+    *int first = row{key};
+    *int second = row{key};
+    return first === second ? first : NOTHING;
+}
+
+*int sub dynamicDuplicateHashKeyProjection(
+        int first, int second, string key) {
+    return makeDuplicate(first, second){key};
+}
+
+bool sub dynamicHashDifferentKeys(string left_key, string right_key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    *int first = row{left_key};
+    *int second = row{right_key};
+    return first == 4 && second == 6;
+}
+
+bool sub dynamicHashDifferentKeyBounds(
+        string left_key, string right_key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    *int first = row{left_key};
+    *int second = row{right_key};
+    return first === NOTHING && second == 6;
+}
+
+bool sub dynamicHashFixedAndDynamicKeyProjection(string key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    *int first = row.left;
+    *int second = row{key};
+    return first == 4 && second == 6;
+}
+
+bool sub dynamicHashDifferentKeySideEffectOrder() {
+    aggregate_projection_key_marker = \"producer\";
+    hash<string, int> row = makeRow(1, 5, 6);
+    *int first = row{aggregate_projection_key_marker = \"left\"};
+    *int second = row{aggregate_projection_key_marker = \"right\"};
+    return first == 1 && second == 6
+        && aggregate_projection_key_marker == \"right\";
+}
+
+bool sub optionalDynamicHashKey(int value, *string key) {
+    return makeRow(value, value + 1, value + 2){key} === NOTHING;
+}
+
+string sub setProjectionKey(reference<int> effects) {
+    effects = 2;
+    return \"middle\";
+}
+
+bool sub dynamicHashSideEffectOrder() {
+    int effects = 0;
+    *int selected = makeRow((effects = 1), 5, 6){
+        setProjectionKey(\\effects)
+    };
+    return selected == 5 && effects == 2;
+}
+
+int sub boxedListSize() {
+    return makeWords(\"a\", \"b\").size();
+}
+
+bool sub optionalInput(*int value) {
+    try {
+        int result = makeRow(1, value, 3).middle;
+        return result == 0;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
+bool sub optionalListInput(*int value) {
+    try {
+        int result = makeValues(1, value, 3).size();
+        return result == 0;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
+int sub genericAutoIntProjection() {
+    return int(forwardAuto(17)[0]);
+}
+
+string sub genericAutoStringProjection() {
+    return string(forwardAuto(\"word\")[0]);
+}
+
+bool sub noNarrowProjection() {
+    hash<auto> source = {\"timeout\": 1};
+    hash<auto> projected = forwardNoNarrow(source)[0];
+    projected.url = \"http://localhost\";
+    return projected.fullType() == \"hash<auto>\"
+        && projected.timeout == 1 && projected.url == \"http://localhost\";
+}
+
+*int sub optionalAssignedProjection() {
+    return forwardOptional(23)[0];
+}
+
+bool sub optionalUnassignedProjection() {
+    *int value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalRemovedProjection() {
+    *int value = 29;
+    remove value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalDeletedProjection() {
+    *int value = 31;
+    delete value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalMaybeProjection(bool assign) {
+    *int value;
+    if (assign) {
+        value = 37;
+    }
+    *int result = forwardOptional(value)[0];
+    return assign ? result == 37 : result === NOTHING;
+}
+
+bool sub optionalDefaultUnsetProjection() {
+    *int value;
+    return forwardOptionalDefault(value)[0] == 43;
+}
+
+int sub emptyZeroArgProjections() {
+    int checksum = 0;
+    checksum += makeEmptyValues().size();
+    checksum += makeEmptyValues().empty() ? 1 : 100;
+    checksum += makeEmptyValues().val() ? 100 : 1;
+    checksum += elements makeEmptyRow();
+    checksum += exists makeEmptyRow() ? 100 : 1;
+    checksum += makeConstantValues()[1];
+    checksum += makeConstantRow().right;
+    return checksum;
+}
+
+bool sub emptyFirstProjection() {
+    return makeEmptyValues().first() === NOTHING;
+}
+
+bool sub emptyLastProjection() {
+    return makeEmptyValues().last() === NOTHING;
+}
+
+bool sub positiveOutOfRangeProjection() {
+    return makeConstantValues()[3] === NOTHING;
+}
+
+bool sub negativeOutOfRangeProjection() {
+    return makeConstantValues()[-4] === NOTHING;
+}
+
+bool sub outOfRangeProjectionSideEffects() {
+    int effects = 0;
+    *int value = makeValues(
+        (effects = 1), (effects = 2), (effects = 3))[3];
+    return value === NOTHING && effects == 3;
+}
+
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%d:%d:%d:%d:%s\\n\",
+    freshHashProjection(), sideEffectProjection(), freshListSize(),
+    freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
+    constantHashProjection(), constantFloatProjection(),
+    constantIntProjection(), constantBoolProjection(),
+    boxedListProjection(), boxedHashProjection(), boxedTemporaryProjection(),
+    sharedResult(), crossBlockProjection(True), crossBlockProjection(False),
+    nonDominatingAssignment(False), phiProjection(True), phiProjection(False),
+    phiSideEffectProjection(True), phiSideEffectProjection(False),
+    mixedPhiProjection(True), mixedPhiProjection(False),
+    nothingPhiProjection(True), nothingPhiProjection(False),
+    sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
+    optionalInput(NOTHING), optionalListInput(NOTHING),
+    boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse(),
+    wrapperProjection(), wrapperConstantProjection(),
+    wrapperBoxedProjection(), wrapperListSize(),
+    computedWrapperProjection(1), nonComposedBindingProjection(),
+    nestedNativeProjection(), nestedSideEffectProjection(),
+    deepNestedProjection(), nestedBoxedProjection(), sharedNestedInput(),
+    nonNestedComputedProjection(), listFirstProjection(),
+    listLastProjection(), listEmptyProjection(), listValProjection(),
+    listElementsProjection(), hashElementsProjection(),
+    duplicateHashElementsProjection(), listExistsProjection(),
+    hashExistsProjection(),
+    aggregateConsumerSideEffects(), nonConsumerComputedProjection(),
+    optionalAggregateConsumer(NOTHING), singleLocalProjection(),
+    boxedPhiProjection(True), boxedPhiProjection(False),
+    boxedConstantPhiProjection(True), boxedSizePhiProjection(False),
+    nestedLocalProjection(), nestedPhiProjection(True),
+    nestedPhiProjection(False), hashSizeProjection(),
+    hashEmptyProjection(), hashValProjection(), boxedIntLocalProjection(),
+    boxedFloatLocalProjection(), boxedBoolLocalProjection(),
+    boxedIntMultiLocalProjection(), boxedFloatMultiLocalProjection(),
+    boxedBoolMultiLocalProjection(), boxedSizeMultiLocalProjection(),
+    nativeFloatPhiProjection(True), nativeFloatPhiProjection(False),
+    conditionalShapeProjection(True),
+    conditionalElementProjection(True), variableShapeProjection(False),
+    conditionalSideEffectProjection(True),
+    potentiallyLoopingProjection(True),
+    hashSizeOverride());
+printf(\"%d:%d:%y:%y:%d:%y:%y:%d:%y:%y\\n\", computedIntProjection(5),
+    computedBoxedIntProjection(6), computedIntOverflowProjection(),
+    computedFloatProjection(), twoParamComputedProjection(),
+    boundedExpressionProjection(), computedWrapperOverflowProjection(),
+    nestedComputedWrapperProjection(5),
+    nestedComputedWrapperOverflowProjection(),
+    computedFloatWrapperProjection());
+printf(\"%d\\n\", emptyZeroArgProjections());
+printf(\"%y:%y:%y:%y:%y\\n\", emptyFirstProjection(),
+    emptyLastProjection(), positiveOutOfRangeProjection(),
+    negativeOutOfRangeProjection(), outOfRangeProjectionSideEffects());
+printf(\"%s:%s:%s\\n\", dynamicMixedListIndex(0),
+    dynamicMixedListIndex(1), dynamicMixedListIndex(2));
+printf(\"%y:%y:%y:%y\\n\",
+    conditionalFloatElementProjection(False),
+    conditionalFloatElementProjection(True),
+    conditionalBoolElementProjection(False),
+    conditionalBoolElementProjection(True));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    conditionalComputedIntProjection(False),
+    conditionalComputedIntProjection(True),
+    conditionalComputedFloatProjection(False),
+    conditionalComputedFloatProjection(True),
+    conditionalComputedBoolProjection(False),
+    conditionalComputedBoolProjection(True),
+    conditionalComputedOverflowProjection(False, 9223372036854775807),
+    conditionalComputedOverflowProjection(True, 9223372036854775807),
+    conditionalComputedSideEffectOrder(),
+    conditionalAutoComputedProjection(False),
+    conditionalAutoComputedProjection(True),
+    conditionalDifferentComputedProjection(False),
+    conditionalDifferentComputedProjection(True),
+    conditionalDifferentZeroProjection(False),
+    conditionalDifferentZeroProjection(True));
+printf(\"%y:%y:%y:%y:%y:%y\\n\",
+    conditionalDifferentIntExpressionsProjection(False),
+    conditionalDifferentIntExpressionsProjection(True),
+    conditionalDifferentFloatExpressionProjection(False),
+    conditionalDifferentFloatExpressionProjection(True),
+    conditionalDifferentBoolExpressionsProjection(False),
+    conditionalDifferentBoolExpressionsProjection(True));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedListIndex(9, 0) == 9,
+    guardedListIndex(9, -1) == 9,
+    guardedListIndex(9, 3) === NOTHING,
+    guardedListIndex(9, -4) === NOTHING,
+    guardedListIndex(9, -9223372036854775807 - 1) === NOTHING,
+    guardedComputedListIndex(5, 1) == 12,
+    guardedFloatListIndex(2.5, -1) == 2.5,
+    guardedBoolListIndex(True, 2) == True,
+    guardedConstantListIndex(1) == 17,
+    guardedSideEffectOrder(),
+    optionalGuardedListIndex(8, NOTHING) == 8,
+    guardedUnusedBoxedListIndex(8, \"unused\", 1) == 8,
+    dynamicSignedZeroListIndex(1) == \"0.0\",
+    missingHashProjection(4));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedMultiLocalProjection(1) == 5,
+    guardedMultiLocalProjection(-1) == 6,
+    guardedMultiLocalProjection(3) === NOTHING,
+    guardedMutableLocalProjection(),
+    guardedDifferentIndexProjection(0, 2),
+    guardedPhiProjection(True, 1) == 2,
+    guardedPhiProjection(False, 1) == 5,
+    guardedPhiProjection(True, -1) == 3,
+    guardedPhiProjection(False, -1) == 6,
+    guardedPhiProjection(True, 3) === NOTHING,
+    guardedPhiProjection(False, -4) === NOTHING,
+    repeatedMissingLocalProjection(4));
+printf(\"%y:%y:%y:%y\\n\",
+    guardedDifferentIndexBounds(3, -1),
+    guardedDifferentIndexBounds(-4, 2),
+    guardedFixedAndDynamicIndexProjection(2),
+    guardedDifferentIndexSideEffectOrder());
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedDirectPhiProjection(True, 1) == 2,
+    guardedDirectPhiProjection(False, 1) == 5,
+    guardedDirectPhiProjection(True, -1) == 3,
+    guardedDirectPhiProjection(False, -1) == 6,
+    guardedDirectPhiProjection(True, 3) === NOTHING,
+    guardedDirectPhiProjection(False, -4) === NOTHING,
+    guardedDirectFloatPhiProjection(True, 1) == 2.5,
+    guardedDirectFloatPhiProjection(False, 1) == 5.0,
+    guardedDirectFloatPhiProjection(True, -1) == 2.5,
+    guardedDirectFloatPhiProjection(False, -1) == 5.0,
+    guardedDirectFloatPhiProjection(True, 2) === NOTHING,
+    guardedDirectFloatPhiProjection(False, -3) === NOTHING,
+    guardedMutableDirectPhiProjection(True, 0) == 2,
+    guardedMutableDirectPhiProjection(False, 0) == 5,
+    guardedDirectPhiSideEffectOrder(True)
+        && guardedDirectPhiSideEffectOrder(False),
+    guardedReferenceDirectPhiOrder(True)
+        && guardedReferenceDirectPhiOrder(False));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    dynamicHashKeyProjection(4, \"middle\") == 5,
+    dynamicHashKeyProjection(4, \"left\") == 4,
+    dynamicHashKeyProjection(4, \"missing\") === NOTHING,
+    repeatedDynamicHashKeyProjection(4, \"right\") == 6,
+    dynamicDuplicateHashKeyProjection(4, 9, \"same\") == 9,
+    dynamicHashDifferentKeys(\"left\", \"right\"),
+    optionalDynamicHashKey(4, NOTHING),
+    dynamicHashSideEffectOrder());
+printf(\"%y:%y:%y:%y\\n\",
+    dynamicHashDifferentKeyBounds(\"missing\", \"right\"),
+    dynamicHashDifferentKeyBounds(\"absent\", \"right\"),
+    dynamicHashFixedAndDynamicKeyProjection(\"right\"),
+    dynamicHashDifferentKeySideEffectOrder());
+printf(\"%d:%d:%y\\n\", sharedListSizeConsumer(),
+    sharedMutatingConsumer(), requiredUnsetConsumer());
+printf(\"%d\\n\", sharedBoxedHashConsumer());
+printf(\"%d:%s:%y:%d:%y:%y:%y:%y:%y:%y\\n\", genericAutoIntProjection(),
+    genericAutoStringProjection(), noNarrowProjection(),
+    optionalAssignedProjection(), optionalUnassignedProjection(),
+    optionalRemovedProjection(), optionalDeletedProjection(),
+    optionalMaybeProjection(True), optionalMaybeProjection(False),
+    optionalDefaultUnsetProjection());
+printf(\"%d:%d:%y:%y:%y:%y:%d:%d:%y:%y\\n\",
+    variableShapeProjection(False), variableShapeProjection(True),
+    variableEmptyProjection(False), variableEmptyProjection(True),
+    variableValProjection(False), variableValProjection(True),
+    variableElementsProjection(False), variableElementsProjection(True),
+    variableExistsProjection(False), variableExistsProjection(True));
+";
+
+string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid());
+string disabled = exe + "-disabled";
+string shape_disabled = exe + "-shape-disabled";
+string expression_disabled = exe + "-expression-disabled";
+string qo_dir = exe + "-qo";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+mkdir(qo_dir);
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
+string shape_disabled_compile = compile(shape_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_SHAPE=1");
+string expression_disabled_compile = compile(expression_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_EXPRESSIONS=1");
+foreach string function in (("freshHashProjection", "sideEffectProjection",
+        "freshListSize", "freshListProjection", "freshFloatProjection",
+        "duplicateKeyProjection", "constantHashProjection",
+        "constantFloatProjection", "constantIntProjection",
+        "constantBoolProjection", "boxedListProjection",
+        "boxedHashProjection", "boxedListSize", "sharedResult",
+        "singleLocalProjection", "boxedIntLocalProjection",
+        "boxedFloatLocalProjection", "boxedBoolLocalProjection",
+        "genericAutoIntProjection", "genericAutoStringProjection",
+        "optionalAssignedProjection", "optionalUnassignedProjection",
+        "optionalRemovedProjection", "optionalDeletedProjection",
+        "optionalMaybeProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate-return projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: emptyZeroArgProjections[^:]*:.*aggregate-projections=7/) {
+    printf("missing empty or zero-argument aggregate projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
+foreach string function in (("emptyFirstProjection", "emptyLastProjection",
+        "positiveOutOfRangeProjection", "negativeOutOfRangeProjection",
+        "outOfRangeProjectionSideEffects", "dynamicMixedListIndex")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing empty or out-of-range list projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection[^:]*:.*aggregate-projections=2/) {
+    printf("missing cross-block aggregate-return projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
+foreach string function in (("phiProjection", "phiSideEffectProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate phi projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: nativeFloatPhiProjection[^:]*:.*aggregate-projections=1/) {
+    printf("missing native-float aggregate phi projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: conditionalShapeProjection[^:]*:.*aggregate-projections=1/) {
+    printf("missing conditional aggregate shape projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+foreach string function in (("conditionalElementProjection",
+        "conditionalFloatElementProjection",
+        "conditionalBoolElementProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing conditional aggregate element projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach hash<string, auto> test in ((
+        {"function": "conditionalComputedIntProjection", "count": 4},
+        {"function": "conditionalComputedFloatProjection", "count": 2},
+        {"function": "conditionalComputedBoolProjection", "count": 2},
+        {"function": "conditionalComputedOverflowProjection", "count": 3},
+        {"function": "conditionalComputedSideEffectOrder", "count": 1},
+        {"function": "conditionalAutoComputedProjection", "count": 1},
+        {"function": "conditionalDifferentComputedProjection", "count": 1},
+        {"function": "conditionalDifferentZeroProjection", "count": 1},
+        {"function": "conditionalDifferentIntExpressionsProjection",
+            "count": 3},
+        {"function": "conditionalDifferentFloatExpressionProjection",
+            "count": 1},
+        {"function": "conditionalDifferentBoolExpressionsProjection",
+            "count": 2})) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=%d",
+            test.function, test.count))) {
+        printf("missing conditional computed aggregate projection for %s:\n%s",
+            test.function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("nonNestedComputedProjection",
+        "nonConsumerComputedProjection", "computedIntProjection",
+        "computedBoxedIntProjection", "computedFloatProjection",
+        "twoParamComputedProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing computed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: boundedExpressionProjection[^:]*:.*aggregate-projections=11/) {
+    printf("missing bounded aggregate expression projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
+foreach string function in (("guardedListIndex",
+        "guardedComputedListIndex", "guardedFloatListIndex",
+        "guardedBoolListIndex", "guardedConstantListIndex",
+        "guardedSideEffectOrder", "guardedMultiLocalProjection",
+        "guardedMutableLocalProjection",
+        "guardedPhiProjection",
+        "guardedDirectPhiProjection",
+        "guardedDirectFloatPhiProjection",
+        "repeatedMissingLocalProjection", "dynamicListIndex",
+        "dynamicSignedZeroListIndex", "missingHashProjection",
+        "dynamicHashKeyProjection", "repeatedDynamicHashKeyProjection",
+        "dynamicDuplicateHashKeyProjection",
+        "guardedDifferentIndexProjection",
+        "guardedDifferentIndexBounds",
+        "guardedFixedAndDynamicIndexProjection",
+        "guardedDifferentIndexSideEffectOrder",
+        "dynamicHashDifferentKeys",
+        "dynamicHashDifferentKeyBounds",
+        "dynamicHashFixedAndDynamicKeyProjection",
+        "dynamicHashDifferentKeySideEffectOrder")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing guarded aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("boxedPhiProjection",
+        "boxedConstantPhiProjection", "boxedSizePhiProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing boxed aggregate phi projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (
+        ("boxedMultiListProjection", "boxedMultiHashProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing multi-use boxed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("boxedIntMultiLocalProjection",
+        "boxedFloatMultiLocalProjection", "boxedBoolMultiLocalProjection",
+        "boxedSizeMultiLocalProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing multi-use scalar aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("wrapperProjection",
+        "wrapperConstantProjection", "wrapperBoxedProjection",
+        "wrapperListSize", "computedWrapperProjection",
+        "nestedComputedWrapperProjection",
+        "computedFloatWrapperProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing composed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("nestedNativeProjection",
+        "nestedSideEffectProjection", "deepNestedProjection",
+        "nestedBoxedProjection", "nestedLocalProjection",
+        "nestedPhiProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing nested aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("listFirstProjection", "listLastProjection",
+        "listEmptyProjection", "listValProjection",
+        "listElementsProjection", "hashElementsProjection",
+        "duplicateHashElementsProjection",
+        "listExistsProjection", "hashExistsProjection",
+        "variableShapeProjection", "variableEmptyProjection",
+        "variableValProjection", "variableElementsProjection",
+        "variableExistsProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate consumer projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("hashSizeProjection", "hashEmptyProjection",
+        "hashValProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing hash pseudo consumer projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: aggregateConsumerSideEffects[^:]*:.*aggregate-projections=1/) {
+    printf("missing side-effecting aggregate consumer projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+        || disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("unsafe or disabled aggregate-return projection:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+if (shape_disabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (variableShapeProjection|variableEmptyProjection|variableValProjection|variableElementsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("disabled conditional aggregate shape projection:\n%s",
+        shape_disabled_compile);
+    exit(2);
+}
+if (expression_disabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (conditionalDifferentComputedProjection|conditionalDifferentZeroProjection|conditionalDifferentIntExpressionsProjection|conditionalDifferentFloatExpressionProjection|conditionalDifferentBoolExpressionsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("disabled conditional aggregate expression projection:\n%s",
+        expression_disabled_compile);
+    exit(2);
+}
+if (shape_disabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentComputedProjection[^:]*:.*aggregate-projections=1/
+        || shape_disabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentZeroProjection[^:]*:.*aggregate-projections=1/) {
+    printf("shape-only kill switch disabled conditional expression projection:\n%s",
+        shape_disabled_compile);
+    exit(2);
+}
+foreach string function in (("sharedEscapes", "sharedListSizeConsumer",
+        "sharedBoxedHashConsumer")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing composed aggregate consumer projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (sharedMutatingConsumer|requiredUnsetConsumer)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("unsafe aggregate consumer projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+
+string qo_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, qo_dir, src));
+string qo = qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
+if (!is_file(qo)) {
+    printf(".qo compile failed:\n%s", qo_compile);
+    exit(2);
+}
+string dump = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, qo));
+string row_line;
+string values_line;
+string floats_line;
+string tagged_line;
+string float_constant_line;
+string forward_row_line;
+string tagged_wrapper_line;
+string word_wrapper_line;
+string computed_wrapper_line;
+string nested_computed_wrapper_line;
+string computed_float_wrapper_line;
+string empty_values_line;
+string empty_row_line;
+string constant_values_line;
+string constant_row_line;
+string conditional_values_line;
+string conditional_computed_values_line;
+string conditional_computed_floats_line;
+string conditional_compared_values_line;
+string variable_shape_line;
+string conditional_different_computed_line;
+string computed_row_line;
+string computed_values_line;
+string computed_floats_line;
+string bounded_values_line;
+string compared_values_line;
+string forward_auto_line;
+string forward_optional_line;
+foreach string line in (dump.split("\n")) {
+    if (line.find("makeRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        row_line = line;
+    } else if (line.find("makeValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        values_line = line;
+    } else if (line.find("makeFloats(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        floats_line = line;
+    } else if (line.find("makeTagged(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        tagged_line = line;
+    } else if (line.find("makeFloatConstant(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        float_constant_line = line;
+    } else if (line.find("forwardRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_row_line = line;
+    } else if (line.find("taggedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        tagged_wrapper_line = line;
+    } else if (line.find("wordWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        word_wrapper_line = line;
+    } else if (line.find("computedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_wrapper_line = line;
+    } else if (line.find("nestedComputedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        nested_computed_wrapper_line = line;
+    } else if (line.find("computedFloatWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_float_wrapper_line = line;
+    } else if (line.find("makeEmptyValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        empty_values_line = line;
+    } else if (line.find("makeEmptyRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        empty_row_line = line;
+    } else if (line.find("makeConstantValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        constant_values_line = line;
+    } else if (line.find("makeConstantRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        constant_row_line = line;
+    } else if (line.find("makeConditionalValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_values_line = line;
+    } else if (line.find("makeConditionalComputedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_computed_values_line = line;
+    } else if (line.find("makeConditionalComputedFloats(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_computed_floats_line = line;
+    } else if (line.find("makeConditionalComparedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_compared_values_line = line;
+    } else if (line.find("makeVariableShape(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        variable_shape_line = line;
+    } else if (line.find("makeConditionalDifferentComputed(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_different_computed_line = line;
+    } else if (line.find("makeComputedRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_row_line = line;
+    } else if (line.find("makeComputedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_values_line = line;
+    } else if (line.find("makeComputedFloats(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_floats_line = line;
+    } else if (line.find("makeBoundedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        bounded_values_line = line;
+    } else if (line.find("makeComparedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        compared_values_line = line;
+    } else if (line.find("forwardAuto(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_auto_line = line;
+    } else if (line.find("forwardOptional(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_optional_line = line;
+    }
+}
+if (row_line.find("\"aggregate_return_kind\": 2") == -1
+        || row_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || row_line.find("\"aggregate_return_keys\": [\"left\", \"middle\", \"right\"]") == -1
+        || values_line.find("\"aggregate_return_kind\": 1") == -1
+        || values_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || values_line.find("\"aggregate_return_keys\": []") == -1
+        || floats_line.find("\"aggregate_return_kind\": 1") == -1
+        || floats_line.find("\"aggregate_return_value_params\": [0, 1]") == -1
+        || floats_line.find("\"aggregate_return_keys\": []") == -1
+        || tagged_line.find("\"aggregate_return_value_params\": [0, -1, -1]") == -1
+        || tagged_line.find("\"aggregate_return_value_kinds\": [0, 1, 1]") == -1
+        || tagged_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
+        || float_constant_line.find("\"aggregate_return_value_params\": [0, -1]") == -1
+        || float_constant_line.find("\"aggregate_return_value_kinds\": [0, 2]") == -1
+        || float_constant_line.find("\"aggregate_return_value_floats\": [0, 2.5]") == -1
+        || forward_row_line.find("\"aggregate_return_kind\": 2") == -1
+        || forward_row_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || forward_row_line.find("\"aggregate_return_keys\": [\"left\", \"middle\", \"right\"]") == -1
+        || tagged_wrapper_line.find("\"aggregate_return_value_params\": [0, -1, -1]") == -1
+        || tagged_wrapper_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
+        || word_wrapper_line.find("\"aggregate_return_kind\": 1") == -1
+        || word_wrapper_line.find("\"aggregate_return_value_params\": [1, 0]") == -1
+        || computed_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [5, 0, 0]") == -1
+        || computed_wrapper_line.find(
+            "\"aggregate_return_value_ints\": [7, 0, 0]") == -1
+        || nested_computed_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [5]") == -1
+        || nested_computed_wrapper_line.find(
+            "\"aggregate_return_value_ints\": [10]") == -1
+        || computed_float_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [6, 0]") == -1
+        || computed_float_wrapper_line.find(
+            "\"aggregate_return_value_floats\": [0.25, 0]") == -1
+        || empty_values_line.find("\"aggregate_return_kind\": 1") == -1
+        || empty_values_line.find("\"aggregate_return_value_params\": []") == -1
+        || empty_row_line.find("\"aggregate_return_kind\": 2") == -1
+        || empty_row_line.find("\"aggregate_return_keys\": []") == -1
+        || constant_values_line.find("\"aggregate_return_value_ints\": [3, 5, 7]") == -1
+        || constant_row_line.find("\"aggregate_return_value_ints\": [11, 13]") == -1
+        || constant_row_line.find("\"aggregate_return_keys\": [\"left\", \"right\"]") == -1) {
+    printf("missing aggregate-return symbol metadata:\n%s", dump);
+    exit(2);
+}
+if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
+        || conditional_values_line.find(
+            "\"aggregate_return_value_kinds\": [7, 7, 4]") == -1
+        || conditional_values_line.find(
+            "\"aggregate_return_value_ints\": [256, 512, 0]") == -1) {
+    printf("missing serialized conditional aggregate shape metadata:\n%s",
+        conditional_values_line);
+    exit(2);
+}
+if (variable_shape_line.find("\"aggregate_return_kind\": 1") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_value_params\": []") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_condition_param\": 0") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_true_size\": 3") == -1
+        || variable_shape_line.find(
+            "\"aggregate_return_shape_false_size\": 2") == -1) {
+    printf("missing serialized conditional aggregate cardinality metadata:\n%s",
+        variable_shape_line);
+    exit(2);
+}
+if (conditional_different_computed_line.find(
+            "\"aggregate_return_value_params\": [-1]") == -1
+        || conditional_different_computed_line.find(
+            "\"aggregate_return_value_kinds\": [4]") == -1
+        || conditional_different_computed_line.find(
+            "\"aggregate_return_value_selects\": [{\"value_index\": 0, \"condition_param\": 0, \"true_kind\": 5, \"true_param\": 1, \"true_int\": 1") == -1
+        || conditional_different_computed_line.find(
+            "\"false_kind\": 5, \"false_param\": 1, \"false_int\": 2") == -1) {
+    printf("missing serialized conditional aggregate expression metadata:\n%s",
+        conditional_different_computed_line);
+    exit(2);
+}
+if (conditional_computed_values_line.find(
+            "\"aggregate_return_value_kinds\": [7, 7, 5, 11, 10, 1]") == -1
+        || conditional_computed_values_line.find(
+            "\"aggregate_return_value_ints\": [256, 512, 7, 3, 2, 11]") == -1
+        || conditional_computed_floats_line.find(
+            "\"aggregate_return_value_kinds\": [8, 6, 2]") == -1
+        || conditional_computed_floats_line.find(
+            "\"aggregate_return_value_floats\": [0, 0.25, -0]") == -1
+        || conditional_compared_values_line.find(
+            "\"aggregate_return_value_kinds\": [9, 9, 12, 3]") == -1
+        || conditional_compared_values_line.find(
+            "\"aggregate_return_value_ints\": [256, 512, 516, 1]") == -1) {
+    printf("missing serialized conditional computed metadata:\n%s\n%s\n%s",
+        conditional_computed_values_line, conditional_computed_floats_line,
+        conditional_compared_values_line);
+    exit(2);
+}
+if (computed_row_line.find(
+            "\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || computed_row_line.find(
+            "\"aggregate_return_value_kinds\": [0, 5, 0]") == -1
+        || computed_row_line.find(
+            "\"aggregate_return_value_ints\": [0, 0, 0]") == -1
+        || computed_values_line.find(
+            "\"aggregate_return_value_kinds\": [5]") == -1
+        || computed_values_line.find(
+            "\"aggregate_return_value_ints\": [7]") == -1
+        || computed_floats_line.find(
+            "\"aggregate_return_value_kinds\": [6]") == -1
+        || computed_floats_line.find(
+            "\"aggregate_return_value_floats\": [1.25]") == -1
+        || bounded_values_line.find(
+            "\"aggregate_return_value_params\": [0, 0, 0, 0]") == -1
+        || bounded_values_line.find(
+            "\"aggregate_return_value_kinds\": [10, 10, 10, 11]") == -1
+        || bounded_values_line.find(
+            "\"aggregate_return_value_ints\": [1, 257, 513, 3]") == -1
+        || compared_values_line.find(
+            "\"aggregate_return_value_params\": [0, 0, 0, 0, 0, 0]") == -1
+        || compared_values_line.find(
+            "\"aggregate_return_value_kinds\": [12, 12, 12, 12, 12, 12]") == -1
+        || compared_values_line.find(
+            "\"aggregate_return_value_ints\": [1, 257, 513, 769, 1025, 1281]") == -1
+        || forward_auto_line.find(
+            "\"fast_param_rejects_nothing\": [0]") == -1
+        || forward_auto_line.find(
+            "\"aggregate_return_value_params\": [0]") == -1
+        || forward_optional_line.find(
+            "\"fast_param_rejects_nothing\": [0]") == -1
+        || forward_optional_line.find(
+            "\"aggregate_return_value_params\": [0]") == -1) {
+    printf("missing serialized computed aggregate metadata:\n%s\n%s\n%s\n%s\n%s\n%s\n%s",
+        computed_row_line, computed_values_line, computed_floats_line,
+        bounded_values_line, compared_values_line, forward_auto_line,
+        forward_optional_line);
+    exit(2);
+}
+
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\nTrue:True:True:True:True\n11:2.5:True\nTrue:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True\n";
+expected += "4:13:True\n";
+expected += "9\n";
+expected += "17:word:True:23:True:True:True:True:True:True\n";
+expected += "2:3:True:False:False:True:0:1:True:True\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled, shape_disabled,
+        expression_disabled)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);
+unlink(shape_disabled);
+unlink(expression_disabled);

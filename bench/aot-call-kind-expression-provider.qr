@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ExpressionComposer {
+    static int staticIntLeaf(int value) {
+        return value * 3 + 1;
+    }
+
+    static int staticIntWrapper(int value) {
+        return ExpressionComposer::staticIntLeaf(value) + 2;
+    }
+
+    int methodIntLeaf(int value) {
+        return value * 3 + 1;
+    }
+
+    int methodIntWrapper(int value) {
+        return self.methodIntLeaf(value) + 2;
+    }
+
+    static float staticFloatLeaf(float value) {
+        return value * 1.25 + 0.5;
+    }
+
+    static float staticFloatWrapper(float value) {
+        return ExpressionComposer::staticFloatLeaf(value) + 0.25;
+    }
+
+    float methodFloatLeaf(float value) {
+        return value * 1.25 + 0.5;
+    }
+
+    float methodFloatWrapper(float value) {
+        return self.methodFloatLeaf(value) + 0.25;
+    }
+}
+
+int sub closureIntWrapper(int value) {
+    return (int sub (int arg) {
+        return arg * 3 + 1;
+    })(value) + 2;
+}
+
+float sub closureFloatWrapper(float value) {
+    return (float sub (float arg) {
+        return arg * 1.25 + 0.5;
+    })(value) + 0.25;
+}

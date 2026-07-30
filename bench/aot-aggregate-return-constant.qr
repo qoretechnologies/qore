@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hash<string, int> sub makeTagged(int value) {
+    return {
+        "value": value,
+        "scale": 3,
+        "bias": 7,
+    };
+}
+
+int sub constantProjectionKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += makeTagged(i).scale;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 5000000;
+printf("%d\n", constantProjectionKernel(rounds));

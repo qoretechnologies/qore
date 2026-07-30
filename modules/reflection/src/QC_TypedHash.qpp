@@ -39,10 +39,11 @@
 #include "QC_GlobalVar.h"
 #include "QC_TypedHash.h"
 #include "QC_FunctionVariant.h"
+#include "qore/intern/qore_aot_deps.h"
 
 QoreReflectionTypedHash::QoreReflectionTypedHash(ExceptionSink* xsink, const char* path, QoreProgram* pgm)
     : AbstractReflectionObject(pgm) {
-    th = pgm->findHashDecl(path, ns);
+    th = qore_reflection_find_hashdecl(pgm, path, ns);
 
     if (!th) {
         xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", path);
@@ -89,7 +90,9 @@ TypedHash::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return;
     }
@@ -509,6 +512,142 @@ hash<auto> TypedHash::doCast(hash<auto> h) {
     return thd->th->doRuntimeCast(h, xsink);
 }
 
+//! Returns a typed hash for the given hashes, with values from the override hash taking precedence
+/** @par Example:
+    @code{.py}
+TypedHash th("MyModule::ConnectionInfo");
+hash<auto> info = th.doCastWithOverrides(serialized_info, {
+    "timeout": runtime_timeout,
+});
+    @endcode
+
+    @param h the base hash to convert
+    @param overrides values that take precedence over values in @a h
+
+    @return a typed hash containing the converted base and override values
+
+    This method is equivalent to @c doCast(h + overrides), but avoids constructing the intermediate merged hash.
+
+    @throw RUNTIME-TYPE-ERROR types are not compatible
+    @throw HASHDECL-INIT-ERROR either initializer contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
+    return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
+}
+
+//! Returns a hash whose hash values have been converted to this typed hash
+/** @par Example:
+    @code{.py}
+TypedHash th = TypedHash::forName("ConnectionInfo");
+hash<auto> typed_values = th.doCastValues({
+    "primary": {"name": "main"},
+    "secondary": {"name": "backup"},
+});
+    @endcode
+
+    @param values hashes to convert, keyed by caller-defined names
+
+    @return a hash with the same keys as @a values and typed hash values
+
+    @throw RUNTIME-TYPE-ERROR an input value is not a hash or a member value has an incompatible type
+    @throw HASHDECL-INIT-ERROR an input hash contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastValues(hash<auto> values) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator i(values);
+    size_t count = 0;
+    while (i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash batch conversion")) {
+            return QoreValue();
+        }
+        QoreValue value = i.get();
+        if (value.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR",
+                "TypedHash::doCastValues() value for key '%s' must be a hash; got type '%s' instead",
+                i.getKey(), value.getTypeName());
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> cast_value(
+            thd->th->doRuntimeCast(value.get<const QoreHashNode>(), xsink), xsink);
+        if (*xsink) {
+            xsink->appendLastDescription(" (while batch-converting key '%s')", i.getKey());
+            return QoreValue();
+        }
+        rv->setKeyValue(i.getKey(), cast_value.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+//! Returns a hash whose hash values have been converted to this typed hash with per-key overrides
+/** @par Example:
+    @code{.py}
+TypedHash th = TypedHash::forName("ConnectionInfo");
+hash<auto> typed_values = th.doCastValuesWithOverrides({
+    "primary": {"name": "main"},
+    "secondary": {"name": "backup"},
+}, {
+    "primary": {"timeout": 30s},
+});
+    @endcode
+
+    @param values base hashes to convert, keyed by caller-defined names
+    @param overrides optional override hashes keyed like @a values; unmatched override keys are ignored
+
+    @return a hash with the same keys as @a values and typed hash values
+
+    @throw RUNTIME-TYPE-ERROR an input or matching override value is not a hash, or a member value has an
+        incompatible type
+    @throw HASHDECL-INIT-ERROR an input or matching override hash contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator i(values);
+    size_t count = 0;
+    while (i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash batch conversion with overrides")) {
+            return QoreValue();
+        }
+        QoreValue value = i.get();
+        if (value.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR",
+                "TypedHash::doCastValuesWithOverrides() value for key '%s' must be a hash; got type '%s' instead",
+                i.getKey(), value.getTypeName());
+            return QoreValue();
+        }
+        QoreValue override_value = overrides->getKeyValue(i.getKey());
+        const QoreHashNode* override_hash = nullptr;
+        if (!override_value.isNothing()) {
+            if (override_value.getType() != NT_HASH) {
+                xsink->raiseException("RUNTIME-TYPE-ERROR",
+                    "TypedHash::doCastValuesWithOverrides() override for key '%s' must be a hash; got type '%s' "
+                    "instead", i.getKey(), override_value.getTypeName());
+                return QoreValue();
+            }
+            override_hash = override_value.get<const QoreHashNode>();
+        }
+        ReferenceHolder<QoreHashNode> cast_value(thd->th->doRuntimeCastWithOverrides(
+            value.get<const QoreHashNode>(), override_hash, xsink), xsink);
+        if (*xsink) {
+            xsink->appendLastDescription(" (while batch-converting key '%s')", i.getKey());
+            return QoreValue();
+        }
+        rv->setKeyValue(i.getKey(), cast_value.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
 //! Returns the parent typed hash if this typed hash inherits from another, or @ref nothing if none
 /** @par Example:
     @code{.py}
@@ -581,7 +720,9 @@ static TypedHash TypedHash::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -633,7 +774,8 @@ list<TypedHash> l = TypedHash::findAllRegex("^S");
     @return a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match
 */
 static list<TypedHash> TypedHash::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_typedhashes(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_typedhashes(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match

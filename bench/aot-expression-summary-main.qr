@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub benchBitwise(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += bitwiseExpression(i, i * 3 + 1, i * 7 - 5);
+    }
+    return checksum;
+}
+
+int sub benchCompareSelect(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += compareSelectExpression(i & 1023, (i * 3) & 1023, i & 31);
+    }
+    return checksum;
+}
+
+float sub benchFloat(int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        float value = float(i & 1023);
+        checksum += floatExpression(value, value * 0.5, value * 0.25);
+    }
+    return checksum;
+}
+
+int sub benchStringMeasure(int rounds) {
+    string value = "Dvo\u0159\u00e1k-data-\u03bb";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += stringMeasureExpression(value, i & 7);
+    }
+    return checksum;
+}
+
+int sub benchListMeasure(int rounds) {
+    list<int> values = (1, 2, 3, 4, 5, 6, 7, 8);
+    list<int> other = (9, 10, 11);
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += listMeasureExpression(values, other, i & 7);
+    }
+    return checksum;
+}
+
+int sub main() {
+    string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "bitwise");
+    int rounds = (ENV.QORE_BENCH_ROUNDS
+        ?? (ARGV.size() > 1 ? ARGV[1] : "10000000")).toInt();
+    switch (kernel) {
+        case "bitwise":
+            printf("%d\n", benchBitwise(rounds));
+            break;
+        case "compare-select":
+            printf("%d\n", benchCompareSelect(rounds));
+            break;
+        case "float":
+            printf("%.2f\n", benchFloat(rounds));
+            break;
+        case "string-measure":
+            printf("%d\n", benchStringMeasure(rounds));
+            break;
+        case "list-measure":
+            printf("%d\n", benchListMeasure(rounds));
+            break;
+        default:
+            throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+    }
+    return 0;
+}

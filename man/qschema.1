@@ -2,18 +2,23 @@
 .\"
 .\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QSCHEMA 1 "2026 June 04" "Qore 3.0" "Qore Programming Language"
+.TH QSCHEMA 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qschema \- database schema management tool
 .SH SYNOPSIS
 .B qschema
-\fIcommand\fP
+\fBalign\fP|\fBdrop\fP|\fBdiff\fP
 \fIconnection\fP
 \fIschema-file\fP
 [\fIoptions\fP]
 .PP
 .B qschema
-\fIcommand\fP
+\fBexport\fP
+\fIconnection\fP
+[\fIoptions\fP]
+.PP
+.B qschema
+\fBvalidate\fP|\fBinfo\fP
 \fIschema-file\fP
 [\fIoptions\fP]
 .SH DESCRIPTION
@@ -21,8 +26,10 @@ qschema \- database schema management tool
 (\fB.jsm\fP) schema definition files.
 It can align a database to match a schema, show differences, validate
 schema files, and export existing database schemas.
+The legacy \fBschema\-reverse\fP command is a compatibility alias for
+\fBqschema export\fP.
 .SH COMMANDS
-.SS "Database Commands (require connection + schema-file)"
+.SS "Database and Schema-File Commands"
 .TP
 .B align
 Align the database to match the schema definition.
@@ -32,9 +39,11 @@ Drop all objects defined in the schema from the database.
 .TP
 .B diff
 Show differences between the database and the schema.
+.SS "Database Export Command"
 .TP
 .B export
-Export the current database schema to a file.
+Export the current database schema; requires a connection but no input schema
+file.
 .SS "File-Only Commands (require schema-file only)"
 .TP
 .B validate
@@ -43,6 +52,7 @@ Validate a schema file for correctness.
 .B info
 Display information about the schema file.
 .SH OPTIONS
+.SS "Schema Management Options"
 .TP
 .B \-\-data\-ts =\fIname\fP
 Data tablespace name.
@@ -58,6 +68,7 @@ Force the operation without confirmation.
 .TP
 .BR \-n ", " \-\-dry\-run
 Show the SQL that would be executed without running it.
+.SS "General Options"
 .TP
 .BR \-C ", " \-\-no\-color
 Disable color output.
@@ -65,8 +76,18 @@ Disable color output.
 .BR \-v ", " \-\-verbose
 Increase verbosity (repeatable).
 .TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit.
+.SS "Export Options"
+.TP
+.BR \-s ", " \-\-schema =\fIname\fP
+Set the schema name in the output (default: \fBExportedSchema\fP).
+.TP
 .BR \-o ", " \-\-output =\fIfile\fP
-Output file (for export).
+Write the data-schema document to \fIfile\fP instead of standard output.
 .TP
 .B \-\-format =\fIformat\fP
 Export format: \fByaml\fP (default) or \fBjson\fP.
@@ -74,11 +95,35 @@ Export format: \fByaml\fP (default) or \fBjson\fP.
 .B \-\-with\-partitions
 Include physical table partitions in exported schema files.
 .TP
-.BR \-h ", " \-\-help
-Show help text and exit.
+.BR \-t ", " \-\-table [=\fIpattern\fP]
+Export matching tables.
 .TP
-.BR \-V ", " \-\-version
-Show version information and exit.
+.BR \-q ", " \-\-seq [=\fIpattern\fP]
+Export matching sequences.
+.TP
+.BR \-y ", " \-\-type [=\fIpattern\fP]
+Export matching types.
+.TP
+.BR \-m ", " \-\-mview [=\fIpattern\fP]
+Export matching materialized views.
+.TP
+.BR \-p ", " \-\-proc [=\fIpattern\fP]
+Export matching procedures.
+.TP
+.BR \-f ", " \-\-func [=\fIpattern\fP]
+Export matching functions.
+.TP
+.BR \-g ", " \-\-pkg [=\fIpattern\fP]
+Export matching packages.
+.PP
+Each export \fIpattern\fP can be an exact name, a comma-separated list, or a
+regular expression.
+A selection option without a value selects all objects of that type.
+Selections can be combined; without any selections, the whole schema is
+exported.
+.PP
+Plain views cannot be exported because the data-schema format has no
+representation for them.
 .SH EXAMPLES
 Align a database with a schema:
 .RS
@@ -103,6 +148,11 @@ Export a database schema:
 Export a database schema including physical partitions:
 .RS
 .B qschema export mydb \-o exported.ysm \-\-with\-partitions
+.RE
+.PP
+Export selected tables as JSON:
+.RS
+.B qschema export mydb \-\-table='workflows,.*step.*' \-\-format json
 .RE
 .PP
 Validate a schema file:

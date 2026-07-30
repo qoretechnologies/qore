@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+our int expected_effects = 0;
+
+*int sub listValue(list<int> values, int index) {
+    return values[index];
+}
+
+*int sub hashValue(hash<string, int> values) {
+    return values.answer;
+}
+
+bool sub dynamicListEqual(list<int> values, int index, int expected) {
+    return listValue(values, index) == expected;
+}
+
+int sub effectExpected() {
+    ++expected_effects;
+    return 42;
+}
+
+bool sub effectHashEqual(hash<string, int> values) {
+    return hashValue(values) == effectExpected();
+}
+
+bool sub unassignedListEqual() {
+    list<int> values;
+    return listValue(values, 0) == 10;
+}
+
+int sub main() {
+    list<int> values = (10, 20, 30, 9223372036854775807);
+    hash<string, int> present = (\"answer\": 42);
+    hash<string, int> large =
+        (\"answer\": 9223372036854775807);
+    hash<string, int> missing = {};
+    printf(\"list:%y:%y:%y:%y:%y:%y\\n\",
+        listValue(values, 1) == 20,
+        listValue(values, 2) != 30,
+        listValue(values, -1) == 9223372036854775807,
+        listValue(values, 8) == 20,
+        listValue(values, -5) != 20,
+        listValue(values, 3) == 9223372036854775807);
+    printf(\"hash:%y:%y:%y:%y:%y\\n\",
+        hashValue(present) == 42,
+        hashValue(present) != 42,
+        hashValue(missing) == 42,
+        hashValue(missing) != 42,
+        9223372036854775807 == hashValue(large));
+    printf(\"dynamic:%y\\n\", dynamicListEqual(values, 0, 10));
+    expected_effects = 0;
+    printf(\"effect:%y:%d\\n\",
+        effectHashEqual(present), expected_effects);
+    bool rejected = False;
+    try {
+        unassignedListEqual();
+    } catch (hash<auto> ex) {
+        rejected = True;
+    }
+    printf(\"unassigned:%y\\n\", rejected);
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-collection-predicate-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/source.qr";
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c"
+        + " --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s"
+        + " QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION=1"
+        + " QORE_IR_OPT_STATS=1 %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/source.qo";
+string disabled_qo = disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (!(enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: main[^:]*:.*collection-consumers=11/)
+        || !(enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: dynamicListEqual[^:]*:.*collection-consumers=1/)
+        || enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (effectHashEqual|unassignedListEqual)[^:]*:.*collection-consumers=[1-9]/
+        || disabled_compile =~ /collection-consumers=[1-9]/) {
+    printf("unexpected collection predicate fusion stats:\nenabled:\n%s"
+        + "disabled:\n%s", enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_list_index_int_compare/
+        || enabled_undefined
+            !~ /qore_rt_hash_key_int_compare_prehashed/
+        || disabled_undefined =~ /qore_rt_list_index_int_compare/
+        || disabled_undefined
+            =~ /qore_rt_hash_key_int_compare_prehashed/) {
+    printf("collection predicate helper mismatch:\nenabled:\n%s"
+        + "disabled:\n%s", enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string sub link(string output, string qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, output, qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+foreach string path in ((
+        link(root + "/enabled-exe", enabled_qo),
+        link(root + "/disabled-exe", disabled_qo))) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+exit(0);

@@ -1,0 +1,14 @@
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    hash<string, int> row = ("a": 1, "b": 2, "c": 3, "d": 4);
+    string value = "abcdefghijklmnopabcdefghijklmnop";
+    string pattern = "def";
+    int total;
+    for (int i = 0; i < rounds; ++i) {
+        total += aggregateHashScore(row) + aggregateStringScore(value, pattern);
+    }
+    printf("%d\n", total);
+    return 0;
+}

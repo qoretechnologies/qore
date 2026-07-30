@@ -25,8 +25,10 @@
 # The test also locks in the *semantics*: a `timeout` operand is interpreted as
 # milliseconds (a 5s relative date assigned to a timeout becomes 5000), matching
 # the legacy QorePlusOperatorNode check_(date_)?timeout_variant path (issue
-# #3157).  Expected ms deltas are hard-coded so the test fails if both the AOT
-# qmod and the interpreter ever agree on the wrong (seconds) answer.
+# #3157).  It covers local and optional-local assignment, argument binding, and
+# exact and optional declared returns. Expected ms values are hard-coded so the
+# test fails if both the AOT qmod and the interpreter ever agree on the wrong
+# (seconds) answer.
 class AOTTimeoutArithmeticTest inherits QUnit::Test {
     private {
         string qore_bin;
@@ -89,11 +91,36 @@ public namespace AOTTimeoutArithmeticMod {
             get_duration_milliseconds(base - c));
     }
 
+    public string sub localAssignmentContext() {
+        timeout seconds_value = 5s;
+        timeout milliseconds_value = 250ms;
+        *timeout optional_value = 250ms;
+        *timeout absent_value = NULL;
+        return sprintf(\"%d,%d,%d,%d,%d,%s\", seconds_value, milliseconds_value,
+            timeoutArgument(seconds_value), timeoutArgument(milliseconds_value),
+            optional_value, absent_value === NOTHING ? \"NOTHING\" : \"VALUE\");
+    }
+
+    public int sub timeoutArgument(timeout value) {
+        return value;
+    }
+
+    public timeout sub returnContext() {
+        return 5s;
+    }
+
+    public *timeout sub optionalReturnContext(bool assigned) {
+        return assigned ? 250ms : NOTHING;
+    }
+
     public string sub verify() {
         # 5s  -> timeout 5000 ms  -> +/-5000 ms
         # 250ms -> timeout 250 ms -> +/-250 ms (proves ms, not seconds, semantics)
         return Helper::invokeContext(5s) + \"|\" + plainContext(5s) + \"|\"
-            + Helper::invokeContext(250ms) + \"|\" + plainContext(250ms);
+            + Helper::invokeContext(250ms) + \"|\" + plainContext(250ms) + \"|\"
+            + localAssignmentContext() + \"|\" + returnContext() + \"|\"
+            + optionalReturnContext(True) + \",\"
+            + (optionalReturnContext(False) === NOTHING ? \"NOTHING\" : \"VALUE\");
     }
 }
 ";
@@ -144,7 +171,8 @@ printf(\"%s\", AOTTimeoutArithmeticMod::verify());
         compileModule(qm_path, qmod_path);
 
         # ms deltas: 5s -> 5000, 250ms -> 250 (each repeated for +, symmetric +, -)
-        string expected = "5000,5000,5000|5000,5000,5000|250,250,250|250,250,250";
+        string expected = "5000,5000,5000|5000,5000,5000|250,250,250|250,250,250"
+            + "|5000,250,5000,250,250,NOTHING|5000|250,NOTHING";
 
         assertEq(expected, runModule(src_dir, script_path),
             "source module: ms (not seconds) timeout-date semantics");

@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub scale(int value, int factor) {
+    return value * factor + 3;
+}
+
+int sub run(int rounds) {
+    int checksum = 1;
+    *int factor = 3;
+    for (int i = 0; i < rounds; ++i) {
+        factor = (checksum & 1) ? 5 : 7;
+        checksum = (checksum + scale(i & 1023, factor)) & 0x7fffffff;
+    }
+    return checksum;
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 20000000;
+    printf("%d\n", run(rounds));
+    return 0;
+}
+
+main();

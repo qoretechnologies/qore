@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+                                      : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_code = "%modern
+
+int sub wideExpression(int a, int b, int c, int d) {
+    int value = a;
+    value = (value * 3 + b) & 0x7fffffff;
+    value = (value * 5 + c) & 0x7fffffff;
+    value = (value * 7 + d) & 0x7fffffff;
+    value = (value * 11 + a) & 0x7fffffff;
+    value = (value * 13 + b) & 0x7fffffff;
+    value = (value * 17 + c) & 0x7fffffff;
+    value = (value * 19 + d) & 0x7fffffff;
+    value = (value * 23 + a) & 0x7fffffff;
+    return value;
+}
+";
+
+string consumer_code = "%modern
+
+int sub run() {
+    return wideExpression(1, 2, 3, 4);
+}
+
+int sub main() {
+    printf(\"%d\\n\", run());
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-wide-int-expression-" + string(getpid());
+string enabled_provider_dir = root + "/enabled-provider";
+string enabled_consumer_dir = root + "/enabled-consumer";
+string disabled_provider_dir = root + "/disabled-provider";
+string disabled_consumer_dir = root + "/disabled-consumer";
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+
+mkdir(root);
+mkdir(enabled_provider_dir);
+mkdir(enabled_consumer_dir);
+mkdir(disabled_provider_dir);
+mkdir(disabled_consumer_dir);
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_code);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_code);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_code + consumer_code + "\nmain();\n");
+combined_file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+string enabled_provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_provider_dir, provider_path));
+string enabled_provider_qo = enabled_provider_dir + "/provider.qo";
+if (!is_file(enabled_provider_qo)) {
+    printf("enabled provider compile failed:\n%s", enabled_provider_compile);
+    exit(2);
+}
+
+string enabled_consumer_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -c -L %s"
+        + " --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_provider_dir, enabled_consumer_dir,
+    consumer_path));
+string enabled_consumer_qo = enabled_consumer_dir + "/consumer.qo";
+if (!is_file(enabled_consumer_qo)) {
+    printf("enabled consumer compile failed:\n%s", enabled_consumer_compile);
+    exit(2);
+}
+if (!(enabled_consumer_compile
+        =~ /AOT: eliding exception check for imported pure summary/)) {
+    printf("wide expression summary was not imported:\n%s",
+        enabled_consumer_compile);
+    exit(2);
+}
+
+string disabled_provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_provider_dir, provider_path));
+string disabled_provider_qo = disabled_provider_dir + "/provider.qo";
+if (!is_file(disabled_provider_qo)) {
+    printf("disabled provider compile failed:\n%s", disabled_provider_compile);
+    exit(2);
+}
+string disabled_consumer_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1"
+        + " QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_provider_dir, disabled_consumer_dir,
+    consumer_path));
+string disabled_consumer_qo = disabled_consumer_dir + "/consumer.qo";
+if (!is_file(disabled_consumer_qo)) {
+    printf("disabled consumer compile failed:\n%s",
+        disabled_consumer_compile);
+    exit(2);
+}
+if (disabled_consumer_compile =~ /imported pure summary/) {
+    printf("wide expression import was not disabled:\n%s",
+        disabled_consumer_compile);
+    exit(2);
+}
+
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, enabled_provider_qo,
+    enabled_consumer_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, disabled_provider_qo,
+    disabled_consumer_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (ast != "212582239\n" || enabled != ast || disabled != ast) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

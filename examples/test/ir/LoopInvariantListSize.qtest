@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+int sub invariantFor() {
+    list<int> l = (1, 2, 3, 4, 5);
+    int sum = 0;
+    for (int i = 0; i < 8; ++i) {
+        sum += l.size();
+        sum += l[i % l.size()];
+    }
+    return sum;
+}
+
+int sub invariantWhile() {
+    list<int> l = (1, 2, 3, 4);
+    int i = 0;
+    int sum = 0;
+    while (i < 5) {
+        sum += l.size();
+        ++i;
+    }
+    return sum;
+}
+
+int sub mutatePush() {
+    list<int> l = (1, 2, 3);
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += l.size();
+        push l, i;
+    }
+    return sum;
+}
+
+int sub reassignList() {
+    list<int> l = (1, 2, 3);
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += l.size();
+        l = range(10 + i);
+    }
+    return sum;
+}
+
+int sub removeAndReassign() {
+    list<int> l = (1, 2, 3);
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += l.size();
+        remove l;
+        l = range(i + 1);
+    }
+    return sum;
+}
+
+int sub unassignedThenAssign() {
+    list<int> l;
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += l.size();
+        l = range(i + 1);
+    }
+    return sum;
+}
+
+bool sub choose() {
+    return False;
+}
+
+int sub conditionalThenAssign() {
+    list<int> l;
+    if (choose()) {
+        l = range(9);
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += l.size();
+        l = range(i + 1);
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d\\n\", invariantFor(), invariantWhile(), mutatePush(), reassignList(),
+    removeAndReassign(), unassignedThenAssign(), conditionalThenAssign());
+";
+}
+
+string sub runMode(string script_path, string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-loop-invariant-list-size-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+sub checkOutput(string label, string expected, string actual) {
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
+        exit(2);
+    }
+}
+
+string script_path = "/tmp/qore-loop-invariant-list-size-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runMode(script_path, "ast");
+checkOutput("ast", "61:20:18:24:6:3:3\n", ast);
+
+foreach string mode in (("ir", "tiered", "jit")) {
+    checkOutput(mode, ast, runMode(script_path, mode));
+}
+checkOutput("aot", ast, runAot(script_path));

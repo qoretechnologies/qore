@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+list<string> sub makeWords(string left, string right) {
+    return (left, right);
+}
+
+int sub borrowedProjection() {
+    string left = \"alpha\";
+    string right = \"beta\";
+    list<string> words = makeWords(left, right);
+    return words[0].length() + words[1].length();
+}
+
+string sub reassignedProjection() {
+    string left = \"alpha\";
+    string right = \"beta\";
+    list<string> words = makeWords(left, right);
+    left = \"changed\";
+    return words[0] + \"/\" + left;
+}
+
+string sub removedProjection() {
+    string left = \"alpha\";
+    string right = \"beta\";
+    list<string> words = makeWords(left, right);
+    remove left;
+    return words[0];
+}
+
+printf(\"%d:%s:%s\\n\", borrowedProjection(), reassignedProjection(),
+    removedProjection());
+";
+
+string root = "/tmp/qore-aot-borrowed-aggregate-projection-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string sub compile(string out, string env) {
+    string output = backquote(sprintf(
+        "%s QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compile(enabled, "");
+string disabled_compile = compile(disabled,
+    "QORE_DISABLE_AOT_BORROWED_AGGREGATE_PROJECTION=1");
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: borrowedProjection[^:]*:.*borrowed-aggregate-projections=2/
+        || enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (reassignedProjection|removedProjection)[^:]*:.*borrowed-aggregate-projections=[1-9]/
+        || disabled_compile =~ /borrowed-aggregate-projections=[1-9]/) {
+    printf("borrowed aggregate projection analysis mismatch:\n%s\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string expected = "9:alpha/changed:alpha\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("%s mismatch: expected %y, got %y\n", mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string exe in ((enabled, disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, exe));
+    if (actual != expected) {
+        printf("AOT mismatch for %s: expected %y, got %y\n", exe,
+            expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(enabled);
+unlink(disabled);

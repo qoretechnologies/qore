@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+int i = 12345;
+int zero = 0;
+float f = 12.5;
+bool b = True;
+string s = \"abc\";
+string empty = \"\";
+string sint = \"12345\";
+string sfloat = \"12.5\";
+string bad_int = \"12x\";
+string unassigned;
+string removed = \"77\";
+remove removed;
+string deleted = \"88\";
+delete deleted;
+*string nullable = NULL;
+
+printf(\"int:%y\\n\", i.toString());
+printf(\"float:%y\\n\", f.toString());
+printf(\"bool:%y\\n\", b.toString());
+printf(\"string:%y\\n\", s.toString());
+printf(\"nothing:%y\\n\", NOTHING.toString());
+printf(\"string-toInt:%y:%y:%y:%y:%y:%y\\n\",
+    sint.toInt(), bad_int.toInt(), unassigned.toInt(), removed.toInt(), deleted.toInt(), nullable.toInt());
+printf(\"string-intp:%y:%y:%y:%y:%y:%y\\n\",
+    sint.intp(), bad_int.intp(), s.intp(), unassigned.intp(), removed.intp(), nullable.intp());
+printf(\"string-strp:%y:%y:%y:%y:%y\\n\", sint.strp(), s.strp(), unassigned.strp(), deleted.strp(),
+    nullable.strp());
+printf(\"builtin-int:%y:%y:%y:%y:%y:%y\\n\",
+    int(i), int(sint), int(bad_int), int(unassigned), int(removed), int(nullable));
+printf(\"builtin-float:%y:%y:%y:%y:%y\\n\",
+    float(f), float(sfloat), float(unassigned), float(removed), float(nullable));
+printf(\"builtin-boolean:%y:%y:%y:%y:%y:%y:%y\\n\",
+    boolean(i), boolean(zero), boolean(s), boolean(empty), boolean(unassigned), boolean(deleted),
+    boolean(nullable));
+printf(\"builtin-string:%y:%y:%y:%y:%y\\n\", string(i), string(f), string(b), string(unassigned),
+    string(nullable));
+printf(\"builtin-named:%y:%y:%y:%y\\n\", int(value: sint), float(value: sfloat), boolean(value: s),
+    string(value: i));
+";
+}
+
+string sub expectedOutput() {
+    return "int:\"12345\"
+float:\"12.5\"
+bool:\"1\"
+string:\"abc\"
+nothing:\"\"
+string-toInt:12345:12:0:0:0:0
+string-intp:True:True:False:False:False:False
+string-strp:True:True:False:False:False
+builtin-int:12345:12345:12:0:0:0
+builtin-float:12.5:12.5:0.0:0.0:0.0
+builtin-boolean:True:False:True:False:False:False:False
+builtin-string:\"12345\":\"12.5\":\"1\":\"\":\"\"
+builtin-named:12345:12.5:True:\"12345\"
+";
+}
+
+string sub runMode(string script_path, string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-conversion-pseudo-fast-path-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+sub checkOutput(string label, string expected, string actual) {
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
+        exit(2);
+    }
+}
+
+string script_path = "/tmp/qore-conversion-pseudo-fast-path-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string expected = expectedOutput();
+string ast = runMode(script_path, "ast");
+checkOutput("ast", expected, ast);
+
+foreach string mode in (("ir", "tiered", "jit")) {
+    checkOutput(mode, ast, runMode(script_path, mode));
+}
+checkOutput("aot", ast, runAot(script_path));

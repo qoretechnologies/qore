@@ -35,11 +35,37 @@
 #define _QORE_INTERN_QORE_AOT_DEPS_H
 
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 class QoreProgramLocation;
 class QoreProgram;
+class QoreClass;
+class QoreNamespace;
+class QoreTypeInfo;
+class TypedHashDecl;
+class ExceptionSink;
+
+enum class QoreAOTSourceSymbolKind : unsigned char {
+    Class,
+    HashDecl,
+    Function,
+    Global,
+};
+
+using QoreAOTSourceSymbolMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
+
+struct QoreAOTSourceSymbolManifest {
+    QoreAOTSourceSymbolMap classes;
+    QoreAOTSourceSymbolMap hashdecls;
+    QoreAOTSourceSymbolMap functions;
+    QoreAOTSourceSymbolMap globals;
+
+    bool empty() const {
+        return classes.empty() && hashdecls.empty() && functions.empty() && globals.empty();
+    }
+};
 
 //! AOT incremental-dependency sink for the single-file compiler.
 /** During a `qcc -c -L <dir>` compile, references to declarations that the
@@ -66,12 +92,60 @@ DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
 
 //! Returns true while a single-file AOT compile is parsing/committing source
 //! with sibling `.qo` metadata preloaded.
-DLLLOCAL bool qore_aot_source_parse_active();
+DLLEXPORT bool qore_aot_source_parse_active();
+
+//! Set the active build-group source-symbol manifest for the current thread.
+/** The manifest lets standalone source compiles prefer declarations provided by
+    the current build group over same-name symbols from already-loaded modules
+    or stubs.  Matching symbols are deferred into the emitted `.qo` instead of
+    being bound to the wrong loaded declaration. */
+DLLLOCAL const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
+        const QoreAOTSourceSymbolManifest* manifest);
+
+//! Allow preloaded source symbols to satisfy source-symbol manifest matches.
+/** This is only enabled around parse-time constant initialization, where the
+    initializer must evaluate the real provider if it is already available.
+    Ordinary source parsing keeps deferring matching build-group symbols so
+    source-deferred call semantics are preserved. */
+DLLLOCAL bool qore_aot_set_allow_preloaded_source_symbols(bool allow);
+
+//! Returns true when @p qore_path should be deferred to another source object
+//! in the active build group instead of resolving against currently-loaded
+//! declarations.
+DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind);
+
+//! Returns the canonical manifest path for a deferred source symbol.
+/** Returns an empty string when @p qore_path should not be deferred.  This uses
+    the same matching rules as qore_aot_should_defer_source_symbol(), but gives
+    callers the fully qualified manifest key so serialized AOT objects do not
+    lose namespace context when a source reference was written relatively. */
+DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind);
 
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */
 DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* loc);
+
+//! Record a source-parse type import for the active single-file AOT compile.
+/** This is a narrow wrapper around Program-private import tracking for modules
+    that need to report a link-time class/hashdecl dependency without including
+    parser-private headers. */
+DLLEXPORT void qore_aot_record_source_parse_type_import(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing);
+
+//! Finds a class for reflection APIs, using parse-commit visibility when active.
+DLLEXPORT const QoreClass* qore_reflection_find_class(QoreProgram* pgm, const char* path, ExceptionSink* xsink,
+        const QoreProgramLocation* loc);
+
+//! Finds a hashdecl for reflection APIs, using parse-commit visibility when active.
+DLLEXPORT const TypedHashDecl* qore_reflection_find_hashdecl(QoreProgram* pgm, const char* path,
+        const QoreNamespace*& ns);
+
+//! Resolves a type string for reflection APIs in the given program context.
+DLLEXPORT const QoreTypeInfo* qore_reflection_get_type_from_string(QoreProgram* pgm, const char* str,
+        ExceptionSink& xsink);
 
 //! AOT module-dependency sink for the module compiler.
 /** When compiling a `.qm`/split-module to a `.qmod`, qcc's `--depfile` records

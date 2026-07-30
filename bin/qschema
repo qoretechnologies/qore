@@ -40,9 +40,20 @@
 
 %exec-class QSchemaMain
 
-const VERSION = "1.1";
+const VERSION = "1.2";
 
-const Opts = {
+#! Export object-type option -> GetOpt specification; keys match SchemaReverse data-schema top-level keys
+const ExportObjectTypes = {
+    "tables":             "t,table:s",
+    "sequences":          "q,seq:s",
+    "types":              "y,type:s",
+    "materialized_views": "m,mview:s",
+    "procedures":         "p,proc:s",
+    "functions":          "f,func:s",
+    "packages":           "g,pkg:s",
+};
+
+const GeneralOpts = {
     "data_ts":       "data-ts=s",
     "index_ts":      "index-ts=s",
     "access_level":  "access-level=s",
@@ -50,12 +61,20 @@ const Opts = {
     "dryrun":        "n,dry-run",
     "nocolor":       "C,no-color",
     "verbose":       "v,verbose:i+",
-    "output":        "o,output=s",
-    "format":        "format=s",
-    "with_partitions": "with-partitions",
     "help":          "h,help",
     "version":       "V,version",
 };
+
+const ExportOpts = {
+    "nocolor":         "C,no-color",
+    "verbose":         "v,verbose:i+",
+    "output":          "o,output=s",
+    "format":          "format=s",
+    "with_partitions": "with-partitions",
+    "schema_name":     "s,schema=s",
+    "help":            "h,help",
+    "version":         "V,version",
+} + ExportObjectTypes;
 
 #! Commands that require a database connection as the first positional argument
 const DbCommands = {
@@ -81,12 +100,22 @@ class QSchemaMain {
     }
 
     constructor() {
-        GetOpt getopt(Opts);
+        # Export has command-specific short options (notably -f for --func, while other commands use -f for --force),
+        # so parse it with its own option set. The documented command-first form keeps this unambiguous.
+        bool export_command = ARGV[0] == "export";
+        if (export_command) {
+            command = shift ARGV;
+        }
+
+        GetOpt getopt(export_command ? ExportOpts : GeneralOpts);
         opts = getopt.parse3(\ARGV);
 
         color = new Util::TerminalColor(!opts.nocolor);
 
         if (opts.help) {
+            if (export_command) {
+                doExportHelp(0);
+            }
             doHelp(0);
         }
         if (opts.version) {
@@ -94,22 +123,28 @@ class QSchemaMain {
             exit(0);
         }
 
-        if (!ARGV) {
-            doHelp();
+        if (!command) {
+            if (!ARGV) {
+                doHelp();
+            }
+            command = shift ARGV;
         }
 
-        command = shift ARGV;
-
         if (DbCommands{command}) {
-            # DB commands: qschema <command> <connection> <schema-file>
+            # DB commands: export needs only a connection; the others also need a schema file
             connection = shift ARGV;
-            schema_file = shift ARGV;
+            if (command != "export") {
+                schema_file = shift ARGV;
+            }
             if (!connection) {
+                if (command == "export") {
+                    exportError("NO-CONNECTION-STRING", "missing database connection string argument; see --help");
+                }
                 printf("%s %s requires a connection argument\n", color.error("ERROR:"), command);
                 printf("\n  Usage: qschema %s <connection> <schema-file>\n", command);
                 exit(1);
             }
-            if (!schema_file && command != "export") {
+            if (command != "export" && !schema_file) {
                 printf("%s %s requires a schema file argument\n", color.error("ERROR:"), command);
                 printf("\n  Usage: qschema %s <connection> <schema-file>\n", command);
                 exit(1);
@@ -153,10 +188,9 @@ class QSchemaMain {
         printf("%s v%s - Qore database schema management tool\n\n", color.bold("qschema"), VERSION);
 
         printf("%s\n", color.bold("Usage:"));
-        printf("  qschema <command> <connection> <schema-file> [options]  %s\n",
-            color.dim("(DB commands)"));
-        printf("  qschema <command> <schema-file> [options]              %s\n",
-            color.dim("(file-only commands)"));
+        printf("  qschema align|drop|diff <connection> <schema-file> [options]\n");
+        printf("  qschema export <connection> [options]\n");
+        printf("  qschema validate|info <schema-file> [options]\n");
 
         printf("\n%s\n", color.bold("DB Commands (require connection):"));
         printf("  %s      Align database to schema (create/upgrade/downgrade)\n", color.key("align"));
@@ -183,12 +217,9 @@ class QSchemaMain {
         printf("  %s              Show SQL without executing (for align/drop)\n", color.key("-n, --dry-run"));
         printf("  %s             Disable color output\n", color.key("-C, --no-color"));
         printf("  %s              Increase verbosity (repeatable)\n", color.key("-v, --verbose"));
-        printf("  %s        Output file (for export)\n", color.key("-o, --output <file>"));
-        printf("  %s     Output format for export %s\n", color.key("    --format yaml|json"),
-            color.dim("(default: yaml)"));
-        printf("  %s     Include physical partitions in export\n", color.key("    --with-partitions"));
         printf("  %s                 Show this help\n", color.key("-h, --help"));
         printf("  %s              Show version\n", color.key("-V, --version"));
+        printf("\n  Run %s for reverse-engineering options.\n", color.key("qschema export --help"));
 
         printf("\n%s\n", color.bold("Examples:"));
         printf("  %s\n", color.dim("# Using a connection name:"));
@@ -203,6 +234,46 @@ class QSchemaMain {
         printf("\n  %s\n", color.dim("# File-only operations (no connection needed):"));
         printf("  qschema validate schema.ysm\n");
         printf("  qschema info -v schema.ysm\n");
+        exit(exit_code);
+    }
+
+    private doExportHelp(int exit_code = 1) {
+        printf("%s v%s - reverse-engineer a database to a data-schema document (.ysm/.jsm)\n\n",
+            color.bold("qschema export"), VERSION);
+        printf("%s\n  qschema export %s %s\n\n", color.bold("Usage:"), color.dim("[options]"),
+            color.dim("<connection>"));
+        printf("%s\n", color.bold("Connection:"));
+        printf("  %s   Direct connection string\n", color.dim("pgsql:user/pass@db%host"));
+        printf("  %s             Named connection from DatasourceProvider\n\n", color.dim("mydb"));
+        printf("%s\n", color.bold("Options:"));
+        printf("  %s   Schema name in the output (default: %s)\n", color.key("-s, --schema <name>"),
+            color.dim("ExportedSchema"));
+        printf("  %s   Output file (default: stdout)\n", color.key("-o, --output <file>"));
+        printf("  %s     Output format %s (default: %s)\n", color.key("    --format <fmt>"),
+            color.dim("yaml|json"), color.dim("yaml"));
+        printf("  %s   Include physical partitions in the export\n", color.key("    --with-partitions"));
+        printf("  %s            Disable colorized status output\n", color.key("-C, --no-color"));
+        printf("  %s              Verbose status output (to stderr)\n", color.key("-v, --verbose"));
+        printf("  %s              Show version and exit\n", color.key("-V, --version"));
+        printf("  %s                 Show this help and exit\n\n", color.key("-h, --help"));
+        printf("%s\n", color.bold("Object selection (default: the whole schema):"));
+        printf("  %s    Export only the given table(s)\n", color.key("-t, --table <val>"));
+        printf("  %s      Export only the given sequence(s)\n", color.key("-q, --seq <val>"));
+        printf("  %s     Export only the given type(s)\n", color.key("-y, --type <val>"));
+        printf("  %s    Export only the given materialized view(s)\n", color.key("-m, --mview <val>"));
+        printf("  %s     Export only the given procedure(s)\n", color.key("-p, --proc <val>"));
+        printf("  %s     Export only the given function(s)\n", color.key("-f, --func <val>"));
+        printf("  %s      Export only the given package(s)\n", color.key("-g, --pkg <val>"));
+        printf("\n  %s each %s is an exact name, a comma-separated list, or a regular expression;\n",
+            color.dim("Note:"), color.dim("<val>"));
+        printf("  a bare flag (no value) selects all objects of that type. Multiple object\n");
+        printf("  options can be combined; the result is always a complete data-schema document.\n\n");
+        printf("  Plain views cannot be exported because the data-schema format has no representation for them.\n\n");
+        printf("%s\n", color.bold("Examples:"));
+        printf("  %s\n", color.dim("qschema export -s MySchema pgsql:user/pass@db -o myschema.ysm"));
+        printf("  %s\n", color.dim("qschema export --with-partitions oracle:user/pass@tns"));
+        printf("  %s\n", color.dim("qschema export --table='workflows,.*step.*' --format json mydb"));
+        printf("\n%s\n", color.dim("The schema-reverse command is a compatibility alias for qschema export."));
         exit(exit_code);
     }
 
@@ -564,42 +635,62 @@ class QSchemaMain {
     }
 
     private doExport() {
-        Datasource ds = getDatasource();
-        on_exit ds.commit();
-
         string format = opts.format ?? "yaml";
         if (format != "yaml" && format != "json") {
-            printf("%s --format must be 'yaml' or 'json'\n", color.error("ERROR:"));
-            exit(1);
+            exportError("OPTION-ERROR", sprintf("--format must be %y or %y, not %y", "yaml", "json", format));
+        }
+%ifdef NoYaml
+        if (format == "yaml") {
+            exportError("MODULE-ERROR", "the \"yaml\" module is required for YAML output but is not available");
+        }
+%endif
+        *hash<auto> filter;
+        foreach string key in (keys ExportObjectTypes) {
+            if (exists opts{key}) {
+                filter{key} = opts{key}.typeCode() == NT_BOOLEAN ? ".*" : makeExportRxString(opts{key});
+            }
         }
 
-        string class_name = "ExportedSchema";
-        hash<auto!> rev_opts;
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string schema_name = opts.schema_name ?? "ExportedSchema";
+        *hash<auto> rev_opts;
         if (opts.with_partitions) {
             rev_opts.with_partitions = True;
         }
-        SchemaReverse::SchemaReverse rev(ds, class_name, rev_opts);
 
-        string output;
-        if (format == "yaml") {
-%ifndef NoYaml
-            output = rev.toYaml();
-%else
-            printf("%s yaml module is required for YAML export\n", color.error("ERROR:"));
-            exit(1);
-%endif
-        } else {
-            output = rev.toJson();
-        }
+        exportStatus("reverse-engineering %s to data-schema %s (%s)%s", color.value(ds.getDriverName()),
+            color.type(format), color.key(schema_name),
+            filter ? sprintf(", objects: %s", color.key((keys filter).join(", "))) : "");
+
+        SchemaReverse::SchemaReverse rev(ds, schema_name, rev_opts);
+        string output = format == "yaml" ? rev.toYaml(filter) : rev.toJson(filter);
 
         if (opts.output) {
             File f();
             f.open2(opts.output, O_CREAT | O_TRUNC | O_WRONLY);
             f.write(output);
-            printf("%s schema to %s (%s format)\n", color.success("Exported"),
+            stderr.printf("%s data schema to %s (%s)\n", color.success("Exported"),
                 color.key(opts.output), color.type(format));
         } else {
+            # Keep stdout as a clean, uncolored schema payload for pipelines.
             print(output);
         }
+    }
+
+    private string makeExportRxString(string value) {
+        return (map trim($1), value.split(",")).join("|");
+    }
+
+    private exportStatus(string msg) {
+        if (opts.verbose) {
+            stderr.printf("%s %s\n", color.dim("#"), vsprintf(msg, argv));
+        }
+    }
+
+    private exportError(string err, string msg) {
+        stderr.printf("%s %s: %s\n", color.error("ERROR:"), err, msg);
+        exit(1);
     }
 }

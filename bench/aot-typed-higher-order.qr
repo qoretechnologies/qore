@@ -1,0 +1,385 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeData() {
+    list<int> data = ();
+    for (int i = 0; i < 1024; ++i) {
+        push data, i & 15;
+    }
+    return data;
+}
+
+list<string> sub makeStringData() {
+    list<string> data = ();
+    for (int i = 0; i < 1024; ++i) {
+        push data, "value-" + string(i & 15);
+    }
+    return data;
+}
+
+list<float> sub makeFloatData() {
+    list<float> data = ();
+    for (int i = 0; i < 1024; ++i) {
+        push data, float(i & 15);
+    }
+    return data;
+}
+
+int sub mapIntHelper(int value) {
+    return value + 1;
+}
+
+int sub mapIntAlternateHelper(int value) {
+    return value + 2;
+}
+
+float sub mapFloatHelper(float value) {
+    return value + 0.5;
+}
+
+float sub mapFloatAlternateHelper(float value) {
+    return value + 1.5;
+}
+
+bool sub mapBoolHelper(int value) {
+    return (value & 1) == 0;
+}
+
+bool sub mapBoolAlternateHelper(int value) {
+    return (value & 2) == 0;
+}
+
+bool sub selectIntHelper(int value) {
+    return (value & 1) == 0;
+}
+
+final class TypedHigherOrderProbe {
+    int mapInt(int value) {
+        return value + 1;
+    }
+
+    bool selectInt(int value) {
+        return (value & 1) == 0;
+    }
+
+    static int mapIntStatic(int value) {
+        return value + 1;
+    }
+
+    static bool selectIntStatic(int value) {
+        return (value & 1) == 0;
+    }
+
+    int methodMapSelectKernel(list<int> data, int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> mapped = (map self.mapInt($1),
+                (select data, self.selectInt($1)));
+            checksum += mapped.size() + mapped[0];
+        }
+        return checksum;
+    }
+
+    static int staticMapSelectKernel(list<int> data, int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> mapped = (map TypedHigherOrderProbe::mapIntStatic($1),
+                (select data, TypedHigherOrderProbe::selectIntStatic($1)));
+            checksum += mapped.size() + mapped[0];
+        }
+        return checksum;
+    }
+}
+
+int sub foldlIntHelper(int accumulator, int value) {
+    return accumulator + (value & 7);
+}
+
+int sub foldlKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + ($2 & 7), data);
+    }
+    return checksum;
+}
+
+int sub foldlHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl foldlIntHelper($1, $2), data);
+    }
+    return checksum;
+}
+
+int sub foldrKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldr $1 + ($2 & 7), data);
+    }
+    return checksum;
+}
+
+int sub foreachKernel(int rounds) {
+    list<int> data = (
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11, 12, 13, 14, 15,
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11, 12, 13, 14, 15,
+    );
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach int value in (data) {
+            checksum += value;
+        }
+    }
+    return checksum;
+}
+
+int sub boolMapKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> mapped = (map ($1 & 1) == 0, data);
+        checksum += mapped.size() + (mapped[0] ? 1 : 0);
+    }
+    return checksum;
+}
+
+int sub intMapKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map $1 + 1, data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map mapIntHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapHelperPhiKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map ($1 & 1)
+            ? mapIntHelper($1) : mapIntAlternateHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+float sub floatMapKernel(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> mapped = (map $1 + 0.5, data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+float sub floatMapHelperKernel(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> mapped = (map mapFloatHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+float sub floatMapHelperPhiKernel(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> mapped = (map ($# & 1)
+            ? mapFloatHelper($1) : mapFloatAlternateHelper($1), data);
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub boolMapHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> mapped = (map mapBoolHelper($1), data);
+        checksum += mapped.size() + (mapped[0] ? 1 : 0);
+    }
+    return checksum;
+}
+
+int sub boolMapHelperPhiKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> mapped = (map ($# & 1)
+            ? mapBoolHelper($1) : mapBoolAlternateHelper($1), data);
+        checksum += mapped.size() + (mapped[0] ? 1 : 0);
+    }
+    return checksum;
+}
+
+int sub stringMapKernel(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<string> mapped = (map $1, data);
+        checksum += mapped.size() + mapped[0].size();
+    }
+    return checksum;
+}
+
+int sub boolSelectKernel(list<bool> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> selected = (select data, $1);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub intSelectKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> selected = (select data, ($1 & 1) == 0);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub intSelectHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> selected = (select data, selectIntHelper($1));
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub intMapSelectKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map $1 + 1,
+            (select data, ($1 & 1) == 0));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapSelectHelperKernel(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map mapIntHelper($1),
+            (select data, selectIntHelper($1)));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub intMapSelectCallRefKernel(list<int> data, int rounds) {
+    code<int(int)> map_value = \mapIntHelper();
+    code<bool(int)> select_value = \selectIntHelper();
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map map_value($1),
+            (select data, select_value($1)));
+        checksum += mapped.size() + mapped[0];
+    }
+    return checksum;
+}
+
+int sub stringSelectKernel(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<string> selected = (select data, $1.size() > 7);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub main() {
+    string kernel = ARGV.size() ? ARGV[0] : "foldl";
+    int rounds = ARGV.size() > 1 ? ARGV[1].toInt()
+        : kernel == "foreach" ? 1000000 : 2000;
+    switch (kernel) {
+        case "foldl":
+            printf("%d\n", foldlKernel(makeData(), rounds));
+            break;
+        case "foldr":
+            printf("%d\n", foldrKernel(makeData(), rounds));
+            break;
+        case "foldl-helper":
+            printf("%d\n", foldlHelperKernel(makeData(), rounds));
+            break;
+        case "foreach":
+            printf("%d\n", foreachKernel(rounds));
+            break;
+        case "bool-map":
+            printf("%d\n", boolMapKernel(makeData(), rounds));
+            break;
+        case "int-map":
+            printf("%d\n", intMapKernel(makeData(), rounds));
+            break;
+        case "int-map-helper":
+            printf("%d\n", intMapHelperKernel(makeData(), rounds));
+            break;
+        case "int-map-helper-phi":
+            printf("%d\n", intMapHelperPhiKernel(makeData(), rounds));
+            break;
+        case "float-map":
+            printf("%g\n", floatMapKernel(makeFloatData(), rounds));
+            break;
+        case "float-map-helper":
+            printf("%g\n", floatMapHelperKernel(makeFloatData(), rounds));
+            break;
+        case "float-map-helper-phi":
+            printf("%g\n", floatMapHelperPhiKernel(makeFloatData(), rounds));
+            break;
+        case "bool-map-helper":
+            printf("%d\n", boolMapHelperKernel(makeData(), rounds));
+            break;
+        case "bool-map-helper-phi":
+            printf("%d\n", boolMapHelperPhiKernel(makeData(), rounds));
+            break;
+        case "string-map":
+            printf("%d\n", stringMapKernel(makeStringData(), rounds));
+            break;
+        case "bool-select":
+            printf("%d\n", boolSelectKernel(
+                (map ($1 & 1) == 0, makeData()), rounds));
+            break;
+        case "int-select":
+            printf("%d\n", intSelectKernel(makeData(), rounds));
+            break;
+        case "int-select-helper":
+            printf("%d\n", intSelectHelperKernel(makeData(), rounds));
+            break;
+        case "int-map-select":
+            printf("%d\n", intMapSelectKernel(makeData(), rounds));
+            break;
+        case "int-map-select-helper":
+            printf("%d\n", intMapSelectHelperKernel(makeData(), rounds));
+            break;
+        case "int-map-select-callref":
+            printf("%d\n", intMapSelectCallRefKernel(makeData(), rounds));
+            break;
+        case "int-map-select-method":
+            TypedHigherOrderProbe method_probe();
+            printf("%d\n", method_probe.methodMapSelectKernel(
+                makeData(), rounds));
+            break;
+        case "int-map-select-static":
+            printf("%d\n", TypedHigherOrderProbe::staticMapSelectKernel(
+                makeData(), rounds));
+            break;
+        case "string-select":
+            printf("%d\n", stringSelectKernel(makeStringData(), rounds));
+            break;
+        default:
+            throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+    }
+    return 0;
+}
+
+main();

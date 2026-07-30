@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+our int cross_object_global;
+
+int sub crossObjectGlobal(int value) {
+    return value + cross_object_global;
+}
+
+int sub crossObjectLeaf(int value) {
+    return value + 1;
+}
+
+int sub crossObjectMiddle(int value) {
+    return crossObjectLeaf(value) + 1;
+}
+
+class CrossObjectMath {
+    static int leaf(int value) {
+        return value + 1;
+    }
+}

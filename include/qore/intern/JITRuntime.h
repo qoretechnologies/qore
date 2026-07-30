@@ -54,6 +54,14 @@ const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count);
 //! Validates the central JIT runtime helper symbol registry.
 bool qore_jit_validate_runtime_symbols(std::string& error);
 
+enum class QoreStringCaseConsumer : int32_t {
+    StartsWith,
+    EndsWith,
+    Contains,
+    Find,
+    RFind,
+};
+
 // C ABI helpers called by JIT-generated code.
 // All functions use extern "C" linkage so LLVM can resolve them by name.
 //
@@ -126,6 +134,12 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
+
+//! Convert a QoreValue accepted by the timeout type to milliseconds
+int64_t qore_rt_to_timeout(uint64_t val);
+
+//! Apply *timeout conversion while preserving NOTHING
+uint64_t qore_rt_coerce_optional_timeout(uint64_t val);
 
 //! Convert a QoreValue to double
 double qore_rt_to_float(uint64_t val);
@@ -200,6 +214,14 @@ uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint
 uint64_t qore_rt_background_dot_eval_name_call_aot_throwing(const char* method_name,
     uint64_t recv_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Native AOT background Class::method(args) call with pre-evaluated args.
+uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_static_method_name_call_aot_throwing(const char* qualified_name,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Native AOT background call-reference/closure invocation with pre-evaluated args.
 uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* args,
     int nargs, ExceptionSink* xsink);
@@ -238,6 +260,9 @@ void qore_rt_deopt(void* deopt_counter_ptr);
 
 //! Check if a NaN-boxed QoreValue is not NOTHING; returns 1 if not NOTHING, 0 otherwise
 int64_t qore_rt_guard_not_nothing(uint64_t val);
+
+//! Raise the runtime type error required when a non-NOTHING return yields NOTHING.
+void qore_rt_raise_return_nothing(ExceptionSink* xsink);
 
 //! Check if a NaN-boxed QoreValue is an int; returns 1 if int, 0 otherwise
 int64_t qore_rt_guard_int(uint64_t val);
@@ -354,6 +379,12 @@ uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink);
 //! Store a NaN-boxed QoreValue to a closure variable
 void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink);
 
+//! Add a native integer delta to a typed local through its runtime lvalue
+int64_t qore_rt_add_assign_local_int(LocalVar* var, int64_t delta, ExceptionSink* xsink);
+
+//! Increment a typed integer closure variable through its runtime LocalVar binding
+int64_t qore_rt_increment_closure_int(LocalVar* var, int64_t delta, ExceptionSink* xsink);
+
 //! Load from a thread-local variable; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink);
 
@@ -383,20 +414,141 @@ uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uint64_t first
 //! MakeList: takes array of NaN-boxed values with optional parse-time type info, returns NaN-boxed list
 uint64_t qore_rt_make_list(uint64_t* values, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_list_by_type_path(uint64_t* values, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_list_by_type_path_cached(QoreAOTContext* ctx, uint64_t* values, int count,
+        const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_list_by_type_path_throwing(uint64_t* values, int count, const char* type_path,
         ExceptionSink* xsink);
+uint64_t qore_rt_make_list_by_type_path_cached_throwing(QoreAOTContext* ctx, uint64_t* values, int count,
+        const char* type_path, ExceptionSink* xsink);
 
 //! MakeHash: takes array of key-value pairs (alternating) with optional parse-time type info, returns NaN-boxed hash
 uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_by_type_path_cached(QoreAOTContext* ctx, uint64_t* kv_pairs, int count,
+        const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_by_type_path_throwing(uint64_t* kv_pairs, int count, const char* type_path,
         ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_by_type_path_cached_throwing(QoreAOTContext* ctx, uint64_t* kv_pairs, int count,
+        const char* type_path, ExceptionSink* xsink);
 
 //! MakeHashConstKeys: takes array of const keys and NaN-boxed values with optional parse-time type info, returns NaN-boxed hash
 uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_by_type_path_cached(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_by_type_path_cached_throwing(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique(const char** keys, uint64_t* vals, int count,
+        const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(const char** keys, uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_cached(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_cached_throwing(QoreAOTContext* ctx,
+        const char** keys, uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_2_unique(const char* key0, uint64_t val0,
+    const char* key1, uint64_t val1, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(const char* key0, uint64_t val0,
+    const char* key1, uint64_t val1, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_3_unique(const char* key0, uint64_t val0,
+    const char* key1, uint64_t val1, const char* key2, uint64_t val2,
+    ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_3_unique_throwing(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, const char* key2,
+    uint64_t val2, ExceptionSink* xsink);
+//! Build a proven heterogeneous two-key literal whose inferred value type is auto.
+uint64_t qore_rt_make_hash_const_keys_2_unique_auto(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_2_unique_auto_throwing(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, ExceptionSink* xsink);
+//! Build a three-key literal with an explicitly preserved auto value type.
+uint64_t qore_rt_make_hash_const_keys_3_unique_auto(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, const char* key2,
+    uint64_t val2, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_3_unique_auto_throwing(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, const char* key2,
+    uint64_t val2, ExceptionSink* xsink);
+
+//! Convert an assigned native integer to a referenced string without boxing it first.
+uint64_t qore_rt_int_to_string(int64_t value);
+
+//! Return the byte and character length of an integer's decimal string form.
+int64_t qore_rt_int_to_string_measure(int64_t value);
+
+//! Measure a concatenation without materializing the result when all parts have
+//! the same encoding. @p characters selects character length instead of bytes.
+int64_t qore_rt_string_concat_multi_measure(uint64_t* args, int nargs,
+        int32_t characters, ExceptionSink* xsink);
+
+//! Concatenate strings and apply an encoding-aware predicate or search while
+//! retaining the intermediate string inside the helper.
+int64_t qore_rt_string_concat_multi_search(uint64_t* args, int nargs,
+        uint64_t pattern, int32_t operation, int64_t offset,
+        ExceptionSink* xsink);
+
+//! Concatenate strings, optionally apply substr() and case conversion, and
+//! execute an encoding-aware predicate or search without boxed intermediates.
+int64_t qore_rt_string_concat_multi_pipeline_search(uint64_t* args, int nargs,
+        int64_t start, int64_t length, int32_t has_substr,
+        int32_t has_length, uint64_t pattern, int32_t operation,
+        int64_t offset, int32_t transform, ExceptionSink* xsink);
+
+//! Return true when an assigned boxed string equals a constant hash key.
+int32_t qore_rt_string_equals_cstr(uint64_t value, const char* key);
+
+//! Native boolean typed string equality and inequality.
+int64_t qore_rt_string_eq_typed_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_ne_typed_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+
+//! Encoding-aware typed string ordering with boxed and native boolean results.
+uint64_t qore_rt_string_lt_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_le_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_gt_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_ge_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_lt_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_le_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_gt_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_ge_typed_soft_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+uint64_t qore_rt_string_cmp_typed_soft(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+//! Transform an assigned string and look up an ASCII switch case without retaining the result.
+int32_t qore_rt_switch_string_case_lookup_noguard(uint64_t value,
+    const char** case_strings, int32_t num_cases, int32_t upper,
+    ExceptionSink* xsink);
+
+//! Compare an assigned string after case conversion without retaining the result.
+int64_t qore_rt_string_case_equal_native_noguard(uint64_t value,
+    uint64_t other, int32_t upper, int32_t transform_left,
+    ExceptionSink* xsink);
+//! Order an assigned string after case conversion without retaining the result.
+int64_t qore_rt_string_case_compare_native_noguard(uint64_t value,
+    uint64_t other, int32_t upper, int32_t transform_left,
+    ExceptionSink* xsink);
+
+//! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
+//! inputs use the original AOT call slot so parameter binding remains authoritative.
+uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,
+        const char* input_key1, uint64_t input_hash1_64, uint32_t input_hash1_32,
+        const char* output_key1, const char* input_key2, uint64_t input_hash2_64,
+        uint32_t input_hash2_32, const char* output_key2, const char* type_path,
+        ExceptionSink* xsink);
+uint64_t qore_rt_fixed_hash_remap2_aot_throwing(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value, const char* input_key1, uint64_t input_hash1_64,
+        uint32_t input_hash1_32, const char* output_key1, const char* input_key2,
+        uint64_t input_hash2_64, uint32_t input_hash2_32, const char* output_key2,
         const char* type_path, ExceptionSink* xsink);
 
 //! Create an empty list with an optional element type; nullptr means auto.
@@ -416,6 +568,15 @@ uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits, c
         ExceptionSink* xsink);
 uint64_t qore_rt_list_push_by_type_path_throwing(uint64_t list_bits, uint64_t val_bits,
         const char* element_type_path, ExceptionSink* xsink);
+
+//! Push to a proven assigned list and return the same borrowed list value.
+uint64_t qore_rt_list_push_in_place(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
+uint64_t qore_rt_list_push_in_place_throwing(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
+
+//! Push an exact native scalar to a fresh assigned list without repeated type validation.
+//! The compiler must prove that the list is valid, exclusively owned, and has the matching element type.
+uint64_t qore_rt_list_push_float_in_place_unchecked(uint64_t list_bits, double value);
+uint64_t qore_rt_list_push_bool_in_place_unchecked(uint64_t list_bits, int64_t value);
 
 // --- Statement execution helpers ---
 
@@ -452,6 +613,11 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Execute on_block_exit handlers registered since saved_count, in LIFO order.
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
+
+//! Discard (without firing) on_block_exit handlers registered since saved_count,
+//! truncating the thread-local handler stack back to that mark.  Used by the JIT
+//! deopt path before re-executing via the AST interpreter.
+void qore_rt_discard_on_block_exit(int64_t saved_count);
 
 struct QoreAOTContext;
 
@@ -509,6 +675,19 @@ uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSi
 //! Load a member from the current runtime object; returns NaN-boxed QoreValue.
 uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink);
 
+//! Load an exact getter member from self and enforce its declared return contract.
+uint64_t qore_rt_load_self_getter_checked(const char* member_name, int32_t rejects_nothing,
+        ExceptionSink* xsink);
+
+//! Load an exact required int getter from self, convert it to native form, and release the owned value.
+int64_t qore_rt_load_self_getter_int(const char* member_name, ExceptionSink* xsink);
+
+//! Load an exact required float getter from self, convert it to native form, and release the owned value.
+double qore_rt_load_self_getter_float(const char* member_name, ExceptionSink* xsink);
+
+//! Load an exact required bool getter from self, convert it to native form, and release the owned value.
+int64_t qore_rt_load_self_getter_bool(const char* member_name, ExceptionSink* xsink);
+
 //! Load a member for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink);
 
@@ -525,6 +704,14 @@ uint64_t qore_rt_load_static_var_by_path_throwing(const char* class_path, const 
         ExceptionSink* xsink);
 uint64_t qore_rt_load_static_var_by_path_for_call_throwing(const char* class_path, const char* var_name,
         ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_aot(QoreAOTContext* ctx, const char* class_path,
+        const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_for_call_aot(QoreAOTContext* ctx, const char* class_path,
+        const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_aot_throwing(QoreAOTContext* ctx, const char* class_path,
+        const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_for_call_aot_throwing(QoreAOTContext* ctx, const char* class_path,
+        const char* var_name, ExceptionSink* xsink);
 
 // --- Closure creation helper ---
 
@@ -536,6 +723,17 @@ uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* x
 //! Create a closure/lambda via AOT context slot
 uint64_t qore_rt_create_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Call a single-use noncapturing closure without materializing a runtime closure node.
+uint64_t qore_rt_call_immediate_closure(const QoreClosureParseNode* cn,
+        uint64_t* args, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_consume_args(const QoreClosureParseNode* cn,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* args, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_aot_consume_args(QoreAOTContext* ctx,
+        int32_t idx, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink);
+
 // --- Reference creation helpers ---
 
 class ParseReferenceNode;
@@ -543,7 +741,7 @@ class ParseReferenceNode;
 //! Create a call reference (function/static method); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
-//! Create a static method call reference from serialized AOT metadata.
+//! Create a class-qualified method call reference from serialized AOT metadata.
 uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path, const char* method_name,
     ExceptionSink* xsink);
 uint64_t qore_rt_create_static_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
@@ -621,13 +819,28 @@ uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionS
 uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Create a new typed hash from an already-evaluated hash initializer
+static constexpr int32_t QORE_RT_HASHDECL_RUNTIME_CHECK = 1;
+static constexpr int32_t QORE_RT_HASHDECL_REUSE_TEMPORARY = 2;
+static constexpr int32_t QORE_RT_HASHDECL_VALUES_PRECHECKED = 4;
+static constexpr int32_t QORE_RT_HASHDECL_LAYOUT_PRECHECKED = 8;
+
 uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
-    ExceptionSink* xsink);
+        ExceptionSink* xsink);
 uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx, const char* hd_path,
     uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
+//! Create a typed hash from a compile-time-proven concrete AOT hashdecl path.
+uint64_t qore_rt_new_hash_decl_from_hash_by_concrete_path_cached(QoreAOTContext* ctx, const char* hd_path,
+    uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink);
+//! Construct a typed hash when IR proof shows every initializer value already satisfies the target type.
+uint64_t qore_rt_new_complex_hash_from_hash_prechecked(const QoreTypeInfo* typeInfo,
+    uint64_t hash_bits, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, uint64_t hash_bits,
     ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached(QoreAOTContext* ctx,
+    const char* type_path, uint64_t hash_bits, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(QoreAOTContext* ctx,
+    const char* type_path, uint64_t hash_bits, ExceptionSink* xsink);
 
 //! Create a new typed list from an already-evaluated constructor value
 uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);
@@ -654,6 +867,8 @@ uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xs
 //! Set a key-value pair in a hash (for hash map loops)
 void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
     ExceptionSink* xsink);
+//! Reserves storage in a newly constructed hash for a nonnegative capacity hint.
+void qore_rt_hash_reserve(uint64_t hash_bits, int64_t capacity);
 
 // --- Reverse iterator creation helper ---
 
@@ -741,8 +956,96 @@ uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSi
 //! Look up a key for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key, ExceptionSink* xsink);
 
+//! Constant-key hash lookup using hashes calculated by IR/AOT lowering.
+uint64_t qore_rt_hash_key_access_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_for_call_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Constant-key access when the operand is proven to be an assigned hash.
+uint64_t qore_rt_hash_key_access_hash(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_hash_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Constant-key access on an explicit hash type that may still be NOTHING.
+uint64_t qore_rt_hash_key_access_hash_guarded(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Access a direct hashdecl member by its declared ordinal. The guarded form
+//! accepts NOTHING; both forms fall back to key lookup if the layout changed.
+uint64_t qore_rt_hashdecl_member_access_slot(uint64_t hash_val, const char* key,
+        int32_t slot, ExceptionSink* xsink);
+uint64_t qore_rt_hashdecl_member_access_slot_guarded(uint64_t hash_val,
+        const char* key, int32_t slot, ExceptionSink* xsink);
+
+//! Test the truth value of a constant hash key without materializing an owned
+//! lookup result. Guarded variants accept NOTHING and other non-hash values.
+int64_t qore_rt_hash_key_truthy(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_guarded(uint64_t hash_val, const char* key,
+        ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_guarded_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
 //! Look up a key known to have an int value; returns NOTHING if unavailable.
 uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
+uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32);
+int64_t qore_rt_hash_key_int_compare_prehashed(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32, int64_t expected,
+        int32_t not_equal);
+
+//! Compare an optional typed list projection without materializing a QoreValue.
+int64_t qore_rt_list_index_int_compare(uint64_t list_val, int64_t index,
+        int64_t expected, int32_t not_equal);
+
+//! Resolve several known integer keys from one hash evaluation. Returns 1 only
+//! when every key exists and writes native integer values to `results`.
+int64_t qore_rt_hash_keys_int_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, int64_t* results, uint32_t count);
+
+//! Resolve several known float keys from one hash evaluation. Returns 1 only
+//! when every key exists and writes native float values to `results`.
+int64_t qore_rt_hash_keys_float_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, double* results, uint32_t count);
+
+//! Resolve and measure known string keys from one hash evaluation. `modes`
+//! contains 0 for byte size and 1 for character length.
+int64_t qore_rt_hash_keys_string_measure_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, const uint8_t* modes,
+        int64_t* results, uint32_t count);
+
+//! Resolve known string keys from one hash evaluation and return owned values.
+int64_t qore_rt_hash_keys_string_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, uint64_t* results, uint32_t count);
+
+//! Resolve known string keys from one hash evaluation and return borrowed values.
+int64_t qore_rt_hash_keys_string_borrowed_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, uint64_t* results, uint32_t count);
+
+//! Select list hash elements whose constant-key value converts to an integer > 0.
+uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val, const char* key,
+        ExceptionSink* xsink);
+uint64_t qore_rt_select_hash_key_positive_int_prehashed(uint64_t list_val,
+        const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Map `hash-key + integer` over a typed hash list while preserving dynamic addition semantics.
+uint64_t qore_rt_map_hash_key_offset_any(uint64_t list_val, const char* key,
+        int64_t offset, ExceptionSink* xsink);
+uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char* key,
+        uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
+
+//! Build a hash from two constant keys projected from each input hash.
+uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val, const char* key1,
+        uint64_t key1_hash64, uint32_t key1_hash32, const char* key2,
+        uint64_t key2_hash64, uint32_t key2_hash32, ExceptionSink* xsink);
 
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.
@@ -758,6 +1061,45 @@ uint64_t qore_rt_list_assignment_value_throwing(uint64_t value, int64_t index, E
 //! Falls back to qore_rt_add_any if either operand is not a string.
 uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+//! Fold an exact list<string> with a constant separator; returns a referenced string or NOTHING.
+uint64_t qore_rt_foldl_string_join_checked(uint64_t list_val, uint64_t separator_val,
+        ExceptionSink* xsink);
+
+//! Reverse-fold an exact list<string> with a constant separator.
+uint64_t qore_rt_foldr_string_join_checked(uint64_t list_val, uint64_t separator_val,
+        ExceptionSink* xsink);
+
+//! Join an assigned exact list<string> using the separator's encoding.
+uint64_t qore_rt_list_string_join_checked(uint64_t separator, uint64_t list,
+        ExceptionSink* xsink);
+
+//! Join the result of a typed identity map, rejecting unassigned list entries.
+uint64_t qore_rt_list_string_join_identity_map_checked(uint64_t separator, uint64_t list,
+        ExceptionSink* xsink);
+
+//! Start and extend an accumulator owned exclusively by fused string-join IR.
+uint64_t qore_rt_string_join_start(uint64_t first, uint64_t separator, uint64_t value,
+        ExceptionSink* xsink);
+uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, uint64_t value,
+        ExceptionSink* xsink);
+
+//! Start a pseudo-method join accumulator using the separator's encoding.
+uint64_t qore_rt_string_method_join_start(uint64_t unused, uint64_t separator, uint64_t value,
+        ExceptionSink* xsink);
+
+//! Format an exact list<int> with fixed %d metadata and join it in one pass.
+uint64_t qore_rt_list_int_sprintf_join(uint64_t separator, uint64_t list, uint64_t literal,
+        int64_t metadata, ExceptionSink* xsink);
+
+//! Format one boxed integer according to compiler-validated fixed %d metadata.
+uint64_t qore_rt_sprintf_int_fixed(uint64_t literal, uint64_t value, int64_t metadata);
+
+//! Append a string value in place when the left string has one owner, or copy it otherwise.
+uint64_t qore_rt_string_append_cow(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Append to a compiler-proven uniquely owned string and return the borrowed left value.
+uint64_t qore_rt_string_append_in_place(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.
@@ -769,14 +1111,43 @@ int64_t qore_rt_list_get_int(uint64_t list_val, int64_t index);
 //! Get float element at index; returns 0.0 if not a list or index out of bounds.
 double qore_rt_list_get_float(uint64_t list_val, int64_t index);
 
+//! Get an int element when the compiler has proven list type and index bounds.
+int64_t qore_rt_list_get_int_unchecked(uint64_t list_val, int64_t index);
+
+//! Get a float element when the compiler has proven list type and index bounds.
+double qore_rt_list_get_float_unchecked(uint64_t list_val, int64_t index);
+
+//! Get the immutable entry array when the compiler has proven list type and loop stability.
+const uint64_t* qore_rt_list_get_data_unchecked(uint64_t list_val);
+
+//! Raise the typed foreach assignment error for an unassigned typed list slot.
+void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsink);
+
+//! Get the mutable entry array for a fresh fixed-size list owned by generated code.
+uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
+
+//! Finalize the logical length of a fresh list after direct scalar stores.
+void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
+
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
 uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+
+//! Return a list element borrowed from the source list without incrementing its reference count.
+uint64_t qore_rt_list_get_value_noref(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+
+//! Append a value whose exact element type was proven by the compiler.
+void qore_rt_list_append_exact(uint64_t list_bits, uint64_t value_bits);
 
 //! Create a list with pre-allocated capacity; returns NaN-boxed QoreListNode*.
 uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink);
 uint64_t qore_rt_create_sized_list_typed(int64_t capacity, const QoreTypeInfo* element_type, ExceptionSink* xsink);
 uint64_t qore_rt_create_sized_list_by_type_path(int64_t capacity, const char* element_type_path,
+        ExceptionSink* xsink);
+//! Create an exact typed list at its final size for direct scalar map output stores.
+uint64_t qore_rt_create_fixed_list_typed(int64_t size, const QoreTypeInfo* element_type,
+        ExceptionSink* xsink);
+uint64_t qore_rt_create_fixed_list_by_type_path(int64_t size, const char* element_type_path,
         ExceptionSink* xsink);
 
 //! Set int element in list at index (for pre-sized typed map output). No bounds check.
@@ -788,6 +1159,13 @@ void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
 //! Set any element in list at index (for pre-sized typed map output). No bounds check.
 //! Takes ownership of the reference (no additional ref needed).
 void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
+
+//! Checked variant preserving typed list assignment and exception semantics.
+//! Takes ownership of the value reference.
+void qore_rt_list_set_value_checked(uint64_t list_bits, int64_t index, uint64_t value_bits,
+        ExceptionSink* xsink);
+void qore_rt_list_set_value_checked_throwing(uint64_t list_bits, int64_t index,
+        uint64_t value_bits, ExceptionSink* xsink);
 
 //! Increment reference count for heap-allocated values; no-op for inline values.
 uint64_t qore_rt_refself(uint64_t bits);
@@ -850,6 +1228,10 @@ void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink
 //! Load from a global variable via AOT context slot
 uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Load an integer global without boxing; assigned receives 1, 0 for NOTHING, or -1 for fallback
+int64_t qore_rt_load_global_int_aot(QoreAOTContext* ctx, int32_t idx,
+        int32_t* assigned, ExceptionSink* xsink);
+
 //! Store to a global variable via AOT context slot
 void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
@@ -864,6 +1246,14 @@ uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSin
 
 //! Store to a closure variable via AOT context slot (uses locals array)
 void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Add a native integer delta to a typed local via an AOT local slot
+int64_t qore_rt_add_assign_local_int_aot(QoreAOTContext* ctx, int32_t idx,
+        int64_t delta, ExceptionSink* xsink);
+
+//! Increment a typed integer closure variable via an AOT local slot
+int64_t qore_rt_increment_closure_int_aot(QoreAOTContext* ctx, int32_t idx,
+        int64_t delta, ExceptionSink* xsink);
 
 //! Invoke an expression via AOT context slot
 uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
@@ -894,6 +1284,12 @@ uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, ui
     uint64_t third, ExceptionSink* xsink);
 
 //! LValuePath runtime helpers — navigate structured lvalue path and execute operation
+uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
+    int32_t weak, ExceptionSink* xsink);
+uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,
+    ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
@@ -946,6 +1342,28 @@ uint64_t qore_rt_call_with_args_aot_consume_args(QoreAOTContext* ctx, int32_t sl
 uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! Resolve the callee AOT context for a pre-resolved direct function call slot.
+QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot,
+    ExceptionSink* xsink);
+
+//! Try to resolve the callee AOT context for a pre-resolved direct call slot.
+//! Returns nullptr without raising when the target does not have cached AOT.
+QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot);
+
+//! Returns true when an assigned object receiver is still valid.
+//! Used to guard receiver-independent AOT method fast entries.
+int qore_rt_object_is_valid(uint64_t value);
+//! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
+void qore_rt_check_valid_object_call_receiver(uint64_t value,
+        ExceptionSink* xsink);
+//! Returns true when a valid object receiver has the exact class stored in an AOT call-target slot.
+int qore_rt_object_has_exact_aot_target_class(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value);
+//! Returns true when an object receiver has the exact class stored in an AOT call-target slot.
+//! Unlike qore_rt_object_has_exact_aot_target_class(), this does not check object validity.
+int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value);
+
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
@@ -954,6 +1372,24 @@ uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
 //! Calls QoreFunction::evalFunctionTmpArgs() directly.
 uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Calls a resolved function after prepending a pseudo-call base to its pre-evaluated arguments.
+//! Used when a synthetic global-function optimization must fall back to the original call semantics.
+uint64_t qore_rt_call_function_with_base(const QoreFunction* func,
+    const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_call_function_with_base(): resolves the function from an expression slot.
+uint64_t qore_rt_call_function_with_base_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! Direct function call with explicit generic type arguments.
+uint64_t qore_rt_call_function_direct_with_inst(const QoreFunction* func,
+    const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, uint64_t* args,
+    int nargs, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
 
 //! Fast function call — bypasses QoreListNode construction, CodeEvaluationHelper,
 //! and the entire dispatch chain. Directly instantiates parameters from NaN-boxed args,
@@ -1082,6 +1518,81 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args(uint64_t b
     uint64_t* args, uint64_t** arg_cleanups, int nargs,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
 
+//! Guarded fast path for no-arg <list>::empty() and <list>::val() pseudo-methods.
+//! Fast path handles list and NOTHING; all other values fall back to generic pseudo dispatch.
+uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, int32_t invert_empty, ExceptionSink* xsink);
+
+//! Guarded fast path for no-arg <list>::first() and <list>::last() pseudo-methods.
+//! Fast path handles list; all other values fall back to generic pseudo dispatch.
+uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, int32_t last, ExceptionSink* xsink);
+
+//! No-guard size helpers for bases proven to be assigned lists or binaries.
+int64_t qore_rt_pseudo_list_size_native_noguard(uint64_t base_bits);
+int64_t qore_rt_pseudo_binary_size_native_noguard(uint64_t base_bits);
+
+//! No-guard <list>::first()/last() for bases proven to be assigned lists.
+uint64_t qore_rt_pseudo_list_value_noguard(uint64_t base_bits, int32_t last);
+
+//! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
+uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg_bits, int32_t predicate,
+    ExceptionSink* xsink);
+
+//! Native scalar variant of qore_rt_pseudo_string_predicate_noguard().
+int64_t qore_rt_pseudo_string_predicate_native_noguard(uint64_t val_bits, uint64_t arg_bits,
+    int32_t predicate, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::find() for assigned string base and substring operands.
+uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+    ExceptionSink* xsink);
+
+//! Native scalar variant of qore_rt_pseudo_string_find_noguard().
+int64_t qore_rt_pseudo_string_find_native_noguard(uint64_t val_bits, uint64_t substring_bits,
+    int64_t offset, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
+uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+    ExceptionSink* xsink);
+
+//! Native scalar variant of qore_rt_pseudo_string_rfind_noguard().
+int64_t qore_rt_pseudo_string_rfind_native_noguard(uint64_t val_bits, uint64_t substring_bits,
+    int64_t offset, ExceptionSink* xsink);
+
+//! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
+int64_t qore_rt_pseudo_string_size_native_noguard(uint64_t val_bits);
+
+//! Native scalar <string>::length() for bases proven to be assigned strings.
+int64_t qore_rt_pseudo_string_length_native_noguard(uint64_t val_bits);
+
+//! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
+uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits, int64_t start, int64_t length,
+    int32_t has_length, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::lwr() for assigned string bases.
+uint64_t qore_rt_pseudo_string_lwr_noguard(uint64_t val_bits, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::upr() for assigned string bases.
+uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsink);
+
+//! Measure an assigned string after lower/upper-case conversion without retaining the result.
+int64_t qore_rt_pseudo_string_case_measure_native_noguard(uint64_t val_bits,
+    int32_t upper, int32_t characters, ExceptionSink* xsink);
+
+//! Consume an assigned string after lower/upper-case conversion without retaining the result.
+int64_t qore_rt_pseudo_string_case_consume_native_noguard(uint64_t val_bits,
+    uint64_t arg_bits, int64_t offset, int32_t upper,
+    QoreStringCaseConsumer consumer, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::toInt() for assigned string bases.
+uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink);
+
+//! Fast pseudo-method helper: type()/typename() returns the runtime type name.
+uint64_t qore_rt_pseudo_type(uint64_t val_bits);
+
+//! Fast pseudo-method helper: <value>::toNumber().
+uint64_t qore_rt_pseudo_toNumber(uint64_t val_bits);
+
 //! Name-based dot-eval method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint64_t base_bits, const char* method_name,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
@@ -1100,6 +1611,49 @@ uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_args(uint64_t base_bi
 uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! AOT dot-eval path for an assigned object receiver; falls back if the runtime tag differs.
+uint64_t qore_rt_dot_eval_object_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Load an exact final-class getter member, falling back to normal method dispatch when guarded checks fail.
+uint64_t qore_rt_load_object_getter_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+
+//! Getter variant carrying the compile-time declared-return NOTHING contract.
+uint64_t qore_rt_load_object_getter_checked_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, int32_t rejects_nothing,
+    ExceptionSink* xsink);
+
+//! Native scalar variants of exact-class object getter lowering.
+int64_t qore_rt_load_object_getter_int_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+double qore_rt_load_object_getter_float_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+int64_t qore_rt_load_object_getter_bool_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+
+//! Assign an exact-class object member from one argument and return its resulting value.
+uint64_t qore_rt_object_member_set_get_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,
+        int32_t value_param, int32_t rejects_nothing, ExceptionSink* xsink);
+
+//! Native scalar variants of exact-class object member assignment-return lowering.
+int64_t qore_rt_object_member_set_get_int_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+double qore_rt_object_member_set_get_float_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+int64_t qore_rt_object_member_set_get_bool_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+
+//! Apply a compound operation to an exact-class object member and return its resulting value.
+uint64_t qore_rt_object_member_compound_get_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, int32_t compound_op,
+        int32_t rejects_nothing, ExceptionSink* xsink);
+
 //! AOT variant that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
@@ -1112,10 +1666,25 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t 
 uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! AOT guarded fast path for no-arg <list>::empty() and <list>::val() pseudo-methods.
+uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int32_t invert_empty, ExceptionSink* xsink);
+
+//! AOT guarded fast path for no-arg <list>::first() and <list>::last() pseudo-methods.
+uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int32_t last, ExceptionSink* xsink);
+
 //! Direct static method call with pre-evaluated arguments — builds QoreListNode.
 //! Calls qore_method_private::eval() with nullptr for self.
 uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Direct static method call with concrete receiver and method type arguments.
+uint64_t qore_rt_call_static_method_direct_with_inst(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
 
 //! AOT variant of qore_rt_call_static_method_direct: resolves method from context slot.
 uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,

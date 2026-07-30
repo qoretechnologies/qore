@@ -451,6 +451,36 @@ QoreValue qore_hash_private::getKeyValueIntern(const char* key) const {
     return i != hm.end() ? (*i->second)->val : QoreValue();
 }
 
+QoreValue qore_hash_private::getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const {
+    bool exists;
+    return getKeyValueExistencePrehashed(key, hash, exists, xsink);
+}
+
+QoreValue qore_hash_private::getKeyValueExistencePrehashed(const char* key, size_t hash,
+        bool& exists, ExceptionSink* xsink) const {
+    if (checkKey(key, xsink)) {
+        exists = false;
+        return QoreValue();
+    }
+    return getKeyValueExistencePrehashedIntern(key, hash, exists);
+}
+
+QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key, size_t hash,
+        bool& exists) const {
+#ifdef HAVE_QORE_HASH_MAP
+    hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
+#else
+    (void)hash;
+    hm_hm_t::const_iterator i = hm.find(key);
+#endif
+    if (i != hm.end()) {
+        exists = true;
+        return (*i->second)->val;
+    }
+    exists = false;
+    return QoreValue();
+}
+
 QoreHashNode::QoreHashNode() : AbstractQoreNode(NT_HASH, true, false), priv(new qore_hash_private) {
 }
 

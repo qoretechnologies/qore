@@ -40,27 +40,61 @@
 #include "qore/intern/QoreLibIntern.h"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <set>
 #include <vector>
 #include <unordered_set>
 
 #include <cassert>
-#include <cstdlib>
 #include <cstring>
 
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
 
+static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
+
+uint64_t qore_get_method_dispatch_epoch() {
+    return qore_method_dispatch_epoch.load(std::memory_order_acquire);
+}
+
+static void qore_bump_method_dispatch_epoch() {
+    qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
+}
+
 AbstractQoreClassUserData::~AbstractQoreClassUserData() {
+}
+
+static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgram* explicit_pgm = nullptr) {
+    const qore_class_private* c = qore_class_private::get(cls);
+    if (!c) {
+        return explicit_pgm;
+    }
+    if (c->spgm) {
+        return c->spgm;
+    }
+    if (explicit_pgm) {
+        return explicit_pgm;
+    }
+    // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
+    // UserApi/ServiceApi/JobApi imported into an interface Program): only switch into the namespace's
+    // Program if it is genuinely a *different* Program than the current one.  Returning it when it is
+    // the current Program makes the method-call CodeEvaluationHelper reset the active runtime parse
+    // options to that Program's base options, which wrongly drops a more-permissive active context and
+    // e.g. blocks a dom=THREAD_CONTROL builtin (get_thread_data()) the API calls on behalf of the
+    // interface.  Returning nullptr here matches the pre-AOT behavior (no Program switch).
+    QoreProgram* nspgm = c->ns ? c->ns->getProgram() : nullptr;
+    return (nspgm && nspgm != ::getProgram()) ? nspgm : nullptr;
 }
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, nullptr, nullptr, explicit_type_param_instantiation);
+        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), receiver_type_info,
+        explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
     return METHV_const(variant)->evalMethod(self, ceh, xsink);
@@ -1511,8 +1545,14 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
         return nullptr;
     }
 
-    // create new object
-    QoreObject* self = new QoreObject(object_class, getProgram());
+    // create the object in the context of the class being instantiated; this
+    // can differ from the ambient caller for classes imported into child
+    // Programs.
+    QoreProgram* object_pgm = object_class->getProgram();
+    if (!object_pgm) {
+        object_pgm = getProgram();
+    }
+    QoreObject* self = new QoreObject(object_class, object_pgm);
     if (instantiated_type) {
         self->setInstantiatedTypeInfo(instantiated_type);
     }
@@ -1720,6 +1760,11 @@ void qore_class_private::parseCommitRuntimeInit(ExceptionSink* xsink) {
     }
     parseCommitRuntimeInitDone = true;
 
+    // Delayed constant and static variable init expressions have the same
+    // lexical class context as parseInit(); preserve it for unqualified class
+    // constants, class names, and private class access during runtime eval.
+    QoreParseClassHelper qpch(cls);
+
     // finalize constant initialization
     constlist.parseCommitRuntimeInit();
 
@@ -1760,6 +1805,7 @@ void qore_class_private::addBuiltinMethod(const char* mname, MethodVariantBase* 
     } else {
         ahm.overrideAbstractVariant(mname, variant);
     }
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant) {
@@ -1784,6 +1830,7 @@ void qore_class_private::addBuiltinStaticMethod(const char* mname, MethodVariant
     variant->setMethod(nm);
 
     nm->priv->addBuiltinVariant(variant);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBuiltinConstructor(BuiltinConstructorVariantBase* variant) {
@@ -4128,7 +4175,8 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
     //printd(5, "qore_class_private::getMethodForEval() %s::%s() class_ctx: %p %s\n", name.c_str(), nme, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
     {
-        ProgramRuntimeParseContextHelper pch(xsink, pgm);
+        QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
+        ProgramRuntimeParseContextHelper pch(xsink, lookup_pgm);
         if (*xsink) {
             return nullptr;
         }
@@ -4439,7 +4487,11 @@ QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) 
         return nullptr;
     }
 
-    ReferenceHolder<QoreObject> self(new QoreObject(cls, old->getProgram(), (QoreHashNode*)nullptr), xsink);
+    QoreProgram* object_pgm = cls->getProgram();
+    if (!object_pgm) {
+        object_pgm = old->getProgram();
+    }
+    ReferenceHolder<QoreObject> self(new QoreObject(cls, object_pgm, (QoreHashNode*)nullptr), xsink);
     qore_object_private* self_priv = qore_object_private::get(**self);
     qore_object_private* old_priv = qore_object_private::get(*old);
     if (self_priv->copyData(xsink, *old_priv)) {
@@ -4615,6 +4667,7 @@ int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, b
     } else if (!n_static && !con && !dst)
         ahm.parseOverrideAbstractVariant(mname, f);
 
+    qore_bump_method_dispatch_epoch();
     return 0;
 }
 
@@ -6091,6 +6144,10 @@ QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& 
     //printd(5, "UserMethodVariant::evalMethod() this: %p %s::%s() self: %p cctx: %p (%s)\n", this,
     //    getClassPriv()->name.c_str(), qmethod->getName(), self, runtime_get_class(),
     //    runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
+    // Inherited methods are copied into the child class, but user variants are
+    // shared with the original declaring method. Execute the body in the
+    // declaring class context so self-member access resolves private:internal
+    // storage from the class where the body was parsed.
     return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
 }
 
@@ -6176,6 +6233,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
 }
 
 int UserConstructorVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
     const QoreClass& parent_class = *(mf->MethodFunctionBase::getClass());
 
@@ -6263,6 +6321,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
 }
 
 int UserCopyVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
     const QoreClass& parent_class = *(mf->MethodFunctionBase::getClass());
 
@@ -6335,10 +6394,12 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
         RuntimeConfig& rc, ExceptionSink* xsink) const {
     // setup call, save runtime position, and evaluate arguments
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "constructor", args, self,
-        qore_class_private::get(thisclass));
+        qore_class_private::get(thisclass), CT_UNUSED, false, nullptr,
+        qore_get_method_pgm_context(thisclass));
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
-            thisclass.getName(), (void*)variant, (void*)args, args ? (int)args->size() : 0);
+            thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
+            args ? static_cast<int>(args->size()) : 0);
         return;
     }
 
@@ -6354,7 +6415,7 @@ void CopyMethodFunction::evalCopy(const QoreClass& thisclass, QoreObject* self, 
 
     // setup call, save runtime position
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "copy", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, true);
+        qore_class_private::get(thisclass), ct, true, nullptr, qore_get_method_pgm_context(thisclass));
     if (*xsink) return;
 
     COPYMV_const(variant)->evalCopy(thisclass, self, old, ceh, scl, xsink);
@@ -6371,7 +6432,7 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct);
+        qore_class_private::get(thisclass), ct, false, nullptr, qore_get_method_pgm_context(thisclass));
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -6386,9 +6447,9 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     const char* cname = getClassName();
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, qore_class_private::get(*qc), CT_UNUSED,
-        false,
-        cctx, pgm_ctx, nullptr, explicit_type_param_instantiation);
+    const qore_class_private* method_qc = qore_class_private::get(*qc);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+        qore_get_method_pgm_context(*qc, pgm_ctx), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
@@ -6411,17 +6472,22 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
 // at run time
 QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
-        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
     //QORE_TRACE("NormalMethodFunction::evalMethodTmpArgs()");
     const char* cname = getClassName();
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
 
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, qore_class_private::get(*qc), CT_UNUSED,
-        false, cctx, nullptr, nullptr, explicit_type_param_instantiation);
+    const qore_class_private* method_qc = qore_class_private::get(*qc);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+        qore_get_method_pgm_context(*qc), nullptr, explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
+    if (resolved_variant) {
+        *resolved_variant = variant;
+    }
     const MethodVariant* mv = METHV_const(variant);
     if (mv->isAbstract()) {
         xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
@@ -6445,8 +6511,9 @@ QoreValue NormalMethodFunction::evalPseudoMethod(ExceptionSink* xsink, RuntimeCo
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalPseudoMethod() '%s' cctx: '%s'\n", mname,
     //    cctx ? cctx->name.c_str() : "n/a");
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx);
+    const qore_class_private* method_qc = qc ? qore_class_private::get(*qc) : nullptr;
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, method_qc,
+        CT_UNUSED, false, cctx, qc ? qore_get_method_pgm_context(*qc) : nullptr);
     if (*xsink)
         return QoreValue();
 
@@ -6461,7 +6528,8 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* mname = getName();
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, pgm_ctx), receiver_type_info,
+        explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
     }
@@ -6475,13 +6543,18 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
 QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const AbstractQoreFunctionVariant** resolved_variant) const {
     const char* mname = getName();
     CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
-        CT_UNUSED, false, cctx, nullptr, receiver_type_info, explicit_type_param_instantiation);
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc), receiver_type_info,
+        explicit_type_param_instantiation);
     if (*xsink)
         return QoreValue();
 
+    if (resolved_variant) {
+        *resolved_variant = variant;
+    }
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -6808,20 +6881,6 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
-static bool qore_is_deferred_static_init_exception(ExceptionSink* xsink) {
-    if (!xsink || !xsink->isException()) {
-        return false;
-    }
-    QoreValue ex_err = xsink->getExceptionErr();
-    if (ex_err.getType() != NT_STRING) {
-        return false;
-    }
-    QoreStringValueHelper ex_err_str(ex_err);
-    return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
-}
-
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
     printd(5, "QoreVarInfo::evalInit() %s committing %s var (exp: %s)\n", name, privpub(access), exp.getFullTypeName());
 
@@ -6834,7 +6893,7 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
         // evaluate expression
         ValueEvalOptimizedRefHolder val(exp, xsink);
         if (*xsink) {
-            if (qore_is_deferred_static_init_exception(xsink)) {
+            if (qore_is_deferred_runtime_init_exception(xsink)) {
                 xsink->clear();
                 eval_init = false;
                 return 0;
@@ -6845,7 +6904,7 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
             val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *val, xsink);
             if (*xsink) {
-                if (qore_is_deferred_static_init_exception(xsink)) {
+                if (qore_is_deferred_runtime_init_exception(xsink)) {
                     xsink->clear();
                     eval_init = false;
                     return 0;

@@ -226,10 +226,25 @@ public:
 */
 typedef std::map<std::string, std::string, ltstrcase> strcase_str_map_t;
 
+struct qore_prehashed_str {
+    const char* str;
+    size_t hash;
+};
+
 class eqstr {
 public:
+    using is_transparent = void;
+
     DLLLOCAL bool operator()(const char* s1, const char* s2) const {
         return !strcmp(s1, s2);
+    }
+
+    DLLLOCAL bool operator()(const qore_prehashed_str& s1, const char* s2) const {
+        return !strcmp(s1.str, s2);
+    }
+
+    DLLLOCAL bool operator()(const char* s1, const qore_prehashed_str& s2) const {
+        return !strcmp(s1, s2.str);
     }
 };
 

@@ -207,6 +207,13 @@ public:
             : QoreCastOperatorNode(loc, exp), hd(hd), or_nothing(or_nothing) {
     }
 
+    DLLLOCAL QoreHashDeclCastOperatorNode(const QoreProgramLocation* loc, const char* dynamic_hashdecl_name,
+            QoreValue exp, bool or_nothing)
+            : QoreCastOperatorNode(loc, exp), hd(nullptr),
+              dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""),
+              or_nothing(or_nothing) {
+    }
+
     DLLLOCAL virtual ~QoreHashDeclCastOperatorNode() = default;
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
@@ -217,6 +224,10 @@ public:
         ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
+        if (isDynamicHashDeclCast()) {
+            return new QoreHashDeclCastOperatorNode(loc, dynamic_hashdecl_name.c_str(), n_exp.release(),
+                or_nothing);
+        }
         return new QoreHashDeclCastOperatorNode(loc, hd, n_exp.release(), or_nothing);
     }
 
@@ -227,8 +238,17 @@ public:
 
     DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
+    DLLLOCAL bool isDynamicHashDeclCast() const {
+        return !hd && !dynamic_hashdecl_name.empty();
+    }
+
+    DLLLOCAL const std::string& getDynamicHashDeclName() const {
+        return dynamic_hashdecl_name;
+    }
+
 protected:
     const TypedHashDecl* hd;
+    std::string dynamic_hashdecl_name;
     bool or_nothing;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

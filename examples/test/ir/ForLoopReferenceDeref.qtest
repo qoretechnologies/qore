@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires QUnit
+
+%exec-class ForLoopReferenceDerefTest
+
+#! Regression test for a parse-time type bug where a C-style "for" loop with an
+#! iterator clause caused an enclosing reference<T> parameter, bound on entry,
+#! to lose its dereference to T for statements that appear AFTER the loop.
+/** The parser's ForStatement definitely-assigned analysis unconditionally
+    marked every visible local (including reference/output parameters that are
+    always assigned on entry) as not-definitely-assigned when the loop had both
+    an iterator and a body. LocalVar::parseGetTypeInfo() only returns the
+    reference target type while the reference is flagged assigned, so after such
+    a loop a bound reference<hash<auto>> reverted to its raw reference<hash<auto>>
+    type and was rejected when passed to a hash<auto> value parameter with a
+    spurious PARSE-TYPE-ERROR.
+*/
+class ForLoopReferenceDerefTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ForLoopReferenceDeref", "1.0") {
+        addTestCase("reference deref survives for loop", \referenceDerefSurvivesForLoop());
+        addTestCase("value use after for loop", \valueUseAfterForLoop());
+        addTestCase("nested for loops", \nestedForLoops());
+        set_return_value(main());
+    }
+
+    #! passing a bound reference to a value parameter after a for loop must parse and run
+    referenceDerefSurvivesForLoop() {
+        # exercises parse acceptance and correct runtime dereference
+        hash<auto> h = {"n": 1};
+        # afterForLoop mutates the reference to 5 after the loop and returns the
+        # new value read back through the same reference at a value-parameter position
+        assertEq(5, Helper::afterForLoop(\h), "reference read after for loop dereferences to hash<auto>");
+        # the reference is an out parameter: mutations through it are visible to the caller
+        assertEq(5, h.n, "reference mutation through parameter is visible to caller");
+    }
+
+    #! the classic minimal shape: value-call of the reference param after the loop
+    valueUseAfterForLoop() {
+        hash<auto> h = {"a": 10};
+        assertEq(10, Helper::firstViaValueParam(\h), "value-param call after for loop yields dereferenced value");
+    }
+
+    #! nested for loops must not corrupt the reference type either
+    nestedForLoops() {
+        hash<auto> h = {"x": 7};
+        assertEq(7, Helper::nested(\h), "reference survives nested for loops");
+    }
+}
+
+class Helper {
+    #! reads the reference before AND after a for loop with an iterator clause
+    static int afterForLoop(reference<hash<auto>> body) {
+        # read before the loop (works even on the buggy build)
+        int before = takesValue(body);
+        for (int i = 0; i < 3; ++i) {
+            before += i;
+        }
+        # these statements previously failed to parse: body reverted to
+        # reference<hash<auto>> and was rejected at the value-parameter position
+        body.n = 5;
+        return takesValue(body);
+    }
+
+    static int firstViaValueParam(reference<hash<auto>> body) {
+        for (int i = 0; i < 5; ++i) {
+        }
+        return takesValue(body);
+    }
+
+    static int nested(reference<hash<auto>> body) {
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 2; ++j) {
+            }
+        }
+        return takesValue(body);
+    }
+
+    #! a plain hash<auto> value parameter — the reference must dereference to match
+    static int takesValue(hash<auto> h) {
+        return h.firstValue().toInt();
+    }
+}

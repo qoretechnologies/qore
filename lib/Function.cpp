@@ -44,6 +44,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/IfStatement.h"
@@ -59,7 +60,6 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ConstantList.h"
-#include "qore/intern/qore_aot_deps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -949,7 +949,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -968,6 +968,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
+    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -975,7 +976,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -994,6 +995,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
+    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1011,6 +1013,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     }
     if (restore_rtflags) {
         rc.setRuntimeFlags(old_rtflags);
+    }
+    if (restore_call_program_context) {
+        set_program_call_context(old_call_program_context);
     }
     if (restore_receiver_type_info) {
         runtime_set_receiver_type_info(old_receiver_type_info);
@@ -1051,20 +1056,34 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 #endif
 
     // set the program context if necessary
-    QoreProgram* old_pgm = pgm_ctx ? getProgram() : nullptr;
+    QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
     if (pgm_ctx) {
+        if (old_pgm) {
+            old_call_program_context = get_set_program_call_context(old_pgm);
+            restore_call_program_context = true;
+        }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
             return;
         }
-        if (pgm_ctx != old_pgm) {
-            old_rc_po = rc.getParseOptions();
-            rc.setParseOptions(pgm_ctx->getParseOptions());
-            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_ctx->getParseOptions(),
-                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
-            restore_runtime_ctx = true;
-            if (*xsink) {
-                return;
+        exec_pgm = pgm_ctx;
+        // Unless this is a deliberate cross-Program QoreProgram::callFunction() (defer_domain_po),
+        // switch the runtime parse options to the called Program's now -- before the functional-domain
+        // check below -- so that method calls, call references, and closures evaluate the dom=... check
+        // against the Program where they run (their target/creation context).  For a cross-Program
+        // callFunction() the switch is deferred (see below) so the dom check is evaluated against the
+        // CALLER's options (the cross-Program privilege model).
+        if (!defer_domain_po) {
+            QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+            if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+                old_rc_po = rc.getParseOptions();
+                rc.setParseOptions(pgm_po);
+                swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                    old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+                restore_runtime_ctx = true;
+                if (*xsink) {
+                    return;
+                }
             }
         }
     }
@@ -1141,6 +1160,28 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         }
     }
 
+    // For a deliberate cross-Program callFunction() (defer_domain_po), the parse-options switch was
+    // deferred to here: call arguments were evaluated (in the constructor, in the CALLING context) and
+    // the variant + functional-domain (dom=...) check were resolved against the CALLING Program's parse
+    // options.  Now switch to the called Program's options for body execution.  This implements the
+    // cross-Program privilege model: a trusted caller (e.g. a Qorus UserApi method with privileged
+    // options) can invoke a privileged builtin (e.g. set_save_object_callback(), dom=PROCESS) on a
+    // sandboxed target Program, while the body itself still runs under the called Program's options (so
+    // e.g. load_module() registers into the target with the target's options).
+    if (pgm_ctx && defer_domain_po) {
+        QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+        if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+            old_rc_po = rc.getParseOptions();
+            rc.setParseOptions(pgm_po);
+            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            restore_runtime_ctx = true;
+            if (*xsink) {
+                return;
+            }
+        }
+    }
+
     setCallType(variant->getCallType());
     setReturnTypeInfo(variant_needs_type_param_substitution
         ? qore_substitute_type_params_if_needed(variant->getReturnTypeInfo(), receiver_type_info,
@@ -1150,11 +1191,25 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
 
+    // Mark this frame as native-AOT when the called variant has a cached AOT function,
+    // so the exception machinery can repair its callstack call-site location via the
+    // lazy PC->loc registry. Set before the stack push so the visible frame reflects it.
+    {
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        is_aot = uvb && uvb->hasCachedAOT();
+    }
+
     // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
         stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
     } else {
         stack_loc = update_get_runtime_stack_location(this, stmt, pgm);
+    }
+    if (pgm_ctx && old_pgm) {
+        // Cross-program calls execute with the target/source Program's TLPD,
+        // but caller-sensitive APIs walk stack frame Programs. Preserve the
+        // caller Program on the visible stack frame.
+        pgm = old_pgm;
     }
     restore_stack = true;
 }
@@ -1340,7 +1395,8 @@ int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFun
         const UserVariantBase* uvb = variant->getUserVariantBase();
         QoreParseOptions po;
         if (uvb) {
-            po = uvb->getParseOptions(uvb->pgm->getParseOptions());
+            QoreProgram* exec_pgm = getExecutionProgram();
+            po = uvb->getParseOptions((exec_pgm ? exec_pgm : uvb->pgm)->getParseOptions());
         } else {
             po = runtime_get_parse_options();
         }
@@ -3101,7 +3157,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //printd(5, "QoreFunction::runtimeFindVariant() pscore: %d score: %d score_len: %d np: %d v: %p\n", pscore,
             //    score, score_len, sig->numParams(), variant);
 
-            if (pscore > score || (pscore == score && (score_len == -1 || (sig->numParams() < (unsigned)score_len)))) {
+            if (pscore > score
+                    || (pscore == score
+                        && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))) {
                 score = pscore;
                 variant = *i;
                 if (type_param_inst) {
@@ -3683,7 +3741,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     if (omitted_defaultable == -1 || cb.omitted_defaultable < omitted_defaultable) {
                         better = true;
                     } else if (cb.omitted_defaultable == omitted_defaultable
-                            && (score_len == -1 || sig->numParams() < (unsigned)score_len)) {
+                            && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len))) {
                         better = true;
                     }
                 }
@@ -3887,6 +3945,221 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         if (type_param_inst) {
             *type_param_inst = std::move(best_type_param_inst);
         }
+    }
+
+    return variant;
+}
+
+const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
+        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
+
+    int score_len = -1;
+    int score = -1;
+    int max_score = -1;
+    int pmatch = -1;
+    int nperfect = -1;
+    unsigned npv = 0;
+
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const AbstractQoreFunctionVariant* pvariant = nullptr;
+    QoreTypeParamInstantiation best_type_param_inst;
+    unsigned num_args = argTypeInfo.size();
+
+    QoreFunction* aqf = nullptr;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    QoreParseOptions po = parse_get_parse_options();
+    bool runtime_match = false;
+    bool has_possible_match = false;
+
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                continue;
+            }
+
+            AbstractFunctionSignature* sig = (*i)->getSignature();
+            int64 vflags = (*i)->getFlags();
+            bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+
+            bool uses_extra_args = (*i)->hasVarargs();
+
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
+                    explicit_type_args)) {
+                continue;
+            }
+
+            if (!num_args && !sig->numParams()) {
+                variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
+                break;
+            }
+
+            if ((int)(sig->numParams() * QTI_IDENT) >= score) {
+                int variant_pmatch = 0;
+                int pscore = 0;
+                int max_pscore = 0;
+                int variant_nperfect = 0;
+                bool variant_runtime_match = false;
+                bool variant_soft_match = false;
+                bool ok = true;
+                bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
+
+                for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+                    const QoreTypeInfo* t = needs_type_param_substitution
+                        ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                            &candidate_inst)
+                        : sig->getParamTypeInfo(pi);
+                    bool pos_has_arg = num_args && num_args > pi;
+                    const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
+                    if (pos_has_arg) {
+                        pos_has_arg = QoreTypeInfo::hasType(a);
+                    }
+
+                    qore_type_result_e rc = QTI_UNASSIGNED;
+                    qore_type_result_e max_rc = QTI_UNASSIGNED;
+                    if (QoreTypeInfo::hasType(t)) {
+                        if (sig->hasDefaultArg(pi)
+                                && (QoreTypeInfo::isType(a, NT_NOTHING)
+                                    || (QoreTypeInfo::isType(a, NT_NULL)
+                                        && qore_is_non_optional_soft_type(t)))) {
+                            rc = max_rc = QTI_IDENT;
+                        } else if (!QoreTypeInfo::hasType(a)) {
+                            if (pi < num_args) {
+                                variant_runtime_match = true;
+                                break;
+                            } else if (sig->hasDefaultArg(pi)) {
+                                rc = max_rc = QTI_IGNORE;
+                            } else {
+                                a = nothingTypeInfo;
+                            }
+                        }
+                    }
+
+                    if (rc == QTI_UNASSIGNED) {
+                        bool may_not_match = false;
+                        bool may_need_filter = false;
+                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        if (may_not_match) {
+                            variant_soft_match = true;
+                            variant_runtime_match = true;
+                            if (rc == QTI_IDENT) {
+                                ++variant_nperfect;
+                            }
+                        } else if (rc == QTI_IDENT) {
+                            ++variant_nperfect;
+                        }
+                    }
+
+                    if (rc == QTI_NOT_EQUAL) {
+                        ok = false;
+                        break;
+                    }
+                    ++variant_pmatch;
+                    if (rc != QTI_IGNORE && pos_has_arg) {
+                        pscore += rc;
+                        if (max_rc == QTI_UNASSIGNED) {
+                            max_rc = rc;
+                        }
+                        max_pscore += max_rc;
+                    }
+                }
+
+                if (variant_runtime_match) {
+                    runtime_match = true;
+                    if (variant) {
+                        variant = nullptr;
+                    }
+                    break;
+                }
+
+                if (!ok) {
+                    continue;
+                }
+
+                if ((sig->numParams() < num_args) && !uses_extra_args && strict_args
+                        && check_extra_args(sig, argTypeInfo)) {
+                    continue;
+                }
+
+                if (!npv) {
+                    pvariant = variant;
+                } else {
+                    pvariant = nullptr;
+                }
+
+                ++npv;
+
+                if ((pscore > score && max_pscore >= max_score)
+                    || (pscore == score
+                        && (variant_nperfect > nperfect
+                            || (variant_nperfect == nperfect
+                                && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))))) {
+                    if (variant_pmatch < pmatch) {
+                        variant = nullptr;
+                        runtime_match = true;
+                        break;
+                    } else {
+                        pmatch = variant_pmatch;
+                        score = pscore;
+                        max_score = max_pscore;
+                        nperfect = variant_nperfect;
+                        score_len = sig->numParams();
+                        variant = *i;
+                        best_type_param_inst = candidate_inst;
+                        if (type_param_inst) {
+                            *type_param_inst = candidate_inst;
+                        }
+                    }
+                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+                    if (variant_soft_match && variant) {
+                        has_possible_match = true;
+                    } else {
+                        variant = nullptr;
+                        pmatch = variant_pmatch;
+                        score_len = -1;
+                    }
+                }
+            }
+        }
+
+        if (runtime_match) {
+            assert(!variant);
+            break;
+        }
+        if (stop || variant) {
+            break;
+        }
+    }
+
+    assert(!(runtime_match && variant));
+
+    if (!variant && has_possible_match && !runtime_match) {
+        runtime_match = true;
+    }
+
+    if (!variant && pvariant) {
+        variant = pvariant;
+    }
+
+    if (variant && type_param_inst) {
+        *type_param_inst = best_type_param_inst;
     }
 
     return variant;
@@ -4122,7 +4395,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     || (pscore == score
                         && (variant_nperfect > nperfect
                             || (variant_nperfect == nperfect
-                                && (score_len == -1 || sig->numParams() < (unsigned)score_len))))) {
+                                && (score_len == -1
+                                    || sig->numParams() < static_cast<unsigned>(score_len)))))) {
                     // if we could possibly match less than another variant
                     // then we have to match at runtime
                     printd(5, "QoreFunction::parseFindVariant() %s(%s) score better: pscore=%d score=%d max_pscore=%d "
@@ -4303,7 +4577,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -4324,13 +4598,13 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
         return QoreValue();
     }
 
+    // issue #3024: make the caller's call context available
+    ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        nullptr, nullptr, explicit_type_param_instantiation);
+        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available
-    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4338,15 +4612,15 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
 // identified at run time
 QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
+    // issue #3024: make the caller's call context available
+    ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        nullptr, nullptr, explicit_type_param_instantiation);
+        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available
-    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4366,11 +4640,11 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         ExceptionSink* xsink) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
+    ProgramCallContextHelper pcch(pgm);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
     if (*xsink) {
         return QoreValue();
     }
-    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4427,6 +4701,16 @@ UserVariantExecHelper::~UserVariantExecHelper() {
         //    sig->lv[i]->getValueTypeName());
         sig->lv[i]->uninstantiate(xsink);
     }
+}
+
+QoreProgram* UserVariantExecHelper::getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh) {
+    QoreProgram* pgm = ceh ? ceh->getExecutionProgram() : nullptr;
+    return pgm ? pgm : uvb->pgm;
+}
+
+static QoreParseOptions get_user_variant_runtime_po_override_mask() {
+    return QoreParseOptions(PO_LOCKDOWN | PO_NO_EMBEDDED_LOGIC | PO_NO_LOCALE_CONTROL | PO_NO_DEBUGGING
+        | PO_ALLOW_INJECTION | PO_ALLOW_DEBUGGER);
 }
 
 // Thread-local stack-top pointer for the "current builtin source location"
@@ -4519,6 +4803,23 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
     return po;
 }
 
+void UserVariantBase::registerPrecompiledAOTFunction(
+        AotFunctionPtr fn, QoreAOTContext* ctx) {
+    cached_aot_fn = fn;
+    cached_aot_ctx = ctx;
+    if (ctx) {
+        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+            uses_argv = signature.argvid != nullptr;
+            uses_self = signature.selfid != nullptr;
+        } else {
+            uses_argv = ctx->uses_argv;
+            uses_self = ctx->uses_self;
+        }
+    }
+    jit_compile_state.store(2, std::memory_order_relaxed);
+    current_tier.store(TIER_JIT, std::memory_order_release);
+}
+
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     if (cached_aot_ctx) {
         return cached_aot_ctx->all_body_locals;
@@ -4543,15 +4844,23 @@ const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
 }
 
 void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const {
-    cached_ir = ir;
-    if (cached_ir) {
-        cached_ir->computeIROnlyLocals();
-        all_body_locals_ir_only = cached_ir->areAllBodyLocalsIROnly();
+    if (ir) {
+        ir->computeIROnlyLocals();
+        all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
+        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+            uses_argv = signature.argvid != nullptr;
+            uses_self = signature.selfid != nullptr;
+        } else {
+            QoreIRFunction::ContextUsage usage =
+                ir->getContextUsage(signature.argvid, signature.selfid);
+            uses_argv = usage.argv;
+            uses_self = usage.self;
+        }
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-            if (!cached_ir->ir_only_locals.empty()) {
-                cached_ir->ir_only_locals.clear();
-                cached_ir->ast_visible_body_locals = cached_ir->all_body_locals;
+            if (!ir->ir_only_locals.empty()) {
+                ir->ir_only_locals.clear();
+                ir->ast_visible_body_locals = ir->all_body_locals;
                 all_body_locals_ir_only = false;
             }
         }
@@ -4559,43 +4868,46 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         // Keep deserialized cached IR aligned with source-lowered IR metadata:
         // IR-only body locals are owned by the LLVM/IR frame and must not be
         // treated as pre-instantiated runtime-stack locals.
-        for (LocalVar* lv : cached_ir->all_body_locals) {
+        for (LocalVar* lv : ir->all_body_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
-            if (cached_ir->ir_only_locals.count(key)) {
-                cached_ir->pre_instantiated_locals.erase(key);
-                cached_ir->pre_instantiated_cache.erase(lv);
+            if (ir->ir_only_locals.count(key)) {
+                ir->pre_instantiated_locals.erase(key);
+                ir->pre_instantiated_cache.erase(lv);
             } else {
-                cached_ir->pre_instantiated_locals.insert(key);
-                cached_ir->pre_instantiated_cache.insert(lv);
+                ir->pre_instantiated_locals.insert(key);
+                ir->pre_instantiated_cache.insert(lv);
             }
         }
 
-        delete cached_ir->cached_pre_instantiated;
+        delete ir->cached_pre_instantiated;
         auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             if (signature.lv[i]) {
                 cached_pre_inst->insert(signature.lv[i]);
-                cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
-                cached_ir->pre_instantiated_cache.insert(signature.lv[i]);
+                ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
+                ir->pre_instantiated_cache.insert(signature.lv[i]);
             }
         }
         if (signature.argvid) {
             cached_pre_inst->insert(signature.argvid);
-            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
-            cached_ir->pre_instantiated_cache.insert(signature.argvid);
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
+            ir->pre_instantiated_cache.insert(signature.argvid);
         }
         if (signature.selfid) {
             cached_pre_inst->insert(signature.selfid);
-            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
-            cached_ir->pre_instantiated_cache.insert(signature.selfid);
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
+            ir->pre_instantiated_cache.insert(signature.selfid);
         }
-        for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+        for (LocalVar* lv : ir->ast_visible_body_locals) {
             if (!lv->closureUse()) {
                 cached_pre_inst->insert(lv);
             }
         }
-        cached_ir->cached_pre_instantiated = cached_pre_inst;
+        ir->cached_pre_instantiated = cached_pre_inst;
     }
+    // Publish only fully initialized IR. The tier/ready release stores below
+    // provide the acquire edge used by runtime dispatch.
+    cached_ir = ir;
     std::call_once(ir_lower_once, []{});  // consume the flag safely
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
@@ -4621,6 +4933,35 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
     }
 
     setCachedIR(ir.release(), false);
+    return true;
+}
+
+bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_lazy_closure_ir_mutex);
+    if (cached_ir || hasCachedAOT()) {
+        aot_lazy_closure_ir.reset();
+        has_aot_lazy_closure_ir.store(false, std::memory_order_release);
+        return true;
+    }
+    if (!aot_lazy_closure_ir) {
+        return statements != nullptr;
+    }
+
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_closure_ir(
+        *aot_lazy_closure_ir, const_cast<UserVariantBase*>(this), xsink, error);
+    if (!ir) {
+        if (!*xsink) {
+            xsink->raiseException("AOT-CLOSURE-IR-ERROR",
+                "could not materialize source-stripped closure IR for '%s': %s",
+                name ? name : "<closure>", error.empty() ? "unknown error" : error.c_str());
+        }
+        return false;
+    }
+
+    setCachedIR(ir.release());
+    aot_lazy_closure_ir.reset();
+    has_aot_lazy_closure_ir.store(false, std::memory_order_release);
     return true;
 }
 
@@ -4927,6 +5268,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(statements);
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    func->source_qf = source_qf;
+    // Owning program for the per-Program background-compile drain (set unconditionally).
+    func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).
@@ -5051,11 +5395,12 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
 
-    // Keep signature-owned slots reserved after lowering as well.  This is
-    // normally a no-op because the slots were reserved before lowering, but it
-    // is deliberately safe if another partial slot pass has already run.
+    // Keep signature-owned slots reserved after lowering and expose parameter
+    // assignment/type metadata before IR optimization. Slot IDs are populated
+    // later and remain independent of this map.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
         func->reserveLocalSlot(signature.lv[i]);
+        func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
     }
     func->reserveLocalSlot(signature.argvid);
     func->reserveLocalSlot(signature.selfid);
@@ -5132,13 +5477,61 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
     }
 
-    // Conservative approach: assume argv and self are used if they exist
-    // This allows the framework to skip ArgvContextHelper and SelfFunctionCallHelper
-    // instantiation when both flags are false, but for now both default to the presence
-    // of argv/self in the function signature. More precise analysis can be added later
-    // to detect when they're actually unused in the IR body.
-    uses_argv = signature.argvid != nullptr;
-    uses_self = signature.selfid != nullptr;
+    QoreIROptimizationStats optimization_stats;
+    qore_ir_optimize(*func, &optimization_stats);
+    if (!QoreIRVerifier::verify(*func, error)) {
+        if (mark_failure) {
+            ir_lower_failed = true;
+        }
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' post-optimization verification failed: %s\n",
+            name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("optimization verification: ") + error).c_str());
+        }
+        if (raise_on_failure) {
+            parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
+                "optimized IR verification of '%s' failed: %s (silent AST fallback disabled)",
+                name ? name : "<fn>", error.c_str());
+        }
+        return nullptr;
+    }
+    if (getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu\n",
+            name,
+            optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
+            optimization_stats.scalar_loads_forwarded,
+            optimization_stats.local_value_facts_refined,
+            optimization_stats.dense_list_facts_refined,
+            optimization_stats.dense_identity_map_joins_elided,
+            optimization_stats.native_local_loads_promoted,
+            optimization_stats.native_local_stores_eliminated,
+            optimization_stats.scalar_expressions_eliminated,
+            optimization_stats.fixed_lists_scalarized,
+            optimization_stats.fixed_hashes_scalarized,
+            optimization_stats.scalar_list_queries_folded,
+            optimization_stats.typed_foreach_loops,
+            optimization_stats.constant_branches_folded,
+            optimization_stats.borrowed_list_reads,
+            optimization_stats.bounded_typed_list_reads,
+            optimization_stats.bounded_boxed_direct_reads,
+            optimization_stats.in_place_list_pushes,
+            optimization_stats.in_place_string_appends);
+    }
+
+    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        uses_argv = signature.argvid != nullptr;
+        uses_self = signature.selfid != nullptr;
+    } else {
+        QoreIRFunction::ContextUsage usage =
+            func->getContextUsage(signature.argvid, signature.selfid);
+        uses_argv = usage.argv;
+        uses_self = usage.self;
+    }
+    if (getenv("QORE_IR_CONTEXT_STATS")) {
+        fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
+            name ? name : "<fn>", uses_argv, uses_self);
+    }
     // Initialize type profiling for guards
     func->initGuardProfiles();
 
@@ -5182,7 +5575,6 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         auto it = func->local_var_slots.find(signature.lv[i]);
         if (it != func->local_var_slots.end()) {
             func->param_slot_ids[static_cast<int>(i)] = it->second;
-            func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
         } else {
             // Param only used in fused instructions — no slot_id, can't pre-populate cache
             all_params_have_slots = false;
@@ -5193,9 +5585,10 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         if (signature.lv[i]->closureUse()
                 || QoreTypeInfo::isReference(signature.lv[i]->getTypeInfo())
-                // no-narrow container params take their runtime type strip in
-                // setupCall(); the direct path passes raw caller values
-                || QoreTypeInfo::isNoNarrowContainer(signature.lv[i]->getTypeInfo())) {
+                // no-narrow container params must bind through the TLS paths so
+                // setupCall() gives them assignment semantics;
+                // direct params would pass the caller's tagged container through
+                || signature.lv[i]->isNoNarrowContainer()) {
             all_params_direct_safe = false;
         }
     }
@@ -5210,7 +5603,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     return func;
 }
 
-void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
+void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
+        bool promote_to_ir) const {
     // Only %modern functions may be IR-lowered.  The eager-compile path
     // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
     // the *program's* parse options, but a %modern program can legitimately
@@ -5248,9 +5642,11 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         return;
     }
     cached_ir = func;
-    current_tier.store(TIER_IR, std::memory_order_release);
-    printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
-        name, func->num_guards);
+    if (promote_to_ir) {
+        current_tier.store(TIER_IR, std::memory_order_release);
+    }
+    printd(3, "UserVariantBase::attemptIRLowering() '%s' cached IR%s (%d guards)\n",
+        name, promote_to_ir ? " and promoted to IR tier" : "", func->num_guards);
 }
 
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
@@ -5300,35 +5696,23 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     // Check all params
     unsigned num_params = sig->numParams();
     for (unsigned i = 0; i < num_params; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "JIT Approach B parameter eligibility")) {
+            return false;
+        }
         const LocalVar* lv = sig->lv[i];
-        const void* key = reinterpret_cast<const void*>(lv);
 
-        // Param must be IR-only
-        if (!callee_ir->ir_only_locals.count(key)) {
+        // Referenced parameters must be IR-only; unused parameters do not
+        // require a runtime-stack local and can still use the direct ABI.
+        if (!qore_ir_fast_entry_param_is_private(*callee_ir, lv)) {
             if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not private\n",
                     callee_ir->name.c_str(), lv->getName());
             }
             return false;
         }
 
-        // No closure-captured params
-        if (lv->closureUse()) {
-            if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
-                    callee_ir->name.c_str(), lv->getName());
-            }
-            return false;
-        }
-
-        // No reference-type params
-        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
-            if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
-                    callee_ir->name.c_str(), lv->getName());
-            }
-            return false;
-        }
     }
 
     if (debug) {
@@ -5338,96 +5722,142 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
-// Collect direct callees from an IR function's CallDirect instructions.
+// Collect direct and transitive callees from an IR function's direct calls and
+// eligible nonmethod closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
-static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func,
+static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunction& func,
         QoreProgram* root_pgm) {
+    constexpr size_t MAX_TRANSITIVE_BATCH_CALLEES = 64;
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
+    std::vector<const QoreIRFunction*> worklist{&func};
+    bool collect_transitive = getenv("QORE_DISABLE_JIT_TRANSITIVE_BATCH") == nullptr;
+    size_t check_count = 0;
 
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            const AbstractQoreFunctionVariant* variant = nullptr;
-            const char* callee_name = nullptr;
-
-            if (inst->opcode == QoreIROpcode::CallDirect) {
-                const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
-                variant = direct->variant;
-                if (direct->func) {
-                    callee_name = direct->func->getName();
+    for (size_t work_i = 0; work_i < worklist.size(); ++work_i) {
+        const QoreIRFunction* current = worklist[work_i];
+        for (const auto& block : current->blocks) {
+            for (const auto& inst : block->instructions) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr, "JIT transitive batch-callee collection")) {
+                    return callees;
                 }
-            } else if (inst->opcode == QoreIROpcode::Invoke) {
-                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
-                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
-                            inv->expr.getInternalNode());
-                    if (call) {
-                        variant = call->getVariant();
-                        if (call->getFunction()) {
-                            callee_name = call->getFunction()->getName();
+                const AbstractQoreFunctionVariant* variant = nullptr;
+                const char* callee_name = nullptr;
+                bool batch_only = false;
+                const LVarSet* closure_captures = nullptr;
+
+                if (inst->opcode == QoreIROpcode::CallDirect) {
+                    const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                    variant = direct->variant;
+                    if (direct->func) {
+                        callee_name = direct->func->getName();
+                    }
+                } else if (inst->opcode == QoreIROpcode::Invoke) {
+                    const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                    if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                                inv->expr.getInternalNode());
+                        if (call) {
+                            variant = call->getVariant();
+                            if (call->getFunction()) {
+                                callee_name = call->getFunction()->getName();
+                            }
                         }
                     }
+                } else if (inst->opcode == QoreIROpcode::CreateClosure
+                        && getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
+                    const auto* create =
+                        static_cast<const QoreIRCreateClosureInstruction*>(inst.get());
+                    const QoreClosureParseNode* closure = create->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            create->expr.getInternalNode());
+                    }
+                    const LVarSet* captures = closure ? closure->getVList() : nullptr;
+                    const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+                    if (closure && !closure->isInMethod() && ucf) {
+                        variant = ucf->first();
+                        callee_name = ucf->getName();
+                        batch_only = true;
+                        closure_captures = captures;
+                    }
                 }
-            }
 
-            if (!variant || seen.count(variant)) {
-                continue;
-            }
-            seen.insert(variant);
-
-            // Check if the variant is a user function eligible for fast calls
-            const UserVariantBase* uvb = variant->getUserVariantBase();
-            if (!uvb || !uvb->isStaticallyFastCallEligible()) {
-                continue;
-            }
-
-            // If the callee doesn't have cached IR yet, attempt IR lowering now.
-            // This enables batch compilation even when the callee hasn't been called yet
-            // (common in --exec-mode=jit where the caller is compiled on first call).
-            const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            if (!callee_ir && callee_name) {
-                // AOT-loaded callees from source-stripped qmods have no
-                // statements (no AST), so attemptIRLowering would assert.
-                // They will already have a cached AOT function if available
-                // or otherwise need to be invoked through the AST/JIT
-                // dispatch path; either way batch compilation can't fold
-                // them in here. Skip silently — the parent function will
-                // call them via the regular call helper.
-                if (!uvb->getStatementBlock()) {
+                if (!variant || seen.count(variant)) {
                     continue;
                 }
-                // Force IR lowering for the callee — must go through forceIRLowering
-                // which handles the call_once flag properly
-                uvb->forceIRLowering(callee_name);
-                callee_ir = uvb->getCachedIR();
+                seen.insert(variant);
+                if (work_i && callees.size() >= MAX_TRANSITIVE_BATCH_CALLEES) {
+                    continue;
+                }
+
+                // Check if the variant is a user function eligible for fast calls
+                const UserVariantBase* uvb = variant->getUserVariantBase();
+                if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+                    continue;
+                }
+
+                // If the callee doesn't have cached IR yet, attempt IR lowering now.
+                // This enables batch compilation even when the callee hasn't been called yet
+                // (common in --exec-mode=jit where the caller is compiled on first call).
+                const QoreIRFunction* callee_ir = uvb->getCachedIR();
+                if (!callee_ir && callee_name) {
+                    // AOT-loaded callees from source-stripped qmods have no
+                    // statements (no AST), so attemptIRLowering would assert.
+                    // They will already have a cached AOT function if available
+                    // or otherwise need to be invoked through the AST/JIT
+                    // dispatch path; either way batch compilation can't fold
+                    // them in here. Skip silently — the parent function will
+                    // call them via the regular call helper.
+                    if (!uvb->getStatementBlock()) {
+                        continue;
+                    }
+                    // Force IR lowering for the callee — must go through forceIRLowering
+                    // which handles the call_once flag properly
+                    uvb->forceIRLowering(callee_name, false, !batch_only);
+                    callee_ir = uvb->getCachedIR();
+                    if (!callee_ir) {
+                        continue;
+                    }
+                }
                 if (!callee_ir) {
                     continue;
                 }
+
+                std::vector<const LocalVar*> capture_locals;
+                if (batch_only && closure_captures && !closure_captures->empty()
+                        && !qore_ir_get_readonly_scalar_closure_captures(
+                            *callee_ir, closure_captures, capture_locals)) {
+                    continue;
+                }
+
+                // Skip self-recursion (the root function is already being compiled)
+                if (callee_ir->name == func.name) {
+                    continue;
+                }
+
+                // Include callees even if already JIT-compiled — the batch module
+                // can emit direct LLVM calls to the callee's in-module function,
+                // bypassing the qore_rt_call_fast() runtime dispatch overhead.
+
+                // Check Approach B eligibility (direct LLVM arg passing)
+                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+                unsigned num_params = uvb->getUserSignature()->numParams();
+
+                callees.push_back(QoreJIT::BatchCallee{
+                    callee_ir,
+                    uvb->getDeoptCounterPtr(),
+                    variant,
+                    approach_b,
+                    num_params,
+                    batch_only,
+                    std::move(capture_locals)
+                });
+                if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
+                    worklist.push_back(callee_ir);
+                }
             }
-            if (!callee_ir) {
-                continue;
-            }
-
-            // Skip self-recursion (the root function is already being compiled)
-            if (callee_ir->name == func.name) {
-                continue;
-            }
-
-            // Include callees even if already JIT-compiled — the batch module
-            // can emit direct LLVM calls to the callee's in-module function,
-            // bypassing the qore_rt_call_fast() runtime dispatch overhead.
-
-            // Check Approach B eligibility (direct LLVM arg passing)
-            bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
-            unsigned num_params = uvb->getUserSignature()->numParams();
-
-            callees.push_back(QoreJIT::BatchCallee{
-                callee_ir,
-                uvb->getDeoptCounterPtr(),
-                variant,
-                approach_b,
-                num_params
-            });
         }
     }
 
@@ -5463,9 +5893,15 @@ void UserVariantBase::attemptJITCompilation() const {
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
-    auto callees = collectDirectCallees(*cached_ir, pgm);
+    auto callees = collectBatchCallees(*cached_ir, pgm);
 
     if (!callees.empty()) {
+        std::shared_ptr<QoreIRFunction> compile_ir;
+        if (statements && !getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+            compile_ir.reset(lowerIRFunction(
+                cached_ir->getDisplayName().c_str(), cached_ir->name,
+                nullptr, nullptr, false, false));
+        }
         if (getenv("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 cached_ir->name.c_str(), (int)callees.size());
@@ -5477,7 +5913,8 @@ void UserVariantBase::attemptJITCompilation() const {
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());
-        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr, &callees);
+        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir,
+            deopt_ptr, &callees, std::move(compile_ir));
     } else {
         // No eligible callees: single-function background compilation
         QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr);
@@ -5507,20 +5944,18 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
     // For JIT mode, set IR tier so function executes immediately, then enqueue
     // for background JIT compilation. This avoids blocking startup while LLVM
     // compiles each function synchronously (~23ms each).
-    if (exec_mode == QEM_JIT && cached_ir) {
+    // Start every eagerly-lowered function at the IR tier so it runs as IR (not
+    // AST) from the first call.  IR lowering above is cheap (no LLVM); the
+    // expensive LLVM/native compilation is NOT done here.  Instead, JIT/tiered
+    // functions are promoted to native ON DEMAND — when first called (jit) or
+    // once hot (tiered) — via the execution-count threshold (recordFastCallExecution
+    // / evalTiered).  Eagerly compiling every function to native at parse-commit
+    // floods the background compile queue and stalls program teardown (which
+    // drains that queue), so it is intentionally avoided.
+    if ((exec_mode == QEM_JIT || exec_mode == QEM_TIERED || exec_mode == QEM_IR) && cached_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
-        attemptJITCompilation();
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' enqueued for background JIT\n", name);
-    } else if (exec_mode == QEM_TIERED && cached_ir) {
-        // For tiered mode, start with IR tier and enqueue for background JIT
-        // This provides 2x speedup immediately while hot code still gets JIT benefit
-        current_tier.store(TIER_IR, std::memory_order_release);
-        attemptJITCompilation();
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' (tiered) starting with IR, enqueued for background JIT\n", name);
-    } else if (exec_mode == QEM_IR && cached_ir) {
-        // For IR mode, mark tier as TIER_IR (skip threshold-based promotion)
-        current_tier.store(TIER_IR, std::memory_order_release);
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR compilation complete\n", name);
+        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR lowering complete "
+            "(native compilation deferred to on-demand promotion)\n", name);
     }
 }
 
@@ -5580,7 +6015,7 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
         || (type_param_instantiation && !type_param_instantiation->empty());
 }
 
-static std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
+std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* type_param_instantiation) {
     std::string key;
     if (receiver_type_info) {
@@ -5592,6 +6027,32 @@ static std::string qore_make_generic_specialization_key(const QoreTypeInfo* rece
         key += std::to_string(reinterpret_cast<uintptr_t>(type_param_instantiation->owner));
         key += "<";
         for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
+            if (i) {
+                key += ",";
+            }
+            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+        }
+        key += ">";
+    }
+    return key;
+}
+
+std::string qore_make_generic_specialization_dispatch_key(
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation) {
+    std::string key;
+    if (receiver_type_info) {
+        key += "R:";
+        key += QoreTypeInfo::getPath(receiver_type_info);
+    }
+    if (type_param_instantiation && !type_param_instantiation->empty()) {
+        key += "|M:<";
+        for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "generic specialization dispatch-key construction")) {
+                return std::string();
+            }
             if (i) {
                 key += ",";
             }
@@ -5732,6 +6193,32 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
     return val;
 }
 
+void UserVariantBase::recordFastCallExecution() const {
+    // The fast-call runtime path (qore_rt_call_fast) is used by IR-interpreted
+    // and JIT-native callers and does NOT go through evalTiered(), so a function
+    // reached only as a callee never accrues exec_count there and would never be
+    // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
+    // promotion tail here so hot tiered-mode functions still reach the JIT tier.
+    if (jit_compile_failed || !cached_ir) {
+        return;
+    }
+    // Already native — nothing to promote.
+    if (current_tier.load(std::memory_order_acquire) == TIER_JIT
+            && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn)) {
+        return;
+    }
+    uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    // On-demand promotion: explicit --exec-mode=jit promotes on the first call
+    // (threshold 1); tiered mode promotes once the function is hot.
+    uint64_t threshold = (pgm && pgm->getExecMode() == QEM_JIT) ? 1 : QoreJIT::getJITThreshold();
+    if (cached_ir->osr_jit_requested) {
+        cached_ir->osr_jit_requested = false;
+        attemptJITCompilation();
+    } else if (count >= threshold) {
+        attemptJITCompilation();
+    }
+}
+
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
@@ -5799,6 +6286,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         QoreValue val{};
+        // Save/restore the innermost-non-AOT-frame marker across native (JIT/AOT)
+        // execution. JIT code sets runtime_loc_sp per line to its own (inner) frame; on
+        // return an AOT caller must see its own outer marker again, not the stale inner
+        // one, so the throw resolver still classifies the AOT caller as innermost. AOT
+        // code never sets the marker, so for it this is a no-op. See
+        // design/aot-lazy-loc-innermost-frame.md.
+        struct SpGuard {
+            uintptr_t saved_sp;
+            ~SpGuard() { set_runtime_loc_sp(saved_sp); }
+        } sp_guard{get_runtime_loc_sp()};
         {
             // Only create ArgvContextHelper if argv is used
             std::optional<ArgvContextHelper> argv_helper;
@@ -5807,7 +6304,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             } else {
                 // argv not used - just discard the reference without creating context
                 if (argv) {
-                    argv->deref(xsink);
+                    argv.release()->deref(xsink);
                 }
             }
 
@@ -6069,12 +6566,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
             name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
+        // On-demand promotion: explicit --exec-mode=jit promotes on the first call
+        // (threshold 1); tiered mode promotes once the function is hot.
+        uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
+            ? 1 : QoreJIT::getJITThreshold();
         if (cached_ir->osr_jit_requested && !jit_compile_failed) {
             cached_ir->osr_jit_requested = false;  // Reset flag
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 cached_ir->name.c_str());
             attemptJITCompilation();
-        } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
+        } else if (count >= jit_promote_threshold && !jit_compile_failed) {
             attemptJITCompilation();
         }
 
@@ -6108,9 +6609,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // Check for IR promotion
     if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
-        std::call_once(ir_lower_once, [this, name]() {
-            attemptIRLowering(name);
-        });
+        if (cached_ir) {
+            // Batch compilation can lower an internal closure without publishing
+            // its IR tier.  Publish that already-cached body once the closure
+            // independently reaches the normal IR threshold.
+            current_tier.store(TIER_IR, std::memory_order_release);
+        } else {
+            std::call_once(ir_lower_once, [this, name]() {
+                attemptIRLowering(name);
+            });
+        }
         // If promotion succeeded, the next call will use IR tier
     }
 
@@ -6246,13 +6754,6 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
         argv = nullptr; // dereference argv now
-        if (qore_aot_source_parse_active()) {
-            xsink->raiseException("AOT-PENDING-FUNCTION",
-                "cannot execute AOT-deserialized function '%s' while sibling "
-                "source parse is still resolving executable metadata",
-                name ? name : "<unknown>");
-            return val;
-        }
     }
 
     // if return value is NOTHING; make sure it's valid; maybe there wasn't a return statement
@@ -6285,6 +6786,10 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     if (!uveh) {
         return QoreValue();
     }
+    QoreProgram* exec_pgm = uveh.getProgram();
+    RuntimeParseOptionsOverrideHelper po_override(exec_pgm && exec_pgm != pgm
+        ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
+        exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions());
 
     // This is a normal function/method call, not a closure invocation.  If the
     // caller is a closure body, do not let its captured LocalVar* map shadow this
@@ -6301,10 +6806,19 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
 
     assert(!self || ceh.getClass());
 
+    if (hasLazyAOTClosureIR()
+            && !materializeLazyAOTClosureIR("<anonymous closure>", xsink)) {
+        return QoreValue();
+    }
+
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
+    QoreProgram* exec_pgm = uveh.getProgram();
+    RuntimeParseOptionsOverrideHelper po_override(exec_pgm && exec_pgm != pgm
+        ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
+        exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions());
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
 
@@ -6698,6 +7212,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     signature.resolve();
 
     // set the varargs flag on the variant if the signature has ellipses at the end
@@ -6722,6 +7237,7 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
 }
 
 int UserClosureVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     UserClosureFunction* cf = static_cast<UserClosureFunction*>(f);
 
     int err = signature.resolve();

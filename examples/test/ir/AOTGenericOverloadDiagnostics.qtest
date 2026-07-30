@@ -37,6 +37,54 @@ module AOTGenericOverloadDiagnosticsMod {
 }
 
 public namespace AOTGenericOverloadDiagnosticsMod {
+public T sub identity<T>(T value) {
+    return value;
+}
+
+public T sub defaultValue<T = int>(T value = 11) {
+    return value;
+}
+
+public T sub bounded<T: int>(T value) {
+    return value;
+}
+
+public class GenericCalls {
+    constructor() {
+    }
+
+    T echo<T>(T value) {
+        return value;
+    }
+}
+
+public class GenericChooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
+public hashdecl GenericResult<T> {
+    T value;
+}
+
+public class GenericBox<T> {
+    T echo(T value) {
+        return value;
+    }
+
+    hash<GenericResult<T>> result(T value) {
+        hash<GenericResult<T>> rv((\"value\": value));
+        return rv;
+    }
+}
+
+public class DerivedGenericBox inherits GenericBox<int> {
+    int echo(int value) {
+        return value + 100;
+    }
+}
+
 public string sub verify() {
     Program p(PO_NEW_STYLE);
     p.parse(\"T sub takes<T>(T a, int b) { return a; }\", \"aot-generic-overload\");
@@ -59,6 +107,17 @@ public string sub verify() {
             ex.desc =~ /takes[(]string, string[)]/ ? \"call\" : \"missing-call\",
             ex.desc =~ /takes[(]string a, int b[)]/ ? \"candidate\" : \"missing-candidate\");
     }
+    GenericCalls calls();
+    auto explicit_identity = identity<float>(41);
+    auto explicit_static = GenericChooser<int>::choose<float>(1, 42);
+    GenericBox<int> generic_box();
+    GenericBox<string> string_box();
+    GenericBox<int> derived_box = new DerivedGenericBox();
+    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d:%d:%d:%d:%d:%s:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
+        bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"), explicit_identity,
+        explicit_identity.typeCode(), explicit_static, explicit_static.typeCode(),
+        generic_box.echo(43), generic_box.result(44).value, string_box.result(\"value\").value,
+        derived_box.echo(44));
     return rv;
 }
 }
@@ -67,7 +126,8 @@ public string sub verify() {
 
     private string expectedOutput() {
         return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
-            "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n";
+            "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
+            "41:echo:11:42:chosen:41:2:42:2:43:44:value:144\n";
     }
 
     private string runModule(string module_dir, string script_path) {
@@ -103,9 +163,13 @@ printf(\"%s\", AOTGenericOverloadDiagnosticsMod::verify());
         script.close();
 
         string qmod_path = qmod_dir + "/AOTGenericOverloadDiagnosticsMod.qmod";
-        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+        string compile_out = backquote(sprintf("QORE_DUMP_LLVM_IR=1 QORE_LIBDIR=%s %s -b --compile-module "
+            + "--strip-source --output %s %s 2>&1",
             shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(qmod_path), shellQuote(qm_path)));
         assertTrue(is_file(qmod_path), "compiled generic overload diagnostics module: " + compile_out);
+        assertTrue(compile_out.regex(
+                "call i64 @[^\\n]*GenericBox[^\\n]*echo[^\\n]*_fast\\("),
+            "generic object call uses the native fast entry: " + compile_out);
 
         assertEq(expectedOutput(), runModule(src_dir, script_path),
             "source module generic overload diagnostics");

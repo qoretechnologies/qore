@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-object-set-get-cross-object-" + string(getpid());
+string provider_dir = root + "/provider";
+string consumer_dir = root + "/consumer";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(consumer_dir);
+
+string provider_path = root + "/provider.qr";
+string provider_source = "%modern
+
+class CrossObjectBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T echo(T value) {
+        T local = value;
+        self.value = local;
+        return self.value;
+    }
+}
+
+class OptionalCrossObjectBox {
+    private {
+        *int value;
+    }
+
+    *int echo(*int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class CrossObjectOverrideBase {
+    private {
+        int value;
+    }
+
+    int echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class CrossObjectOverrideChild inherits CrossObjectOverrideBase {
+    int echo(int value) {
+        return value + 1000;
+    }
+}
+
+int sub crossObjectAnchor() {
+    CrossObjectBox<int> box(0);
+    return box.echo(1);
+}
+";
+
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string provider_compile = backquote(sprintf(
+    "%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf(
+    "%s %s --dump-index-json %s 2>&1", env, qcc_bin, provider_qo));
+if (provider_index !~ /"symbol_index_version", "value": "35"/
+        || provider_index !~ /"qore_path": "CrossObjectBox::echo[^\n]*"native_symbol": "", "abi_kind": "qore_summary_v1"[^\n]*"object_set_get_member": "value", "object_set_get_param": 0/) {
+    printf("provider object set/get metadata mismatch:\n%s", provider_index);
+    exit(2);
+}
+
+# Prove that consumer lowering needs only the source-stripped provider object.
+unlink(provider_path);
+
+string consumer_path = root + "/consumer.qr";
+string consumer_source = "%modern
+
+int sub callOverride(CrossObjectOverrideBase object) {
+    return object.echo(4);
+}
+
+int sub main() {
+    CrossObjectBox<int> int_box(0);
+    CrossObjectBox<string> string_box(\"before\");
+    OptionalCrossObjectBox optional_box();
+    CrossObjectOverrideBase override = new CrossObjectOverrideChild();
+    *int absent = NOTHING;
+    printf(\"%d:%s:%y:%d\\n\", int_box.echo(7), string_box.echo(\"ok\"),
+        optional_box.echo(absent) === NOTHING, callOverride(override));
+    return 0;
+}
+
+main();
+";
+
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+
+string consumer_compile = backquote(sprintf(
+    "%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, consumer_dir, consumer_path));
+string consumer_qo = consumer_dir + "/consumer.qo";
+if (!is_file(consumer_qo)) {
+    printf("consumer compile failed:\n%s", consumer_compile);
+    exit(2);
+}
+
+string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
+if (undefined_symbols !~ /qore_rt_object_member_set_get_aot/
+        || undefined_symbols !~ /qore_rt_object_member_set_get_int_aot/) {
+    printf("consumer did not import the object set/get summary:\n%scompile:\n%s",
+        undefined_symbols, consumer_compile);
+    exit(2);
+}
+
+string exe_path = root + "/cross-object";
+string link_out = backquote(sprintf(
+    "%s %s -O3 -o %s %s %s 2>&1",
+    env, qcc_bin, exe_path, provider_qo, consumer_qo));
+if (!is_file(exe_path)) {
+    printf("cross-object link failed:\n%s", link_out);
+    exit(2);
+}
+
+string actual = backquote(sprintf("%s %s 2>&1", env, exe_path));
+string expected = "7:ok:True:1004\n";
+if (actual != expected) {
+    printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",
+        expected, actual);
+    exit(2);
+}

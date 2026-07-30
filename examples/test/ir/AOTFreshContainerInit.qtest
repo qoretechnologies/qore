@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-fresh-container-init-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+int sub freshInitChecksum(int count) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<auto> record = (\"value\": i, \"values\": values);
+        checksum += record.value + record.values[1];
+    }
+    return checksum;
+}
+
+string sub freshThreeKeyInit(bool first) {
+    hash<auto> record = (\"first\": 1, \"second\": 2, \"third\": 3);
+    string key = first ? \"first\" : \"third\";
+    return sprintf(\"%d:%s\", record{key}, record.fullType());
+}
+
+string sub freshThreeKeyAutoInit() {
+    hash<auto!> record = (\"first\": 1, \"second\": 2, \"third\": 3);
+    return record.fullType();
+}
+
+int sub freshThreeKeyChecksum(int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        hash<auto> record = (\"first\": i, \"second\": i + 1,
+            \"third\": i + 2);
+        string key = i % 2 ? \"first\" : \"third\";
+        result += record{key};
+    }
+    return result;
+}
+
+hash<auto> sub freshThreeKeyResult(int value) {
+    hash<auto> record = (\"first\": value, \"second\": value + 1,
+        \"third\": value + 2);
+    return record;
+}
+
+hash<auto> sub freshThreeKeyMixedResult(int value) {
+    list<int> values = (value, value + 1);
+    hash<auto> record = (\"value\": value, \"values\": values,
+        \"text\": \"mixed\");
+    return record;
+}
+
+string sub maybeUnassigned() {
+    int value;
+    bool assign = False;
+    if (assign) {
+        value = 7;
+    }
+    try {
+        list<int> values = (value,);
+        return sprintf(\"accepted:%y\", values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub main() {
+    printf(\"%d:%s:%s:%d:%s:%s:%s\\n\", freshInitChecksum(100),
+        freshThreeKeyInit(True), freshThreeKeyAutoInit(),
+        freshThreeKeyChecksum(2), freshThreeKeyResult(1).fullType(),
+        freshThreeKeyMixedResult(1).fullType(), maybeUnassigned());
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string enabled_exe = root + "/enabled";
+string disabled_exe = root + "/disabled";
+string enabled_compile = backquote(sprintf(
+    "%s QORE_IR_OPT_STATS=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+string disabled_compile = backquote(sprintf(
+    "%s QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_FRESH_CONTAINER_INIT=1"
+        " %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, disabled_exe, source_path));
+
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile
+            !~ /freshThreeKeyResult.*fused-fresh-container-inits=1/
+        || enabled_compile
+            !~ /freshThreeKeyMixedResult.*fused-fresh-container-inits=2/
+        || disabled_compile =~ /fused-fresh-container-inits=/) {
+    printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string ast = backquote(sprintf("%s %s %s 2>&1", env, qore_bin, source_path));
+string jit = backquote(sprintf("%s %s --exec-mode=jit %s 2>&1",
+    env, qore_bin, source_path));
+string jit_disabled = backquote(sprintf(
+    "%s QORE_DISABLE_IR_FRESH_CONTAINER_INIT=1"
+        " %s --exec-mode=jit %s 2>&1",
+    env, qore_bin, source_path));
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string enabled_generic_hash = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1 %s 2>&1",
+    env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+if (!ast || ast
+        !~ /:1:hash<string, int>:hash<auto>:3:hash<string, int>:hash<auto>:RUNTIME-TYPE-ERROR\n$/
+        || jit != ast || jit_disabled != ast
+        || enabled != ast || enabled_generic_hash != ast
+        || disabled != ast) {
+    printf("execution mismatch:\nAST:\n%sJIT:\n%sJIT disabled:\n%s"
+        "AOT:\n%sAOT generic hash:\n%sAOT disabled:\n%s",
+        ast, jit, jit_disabled, enabled, enabled_generic_hash, disabled);
+    exit(2);
+}
+
+unlink(enabled_exe);
+unlink(disabled_exe);
+unlink(source_path);
+rmdir(root);

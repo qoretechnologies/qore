@@ -12,7 +12,9 @@ Runtime modes:
 
 - `--exec-mode=ast`: AST interpreter and default execution mode.
 - `--exec-mode=ir`: eager IR lowering and IR interpreter execution.
-- `--exec-mode=jit`: eager IR lowering and LLVM JIT compilation.
+- `--exec-mode=jit`: eager IR lowering; the program's own functions are compiled
+  to native code on a background thread behind a parse-commit barrier, while
+  functions imported from modules promote to native adaptively on first use.
 - `--exec-mode=tiered`: explicit adaptive execution, promoting hot functions
   AST -> IR -> JIT.
 - `qcc`: ahead-of-time compiler and artifact inspection tool for executables,
@@ -43,9 +45,18 @@ Tiered mode starts functions on AST and promotes by call count:
 - AST -> IR after `--jit-ir-threshold` calls.
 - IR -> JIT after `--jit-jit-threshold` calls.
 
+Native compilation always runs asynchronously on a background thread; promotion
+is non-blocking, so a function keeps executing through the IR interpreter until
+its compiled form is ready. Program teardown drains only that Program's own
+pending background compiles (matched via `QoreIRFunction::pgm`; a compile with no
+owning program is treated as matching any teardown), so destroying one Program
+never serializes behind unrelated Programs' compilation.
+
 Failed lowering or compilation disables promotion for that variant rather than
 retrying on every call. Debug attach can force dispatch back to AST so debugger
-semantics remain predictable.
+semantics remain predictable; JIT-compiled native code also emits
+statement-boundary debug events (gated on `PO_ALLOW_DEBUGGER` and dormant until a
+debugger attaches) so an already-running native frame stays debuggable.
 
 ## AOT Compiler
 
@@ -68,6 +79,37 @@ For the object-file and module artifact contract, see
 For multi-file script/application AOT, see
 [`aot-script-context.md`](aot-script-context.md).
 
+### Parallel Backend Codegen (split-after-opt)
+
+`qcc` can parallelize LLVM backend codegen for a single compilation. It optimizes
+the whole module once (so cross-function optimization is unaffected), then
+`llvm::SplitModule(PreserveLocals=false)` partitions the optimized module into N
+balanced pieces along whole-function boundaries, codegens each piece concurrently on
+a worker thread (each with its own `LLVMContext` via a bitcode round-trip, since a
+`Value*` may not cross contexts, plus its own `TargetMachine`), and `ld -r`
+partial-links the per-partition objects back into one relocatable object.
+`SplitModule` externalizes internal symbols, so after the merge qcc re-internalizes
+the extras (ELF: `objcopy --localize-symbols`) to keep the split object
+symbol-equivalent to the single-object build. Output is byte-deterministic wherever
+the single-object build is.
+
+- `--jobs=N` selects the number of codegen threads (default: CPU count, capped at
+  32; `1` = single-object, the reference path). `qcc` propagates it to the backend
+  via the `QCC_JOBS` environment variable.
+- Splitting is gated by a size threshold (`QCC_SPLIT_THRESHOLD`, default `50000`
+  optimized-IR instructions — a CPU-speed-invariant metric) so trivially small
+  modules are never split.
+- Concurrency is bounded by a **GNU make jobserver client**: qcc parses `MAKEFLAGS`
+  and acquires tokens *before* splitting; if no spare tokens are available (a
+  saturated `make -jN`), it falls back to single codegen so a parallel build is
+  never oversubscribed. The client supports both the make 4.4+ named-pipe form
+  (`--jobserver-auth=fifo:PATH`) and the older inherited-fd form
+  (`--jobserver-auth=R,W` / `--jobserver-fds=R,W`); each qcc process owns one
+  implicit job slot and uses extra codegen threads only for tokens it can acquire
+  non-blockingly. This makes parallel codegen safe to leave default-on under
+  `make -j`.
+- `QORE_AOT_SIZE_DEBUG` traces the module instruction count and the split decision.
+
 ## User Module Build Behavior
 
 `QORE_BUILD_AOT_MODULES` defaults to `ON`. The CMake build compiles user
@@ -88,6 +130,80 @@ they must not silently emit `EXPR_TREE`, `GENERIC_EVAL`, or source fallback.
 AOT artifacts require complete serialized metadata. Source text can be embedded
 for diagnostics or inspection, but it is not a runtime fallback for missing AOT
 metadata.
+
+## IR Analysis And Optimization
+
+Lowered functions carry transient facts for each SSA value: known type,
+assigned state, NOTHING exclusion, and runtime representation. Assignment is a
+separate fact from the declared type. In particular, a typed lvalue is not
+assigned before its first write and becomes NOTHING again after remove/delete;
+reference parameters retain reference assignment semantics while value reads
+use the declared target type.
+
+`QoreIRAnalysis` provides normalized SSA-operand and normal-successor visitors,
+plus reusable reachability, predecessor/successor, dominator, and natural-loop
+analysis. Generic operands carry phi inputs and dynamic lvalue-path and slice
+values, while the visitor also covers operands stored only in dedicated
+instruction fields. The IR interpreter uses it for ownership use counts,
+preventing dedicated instruction fields from diverging from generic operand
+handling.
+
+The first generic optimization built on this layer is conservative scalar
+loop-invariant code motion. It moves only native scalar constants, proven
+assigned and non-NOTHING non-reference IR-only local loads, and non-throwing
+native scalar operations. A local written in the loop is never hoisted. Loops
+must have a unique unconditional preheader, and the preheader must precede the
+loop in IR block-list order while the LLVM emitter still resolves ordinary SSA
+operands in that order. Every hoisted result must have only repeated,
+non-consuming scalar users inside the loop. Loads are not hoisted across calls
+or other operations that can invalidate interpreter local slots. These rules
+preserve the runtime ownership and assigned-state lifetime represented by each
+SSA slot. The post-optimization verifier is mandatory for both runtime and AOT
+source lowering. `QORE_DISABLE_IR_LICM=1` disables only LICM, while
+`QORE_DISABLE_IR_OPT=1` disables all IR passes; `QORE_IR_OPT_STATS=1` reports
+analyzed loops and hoisted instructions.
+
+After LICM, a same-basic-block scalar pass forwards repeated loads of IR-only
+locals and eliminates repeated native scalar constants and arithmetic or
+comparison expressions. Load forwarding requires the value facts to prove an
+assigned, non-NOTHING native `int`, `float`, or `bool`; declared type alone is
+not sufficient. Explicit local writes invalidate that local, while references,
+calls, lvalue operations, scope exits, and other operations that can mutate an
+unknown local invalidate all available loads. Discovery is cancellation-safe
+and no definition is erased until all replacements have been selected. A value
+is merged only when every consumer is a non-consuming scalar operation or an
+IR-only local store; call arguments, runtime-visible stores, phi inputs, and
+lvalue paths retain distinct SSA ownership. Set `QORE_DISABLE_IR_CSE=1` to
+retain the unoptimized same-binary path; the `QORE_IR_OPT_STATS=1` output
+includes forwarded-load and eliminated-expression counts.
+
+The optimizer also replaces a conditional branch whose SSA condition is a
+literal boolean with an unconditional branch. It deliberately leaves the
+unreachable block and phi structure intact; native backends remove that code,
+while the IR interpreter avoids repeated condition dispatch in constant-path
+loops. `QORE_DISABLE_IR_CONST_FOLD=1` retains the conditional form for
+same-binary comparisons, and optimization statistics report folded branches.
+
+Recognized builtin and pseudo-method operations also carry a stable
+`QoreIRIntrinsic` identity. The builder assigns the identity when it creates a
+resolved pseudo call, and artifact readers reconstruct it once from serialized
+method metadata. Interpreter and LLVM fast-path selection dispatch on this
+identity instead of repeatedly comparing class and method names. Runtime name
+dispatch remains the fallback for unresolved or unsupported calls and retains
+precedence for objects and hash-like values whose members can override pseudo
+methods.
+
+The IR interpreter also computes a transitive external-cache effect summary for
+resolved direct user-function calls. Local writes to globals, thread-locals,
+closures, references, and unknown call forms remain immediately effectful.
+Known direct-call edges are solved to a fixed point, so pure recursive call
+components are recognized without recursive-analysis guesses. Missing callee
+IR, reference arguments, direct methods, and closures remain conservative. The
+summary is published atomically after the complete reachable call graph is
+known; until then callers invalidate caches as before.
+`QORE_DISABLE_IR_EFFECT_SUMMARY=1` keeps the conservative direct-call policy for
+same-binary comparisons, and `QORE_IR_EFFECT_SUMMARY_STATS=1` reports each
+resolved graph's size and result.
 
 ## Validated Registries
 
@@ -119,6 +235,21 @@ The current implementation relies on explicit registries for extension safety:
   user code during compile-time name/type resolution.
 - Batch AOT registration must keep cross-session barriers: shells, type/base
   resolution, constants, members, functions, then final class fixups.
+
+## Exception Source Locations
+
+AOT-compiled code reports real per-frame source file and line numbers in
+exceptions, matching interpreted execution. The throwing location and full
+backtrace are reconstructed lazily at throw from line-number tables embedded in
+the artifact (emitted by default with debug info), so non-throwing code carries
+no per-statement location-updater cost. `--strip-debug-info` emits no line
+tables and retains the per-statement updater instead. Source text is not
+required: stripped-source artifacts still report file and line from the line
+tables.
+
+For the innermost-frame detection mechanism that decides, at throw, whether the
+innermost user frame is AOT (and therefore whether to resolve lazily), see
+[`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md).
 
 ## Exception Cleanup Dominance
 

@@ -5,6 +5,25 @@
 - Phase 1 (time-trace + debug-info flags) shipped at `c828cc1a8`.
 - Phase 5a (OptimizeNone big-fn escape hatch) shipped at `f0f75a301`.
   **HS compile: 623s → 20.8s (30x)** with `--big-fn-threshold=200`.
+- Phase 4 (`.qo`/`.qoa` object files + downstream linkage) **substantially
+  shipped** on `feature/aot-build-link-stabilization`: `qcc -c`/`-o app *.qo`/
+  `--from-objects`/`-a`, the relink-surviving `qore_aot_pcloc` section (ELF +
+  Mach-O), per-file `.qo` indexes + `qore-qo-source-order` link ordering, and
+  lazy exception source locations that survive into linked executables. See
+  `design/aot-object-files-and-module-artifacts.md`,
+  `design/aot-script-context.md`, `design/aot-lazy-loc-innermost-frame.md`.
+
+**2026-06-26 re-measurement + evaluation (16-core x86_64, Release qcc):**
+DataProvider.qm (137 files, 1907 variants, 13.8 MB qmod) is the critical-path
+module at **~31 s** clean compile. Time-trace split: **OptModule ~16 s +
+BackendCodegen ~16 s** (roughly equal halves), single `llvm::Module` → single
+`emitObjectFile` → single-threaded. Opt-level is **codegen-bound, not opt-bound**:
+`-O0` 21.6 s, `-O1` 28.7 s, `-O2` 32.3 s, `-O3` 30.7 s — so lowering the opt level
+is NOT a build-time lever (Phase 7 note below). Cheap micro-opt landed: the
+pc→loc section now reuses the trailer's already-parsed DWARF map instead of
+re-parsing (`8c6f5e105`), removing a redundant per-object DWARF parse. The one
+remaining large build-time lever is **Phase 3 (parallel codegen)** — see updated
+Phase 3 for the measured ceiling and integration path.
 
 Baseline for remaining work: HS.qm compile **20.8s** (opt-in flag),
 **198/198 functions AOT-compiled**.
@@ -115,50 +134,156 @@ explicit opt-in.
 **Informs:** how much dev-loop time is saved. Sets expectation that
 fresh/CI builds still need Phase 3.
 
-### Phase 3: Parallel per-function codegen
+**2026-06-26 note — relation to per-file `.qo` incremental builds.** A
+related, coarser dev-loop win is per-file split-dir compilation (rebuild only
+the changed `.qc`'s `.qo`, then relink) instead of the current whole-dir
+`qcc -m`. The scaffolding exists (`QORE_QCC_COMPILE_OBJECTS`/`qore-qo-source-order`)
+but is **disabled**: measurement showed per-file re-parses the full context N
+times so *clean* builds are slower (DataProvider 93 s vs 69 s @ -j8), and the
+per-file path hits a latent SIGSEGV in `extractAOTSlotIdentities`
+(`lib/QoreAOT.cpp:15613`) on some modules (e.g. `FileLocationHandlerHttp.qc`)
+that whole-dir avoids (see `cmake/QoreMacros.cmake:1454-1465`). Unblocking it =
+fix the SIGSEGV + add an opt-in flag for dev loops; it does not help clean/CI
+builds. Per-function content-addressed caching (this phase) is the more general
+answer and subsumes most of the per-file benefit without the re-parse penalty.
 
-**Goal:** parallelize backend codegen across cores.
+### Phase 3: Parallel codegen (split-after-opt + make jobserver)
 
-**Size:** large. 2-3 sessions.
+**Goal:** parallelize backend codegen across cores, on by default where safe,
+delivered in-branch (`feature/aot-build-link-stabilization` is the feature
+branch for AOT build+link — this is more of that feature work).
 
-**Architecture:**
-- `generateModuleABIV2` currently builds one `llvm::Module` with all
-  functions, runs `MPM.run(module, MAM)` serially, emits one `.o`.
-- New flow:
-  - Partition functions into N chunks (N = `std::thread::hardware_
-    concurrency()` or `$QCC_JOBS`).
-  - For each chunk, start a worker thread with its own fresh
-    `llvm::LLVMContext` + `llvm::Module`.
-  - Each worker clones the runtime helper declarations + its function
-    slice into its own module, runs the pass pipeline, emits `.o` bytes
-    to a buffer.
-  - Main thread waits, concatenates the `.o` buffers into the final
-    `.qmod`.
-- LLVM constraint: **every thread needs its own `llvm::LLVMContext`**.
-  Cross-context `llvm::Value*` is UB. Our current code shares one
-  context; refactor required.
+**Size:** large. 4-5 sessions.
 
-**Cross-function references:** currently functions call into each other
-(e.g., handleRequest → helper method). In split modules:
-- Callee declared in both modules; runtime linker resolves.
-- Or: first emit all function declarations into a shared "header" IR
-  that each worker imports.
+**Measured ceiling (2026-06-26, 16-core):** DataProvider (worst case) =
+OptModule ~16 s + BackendCodegen ~16 s of a ~31 s compile. We parallelize the
+**codegen half only** (split-AFTER-opt): optimize the whole module once
+(preserves cross-function inlining → **zero runtime-perf risk**, unchanged
+optimization determinism), then partition + codegen on N threads → ~31 s →
+~17 s ideal (**~45%**). Split-before-opt (parallelize both halves) is rejected:
+it loses inlining and changes runtime perf.
 
-**Deliverables:**
-- HS compile time with `QCC_JOBS=8`: should drop from 623s toward
-  ~80-150s depending on parallel efficiency.
-- Verify all baselines + qmod tests green.
-- Compare single-threaded fallback (`QCC_JOBS=1`) vs current code —
-  should match.
+**Strategy is NOT a wire-format change.** The final `.qmod` is produced by the
+existing aggregate/`--from-objects` linker (N objects → one artifact, sections
+concatenated, metadata/registration glue in one object). The loader and
+downstream static-linkers cannot distinguish a parallel-built aggregate `.qmod`
+from a single-object one — already true and exercised by the AOTSymbolIndex
+`--from-objects`/`--link-qo` tests. So this is a build-pipeline feature whose
+output is format-identical; only the exact bytes differ (handled by determinism
+below). A required gate is a **load-equivalence test**: single-object vs
+`--jobs N` `.qmod` must be functionally identical (loads, same symbols/metadata,
+same runtime + backtraces).
 
-**Informs:** whether 120s goal is met with just parallelism, or
-additional phases needed.
+**Concurrency model — jobserver-first, default-on-where-safe.** The
+oversubscription problem (outer `make -jN` × inner codegen threads = N×N) is
+solved the way GCC-LTO (`-flto=jobserver`) and Cargo↔rustc (codegen-units)
+solve it: a **GNU-make jobserver client**.
+- **Under `make` (jobserver present):** qcc parses `MAKEFLAGS`/`--jobserver-auth`
+  and acquires one token per codegen thread, releasing on completion. Total live
+  threads across all qcc invocations never exceed `-jN`; in the busy middle each
+  qcc stays ~single-threaded, and the **tail-end big module gets all cores for
+  free**. On by default — no flags.
+- **Standalone `qcc -m X`:** default to `nproc` (no outer build to oversubscribe
+  against); `--jobs N` overrides.
+- **Ninja:** CMake `JOB_POOL` (or Ninja's newer jobserver) coordinates.
+- **`--jobs 1`:** kept as the **deterministic single-threaded reference mode**
+  (reproducible-byte builds, debugging) — a feature, not "the safe default".
+- Caveat to handle: GNU make only exposes the jobserver to recipes it treats as
+  recursive (the `+`-prefix convention); CMake custom commands do not inherit it
+  automatically — must be wired (validated in M0).
+
+**Architecture / the seam.** In `lib/QoreAOT.cpp::emitObjectFile`, optimization
+ends at `MPM.run(module, MAM)` (~line 4604) and codegen is `addPassesToEmitFile`
+(~line 4658). Cut there. When jobs>1, after opt:
+1. `llvm::SplitModule(M, N, callback, …)` (present in LLVM 21;
+   `llvm/Transforms/Utils/SplitModule.h`) → N deterministic partitions of
+   function bodies. (`llvm/CodeGen/ParallelCG.h`/`splitCodeGen` was removed in
+   modern LLVM, so we hand-roll the thread pool.)
+2. Registration glue + metadata blob (`generateMainAndTableV2`) stay in one
+   designated partition (codegen'd on the main thread), exactly like the
+   `--from-objects` glue object; other partitions' functions are referenced as
+   external symbols, resolved at link.
+3. Each worker: bitcode round-trip its partition into a **fresh `LLVMContext`**
+   (`BitcodeWriter`/`BitcodeReader`; cross-context `Value*` is UB), build its own
+   `TargetMachine`, `addPassesToEmitFile` → a `.o`.
+4. Feed the N `.o`s + glue to the existing aggregate linker
+   (`linkSharedLibMulti`); it concatenates each part's `qore_aot_pcloc` section,
+   so lazy locations keep working with no extra code.
+
+**Hard problems (and handling):**
+1. *Determinism* (content-digest stamps + reproducible builds): pin
+   `SplitModule`'s hash-based assignment, sort partitions, fix link-input order.
+   Gate: `--jobs N` twice ⇒ identical bytes.
+2. *Cross-partition & internal symbols*: external AOT symbols resolve at link
+   (proven by the aggregate path); the risk is `internal`/`static` helpers split
+   from their sole caller. Use `SplitModule`'s locals handling (keep-with-refs or
+   promote to hidden-external). Validate on a module with internal helpers.
+3. *Metadata/registration partition*: one glue object holds the blob + registry;
+   no new merge logic (mirrors `--from-objects`).
+4. *Oversubscription*: the jobserver (above).
+
+**Milestones (in-branch):**
+- **M0 — de-risk spike** (DONE 2026-06-27, env-gated throwaway, not pushed):
+  validated end-to-end. SplitModule → per-part bitcode → fresh-`LLVMContext`
+  worker threads (`parseBitcodeFile` + own `TargetMachine`) → `ld -r` merge into
+  one relocatable object. Results on DataProvider (16-core):
+  - **Correctness**: Mime functions correct; DataProvider registers 139 classes
+    **identical to baseline** (reflection enumerated); lazy exception locations
+    survive the split+merge.
+  - **Determinism**: the `.qmod` is byte-identical across builds. (The single
+    `.qo` is non-deterministic, but **so is the baseline** — pre-existing; the
+    build keys content-digest stamps on inputs, not output bytes.)
+  - **Speedup**: **32.6 s → 20.1 s (~38%)** at jobs=8; codegen parallel-eff
+    **6.4×** (16 s → 2.8 s). jobs=16 no better — only 8 partitions, and the run
+    is now opt-bound.
+  - **KEY finding**: `SplitModule(..., PreserveLocals=false)` is mandatory.
+    `=true` keeps the dense web of AOT-emitted local symbols in ONE partition
+    (measured: a single 20.8 MB part vs seven ~1 MB parts → eff 1.11×, no win).
+    `=false` externalizes locals and balances (~3-5 MB parts, eff 6.4×).
+  - **Residual for M2** (from `=false`): externalizing promotes local symbols to
+    external linkage — must verify **no cross-module symbol clashes** when many
+    parallel-built modules load together (single-module load is fine). Likely
+    re-internalize/localize-hidden after the merge (e.g. `objcopy --localize-hidden`)
+    or have the final `.qmod` link hide them.
+  - **Ceiling reality**: the ~16 s **opt phase stays single-threaded**
+    (split-after-opt) + ~3 s split/serialize overhead → ~38% is the realistic
+    win, not higher, unless opt is sped up separately (Phase 5a/7) or split-
+    before-opt is used (rejected — runtime-perf risk).
+  - **Still TODO in M0/M2**: prototype the jobserver client throttling under a
+    real `make -jN` (the CMake-custom-command-doesn't-inherit-jobserver caveat).
+- **M1 — seam refactor** (1 session): split `emitObjectFile` into
+  `optimizeModule()` + `codegenModuleToObject()`, `--jobs 1` path **byte-
+  identical** to today. Land alone; full AOT suite green.
+- **M2 — parallel path + jobserver client** (1-2 sessions): `--jobs N`/`$QCC_JOBS`
+  + jobserver; SplitModule → thread pool → aggregate link. Gates: `--jobs 1`
+  byte-identical; `--jobs N` load-equivalent + deterministic + valgrind clean;
+  AOTSmoke/AOTSymbolIndex/exception-location green on ELF + macOS.
+- **M3 — default-on + measure** (½ session): on by default under make jobserver /
+  Ninja pool; benchmark DataProvider/SqlUtil/HttpServer at jobs 2/4/8/16; confirm
+  ~45% + lazy locations survive (re-run single/multi/two-object backtrace checks).
+
+**Deliverables:** DataProvider clean compile ~31 s → ~17-18 s at jobs≥8;
+`--jobs 1` matches current bytes; load-equivalence + determinism tests added;
+no runtime-perf regression (split-after-opt). Pairs with Phase 2 (caching) for
+the unchanged-function dev-loop case.
 
 ### Phase 4: `.qo` object files + qorus-core linkage
 
 **Goal:** make Qore-compiled code linkable into C++ binaries.
 
 **Size:** large. 2-3 sessions.
+
+**Status: SUBSTANTIALLY SHIPPED** on `feature/aot-build-link-stabilization`.
+Delivered: `qcc -c` per-file `.qo`, `qcc -o app *.qo` executables-from-objects,
+`qcc -m --from-objects` aggregate `.qmod`, `qcc -a` `.qoa` archives, the
+cross-link symbol/index model (`qore-qo-source-order`), and lazy exception
+source locations that survive arbitrary downstream relinking via the
+`qore_aot_pcloc` section (ELF + Mach-O). Remaining/under validation: full
+qorus-core static-link integration test, and the open design questions below
+(symbol-namespace policy, static-init ordering) for embedding into large C++
+binaries. The original list below is retained as the contract; most items are
+now implemented — see `design/aot-object-files-and-module-artifacts.md` and
+`design/aot-script-context.md` for the as-built design.
 
 **Current state:**
 - `.qmod` already contains compiled `.o` bytes + metadata blob. On
@@ -327,6 +452,14 @@ codegen options.
 
 **Size:** small-medium. 1-2 sessions (data-driven).
 
+**2026-06-26 note — the gross opt-level knob is a dead end.** Measured
+DataProvider at each level: `-O0` 21.6 s, `-O1` 28.7 s, `-O2` 32.3 s, `-O3`
+30.7 s. Because the build is codegen-bound (codegen ≈ optimization), even `-O0`
+only saves ~30% (and de-optimizes runtime). `-O2`≈`-O3` for build time, so
+there is no free build-time win from lowering the default opt level. Any Phase 7
+value must come from *targeted* per-pass/codegen toggles (the items below) or
+from `--big-fn-threshold` (Phase 5a), not from the opt-level dial.
+
 **Likely wins (informed by Phase 1 trace):**
 - Disable SLP vectorization if Qore code doesn't benefit.
 - Reduce loop unrolling.
@@ -347,12 +480,15 @@ Phase 1 (time-trace, debug-info)                         — SHIPPED
     ↓
 Phase 5a (OptimizeNone big-fn)                           — SHIPPED
     ↓
-    ├→ Phase 4 (.qo object files)   — TOP PRIORITY; enables qorus-core.
-    ├→ Phase 2 (caching)            — dev-cycle win.
-    ├→ Phase 3 (parallel)           — lower priority post-5a.
+Phase 4 (.qo/.qoa object files + linkage)                — SUBSTANTIALLY SHIPPED
+    ↓
+    ├→ Phase 2 (caching)            — dev-cycle win; subsumes per-file incremental.
+    ├→ Phase 3 (parallel codegen)   — measured ~45% on big modules (split-after-opt,
+    │                                  safe); main win is critical-path tail + incremental.
+    │                                  Reuses Phase 4 aggregate-link plumbing.
     ├→ Phase 5b (outlining)         — only if 5a runtime cost is a blocker.
     ├→ Phase 6 (lazy)               — optional polish.
-    └→ Phase 7 (LLVM tuning)        — incremental.
+    └→ Phase 7 (LLVM tuning)        — incremental; opt-level dial is a dead end (measured).
 ```
 
 ## Debug-info tier (CMake-style)
@@ -370,14 +506,23 @@ Introduce three levels, selectable via qcc flags:
 
 ## Entry point for next session
 
-Phases 1 and 5a shipped. Pick one of:
+Phases 1, 5a shipped; Phase 4 substantially shipped (this branch). The
+build is well-parallelized across modules and incrementally scoped; the
+gross opt-level dial is a measured dead end. Pick one of:
 
-1. **Phase 4 (.qo object files)** — user-called-out goal, orthogonal
-   to compile-time work, unblocks qorus-core linkage.
-2. **Validate Phase 5a runtime cost** on a more representative workload
-   than the synthetic microbenches; decide whether to flip the
-   `--big-fn-threshold` default.
-3. **Phase 2 (caching)** — dev-cycle ergonomics.
+1. **Phase 2 (per-function caching)** — best dev-loop ROI; content-addressed
+   `.o` cache keyed on IR+toolchain hash, skips codegen for unchanged
+   functions. Subsumes most of the disabled per-file `.qo` incremental win
+   without its re-parse penalty.
+2. **Phase 3 (parallel codegen)** — the one remaining large clean-build lever
+   (~45% on big modules via split-after-opt). Architectural change to the
+   emit path; reuses the Phase 4 aggregate-link plumbing. Do as a dedicated,
+   opt-in effort — not on a stabilization branch. Determinism + metadata
+   partition are the risk, not the linking.
+3. **Validate Phase 5a runtime cost** on a representative workload; decide
+   whether to flip the `--big-fn-threshold` default to 200.
+4. **Phase 4 finish** — qorus-core static-link integration test + the open
+   symbol-namespace / static-init-ordering design questions.
 
 ## References
 

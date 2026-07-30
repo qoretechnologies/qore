@@ -566,7 +566,8 @@ public class TableMapperTest inherits QUnit::Test {
             InboundTableMapperIterator i = mapper.iterator(Input1.iterator());
             assertTrue(i instanceof Mapper::AbstractMapperIterator<hash<auto>>);
             assertTrue(i instanceof Qore::AbstractIterator<hash<auto>>);
-            map $1, i;
+            while (i.next()) {
+            }
             checkMap(table.selectRows(("orderby": "id")), output1);
             assertEq(3, i.getCount());
             assertEq(3, mapper.getCount());

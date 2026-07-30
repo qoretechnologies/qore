@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ProjectionFactory {
+    static list<int> makeStatic(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    list<int> makeInstance(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    static int staticKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += makeStatic(i, i + 1, i + 2)[1];
+        }
+        return checksum;
+    }
+
+    static int staticMultiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeStatic(i, i + 1, i + 2);
+            checksum += values[0] + values[1] + values[2];
+        }
+        return checksum;
+    }
+
+    int instanceKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += makeInstance(i, i + 1, i + 2)[1];
+        }
+        return checksum;
+    }
+
+    int instanceMultiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeInstance(i, i + 1, i + 2);
+            checksum += values[0] + values[1] + values[2];
+        }
+        return checksum;
+    }
+
+    static int staticCfgKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeStatic(i, i + 1, i + 2);
+            if (i & 1) {
+                checksum += values[0] + values[2];
+            } else {
+                checksum += values[1];
+            }
+            checksum += values[1];
+        }
+        return checksum;
+    }
+
+    int instanceCfgKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeInstance(i, i + 1, i + 2);
+            if (i & 1) {
+                checksum += values[0] + values[2];
+            } else {
+                checksum += values[1];
+            }
+            checksum += values[1];
+        }
+        return checksum;
+    }
+
+    static int staticPhiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += (i & 1
+                ? makeStatic(i, i + 1, i + 2)
+                : makeStatic(i + 3, i + 4, i + 5))[1];
+        }
+        return checksum;
+    }
+
+    int instancePhiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += (i & 1
+                ? makeInstance(i, i + 1, i + 2)
+                : makeInstance(i + 3, i + 4, i + 5))[1];
+        }
+        return checksum;
+    }
+
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+string mode = ARGV.size() > 1 ? ARGV[1] : "static";
+ProjectionFactory factory();
+int result = mode == "instance"
+    ? factory.instanceKernel(rounds)
+    : mode == "phi-static"
+        ? ProjectionFactory::staticPhiKernel(rounds)
+        : mode == "phi-instance"
+            ? factory.instancePhiKernel(rounds)
+    : mode == "cfg-static"
+        ? ProjectionFactory::staticCfgKernel(rounds)
+        : mode == "cfg-instance"
+            ? factory.instanceCfgKernel(rounds)
+            : mode == "multi-static"
+                ? ProjectionFactory::staticMultiKernel(rounds)
+                : mode == "multi-instance"
+                    ? factory.instanceMultiKernel(rounds)
+                    : ProjectionFactory::staticKernel(rounds);
+printf("%d\n", result);

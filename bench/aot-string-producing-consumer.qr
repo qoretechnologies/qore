@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 5000000;
+    string mode = ENV.QORE_BENCH_MODE ? ENV.QORE_BENCH_MODE : "all";
+    string prefix = "record-";
+    string suffix = "value";
+    string source = "Dvorak-Dvorak-Dvorak";
+    string utf8_prefix = "Dvo\u0159\u00e1k-";
+    int checksum = 0;
+    if (mode == "concat") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(prefix, suffix).size();
+        }
+    } else if (mode == "concat3") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatTriple(prefix, "middle-", suffix).size();
+        }
+    } else if (mode == "concat_length") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(utf8_prefix, suffix).length();
+        }
+    } else if (mode == "convert") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += convertInt(i & 1023).size();
+        }
+    } else if (mode == "substr") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += sliceString(source, i & 7, 6).size();
+        }
+    } else if (mode == "format") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += formatRecord(prefix, i & 1023, suffix).size();
+        }
+    } else if (mode == "wrapped") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += wrappedPairTwice(prefix, suffix).size();
+        }
+    } else if (mode == "wrapped_format") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += wrappedRecord(prefix, i & 1023, suffix).size();
+        }
+    } else if (mode == "concat_slice") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatSlice(prefix, suffix, i & 3, 6).size();
+        }
+    } else {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(prefix, suffix).size();
+            checksum += concatTriple(prefix, "middle-", suffix).size();
+            checksum += convertInt(i & 1023).size();
+            checksum += sliceString(source, i & 7, 6).size();
+            checksum += formatRecord(prefix, i & 1023, suffix).size();
+            checksum += wrappedPairTwice(prefix, suffix).size();
+            checksum += wrappedRecord(prefix, i & 1023, suffix).size();
+            checksum += concatSlice(prefix, suffix, i & 3, 6).size();
+        }
+    }
+    printf("%d\n", checksum);
+    return 0;
+}

@@ -291,13 +291,13 @@ class AvroContainerTest inherits QUnit::Test {
         binary corrupt = file.substr(0, file.size() - AvroSyncSize) + <ffffffffffffffffffffffffffffffff>;
         assertThrows("AVRO-FILE-ERROR", "sync marker", sub () {
             AvroFileReader r(corrupt);
-            map $1, r;
+            list<auto> ignored = map $1, r;
         });
 
         # a file truncated in the middle of a block
         assertThrows("AVRO-FILE-ERROR", "truncated", sub () {
             AvroFileReader r(file.substr(0, file.size() - 4));
-            map $1, r;
+            list<auto> ignored = map $1, r;
         });
     }
 }

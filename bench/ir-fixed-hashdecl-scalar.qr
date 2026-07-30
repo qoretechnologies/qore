@@ -1,0 +1,30 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hashdecl FixedHashDeclRecord {
+    int left;
+    int middle;
+    int right;
+}
+
+int sub fixedHashDeclKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        FixedHashDeclRecord values((
+            "left": i,
+            "middle": i + 1,
+            "right": i + 2,
+        ));
+        if (i & 1) {
+            checksum += values.left + values.right;
+        } else {
+            checksum += values.middle + values.right;
+        }
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", fixedHashDeclKernel(rounds));

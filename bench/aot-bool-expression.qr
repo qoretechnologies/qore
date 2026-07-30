@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+
+%modern
+
+bool sub positive(int value) {
+    return value > 0;
+}
+
+bool sub nestedPositive(int value) {
+    return positive(value);
+}
+
+int sub benchLeaf(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += positive((i & 1) ? i : -i);
+    }
+    return checksum;
+}
+
+int sub benchChain(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += nestedPositive((i & 1) ? i : -i);
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "chain";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
+printf("%d\n", kernel == "leaf" ? benchLeaf(rounds) : benchChain(rounds));

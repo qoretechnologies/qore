@@ -424,6 +424,14 @@ public:
     //! hot path.  Same safety argument as shared_aot_argv.
     std::unordered_map<const QoreClass*, LocalVar*> shared_aot_self;
 
+    //! AOT modules merged into this Program and eligible for deferred init.
+    /** Runtime access is protected by the global AOT module-state lock; Program
+        teardown clears the sets after all Program threads have terminated. */
+    std::unordered_set<std::string> merged_aot_modules;
+
+    //! AOT modules currently executing deferred init in this Program.
+    std::unordered_set<std::string> initializing_aot_modules;
+
     //! AOT modules whose deferred init functions have run in this Program.
     /** This state belongs to the target Program so teardown cannot leave stale
         raw Program pointers in process-wide AOT module state. */
@@ -534,6 +542,8 @@ public:
         requires_exception : 1,
         parsing_done : 1,
         parsing_in_progress : 1,
+        parse_commit_runtime_init : 1,
+        parse_commit_in_progress : 1,
         ns_const : 1,
         ns_vars : 1,
         expression_mode : 1,
@@ -661,6 +671,36 @@ public:
     // define map
     dmap_t dmap;
 
+    struct source_parse_define_t {
+        std::string source_file;
+        std::string define;
+    };
+
+    std::vector<source_parse_define_t> source_parse_defines;
+
+    struct source_parse_type_import_t {
+        std::string source_file;
+        std::string qore_path;
+        std::string type_path;
+        bool hashdecl = false;
+        bool or_nothing = false;
+    };
+
+    std::vector<source_parse_type_import_t> source_parse_type_imports;
+
+    enum class source_parse_call_import_kind_t {
+        Function,
+        Method,
+    };
+
+    struct source_parse_function_import_t {
+        std::string source_file;
+        std::string qore_path;
+        source_parse_call_import_kind_t kind = source_parse_call_import_kind_t::Function;
+    };
+
+    std::vector<source_parse_function_import_t> source_parse_function_imports;
+
     // pushed parse option map
     ppo_t ppo;
 
@@ -688,6 +728,8 @@ public:
             requires_exception(false),
             parsing_done(false),
             parsing_in_progress(false),
+            parse_commit_runtime_init(false),
+            parse_commit_in_progress(false),
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
@@ -878,6 +920,14 @@ protected:
     typedef vector_map_t<const char*, AbstractQoreProgramExternalData*> extmap_t;
     //typedef std::map<const char*, AbstractQoreProgramExternalData*, ltstr> extmap_t;
     extmap_t extmap;
+
+    // objects captured from languages without deterministic garbage collection (e.g. jni, python);
+    // each is held with a strong reference and released when this program is torn down, so the
+    // captured objects' destructors run while the program is still valid (ptid == tid).  This makes
+    // object lifetime deterministic despite the foreign runtime's non-deterministic GC.
+    // protected by plock
+    typedef std::map<QoreObject*, int64> saved_obj_map_t;
+    saved_obj_map_t saved_objects;
 
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
 
@@ -2155,6 +2205,110 @@ public:
         return false;
     }
 
+    DLLLOCAL bool buildSourceParseDefineRecord(const QoreProgramLocation* loc, const char* name, QoreValue val,
+            source_parse_define_t& rec) {
+        if (!loc || !name || !*name) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.define = name;
+        if (val.isNothing()) {
+            return true;
+        }
+
+        ExceptionSink xsink;
+        QoreString str(QCS_UTF8);
+        if (val.getAsString(str, FMT_NORMAL, &xsink) || xsink) {
+            xsink.clear();
+            return false;
+        }
+        rec.define += '=';
+        rec.define += str.c_str();
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseDefine(const QoreProgramLocation* loc, const char* name, QoreValue val) {
+        source_parse_define_t rec;
+        if (buildSourceParseDefineRecord(loc, name, val, rec)) {
+            source_parse_defines.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_define_t>& getSourceParseDefineRecords() const {
+        return source_parse_defines;
+    }
+
+    DLLLOCAL bool buildSourceParseTypeImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing, source_parse_type_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path || !type_path || !*type_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        rec.type_path = type_path;
+        rec.hashdecl = hashdecl;
+        rec.or_nothing = or_nothing;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseTypeImport(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing) {
+        source_parse_type_import_t rec;
+        if (buildSourceParseTypeImportRecord(loc, qore_path, type_path, hashdecl, or_nothing, rec)) {
+            source_parse_type_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords() const {
+        return source_parse_type_imports;
+    }
+
+    DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            source_parse_call_import_kind_t kind, source_parse_function_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        rec.kind = kind;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseFunctionImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Function, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL void recordSourceParseMethodImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Method, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords() const {
+        return source_parse_function_imports;
+    }
+
     // internal method - does not bother with the parse lock
     DLLLOCAL const QoreValue getDefine(const char* name, bool& is_defined) {
         dmap_t::iterator i = dmap.find(name);
@@ -2230,6 +2384,7 @@ public:
         if (checkDefine(loc, str, parseSink))
             return;
 
+        recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
     }
 
@@ -2519,6 +2674,81 @@ public:
         return rv;
     }
 
+    // saves an object in this program's saved-object cache, holding a strong reference; the object
+    // will be released (its destructor run) when this program is torn down, while it is still valid.
+    // used to give deterministic lifetime to Qore objects created from languages without
+    // deterministic GC (jni, python).  a no-op if the object is already present.
+    DLLLOCAL void saveObject(QoreObject* obj) {
+        AutoLocker al(plock);
+        if (saved_objects.find(obj) == saved_objects.end()) {
+            obj->ref();
+            saved_objects.insert(saved_obj_map_t::value_type(obj, q_epoch()));
+        }
+    }
+
+    // removes an object from the saved-object cache and dereferences it; returns true if it was
+    // present
+    DLLLOCAL bool clearObject(QoreObject* obj, ExceptionSink* xsink) {
+        {
+            AutoLocker al(plock);
+            saved_obj_map_t::iterator i = saved_objects.find(obj);
+            if (i == saved_objects.end()) {
+                return false;
+            }
+            saved_objects.erase(i);
+        }
+        // deref outside the lock: the destructor may run user code that needs the program
+        obj->deref(xsink);
+        return true;
+    }
+
+    // clears the entire saved-object cache; returns the number of objects cleared
+    DLLLOCAL int clearSavedObjects(ExceptionSink* xsink) {
+        saved_obj_map_t tmp;
+        {
+            AutoLocker al(plock);
+            tmp.swap(saved_objects);
+        }
+        int rv = (int)tmp.size();
+        for (saved_obj_map_t::iterator i = tmp.begin(), e = tmp.end(); i != e; ++i) {
+            i->first->deref(xsink);
+        }
+        return rv;
+    }
+
+    // clears all saved objects cached at or before the given epoch (seconds); returns the count
+    DLLLOCAL int clearSavedObjectsBefore(int64 cutoff, ExceptionSink* xsink) {
+        std::vector<QoreObject*> to_deref;
+        {
+            AutoLocker al(plock);
+            for (saved_obj_map_t::iterator i = saved_objects.begin(), e = saved_objects.end(); i != e;) {
+                if (i->second <= cutoff) {
+                    to_deref.push_back(i->first);
+                    saved_objects.erase(i++);
+                } else {
+                    ++i;
+                }
+            }
+        }
+        for (size_t i = 0; i < to_deref.size(); ++i) {
+            to_deref[i]->deref(xsink);
+        }
+        return (int)to_deref.size();
+    }
+
+    // returns the number of objects in the saved-object cache
+    DLLLOCAL size_t getSavedObjectCount() const {
+        AutoLocker al(plock);
+        return saved_objects.size();
+    }
+
+    // returns the epoch (seconds) when the object was cached, or 0 if not present
+    DLLLOCAL int64 checkSavedObject(QoreObject* obj) const {
+        AutoLocker al(plock);
+        saved_obj_map_t::const_iterator i = saved_objects.find(obj);
+        return i == saved_objects.end() ? 0 : i->second;
+    }
+
     DLLLOCAL QoreHashNode* getGlobalVars() const {
         return qore_root_ns_private::getGlobalVars(*RootNS);
     }
@@ -2713,6 +2943,35 @@ public:
     DLLLOCAL static void parseDefine(QoreProgram* pgm, const QoreProgramLocation* loc, const char* str,
             QoreValue val) {
         pgm->priv->parseDefine(loc, str, val);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
+        return pgm->priv->getSourceParseDefineRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseTypeImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing) {
+        pgm->priv->recordSourceParseTypeImport(loc, qore_path, type_path, hashdecl, or_nothing);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseTypeImportRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseFunctionImport(loc, qore_path);
+    }
+
+    DLLLOCAL static void recordSourceParseMethodImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseMethodImport(loc, qore_path);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseFunctionImportRecords();
     }
 
     //! Copies all defines from `parent` into `child`.
@@ -3344,7 +3603,7 @@ private:
     typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
-    static volatile unsigned programIdCounter;   // to generate programId
+    static unsigned programIdCounter;   // to generate programId
     unsigned programId;
 };
 
@@ -3561,6 +3820,12 @@ private:
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
+
+class RuntimeConfig;
+//! Returns the QoreProgram a builtin call should operate on: the thread-current Program is
+//! authoritative, falling back to the runtime-config/context Program only when there is no
+//! current Program.  Single definition in ql_misc.cpp; also called from ql_object.cpp.
+DLLLOCAL QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg);
 
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them

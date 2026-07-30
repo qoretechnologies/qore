@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hash<string, int> sub identityHash(hash<string, int> value) {
+    return value;
+}
+
+string sub identityString(string value) {
+    return value;
+}
+
+int sub passthroughKernel(int rounds) {
+    hash<string, int> row = {"value": 7};
+    string text = "abcdefghijklmnop";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += identityHash(row).value;
+        checksum += identityString(text).size();
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", passthroughKernel(rounds));

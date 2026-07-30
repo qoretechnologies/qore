@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+const int DATA_SIZE = 1024;
+const int ROUNDS = 10000;
+
+int sub runPipeline(list<int> data, int threshold, int scale, int offset) {
+    int checksum = 0;
+    for (int i = 0; i < ROUNDS; ++i) {
+        list<int> result = (map $1 * scale + offset, (select data, $1 > threshold));
+        checksum += result[0] + result[-1] + result.size();
+    }
+    return checksum;
+}
+
+list<int> data = ();
+for (int i = 0; i < DATA_SIZE; ++i) {
+    data += i;
+}
+
+printf("%d\n", runPipeline(data, 511, 3, 7));

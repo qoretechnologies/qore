@@ -34,6 +34,7 @@
 
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -47,6 +48,7 @@ class QoreParseContext;
 class QoreParseListNode;
 class QoreListNode;
 class QoreValue;
+class AbstractQoreNode;
 class VarRefNode;
 class AbstractStatement;
 class StatementBlock;
@@ -257,7 +259,10 @@ private:
     QoreIRValue lowerFoldrNative(const QoreFoldrOperatorNode* foldr, const QoreValue& expr, std::string& error);
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
-        std::string& error);
+        const QoreTypeInfo* element_type, std::string& error);
+    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
+    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
+        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
@@ -290,11 +295,14 @@ private:
             Streaming,
             List,
             Foldl,
+            MethodJoin,
         };
 
         Kind kind;
         const QoreStreamingOperatorNode* streaming = nullptr;
         const QoreValue* fold_expr = nullptr;
+        const QoreValue* join_expr = nullptr;
+        QoreIRValue join_separator;
         const QoreTypeInfo* list_element_type = nullptr;
         const QoreProgramLocation* loc = nullptr;
         bool need_result = true;
@@ -303,6 +311,10 @@ private:
     //! Collects a supported lazy source chain into ordered stages and an innermost source expression.
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
+
+    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+    QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
+        QoreIRValue element, QoreIRValue index, std::string& error);
 
     //! Shared native IR lowering for fused lazy streaming/functional pipelines.
     QoreIRValue lowerLazyPipelineFused(const QoreValue& base_source,
@@ -357,12 +369,16 @@ private:
         std::vector<QoreIRValue>& lowered, std::string& error);
     bool callArgumentMayPassReference(const QoreValue& arg) const;
     bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+    bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
+        const QoreListNode* args, std::string& error);
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const;
+    QoreIRValue findLoopInvariantListSize(LocalVar* local) const;
+    QoreIRValue findLoopInvariantValue(const QoreValue& expr) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
@@ -576,6 +592,12 @@ private:
     //! DotEvalMethodDirect/HashKeyAccess).  Used by lowerMapNative to determine whether
     //! push/pop implicit arg calls are needed for the map body.
     int ast_delegate_count = 0;
+
+    //! Hoisted per-loop values for safe, invariant <list>.size() expressions.
+    std::vector<std::unordered_map<LocalVar*, QoreIRValue>> loop_invariant_list_sizes;
+
+    //! Hoisted per-loop values for safe invariant expressions keyed by AST node.
+    std::vector<std::unordered_map<const AbstractQoreNode*, QoreIRValue>> loop_invariant_values;
 };
 
 #endif

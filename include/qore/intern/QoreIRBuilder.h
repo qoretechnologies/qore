@@ -59,6 +59,8 @@ public:
         const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
+    QoreIRInstruction* createSizedHash(QoreIRValue capacity,
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHashConstKeys(std::vector<std::string>&& keys,
         const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc = nullptr,
         const QoreTypeInfo* typeInfo = nullptr);
@@ -67,6 +69,8 @@ public:
     QoreIRInstruction* createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc = nullptr,
         const QoreTypeInfo* element_type = nullptr);
     QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSetLength(QoreIRValue list, QoreIRValue length,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSize(QoreIRValue list, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListGetInt(QoreIRValue list, QoreIRValue index,
@@ -82,7 +86,7 @@ public:
     QoreIRInstruction* createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* element_type = nullptr);
     QoreIRInstruction* createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createListPush(QoreIRValue list, QoreIRValue val,
@@ -113,6 +117,8 @@ public:
     QoreIRHashKeyAccessInstruction* createHashKeyAccess(const char* key_name,
         const QoreProgramLocation* loc = nullptr);
     QoreIRHashKeyAccessInstruction* createHashKeyAccessInt(const char* key_name,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRHashKeyAccessInstruction* createHashKeyAccessHash(const char* key_name, bool guarded,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInvokeInstruction* createInvokeHashKeyAccess(const char* key_name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
@@ -166,6 +172,9 @@ public:
     // Hashdecl construction from pre-lowered hash operand
     QoreIRNewHashDeclFromHashInstruction* createNewHashDeclFromHash(const TypedHashDecl* hd,
         bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewHashDeclFromHashInstruction* createNewHashDeclFromHash(const char* hd_path,
+        const TypedHashDecl* hd, bool runtime_check, QoreIRValue hash_val,
+        const QoreProgramLocation* loc = nullptr);
     // Hash building (for hash map loops)
     QoreIRInstruction* createHashSetKeyValue(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
@@ -219,6 +228,11 @@ public:
     QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
+    //! Marks exact boolean call results as unable to own reference-counted nodes.
+    //! @param value SSA result value to annotate
+    //! @param variant resolved call variant providing the declared return type
+    void setCallResultOwnership(QoreIRValue value,
+        const AbstractQoreFunctionVariant* variant);
     QoreIRPhiInstruction* createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
         const QoreProgramLocation* loc = nullptr,
         QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue);
@@ -257,6 +271,12 @@ public:
         @return the RefSelf instruction; its result owns an independent reference
      */
     QoreIRInstruction* createRefSelf(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Release an independently owned reference.
+    /** @param value the owned IR value to release
+        @param loc optional source location for diagnostics
+        @return the Decref instruction
+     */
+    QoreIRInstruction* createDecref(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     //! Emit DiscardTemps to drain cleanup back to the nearest PushTempMark.
     //! In LLVM mode, drains generated cleanup slots created since the nearest
     //! mark; in the IR interpreter, drains the runtime cleanup vector so
@@ -267,6 +287,12 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+    //! Set the statement temp scope that caught invoke exceptions must unwind.
+    void setExceptionTempScopeId(uint32_t id);
+    //! Return the statement temp scope currently assigned to invoke instructions.
+    uint32_t getExceptionTempScopeId() const;
+    //! Drop the current temp scope after lowering emits a terminating instruction.
+    void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
     QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
@@ -294,6 +320,10 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
+    QoreIRIteratorNextInstruction* createTypedForeachNext(QoreIRValue list, QoreIRValue index,
+        QoreIRValue limit, const QoreTypeInfo* element_type, QoreIRBasicBlock* done_target,
+        QoreIRBasicBlock* continue_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRRefForeachInitInstruction* createRefForeachInit(const QoreValue& parse_ref_expr,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createRefForeachSize(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
@@ -304,7 +334,7 @@ public:
     QoreIRInstruction* createRefForeachFinalize(QoreIRValue state, QoreIRValue fill_remaining,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createRefForeachCleanup(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
-    QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
+    QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt, uint32_t owner_scope_id,
         const QoreProgramLocation* loc = nullptr);
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
     QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,
@@ -346,6 +376,8 @@ private:
     // QoreIRInstruction::temp_scope_id.
     uint32_t next_temp_scope_id = 1;
     std::vector<uint32_t> temp_scope_id_stack;
+    uint32_t exception_temp_scope_id = 0;
+    std::vector<uint32_t> exception_temp_scope_id_stack;
 };
 
 #endif

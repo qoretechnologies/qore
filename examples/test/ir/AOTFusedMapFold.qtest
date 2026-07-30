@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub sumScaleInt(list<int> values) {
+    return (foldl \$1 + \$2, (map \$1 * 2, values));
+}
+
+float sub sumScaleFloat(list<float> values) {
+    return (foldl \$1 + \$2, (map \$1 * 2.0, values));
+}
+
+int sub sumSquareInt(list<int> values) {
+    return (foldl \$1 + \$2, (map \$1 * \$1, values));
+}
+
+float sub sumSquareFloat(list<float> values) {
+    return (foldl \$1 + \$2, (map \$1 * \$1, values));
+}
+
+int sub sumOffsetInt(list<int> values) {
+    return (foldl \$1 + \$2, (map \$1 + 4, values));
+}
+
+float sub sumOffsetFloat(list<float> values) {
+    return (foldl \$1 + \$2, (map \$1 + 0.5, values));
+}
+
+int sub prodScaleInt(list<int> values) {
+    return (foldl \$1 * \$2, (map \$1 * 2, values));
+}
+
+float sub prodScaleFloat(list<float> values) {
+    return (foldl \$1 * \$2, (map \$1 * 0.5, values));
+}
+
+list<int> sub capturedPipeline(list<int> values, int threshold, int scale, int offset) {
+    return (map \$1 * scale + offset, (select values, \$1 > threshold));
+}
+
+int sub capturedForeach(list<int> values, int threshold, int scale, int offset) {
+    int result = 0;
+    foreach int value in (map \$1 * scale + offset, (select values, \$1 > threshold)) {
+        result += value;
+    }
+    return result;
+}
+
+list<int> sparse_int = (1, 2, 3);
+delete sparse_int[1];
+list<float> sparse_float = (1.5, 2.5, 3.5);
+delete sparse_float[1];
+list<int> missing;
+list<int> removed = (1, 2);
+remove removed;
+auto iterator = (1, 2, 3).iterator();
+list<float> negative_zero = (-0.0,);
+
+auto missing_result = (foldl \$1 + \$2, (map \$1 * 2, missing));
+auto missing_offset_result = (foldl \$1 + \$2, (map \$1 + 4, missing));
+auto removed_result = (foldl \$1 + \$2, (map \$1 * 2, removed));
+auto iterator_result = (foldl \$1 + \$2, (map \$1 * 2, iterator));
+printf(\"%d:%.1f:%d:%.1f:%d:%.1f:%d:%.1f:%d:%.2f:%d:%.1f:%s:%s:%s:%d:%.1f:%y:%d\\n\",
+    sumScaleInt((1, 2, 3)), sumScaleFloat((1.0, 2.0, 3.0)),
+    sumSquareInt((1, 2, 3)), sumSquareFloat((1.0, 2.0, 3.0)),
+    sumOffsetInt((1, 2, 3)), sumOffsetFloat((1.0, 2.0, 3.0)),
+    sumOffsetInt(sparse_int), sumOffsetFloat(sparse_float),
+    prodScaleInt((1, 2, 3)), prodScaleFloat((1.0, 2.0, 3.0)),
+    sumSquareInt(sparse_int), sumSquareFloat(sparse_float),
+    exists missing_result ? string(missing_result) : \"NOTHING\",
+    exists missing_offset_result ? string(missing_offset_result) : \"NOTHING\",
+    exists removed_result ? string(removed_result) : \"NOTHING\", iterator_result,
+    sumScaleFloat(negative_zero), capturedPipeline((1, 2, 3, 4), 2, 3, 7),
+    capturedForeach((1, 2, 3, 4), 2, 3, 7));
+";
+
+string script_path = "/tmp/qore-aot-fused-map-fold-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string suffix, string env) {
+    string exe = "/tmp/qore-aot-fused-map-fold-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "12:12.0:14:14.0:18:7.5:16:6.5:48:0.75:10:14.5:NOTHING:NOTHING:NOTHING:12:-0.0:[16, 19]:35\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+hash<string, string> aot_modes = {
+    "-native": "",
+    "-helper": "QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS=1",
+    "-lazy": "QORE_DISABLE_IR_SPECIALIZED_MAP_FOLD_PRECEDENCE=1",
+    "-runtime-context": "QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT=1",
+};
+foreach string suffix in (keys aot_modes) {
+    string env = aot_modes{suffix};
+    string actual = runAot(suffix, env);
+    if (actual != expected) {
+        printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
+        exit(2);
+    }
+}

@@ -1,0 +1,9 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub wideStringExpression(string left, int value, string right) {
+    return "<" + left + ":" + string(value) + ":" + right + ":"
+        + left + ":" + right + ":" + string(value) + ">";
+}

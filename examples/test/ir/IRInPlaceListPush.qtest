@@ -1,0 +1,284 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub assignedPush() {
+    list<int> values = ();
+    for (int i = 0; i < 20; ++i) {
+        push values, i;
+    }
+    return values.size() * 100 + values[19];
+}
+
+int sub singlePush() {
+    list<int> values = ();
+    push values, 6;
+    return values[0];
+}
+
+int sub unassignedPush() {
+    list<int> values;
+    push values, 7;
+    return values[0];
+}
+
+int sub removedPush() {
+    list<int> values = (1, 2);
+    remove values;
+    push values, 8;
+    return values[0];
+}
+
+int sub deletedPush() {
+    list<int> values = (1, 2);
+    delete values;
+    push values, 9;
+    return values[0];
+}
+
+int sub softPush() {
+    list<softint> values = ();
+    push values, \"3\";
+    return values[0];
+}
+
+int sub exactFloatPush() {
+    list<float> values = ();
+    for (int i = 0; i < 4; ++i) {
+        push values, float(i) + 0.5;
+    }
+    return int(values[3] * 10.0);
+}
+
+int sub exactBoolPush() {
+    list<bool> values = ();
+    push values, False;
+    push values, True;
+    return values.size() * 10 + (values[1] ? 1 : 0);
+}
+
+string sub maybeFloatPush(bool assign) {
+    list<float> values = ();
+    float value;
+    if (assign) {
+        value = 2.5;
+    }
+    try {
+        push values, value;
+        return string(int(values[0] * 10.0));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+list<int> sub expressionPush() {
+    list<int> values = (1,);
+    return push values, 2;
+}
+
+nothing sub aliasedPush() {
+    list<int> values = ();
+    list<int> alias = values;
+    push values, 10;
+}
+
+int sub observeList(list<int> values) {
+    return values.size();
+}
+
+int sub noescapeCallPush() {
+    list<int> values = ();
+    push values, 1;
+    int observed = observeList(values);
+    push values, 2;
+    return observed * 100 + values.size() * 10 + values[1];
+}
+
+list<int> escaped_method_values;
+list<int> escaped_closure_values;
+
+final class NoEscapeCalls {
+    int observe(list<int> values) {
+        return values.size();
+    }
+
+    int escape(list<int> values) {
+        escaped_method_values = values;
+        return values.size();
+    }
+
+    int methodPush() {
+        list<int> values = ();
+        push values, 1;
+        int observed = self.observe(values);
+        push values, 2;
+        return observed * 100 + values.size() * 10 + values[1];
+    }
+
+    int escapingMethodPush() {
+        list<int> values = ();
+        push values, 1;
+        self.escape(values);
+        push values, 2;
+        return escaped_method_values.size() * 10 + values.size();
+    }
+}
+
+int sub noescapeClosurePush() {
+    list<int> values = ();
+    push values, 1;
+    int observed = (int sub(list<int> seen) {
+        return seen.size();
+    })(values);
+    push values, 2;
+    return observed * 100 + values.size() * 10 + values[1];
+}
+
+int sub escapingClosurePush() {
+    list<int> values = ();
+    push values, 1;
+    (int sub(list<int> seen) {
+        escaped_closure_values = seen;
+        return seen.size();
+    })(values);
+    push values, 2;
+    return escaped_closure_values.size() * 10 + values.size();
+}
+
+int sub referenceClosureCallPush() {
+    list<int> values = ();
+    push values, 1;
+    int observed = (int sub(reference<list<int>> seen) {
+        return seen.size();
+    })(\\values);
+    push values, 2;
+    return observed * 100 + values.size() * 10 + values[1];
+}
+
+list<int> sub buildAndReturn() {
+    list<int> values = ();
+    for (int i = 0; i < 4; ++i) {
+        push values, i;
+    }
+    return values;
+}
+
+nothing sub referencePush(reference<list<int>> values) {
+    push values, 11;
+}
+
+list<int> reference_values = (10,);
+referencePush(\\reference_values);
+aliasedPush();
+list<int> expression_values = expressionPush();
+list<int> built_values = buildAndReturn();
+NoEscapeCalls calls();
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s\\n\", assignedPush(), singlePush(), unassignedPush(),
+    removedPush(), deletedPush(), softPush(), expression_values.size(), expression_values[1],
+    reference_values[1], built_values.size(), built_values[3], noescapeCallPush(), calls.methodPush(),
+    noescapeClosurePush(), calls.escapingMethodPush(), escapingClosurePush(), referenceClosureCallPush(),
+    exactFloatPush(), exactBoolPush(), maybeFloatPush(False), maybeFloatPush(True));
+";
+
+string script_path = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+on_exit {
+    unlink(script_path);
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()));
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-disabled");
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-native-disabled");
+}
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string suffix, string env, bool expect_effect_refinement) {
+    string exe = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    bool has_effect_refinement = compile_out
+            =~ /IR-OPT-AOT-EFFECTS: noescapeCallPush[^\n]*:.*inplace-push=1/
+        && compile_out
+            =~ /IR-OPT-AOT-EFFECTS: NoEscapeCalls[^\n]*methodPush[^\n]*:.*inplace-push=1/
+        && compile_out
+            =~ /IR-OPT-AOT-EFFECTS: noescapeClosurePush[^\n]*:.*inplace-push=1/;
+    bool has_unsafe_refinement = compile_out
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*escapingMethodPush[^\n]*:.*inplace-push=[1-9]/
+        || compile_out
+            =~ /IR-OPT-AOT-EFFECTS: escapingClosurePush[^\n]*:.*inplace-push=[1-9]/
+        || compile_out
+            =~ /IR-OPT-AOT-EFFECTS: referenceClosureCallPush[^\n]*:.*inplace-push=[1-9]/;
+    if (has_effect_refinement != expect_effect_refinement || has_unsafe_refinement) {
+        printf("unexpected AOT effect refinement (%y):\n%s", expect_effect_refinement, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "2019:6:7:8:9:3:2:2:11:4:3:122:122:122:12:12:122:35:21:RUNTIME-TYPE-ERROR:25\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot("", "", True);
+string disabled_aot = runAot("-disabled", "QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH=1", False);
+string native_disabled_aot = runAot("-native-disabled",
+    "QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH=1", True);
+if (aot != expected || disabled_aot != expected || native_disabled_aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%sdisabled:\n%snative disabled:\n%s",
+        expected, aot, disabled_aot, native_disabled_aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: assignedPush:.*inplace-push=1/) {
+    printf("missing assigned in-place push optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: singlePush:.*inplace-push=1/) {
+    printf("missing single in-place push optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: buildAndReturn:.*inplace-push=1/) {
+    printf("missing build-and-return in-place push optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: softPush:.*inplace-push=1/) {
+    printf("missing soft-list in-place push optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: unassignedPush:.*inplace-push=0/
+        || stats !~ /IR-OPT: removedPush:.*inplace-push=0/
+        || stats !~ /IR-OPT: deletedPush:.*inplace-push=0/
+        || stats !~ /IR-OPT: expressionPush:.*inplace-push=0/
+        || stats !~ /IR-OPT: aliasedPush:.*inplace-push=0/
+        || stats !~ /IR-OPT: referencePush:.*inplace-push=0/) {
+    printf("unsafe in-place push selection:\n%s", stats);
+    exit(2);
+}

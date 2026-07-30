@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+*bool sub optionalBool(int input) {
+    return input & 1 ? True : NOTHING;
+}
+
+const int Iterations = 10000000;
+
+int sub main() {
+    int checksum = 0;
+    for (int i = 0; i < Iterations; ++i) {
+        checksum += exists optionalBool(i);
+    }
+    printf("%d\n", checksum);
+    return 0;
+}
+
+main();

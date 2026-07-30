@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hashdecl ReturnPair {
+    int left;
+    int right;
+}
+
+hash<string, int> sub hashProducer(int value) {
+    hash<string, int> values = {"left": value, "right": value + 1};
+    values.left += 1;
+    values.right += 2;
+    return values;
+}
+
+list<int> sub listProducer(int value) {
+    list<int> values = (value, value + 1);
+    values[0] += 1;
+    values[1] += 2;
+    return values;
+}
+
+ReturnPair sub hashdeclProducer(int value) {
+    ReturnPair values(("left": value, "right": value + 1));
+    values.left += 1;
+    values.right += 2;
+    return values;
+}
+
+int sub aggregateKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += hashProducer(i).left + hashProducer(i).right;
+        checksum += listProducer(i)[0] + listProducer(i)[1];
+        checksum += hashdeclProducer(i).left + hashdeclProducer(i).right;
+    }
+    return checksum;
+}
+
+int sub scalarLeft(int value) {
+    return value + 1;
+}
+
+int sub scalarRight(int value) {
+    return value + 3;
+}
+
+int sub oracleKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += scalarLeft(i) + scalarRight(i);
+        checksum += scalarLeft(i) + scalarRight(i);
+        checksum += scalarLeft(i) + scalarRight(i);
+    }
+    return checksum;
+}
+
+string mode = ARGV.size() ? ARGV[0] : "aggregate";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 1000000;
+printf("%d\n", mode == "aggregate"
+    ? aggregateKernel(rounds) : oracleKernel(rounds));

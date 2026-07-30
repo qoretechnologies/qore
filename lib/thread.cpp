@@ -345,6 +345,8 @@ static int initial_thread = -1;
 class ThreadData {
 public:
     QoreParseOptions runtime_po;
+    QoreParseOptions runtime_po_override_mask;
+    QoreParseOptions runtime_po_override_value;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -355,6 +357,12 @@ public:
     const QoreStackLocation* current_stack_location = nullptr;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
+    // Stack-frame address of the innermost LIVE non-AOT (AST/IR/JIT) frame that set
+    // runtime_loc per statement/line; 0 means "owned by an AOT frame (or not yet set)".
+    // Shadows runtime_loc's save/restore lifecycle so it never points at a dead frame.
+    // Read at throw to decide whether the innermost user frame is AOT (-> lazy location)
+    // or non-AOT (-> eager). See design/aot-lazy-loc-innermost-frame.md.
+    uintptr_t runtime_loc_sp = 0;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -1403,6 +1411,26 @@ ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id) {
     return env ? env->find(id) : nullptr;
 }
 
+ClosureVarValue* thread_resolve_runtime_closure_var(const LocalVar* id) {
+    if (!id) {
+        return nullptr;
+    }
+    ThreadData* td = thread_data.get();
+    const QoreClosureBase* env = td->closure_rt_env;
+    if (!env || !td->tlpd) {
+        return nullptr;
+    }
+    ClosureVarValue* frame_cvv = td->tlpd->cvstack.try_find_in_current_frame(id->getName());
+    ClosureVarValue* env_cvv = env->find(id);
+    if (frame_cvv && env_cvv && frame_cvv != env_cvv) {
+        return frame_cvv;
+    }
+    if (env_cvv) {
+        return env_cvv;
+    }
+    return frame_cvv ? frame_cvv : td->tlpd->cvstack.try_find(id->getName());
+}
+
 bool thread_has_runtime_closure_env() {
     return thread_data.get()->closure_rt_env != nullptr;
 }
@@ -1707,6 +1735,13 @@ const QoreStackLocation* get_runtime_stack_location() {
     return thread_data.get()->current_stack_location;
 }
 
+static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
+    if (!td->runtime_po_override_mask) {
+        return po;
+    }
+    return (po & ~td->runtime_po_override_mask) | (td->runtime_po_override_value & td->runtime_po_override_mask);
+}
+
 // called when pushing a new location on the stack
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm) {
@@ -1781,7 +1816,7 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
     old_po = td->runtime_po;
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = po;
+    td->runtime_po = apply_runtime_po_override(td, po);
 
 #ifdef QORE_MANAGE_STACK
     return check_stack_intern(xsink, td);
@@ -1804,7 +1839,7 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = po;
+    td->runtime_po = apply_runtime_po_override(td, po);
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc) {
@@ -1817,8 +1852,17 @@ RuntimeLocationCache get_runtime_location_cache() {
     ThreadData* td = thread_data.get();
     return RuntimeLocationCache{
         &td->runtime_loc,
-        &td->runtime_statement
+        &td->runtime_statement,
+        &td->runtime_loc_sp
     };
+}
+
+uintptr_t get_runtime_loc_sp() {
+    return thread_data.get()->runtime_loc_sp;
+}
+
+void set_runtime_loc_sp(uintptr_t sp) {
+    thread_data.get()->runtime_loc_sp = sp;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -2286,7 +2330,16 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
         do_ref = false;
     }
 
-    // issue #3024: ensure that the program call context is saved & updated
+    // issue #3024 / issue #3390: save & update the program call context from the code context
+    // (class/object) for every frame.  This reverts ca3139789's ("preserve AOT runtime caller
+    // contexts") gating of this block behind "no active execution program" back to develop's
+    // proven per-frame update.  The gating broke the JNI object-capture path: a runtime
+    // Program::callFunction() invoked on a Program object reached through getProgram() left
+    // call_program_context pointing at the wrapped target Program, so set_save_object_callback()
+    // and the object-save path (both via qore_get_call_program_context()) resolved to different
+    // Programs -- the capture callback landed where the caller's objects are NOT created (issue
+    // #3390).  AOTSmoke (221/221) and the IR suite (49/49) confirm ca3139789's AOT protection
+    // lives in its getProgram() change, not in this gating.
     QoreProgram* call_program_context;
     if (c && c->spgm) {
         call_program_context = c->spgm;
@@ -2458,10 +2511,12 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
-    // ProgramRuntimeParseContextHelper locks the current program for parsing
-    // without creating tlpd.  In that state we only need a local frame; calling
+    // ProgramRuntimeParseContextHelper locks a program for parsing without
+    // creating tlpd. Nested cross-program calls can temporarily switch away
+    // from that program while module init is still running; re-entering the
+    // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
-    const bool skip_thread_count = pgm == old_pgm && pp->parsingLocked();
+    const bool skip_thread_count = pp->parsingLocked();
     if (!skip_thread_count) {
         // try to increment thread count
         if (pp->incThreadCount(xsink)) {
@@ -2762,10 +2817,10 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
 QoreProgram* getProgram() {
     ThreadData* td = thread_data.get();
-    printd(5, "getProgram(): (td: %p) %p\n", td, td ? td->current_pgm : nullptr);
+    printd(5, "getProgram(): (td: %p) current: %p call: %p\n", td, td ? td->current_pgm : nullptr,
+        td ? td->call_program_context : nullptr);
     assert(td);
-    QoreProgram* rv = td->current_pgm;
-    return rv ? rv : td->call_program_context;
+    return td->current_pgm;
 }
 
 RootQoreNamespace* getRootNS() {
@@ -2779,6 +2834,24 @@ QoreParseOptions parse_get_parse_options() {
 
 QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
+        const QoreParseOptions& value) {
+    ThreadData* td = thread_data.get();
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    old_po = td->runtime_po;
+    td->runtime_po_override_mask = mask;
+    td->runtime_po_override_value = value;
+    td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
+}
+
+RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
+    ThreadData* td = thread_data.get();
+    td->runtime_po_override_mask = old_mask;
+    td->runtime_po_override_value = old_value;
+    td->runtime_po = old_po;
 }
 
 QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
@@ -3815,9 +3888,10 @@ QoreHashNode* QoreThreadList::getCallStackHash(qore_call_t call_type, const std:
 }
 
 // static
-QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc) {
+QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc,
+        const QoreProgramLocation* override_loc) {
     ReferenceHolder<QoreHashNode> h(getCallStackHash(stack_loc.getCallType(), stack_loc.getCallName(),
-        stack_loc.getLocation()), nullptr);
+        override_loc ? *override_loc : stack_loc.getLocation()), nullptr);
 
     QoreProgram* pgm = stack_loc.getProgram();
     if (pgm) {

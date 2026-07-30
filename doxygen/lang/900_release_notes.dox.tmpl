@@ -740,6 +740,16 @@ int echoed = child.echo(value);
     executables, dependency files, and artifact inspection with
     \c --dump-info.
 
+    \c qcc can also parallelize LLVM backend codegen for a single compilation
+    (\c --jobs=N / \c QCC_JOBS, split-after-opt) and acts as a GNU make jobserver
+    client so parallel codegen shares one job budget under <tt>make -j</tt> without
+    oversubscription; see @ref qcc_parallel_codegen "Parallel Backend Codegen and the
+    GNU make Jobserver". AOT exceptions report real \c .qc/\c .qm source locations,
+    reconstructed lazily at throw time from line tables (see
+    @ref exec_mode_aot "AOT" exception source locations). CMake-based module and host
+    projects that drive \c qcc directly can use the AOT build macros documented in the
+    @ref qore_cmake "CMake API guide".
+
     LLVM 16 or later is required for JIT and AOT support.  See
     @ref execution_modes "Execution Modes" for execution-mode semantics,
     qcc options, artifact types, source-stripping behavior, and debugging
@@ -1866,7 +1876,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - added @ref Schema::DataSchema "DataSchema", @ref Schema::DataSchemaLoader "DataSchemaLoader", and
         @ref Schema::MigrationExecutor "MigrationExecutor" classes for data-driven schema definitions and
         migrations from YAML (\c .ysm) / JSON (\c .jsm) files
-      - added the \c qschema CLI tool (align, drop, diff, validate, info, export)
+      - added the \c qschema CLI tool (align, drop, diff, validate, info, export); \c qschema \c export is now the
+        canonical database reverse-engineering command with schema naming, object filtering, YAML/JSON output, and
+        physical-partition options; \c schema-reverse is retained as a compatibility alias
 
     - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
       - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse

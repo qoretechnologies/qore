@@ -24,6 +24,16 @@
 
 %requires json
 
+%ifdef NoJson
+auto sub make_json(auto val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+
+auto sub parse_json(auto val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
 %exec-class RerankUsageTest
 
 #! In-process reranker with no provider usage — exercises the base rerankEx()/estimate.
@@ -131,6 +141,12 @@ class RerankUsageTest inherits QUnit::Test {
         return "http://localhost:" + port;
     }
 
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
     baseEstimateTest() {
         FakeReranker r();
         # query "hello" = 5 bytes -> 2 tokens; docs "aaaa"(4)+"bb"(2)=6 bytes -> 2 tokens
@@ -145,6 +161,8 @@ class RerankUsageTest inherits QUnit::Test {
     }
 
     voyageUsageTest() {
+        checkModule();
+
         QoreRagUtils::VoyageReranker r(<QoreRagUtils::RerankerConfig>{
             "backend": "voyage",
             "model": "rerank-2.5-lite",
@@ -158,6 +176,8 @@ class RerankUsageTest inherits QUnit::Test {
     }
 
     gatewayUsageTest() {
+        checkModule();
+
         QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
             "backend": "gateway",
             "url": url(),
@@ -169,6 +189,8 @@ class RerankUsageTest inherits QUnit::Test {
     }
 
     gatewayEstimateTest() {
+        checkModule();
+
         # the "no-usage" query marker makes the fake gateway omit the usage
         # block, so the reranker must fall back to a length estimate
         QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
@@ -182,6 +204,8 @@ class RerankUsageTest inherits QUnit::Test {
     }
 
     gatewayBatchTest() {
+        checkModule();
+
         # batch_size 1 forces multiple gateway calls; provider usage must sum
         QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
             "backend": "gateway",

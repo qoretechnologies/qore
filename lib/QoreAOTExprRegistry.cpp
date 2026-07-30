@@ -64,9 +64,6 @@ extern QoreValue readOneExpr(
 // ============================================================================
 
 const QoreAOTExprKindInfo* getAOTExprKindInfo(uint8_t kind_byte) {
-    if (kind_byte >= 256) {
-        return nullptr;
-    }
     return &AOT_EXPR_KIND_REGISTRY[kind_byte];
 }
 
@@ -322,18 +319,20 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
         "Complex buffer construction"},
     {"ITERATE", 108, true, write_expr_iterate, read_expr_iterate, "Iterate operator"},
     {"STREAMING", 109, true, write_expr_streaming, read_expr_streaming, "Streaming operator"},
-    {nullptr, 110, false, nullptr, nullptr, nullptr},
-    {nullptr, 111, false, nullptr, nullptr, nullptr},
-    {nullptr, 112, false, nullptr, nullptr, nullptr},
-    {nullptr, 113, false, nullptr, nullptr, nullptr},
-    {nullptr, 114, false, nullptr, nullptr, nullptr},
-    {nullptr, 115, false, nullptr, nullptr, nullptr},
-    {nullptr, 116, false, nullptr, nullptr, nullptr},
-    {nullptr, 117, false, nullptr, nullptr, nullptr},
-    {nullptr, 118, false, nullptr, nullptr, nullptr},
-    {nullptr, 119, false, nullptr, nullptr, nullptr},
-    {nullptr, 120, false, nullptr, nullptr, nullptr},
-    {nullptr, 121, false, nullptr, nullptr, nullptr},
+    {"DEFERRED_STATIC_METHOD_REF", 110, true, write_expr_deferred_static_method_ref,
+        read_expr_deferred_static_method_ref, "Deferred static method reference"},
+    {"DEFERRED_FUNCTION_REF", 111, true, write_expr_deferred_function_ref,
+        read_expr_deferred_function_ref, "Deferred function call reference"},
+    {"PLUS_EQ", 112, true, write_expr_plus_eq, read_expr_plus_eq, "Plus-equals operator"},
+    {"MINUS_EQ", 113, true, write_expr_minus_eq, read_expr_minus_eq, "Minus-equals operator"},
+    {"MULTIPLY_EQ", 114, true, write_expr_multiply_eq, read_expr_multiply_eq, "Multiply-equals operator"},
+    {"DIVIDE_EQ", 115, true, write_expr_divide_eq, read_expr_divide_eq, "Divide-equals operator"},
+    {"MODULO_EQ", 116, true, write_expr_modulo_eq, read_expr_modulo_eq, "Modulo-equals operator"},
+    {"AND_EQ", 117, true, write_expr_and_eq, read_expr_and_eq, "Bitwise-and-equals operator"},
+    {"OR_EQ", 118, true, write_expr_or_eq, read_expr_or_eq, "Bitwise-or-equals operator"},
+    {"XOR_EQ", 119, true, write_expr_xor_eq, read_expr_xor_eq, "Bitwise-xor-equals operator"},
+    {"SHL_EQ", 120, true, write_expr_shl_eq, read_expr_shl_eq, "Shift-left-equals operator"},
+    {"SHR_EQ", 121, true, write_expr_shr_eq, read_expr_shr_eq, "Shift-right-equals operator"},
     {nullptr, 122, false, nullptr, nullptr, nullptr},
     {nullptr, 123, false, nullptr, nullptr, nullptr},
     {nullptr, 124, false, nullptr, nullptr, nullptr},

@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+float sub floatCfgExpression(bool outer, bool inner, float value) {
+    if (outer) {
+        if (inner) {
+            return value * 1.25 + 0.5;
+        }
+        return value * 0.875 - 0.25;
+    }
+    return value * 0.625 + 1.5;
+}

@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Fixture for BgCompileProgramDrain.qtest.
+#
+# Creates and destroys many short-lived child Programs, each of which runs
+# functions hot enough to be promoted to native code (the harness runs this with
+# QORE_JIT_THRESHOLD=1 so every function is enqueued for background JIT
+# compilation on first call).  Each child Program teardown must drain only its
+# own in-flight/queued compiles (QoreJIT::waitForBgCompileQueue(QoreProgram*))
+# rather than the whole global queue; a correct drain produces the right result
+# without hanging or using freed IR.
+#
+# Prints "total=<n>" for the caller to compare across exec modes.
+
+%new-style
+%require-types
+
+int sub work(int x) {
+    int s = 0;
+    for (int j = 0; j < x; ++j) {
+        s += j * 2;
+    }
+    return s;
+}
+
+int total = 0;
+for (int i = 0; i < 40; ++i) {
+    Program p(PO_NEW_STYLE);
+    p.parse("int sub run() {
+                 int t = 0;
+                 for (int k = 0; k < 60; ++k) {
+                     t += k * k - (k % 7);
+                 }
+                 return t;
+             }", "child_" + i);
+    total += p.callFunction("run") + work(i);
+    # child Program p is destroyed here -> exercises the per-Program bg-compile drain
+}
+
+printf("total=%d\n", total);

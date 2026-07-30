@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hashdecl StringPair {
+    string left;
+    string right;
+}
+
+int sub hashStringKernel(int rounds) {
+    hash<string, string> values = {
+        "left": "abcdefgh",
+        "right": "ijklmnopqrst",
+    };
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += values.left.size() + values.right.size();
+    }
+    return checksum;
+}
+
+int sub listStringKernel(int rounds) {
+    list<string> values = ("abcdefgh", "ijklmnopqrst");
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += values[0].size() + values[1].size();
+    }
+    return checksum;
+}
+
+int sub hashdeclStringKernel(int rounds) {
+    StringPair values(("left": "abcdefgh", "right": "ijklmnopqrst"));
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += values.left.size() + values.right.size();
+    }
+    return checksum;
+}
+
+int sub nestedHashKernel(int rounds) {
+    hash<string, hash<string, int>> values = {
+        "left": {"value": 3},
+        "right": {"value": 7},
+    };
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += values.left.value + values.right.value;
+    }
+    return checksum;
+}
+
+int sub nestedListKernel(int rounds) {
+    list<list<int>> values = ((3, 4), (6, 7));
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += values[0][0] + values[1][1];
+    }
+    return checksum;
+}
+
+string mode = ARGV.size() ? ARGV[0] : "hash-string";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 1000000;
+switch (mode) {
+    case "hash-string":
+        printf("%d\n", hashStringKernel(rounds));
+        break;
+    case "list-string":
+        printf("%d\n", listStringKernel(rounds));
+        break;
+    case "hashdecl-string":
+        printf("%d\n", hashdeclStringKernel(rounds));
+        break;
+    case "nested-hash":
+        printf("%d\n", nestedHashKernel(rounds));
+        break;
+    case "nested-list":
+        printf("%d\n", nestedListKernel(rounds));
+        break;
+    default:
+        throw "BENCHMARK-ERROR", "unknown mode '%s'", mode;
+}

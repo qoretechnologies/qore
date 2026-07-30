@@ -1,0 +1,562 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub sumInt(list<int> values) {
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+float sub sumFloat(list<float> values) {
+    float total = 0.0;
+    foreach float value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub countBool(list<bool> values) {
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub unassignedBool() {
+    list<bool> values;
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+*bool sub maybeAssignedBool(bool assign) {
+    bool value;
+    if (assign) {
+        value = True;
+    }
+    return value;
+}
+
+bool sub removedBoolIsNothing() {
+    bool value = True;
+    remove value;
+    return value === NOTHING;
+}
+
+bool sub deletedBoolIsNothing() {
+    bool value = True;
+    delete value;
+    return value === NOTHING;
+}
+
+*string sub maybeAssignedString(bool assign) {
+    string value;
+    if (assign) {
+        value = \"set\";
+    }
+    return value;
+}
+
+bool sub removedStringIsNothing() {
+    string value = \"set\";
+    remove value;
+    return value === NOTHING;
+}
+
+bool sub deletedStringIsNothing() {
+    string value = \"set\";
+    delete value;
+    return value === NOTHING;
+}
+
+int sub unassigned() {
+    list<int> values;
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub empty() {
+    list<int> values = ();
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub removed() {
+    list<int> values = (5, 6);
+    remove values;
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub deleted() {
+    list<int> values = (7, 8);
+    delete values;
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub optional(*list<int> values) {
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub optionalBool(*list<bool> values) {
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+string sub optionalString(*list<string> values) {
+    string result = \"\";
+    foreach string value in (values) {
+        result += value;
+    }
+    return result;
+}
+
+int sub sparseInt() {
+    list<int> values = ();
+    values[2] = 7;
+    int total = 0;
+    foreach int value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+float sub sparseFloat() {
+    list<float> values = ();
+    values[2] = 2.5;
+    float total = 0.0;
+    foreach float value in (values) {
+        total += value;
+    }
+    return total;
+}
+
+int sub sparseBool() {
+    list<bool> values = ();
+    values[2] = True;
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+string sub sparseString() {
+    list<string> values = ();
+    values[2] = \"set\";
+    string result;
+    foreach string value in (values) {
+        result += value;
+    }
+    return result;
+}
+
+int sub sparseAuto() {
+    list<int> values = ();
+    values[2] = 7;
+    int result = 0;
+    foreach auto value in (values) {
+        result += value === NOTHING ? 1 : value * 10;
+    }
+    return result;
+}
+
+int sub controlFlow(list<int> values) {
+    int total = 0;
+    foreach int value in (values) {
+        if (value == 2) {
+            continue;
+        }
+        if (value == 4) {
+            break;
+        }
+        total += value;
+    }
+    return total;
+}
+
+int sub returnFromLoop(list<int> values) {
+    foreach int value in (values) {
+        if (value > 2) {
+            return value;
+        }
+    }
+    return -1;
+}
+
+int sub nested(list<int> outer, list<int> inner) {
+    int total = 0;
+    foreach int left in (outer) {
+        foreach int right in (inner) {
+            total += left * right;
+        }
+    }
+    return total;
+}
+
+int sub directIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + $# + (value & 0);
+    }
+    return result;
+}
+
+int sub readDynamicIndex() {
+    return $#;
+}
+
+int sub calledIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + readDynamicIndex() + (value & 0);
+    }
+    return result;
+}
+
+class IndexReader {
+    int read() {
+        return $#;
+    }
+}
+
+int sub methodIndex(list<int> values) {
+    IndexReader reader();
+    int result = 0;
+    foreach int value in (values) {
+        result = result * 10 + reader.read() + (value & 0);
+    }
+    return result;
+}
+
+int sub delegatedIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        result = string($#) =~ /[0-9]/
+            ? result * 10 + $# + (value & 0) : result;
+    }
+    return result;
+}
+
+int sub controlFlowIndex(list<int> values) {
+    int result = 0;
+    foreach int value in (values) {
+        if (value == 2) {
+            continue;
+        }
+        if (value == 4) {
+            break;
+        }
+        result = result * 10 + $#;
+    }
+    return result;
+}
+
+int sub returnIndex(list<int> values) {
+    foreach int value in (values) {
+        if (value > 2) {
+            return $#;
+        }
+    }
+    return -1;
+}
+
+int sub nestedIndex(list<int> outer, list<int> inner) {
+    int result = 0;
+    foreach int left in (outer) {
+        result = result * 10 + $# + (left & 0);
+        foreach int right in (inner) {
+            result = result * 10 + $# + (right & 0);
+        }
+    }
+    return result;
+}
+
+int sub mutationSnapshot() {
+    list<int> values = (1, 2, 3);
+    int seen = 0;
+    foreach int value in (values) {
+        seen = seen * 10 + value;
+        if (value == 1) {
+            push values, 4;
+        }
+    }
+    return seen * 100 + values.size();
+}
+
+int sub reassignmentSnapshot() {
+    list<int> values = (1, 2, 3);
+    int seen = 0;
+    foreach int value in (values) {
+        seen = seen * 10 + value;
+        if (value == 1) {
+            values = (9, 10);
+        }
+    }
+    return seen * 100 + values.size();
+}
+
+string sub genericList(list<string> values) {
+    string result;
+    foreach string value in (values) {
+        result += value;
+    }
+    return result;
+}
+
+string sub firstString(list<string> values) {
+    foreach string value in (values) {
+        return value;
+    }
+    return \"\";
+}
+
+string sub stringMutationSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        result += value;
+        if (value == \"a\") {
+            push values, \"c\";
+        }
+    }
+    return result + \":\" + string(values.size());
+}
+
+string sub stringReassignmentSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        result += value;
+        if (value == \"a\") {
+            values = (\"x\",);
+        }
+    }
+    return result + \":\" + values[0];
+}
+
+nothing sub throwNoTemp() {
+    throw \"EXPECTED\", \"no temporary\";
+}
+
+string sub throwWithTemp(string value) {
+    throw \"EXPECTED\", value;
+}
+
+string sub exceptionSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        try {
+            throwNoTemp();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        result += value;
+        try {
+            throwWithTemp(value);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        result += value;
+    }
+    return result;
+}
+
+string action = ARGV.size() ? ARGV[0] : \"\";
+if (action == \"sparse-int\") {
+    sparseInt();
+    exit(0);
+}
+if (action == \"sparse-float\") {
+    sparseFloat();
+    exit(0);
+}
+if (action == \"sparse-bool\") {
+    sparseBool();
+    exit(0);
+}
+if (action == \"sparse-string\") {
+    sparseString();
+    exit(0);
+}
+bool basic = action == \"basic\";
+if (unassignedBool() || !(maybeAssignedBool(False) === NOTHING)
+        || !(maybeAssignedBool(True) === True) || !removedBoolIsNothing()
+        || !deletedBoolIsNothing()) {
+    printf(\"bool assigned-state mismatch\\n\");
+    exit(2);
+}
+if (!(maybeAssignedString(False) === NOTHING)
+        || maybeAssignedString(True) != \"set\" || !removedStringIsNothing()
+        || !deletedStringIsNothing()
+        || optionalString(NOTHING) != \"\" || optionalString((\"a\", \"b\")) != \"ab\"
+        || firstString((\"first\", \"second\")) != \"first\"
+        || (!basic && (stringMutationSnapshot() != \"ab:3\"
+            || stringReassignmentSnapshot() != \"ab:x\"))) {
+    printf(\"string mismatch: maybe-empty=%y maybe-set=%y removed=%y deleted=%y optional-empty=%y optional-ab=%y mutation=%y reassignment=%y\\n\",
+        maybeAssignedString(False), maybeAssignedString(True), removedStringIsNothing(),
+        deletedStringIsNothing(), optionalString(NOTHING), optionalString((\"a\", \"b\")),
+        stringMutationSnapshot(), stringReassignmentSnapshot());
+    exit(2);
+}
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%d:%d:%d:%d:%d:%d:%d\\n\",
+    sumInt((1, 2, 3, 4)),
+    sumFloat((1.5, 2.5, 3.0)), countBool((True, False, True)), unassigned(), empty(), removed(),
+    deleted(), optional(NOTHING), optional((8, 9)), optionalBool(NOTHING),
+    optionalBool((False, True, True)), sparseAuto(), controlFlow((1, 2, 3, 4, 5)),
+    returnFromLoop((1, 2, 3, 4)), nested((1, 2), (3, 4)), basic ? 0 : mutationSnapshot(),
+    basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")), exceptionSnapshot(),
+    directIndex((1, 2, 3, 4)), calledIndex((1, 2, 3, 4)), methodIndex((1, 2, 3, 4)),
+    delegatedIndex((1, 2, 3, 4)), controlFlowIndex((1, 2, 3, 4, 5)),
+    returnIndex((1, 2, 3, 4)), nestedIndex((1, 2), (3, 4)));
+";
+
+string script_path = "/tmp/qore-ir-typed-foreach-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode, bool disabled, string arg, bool virtual_disabled = False) {
+    return backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_TYPED_FOREACH=1 " : "",
+        virtual_disabled ? "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1 " : "",
+        libqore_dir, qore_bin, mode, script_path, arg));
+}
+
+string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
+    string exe = "/tmp/qore-ir-typed-foreach-" + string(getpid())
+        + (disabled ? "-disabled" : "")
+        + (virtual_disabled ? "-virtual-disabled" : "");
+    string compile_out = backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_TYPED_FOREACH=1 " : "",
+        virtual_disabled ? "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1 " : "",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s %s 2>&1",
+        libqore_dir, exe, arg));
+}
+
+string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb:"
+    + "123:123:123:123:2:2:1101\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode, False, "");
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb:"
+    + "123:123:123:123:2:2:1101\n";
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = runMode(mode, True, "basic");
+    if (actual != basic_expected) {
+        printf("disabled mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, basic_expected, actual);
+        exit(2);
+    }
+}
+
+string aot = runAot(False, "");
+string virtual_disabled_aot = runAot(False, "", True);
+string disabled_aot = runAot(True, "basic");
+if (aot != expected || virtual_disabled_aot != expected
+        || disabled_aot != basic_expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%svirtual-disabled AOT:\n%sdisabled AOT:\n%s",
+        expected, aot, virtual_disabled_aot, disabled_aot);
+    exit(2);
+}
+
+foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool", "sparse-string")) {
+    foreach string mode in (("ast", "ir", "tiered", "jit")) {
+        string actual = runMode(mode, False, sparse_test);
+        if (actual !~ /RUNTIME-TYPE-ERROR/) {
+            printf("missing sparse-list error in %s/%s:\n%s", mode, sparse_test, actual);
+            exit(2);
+        }
+    }
+    string sparse_aot = runAot(False, sparse_test);
+    if (sparse_aot !~ /RUNTIME-TYPE-ERROR/) {
+        printf("missing sparse-list AOT error in %s:\n%s", sparse_test, sparse_aot);
+        exit(2);
+    }
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sumFloat:.*typed-foreach=1/
+        || stats !~ /IR-OPT: countBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: unassignedBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: unassigned:.*typed-foreach=1/
+        || stats !~ /IR-OPT: removed:.*typed-foreach=1/
+        || stats !~ /IR-OPT: deleted:.*typed-foreach=1/
+        || stats !~ /IR-OPT: optional:.*typed-foreach=1/
+        || stats !~ /IR-OPT: optionalBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: optionalString:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseInt:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseFloat:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseString:.*typed-foreach=1/
+        || stats !~ /IR-OPT: genericList:.*typed-foreach=1/
+        || stats !~ /IR-OPT: firstString:.*typed-foreach=1/
+        || stats !~ /IR-OPT: stringMutationSnapshot:.*typed-foreach=1/
+        || stats !~ /IR-OPT: stringReassignmentSnapshot:.*typed-foreach=1/
+        || stats !~ /IR-OPT: exceptionSnapshot:.*typed-foreach=1/
+        || stats !~ /IR-OPT: nested:.*typed-foreach=2/) {
+    printf("missing typed foreach lowering:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: sparseAuto:.*typed-foreach=0/) {
+    printf("unsafe typed foreach lowering:\n%s", stats);
+    exit(2);
+}

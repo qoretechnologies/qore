@@ -3744,8 +3744,8 @@ QoreValue qore_get_app_registry(std::string key) {
     return i == app_reg_map.end() ? QoreValue() : i->second.refSelf();
 }
 
-const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink) {
-    ProgramRuntimeParseAccessHelper pah(&xsink, getProgram());
+const QoreTypeInfo* qore_get_type_from_string(const char* str, QoreProgram* pgm, ExceptionSink& xsink) {
+    ProgramRuntimeParseAccessHelper pah(&xsink, pgm ? pgm : getProgram());
     if (xsink) {
         return nullptr;
     }
@@ -3754,6 +3754,10 @@ const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xs
         xsink.raiseException("UNKNOWN-TYPE", "cannot resolve '%s' to any known type", str);
     }
     return rv;
+}
+
+const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink) {
+    return qore_get_type_from_string(str, getProgram(), xsink);
 }
 
 void qore_apply_rounding_heuristic(QoreString& str, int round_threshold_1, int round_threshold_2) {

@@ -60,6 +60,9 @@ struct QoreIRExprHandlerInfo {
 extern const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[];
 extern const size_t QORE_IR_EXPR_REGISTRY_SIZE;
 
+//! Return the first built-in handler claiming the expression, or nullptr.
+const QoreIRExprHandlerInfo* qore_ir_find_expr_handler(const QoreValue& expr);
+
 //! Validate expression lowering registry invariants
 bool qore_ir_validate_expr_registry(std::string& error);
 

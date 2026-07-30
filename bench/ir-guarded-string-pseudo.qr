@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub run(*string value, *string pattern, int iterations) {
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += value.startsWith(pattern);
+        result += value.endsWith(pattern);
+        result += value.contains(pattern);
+        result += value.find(pattern);
+        result += value.rfind(pattern);
+        result += value.substr(1, 2).size();
+    }
+    return result;
+}
+
+if (ENV.TEST_NOTHING) {
+    try {
+        printf("%d\n", run(NOTHING, "bc", 1));
+    } catch (hash<auto> ex) {
+        printf("%s\n", ex.err);
+    }
+} else {
+    printf("%d\n", run("abcdef", "bc", int(ENV.BENCH_ITERS ?? 1000000)));
+}

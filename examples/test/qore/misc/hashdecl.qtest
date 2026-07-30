@@ -55,6 +55,10 @@ public hashdecl RuntimeFoldContainer {
     *list<hash<RuntimeFoldExpression>> expression_list;
 }
 
+public hashdecl OverrideCastInfo {
+    *string value = "default";
+}
+
 hashdecl Issue3654 {
     bool b = False;
 }
@@ -120,6 +124,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
         addTestCase("complex type defaults", \testComplexTypeDefaults());
         addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
+        addTestCase("typed hash cast with overrides", \testTypedHashCastWithOverrides());
         addTestCase("typed container runtime assignment", \testTypedContainerRuntimeAssignment());
         set_return_value(main());
     }
@@ -245,11 +250,12 @@ class HashDeclTest inherits QUnit::Test {
         }
 
         {
-            hash<Container> c(("i": 2, "str": "other", "n": 1n));
+            hash<Container> c(("n": 1n, "str": "other", "i": 2));
             assertEq(Type::Hash, c.type());
             assertEq(2, c.i);
             assertEq("other", c.str);
             assertEq(1n, c.n);
+            assertEq(("i", "str", "n"), c.keys());
         }
 
         {
@@ -1168,6 +1174,72 @@ class HashDeclTest inherits QUnit::Test {
                 "expressions": bad_map,
             };
             delete bad;
+        });
+    }
+
+    testTypedHashCastWithOverrides() {
+        TypedHash th("Container");
+        hash<auto> h = th.doCastWithOverrides({
+            "i": 2,
+            "str": "base",
+            "n": 1.5,
+        }, {
+            "i": 9,
+        });
+        assertEq(True, h instanceof hash<Container>);
+        assertEq(9, h.i);
+        assertEq("base", h.str);
+        assertEq(1.5n, h.n);
+        assertEq(th.doCast({
+            "i": 2,
+            "str": "base",
+            "n": 1.5,
+        } + {
+            "i": 9,
+        }), h);
+
+        hash<auto> defaults = th.doCastWithOverrides({
+            "n": 2.5,
+        }, {
+            "i": 7,
+        });
+        assertEq(7, defaults.i);
+        assertEq("hi", defaults.str);
+        assertEq(2.5n, defaults.n);
+
+        TypedHash optional("OverrideCastInfo");
+        hash<auto> assigned_nothing = optional.doCastWithOverrides({}, {
+            "value": NOTHING,
+        });
+        hash<auto> merged_nothing = optional.doCast({} + {
+            "value": NOTHING,
+        });
+        assertEq(merged_nothing, assigned_nothing);
+        assertEq(False, exists assigned_nothing.value);
+        assertEq(NOTHING, assigned_nothing.value);
+
+        TypedHash inherited("ExtendedInfo");
+        hash<auto> extended = inherited.doCastWithOverrides({
+            "name": "base",
+            "id": 1,
+            "created": 2026-07-23,
+        }, {
+            "name": "override",
+            "description": "set",
+        });
+        assertEq("override", extended.name);
+        assertEq(1, extended.id);
+        assertEq(2026-07-23, extended.created);
+        assertEq("set", extended.description);
+
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            th.doCastWithOverrides({"n": 1.0}, {"i": "invalid"});
+        });
+        assertThrows("HASHDECL-INIT-ERROR", sub () {
+            th.doCastWithOverrides({"n": 1.0, "unknown": 1}, {});
+        });
+        assertThrows("HASHDECL-INIT-ERROR", sub () {
+            th.doCastWithOverrides({"n": 1.0}, {"unknown": 1});
         });
     }
 }

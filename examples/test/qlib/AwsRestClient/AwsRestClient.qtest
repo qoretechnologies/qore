@@ -129,7 +129,7 @@ class AwsTest inherits QUnit::Test {
         try {
             aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"} + FakeAwsOptions);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
                     || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip("connection error: " + ex.err + ": " + ex.desc);
@@ -147,7 +147,7 @@ class AwsTest inherits QUnit::Test {
             aws_client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
                 + (FakeAwsOptions - ("aws_service", "aws_region")));
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
                     || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip("connection error: " + ex.err + ": " + ex.desc);

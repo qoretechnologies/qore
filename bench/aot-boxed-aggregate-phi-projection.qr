@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<string> sub makeWords(string left, string right) {
+    return (left, right);
+}
+
+int sub projectionKernel(int rounds) {
+    int checksum = 0;
+    string alpha = "alpha";
+    string beta = "beta";
+    string gamma = "gamma";
+    string delta = "delta";
+    for (int i = 0; i < rounds; ++i) {
+        checksum += ((i % 2)
+            ? makeWords(alpha, beta)
+            : makeWords(gamma, delta))[1].size();
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", projectionKernel(rounds));

@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+int sub ordering(string left, string right) {
+    int result = 0;
+    if (left < right) {
+        result += 1;
+    }
+    if (left <= right) {
+        result += 2;
+    }
+    if (left > right) {
+        result += 4;
+    }
+    if (left >= right) {
+        result += 8;
+    }
+    return result;
+}
+
+int sub comparison(string left, string right) {
+    return left <=> right;
+}
+
+int sub main() {
+    printf(\"ascii:%d:%d:%d\\n\",
+        ordering(\"abc\", \"abd\"),
+        ordering(\"same\", \"same\"),
+        comparison(\"abc\", \"abd\"));
+
+    string latin1_eacute = convert_encoding(\"\\u00e9\", \"ISO-8859-1\");
+    string utf8_ecirc = \"\\u00ea\";
+    printf(\"encoding:%d:%d:%d:%d\\n\",
+        ordering(latin1_eacute, utf8_ecirc),
+        comparison(latin1_eacute, utf8_ecirc),
+        ordering(utf8_ecirc, latin1_eacute),
+        comparison(utf8_ecirc, latin1_eacute));
+    printf(\"empty:%d:%d:%d:%d\\n\",
+        ordering(\"\", \"a\"), comparison(\"\", \"a\"),
+        ordering(\"a\", \"\"), comparison(\"a\", \"\"));
+
+    string conversion_error;
+    try {
+        ordering(convert_encoding(\"A\", \"ISO-8859-1\"), \"\\u6f22\");
+    } catch (hash<auto> ex) {
+        conversion_error = ex.err;
+    }
+    string invoke_conversion_error;
+    try {
+        bool ignored = convert_encoding(\"A\", \"ISO-8859-1\") < \"\\u6f22\";
+    } catch (hash<auto> ex) {
+        invoke_conversion_error = ex.err;
+    }
+    printf(\"conversion-error:%s:%s\\n\",
+        conversion_error, invoke_conversion_error);
+
+    string unassigned;
+    string removed = \"value\";
+    remove removed;
+    printf(\"nothing:%d:%d:%d:%d:%d:%d\\n\",
+        unassigned < \"a\", unassigned > \"a\",
+        unassigned <=> \"a\",
+        removed < \"a\", removed > \"a\",
+        removed <=> \"a\");
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-string-ordering-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/source.qr";
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string ir = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string jit = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=jit %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_NATIVE_STRING_ORDERING_RESULTS=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/source.qo";
+string disabled_qo = disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_string_lt_typed_soft_native/
+        || enabled_undefined !~ /qore_rt_string_ge_typed_soft_native/
+        || enabled_undefined !~ /qore_rt_string_cmp_typed_soft/
+        || enabled_undefined =~ /qore_rt_string_lt_typed$/
+        || disabled_undefined =~ /qore_rt_string_lt_typed_soft_native/
+        || disabled_undefined !~ /qore_rt_string_lt_typed_soft/
+        || disabled_undefined !~ /qore_rt_string_cmp_typed_soft/) {
+    printf("string ordering helper mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (ast != ir || ast != jit || ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sIR:\n%sJIT:\n%s"
+        + "Enabled:\n%sDisabled:\n%s",
+        ast, ir, jit, enabled, disabled);
+    exit(2);
+}

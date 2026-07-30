@@ -3594,12 +3594,13 @@ table.insert(row);
         sql += (foldl $1 + "," + $2, vh.placeholders);
         sql += ")";
 
-        args = vh.values;
+        list<auto> exec_args = vh.values;
+        args = exec_args;
 
         # check for a bulk insert in case the driver does not support array binding
         if (!hasArrayBind()) {
             int size = 0;
-            foreach auto arg in (args) {
+            foreach auto arg in (exec_args) {
                 if (arg.typeCode() == NT_LIST) {
                     size = arg.size();
                     break;
@@ -3609,7 +3610,7 @@ table.insert(row);
                 hash<auto> rv;
                 for (int i = 0; i < size; ++i) {
                     # get arg list for row
-                    list<auto> targs = map $1.typeCode() == NT_LIST ? $1[i] : $1, args;
+                    list<auto> targs = map $1.typeCode() == NT_LIST ? $1[i] : $1, exec_args;
                     if (opt.returning) {
                         if (!rv) {
                             hash<auto> h = doReturningImpl(opt, \sql, targs);
@@ -3627,9 +3628,9 @@ table.insert(row);
         }
 
         if (opt.returning)
-            return doReturningImpl(opt, \sql, args);
+            return doReturningImpl(opt, \sql, exec_args);
 
-        execData(opt, sql, args);
+        execData(opt, sql, exec_args);
     }
 
     private hash<auto> getPlaceholdersAndValues(hash<auto> row) {

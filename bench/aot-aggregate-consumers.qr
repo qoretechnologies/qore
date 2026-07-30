@@ -1,0 +1,34 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        "left": left,
+        "middle": middle,
+        "right": right,
+    };
+}
+
+int sub consumerKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += makeValues(i, i + 1, i + 2).first();
+        checksum += makeValues(i, i + 1, i + 2).last();
+        checksum += makeValues(i, i + 1, i + 2).empty() ? 1 : 0;
+        checksum += makeValues(i, i + 1, i + 2).val() ? 1 : 0;
+        checksum += elements makeValues(i, i + 1, i + 2);
+        checksum += elements makeRow(i, i + 1, i + 2);
+        checksum += exists makeValues(i, i + 1, i + 2) ? 1 : 0;
+        checksum += exists makeRow(i, i + 1, i + 2) ? 1 : 0;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+printf("%d\n", consumerKernel(rounds));

@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeShape(bool long_value, int value) {
+    if (long_value) {
+        return (value, value + 1, value + 2);
+    }
+    return ();
+}
+
+int sub shapeSize(bool long_value, int value) {
+    return makeShape(long_value, value).size();
+}
+
+int sub shapeElements(bool long_value, int value) {
+    return elements makeShape(long_value, value);
+}
+
+bool sub shapeEmpty(bool long_value, int value) {
+    return makeShape(long_value, value).empty();
+}
+
+bool sub shapeVal(bool long_value, int value) {
+    return makeShape(long_value, value).val();
+}
+
+bool sub shapeExists(bool long_value, int value) {
+    return exists makeShape(long_value, value);
+}
+
+int sub consumerKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        bool long_value = i % 2 == 1;
+        checksum += shapeSize(long_value, i);
+        checksum += shapeElements(long_value, i);
+        checksum += shapeEmpty(long_value, i) ? 1 : 0;
+        checksum += shapeVal(long_value, i) ? 1 : 0;
+        checksum += shapeExists(long_value, i) ? 1 : 0;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", consumerKernel(rounds));

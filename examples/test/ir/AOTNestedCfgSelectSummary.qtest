@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+string root = "/tmp/qore-aot-nested-cfg-select-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+string provider_code = "%modern
+
+int sub nestedFalseArm(int value) {
+    if (value < 0) {
+        return -value;
+    }
+    if (value > 100) {
+        return value - 100;
+    }
+    return value * 2 + 1;
+}
+
+int sub nestedTrueArm(int value) {
+    if (value >= 0) {
+        return value + 3;
+    }
+    if (value < -100) {
+        return -value - 100;
+    }
+    return -value * 2;
+}
+
+int sub unsafeUnassignedArm(int value) {
+    int local;
+    if (value < 0) {
+        return 1;
+    }
+    if (value > 0) {
+        return 2;
+    }
+    return local;
+}
+";
+string consumer_code = "%modern
+
+int sub main() {
+    bool unassigned_rejected = False;
+    try {
+        unsafeUnassignedArm(0);
+    } catch (hash<auto> ex) {
+        unassigned_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"%d:%d:%d:%d:%d:%d:%d\\n\",
+        nestedFalseArm(-7), nestedFalseArm(40), nestedFalseArm(140),
+        nestedTrueArm(7), nestedTrueArm(-40), nestedTrueArm(-140),
+        unassigned_rejected);
+    return 0;
+}
+";
+
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+provider_file.write(provider_code);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+consumer_file.write(consumer_code);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+combined_file.write(provider_code + consumer_code + "\nmain();\n");
+combined_file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "%s %s -O3 -c --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf("%s --dump-index-json %s",
+    qcc_bin, provider_qo));
+if (!(provider_index =~ /\"qore_path\": \"nestedFalseArm\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nestedTrueArm\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"unsafeUnassignedArm\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
+    printf("unexpected nested CFG metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf("%s %s -O3 -o %s %s %s 2>&1",
+    env, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf("%s %s -O3 -o %s %s %s 2>&1",
+    env, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+if (ast != enabled || ast != disabled || !(enabled =~ /7:81:40:10:80:40:1/)) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

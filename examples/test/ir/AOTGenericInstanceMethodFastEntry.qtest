@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+class GenericInstanceSelector<C> {
+    constructor() {
+    }
+
+    C choose(bool select_left, C ignored, C left, C right) {
+        if (select_left) {
+            return left;
+        }
+        return right;
+    }
+}
+
+class MethodGenericInstanceSelector {
+    constructor() {
+    }
+
+    T choose<T>(bool select_left, T left, T right) {
+        if (select_left) {
+            return left;
+        }
+        return right;
+    }
+}
+
+class ConflictingInstanceSelector {
+    constructor() {
+    }
+
+    T choose<T>(bool select_left, T left, T right) {
+        if (select_left) {
+            return left;
+        }
+        return right;
+    }
+}
+
+class ContextDependentInstanceSelector<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+int sub explicitLoop(int count) {
+    GenericInstanceSelector<int> selector();
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result += selector.choose((i & 1) == 0, i, i, i + 1);
+    }
+    return result;
+}
+
+int sub inferredLoop(int count) {
+    MethodGenericInstanceSelector selector();
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result += selector.choose<int>((i & 1) == 0, i, i + 1);
+    }
+    return result;
+}
+
+int sub invokeLoop(int count) {
+    MethodGenericInstanceSelector selector();
+    int result = 0;
+    try {
+        for (int i = 0; i < count; ++i) {
+            result += selector.choose((i & 1) == 0, i, i + 1);
+        }
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return result;
+}
+
+bool sub unassignedRejected() {
+    GenericInstanceSelector<int> selector();
+    int ignored;
+    try {
+        int result = selector.choose(True, ignored, 1, 2);
+        return result == -1;
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+}
+
+int sub conflictingInt() {
+    ConflictingInstanceSelector selector();
+    return selector.choose<int>(False, 1, 2);
+}
+
+string sub conflictingString() {
+    ConflictingInstanceSelector selector();
+    return selector.choose<string>(False, \"a\", \"b\");
+}
+
+int sub contextDependent() {
+    ContextDependentInstanceSelector<int> selector(3);
+    return selector.get();
+}
+
+int sub main() {
+    printf(\"%d:%d:%d:%y:%d:%s:%d\\n\", explicitLoop(100),
+        inferredLoop(100), invokeLoop(100), unassignedRejected(),
+        conflictingInt(), conflictingString(), contextDependent());
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-generic-instance-method-fast-entry-" + string(getpid());
+mkdir(root);
+string source_path = root + "/generic-instance-method.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string expected = "5000:5000:5000:True:2:b:3\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_path = root + "/enabled-aot";
+string disabled_path = root + "/disabled-aot";
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_path, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1"
+        + " QORE_DISABLE_AOT_GENERIC_FAST_ENTRY=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_path, source_path));
+if (!is_file(enabled_path) || !is_file(disabled_path)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /method fast entry 'GenericInstanceSelector[^']*_generic_fast'/
+        || enabled_compile !~ /method fast entry 'MethodGenericInstanceSelector[^']*_generic_fast'/
+        || enabled_compile =~ /method fast entry 'ConflictingInstanceSelector[^']*_generic_fast'/
+        || enabled_compile =~ /method fast entry 'ContextDependentInstanceSelector[^']*_generic_fast'/
+        || disabled_compile =~ /_generic_fast/) {
+    printf("generic instance specialization mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled_path, disabled_path)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

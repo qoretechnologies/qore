@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub parameterStridedRead(
+        int rounds, list<int> values) {
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < values.size(); i += 2) {
+            total += values[i];
+        }
+    }
+    return total;
+}
+
+int sub localStridedRead(int rounds) {
+    list<int> values = (1, 2, 3, 4, 5, 6, 7, 8);
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < values.size(); i += 2) {
+            total += values[i];
+        }
+    }
+    return total;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 5000000;
+bool local = ARGV.size() > 1 && ARGV[1] == "local";
+printf("%d\n", local
+    ? localStridedRead(rounds)
+    : parameterStridedRead(
+        rounds, (1, 2, 3, 4, 5, 6, 7, 8)));

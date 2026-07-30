@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub joinAround(string left, string needle, string right) {
+    return left + needle + right;
+}
+
+int sub stringSearchKernel(int rounds, string left, string needle, string right) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (joinAround(left, needle, right).contains(needle)) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
+int sub localStringSearchKernel(int rounds, string left, string needle,
+        string right) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string value = joinAround(left, needle, right);
+        if (i & 1) {
+            checksum += 2;
+        }
+        if (value.contains(needle)) {
+            checksum += 1;
+        }
+    }
+    return checksum;
+}
+
+final class ExactStringSearch {
+    static string joinStatic(string left, string needle, string right) {
+        return left + needle + right;
+    }
+
+    string joinInstance(string left, string needle, string right) {
+        return left + needle + right;
+    }
+
+    static int staticKernel(int rounds, string left, string needle,
+            string right) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            if (joinStatic(left, needle, right).contains(needle)) {
+                ++checksum;
+            }
+        }
+        return checksum;
+    }
+
+    int instanceKernel(int rounds, string left, string needle, string right) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += joinInstance(left, needle, right).find(needle);
+        }
+        return checksum;
+    }
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+string mode = ARGV.size() > 1 ? ARGV[1] : "direct";
+ExactStringSearch factory();
+int result = mode == "local"
+    ? localStringSearchKernel(rounds, "prefix-", "needle", "-suffix")
+    : mode == "static"
+        ? ExactStringSearch::staticKernel(
+            rounds, "prefix-", "needle", "-suffix")
+        : mode == "instance"
+            ? factory.instanceKernel(
+                rounds, "prefix-", "needle", "-suffix")
+            : stringSearchKernel(
+                rounds, "prefix-", "needle", "-suffix");
+printf("%d\n", result);

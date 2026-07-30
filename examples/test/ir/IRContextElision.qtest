@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub plain(int value) {
+    return value + 1;
+}
+
+int sub usesArgv(int value, ...) {
+    return value + elements argv * 10 + int(argv[0]);
+}
+
+int sub deletesArgv(int value, ...) {
+    int before = elements argv;
+    delete argv;
+    return value + before * 10 + elements argv;
+}
+
+int sub implicitMap(list<int> values) {
+    return (map \$1 + 1, values)[1];
+}
+
+final class ContextProbe {
+    private {
+        int base;
+    }
+
+    constructor(int value) {
+        base = value;
+    }
+
+    int noSelf(int value) {
+        return value + 3;
+    }
+
+    int member(int value) {
+        return base + value;
+    }
+
+    int helper(int value) {
+        return base + value + 1;
+    }
+
+    int selfCall(int value) {
+        return helper(value);
+    }
+
+    int zero() {
+        return base;
+    }
+
+    code<int()> makeMethodRef() {
+        return \\zero();
+    }
+
+    code<int()> makeClosure() {
+        return int sub () {
+            return base + 2;
+        };
+    }
+}
+
+class EmptyBase {
+    constructor() {
+    }
+}
+
+final class EmptyDerived inherits EmptyBase {
+    constructor() : EmptyBase() {
+    }
+}
+
+ContextProbe probe(7);
+EmptyDerived empty_derived();
+code plain_call = \\plain();
+code argv_call = \\usesArgv();
+code delete_call = \\deletesArgv();
+code member_call = \\probe.member();
+code no_self_call = \\probe.noSelf();
+code<int()> method_ref = probe.makeMethodRef();
+code<int()> closure = probe.makeClosure();
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    plain_call(3), argv_call(5, 7, 8), delete_call(5, 7, 8),
+    implicitMap((2, 4)), no_self_call(1), member_call(4),
+    probe.selfCall(4), method_ref(), closure(), plain(9));
+";
+
+string expected = "4:32:25:5:4:11:12:7:9:10\n";
+string root = "/tmp/qore-ir-context-elision-" + string(getpid());
+string src = root + ".qr";
+string exe = root + "-aot";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_CONTEXT_STATS=1"
+        + " QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY=1"
+        + " QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI=1"
+        + " QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, src));
+if (!is_file(exe)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+
+hash<string, string> expected_stats = {
+    "plain": "argv=0 self=0",
+    "usesArgv": "argv=1 self=0",
+    "deletesArgv": "argv=1 self=0",
+    # $1 is established and restored inside the map; the caller's argv is not read.
+    "implicitMap": "argv=0 self=0",
+    "noSelf": "argv=0 self=0",
+    "member": "argv=0 self=1",
+    "selfCall": "argv=0 self=1",
+    "makeMethodRef": "argv=0 self=1",
+    "makeClosure": "argv=0 self=1",
+    "constructor": "argv=0 self=1",
+};
+foreach string function in (keys expected_stats) {
+    string flags = expected_stats{function};
+    if (!compile_out.regex(sprintf(
+            "AOT-CONTEXT: [^\\n]*%s[^\\n]*: %s", function, flags))) {
+        printf("missing context analysis for %s (%s):\n%s",
+            function, flags, compile_out);
+        exit(2);
+    }
+}
+
+foreach string env in (("", "QORE_DISABLE_IR_CONTEXT_ELISION=1")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir, env, exe));
+    if (actual != expected) {
+        printf("AOT mismatch with env '%s'\nexpected:\n%sactual:\n%s",
+            env, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);

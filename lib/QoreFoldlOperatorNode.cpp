@@ -55,6 +55,21 @@ static void set_analysis_foldl(QoreParseContext& parse_context,
     }
 }
 
+static const QoreStringNode* get_string_join_separator(const QoreValue& fold_expr) {
+    const auto* outer = dynamic_cast<const QorePlusOperatorNode*>(fold_expr.getInternalNode());
+    if (!outer) {
+        return nullptr;
+    }
+    const auto* arg2 = dynamic_cast<const QoreImplicitArgumentNode*>(outer->getRight().getInternalNode());
+    const auto* inner = dynamic_cast<const QorePlusOperatorNode*>(outer->getLeft().getInternalNode());
+    if (!arg2 || arg2->getOffset() != 1 || !inner) {
+        return nullptr;
+    }
+    const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(inner->getLeft().getInternalNode());
+    const auto* separator = dynamic_cast<const QoreStringNode*>(inner->getRight().getInternalNode());
+    return arg1 && arg1->getOffset() == 0 ? separator : nullptr;
+}
+
 // if del is true, then the returned QoreString * should be foldld, if false, then it must not be
 QoreString *QoreFoldlOperatorNode::getAsString(bool &del, int foff, ExceptionSink *xsink) const {
     del = false;
@@ -105,6 +120,11 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 
     // use lazy evaluation if the iterator expression supports it
     iterator_func = dynamic_cast<FunctionalOperator*>(right.getInternalNode());
+    const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(iteratorTypeInfo);
+    string_join = !std::getenv("QORE_DISABLE_AST_STRING_FOLD_JOIN")
+        && element_type
+        && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT
+        && get_string_join_separator(left);
 
     // if "right" (iterator exp) is a list or an iterator, then the return type is expTypeInfo, otherwise it's the
     // return type of the iterated expression
@@ -151,6 +171,51 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
         return QoreValue();
 
     ValueHolder result(iv.takeReferencedValue(), xsink);
+
+    if (string_join) {
+        if (f->getNext(iv, xsink)) {
+            return result.release();
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        const QoreStringNode* separator = get_string_join_separator(left);
+        assert(separator);
+        const QoreEncoding* encoding = separator->getEncoding();
+        if (result->getType() == NT_STRING) {
+            encoding = result->get<const QoreStringNode>()->getEncoding();
+        }
+        QoreStringNodeHolder joined(new QoreStringNode(encoding));
+        qore_string_private* joined_priv = qore_string_private::get(*joined);
+        auto append_value = [&](const QoreValue& value) -> bool {
+            if (value.getType() != NT_STRING) {
+                return true;
+            }
+            joined_priv->concat(value.get<const QoreStringNode>(), xsink);
+            return !*xsink;
+        };
+        if (!append_value(*result)
+                || joined_priv->concat(separator, xsink)
+                || !append_value(*iv)) {
+            return QoreValue();
+        }
+
+        size_t count = 2;
+        while (true) {
+            if (!(count % 100) && qore_check_cancel(xsink, "string fold join")) {
+                return QoreValue();
+            }
+            if (f->getNext(iv, xsink)) {
+                break;
+            }
+            if (*xsink || joined_priv->concat(separator, xsink) || !append_value(*iv)) {
+                return QoreValue();
+            }
+            ++count;
+        }
+        return QoreValue(joined.release());
+    }
 
     while (true) {
         // get next argument value

@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+int sub invariantLength() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 7; ++i) {
+        sum += s.length();
+    }
+    return sum;
+}
+
+int sub invariantStrlen() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 5; ++i) {
+        sum += s.strlen();
+    }
+    return sum;
+}
+
+int sub invariantSize() {
+    string s = \"abcdef\";
+    int sum = 0;
+    while (sum < 24) {
+        sum += s.size();
+    }
+    return sum;
+}
+
+int sub invariantGlobalLength() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 7; ++i) {
+        sum += length(s);
+    }
+    return sum;
+}
+
+int sub invariantGlobalStrlen() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 5; ++i) {
+        sum += strlen(s);
+    }
+    return sum;
+}
+
+int sub invariantNoArgPredicates() {
+    string s = \"abcdef\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (s.empty()) ++sum;
+        if (s.val()) ++sum;
+        if (s.strp()) ++sum;
+        if (s.intp()) ++sum;
+    }
+    return sum;
+}
+
+int sub reassignString() {
+    string s = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += s.length();
+        s += \"b\";
+    }
+    return sum;
+}
+
+int sub reassignNoArgPredicate() {
+    string s = \"\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (s.empty()) ++sum;
+        s += \"x\";
+    }
+    return sum;
+}
+
+int sub reassignGlobalString() {
+    string s = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += length(s);
+        s += \"b\";
+    }
+    return sum;
+}
+
+int sub removeAndAssign() {
+    string s = \"abcd\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += s.strlen();
+        remove s;
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+int sub removeAndAssignGlobal() {
+    string s = \"abcd\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += strlen(s);
+        remove s;
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+bool sub choose() {
+    return False;
+}
+
+int sub conditionalThenAssign() {
+    string s;
+    if (choose()) {
+        s = \"abcd\";
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += s.size();
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+int sub conditionalThenAssignNoArgPredicate() {
+    string s;
+    if (choose()) {
+        s = \"abcd\";
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        if (s.val()) ++sum;
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+int sub conditionalThenAssignGlobal() {
+    string s;
+    if (choose()) {
+        s = \"abcd\";
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += length(s);
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    invariantLength(), invariantStrlen(), invariantSize(),
+    invariantGlobalLength(), invariantGlobalStrlen(), invariantNoArgPredicates(),
+    reassignString(), reassignNoArgPredicate(), reassignGlobalString(),
+    removeAndAssign(), removeAndAssignGlobal(),
+    conditionalThenAssign(), conditionalThenAssignNoArgPredicate(), conditionalThenAssignGlobal());
+";
+}
+
+string sub runMode(string script_path, string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-loop-invariant-string-length-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+sub checkOutput(string label, string expected, string actual) {
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
+        exit(2);
+    }
+}
+
+string script_path = "/tmp/qore-loop-invariant-string-length-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runMode(script_path, "ast");
+checkOutput("ast", "35:45:24:35:45:8:10:1:10:6:6:2:2:2\n", ast);
+
+foreach string mode in (("ir", "tiered", "jit")) {
+    checkOutput(mode, ast, runMode(script_path, mode));
+}
+checkOutput("aot", ast, runAot(script_path));

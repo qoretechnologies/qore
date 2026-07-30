@@ -1,0 +1,289 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub branchInt(int rounds) {
+    int checksum = 0;
+    int selected = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = i + 1;
+        } else {
+            selected = i + 2;
+        }
+        checksum = checksum + selected;
+    }
+    return checksum;
+}
+
+float sub branchFloat(int rounds) {
+    float checksum = 0.0;
+    float selected = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = i + 1.25;
+        } else {
+            selected = i + 2.25;
+        }
+        checksum = checksum + selected;
+    }
+    return checksum;
+}
+
+int sub branchBool(int rounds) {
+    int checksum = 0;
+    bool selected = False;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = True;
+        } else {
+            selected = False;
+        }
+        if (selected) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
+int sub straightInt(int rounds) {
+    int checksum = 0;
+    int value = 0;
+    for (int i = 0; i < rounds; ++i) {
+        value = i * 3 + 1;
+        checksum = checksum + value;
+    }
+    return checksum;
+}
+
+int sub storeResult() {
+    int value = 1;
+    int result = (value = 7);
+    return result + value;
+}
+
+int store_counter = 0;
+
+int sub nextValue() {
+    return ++store_counter;
+}
+
+int sub storeSideEffect() {
+    int value = 0;
+    value = nextValue();
+    return store_counter;
+}
+
+string sub maybeAssigned(bool assign) {
+    int value;
+    if (assign) {
+        value = 7;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub removedValue(bool remove_it) {
+    int value = 9;
+    if (remove_it) {
+        remove value;
+    } else {
+        value = 11;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub deletedValue(bool delete_it) {
+    int value = 13;
+    if (delete_it) {
+        delete value;
+    } else {
+        value = 15;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub maybeAssignedBool(bool assign) {
+    bool value;
+    if (assign) {
+        value = True;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub removedBool(bool remove_it) {
+    bool value = True;
+    if (remove_it) {
+        remove value;
+    } else {
+        value = False;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub deletedBool(bool delete_it) {
+    bool value = True;
+    if (delete_it) {
+        delete value;
+    } else {
+        value = False;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+# regression: an exact native int local promoted to SSA must stay valid across a
+# specialized typed foreach with a conditional body (loop-exit PHI wiring; the
+# done edge of TypedForeachNext* leaves a different LLVM block than the
+# continue edge)
+string sub typedForeachInt(hash<string, int> counts) {
+    int max_fields = 12;
+    list<string> shapes = ();
+    foreach string name in ((\"int\", \"string\", \"other\")) {
+        if (counts{name}) {
+            shapes += name;
+        }
+    }
+    return sprintf(\"%d:%s\", max_fields, shapes.join(\",\"));
+}
+
+# same regression shape for exact native float locals, including one local
+# conditionally reassigned inside the typed loop body
+string sub typedForeachFloat() {
+    float scale = 1.5;
+    float total = 0.0;
+    foreach float v in ((1.25, 2.5, 0.5)) {
+        if (v > 1.0) {
+            total = total + v;
+        }
+    }
+    return sprintf(\"%.2f:%.2f\", scale, total);
+}
+
+printf(\"%d:%.2f:%d:%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
+    branchFloat(20), branchBool(20), straightInt(20), storeResult(), storeSideEffect(),
+    maybeAssigned(False), maybeAssigned(True),
+    removedValue(True), removedValue(False), deletedValue(True),
+    deletedValue(False), maybeAssignedBool(False), maybeAssignedBool(True),
+    removedBool(True), removedBool(False), deletedBool(True), deletedBool(False),
+    typedForeachInt({\"int\": 1}), typedForeachFloat());
+";
+
+string root = "/tmp/qore-ir-native-local-ssa-" + string(getpid());
+string source_path = root + ".qr";
+string enabled_aot = root + "-enabled";
+string disabled_aot = root + "-disabled";
+File source();
+source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected = "220:225.00:10:590:14:1:nothing:7:nothing:11:nothing:15:nothing:1:nothing:0:nothing:0:12:int:1.50:3.75\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s"
+        + " %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+if (stats !~ /IR-OPT: branchInt:.*native-local-loads=[1-9]/
+        || stats !~ /IR-OPT: branchFloat:.*native-local-loads=[1-9]/
+        || stats !~ /IR-OPT: branchBool:.*native-local-loads=[1-9]/
+        || stats !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/) {
+    printf("missing native local SSA promotion:\n%s", stats);
+    exit(2);
+}
+foreach string function in (("branchInt", "branchFloat", "branchBool", "straightInt")) {
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*native-local-stores=[1-9]", function))) {
+        printf("missing dead native local store elimination for %s:\n%s",
+            function, stats);
+        exit(2);
+    }
+}
+foreach string function in (("maybeAssigned", "removedValue", "deletedValue",
+        "maybeAssignedBool", "removedBool", "deletedBool")) {
+    if (stats.regex(sprintf(
+            "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
+        printf("unsafe native local SSA promotion for %s:\n%s",
+            function, stats);
+        exit(2);
+    }
+}
+# the typed-foreach regression functions must exercise BOTH native local SSA
+# promotion and typed-foreach specialization; require nonzero counters so the
+# test cannot pass by silently avoiding either optimization
+foreach string function in (("typedForeachInt", "typedForeachFloat")) {
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
+        printf("missing native local SSA promotion across typed foreach "
+            + "for %s:\n%s", function, stats);
+        exit(2);
+    }
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*typed-foreach=[1-9]", function))) {
+        printf("missing typed foreach specialization for %s:\n%s",
+            function, stats);
+        exit(2);
+    }
+}
+
+string loads_only_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION=1"
+        + " QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s"
+        + " %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+if (loads_only_stats
+        !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/
+        || loads_only_stats =~ /native-local-stores=[1-9]/) {
+    printf("invalid native local load-only optimization stats:\n%s",
+        loads_only_stats);
+    exit(2);
+}
+
+string enabled_aot_o0 = root + "-enabled-o0";
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_aot, source_path));
+# -O0 must pass too: the typed-foreach loop-exit PHI regression was independent
+# of the LLVM optimization level
+string enabled_compile_o0 = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O0 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_aot_o0, source_path));
+string disabled_compile = backquote(sprintf(
+    "QORE_DISABLE_IR_NATIVE_LOCAL_SSA=1 LD_LIBRARY_PATH=%s"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_aot, source_path));
+foreach string executable in ((enabled_aot, enabled_aot_o0, disabled_aot)) {
+    if (!is_file(executable)) {
+        printf("AOT compile failed for %s:\n%s%s%s", executable,
+            enabled_compile, enabled_compile_o0, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, executable));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            executable, expected, actual);
+        exit(2);
+    }
+}

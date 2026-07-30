@@ -1,0 +1,310 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+hashdecl LoopState {
+    int count;
+    float total;
+    bool flag;
+}
+
+int sub hashLoopControl(int rounds) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < rounds; ++i) {
+        if (i == 5) {
+            break;
+        }
+        if (i % 2) {
+            values.left += 2;
+            continue;
+        }
+        values.right++;
+    }
+    return values.left * 100 + values.right;
+}
+
+int sub listLoopControl(int rounds) {
+    list<int> values = (1, 2);
+    for (int i = 0; i < rounds; ++i) {
+        if (i == 5) {
+            break;
+        }
+        if (i % 2) {
+            values[0] += 2;
+            continue;
+        }
+        values[1]++;
+    }
+    return values[0] * 100 + values[1];
+}
+
+int sub hashdeclLoopHeterogeneous() {
+    LoopState values((\"count\": 1, \"total\": 2.0, \"flag\": True));
+    for (int i = 0; i < 4; ++i) {
+        values.count += 1;
+        values.total += 0.5;
+        if (i == 2) {
+            values.flag = False;
+        }
+    }
+    return values.count * 100 + values.total.toInt() * 10
+        + (values.flag ? 1 : 0);
+}
+
+int sub nestedListLoop() {
+    list<int> values = (1, 2);
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            values[0] += 1;
+            values[1]++;
+        }
+    }
+    return values[0] * 100 + values[1];
+}
+
+hash<string, int> sub hashReturnLoop(int rounds) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < rounds; ++i) {
+        values.left += 1;
+        values.right += 2;
+    }
+    return values;
+}
+
+int sub hashReturnKernel() {
+    hash<string, int> values = hashReturnLoop(4);
+    return values.left + values.right;
+}
+
+list<int> sub listReturnLoop(int rounds) {
+    list<int> values = (1, 2);
+    for (int i = 0; i < rounds; ++i) {
+        values[0] += 1;
+        values[1] += 2;
+    }
+    return values;
+}
+
+int sub listReturnKernel() {
+    list<int> values = listReturnLoop(4);
+    return values[0] + values[1];
+}
+
+LoopState sub hashdeclReturnLoop(int rounds) {
+    LoopState values((\"count\": 1, \"total\": 2.0, \"flag\": True));
+    for (int i = 0; i < rounds; ++i) {
+        values.count += 1;
+        values.total += 0.5;
+        if (i == 2) {
+            values.flag = False;
+        }
+    }
+    return values;
+}
+
+int sub hashdeclReturnKernel() {
+    LoopState values = hashdeclReturnLoop(4);
+    return values.count * 100 + values.total.toInt() * 10
+        + (values.flag ? 1 : 0);
+}
+
+int sub dynamicHashSelectorLoop() {
+    string key = \"left\";
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < 4; ++i) {
+        values{key} += 1;
+    }
+    return values.left * 10 + values.right;
+}
+
+int sub dynamicListSelectorLoop() {
+    int index = 1;
+    list<int> values = (1, 2);
+    for (int i = 0; i < 4; ++i) {
+        values[index] += 2;
+    }
+    return values[0] * 100 + values[1];
+}
+
+int sub aliasedLoop() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    hash<string, int> alias = values;
+    for (int i = 0; i < 3; ++i) {
+        values.left += 1;
+    }
+    return alias.left * 10 + values.left;
+}
+
+bool sub removedLoop() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < 2; ++i) {
+        remove values.left;
+    }
+    return values.left === NOTHING;
+}
+
+bool sub deletedLoop() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < 2; ++i) {
+        delete values.left;
+    }
+    return values.left === NOTHING;
+}
+
+int sub consume(hash<string, int> values) {
+    return values.left;
+}
+
+int sub escapedLoop() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    int checksum = 0;
+    for (int i = 0; i < 3; ++i) {
+        checksum += consume(values);
+        values.left += 1;
+    }
+    return checksum * 10 + values.left;
+}
+
+bool sub conditionalLoop(bool assign) {
+    hash<string, int> values;
+    if (assign) {
+        values = {\"left\": 10, \"right\": 20};
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (assign) {
+            values.left += 1;
+        }
+    }
+    return values.left === NOTHING;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    hashLoopControl(10), listLoopControl(10),
+    hashdeclLoopHeterogeneous(), nestedListLoop(),
+    dynamicHashSelectorLoop(), dynamicListSelectorLoop(),
+    aliasedLoop(), removedLoop(), deletedLoop(), escapedLoop(),
+    conditionalLoop(False), conditionalLoop(True),
+    hashReturnKernel(), listReturnKernel(), hashdeclReturnKernel());
+";
+
+string script_path = "/tmp/qore-ir-loop-carried-aggregate-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "505:505:540:708:52:110:14:1:1:64:1:0:15:15:540\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+foreach string name in (("hashLoopControl", "hashdeclLoopHeterogeneous",
+        "dynamicHashSelectorLoop")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=1", name))) {
+        printf("missing loop-carried hash scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+foreach string name in (("listLoopControl", "nestedListLoop", "dynamicListSelectorLoop")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-lists=1", name))) {
+        printf("missing loop-carried list scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+foreach string name in (("hashReturnLoop", "hashdeclReturnLoop")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=1", name))) {
+        printf("missing return-materialized hash scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+if (!stats.regex("IR-OPT: listReturnLoop:.*scalar-lists=1")) {
+    printf("missing return-materialized list scalar replacement:\n%s", stats);
+    exit(2);
+}
+foreach string name in (("aliasedLoop", "removedLoop", "deletedLoop", "escapedLoop", "conditionalLoop")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=0", name))) {
+        printf("unsafe loop-carried hash scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+
+string exe = "/tmp/qore-ir-loop-carried-aggregate-" + string(getpid());
+string disabled = exe + "-disabled";
+string return_disabled = exe + "-return-disabled";
+string enabled_compile = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, script_path));
+string disabled_compile = backquote(sprintf(
+    "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 "
+    + "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 "
+    + "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, script_path));
+string return_disabled_compile = backquote(sprintf(
+    "QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION=1 "
+    + "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, return_disabled, script_path));
+if (!is_file(exe) || !is_file(disabled) || !is_file(return_disabled)) {
+    printf("AOT compile failed:\nenabled:\n%sdisabled:\n%sreturn-disabled:\n%s",
+        enabled_compile, disabled_compile, return_disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /IR-OPT-AOT: hashLoopControl:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: listLoopControl:.*scalar-lists=1/
+        || enabled_compile !~ /IR-OPT-AOT: hashdeclLoopHeterogeneous:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: nestedListLoop:.*scalar-lists=1/
+        || enabled_compile !~ /IR-OPT-AOT: dynamicHashSelectorLoop:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: dynamicListSelectorLoop:.*scalar-lists=1/
+        || enabled_compile !~ /IR-OPT-AOT: hashReturnLoop:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: hashdeclReturnLoop:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: listReturnLoop:.*scalar-lists=1/) {
+    printf("missing AOT loop-carried aggregate scalar replacement:\n%s", enabled_compile);
+    exit(2);
+}
+foreach string name in (("hashReturnLoop", "hashdeclReturnLoop")) {
+    if (return_disabled_compile.regex(sprintf(
+            "IR-OPT-AOT: %s:.*scalar-hashes=1", name))) {
+        printf("return materialization disable control failed for %s:\n%s",
+            name, return_disabled_compile);
+        exit(2);
+    }
+}
+if (return_disabled_compile =~ /IR-OPT-AOT: listReturnLoop:.*scalar-lists=1/) {
+    printf("return materialization disable control failed for listReturnLoop:\n%s",
+        return_disabled_compile);
+    exit(2);
+}
+foreach string binary in ((exe, disabled, return_disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, binary));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            binary, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(script_path);

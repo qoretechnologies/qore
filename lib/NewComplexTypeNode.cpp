@@ -33,7 +33,34 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/qore_program_private.h"
+
+static std::string qore_new_complex_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
+    if (!qore_type_info_is_aot_deferred(typeInfo)
+            || QoreTypeInfo::parseReturns(typeInfo, NT_HASH) == QTI_NOT_EQUAL) {
+        return std::string();
+    }
+
+    std::string path = qore_get_aot_serializable_type_path(typeInfo);
+    return (!strncmp(path.c_str(), "hash<", 5) || !strncmp(path.c_str(), "*hash<", 6))
+        ? path : std::string();
+}
+
+static int qore_parse_init_hashdecl_args(QoreParseListNode* args, QoreParseContext& parse_context) {
+    if (!args) {
+        return 0;
+    }
+
+    QoreParseListNodeParseInitHelper helper(args);
+    while (helper.next()) {
+        helper.parseInit(parse_context);
+    }
+    return helper.hasError() ? -1 : 0;
+}
 
 int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     int err = 0;
@@ -81,6 +108,21 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             }
             parse_context.typeInfo = returnTypeInfo;
             val = new NewHashDeclNode(loc, hd, takeArgs(), runtime_check);
+            return err;
+        }
+    }
+    {
+        std::string hashdecl_path;
+        if (qore_aot_source_parse_active()
+                && !(hashdecl_path = qore_new_complex_aot_deferred_hashdecl_type_path(
+                    parse_context.typeInfo)).empty()) {
+            ReferenceHolder<> holder(this, nullptr);
+            const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
+            if (qore_parse_init_hashdecl_args(args, parse_context) && !err) {
+                err = -1;
+            }
+            parse_context.typeInfo = returnTypeInfo;
+            val = new NewHashDeclNode(loc, hashdecl_path.c_str(), returnTypeInfo, takeArgs());
             return err;
         }
     }
@@ -164,7 +206,30 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 }
 
 QoreValue NewHashDeclNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return typed_hash_decl_private::get(*hd)->newHash(args, runtime_check, xsink);
+    const TypedHashDecl* resolved_hd = hd;
+    if (!resolved_hd) {
+        QoreProgram* pgm = getProgram();
+        if (!pgm) {
+            xsink->raiseException("HASHDECL-ERROR",
+                "cannot resolve hashdecl '%s' for instantiation: no program context",
+                dynamic_hashdecl_name.c_str());
+            return QoreValue();
+        }
+        resolved_hd = qore_aot_resolve_hashdecl_path(pgm, dynamic_hashdecl_name.c_str());
+        if (!resolved_hd) {
+            std::string error;
+            QoreAOTTypeResolver resolver(pgm);
+            const QoreTypeInfo* ti = resolver.resolve(dynamic_hashdecl_name.c_str(), error);
+            ti = qore_substitute_type_params_if_needed(ti);
+            resolved_hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+        }
+        if (!resolved_hd) {
+            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s' for instantiation",
+                dynamic_hashdecl_name.c_str());
+            return QoreValue();
+        }
+    }
+    return typed_hash_decl_private::get(*resolved_hd)->newHash(args, runtime_check, xsink);
 }
 
 QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

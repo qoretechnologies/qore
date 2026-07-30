@@ -1083,6 +1083,21 @@ public:
     DLLEXPORT int waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink);
 
+    //! Flushes pending HTTP/3 write data through the async I/O controller
+    /** Runs one QUIC timer/write cycle for the given session on the async I/O
+        controller thread and sends any generated packets on the UDP socket.
+
+        @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+
+        @throw QUIC-ERROR if no QUIC session with the given ID is active
+        @throw QUIC-SEND-ERROR if the UDP send fails
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int flushQuicPendingData(int64_t session_id, ExceptionSink* xsink);
+
     //! Submit a response for an HTTP/3 extended CONNECT request (RFC 9220)
     /** @param session_id the QUIC session ID
         @param stream_id the HTTP/3 stream ID from the CONNECT request

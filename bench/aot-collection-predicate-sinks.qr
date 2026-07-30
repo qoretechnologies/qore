@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+*int sub listValue(list<int> values, int index) {
+    return values[index];
+}
+
+*int sub hashValue(hash<string, int> values) {
+    return values.answer;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 2000000;
+    list<int> values = (10, 20, 30);
+    hash<string, int> present = ("answer": 42);
+    hash<string, int> missing = {};
+    int list_expected = 20;
+    int hash_expected = 42;
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int index = i % 4;
+        result += listValue(values, index) == 20;
+        result += listValue(values, index) != 30;
+        result += hashValue(present) == 42;
+        result += hashValue(missing) != 42;
+        result += listValue(values, index) == list_expected;
+        result += hashValue(present) == hash_expected;
+    }
+    printf("%d\n", result);
+    return 0;
+}
+
+main();

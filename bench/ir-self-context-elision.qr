@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ContextTransform {
+    int apply(int value) {
+        return value + 1;
+    }
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+ContextTransform transform();
+code<int(int)> apply = \transform.apply();
+
+int checksum = 0;
+for (int i = 0; i < rounds; ++i) {
+    checksum += apply(i & 1023);
+}
+printf("%d\n", checksum);

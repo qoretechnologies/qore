@@ -1,0 +1,479 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class CMakeBuildHelpersTest
+
+class CMakeBuildHelpersTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qore_build_dir;
+        *string qore_dir;
+    }
+
+    constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
+            ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
+        qore_dir = qore_build_dir + "/cmake";
+        if (!is_file(qore_dir + "/QoreConfig.cmake")
+                && is_file(qore_dir + "/Qore/QoreConfig.cmake")) {
+            qore_dir += "/Qore";
+        }
+        if (!is_file(qore_dir + "/QoreConfig.cmake")) {
+            qore_dir = NOTHING;
+        }
+
+        addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+        addTestCase("generic qcc object helper builds standalone .qo files",
+            \testGenericQccObjectHelpers());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string read(string path) {
+        return ReadOnlyFile::readTextFile(path) ?? "";
+    }
+
+    testExportedHelpers() {
+        TmpDir tmp("qore-cmake-build-helpers-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+
+        string input = src_dir + "/input.txt";
+        string cmakelists = src_dir + "/CMakeLists.txt";
+        write(input, "stable content\n");
+        write(cmakelists,
+"cmake_minimum_required(VERSION 3.5)
+project(QoreCMakeHelperSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(INPUT_FILE \"${CMAKE_SOURCE_DIR}/input.txt\")
+set(DIGEST_FILE \"${CMAKE_BINARY_DIR}/input.sha256\")
+qore_content_digest_target(input-digest
+    OUTPUT \"${DIGEST_FILE}\"
+    INPUTS \"${INPUT_FILE}\")
+
+qore_get_qcc_command(QCC_CMD)
+qore_get_qcc_deps(QCC_DEPS QCC_COMMAND \"${QCC_CMD}\")
+qore_qcc_sidecar_paths(\"${CMAKE_BINARY_DIR}/sample.qo\"
+    DEPFILE SAMPLE_DEPFILE
+    INDEX_JSON SAMPLE_INDEX
+    STATUS_JSON SAMPLE_STATUS
+    SUCCESS_STAMP SAMPLE_STAMP
+    CONTENT_STAMP SAMPLE_CONTENT_STAMP
+    MANIFEST_JSON SAMPLE_MANIFEST)
+qore_qcc_sidecar_flags(SAMPLE_FLAGS \"${CMAKE_BINARY_DIR}/sample.qo\" ALL)
+file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
+    \"qcc=${QCC_CMD}\\n\"
+    \"deps=${QCC_DEPS}\\n\"
+    \"depfile=${SAMPLE_DEPFILE}\\n\"
+    \"status=${SAMPLE_STATUS}\\n\"
+    \"flags=${SAMPLE_FLAGS}\\n\")
+");
+
+        string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
+            src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/helper-vars.txt"),
+            "configured with Qore package: " + configure);
+
+        string vars = read(build_dir + "/helper-vars.txt");
+        assertTrue(vars.find("qcc=") != -1, "qcc command exported: " + vars);
+        assertTrue(vars.find("qcc-format.stamp") != -1,
+            "qcc deps use semantic format stamp: " + vars);
+        assertEq(-1, vars.find("deps=" + qore_build_dir + "/qcc\n"),
+            "qcc deps do not mtime-track qcc when format stamp is available: " + vars);
+        assertTrue(vars.find("depfile=" + build_dir + "/sample.qo.d") != -1,
+            "sidecar depfile path exported: " + vars);
+        assertTrue(vars.find("--content-stamp=" + build_dir + "/sample.qo.content.stamp") != -1,
+            "sidecar content-stamp flag exported: " + vars);
+        assertTrue(vars.find("--skip-if-manifest-current") != -1,
+            "sidecar manifest skip flag exported: " + vars);
+
+        string build1 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertTrue(is_file(build_dir + "/input.sha256"),
+            "content digest target built: " + build1);
+        string digest1 = read(build_dir + "/input.sha256");
+        assertTrue(digest1.find("format=1\n") == 0, "digest has stable format header: " + digest1);
+        assertTrue(digest1.find("input.txt") != -1, "digest names input: " + digest1);
+
+        write(input, "stable content\n");
+        string build2 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertEq(digest1, read(build_dir + "/input.sha256"),
+            "same-content rebuild does not change digest content: " + build2);
+
+        write(input, "changed content\n");
+        string build3 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertNeq(digest1, read(build_dir + "/input.sha256"),
+            "changed content updates digest: " + build3);
+    }
+
+    testGenericQccObjectHelpers() {
+        TmpDir tmp("qore-cmake-qcc-helpers-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        string provider = snippets_dir + "/provider.qc";
+        string consumer = snippets_dir + "/consumer.qc";
+        string base = snippets_dir + "/base.qc";
+        string child = snippets_dir + "/child.qc";
+        string default_target = snippets_dir + "/defaulttarget.qc";
+        string default_holder = snippets_dir + "/defaultholder.qc";
+        string hashdecl_provider = snippets_dir + "/hashdeclprovider.qc";
+        string hashdecl_consumer = snippets_dir + "/hashdeclconsumer.qc";
+        string status_provider = snippets_dir + "/statusprovider.qc";
+        string status_holder = snippets_dir + "/statusholder.qc";
+        string enum_provider = snippets_dir + "/enumprovider.qc";
+        string enum_consumer = snippets_dir + "/enumconsumer.qc";
+        string callref_provider = snippets_dir + "/callrefprovider.qc";
+        string callref_consumer = snippets_dir + "/callrefconsumer.qc";
+        string constinit_provider = snippets_dir + "/constinitprovider.qc";
+        string constinit_consumer = snippets_dir + "/constinitconsumer.qc";
+        string const_hashdecl_provider = snippets_dir + "/consthashdeclprovider.qc";
+        string const_hashdecl_consumer = snippets_dir + "/consthashdeclconsumer.qc";
+        string late_object_module = src_dir + "/LateObjectModule.qm";
+        string late_aggregate_module = src_dir + "/LateAggregateModule.qm";
+        write(provider,
+"%new-style
+class CMakeQoProvider {
+    public {
+        const StaticConst = \"provider\";
+        static string StaticText = \"state\";
+    }
+    constructor() {}
+    static string label() { return StaticConst + \":\" + StaticText; }
+    string get() { return label(); }
+}
+string sub cmakeQoFreeFunction() { return CMakeQoProvider::label(); }
+");
+        write(consumer,
+"%new-style
+class CMakeQoConsumer {
+    string run() {
+        object p = new CMakeQoProvider();
+        return p.get() + \":\" + CMakeQoProvider::StaticConst + \":\" + CMakeQoProvider::StaticText
+            + \":\" + CMakeQoProvider::label() + \":\" + cmakeQoFreeFunction();
+    }
+}
+");
+        write(base,
+"%new-style
+class CMakeQoBase {
+    string base() { return \"base\"; }
+}
+");
+        write(child,
+"%new-style
+class CMakeQoChild inherits CMakeQoBase {
+    string child() { return base(); }
+}
+");
+        write(default_target,
+"%new-style
+class CMakeQoDefaultTarget {
+}
+");
+        write(default_holder,
+"%new-style
+class CMakeQoDefaultHolder {
+    private {
+        CMakeQoDefaultTarget target();
+    }
+}
+");
+        write(hashdecl_provider,
+"%new-style
+hashdecl CMakeQoHashInfo {
+    string label;
+}
+");
+        write(hashdecl_consumer,
+"%new-style
+class CMakeQoHashConsumer {
+    hash<CMakeQoHashInfo> get() {
+        return new hash<CMakeQoHashInfo>({\"label\": \"hash\"});
+    }
+}
+");
+        write(status_provider,
+"%new-style
+hashdecl CMakeQoStatus {
+    string status = \"queued\";
+}
+");
+        write(status_holder,
+"%new-style
+class CMakeQoStatusHolder {
+    private {
+        hash<CMakeQoStatus> status();
+    }
+}
+");
+        write(enum_provider,
+"%new-style
+public enum CMakeQoMode : string {
+    Fast = \"fast\",
+    Slow = \"slow\",
+}
+");
+        write(enum_consumer,
+"%new-style
+class CMakeQoEnumConsumer {
+    enum<CMakeQoMode> get() {
+        enum<CMakeQoMode> mode = CMakeQoMode::Slow;
+        switch (mode) {
+            case CMakeQoMode::Fast:
+                return CMakeQoMode::Fast;
+            default:
+                return mode;
+        }
+    }
+}
+");
+        write(callref_provider,
+"%new-style
+string sub cmakeQoCallRefFunction() { return \"callref\"; }
+");
+        write(callref_consumer,
+"%new-style
+class CMakeQoCallRefConsumer {
+    callref get() {
+        return \\cmakeQoCallRefFunction();
+    }
+}
+");
+        write(constinit_provider,
+"%new-style
+class CMakeQoConstInitProvider {
+    static int limit() { return 42; }
+}
+");
+        write(constinit_consumer,
+"%new-style
+class CMakeQoConstInitConsumer {
+    public {
+        const Limit = CMakeQoConstInitProvider::limit();
+    }
+}
+");
+        write(const_hashdecl_provider,
+"%new-style
+hashdecl CMakeQoConstHashInfo {
+    string value;
+}
+");
+        write(const_hashdecl_consumer,
+"%new-style
+class CMakeQoConstHashConsumer {
+    public {
+        const Values = (
+            <CMakeQoConstHashInfo>{\"value\": \"const\"}
+        );
+    }
+}
+");
+        write(late_object_module,
+"%new-style
+module LateObjectModule {
+    version = \"1.0\";
+    desc = \"late-defined qcc object dependency\";
+    author = \"Qore\";
+}
+");
+        write(late_aggregate_module,
+"%new-style
+module LateAggregateModule {
+    version = \"1.0\";
+    desc = \"late-defined qcc aggregate dependency\";
+    author = \"Qore\";
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoHelperSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(LATE_MODULE_DIR \"${CMAKE_BINARY_DIR}/late-modules\")
+set(QORE_QCC_MODULE_PATH \"${QORE_BUILDTREE_USER_MODULE_PATH}\")
+if(NOT QORE_QCC_MODULE_PATH)
+    set(QORE_QCC_MODULE_PATH \"${QORE_MODULES_DIR}\")
+endif()
+set(QORE_QCC_MODULE_PATH \"${LATE_MODULE_DIR}:${QORE_QCC_MODULE_PATH}\")
+
+set(QO_SOURCES
+    \"${CMAKE_SOURCE_DIR}/srcs/provider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/base.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/child.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/defaulttarget.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/defaultholder.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/hashdeclprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/hashdeclconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/statusprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/statusholder.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/enumprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/enumconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/callrefprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/callrefconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/constinitprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/constinitconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclconsumer.qc\")
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP cmake-smoke
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    INCLUDE_DIR \"${QORE_INCLUDE_DIR}\"
+    MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
+    SOURCES ${QO_SOURCES}
+    LOAD_MODULES LateObjectModule
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS
+    CONTEXT_VAR QO_CONTEXT)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+
+qore_qcc_link_objects(QO_LINK
+    OUTPUT \"${CMAKE_BINARY_DIR}/linked.qo\"
+    AGGREGATE_SYMBOL QORE_CMAKE_QO_SMOKE
+    INPUTS ${QO_OBJECTS}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    WARNINGS_ARE_ERRORS
+    STAMP_VAR QO_LINK_STAMP
+    LINK_MAP_VAR QO_LINK_MAP)
+add_custom_target(qo-link ALL DEPENDS ${QO_LINK_STAMP})
+
+qore_qcc_script_aggregate(QO_SCRIPT_AGG
+    OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate.qo\"
+    AGGREGATE QORE_CMAKE_SCRIPT_SMOKE
+    MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
+    SOURCES ${QO_SOURCES}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    LOAD_MODULES LateAggregateModule
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    NATIVE_REGISTERS
+    STAMP_VAR QO_SCRIPT_AGG_STAMP)
+add_custom_target(qo-script-aggregate ALL DEPENDS ${QO_SCRIPT_AGG_STAMP})
+
+set(LATE_OBJECT_QMOD \"${LATE_MODULE_DIR}/LateObjectModule.qmod\")
+add_custom_command(
+    OUTPUT \"${LATE_OBJECT_QMOD}\"
+    COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${LATE_MODULE_DIR}\"
+    COMMAND \"${QORE_QCC_EXECUTABLE}\" --warnings-are-errors -m
+        \"${CMAKE_SOURCE_DIR}/LateObjectModule.qm\" -o \"${LATE_OBJECT_QMOD}\"
+    DEPENDS \"${CMAKE_SOURCE_DIR}/LateObjectModule.qm\"
+    VERBATIM)
+add_custom_target(LateObjectModule-qmod DEPENDS \"${LATE_OBJECT_QMOD}\")
+
+set(LATE_AGGREGATE_QMOD \"${LATE_MODULE_DIR}/LateAggregateModule.qmod\")
+add_custom_command(
+    OUTPUT \"${LATE_AGGREGATE_QMOD}\"
+    COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${LATE_MODULE_DIR}\"
+    COMMAND \"${QORE_QCC_EXECUTABLE}\" --warnings-are-errors -m
+        \"${CMAKE_SOURCE_DIR}/LateAggregateModule.qm\" -o \"${LATE_AGGREGATE_QMOD}\"
+    DEPENDS \"${CMAKE_SOURCE_DIR}/LateAggregateModule.qm\"
+    VERBATIM)
+add_custom_target(LateAggregateModule-qmod DEPENDS \"${LATE_AGGREGATE_QMOD}\")
+
+file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
+    \"objects=${QO_OBJECTS}\\n\"
+    \"stamps=${QO_STAMPS}\\n\"
+    \"content_stamps=${QO_CONTENT_STAMPS}\\n\"
+    \"order_targets=${QO_ORDER_TARGETS}\\n\"
+    \"context=${QO_CONTEXT}\\n\"
+    \"link=${QO_LINK}\\n\"
+    \"link_stamp=${QO_LINK_STAMP}\\n\"
+    \"link_map=${QO_LINK_MAP}\\n\"
+    \"script_aggregate=${QO_SCRIPT_AGG}\\n\"
+    \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\")
+");
+
+        string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
+            src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-vars.txt"),
+            "configured generic qcc helper project: " + configure);
+
+        string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_1 \"\"\\)"),
+            "linkable provider references do not become consumer build deps: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_3.*base_qc\\.qo"),
+            "inheritance remains a source-scanned build prerequisite: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_5 \"\"\\)"),
+            "constructed class member defaults remain linkable: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_7 \"\"\\)"),
+            "new hash<HashDecl> constructors remain linkable: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_9 \"\"\\)"),
+            "constructed typed-hash defaults remain linkable: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_11.*enumprovider_qc\\.qo"),
+            "enum annotations and members become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_13.*callrefprovider_qc\\.qo"),
+            "function call references become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_15 \"\"\\)"),
+            "static calls in constant initializers remain source-deferred callable imports: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_17.*consthashdeclprovider_qc\\.qo"),
+            "typed-hash constructors in constant initializers become source-scanned build prerequisites: " + direct);
+
+        string build1 = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
+        assertTrue(is_file(build_dir + "/linked.qo.qolink.json"),
+            "linked .qo map built: " + build1);
+        assertTrue(is_file(build_dir + "/script-aggregate.qo"),
+            "script aggregate .qo built: " + build1);
+        assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
+            "late-defined object module dependency built: " + build1);
+        assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
+            "late-defined aggregate module dependency built: " + build1);
+        string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
+                && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1
+                && source_symbols.find("function\tcmakeQoCallRefFunction\t") != -1,
+            "qcc object helper writes a source-symbol manifest: " + source_symbols);
+
+        string link_map = read(build_dir + "/linked.qo.qolink.json");
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "qo-link map resolves standalone imports: " + link_map);
+        assertTrue(link_map.find("CMakeQoProvider::label") != -1,
+            "qo-link map records static method resolution: " + link_map);
+
+        string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(no_op.find("qcc -c:") == -1
+                && no_op.find("qcc: scanning") == -1
+                && no_op.find("qcc --link-qo:") == -1
+                && no_op.find("qcc --script-aggregate:") == -1,
+            "no-op rebuild does not rerun qcc helper targets: " + no_op);
+
+        string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
+        string provider_body = read(provider);
+        write(provider, provider_body);
+        string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
+            "same-content source mtime rebuild does not relink aggregate: " + same_content);
+    }
+}

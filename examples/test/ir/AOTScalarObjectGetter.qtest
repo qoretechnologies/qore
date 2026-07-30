@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-scalar-object-getter-" + string(getpid());
+string provider_dir = root + "/provider";
+string aot_dir = root + "/objects";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(aot_dir);
+
+string provider_path = root + "/provider.qc";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+string provider_code = "%modern
+
+final class ScalarGetter {
+    private {
+        int int_value;
+        float float_value;
+        bool bool_value;
+        *int optional_value;
+    }
+
+    constructor(bool assign_values) {
+        if (assign_values) {
+            int_value = 9223372036854775807;
+            float_value = 2.5;
+            bool_value = True;
+        }
+    }
+
+    int getInt() { return int_value; }
+    float getFloat() { return float_value; }
+    bool getBool() { return bool_value; }
+    *int getOptional() { return optional_value; }
+    int invalidate() {
+        delete self;
+        return 1;
+    }
+}
+";
+string consumer_code = "%modern
+
+int sub concurrentReads(ScalarGetter getter) {
+    const int Threads = 8;
+    const int Iterations = 1000;
+    Counter done(Threads);
+    Mutex lock();
+    int checksum = 0;
+    for (int i = 0; i < Threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            int local = 0;
+            for (int j = 0; j < Iterations; ++j) {
+                local += getter.getBool();
+            }
+            lock.lock();
+            on_exit lock.unlock();
+            checksum += local;
+        }();
+    }
+    done.waitForZero();
+    return checksum;
+}
+
+int sub main() {
+    ScalarGetter getter(True);
+    ScalarGetter missing(False);
+    ScalarGetter deleted(True);
+    bool rejected = False;
+    bool deleted_rejected = False;
+    try {
+        missing.getInt();
+    } catch (hash<auto> ex) {
+        rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    deleted.invalidate();
+    try {
+        deleted.getInt();
+    } catch (hash<auto> ex) {
+        deleted_rejected = ex.err == \"OBJECT-ALREADY-DELETED\";
+    }
+    printf(\"%d:%g:%y:%y:%y:%y:%d\\n\", getter.getInt(), getter.getFloat(),
+        getter.getBool(), rejected, getter.getOptional() === NOTHING,
+        deleted_rejected, concurrentReads(getter));
+    return 0;
+}
+";
+
+File provider();
+provider.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider.write(provider_code);
+provider.close();
+File consumer();
+consumer.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer.write(consumer_code);
+consumer.close();
+File combined();
+combined.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined.write(provider_code + consumer_code + "\nmain();\n");
+combined.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+    env, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "%s %s -O3 -c --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string consumer_compile = backquote(sprintf(
+    "%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    env, qcc_bin, provider_dir, aot_dir, consumer_path));
+string consumer_qo = aot_dir + "/consumer.qo";
+if (!is_file(consumer_qo)) {
+    printf("consumer compile failed:\n%s", consumer_compile);
+    exit(2);
+}
+
+string aot_exe = root + "/aot";
+string link_output = backquote(sprintf("%s %s -O3 -o %s %s %s 2>&1",
+    env, qcc_bin, aot_exe, provider_qo, consumer_qo));
+if (!is_file(aot_exe)) {
+    printf("link failed:\n%s", link_output);
+    exit(2);
+}
+
+string aot = backquote(sprintf("%s %s 2>&1", env, aot_exe));
+string aot_no_prehash = backquote(sprintf(
+    "QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH=1 %s %s 2>&1",
+    env, aot_exe));
+string aot_no_descriptor = backquote(sprintf(
+    "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE=1 %s %s 2>&1",
+    env, aot_exe));
+string symbols = backquote(sprintf("nm -u %s 2>&1", aot_exe));
+if (!symbols.regex("qore_rt_load_object_getter_int_aot")
+        || !symbols.regex("qore_rt_load_object_getter_float_aot")
+        || !symbols.regex("qore_rt_load_object_getter_bool_aot")
+        || !symbols.regex("qore_rt_load_object_getter_checked_aot")) {
+    printf("missing object getter helpers:\n%s", symbols);
+    exit(2);
+}
+if (ast != aot || ast != aot_no_prehash || ast != aot_no_descriptor
+        || ast != "9223372036854775807:2.5:True:True:True:True:8000\n") {
+    printf("execution mismatch:\nAST:\n%sAOT:\n%s"
+        + "AOT without prehash:\n%sAOT without descriptor:\n%s",
+        ast, aot, aot_no_prehash, aot_no_descriptor);
+    exit(2);
+}

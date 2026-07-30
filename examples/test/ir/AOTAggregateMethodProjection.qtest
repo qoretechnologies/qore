@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+hash<string, int> sub makeConsumerHash(int left, int right) {
+    return (\"left\": left, \"right\": right);
+}
+
+final class ExactProjection {
+    static list<int> makeStatic(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    list<int> makeInstance(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": left, \"right\": right);
+    }
+
+    static list<string> makeStrings(string left, string middle, string right) {
+        return (left, middle, right);
+    }
+
+    static int consumeStatic(hash<string, int> row) {
+        return row.right;
+    }
+
+    int consumeInstance(hash<string, int> row) {
+        return row.right;
+    }
+
+    static int staticProjection() {
+        return makeStatic(4, 5, 6)[1];
+    }
+
+    int instanceProjection() {
+        return makeInstance(7, 8, 9)[1];
+    }
+
+    static int staticMultiProjection() {
+        list<int> values = makeStatic(4, 5, 6);
+        return values[0] + values[1] + values[2];
+    }
+
+    int instanceMultiProjection() {
+        list<int> values = makeInstance(7, 8, 9);
+        return values[0] + values[1] + values[2];
+    }
+
+    static int staticCfgProjection(bool first) {
+        list<int> values = makeStatic(10, 11, 12);
+        int result;
+        if (first) {
+            result = values[0] + values[2];
+        } else {
+            result = values[1];
+        }
+        return result + values[1];
+    }
+
+    int instanceCfgProjection(bool first) {
+        list<int> values = makeInstance(20, 21, 22);
+        int result;
+        if (first) {
+            result = values[0] + values[2];
+        } else {
+            result = values[1];
+        }
+        return result + values[1];
+    }
+
+    static int staticPhiProjection(bool first) {
+        return (first
+            ? makeStatic(30, 31, 32)
+            : makeStatic(40, 41, 42))[1];
+    }
+
+    int instancePhiProjection(bool first) {
+        return (first
+            ? makeInstance(50, 51, 52)
+            : makeInstance(60, 61, 62))[1];
+    }
+
+    static string boxedPhiProjection(bool first) {
+        return (first
+            ? makeStrings(\"left\", \"middle\", \"right\")
+            : makeStrings(\"other-left\", \"other-middle\", \"other-right\"))[2];
+    }
+
+    static int reassignedProjection(bool replace) {
+        list<int> values = makeStatic(70, 71, 72);
+        if (replace) {
+            values = (80, 81, 82);
+        }
+        return values[1];
+    }
+
+    static int sideEffectProjection() {
+        int effects = 0;
+        int value = makeStatic((effects = 1), (effects = 2),
+            (effects = 3))[1];
+        return value * 10 + effects;
+    }
+
+    static int staticConsumerProjection() {
+        return consumeStatic(makeConsumerHash(100, 101));
+    }
+
+    int instanceConsumerProjection() {
+        return self.consumeInstance(makeConsumerHash(102, 103));
+    }
+
+    int consumerSideEffectProjection() {
+        int effects = 0;
+        int value = self.consumeInstance(makeConsumerHash(
+            (effects = 6), (effects = 7)));
+        return value * 10 + effects;
+    }
+}
+
+class OverridableProjection {
+    list<int> makeValues(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    int projection() {
+        return makeValues(10, 11, 12)[1];
+    }
+
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": left, \"right\": right);
+    }
+
+    int consumeHash(hash<string, int> row) {
+        return row.left;
+    }
+
+    int consumerProjection() {
+        return consumeHash(makeConsumerHash(1, 2));
+    }
+}
+
+class OverriddenProjection inherits OverridableProjection {
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": right, \"right\": left);
+    }
+
+    int consumeHash(hash<string, int> row) {
+        return row.right;
+    }
+}
+
+int sub objectDirectProjection(ExactProjection source) {
+    return source.makeHash(90, 91).right;
+}
+
+int sub objectMultiProjection(ExactProjection source) {
+    hash<string, int> values = source.makeHash(92, 93);
+    return values.left + values.right;
+}
+
+int sub objectSideEffectProjection(ExactProjection source) {
+    int effects = 0;
+    int value = source.makeHash((effects = 4), (effects = 5)).left;
+    return value * 10 + effects;
+}
+
+int sub objectConsumerProjection(ExactProjection source) {
+    return source.consumeInstance(makeConsumerHash(104, 105));
+}
+
+int sub deletedObjectConsumerProjection() {
+    ExactProjection source();
+    ExactProjection alias = source;
+    delete source;
+    return alias.consumeInstance(makeConsumerHash(106, 107));
+}
+
+int sub maybeObjectProjection(*ExactProjection source) {
+    return source.makeHash(94, 95).left;
+}
+
+int sub overriddenObjectProjection(OverridableProjection source) {
+    return source.makeHash(1, 2).left;
+}
+
+int sub deletedObjectProjection() {
+    ExactProjection source();
+    ExactProjection alias = source;
+    delete source;
+    return alias.makeHash(96, 97).left;
+}
+
+ExactProjection exact();
+OverridableProjection overridable();
+OverridableProjection overridden = new OverriddenProjection();
+string deleted_error;
+string deleted_consumer_error;
+try {
+    deletedObjectProjection();
+} catch (hash<ExceptionInfo> ex) {
+    deleted_error = ex.err;
+}
+try {
+    deletedObjectConsumerProjection();
+} catch (hash<ExceptionInfo> ex) {
+    deleted_consumer_error = ex.err;
+}
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s\\n\",
+    ExactProjection::staticProjection(),
+    exact.instanceProjection(), ExactProjection::staticMultiProjection(),
+    exact.instanceMultiProjection(), ExactProjection::staticCfgProjection(True),
+    exact.instanceCfgProjection(False), ExactProjection::staticPhiProjection(False),
+    exact.instancePhiProjection(True), ExactProjection::reassignedProjection(True),
+    ExactProjection::sideEffectProjection(), overridable.projection(),
+    ExactProjection::boxedPhiProjection(True), objectDirectProjection(exact),
+    objectMultiProjection(exact), objectSideEffectProjection(exact),
+    maybeObjectProjection(exact), overriddenObjectProjection(overridden),
+    deleted_error, ExactProjection::staticConsumerProjection(),
+    exact.instanceConsumerProjection(),
+    exact.consumerSideEffectProjection(),
+    objectConsumerProjection(exact),
+    overridden.consumerProjection(), deleted_consumer_error);
+";
+
+string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected =
+    "5:8:15:24:33:42:41:51:81:23:11:right:91:185:45:94:2:"
+        + "OBJECT-ALREADY-DELETED:101:103:77:105:2:OBJECT-ALREADY-DELETED\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, src));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, src));
+foreach string function in (("staticProjection", "instanceProjection",
+        "staticMultiProjection", "instanceMultiProjection",
+        "staticCfgProjection", "instanceCfgProjection",
+        "staticPhiProjection", "instancePhiProjection",
+        "sideEffectProjection", "objectDirectProjection",
+        "objectSideEffectProjection", "deletedObjectProjection",
+        "staticConsumerProjection", "instanceConsumerProjection",
+        "consumerSideEffectProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing method aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::(projection|consumerProjection)|reassignedProjection|boxedPhiProjection|objectMultiProjection|maybeObjectProjection|overriddenObjectProjection|objectConsumerProjection|deletedObjectConsumerProjection)[^\n]*:.*aggregate-projections=[1-9]/
+        || disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("unsafe or disabled method aggregate projection:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled, disabled)) {
+    if (!is_file(path)) {
+        printf("AOT compile failed for %s:\n%s%s",
+            path, enabled_compile, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

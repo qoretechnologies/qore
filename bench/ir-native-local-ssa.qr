@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub intKernel(int rounds) {
+    int checksum = 0;
+    int selected = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = i + 1;
+        } else {
+            selected = i + 2;
+        }
+        checksum = checksum + selected;
+    }
+    return checksum;
+}
+
+float sub floatKernel(int rounds) {
+    float checksum = 0.0;
+    float selected = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = i + 1.25;
+        } else {
+            selected = i + 2.25;
+        }
+        checksum = checksum + selected;
+    }
+    return checksum;
+}
+
+int sub boolKernel(int rounds) {
+    int checksum = 0;
+    bool selected = False;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = True;
+        } else {
+            selected = False;
+        }
+        if (selected) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
+int sub straightKernel(int rounds) {
+    int checksum = 0;
+    int value = 0;
+    for (int i = 0; i < rounds; ++i) {
+        value = i * 3 + 1;
+        checksum = checksum + value;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 10000000;
+if (ARGV.size() > 1 && ARGV[1] == "float") {
+    printf("%.2f\n", floatKernel(rounds));
+} else if (ARGV.size() > 1 && ARGV[1] == "bool") {
+    printf("%d\n", boolKernel(rounds));
+} else if (ARGV.size() > 1 && ARGV[1] == "straight") {
+    printf("%d\n", straightKernel(rounds));
+} else {
+    printf("%d\n", intKernel(rounds));
+}

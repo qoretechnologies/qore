@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int destructors;
+
+final class ProjectedValue {
+    private {
+        int int_value;
+        float float_value;
+        bool bool_value;
+    }
+
+    constructor(int int_value, float float_value, bool bool_value) {
+        self.int_value = int_value;
+        self.float_value = float_value;
+        self.bool_value = bool_value;
+    }
+
+    destructor() {
+        ++destructors;
+    }
+
+    int getInt() {
+        return int_value;
+    }
+
+    float getFloat() {
+        return float_value;
+    }
+
+    bool getBool() {
+        return bool_value;
+    }
+}
+
+final class MutableValue {
+    private {
+        int value;
+    }
+
+    constructor(int value) {
+        self.value = value;
+    }
+
+    int get() {
+        return value;
+    }
+
+    int increment() {
+        return ++value;
+    }
+}
+
+final class ComputedValue {
+    private {
+        int value;
+    }
+
+    constructor(int value) {
+        self.value = value + 1;
+    }
+
+    int get() {
+        return value;
+    }
+}
+
+string sub projectedKernel() {
+    ProjectedValue value(7, 2.5, True);
+    return sprintf(\"%d:%.1f:%d\", value.getInt(),
+        value.getFloat(), value.getBool());
+}
+
+int sub mutationKernel() {
+    MutableValue value(5);
+    return value.get() * 10 + value.increment();
+}
+
+int sub readEscaped(ProjectedValue value) {
+    return value.getInt();
+}
+
+int sub escapeKernel() {
+    ProjectedValue value(11, 1.5, False);
+    return readEscaped(value);
+}
+
+int sub computedKernel() {
+    ComputedValue value(8);
+    return value.get();
+}
+
+int sub maybeAssignedKernel(bool assign) {
+    int source;
+    if (assign) {
+        source = 13;
+    }
+    ProjectedValue value(source, 1.0, False);
+    return value.getInt();
+}
+
+printf(\"%s:%d:%d:%d:%d:%d\\n\", projectedKernel(), mutationKernel(),
+    escapeKernel(), computedKernel(), maybeAssignedKernel(True), destructors);
+";
+
+string src = "/tmp/qore-aot-object-scalar-projection-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-object-scalar-projection-" + string(getpid());
+string disabled = exe + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1"
+    " QORE_DISABLE_AOT_NONESCAPING_OBJECT_SCALAR_PROJECTION=1");
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: projectedKernel[^:]*:.*object-scalar-projections=2/) {
+    printf("missing nonescaping object scalar projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (mutationKernel|escapeKernel|computedKernel|maybeAssignedKernel)[^:]*:.*object-scalar-projections=[1-9]/
+        || disabled_compile =~ /object-scalar-projections=[1-9]/) {
+    printf("unsafe or disabled object scalar projection:\n%s\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string expected = "7:2.5:1:56:11:9:13:3\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);

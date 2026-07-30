@@ -86,7 +86,9 @@ GlobalVar::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return;
     }
@@ -319,7 +321,9 @@ static GlobalVar GlobalVar::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -371,7 +375,8 @@ list<GlobalVar> l = GlobalVar::findAllRegex("^E");
     @return a list of global variables matching the regular expression pattern argument or an empty list if no global variables match
 */
 static list<GlobalVar> GlobalVar::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_gvars(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_gvars(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of global variables matching the regular expression pattern argument or an empty list if no global variables match

@@ -1,0 +1,226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int global_value = 2;
+int assigned_context = 3;
+int optional_context;
+list<int> offsets = (3,);
+hash<auto> escaped;
+
+class EffectHolder {
+    private {
+        int value;
+    }
+
+    constructor(int v) {
+        value = v;
+    }
+
+    int get() {
+        return value;
+    }
+}
+
+class StaticEffects {
+    static int pureLeaf(int value) {
+        return value + 1;
+    }
+
+    static int pureMiddle(int value) {
+        return StaticEffects::pureLeaf(value);
+    }
+
+    static int mutatingLeaf(int value) {
+        global_value += value;
+        return global_value;
+    }
+
+    static int mutatingMiddle(int value) {
+        return StaticEffects::mutatingLeaf(value);
+    }
+}
+
+final class FinalEffects {
+    int pureLeaf(int value) {
+        return value + 1;
+    }
+
+    int pureMiddle(int value) {
+        return self.pureLeaf(value);
+    }
+
+    int run(int value) {
+        return self.pureMiddle(value);
+    }
+}
+
+int sub pureLeaf(int value) {
+    return value + offsets[0];
+}
+
+int sub pureRecursive(int value) {
+    return value > 0 ? value + pureRecursive(value - 1) : 0;
+}
+
+int sub pureNested(int value) {
+    return pureLeaf(pureLeaf(value));
+}
+
+int sub assignedContextLeaf(int value) {
+    return value + assigned_context;
+}
+
+int sub optionalContextLeaf(int value) {
+    return value + optional_context;
+}
+
+int sub contextSummary() {
+    int first = optionalContextLeaf(7);
+    optional_context = 4;
+    int second = optionalContextLeaf(7);
+    remove optional_context;
+    int third = optionalContextLeaf(7);
+    return assignedContextLeaf(4) * 1000 + first * 100 + second * 10 + third;
+}
+
+auto sub maybeNothing(bool assign_value) {
+    auto value;
+    if (assign_value) {
+        value = 7;
+    }
+    return value;
+}
+
+int sub mutatingLeaf(int value) {
+    global_value += value;
+    return global_value;
+}
+
+int sub mutatingMiddle(int value) {
+    return mutatingLeaf(value);
+}
+
+int sub referenceLeaf(reference<int> value) {
+    return ++value;
+}
+
+hash<auto> sub recursiveIdentity(hash<auto> value, int depth) {
+    return depth ? recursiveIdentity(value, depth - 1) : value;
+}
+
+hash<auto> sub reassigned(hash<auto> value) {
+    value = {\"number\": 9};
+    return value;
+}
+
+int sub removeListParam(list<int> value, int add) {
+    remove value;
+    return add + 1;
+}
+
+int sub forwardedRemoveListParam(list<int> value, int add) {
+    return removeListParam(value, add);
+}
+
+hash<auto> sub escaping(hash<auto> value) {
+    escaped = value;
+    return value;
+}
+
+EffectHolder sub objectIdentity(EffectHolder value) {
+    return value;
+}
+
+int sub caller() {
+    int local = 4;
+    on_exit local += 0;
+    int pure = pureLeaf(local);
+    int recursive = pureRecursive(4);
+    int mutated = mutatingMiddle(3);
+    int referenced = referenceLeaf(\\local);
+    return pure * 10000 + recursive * 100 + mutated * 10 + referenced;
+}
+
+int sub methodEffects() {
+    int local = 4;
+    code<int()> read_local = int sub () {
+        return local;
+    };
+    local = StaticEffects::pureMiddle(local);
+    int static_value = read_local();
+    FinalEffects effects();
+    local = effects.run(local);
+    int final_value = read_local();
+    int mutated = StaticEffects::mutatingMiddle(1);
+    return static_value * 1000 + final_value * 100 + mutated;
+}
+
+int sub parameterEffects() {
+    list<int> stable = (3, 4);
+    list<int> observed = (5,);
+    observed[0] = 5;
+    int result = forwardedRemoveListParam(stable, 7);
+    return result * 100 + observed[0] * 10 + stable[0];
+}
+
+int sub preciseRuntimeLocalEffects() {
+    int before_global = global_value;
+    int unaffected = assigned_context;
+    int result = mutatingLeaf(2);
+    return before_global * 100000 + global_value * 1000
+        + unaffected * 100 + result;
+}
+
+hash<auto> input = {\"number\": 7};
+EffectHolder holder = objectIdentity(new EffectHolder(11));
+printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
+    recursiveIdentity(input, 5).number, reassigned(input).number, escaping(input).number, escaped.number,
+    holder.get(), methodEffects(), contextSummary(), parameterEffects(), preciseRuntimeLocalEffects());
+";
+
+string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
+string exe_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid());
+string disabled_exe_path = exe_path + "-disabled";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-debug-info -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, script_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+string disabled_compile_out = backquote(sprintf(
+    "QORE_DISABLE_AOT_CONTEXT_INT_IMPORT=1 QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY=1"
+        + " QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS=1"
+        + " LD_LIBRARY_PATH=%s %s --strip-debug-info -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe_path, script_path));
+if (!is_file(disabled_exe_path)) {
+    printf("AOT disabled-summary compile failed:\n%s", disabled_compile_out);
+    exit(2);
+}
+string disabled_aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe_path));
+if (ast != "71055:5:10:null:7:9:7:7:11:5606:7817:853:608308\n"
+        || aot != ast || disabled_aot != ast) {
+    printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
+    exit(2);
+}

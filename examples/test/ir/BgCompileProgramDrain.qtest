@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Regression test for the per-Program background-JIT-compile drain.
+#
+# When a Program is destroyed, QoreJIT::waitForBgCompileQueue(QoreProgram*) must
+# drain only the compiles that reference that Program (cancel its queued items,
+# await an in-progress compile that touches it) while leaving other Programs'
+# compiles running — instead of serializing every teardown behind the entire
+# global compile queue.  The fixture creates/destroys many child Programs while
+# forcing native compilation (QORE_JIT_THRESHOLD=1), which floods the queue and
+# exercises the drain on every teardown.
+#
+# The test runs the fixture in all exec modes and asserts they agree, which
+# verifies the drain neither hangs, drops results, nor uses freed IR, and that
+# native codegen stays correct under this load.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class BgCompileProgramDrainTest
+
+class BgCompileProgramDrainTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string scenario;
+    }
+
+    constructor() : QUnit::Test("BgCompileProgramDrainTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        scenario = get_script_dir() + DirSep + "BgCompileProgramDrainScenario.qr";
+        addTestCase("per-Program drain is correct under forced-native load", \testDrain());
+        set_return_value(main());
+    }
+
+    private int runScenario(string mode) {
+        # Force every function native on first call (QORE_JIT_THRESHOLD=1) so each
+        # child Program has in-flight compiles to drain at teardown.
+        string cmd = sprintf("QORE_JIT_THRESHOLD=1 %s -b --enable-debug --exec-mode=%s %s 2>&1",
+            qore_bin, mode, scenario);
+        string out = backquote(cmd);
+        on_error printf("scenario (%s mode) output:\n%s\n", mode, out);
+        *list<string> m = (out =~ x/total=(-?[0-9]+)/);
+        assertTrue(exists m, sprintf("scenario produced a total in %s mode", mode));
+        return m[0].toInt();
+    }
+
+    private testDrain() {
+        int expected = runScenario("ast");
+        assertGt(0, expected, "non-trivial workload total");
+        # Tiered and jit force native compilation, exercising the per-Program drain
+        # on each of the 40 child-Program teardowns; all modes must agree.
+        assertEq(expected, runScenario("ir"), "ir result matches ast");
+        assertEq(expected, runScenario("jit"), "jit result matches ast");
+        assertEq(expected, runScenario("tiered"), "tiered result matches ast");
+    }
+}

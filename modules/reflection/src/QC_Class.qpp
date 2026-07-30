@@ -257,7 +257,9 @@ Class::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionClass> cls(
+        new QoreReflectionClass(xsink, npath->c_str(), lookup_pgm, runtime_cfg.getLocation()), xsink);
     if (*xsink) {
         return;
     }
@@ -1789,12 +1791,14 @@ static Class Class::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionClass> cls(
+        new QoreReflectionClass(xsink, npath->c_str(), lookup_pgm, runtime_cfg.getLocation()), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_CLASS, getProgram(), cls.release());
+    return new QoreObject(QC_CLASS, lookup_pgm, cls.release());
 }
 
 //! Returns a %Class object from the class name or namespace-justified path as a string
@@ -1817,7 +1821,8 @@ static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VA
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink, npath->c_str(), *pgm), xsink);
+    ReferenceHolder<QoreReflectionClass> cls(
+        new QoreReflectionClass(xsink, npath->c_str(), *pgm, runtime_cfg.getLocation()), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1853,7 +1858,8 @@ list<Class> l = Class::findAllRegex("^T");
     @return a list of classes matching the regular expression pattern argument or an empty list if no classes match
 */
 static list<Class> Class::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_classes(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_classes(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of classes matching the regular expression pattern argument or an empty list if no classes match

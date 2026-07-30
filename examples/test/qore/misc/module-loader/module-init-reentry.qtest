@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ./ModuleInitReentryRegistry.qm
+%requires ./ModuleInitReentrySource.qm
+
+%exec-class ModuleInitReentryTest
+
+class ModuleInitReentryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Module Init Reentry Test", "1.0") {
+        addTestCase("module init callback can reenter parsing module", \testModuleInitReentry());
+        set_return_value(main());
+    }
+
+    testModuleInitReentry() {
+        assertEq(("module-init-reentry",), ModuleInitReentryRegistry::Registry::getRegisteredFactories());
+        assertEq("registered during module initialization",
+            ModuleInitReentryRegistry::Registry::getDescription("module-init-reentry"));
+        assertEq("module-init-reentry", ModuleInitReentryRegistry::Registry::getFactoryName("module-init-reentry"));
+        assertEq("ModuleInitReentrySource::FactoryExtraInfo",
+            ModuleInitReentryRegistry::Registry::getReflectedHashPath("module-init-reentry"));
+    }
+}

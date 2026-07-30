@@ -102,7 +102,9 @@
 class UserClosureVariant;
 class UserSignature;
 class LVarSet;
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out = nullptr);
+bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
+    const LVarSet* vlist);
 bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
     const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals);
 void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
@@ -121,9 +123,6 @@ void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSigna
 // ============================================================================
 
 const QoreAOTExprSlotKindInfo* getAOTExprSlotKindInfo(uint8_t kind_byte) {
-    if (kind_byte >= 256) {
-        return nullptr;
-    }
     return &AOT_EXPR_SLOT_KIND_REGISTRY[kind_byte];
 }
 
@@ -454,18 +453,19 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"COMPLEX_BUFFER_NEW", 107, true, write_slot_COMPLEX_BUFFER_NEW, "Complex buffer construction"},
     {"ITERATE", 108, true, write_slot_ITERATE, "Iterate operator"},
     {"STREAMING", 109, true, write_slot_STREAMING, "Streaming operator"},
-    {nullptr, 110, false, nullptr, nullptr},
-    {nullptr, 111, false, nullptr, nullptr},
-    {nullptr, 112, false, nullptr, nullptr},
-    {nullptr, 113, false, nullptr, nullptr},
-    {nullptr, 114, false, nullptr, nullptr},
-    {nullptr, 115, false, nullptr, nullptr},
-    {nullptr, 116, false, nullptr, nullptr},
-    {nullptr, 117, false, nullptr, nullptr},
-    {nullptr, 118, false, nullptr, nullptr},
-    {nullptr, 119, false, nullptr, nullptr},
-    {nullptr, 120, false, nullptr, nullptr},
-    {nullptr, 121, false, nullptr, nullptr},
+    {"DEFERRED_STATIC_METHOD_REF", 110, true, write_slot_STATIC_METHOD_REF,
+        "Deferred static method reference"},
+    {"DEFERRED_FUNCTION_REF", 111, true, write_slot_FUNC_CALL_REF, "Deferred function call reference"},
+    {"PLUS_EQ", 112, true, write_slot_PLUS_EQ, "Plus-equals operator"},
+    {"MINUS_EQ", 113, true, write_slot_MINUS_EQ, "Minus-equals operator"},
+    {"MULTIPLY_EQ", 114, true, write_slot_MULTIPLY_EQ, "Multiply-equals operator"},
+    {"DIVIDE_EQ", 115, true, write_slot_DIVIDE_EQ, "Divide-equals operator"},
+    {"MODULO_EQ", 116, true, write_slot_MODULO_EQ, "Modulo-equals operator"},
+    {"AND_EQ", 117, true, write_slot_AND_EQ, "Bitwise-and-equals operator"},
+    {"OR_EQ", 118, true, write_slot_OR_EQ, "Bitwise-or-equals operator"},
+    {"XOR_EQ", 119, true, write_slot_XOR_EQ, "Bitwise-xor-equals operator"},
+    {"SHL_EQ", 120, true, write_slot_SHL_EQ, "Shift-left-equals operator"},
+    {"SHR_EQ", 121, true, write_slot_SHR_EQ, "Shift-right-equals operator"},
     {nullptr, 122, false, nullptr, nullptr},
     {nullptr, 123, false, nullptr, nullptr},
     {nullptr, 124, false, nullptr, nullptr},

@@ -135,12 +135,26 @@ int WhileStatement::parseInitImpl(QoreParseContext& parse_context) {
         // FIXME: raise a parse warning if cond cannot be converted to a bool (i.e. always false)
     }
     if (code) {
+        // The loop body may not execute, so facts from the body must be
+        // merged with the pre-loop state.
+        NarrowedTypeHelper nth;
+        AssignedStateHelper ash;
+        nth.saveState();
+        ash.saveState();
+
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
 
         if (code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
+
+        nth.recordBranchAndRestore();
+        ash.recordBranchAndRestore();
+        nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
+        nth.mergeAndApply();
+        ash.mergeAndApply();
     }
 
     return err;

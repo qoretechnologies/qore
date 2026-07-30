@@ -409,6 +409,40 @@ public:
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolved(const char* mem,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolvedPrehashed(
+            const char* mem, size_t hash,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
+    DLLLOCAL int getLValueResolved(const char* key,
+            const QoreMemberInfo& info,
+            const qore_class_private* class_ctx, LValueHelper& lvh,
+            bool for_remove, ExceptionSink* xsink);
+
+    DLLLOCAL int getLValueResolvedPrehashed(const char* key, size_t hash,
+            const QoreMemberInfo& info,
+            const qore_class_private* class_ctx, LValueHelper& lvh,
+            bool for_remove, ExceptionSink* xsink);
+
+    //! Assigns an exact scalar member without generic lvalue bookkeeping.
+    /** @param key member name
+        @param hash precomputed member-name hash, or 0
+        @param info resolved member declaration
+        @param member_class_ctx object storage context for the member
+        @param value scalar value to assign
+        @param expected_type exact scalar type required for both member and value
+        @param xsink exception sink
+        @return 1 when assigned, 0 when the generic path is required, -1 on error
+    */
+    DLLLOCAL int tryAssignScalarMemberResolvedPrehashed(const char* key,
+            size_t hash, const QoreMemberInfo& info,
+            const qore_class_private* member_class_ctx, QoreValue value,
+            qore_type_t expected_type, ExceptionSink* xsink);
+
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 

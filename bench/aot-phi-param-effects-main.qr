@@ -1,0 +1,16 @@
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    list<int> left = (1, 2, 3, 4);
+    list<int> right = (5, 6, 7, 8);
+    int total;
+    for (int i = 0; i < rounds; ++i) {
+        total += observeSelected((i & 1) == 0, left, right);
+    }
+    printf("%d\n", total);
+    return 0;
+}
+
+main();

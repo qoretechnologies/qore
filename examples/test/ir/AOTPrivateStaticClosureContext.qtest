@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+class CallbackInvoker {
+    public static *hash<auto> invoke(code<*hash<auto>(auto)> callback, auto value) {
+        return callback(value);
+    }
+}
+
+class PrivateStaticClosureOwner {
+    private static *hash<auto> decode(*string raw) {
+        if (!raw.val()) {
+            return NOTHING;
+        }
+        return {
+            \"decoded\": raw,
+        };
+    }
+
+    private static code<*hash<auto>(auto)> makeCallback() {
+        return *hash<auto> sub (auto outer_value) {
+            return CallbackInvoker::invoke(
+                *hash<auto> sub (auto inner_value) {
+                    return decode(inner_value);
+                }, outer_value);
+        };
+    }
+
+    public static *hash<auto> run(auto value) {
+        return CallbackInvoker::invoke(makeCallback(), value);
+    }
+}
+
+*hash<auto> nothing_result = PrivateStaticClosureOwner::run(NOTHING);
+*hash<auto> string_result = PrivateStaticClosureOwner::run(\"payload\");
+printf(\"%s|%s\\n\", exists nothing_result ? \"value\" : \"nothing\",
+    string_result.decoded);
+";
+
+string script_path = "/tmp/qore-aot-private-static-closure-context-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "nothing|payload\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string exe_path = "/tmp/qore-aot-private-static-closure-context-" + string(getpid());
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, script_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+
+string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+if (actual != expected) {
+    printf("AOT mismatch\nexpected:\n%sactual:\n%s", expected, actual);
+    exit(2);
+}

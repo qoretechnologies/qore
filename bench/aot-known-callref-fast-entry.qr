@@ -1,0 +1,19 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub increment(int value) {
+    return value + 1;
+}
+
+int sub run(int rounds) {
+    code<int(int)> transform = \increment();
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += transform(i & 1023);
+    }
+    return checksum;
+}
+
+printf("%d\n", run(ARGV.size() ? ARGV[0].toInt() : 10000000));

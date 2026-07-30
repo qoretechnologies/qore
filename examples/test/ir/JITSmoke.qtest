@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class JITSmokeTest
@@ -167,6 +167,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("dot-eval method fast call", \testDotEvalMethodFastCall());
         addTestCase("builtin function fast call", \testBuiltinFastCall());
         addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
+        addTestCase("specialized hash-key select opcode", \testSelectHashKeyPositiveInt());
         addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
         addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
         addTestCase("hash key access int opcode", \testHashKeyAccessInt());
@@ -189,7 +190,31 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("hash/list auto-vivification from NOTHING", \testAutoVivification());
         addTestCase("list assignment decomposition", \testListAssignment());
         addTestCase("extract via LValuePathTernary", \testExtractLValuePath());
+        addTestCase("enum value through typed param to enum lvalue", \testEnumParamLValue());
         set_return_value(main());
+    }
+
+    testEnumParamLValue() {
+        # Regression: a typed-enum parameter assigned to an enum-typed lvalue
+        # (object member or local) must preserve enum identity when the function
+        # runs as JIT-compiled native code.  Enum types report base type NT_INT,
+        # so the JIT used to unbox the enum local to a bare int, stripping the
+        # TAG_ENUM marker; the subsequent runtime-checked store to an
+        # *enum<...> lvalue then failed with RUNTIME-TYPE-ERROR.  The function is
+        # warmed past the JIT threshold so it genuinely runs native.
+        string code = "%modern
+enum Shape { RowRecords = 1, HashOfLists = 2, }
+class P {
+    public { *Shape last_shape; }
+    setShape(Shape shape) { last_shape = shape; }
+}
+P p();
+int ok = 0;
+for (int j = 0; j < 20000; j++) { p.setShape(Shape::RowRecords); ++ok; }
+printf(\"%d:%y\\n\", ok, p.last_shape);
+";
+        string result = trim(runScriptWithOpts(code, "jit", "--jit-jit-threshold=50"));
+        assertEq("20000:1", result, "enum param survives native lvalue store");
     }
 
     private string runScript(string code, *string exec_mode, *string suffix) {
@@ -3845,6 +3870,70 @@ printf(\"%s\\n\", (foldl $1 + \",\" + $2, result));
             assertEq("1:bob,2:charlie", result,
                     sprintf("map+select with index %s", mode));
         }
+
+        # Exact scalar map results use fresh reserved output storage. A direct
+        # typed lvalue still needs a NOTHING guard until it is assigned and
+        # after remove.
+        code = "%modern
+softlist<softint> sub selectBoxed(softlist<softint> input, hash<string, bool> selected) {
+    return (map $1, input, selected{$1});
+}
+
+list<int> input = (1, 2, 3);
+int value;
+list<string> errors;
+try {
+    auto unassigned = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+value = 7;
+list<int> assigned = (map value, input, $1 > 1);
+remove value;
+try {
+    auto removed = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> mapped_ints = (map $1 * 2, input, $1 != 2);
+list<float> mapped_floats = (map $1 + 0.5, input, $1 >= 2);
+list<int> none = (map $1 * 2, input, False);
+list<int> empty_input = ();
+list<int> empty = (map $1 * 2, empty_input, True);
+softlist<softint> boxed = selectBoxed((1, 2, 3, 4), {\"1\": True, \"3\": True});
+int pipeline_value;
+try {
+    auto pipeline_unassigned = (map pipeline_value, (select input, True));
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+pipeline_value = 9;
+list<int> pipeline_assigned = (map pipeline_value, (select input, $1 > 1));
+remove pipeline_value;
+try {
+    auto pipeline_removed = (map pipeline_value, (select input, True));
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> pipeline_ints = (map $1 * 3, (select input, $1 != 2));
+list<float> pipeline_floats = (map $1 + 0.25, (select input, $1 >= 2));
+list<int> pipeline_none = (map $1 * 3, (select input, False));
+list<int> pipeline_removed_source = (1,);
+remove pipeline_removed_source;
+auto pipeline_missing = (map $1 * 3, (select pipeline_removed_source, True));
+printf(\"%s|%s|%s|%s|%d:%d|%s|%s|%s|%s|%d|%d\\n\", errors.join(\",\"),
+    assigned.join(\",\"), mapped_ints.join(\",\"), mapped_floats.join(\",\"),
+    none.size(), empty.size(), boxed.join(\",\"), pipeline_assigned.join(\",\"),
+    pipeline_ints.join(\",\"), pipeline_floats.join(\",\"), pipeline_none.size(),
+    exists pipeline_missing);
+";
+        string expected = "RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR"
+            + "|7,7|2,6|2.5,3.5|0:0|1,3|9,9|3,9|2.25,3.25|0|0";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq(expected, result,
+                    sprintf("typed scalar map-select construction %s", mode));
+        }
     }
 
     testHashMapNative() {
@@ -5263,6 +5352,32 @@ printf(\"%d\\n\", compute_factorials());
             assertEq("4037913", result,
                     sprintf("batch recursive %s", mode));
         }
+
+        # Test 6: an exact return type does not imply an assigned return value
+        code = "%modern
+int sub maybe_result(int choose) {
+    int value;
+    if (choose) {
+        value = 9;
+    }
+    return value;
+}
+string sub check_result() {
+    int assigned = maybe_result(1);
+    try {
+        maybe_result(0);
+        return \"missing error\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%d:%s\", assigned, ex.err);
+    }
+}
+printf(\"%s\\n\", check_result());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9:RUNTIME-TYPE-ERROR", result,
+                    sprintf("batch unassigned return %s", mode));
+        }
     }
 
     testDirectIndexFoldl() {
@@ -5409,6 +5524,46 @@ printf(\"%d\\n\", result.size());
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(map_size, mode));
             assertEq("5", result, sprintf("map size direct-index %s", mode));
+        }
+
+        # A declared scalar is still NOTHING before assignment and after remove.
+        # The typed-map fast path must guard those states before a direct store.
+        string map_assigned_state = "%modern
+list<int> input = (1, 2, 3);
+list<int> empty = ();
+int value;
+printf(\"%y\\n\", (map value, empty));
+try {
+    auto unassigned = (map value, input);
+    printf(\"unexpected: %y\\n\", unassigned);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+value = 4;
+printf(\"%y\\n\", (map value, input));
+remove value;
+try {
+    auto removed = (map value, input);
+    printf(\"unexpected: %y\\n\", removed);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float float_value;
+try {
+    auto unassigned_float = (map float_value, input);
+    printf(\"unexpected: %y\\n\", unassigned_float);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float_value = 1.5;
+printf(\"%y\\n\", (map float_value, input));
+";
+        string map_assigned_expected = "[]\nRUNTIME-TYPE-ERROR\n[4, 4, 4]\nRUNTIME-TYPE-ERROR\n"
+            + "RUNTIME-TYPE-ERROR\n[1.5, 1.5, 1.5]";
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            string result = trim(runScript(map_assigned_state, mode));
+            assertEq(map_assigned_expected, result,
+                sprintf("typed map assigned-state guard %s", mode));
         }
     }
 
@@ -5645,6 +5800,24 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
                     sprintf("MapHashKeyOffsetInt %s", mode));
         }
 
+        # Dynamic hash values preserve ordinary addition semantics and unassigned
+        # typed-list elements still evaluate as NOTHING before the addition.
+        code = "%modern
+list<hash<auto>> mixed = ({\"val\": \"a\"}, {\"val\": 2});
+list<auto> dynamic = map ($1.val + 7), mixed;
+list<hash<auto>> sparse = ();
+sparse[1] = {\"val\": 2};
+list<auto> guarded = map ($1.val + 7), sparse;
+list<auto> reversed = map (7 + $1.val), mixed;
+printf(\"%s:%s:%s:%s:%s:%s\\n\", dynamic[0], dynamic[1],
+    guarded[0].type(), guarded[0], guarded[1], reversed[0]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a7:9:integer:7:9:7a", result,
+                    sprintf("MapHashKeyOffsetAny semantics %s", mode));
+        }
+
         # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
         code = "%modern
 list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
@@ -5719,6 +5892,27 @@ printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
             string result = trim(runScript(code, mode));
             assertEq("10:20:30", result,
                     sprintf("HashMapTwoKeys three items %s", mode));
+        }
+    }
+
+    testSelectHashKeyPositiveInt() {
+        string code = "%modern
+list<hash<auto>> items = (
+    {\"value\": -1, \"name\": \"negative\"},
+    {\"value\": 0, \"name\": \"zero\"},
+    {\"value\": 2, \"name\": \"positive\"},
+    {\"name\": \"missing\"}
+);
+list<hash<auto>> result = select items, $1.value > 0;
+list<hash<auto>> nonpositive = (items[0], items[1]);
+list<hash<auto>> empty = select nonpositive, $1.value > 0;
+printf(\"%d:%s:%s:%s\\n\", result.size(), result[0].name,
+    result.fullType(), empty.fullType());
+";
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:positive:list<hash<auto>>:list<hash<auto>>", result,
+                sprintf("SelectHashKeyPositiveInt %s", mode));
         }
     }
 
@@ -5882,6 +6076,185 @@ printf(\"%d\\n\", result.size());
                     sprintf("select on typed hash list %s", mode));
         }
 
+        # Dynamic string comparison exercises the native-bool slow-path merge
+        code = "%modern
+list<hash<auto>> items = ({\"val\": \"b\"}, {\"val\": \"a\"}, {\"val\": \"c\"});
+list<auto> result = (select items, $1.val > \"a\");
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select dynamic string comparison %s", mode));
+        }
+
+        # Hash-key truth predicates use guarded access for typed-list elements:
+        # list declarations allow unassigned slots. Scalar values use the
+        # borrowed truth path; strings retain the full owned-node path.
+        code = "%modern
+list<hash<auto>> items = ();
+items[0] = (\"id\": \"bool\", \"active\": True);
+items[1] = (\"id\": \"false\", \"active\": False);
+items[2] = (\"id\": \"int\", \"active\": 1);
+items[3] = (\"id\": \"zero\", \"active\": 0);
+items[4] = (\"id\": \"string\", \"active\": \"x\");
+items[5] = (\"id\": \"empty\", \"active\": \"\");
+items[6] = (\"id\": \"missing\");
+items[8] = (\"id\": \"last\", \"active\": True);
+list<hash<auto>> result = (select items, $1.active);
+printf(\"%s\\n\", (map $1.id, result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("bool,int,string,last", result,
+                    sprintf("guarded hash-key truth predicate %s", mode));
+        }
+
+        # Exact parameters are assigned by successful binding and can use the
+        # no-guard variant; remove restores NOTHING and requires a guard.
+        code = "%modern
+bool sub active(hash<auto> h) {
+    return h.active;
+}
+bool sub removed(hash<auto> h) {
+    remove h;
+    return h.active ? True : False;
+}
+printf(\"%s:%s\\n\", active((\"active\": True)), removed((\"active\": True)));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:0", result,
+                    sprintf("assigned hash-key truth predicate %s", mode));
+        }
+
+        # A single-use noncapturing closure can be called without allocating a
+        # runtime closure. Captured, method-bound, and stored closures retain
+        # the ordinary identity-preserving path.
+        code = "%modern
+class ImmediateClosureTest {
+    private { int base = 20; }
+    int run(int x) {
+        return (int sub (int y) { return base + y; })(x);
+    }
+}
+int captured = 10;
+int pure = (int sub (int x) { return x + 1; })(4);
+int nonleaf = (int sub (int x) {
+    int total = 0;
+    for (int i = 0; i < x; ++i) total += i;
+    return total;
+})(5);
+string temporary = (string sub (string value) { return value + \"!\"; })(\"a\" + \"b\");
+int captured_result = (int sub (int x) { return captured + x; })(5);
+code<int(int)> stored = int sub (int x) { return x * 2; };
+string error;
+try {
+    (int sub (int x) { throw \"IMMEDIATE-CLOSURE\", string(x); })(7);
+} catch (hash<ExceptionInfo> ex) {
+    error = ex.err;
+}
+ImmediateClosureTest object();
+printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
+    captured_result, stored(6), object.run(2), error);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:10:ab!:15:12:22:IMMEDIATE-CLOSURE", result,
+                    sprintf("immediate noncapturing closure fusion %s", mode));
+        }
+
+        # Caching a native body for a noncapturing closure must not bypass
+        # overload binding for a value that became NOTHING after remove.
+        code = "%modern
+string sub run() {
+    code<int(int)> increment = int sub (int value) { return value + 1; };
+    int value = 4;
+    int assigned = increment(value);
+    remove value;
+    string error;
+    try {
+        increment(value);
+    } catch (hash<ExceptionInfo> ex) {
+        error = ex.err;
+    }
+    return sprintf(\"%d:%s\", assigned, error);
+}
+printf(\"%s\\n\", run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:RUNTIME-OVERLOAD-ERROR", result,
+                    sprintf("native closure removed argument guard %s", mode));
+        }
+
+        # Typed closure fast entries support float, bool, and mixed boxed/native
+        # signatures. Removed scalar and boxed lvalues must still use ordinary
+        # overload binding and reject NOTHING.
+        code = "%modern
+string sub run() {
+    code<float(float, bool, string)> adjust = float sub (
+            float value, bool add, string suffix) {
+        return add ? value + suffix.size() : value - suffix.size();
+    };
+    code<bool(bool, bool)> differs = bool sub (bool left, bool right) {
+        return left != right;
+    };
+    code<string(float, bool, string)> describe = string sub (
+            float value, bool enabled, string label) {
+        return sprintf(\"%.1f:%d:%s\", value, enabled ? 1 : 0, label);
+    };
+    code<bool(float)> nan_check = bool sub (float value) {
+        return value.nanp();
+    };
+    string output = sprintf(\"%.1f:%d:%s:%d\", adjust(3.5, True, \"xy\"),
+        differs(True, False) ? 1 : 0, describe(2.5, False, \"ok\"),
+        nan_check(-@nan@) ? 1 : 0);
+    float unset_float = 1.0;
+    bool unset_bool = True;
+    string unset_string = \"x\";
+    remove unset_float;
+    remove unset_bool;
+    remove unset_string;
+    list<string> errors;
+    foreach auto args in ((unset_float, True, \"x\"),
+            (1.0, unset_bool, \"x\"), (1.0, True, unset_string)) {
+        try {
+            adjust(args[0], args[1], args[2]);
+        } catch (hash<ExceptionInfo> ex) {
+            errors += ex.err;
+        }
+    }
+    return output + \"::\" + errors.join(\",\");
+}
+string output;
+for (int i = 0; i < 20; ++i) {
+    output = run();
+}
+printf(\"%s\\n\", output);
+";
+        string expected = "5.5:1:2.5:0:ok:1::RUNTIME-OVERLOAD-ERROR,"
+            + "RUNTIME-OVERLOAD-ERROR,RUNTIME-OVERLOAD-ERROR";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq(expected, result,
+                    sprintf("typed native closure ABI %s", mode));
+        }
+
+        # A comparison with a second use must retain its boxed Qore bool value
+        code = "%modern
+auto lhs = 2;
+auto rhs = 1;
+auto comparison = lhs > rhs;
+bool condition = comparison;
+printf(\"%s:%s:%s\\n\", comparison.type(), comparison, condition);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("bool:1:1", result,
+                    sprintf("multi-use dynamic comparison remains boxed %s", mode));
+        }
+
         # Select on typed int list (direct-index)
         code = "%modern
 list<int> vals = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
@@ -5904,6 +6277,30 @@ printf(\"%d\\n\", result.size());
             string result = trim(runScript(code, mode));
             assertEq("2", result,
                     sprintf("select on typed float list %s", mode));
+        }
+
+        # Fresh typed result construction must publish only selected values,
+        # including all-match, no-match, empty, and removed-input paths.
+        code = "%modern
+list<int> ints = range(10);
+list<int> partial = (select ints, $1 % 3 == 0);
+list<int> all = (select ints, True);
+list<int> none = (select ints, False);
+list<int> empty_input = ();
+list<int> empty = (select empty_input, True);
+list<float> floats = (1.5, 2.5, 3.5, 0.5);
+list<float> selected_floats = (select floats, $1 >= 2.5);
+list<int> removed = range(1);
+remove removed;
+auto missing = (select removed, True);
+printf(\"%s|%d:%d|%s:%d|%d|%s|%d\\n\", partial.join(\",\"),
+    all.size(), all[-1], none.type(), none.size(), empty.size(),
+    selected_floats.join(\",\"), exists missing);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0,3,6,9|10:9|list:0|0|2.5,3.5|0", result,
+                    sprintf("typed scalar select construction %s", mode));
         }
 
         # Map+select on typed hash list (direct-index)
@@ -5977,6 +6374,37 @@ printf(\"%s\\n\", result);
             string result = trim(runScript(code, mode));
             assertEq("nothing", result,
                     sprintf("missing key plain hash try-catch %s", mode));
+        }
+
+        # A declared hash lvalue is still NOTHING before assignment and after
+        # remove/delete. An exact, non-reference parameter is assigned by binding.
+        code = "%modern
+int sub readValue(hash<auto> arg) {
+    return arg.value;
+}
+auto sub readRemovedValue(hash<auto> arg) {
+    remove arg;
+    return arg.value;
+}
+hash<auto> h;
+auto before = h.value;
+h = {\"value\": 42};
+auto assigned = h.value;
+int parameter = readValue({\"value\": 44});
+auto removed_parameter = readRemovedValue({\"value\": 45});
+remove h;
+auto removed = h.value;
+h = {\"value\": 43};
+delete h;
+auto deleted = h.value;
+printf(\"%s:%d:%d:%s:%s:%s\\n\", exists before ? \"set\" : \"nothing\", assigned, parameter,
+    exists removed_parameter ? \"set\" : \"nothing\",
+    exists removed ? \"set\" : \"nothing\", exists deleted ? \"set\" : \"nothing\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("nothing:42:44:nothing:nothing:nothing", result,
+                    sprintf("hash key access assigned-state guard %s", mode));
         }
     }
 

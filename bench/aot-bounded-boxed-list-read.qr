@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub boundedBoxedListRead(int rounds) {
+    list<bool> flags = (True, False, True, True, False, True, False, True);
+    list<string> words = ("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < flags.size(); ++i) {
+            if (flags[i]) {
+                ++total;
+            }
+        }
+        for (int i = 0; i < words.size(); ++i) {
+            if (words[i] !== "") {
+                ++total;
+            }
+        }
+    }
+    return total;
+}
+
+int sub boundedStringSizeRead(int rounds) {
+    list<string> words = ("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < words.size(); ++i) {
+            total += words[i].size();
+        }
+    }
+    return total;
+}
+
+int sub boundedStringSearchRead(int rounds) {
+    list<string> words = ("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < words.size(); ++i) {
+            if (words[i].contains("ta")) {
+                ++total;
+            }
+        }
+    }
+    return total;
+}
+
+int sub boundedStringTransformRead(int rounds) {
+    list<string> words = ("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < words.size(); ++i) {
+            total += words[i].substr(1).size();
+        }
+    }
+    return total;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "mixed";
+int rounds = ARGV.size() > 1
+    ? ARGV[1].toInt()
+    : ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 2000000;
+printf("%d\n", kernel == "string-size"
+    ? boundedStringSizeRead(rounds)
+    : kernel == "string-search"
+        ? boundedStringSearchRead(rounds)
+        : kernel == "string-transform"
+            ? boundedStringTransformRead(rounds)
+            : boundedBoxedListRead(rounds));

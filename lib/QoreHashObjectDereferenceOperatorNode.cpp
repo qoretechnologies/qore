@@ -37,6 +37,8 @@
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
 
 int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    const QoreTypeInfo* serializedTypeInfo = typeInfo;
+
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -215,6 +217,11 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
         rti->doNonStringWarning(loc, "the right side of the expression with the '.' or '{}' operator is ");
     }
 
+    if (!err && serializedTypeInfo && QoreTypeInfo::hasType(serializedTypeInfo)
+            && (!QoreTypeInfo::hasType(parse_context.typeInfo)
+                || QoreTypeInfo::isType(parse_context.typeInfo, NT_NOTHING))) {
+        parse_context.typeInfo = serializedTypeInfo;
+    }
     typeInfo = parse_context.typeInfo;
     parse_context.analysis.clear();
     if (typeInfo) {

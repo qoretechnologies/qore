@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+
+int sub projectionKernel(int rounds, int index) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = makeValues(i, i + 1, i + 2);
+        int first = values[index];
+        int second = values[index];
+        int third = values[index];
+        checksum += first + second + third;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+printf("%d\n", projectionKernel(rounds, 1));

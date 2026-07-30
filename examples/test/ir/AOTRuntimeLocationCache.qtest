@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-runtime-location-cache-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string exe_path = root + "/case";
+on_exit {
+    unlink(source_path);
+    unlink(exe_path);
+    rmdir(root);
+}
+
+string source = "%modern
+
+int sub failAtLine() {
+    int value = 1;
+    ++value;
+    throw \"LOCATION-TEST\", string(value);
+}
+
+try {
+    failAtLine();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%d:%s\\n\", ex.err, ex.line, ex.desc);
+}
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+string compile_out = backquote(sprintf(
+    "%s %s -O3 --strip-source --strip-debug-info -o %s %s 2>&1",
+    env, qcc_bin, exe_path, source_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+
+string output = backquote(sprintf("%s %s 2>&1", env, exe_path));
+if (output != "LOCATION-TEST:6:2\n") {
+    printf("stripped AOT location mismatch:\nexpected:\nLOCATION-TEST:6:2\nactual:\n%s", output);
+    exit(2);
+}

@@ -1,0 +1,385 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+const int DATA_SIZE = 1024;
+const int SMALL_DATA_SIZE = 32;
+
+list<int> sub makeIntData() {
+    list<int> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, (i % 17) - 8;
+    }
+    return data;
+}
+
+list<float> sub makeFloatData() {
+    list<float> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, (i % 17) - 8.0;
+    }
+    return data;
+}
+
+list<string> sub makeStringData() {
+    list<string> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, sprintf("item-%04d", i);
+    }
+    return data;
+}
+
+list<string> sub makeSmallStringData() {
+    list<string> data = ();
+    for (int i = 0; i < SMALL_DATA_SIZE; ++i) {
+        push data, sprintf("item-%04d", i);
+    }
+    return data;
+}
+
+int sub foldSumInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, data);
+    }
+    return checksum;
+}
+
+float sub foldSumFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, data);
+    }
+    return checksum;
+}
+
+int sub fusedSumSquareInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * $1, data));
+    }
+    return checksum;
+}
+
+int sub fusedSumScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumScaleFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * 3.0, data));
+    }
+    return checksum;
+}
+
+int sub fusedSumOffsetInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 + 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumOffsetFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 + 3.0, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumSquareFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * $1, data));
+    }
+    return checksum;
+}
+
+int sub fusedProdScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 * $2, (map $1 * 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedProdScaleFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 * $2, (map $1 * 3.0, data));
+    }
+    return checksum;
+}
+
+int sub mapScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map $1 * 3, data);
+        checksum += mapped[DATA_SIZE - 1];
+    }
+    return checksum;
+}
+
+int sub selectPositiveInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> selected = (select data, $1 > 0);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+int sub foldJoinString(*list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, data);
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub foldrJoinString(*list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldr $1 + ", " + $2, data);
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub listJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = join(", ", data);
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub methodListJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = data.join(", ");
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub methodMapListJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (map $1, data).join(", ");
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub methodMapDenseLocalJoinString(int rounds) {
+    list<string> data = (
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+    );
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (map $1, data).join(", ");
+        checksum += exists joined;
+    }
+    return checksum;
+}
+
+int sub mapListJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = join(", ", (map $1, data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub mapJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map $1, data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub selectMapJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map $1, (select data, $# % 2 == 0)));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub sprintfIntFixed(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string formatted = sprintf("row-%08d", i & 65535);
+        checksum += formatted.size();
+    }
+    return checksum;
+}
+
+int sub sprintfMapJoin(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map sprintf("item-%04d", $1), data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub methodSprintfMapJoin(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (map sprintf("item-%04d", $1), data).join(", ");
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub appendLocalString(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string value = "";
+        for (int j = 0; j < 256; ++j) {
+            value += "abcdefgh";
+        }
+        checksum += value.size();
+    }
+    return checksum;
+}
+
+int sub constHashLiteral(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<auto> value = {
+            "constant-hash-key-00": i,
+            "constant-hash-key-01": i + 1,
+            "constant-hash-key-02": i + 2,
+            "constant-hash-key-03": i + 3,
+            "constant-hash-key-04": i + 4,
+            "constant-hash-key-05": i + 5,
+            "constant-hash-key-06": i + 6,
+            "constant-hash-key-07": i + 7,
+            "constant-hash-key-08": i + 8,
+            "constant-hash-key-09": i + 9,
+            "constant-hash-key-10": i + 10,
+            "constant-hash-key-11": i + 11,
+            "constant-hash-key-12": i + 12,
+            "constant-hash-key-13": i + 13,
+            "constant-hash-key-14": i + 14,
+            "constant-hash-key-15": i + 15,
+        };
+        value{"constant-hash-key-00"} += 1;
+        checksum += value{"constant-hash-key-00"};
+    }
+    return checksum;
+}
+
+string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
+int rounds = ENV.QORE_BENCH_ROUNDS
+    ? ENV.QORE_BENCH_ROUNDS.toInt()
+    : (ARGV.size() > 1 ? ARGV[1].toInt() : 20000);
+
+switch (kernel) {
+    case "fold-sum-int":
+        printf("%d\n", foldSumInt(makeIntData(), rounds));
+        break;
+    case "fold-sum-float":
+        printf("%.1f\n", foldSumFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-square-int":
+        printf("%d\n", fusedSumSquareInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-scale-int":
+        printf("%d\n", fusedSumScaleInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-scale-float":
+        printf("%.1f\n", fusedSumScaleFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-offset-int":
+        printf("%d\n", fusedSumOffsetInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-offset-float":
+        printf("%.1f\n", fusedSumOffsetFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-square-float":
+        printf("%.1f\n", fusedSumSquareFloat(makeFloatData(), rounds));
+        break;
+    case "fused-prod-scale-int":
+        printf("%d\n", fusedProdScaleInt(makeIntData(), rounds));
+        break;
+    case "fused-prod-scale-float":
+        printf("%.1f\n", fusedProdScaleFloat(makeFloatData(), rounds));
+        break;
+    case "map-scale-int":
+        printf("%d\n", mapScaleInt(makeIntData(), rounds));
+        break;
+    case "select-positive-int":
+        printf("%d\n", selectPositiveInt(makeIntData(), rounds));
+        break;
+    case "fold-join-string":
+        printf("%d\n", foldJoinString(makeStringData(), rounds));
+        break;
+    case "foldr-join-string":
+        printf("%d\n", foldrJoinString(makeStringData(), rounds));
+        break;
+    case "list-join-string":
+        printf("%d\n", listJoinString(makeStringData(), rounds));
+        break;
+    case "method-list-join-string":
+        printf("%d\n", methodListJoinString(makeStringData(), rounds));
+        break;
+    case "method-list-join-small-string":
+        printf("%d\n", methodListJoinString(makeSmallStringData(), rounds));
+        break;
+    case "method-map-list-join-string":
+        printf("%d\n", methodMapListJoinString(makeStringData(), rounds));
+        break;
+    case "method-map-dense-local-join-string":
+        printf("%d\n", methodMapDenseLocalJoinString(rounds));
+        break;
+    case "map-list-join-string":
+        printf("%d\n", mapListJoinString(makeStringData(), rounds));
+        break;
+    case "map-join-string":
+        printf("%d\n", mapJoinString(makeStringData(), rounds));
+        break;
+    case "select-map-join-string":
+        printf("%d\n", selectMapJoinString(makeStringData(), rounds));
+        break;
+    case "sprintf-int-fixed":
+        printf("%d\n", sprintfIntFixed(rounds));
+        break;
+    case "sprintf-map-join":
+        printf("%d\n", sprintfMapJoin(makeIntData(), rounds));
+        break;
+    case "method-sprintf-map-join":
+        printf("%d\n", methodSprintfMapJoin(makeIntData(), rounds));
+        break;
+    case "append-local-string":
+        printf("%d\n", appendLocalString(rounds));
+        break;
+    case "const-hash-literal":
+        printf("%d\n", constHashLiteral(rounds));
+        break;
+    default:
+        throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+}

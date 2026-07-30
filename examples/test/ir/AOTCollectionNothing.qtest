@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class AOTCollectionNothingTest
@@ -33,6 +33,11 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     private string expectedOutput() {
         return "typed-nothing:missing:missing:missing:missing:missing\n"
             "typed-empty:list:list:list:hash:hash\n"
+            "typed-bool-map:TFTF:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR\n"
+            "typed-bool-select:TT:RUNTIME-TYPE-ERROR:SELECT-HELPER-ERROR\n"
+            "typed-string-select:alpha,atom:RUNTIME-TYPE-ERROR:STRING-SELECT-ERROR\n"
+            "typed-helper-map:9:7.5:TFTF:RUNTIME-TYPE-ERROR:MAP-HELPER-ERROR\n"
+            "typed-helper-phi:10:9.5:TFFF:4.5:RUNTIME-TYPE-ERROR:MAP-HELPER-ERROR\n"
             "qorus-options:missing\n";
     }
 
@@ -41,6 +46,67 @@ class AOTCollectionNothingTest inherits QUnit::Test {
 
         return sprintf("%sstring sub kind(auto v) {
     return !exists v ? \"missing\" : (v instanceof list ? \"list\" : (v instanceof hash ? \"hash\" : v.type()));
+}
+
+%sstring sub boolList(list<bool> values) {
+    string result;
+    for (int i = 0; i < values.size(); ++i) {
+        result += values[i] === NOTHING ? \"N\" : values[i] ? \"T\" : \"F\";
+    }
+    return result;
+}
+
+%sint sub mapInt(int value) {
+    return value + 1;
+}
+
+%sint sub mapIntAlternate(int value) {
+    return value + 2;
+}
+
+%sfloat sub mapFloat(float value) {
+    return value + 0.5;
+}
+
+%sfloat sub mapFloatAlternate(float value) {
+    return value + 1.5;
+}
+
+%sbool sub mapBool(int value) {
+    return (value & 1) == 0;
+}
+
+%sbool sub mapBoolAlternate(int value) {
+    return (value & 2) == 0;
+}
+
+%s*int sub mapMaybeNothing(int value) {
+    int result;
+    if (value) {
+        result = value;
+    }
+    return result;
+}
+
+%sint sub mapThrow(int value) {
+    if (value == 2) {
+        throw \"MAP-HELPER-ERROR\", \"expected\";
+    }
+    return value;
+}
+
+%sbool sub selectThrow(bool value) {
+    if (!value) {
+        throw \"SELECT-HELPER-ERROR\", \"expected\";
+    }
+    return value;
+}
+
+%sbool sub selectStringThrow(string value) {
+    if (value == \"beta\") {
+        throw \"STRING-SELECT-ERROR\", \"expected\";
+    }
+    return True;
 }
 
 %sstring sub verify() {
@@ -58,17 +124,125 @@ class AOTCollectionNothingTest inherits QUnit::Test {
     auto ehm = map {$1: $1}, e;
     auto ehms = map ({$1: $1}, e, True);
 
+    list<int> bool_source = (0, 1, 2, 3);
+    list<bool> bool_map = (map ($1 & 1) == 0, bool_source);
+    list<bool> sparse_bool = (True, False, True);
+    delete sparse_bool[1];
+    string sparse_bool_error = \"none\";
+    try {
+        list<bool> sparse_bool_map = (map $1, sparse_bool);
+    } catch (hash<ExceptionInfo> ex) {
+        sparse_bool_error = ex.err;
+    }
+    bool unassigned_bool;
+    string missing_bool_error = \"none\";
+    try {
+        list<bool> missing_bool_map = (map unassigned_bool, bool_source);
+    } catch (hash<ExceptionInfo> ex) {
+        missing_bool_error = ex.err;
+    }
+    list<bool> bool_select = (select bool_map, $1);
+    string sparse_bool_select_error = \"none\";
+    try {
+        list<bool> sparse_bool_select = (select sparse_bool, True);
+    } catch (hash<ExceptionInfo> ex) {
+        sparse_bool_select_error = ex.err;
+    }
+    string throwing_bool_select_error = \"none\";
+    try {
+        list<bool> throwing_bool_select = (select bool_map, selectThrow($1));
+    } catch (hash<ExceptionInfo> ex) {
+        throwing_bool_select_error = ex.err;
+    }
+    list<string> string_select;
+    {
+        list<string> string_source = (\"alpha\", \"beta\", \"atom\");
+        string_select = (select string_source, $1.startsWith(\"a\"));
+    }
+    list<string> sparse_string = (\"alpha\", \"beta\", \"atom\");
+    delete sparse_string[1];
+    string sparse_string_select_error = \"none\";
+    try {
+        list<string> sparse_string_select = (select sparse_string, True);
+    } catch (hash<ExceptionInfo> ex) {
+        sparse_string_select_error = ex.err;
+    }
+    string throwing_string_select_error = \"none\";
+    try {
+        list<string> throwing_string_select = (select (\"alpha\", \"beta\", \"atom\"),
+            selectStringThrow($1));
+    } catch (hash<ExceptionInfo> ex) {
+        throwing_string_select_error = ex.err;
+    }
+
+    list<int> helper_source = (1, 2, 3);
+    list<int> helper_int_map = (map mapInt($1), helper_source);
+    list<float> helper_float_map = (map mapFloat($1), (1.0, 2.0, 3.0));
+    list<bool> helper_bool_map = (map mapBool($1), (0, 1, 2, 3));
+    string helper_nothing_error = \"none\";
+    try {
+        list<int> helper_nothing_map = (map mapMaybeNothing($1), (0, 1));
+    } catch (hash<ExceptionInfo> ex) {
+        helper_nothing_error = ex.err;
+    }
+    string helper_throw_error = \"none\";
+    try {
+        list<int> helper_throw_map = (map mapThrow($1), helper_source);
+    } catch (hash<ExceptionInfo> ex) {
+        helper_throw_error = ex.err;
+    }
+    list<int> helper_int_phi = (map ($1 & 1)
+        ? mapInt($1) : mapIntAlternate($1), helper_source);
+    list<float> helper_float_phi = (map ($# & 1)
+        ? mapFloat($1) : mapFloatAlternate($1), (1.0, 2.0, 3.0));
+    list<bool> helper_bool_phi = (map ($# & 1)
+        ? mapBool($1) : mapBoolAlternate($1), (0, 1, 2, 3));
+    list<float> helper_mixed_phi = (map ($1 & 1)
+        ? mapInt($1) : mapFloat(float($1)), (1, 2));
+    string helper_phi_nothing_error = \"none\";
+    try {
+        list<int> helper_phi_nothing = (map $1
+            ? mapInt($1) : mapMaybeNothing($1), (0, 1));
+    } catch (hash<ExceptionInfo> ex) {
+        helper_phi_nothing_error = ex.err;
+    }
+    string helper_phi_throw_error = \"none\";
+    try {
+        list<int> helper_phi_throw = (map $1 == 2
+            ? mapThrow($1) : mapInt($1), helper_source);
+    } catch (hash<ExceptionInfo> ex) {
+        helper_phi_throw_error = ex.err;
+    }
+
     hash<auto> opts;
     auto workflow_options = map (\"name\": $1) + opts.$1, keys opts;
 
     return sprintf(\"typed-nothing:%%s:%%s:%%s:%%s:%%s\\n\"
         \"typed-empty:%%s:%%s:%%s:%%s:%%s\\n\"
+        \"typed-bool-map:%%s:%%s:%%s\\n\"
+        \"typed-bool-select:%%s:%%s:%%s\\n\"
+        \"typed-string-select:%%s:%%s:%%s\\n\"
+        \"typed-helper-map:%%d:%%g:%%s:%%s:%%s\\n\"
+        \"typed-helper-phi:%%d:%%g:%%s:%%g:%%s:%%s\\n\"
         \"qorus-options:%%s\\n\",
         kind(m), kind(s), kind(ms), kind(hm), kind(hms),
         kind(em), kind(es), kind(ems), kind(ehm), kind(ehms),
+        boolList(bool_map), sparse_bool_error, missing_bool_error,
+        boolList(bool_select), sparse_bool_select_error,
+        throwing_bool_select_error,
+        join(\",\", string_select), sparse_string_select_error,
+        throwing_string_select_error,
+        helper_int_map[0] + helper_int_map[1] + helper_int_map[2],
+        helper_float_map[0] + helper_float_map[1] + helper_float_map[2],
+        boolList(helper_bool_map), helper_nothing_error, helper_throw_error,
+        helper_int_phi[0] + helper_int_phi[1] + helper_int_phi[2],
+        helper_float_phi[0] + helper_float_phi[1] + helper_float_phi[2],
+        boolList(helper_bool_phi), helper_mixed_phi[0] + helper_mixed_phi[1],
+        helper_phi_nothing_error, helper_phi_throw_error,
         kind(workflow_options));
 }
-", access, access);
+", access, access, access, access, access, access, access, access, access, access,
+    access, access, access);
     }
 
     private string collectionNothingCode() {

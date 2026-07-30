@@ -1,0 +1,17 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    string value = "Dvorak-Dvo\u0159ak-Dvorak";
+    string present = "Dvo\u0159";
+    string absent = "Smetana";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += nestedStringExpressionScore(value, i & 1 ? present : absent, i & 7);
+    }
+    printf("%d\n", checksum);
+    return 0;
+}

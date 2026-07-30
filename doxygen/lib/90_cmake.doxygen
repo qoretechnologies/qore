@@ -94,7 +94,8 @@
      - @ref QORE_BINARY_MODULE
      - @ref QORE_DIST
      - @ref QORE_CONFIG_INFO
-     
+     - @ref qore_cmake_aot_macros
+
     @subsection QORE_WRAP_QPP QORE_WRAP_QPP
     
     @code
@@ -160,6 +161,38 @@
     
     This macro prints configuration label, text lines with information about
     architecture, build type, compiler flags, etc.
+
+
+    @subsection qore_cmake_aot_macros AOT Module-Build Macros (qcc .qo pipeline)
+
+    Most module authors do not need these directly: with \c QORE_BUILD_AOT_MODULES
+    (default \c ON), the standard user-module build compiles \c .qm/\c .qc sources to
+    \c .qmod artifacts with \c qcc automatically. The following functions in
+    \c cmake/QoreMacros.cmake are the lower-level building blocks of that AOT pipeline,
+    exposed for projects that drive \c qcc compilation/linking themselves (for example a
+    module that ships pre-compiled \c .qo objects, or a C/C++ host that links Qore code).
+    They participate in the @ref qcc_parallel_codegen "parallel codegen / make jobserver"
+    model automatically. All take keyword arguments; see the macro definitions for the
+    full argument set.
+
+    - \c qore_qcc_compile_objects() — compile one or more Qore sources to relocatable
+      \c .qo objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
+      \c PARSE_DEFINES, \c PARSE_OPTIONS, \c INCLUDE_DIR, \c MODULE_DIR, …); emits the
+      custom commands and returns the generated object list.
+    - \c qore_qcc_link_objects() — link a set of \c .qo \c INPUTS into a final artifact
+      (\c OUTPUT, \c AGGREGATE_SYMBOL, \c MANIFEST_INPUTS, \c ALLOW_UNRESOLVED_IMPORTS, …).
+    - \c qore_qcc_script_aggregate() — build a single script-context aggregate object
+      from \c SOURCES for multi-file script/application AOT.
+    - \c qore_get_qcc_command() / \c qore_get_qcc_deps() — resolve the \c qcc command and
+      its dependency set (for correct rebuilds when the compiler changes).
+    - \c qore_qcc_sidecar_paths() / \c qore_qcc_sidecar_flags() — compute and pass the
+      per-compilation sidecar outputs (depfile, index/status JSON, success/content stamps,
+      qo-link map, manifest).
+    - \c qore_write_if_changed() / \c qore_content_digest_target() — write a generated file
+      only when its content changes, so downstream \c qcc steps re-run only on real changes.
+
+    For the artifact formats these produce, see the object-file and module artifact
+    contract in the Qore language reference and design docs.
 
 
     @subsection qore_cmake_binary_modules_example Qore Binary Module Example
