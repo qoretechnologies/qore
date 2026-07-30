@@ -3657,14 +3657,35 @@ static char qo_object_global_symbol_prefix(const llvm::object::ObjectFile& obj) 
 
     Only the qcc-generated `qore..._script_register` family is normalized;
     no other leading underscore is touched.
+
+    Only defined *global* symbols qualify.  A registration entry point is by
+    definition exported: the aggregate object emitted by
+    QoreAOT::compileScriptRegisterAggregate() references it across a native
+    link, so a local record can never satisfy it.  The distinction is not
+    academic on Mach-O: the parallel-codegen path merges its partition objects
+    with `ld -r`, and the Darwin linker writes a STABS debug map into the
+    merged symbol table (N_SO/N_OSO/N_BNSYM/N_FUN/N_ENSYM).  The N_FUN record
+    for the registration function carries the same name and address as the
+    real `N_SECT|N_EXT` definition but is non-external, so accepting every
+    defined record made a valid split-codegen object look like it exported the
+    registration function twice and `--link-qo` rejected it with
+    "input has multiple exported *_script_register symbols".
 */
 static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
         std::vector<std::string>& register_symbols, std::string& error) {
     const char global_prefix = qo_object_global_symbol_prefix(obj);
+    std::set<std::string> seen;
     size_t i = 0;
     for (const llvm::object::SymbolRef& sym : obj.symbols()) {
         if (!qo_link_check_cancel(i++, "AOT qo-link register-symbol scan", error)) {
             return false;
+        }
+        // the entry point must be an exported definition; local debug-map
+        // records and undefined references are not registration functions
+        uint32_t flags = symbol_flags(sym);
+        if (!(flags & llvm::object::SymbolRef::SF_Global)
+            || (flags & llvm::object::SymbolRef::SF_Undefined)) {
+            continue;
         }
         auto name_or = sym.getName();
         if (!name_or) {
@@ -3672,13 +3693,18 @@ static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
             continue;
         }
         std::string name = name_or->str();
-        if (string_has_suffix(name, "_script_register") && symbol_kind(sym) != 'U') {
-            // strip the target decoration so the stored name is the logical
-            // IR identifier the aggregate module must reference
-            if (global_prefix && name.size() > 5 && name[0] == global_prefix
-                && !name.compare(1, 4, "qore")) {
-                name.erase(0, 1);
-            }
+        if (!string_has_suffix(name, "_script_register")) {
+            continue;
+        }
+        // strip the target decoration so the stored name is the logical
+        // IR identifier the aggregate module must reference
+        if (global_prefix && name.size() > 5 && name[0] == global_prefix
+            && !name.compare(1, 4, "qore")) {
+            name.erase(0, 1);
+        }
+        // defensive: an object format that lists the same exported
+        // definition twice still contributes one logical registration name
+        if (seen.insert(name).second) {
             register_symbols.push_back(std::move(name));
         }
     }
