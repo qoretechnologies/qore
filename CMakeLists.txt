@@ -883,8 +883,28 @@ set(HAVE_BROTLI TRUE)
 # Zstandard (required)
 pkg_check_modules(ZSTD QUIET libzstd)
 if(ZSTD_FOUND)
-    message(STATUS "Found Zstandard: ${ZSTD_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARIES})
+    # pkg-config reports bare library names (e.g. "zstd") and keeps the search
+    # path in ZSTD_LIBRARY_DIRS.  Resolve to an absolute path: targets that link
+    # zstd on their own (qcc) and the AOT static link recipe carry no -L of their
+    # own, so a bare -lzstd only resolves when the library happens to live on the
+    # default linker search path (it does not under /opt/local or /opt/homebrew).
+    # search the pkg-config dir first and exclusively, so the library matches the
+    # headers pkg-config reported when several prefixes are installed
+    # (MacPorts + Homebrew); fall back to the default search path otherwise
+    if(ZSTD_LIBRARY_DIRS)
+        find_library(ZSTD_LIBRARY NAMES ${ZSTD_LIBRARIES} zstd
+            PATHS ${ZSTD_LIBRARY_DIRS} NO_DEFAULT_PATH)
+    endif()
+    find_library(ZSTD_LIBRARY NAMES ${ZSTD_LIBRARIES} zstd)
+    if(ZSTD_LIBRARY)
+        message(STATUS "Found Zstandard: ${ZSTD_LIBRARY} (${ZSTD_VERSION})")
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARY})
+    else()
+        message(STATUS "Found Zstandard: ${ZSTD_VERSION}")
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARIES})
+        # keep the bare names resolvable for every target defined below
+        link_directories(${ZSTD_LIBRARY_DIRS})
+    endif()
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${ZSTD_INCLUDE_DIRS})
 else()
     # Try to find Zstd without pkg-config
@@ -897,6 +917,13 @@ else()
     else()
         message(FATAL_ERROR "Zstandard is required for compression support. Please install libzstd-dev (Debian/Ubuntu) or libzstd-devel (Fedora/RHEL)")
     endif()
+endif()
+# canonical zstd link spec for targets that link zstd directly (qcc); prefers the
+# absolute path so no -L from an unrelated package is needed on the link line
+if(ZSTD_LIBRARY)
+    set(QORE_ZSTD_LIBS ${ZSTD_LIBRARY})
+else()
+    set(QORE_ZSTD_LIBS ${ZSTD_LIBRARIES})
 endif()
 # Always defined since zstd is now required
 set(HAVE_ZSTD TRUE)
@@ -2673,7 +2700,7 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
 target_include_directories(qcc PRIVATE ${ZSTD_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${ZSTD_LIBRARIES} ${ZSTD_LIBRARY} ${CMAKE_DL_LIBS})
+target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${QORE_ZSTD_LIBS} ${CMAKE_DL_LIBS})
 target_compile_definitions(qcc PRIVATE
     QORE_QCC_SOURCE_INCLUDE_DIR="${CMAKE_SOURCE_DIR}/include"
     QORE_QCC_BUILD_INCLUDE_DIR="${CMAKE_BINARY_DIR}/include"
