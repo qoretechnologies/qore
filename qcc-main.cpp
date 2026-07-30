@@ -3628,8 +3628,39 @@ static bool qo_link_check_cancel(size_t ordinal, const char* operation, std::str
     return true;
 }
 
+//! Returns the object format's global-symbol prefix, or 0 if it has none.
+/** Mach-O and 32-bit x86 COFF decorate every external symbol with a leading
+    underscore, so the object symbol table spells the LLVM IR identifier
+    `qore_x_script_register` as `_qore_x_script_register`.  ELF and 64-bit
+    COFF use the symbol name verbatim.
+*/
+static char qo_object_global_symbol_prefix(const llvm::object::ObjectFile& obj) {
+    if (obj.isMachO()) {
+        return '_';
+    }
+    if (obj.isCOFF() && obj.getArch() == llvm::Triple::x86) {
+        return '_';
+    }
+    return 0;
+}
+
+//! Collects the logical IR names of the `*_script_register` symbols defined by @p obj.
+/** The names collected here are stored in QOLinkInputInfo::register_symbol,
+    written to the `.qolink.json` link map, and handed to
+    QoreAOT::compileScriptRegisterAggregate(), which treats them as LLVM IR
+    identifiers and lets the target mangler decorate them again when the
+    aggregate object is emitted.  The object-file spelling must therefore be
+    normalized back to its logical form here, or the aggregate references
+    `__qore_x_script_register` on Mach-O while the inputs define
+    `_qore_x_script_register`, and the native link fails with undefined
+    symbols.
+
+    Only the qcc-generated `qore..._script_register` family is normalized;
+    no other leading underscore is touched.
+*/
 static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
         std::vector<std::string>& register_symbols, std::string& error) {
+    const char global_prefix = qo_object_global_symbol_prefix(obj);
     size_t i = 0;
     for (const llvm::object::SymbolRef& sym : obj.symbols()) {
         if (!qo_link_check_cancel(i++, "AOT qo-link register-symbol scan", error)) {
@@ -3642,6 +3673,12 @@ static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
         }
         std::string name = name_or->str();
         if (string_has_suffix(name, "_script_register") && symbol_kind(sym) != 'U') {
+            // strip the target decoration so the stored name is the logical
+            // IR identifier the aggregate module must reference
+            if (global_prefix && name.size() > 5 && name[0] == global_prefix
+                && !name.compare(1, 4, "qore")) {
+                name.erase(0, 1);
+            }
             register_symbols.push_back(std::move(name));
         }
     }

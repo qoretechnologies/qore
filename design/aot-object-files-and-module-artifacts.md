@@ -244,11 +244,23 @@ register symbols still fail in the normal native linker.  This first
 object-driven link mode preserves the per-file metadata registration semantics
 while removing source-list assumptions from the aggregate registration step.
 
+Register symbols extracted from input objects are normalized to their logical
+LLVM IR spelling: object symbol tables that use a global-symbol prefix (Mach-O,
+and 32-bit x86 COFF) decorate `qore_<sanmod>_<sanfile>_script_register` as
+`_qore_<sanmod>_<sanfile>_script_register`, and that prefix is stripped before
+the name is stored.  The aggregate is generated as LLVM IR, so the target
+mangler re-applies the prefix when the object is emitted; storing the decorated
+spelling would make the aggregate reference `__qore..._script_register` while
+its inputs define `_qore..._script_register`, and the native link would fail
+with undefined symbols.  Only the qcc-generated `qore..._script_register`
+family is normalized.
+
 The command also writes `<aggregate.qo>.qolink.json` by default, or the path
 given with `--qolink-map`.  The link map records input object hashes, register
-symbols, provided Qore symbols, resolved/unresolved/ambiguous imports, hash
-mismatches, external dependencies, module path lists, module commands, and
-native symbols expected by the final link.
+symbols in their logical (undecorated) spelling, provided Qore symbols,
+resolved/unresolved/ambiguous imports, hash mismatches, external dependencies,
+module path lists, module commands, and native symbols expected by the final
+link.
 
 ## Build-System Contract
 

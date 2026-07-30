@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTQoLinkNativeSymbolsTest
+
+#! regression coverage for the qcc `--link-qo` register-symbol contract
+/** `qcc --link-qo` scans every input `.qo` for its exported
+    `*_script_register` symbol, stores the name in the `.qolink.json` link
+    map, and hands the collected names to
+    `QoreAOT::compileScriptRegisterAggregate()`, which emits them as LLVM IR
+    symbol names.  LLVM applies the target's global-symbol prefix when the
+    aggregate object is written, so the stored name must be the logical IR
+    identifier, not the object-file spelling.
+
+    On Mach-O the object symbol table spells the IR name
+    `qore_x_script_register` as `_qore_x_script_register`; storing that
+    spelling made the aggregate reference `__qore_x_script_register` while
+    every input defined `_qore_x_script_register`, and the native link failed
+    with undefined symbols.
+*/
+class AOTQoLinkNativeSymbolsTest inherits QUnit::Test {
+    public {
+        #! aggregate symbol used for all cases here
+        const AggSymbol = "QO_LINK_NATIVE_SYMBOLS";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+        *string nm_bin;
+    }
+
+    constructor() : QUnit::Test("AOTQoLinkNativeSymbolsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, source_root + "/include");
+        nm_bin = trim(backquote("command -v nm 2>/dev/null"));
+        if (!nm_bin.val()) {
+            remove nm_bin;
+        }
+
+        addTestCase("link map records logical register symbols", \testLinkMapLogicalSymbols());
+        addTestCase("aggregate references the symbols its inputs define",
+            \testAggregateObjectSymbolsMatchInputs());
+        addTestCase("aggregate native-links and registers", \testAggregateNativeLink());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+    }
+
+    #! compile two sources to `.qo` objects and generate the `--link-qo` aggregate
+    /** @return a hash with the qo dir, the input object list, the aggregate
+        path, and the link map text
+    */
+    private hash<auto> buildAggregate(string tmp_dir) {
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string lib_src = tmp_dir + "/qo_link_native_lib.qc";
+        string main_src = tmp_dir + "/qo_link_native_main.qr";
+        string agg = tmp_dir + "/qo-link-native.qo";
+
+        write(lib_src, "%new-style
+class QoLinkNativeLib {
+    static int add(int a, int b) { return a + b; }
+}
+");
+        write(main_src, "%modern
+int sub qo_link_native_main() {
+    printf(\"qo-link native ok: %d\\n\", QoLinkNativeLib::add(40, 2));
+    return 0;
+}
+");
+
+        string compile_out = run(sprintf("%s %s -c --output-dir=%s %s %s",
+            env, qcc_bin, qo_dir, lib_src, main_src));
+        assertTrue(compile_out.find("script-context .qo") != -1,
+            "batch compile emitted script objects: " + compile_out);
+
+        list<string> inputs = sort(glob(qo_dir + "/*.qo"));
+        assertEq(2, inputs.size(), "batch compile emitted one .qo per source: " + compile_out);
+
+        string link_out = run(sprintf("%s %s --link-qo -o %s --aggregate-symbol=%s %s/*.qo",
+            env, qcc_bin, agg, AggSymbol, qo_dir));
+        assertTrue(is_file(agg), "qo-link aggregate was created: " + link_out);
+        assertTrue(is_file(agg + ".qolink.json"), "qo-link map was created: " + link_out);
+
+        return {
+            "qo_dir": qo_dir,
+            "inputs": inputs,
+            "aggregate": agg,
+            "link_map": File::readTextFile(agg + ".qolink.json"),
+        };
+    }
+
+    #! all `register_symbol` values recorded in a `.qolink.json` link map
+    private list<string> mapRegisterSymbols(string link_map) {
+        *list<string> syms = (link_map =~ x/"register_symbol": "([^"]+)"/g);
+        return sort(syms ?? ());
+    }
+
+    #! `*_script_register` symbols of the given `nm` kind ("U" for undefined) in an object
+    /** The `qore_aot_script_register` runtime bridge also ends in
+        `_script_register`; it is not a per-file registration entry point and
+        is filtered out here.
+    */
+    private list<string> objectRegisterSymbols(string path, string kind) {
+        list<string> rv();
+        foreach string raw_line in (run(sprintf("%s -g %s", nm_bin, path)).split("\n")) {
+            list<string> fields();
+            foreach string field in (raw_line.split(" ")) {
+                field = trim(field);
+                if (field != "") {
+                    fields += field;
+                }
+            }
+            if (fields.size() < 2) {
+                continue;
+            }
+            string name = fields[fields.size() - 1];
+            string sym_kind = fields[fields.size() - 2];
+            if (sym_kind.size() != 1 || sym_kind != kind) {
+                continue;
+            }
+            if (!(name =~ /_script_register$/) || name =~ /qore_aot_script_register$/) {
+                continue;
+            }
+            rv += name;
+        }
+        return sort(rv);
+    }
+
+    testLinkMapLogicalSymbols() {
+        TmpDir tmp("qore-aot-qo-link-symbols-");
+        hash<auto> built = buildAggregate(tmp.path);
+
+        list<string> syms = mapRegisterSymbols(built.link_map);
+        assertEq(built.inputs.size(), syms.size(),
+            "link map records one register symbol per input: " + built.link_map);
+        foreach string sym in (syms) {
+            # the link map must hold the logical LLVM IR identifier; any
+            # target decoration here is re-applied when the aggregate is
+            # emitted and produces unresolvable references
+            assertTrue(sym =~ /^qore[A-Za-z0-9_]*_script_register$/,
+                sprintf("link map register symbol %y is an undecorated logical identifier", sym));
+            assertFalse(sym.startsWith("_"),
+                sprintf("link map register symbol %y carries no Mach-O decoration", sym));
+        }
+    }
+
+    testAggregateObjectSymbolsMatchInputs() {
+        if (!nm_bin.val()) {
+            testSkip("no nm available to inspect object symbol tables");
+        }
+
+        TmpDir tmp("qore-aot-qo-link-symbols-");
+        hash<auto> built = buildAggregate(tmp.path);
+
+        list<string> defined();
+        foreach string input in (built.inputs) {
+            list<string> input_defined = objectRegisterSymbols(input, "T");
+            assertEq(1, input_defined.size(),
+                sprintf("input %y defines exactly one register symbol", basename(input)));
+            defined += input_defined;
+        }
+        defined = sort(defined);
+
+        list<string> requested = objectRegisterSymbols(built.aggregate, "U");
+        assertEq(defined, requested,
+            "aggregate requests exactly the register symbols its inputs define");
+
+        # each object-level name is the logical link-map name plus at most the
+        # target's single-character global-symbol prefix
+        list<string> logical = mapRegisterSymbols(built.link_map);
+        foreach string sym in (requested) {
+            assertFalse(sym.startsWith("__"),
+                sprintf("aggregate reference %y is not doubly decorated", sym));
+            assertTrue(inlist(sym, logical) || inlist(sym.substr(1), logical),
+                sprintf("aggregate reference %y matches a link map symbol", sym));
+        }
+    }
+
+    testAggregateNativeLink() {
+        TmpDir tmp("qore-aot-qo-link-symbols-");
+        hash<auto> built = buildAggregate(tmp.path);
+
+        string glue = tmp.path + "/host.cpp";
+        string exe = tmp.path + "/qo-link-native-host";
+
+        write(glue, "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+
+extern \"C\" void init_" + AggSymbol + "_qo(QoreProgram*);
+
+int main(int, char**) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        fprintf(stderr, \"qore_create_program failed\\n\");
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    init_" + AggSymbol + "_qo(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (rc != 0) {
+        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+        qore_destroy_program(pgm);
+        qore_cleanup();
+        return 1;
+    }
+    rc = qore_run_callable(pgm, \"qo_link_native_main\", NULL);
+    if (rc != 0) {
+        fprintf(stderr, \"qo_link_native_main failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
+}
+");
+
+        string cxx = ENV.CXX ?? "g++";
+        # qore-version.h is generated into the build dir (CMAKE_BINARY_DIR/include) rather
+        # than the source include tree, so the host TU needs both include dirs in-tree; a
+        # non-existent dir is harmlessly ignored for installed layouts.
+        string link_out = run(sprintf(
+            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s %s/*.qo -L%s -Wl,-rpath,%s -lqore -o %s",
+            libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
+            glue, built.aggregate, built.qo_dir, libqore_dir, libqore_dir, exe));
+        # the pre-fix failure mode: the aggregate references decorated names no
+        # input defines, so the native link fails on unresolved symbols
+        assertEq(-1, link_out.find("_script_register"),
+            "native link resolved every aggregate register symbol: " + link_out);
+        assertTrue(is_file(exe), "linked qo-link aggregate host: " + link_out);
+
+        string out = run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertTrue(out.find("qo-link native ok: 42") != -1,
+            "aggregate registered both objects and ran the cross-object call: " + out);
+    }
+}

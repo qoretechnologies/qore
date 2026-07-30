@@ -415,6 +415,20 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "link map has no ambiguous imports: " + link_map);
         assertTrue(link_map.find("\"hash_mismatches\": []") != -1,
             "link map has no hash mismatches: " + link_map);
+
+        # the link map must record the logical LLVM IR identifier of each
+        # input's registration entry point, never the object-file spelling:
+        # compileScriptRegisterAggregate() emits these as IR symbol names and
+        # the target mangler decorates them again (Mach-O prepends `_`), so a
+        # decorated name here yields an unresolvable `__qore..._script_register`
+        # reference in the aggregate
+        *list<string> register_symbols = (link_map =~ x/"register_symbol": "([^"]+)"/g);
+        assertEq(2, register_symbols.size(),
+            "link map records one register symbol per input: " + link_map);
+        foreach string sym in (register_symbols) {
+            assertTrue(sym =~ /^qore[A-Za-z0-9_]*_script_register$/,
+                sprintf("link map register symbol %y is an undecorated logical identifier", sym));
+        }
     }
 
     testStandaloneGlobalImport() {
