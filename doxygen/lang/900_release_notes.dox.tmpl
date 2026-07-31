@@ -17,35 +17,6 @@
     <b>Highlights:</b>
 
     <i>Performance and memory:</i>
-    - <b><a href="https://llvm.org/">LLVM</a>-backed @ref execution_modes "execution modes"</b> are the headline feature of this
-      release. A single Qore intermediate-representation (IR) pipeline now backs four ways to run
-      @ref modern "%modern" code, all sharing the same @ref exec_mode_ir "IR" semantic baseline so native
-      paths preserve interpreter behavior exactly:
-      - @ref exec_mode_ir "IR interpreter" &mdash; an Intermediate-Representation interpreter that lowers code to Qore IR and executes it directly,
-        avoiding AST dispatch while keeping startup overhead low (<tt>--exec-mode=ir</tt>)
-      - @ref exec_mode_jit "JIT" &mdash; Just-In-Time compilation that lowers IR to LLVM IR and compiles it to native machine code for
-        long-running or CPU-intensive workloads, with GDB JIT symbol registration for debugging
-        (<tt>--exec-mode=jit</tt>)
-      - @ref exec_mode_tiered "tiered" (the default for @ref modern "%modern" code) &mdash; validates IR
-        lowerability at parse commit, starts fast with cached IR, and adaptively promotes hot function
-        variants to JIT after a configurable call threshold (\c --jit-jit-threshold)
-      - @ref exec_mode_aot "AOT" &mdash; Ahead-Of-Time compilation: the @ref qcc_tool "qcc" compiler produces standalone native
-        executables, binary user modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), and archives
-        (<tt>.qoa</tt>) ahead of time, eliminating parse-time overhead and allowing source text to be stripped
-        from artifacts (each carries QORD metadata with format version, feature flags, and dependencies)
-      - LLVM 16 or later is required for JIT and AOT; see @ref execution_modes "Execution Modes" for
-        full mode semantics, \c qcc options, artifact types, and debugging notes
-    - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
-      artifacts by default for better startup and runtime performance (see
-      @ref exec_mode_aot "AOT Compilation")
-    - downstream CMake object groups now seed clean AOT builds with one shared-parse
-      batch compilation while retaining exact per-file incremental rebuilds;
-      <tt>qcc --batch-build-sidecars</tt> emits the dependency and manifest
-      sidecars required to move between the two modes without an all-to-all
-      source dependency
-    - explicit <tt>.qmod</tt> paths now fall back to the complete separated source module directory when the binary
-      artifact is missing or cannot be loaded, ensuring sibling <tt>.qc</tt> and <tt>.ql</tt> component files are
-      parsed along with the main <tt>.qm</tt> file
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
@@ -73,8 +44,7 @@
     - source-defined @ref generic_classes "generic classes" now support generic inheritance,
       source-level raw compatibility attributes
       (<tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
-      <tt>[legacy_raw]</tt>), and AOT metadata preservation for generic base
-      and raw-compatibility information
+      <tt>[legacy_raw]</tt>)
     - source-defined @ref generic_classes "generic class" static methods can now be called with
       parameterized receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
       source-defined @ref hashdecl_generic "hashdecls" can now declare type parameters for typed result
@@ -90,9 +60,6 @@
       parameters can declare defaults and upper bounds; functions and methods
       can also infer method-level type arguments or accept explicit call type
       arguments such as <tt>identity&lt;string&gt;(...)</tt>
-    - @ref execution_modes "IR/JIT execution" can internally specialize source @ref generic_classes "generic" method and
-      function bodies for concrete receiver and call type arguments, while AOT
-      metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH @ref string_escape_chars "string-literal escapes"
     - new streaming operators @ref streaming_first "first", @ref streaming_any "any",
@@ -100,9 +67,8 @@
       @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and
       @ref streaming_takeuntil "takeuntil", plus the <tt>iterate</tt>
       operator, provide short-circuit and prefix/boundary processing over lists, hashes,
-      strings, binaries, integer ranges, and iterators; IR/JIT/AOT execution lowers streaming
-      operators to native iterator loops and fuses nested streaming stages; string
-      iteration yields @ref char "char" values
+      strings, binaries, integer ranges, and iterators; string iteration yields
+      @ref char "char" values
     - the @ref find "find" operator now supports \c first, \c last, and \c one modifiers
       for consistent first-match, last-match, and exactly-one-match context queries
     - new \c %%Y @ref string_formatting "printf format specifier" for multi-line pseudo-YAML output
@@ -201,11 +167,9 @@
     - new experimental @ref plugin_types "plugin-type" registration ABI
       foundation for future module-defined dense data types, including
       descriptor validation, module-init registration staging, runtime helper
-      dispatch, QORD helper-reference metadata, serialized plugin value
-      instances, lowering pattern hooks, optional LLVM codegen extension hooks,
-      per-operation FP reassociation metadata gated by the new
-      @ref fp-fast-math "%fp-fast-math" parse directive, verifier diagnostics, trace controls, and
-      @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
+      dispatch, serialized plugin value instances, verifier diagnostics, trace
+      controls, and @ref Qore::Reflection::PluginRegistry "PluginRegistry"
+      introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -268,13 +232,10 @@
     - integrated REPL mode in the \c qore binary with the @ref qorereplintro "QoreRepl" module
     - new @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" parse option for REPL functionality
     - new @ref prepend-module-path "%prepend-module-path" and
-      @ref append-module-path "%append-module-path" directives for per-program module search paths,
-      including paths persisted in AOT binaries
+      @ref append-module-path "%append-module-path" directives for per-program module search paths
     - new @ref try-child-module "%try-child-module" directive letting a base module declare optional
       @ref user_module_children "child modules" that extend it, loaded automatically once the base module
       is fully published
-    - \c qpp \c --metadata flag emits structured \c .meta.json files for builtin classes,
-      methods, functions, constants, hashdecls, and enums
     - tree-sitter-based parser backend in the @ref astparserintro "astparser" module
     - DPQL (Data Provider Query Language) for human/AI-readable query expressions
 
@@ -460,8 +421,8 @@ AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com
 
     Object serialization preserves specialized generic class types, reflection
     exposes type parameters, defaults, and bounds for generic classes and
-    hashdecls, and QoreApiMetadata merges generic metadata from AST parsing,
-    reflection, and qpp metadata. QoreApiMetadata also exposes structured
+    hashdecls, and QoreApiMetadata merges generic metadata from AST parsing and
+    reflection. QoreApiMetadata also exposes structured
     type-use metadata for generic arguments and wildcards, including
     unbounded, upper-bound, and lower-bound wildcard entries for parameters,
     members, returns, and inherited class/hashdecl types. The astparser and
@@ -506,10 +467,7 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
-    Source-defined generic class types are runtime checked and invariant. AOT
-    metadata preserves generic class parameters and parameterized base-class
-    inheritance so compiled code uses the same type substitutions as source
-    execution.
+    Source-defined generic class types are runtime checked and invariant.
     @endparblock
 
     @par Removal of \%strict-types Support
@@ -518,10 +476,9 @@ int echoed = child.echo(value);
     parse option have been removed. The @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES" constant remains
     defined as \c 0 for backward compatibility; code referencing it will compile but the option has no effect.
 
-    This feature was originally intended to prepare for JIT compilation by enforcing stricter typing and
-    automatically initializing typed variables with default values. However, the NaN-boxing optimization
-    for \c QoreValue (reducing value size from 16 to 8 bytes with single-comparison type guards) addressed
-    JIT requirements more effectively without requiring behavioral changes.
+    This feature enforced stricter typing and automatically initialized typed
+    variables with default values. The NaN-boxing optimization for \c QoreValue
+    made the special behavior unnecessary.
 
     The @ref loose-types "%loose-types" parse directive is also removed (it was only used to disable
     @ref strict-types "%strict-types").
@@ -584,7 +541,6 @@ int echoed = child.echo(value);
     - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
       @ref Qore::Program "Program" object (AST-only)
 
-    <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
     @endparblock
 
     @par \%modern Is Now the Default for Non-.q Files
@@ -807,62 +763,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - <b>macOS (Homebrew):</b> \c onnxruntime
     @endparblock
 
-    @par LLVM-backed Execution and AOT Compilation
-    @parblock
-    %Qore now uses a shared IR pipeline for the IR interpreter, <a href="https://llvm.org/">LLVM</a> JIT,
-    tiered execution, and AOT compilation.  @ref modern "%modern" code
-    defaults to @ref exec_mode_tiered "tiered", which validates IR
-    lowerability during parsing, starts quickly with cached IR, and can
-    promote hot functions to JIT. Legacy non-modern code defaults to AST
-    execution for compatibility.
-
-    The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
-    script executables, binary user modules (<tt>.qmod</tt>), relocatable Qore
-    objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>), generated link-mode
-    executables, dependency files, and artifact inspection with
-    \c --dump-info.
-
-    \c qcc can also parallelize LLVM backend codegen for a single compilation
-    (\c --jobs=N / \c QCC_JOBS, split-after-opt) and acts as a GNU make jobserver
-    client so parallel codegen shares one job budget under <tt>make -j</tt> without
-    oversubscription; see @ref qcc_parallel_codegen "Parallel Backend Codegen and the
-    GNU make Jobserver". AOT exceptions report real \c .qc/\c .qm source locations,
-    reconstructed lazily at throw time from line tables (see
-    @ref exec_mode_aot "AOT" exception source locations). CMake-based module and host
-    projects that drive \c qcc directly can use the AOT build macros documented in the
-    @ref qore_cmake "CMake API guide".
-
-    LLVM 16 or later is required for JIT and AOT support.  See
-    @ref execution_modes "Execution Modes" for execution-mode semantics,
-    qcc options, artifact types, source-stripping behavior, and debugging
-    notes.
-    @endparblock
-
-    @par AOT-compiled User Modules by Default
-    @parblock
-    The standard CMake build now compiles user modules to <tt>.qmod</tt> artifacts
-    with \c qcc and installs those compiled artifacts in the
-    architecture-specific module directory.  Source <tt>.qm</tt> modules remain
-    installed in the user-module source directory.  \c QORE_BUILD_AOT_MODULES
-    defaults to \c ON.
-
-    Module lookup checks compiled module directories before the corresponding
-    source module directories, so installed user modules use the AOT-compiled
-    version for better startup and runtime performance by default.  Source
-    modules remain installed for documentation, inspection, and development
-    workflows.
-
-    Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
-    @ref qore_modules "Qore Modules" and
-    @ref exec_mode_aot "AOT Compilation" for details.
-    @endparblock
-
     @par Program-owned Module Path Directives
     @parblock
     @ref prepend-module-path "%prepend-module-path" and the new quoted form of
     @ref append-module-path "%append-module-path" let programs declare their
-    own module search paths.  The expanded per-program path lists are persisted
-    in AOT artifacts and restored before dependency modules load.
+    own module search paths.
 
     See @ref prepend-module-path "%prepend-module-path",
     @ref append-module-path "%append-module-path", and
@@ -907,40 +812,6 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     See the \c "Developing Qore Modules" chapter of the %Qore library documentation for the
     naming convention, the append-only and public-ABI-types-only rules, and complete producer and
     consumer examples.
-    @endparblock
-
-    @par Native IR Lowering for context Statement
-    @parblock
-    The @ref context "context" statement, including contextual column
-    references and the \c %% row reference, now runs through the shared IR,
-    JIT, and AOT pipeline instead of falling back to AST execution.
-
-    This is a semantic-preserving change that allows modules using
-    \c context loops to be AOT-compiled to <tt>.qmod</tt>.  See @ref context
-    and @ref execution_modes "Execution Modes" for details.
-    @endparblock
-
-    @par Programmatic Execution Mode Control
-    @parblock
-    The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide
-    type-safe programmatic control over execution modes:
-
-    - new @ref Qore::ExecMode "ExecMode" enum with values \c EM_AST,
-      \c EM_IR, \c EM_JIT, and
-      \c EM_TIERED
-    - new @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" method to set the
-      execution mode for a @ref Qore::Program "Program" object
-    - new @ref Qore::Program::getExecMode() "Program::getExecMode()" method to query the current
-      execution mode
-
-    Example:
-    @code{.py}
-    Program pgm(PO_MODERN);
-    pgm.setExecMode(ExecMode::EM_JIT);  # Use JIT for this program
-    pgm.parse("int sub compute() { return 42; }", "code");
-    @endcode
-
-    See @ref execution_modes for complete documentation of execution modes.
     @endparblock
 
     @par New Build Requirement: Rust Toolchain and tree-sitter CLI
@@ -1246,9 +1117,6 @@ cargo install tree-sitter-cli@0.26.5
     - <b>ReadOnlyFile short reads</b>
       - new @ref ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
         fill the requested size
-    - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
-      \c .meta.json metadata files during the build, providing machine-readable documentation for
-      all builtin classes, methods, functions, constants, hashdecls, and enums
     - integrated REPL mode in the \c qore binary
       - automatically enters REPL mode when run interactively in a terminal with no script file
       - new \c --interactive command-line option to force REPL mode
@@ -1421,7 +1289,7 @@ cargo install tree-sitter-cli@0.26.5
     - Added @ref const_methods "const-qualified instance methods" with trailing
       \c const syntax. Read-only receivers can call only const methods when
       method resolution is static, and const-method metadata is available through
-      reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
+      reflection, QoreApiMetadata, astparser, and QoreCodeFormat
 
     @par Fast Text Processing APIs
     @parblock
@@ -1705,36 +1573,21 @@ foreach string module_name in (registry.getProcessModules()) {
     @ref Qore::Reflection::PluginRegistry::getRecentFallbackSites() "PluginRegistry::getRecentFallbackSites()".
 
     <b>Values and serialization</b>:
-    - Dense-buffer helper dispatch now has dedicated IR opcodes that validate \c buffer<T> operands before passing
-      raw frames to module helpers.
     - Plugin value nodes can be wrapped with \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in
       QORD, and round-tripped through \c Serializable using the registered plugin serializer callbacks.
-
-    <b>Inline LLVM lowering</b>: modules can opt in with the \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
-    \c <qore/QorePluginLLVM.h>:
-    - callbacks receive operation metadata plus the gated \c fp_reassociation_enabled decision;
-    - incompatible <em>optional</em> LLVM extensions fall back to runtime-helper dispatch;
-    - <em>required</em> mismatches fail registration.
-
-    Registered operations can also provide \c QorePluginLoweringCallback pattern matchers so IR lowering can emit
-    plugin-dispatch IR before the generic \c any fallback; claimed-node \c NotApplicable results fail with
-    \c PLUGIN-LOWERING-CLAIM-VIOLATED.
-    @ref Qore::Reflection::PluginRegistry::getOperations() "PluginRegistry::getOperations()" now reflects whether a
-    lowering callback or accepted LLVM codegen hook is registered for each operation, allowing descriptor tools to
-    verify optimization coverage.
 
     <b>References and tooling</b>: see @ref plugin_types for the complete module-author overview and current
     limitations, along with:
     - \c examples/plugins/sample-buffer - reference module;
     - \c examples/plugins/qore-plugin-lint - advisory descriptor linter;
-    - \c tools/plugin-type-verify.sh - runner combining the registry smoke test, descriptor linting, and optional
-      AST/IR/JIT/tiered consumer workloads;
+    - \c tools/plugin-type-verify.sh - runner combining the registry smoke test,
+      descriptor linting, and optional consumer workloads;
     - \c plugin-type-verify-dataframe - CMake target for the in-tree dataframe consumer.
     @endparblock
 
     @par Module-Loading Lock Hierarchy
     @parblock
-    Cold runtime module loads serialize on a process-global lock while applying AOT module commands
+    Cold runtime module loads serialize on a process-global lock while applying module commands
     and running module initializers.  Because applying a module's commands can call into that
     module (for example to import Java classes), a binary module that holds a private lock while
     triggering a module load could invert the lock order and deadlock against a concurrent load.
@@ -2955,19 +2808,6 @@ foreach string module_name in (registry.getProcessModules()) {
         <tt>*hash&lt;auto&gt; instanceof hash&lt;SomeHashDecl&gt;</tt> or <tt>int instanceof float</tt>), but is now
         correctly emitted for disjoint hashdecl and complex-list types (such as <tt>hash&lt;X&gt; instanceof
         hash&lt;Y&gt;</tt>), which can never share a runtime value
-      - fixed class member initialization expressions restored from @ref exec_mode_aot "AOT"-compiled modules being
-        parse-initialized a second time when the class is subclassed, either inside the same module or by the code
-        loading it; this aborted the process on \c %requires in debug builds (for example with a pseudo-method call
-        such as <tt>int delay = SomeDelay.durationSeconds();</tt> in a member initializer) and silently re-resolved
-        call targets in release builds
-      - fixed hashdecl member default-value expressions restored from @ref exec_mode_aot "AOT"-compiled modules
-        being parse-initialized a second time when code referencing a member of the hashdecl by name is parsed,
-        with the same symptoms as the class member case above
-      - fixed loading @ref exec_mode_aot "AOT"-compiled modules with a default argument expression referencing
-        another function in the same module (such as <tt>int d = getDelay().durationSeconds()</tt>), which failed
-        with \c LOAD-MODULE-ERROR (\c "cannot resolve function ... in inline FUNC_CALL expression") depending on
-        the order functions happened to be serialized in; these expressions are now resolved after all functions,
-        methods, and classes in the module are registered
       - fixed regular expression matching never completing on subject strings larger than 5,000,000 bytes; an
         unanchored pattern that did not match spun a CPU core indefinitely and permanently wedged the calling
         thread. PCRE2's interpreter switches off its required-code-unit start-of-match optimization once the
