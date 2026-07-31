@@ -141,8 +141,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v11: all serialized source line numbers use signed 32-bit values
 //! v12: whole-body and sectioned Zstandard metadata compression are supported
 //! v13: lazy debugger IR is stored in a separate section referenced by SLOT_MAPS ranges
+//! v14: init-function descriptors can target namespace global variables
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 13;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 14;
 //! First format version storing lazy debugger IR in a separate section.
 constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
 
@@ -2049,6 +2050,7 @@ struct AOTCompiledInitFunc {
     //! Pre-filtered reverse map used for serializing this init function's slot payloads.
     std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
     uint64_t feature_flags = 0;
+    uint64_t source_order = 0;      //!< declaration order for ordered global initializers
 
     //! Target type for the init function result
     enum TargetType : uint8_t {
@@ -2061,6 +2063,8 @@ struct AOTCompiledInitFunc {
                               //!< its outer init calls it as a helper instead.
                               //!< Slot IDs still populate so the helper can
                               //!< resolve globals / constants it references.
+        GLOBAL_VAR = 5,       //!< namespace-level global or thread-local variable
+        GLOBAL_VAR_CONSTRUCT = 6, //!< initializer expression constructs and stores the value
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path

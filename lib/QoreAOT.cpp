@@ -4420,11 +4420,6 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
 
 static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
         QoreProgram* pgm, QoreIRFunction*& ir_func, std::string& error) {
-    if (!init_expr.hasNode() || !init_expr.getInternalNode()->needs_eval()) {
-        error = "init expression does not need eval";
-        return -1;
-    }
-
     ir_func = new QoreIRFunction(name);
     // No pre-instantiated locals from signature (init functions have no parameters)
 
@@ -19732,7 +19727,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     // Helper lambda to compile an init expression to LLVM and record it
     auto compileInitExpr = [&](const QoreValue& init_expr, const std::string& init_name,
             AOTCompiledInitFunc::TargetType target_type,
-            const std::string& container_path, const std::string& item_name) {
+            const std::string& container_path, const std::string& item_name,
+            uint64_t source_order) {
         if (fatal_error && !fatal_error->empty()) {
             return;
         }
@@ -19871,6 +19867,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
             cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
             cif.feature_flags = scanIRFeatureFlags(*ir_func);
+            cif.source_order = source_order;
             for (auto& h : outlined_helpers) {
                 cif.feature_flags |= scanIRFeatureFlags(*h.ir_func);
             }
@@ -20038,7 +20035,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             std::string init_name = "__const_init::" + ns_path + "::" + ce->getName();
             compileInitExpr(init_expr, init_name, AOTCompiledInitFunc::NS_CONSTANT,
-                ns_path, ce->getName());
+                ns_path, ce->getName(), 0);
             if (fatal_error && !fatal_error->empty()) {
                 return;
             }
@@ -20082,7 +20079,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 std::string init_name = std::string("__const_init::") + class_path
                     + "::" + ce->getName();
                 compileInitExpr(init_expr, init_name, AOTCompiledInitFunc::CLASS_CONSTANT,
-                    class_path, ce->getName());
+                    class_path, ce->getName(), 0);
                 if (fatal_error && !fatal_error->empty()) {
                     return;
                 }
@@ -20097,10 +20094,44 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 std::string init_name = std::string("__svar_init::") + class_path
                     + "::" + vi.first;
                 compileInitExpr(vi.second->exp, init_name, AOTCompiledInitFunc::STATIC_VAR,
-                    class_path, vi.first);
+                    class_path, vi.first, 0);
                 if (fatal_error && !fatal_error->empty()) {
                     return;
                 }
+            }
+        }
+    }
+
+    // Script fragments are registered without executing their source top-level
+    // blocks. Preserve namespace-global declaration initialization in their
+    // native metadata. Monolithic scripts and modules already execute these
+    // assignments through _toplevel or the module-init closure respectively.
+    if (!compile_module && (compile_file || compile_files)) {
+        std::string ns_path;
+        ns->getPath(ns_path, false);
+        for (const auto& vi : ns->var_list.vmap) {
+            Var* var = vi.second;
+            if (!var || var->isImported() || var->isAOTImport() || var->isBuiltin()
+                    || !var->hasAOTInitExpr()) {
+                continue;
+            }
+            if (shouldSkipModuleItem(var->getModuleName(), compile_module, keep_modules)) {
+                continue;
+            }
+            const QoreProgramLocation* var_loc = var->getParseLocation();
+            if (shouldSkipByFile(var_loc ? var_loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
+                continue;
+            }
+            std::string init_name = "__gvar_init::" + ns_path + "::" + vi.first;
+            compileInitExpr(var->getAOTInitExpr(), init_name,
+                var->isAOTInitSelfStoring()
+                    ? AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT
+                    : AOTCompiledInitFunc::GLOBAL_VAR,
+                ns_path, vi.first,
+                var->getAOTInitOrder());
+            if (fatal_error && !fatal_error->empty()) {
+                return;
             }
         }
     }
@@ -23500,7 +23531,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             name_str, "qore_aot_mfname_" + cf.llvm_symbol);
         llvm::Function* fn = module.getFunction(cf.llvm_symbol);
         if (!fn) {
-            if (cf.name.substr(0, 14) == "__const_init::" || cf.name.substr(0, 13) == "__svar_init::") {
+            if (cf.name.substr(0, 14) == "__const_init::"
+                    || cf.name.substr(0, 13) == "__svar_init::"
+                    || cf.name.substr(0, 13) == "__gvar_init::") {
                 if (qccAOTVerbose()) {
                     fprintf(stderr, "%smodule ABI table: skipping init body '%s' "
                         "(LLVM symbol '%s' was not emitted)\n",

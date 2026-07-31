@@ -54,7 +54,7 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
     }
     *list<string> debug_section =
         dump_out =~ x/DEBUG_IR\s+type=28\s+offset=\d+\s+size=(\d+)/;
-    if (!(dump_out =~ /format: 13 \(current 13\)/)
+    if (!(dump_out =~ /format: 14 \(current 14\)/)
             || !debug_section || debug_section[0].toInt() <= 4) {
         printf("%s split debug IR metadata mismatch:\n%s", mode, dump_out);
         unlink(source_path);

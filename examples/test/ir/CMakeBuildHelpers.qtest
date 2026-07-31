@@ -153,6 +153,9 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         string const_hashdecl_consumer = snippets_dir + "/consthashdeclconsumer.qc";
         string global_provider = snippets_dir + "/globalprovider.qc";
         string global_consumer = snippets_dir + "/globalconsumer.qc";
+        string entry = snippets_dir + "/entry.qc";
+        string source_runner = src_dir + "/source-runner.qr";
+        string host = src_dir + "/host.cpp";
         string late_object_module = src_dir + "/LateObjectModule.qm";
         string late_aggregate_module = src_dir + "/LateAggregateModule.qm";
         write(provider,
@@ -296,12 +299,100 @@ class CMakeQoConstHashConsumer {
 ");
         write(global_provider,
 "%new-style
+class CMakeQoGlobalObject {
+    private {
+        string value;
+    }
+    constructor(string value) { self.value = value; }
+    string get() { return value; }
+}
 our hash<auto> CMakeQoGlobal = {\"label\": \"global\"};
+our list<string> CMakeQoGlobalOrder = ();
+string sub CMakeQoRecordGlobal(string value) {
+    CMakeQoGlobalOrder += value;
+    return value;
+}
+our string CMakeQoFirst = CMakeQoRecordGlobal(\"first\");
+our string CMakeQoSecond = CMakeQoRecordGlobal(\"second\");
+our timeout CMakeQoTimeout = 5s;
+our softint CMakeQoSoftInt = \"23\";
+our *string CMakeQoOptionalString = NULL;
+our CMakeQoGlobalObject CMakeQoObject(\"object\");
 ");
         write(global_consumer,
 "%new-style
 class CMakeQoGlobalConsumer {
-    static string get() { return CMakeQoGlobal.label; }
+    static string get() {
+        return sprintf(\"%s:%s:%d:%d:%s:%s\", CMakeQoGlobal.label,
+            CMakeQoGlobalOrder.join(\",\"), CMakeQoTimeout, CMakeQoSoftInt,
+            CMakeQoOptionalString === NOTHING ? \"NOTHING\" : \"VALUE\",
+            CMakeQoObject.get());
+    }
+}
+");
+        write(entry,
+"%new-style
+int sub main() {
+    CMakeQoConsumer consumer();
+    CMakeQoHashConsumer hash_consumer();
+    CMakeQoEnumConsumer enum_consumer();
+    CMakeQoCallRefConsumer callref_consumer();
+    CMakeQoChild child();
+    callref callback = callref_consumer.get();
+    printf(\"%s:%s:%s:%s:%d:%s:%s:%s\\n\",
+        consumer.run(), hash_consumer.get().label, enum_consumer.get(), callback(),
+        CMakeQoConstInitConsumer::Limit, CMakeQoConstHashConsumer::Values.value,
+        CMakeQoGlobalConsumer::get(), child.child());
+    return 0;
+}
+");
+        write(source_runner,
+"%modern
+%include srcs/provider.qc
+%include srcs/consumer.qc
+%include srcs/base.qc
+%include srcs/child.qc
+%include srcs/hashdeclprovider.qc
+%include srcs/hashdeclconsumer.qc
+%include srcs/enumprovider.qc
+%include srcs/enumconsumer.qc
+%include srcs/callrefprovider.qc
+%include srcs/callrefconsumer.qc
+%include srcs/constinitprovider.qc
+%include srcs/constinitconsumer.qc
+%include srcs/consthashdeclprovider.qc
+%include srcs/consthashdeclconsumer.qc
+%include srcs/globalprovider.qc
+%include srcs/globalconsumer.qc
+%include srcs/entry.qc
+main();
+");
+        write(host,
+"#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+
+extern \"C\" void init_QORE_CMAKE_SCRIPT_SMOKE_qo(QoreProgram*);
+
+int main(int, char**) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    init_QORE_CMAKE_SCRIPT_SMOKE_qo(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (!rc) {
+        rc = qore_run_callable(pgm, \"main\", nullptr);
+    }
+    if (rc) {
+        fprintf(stderr, \"AOT host failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
 }
 ");
         write(late_object_module,
@@ -323,7 +414,7 @@ module LateAggregateModule {
 
         write(src_dir + "/CMakeLists.txt",
 "cmake_minimum_required(VERSION 3.16)
-project(QoreQoHelperSmoke NONE)
+project(QoreQoHelperSmoke CXX)
 find_package(Qore REQUIRED)
 
 set(LATE_MODULE_DIR \"${CMAKE_BINARY_DIR}/late-modules\")
@@ -353,7 +444,8 @@ set(QO_SOURCES
     \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclprovider.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclconsumer.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/globalprovider.qc\"
-    \"${CMAKE_SOURCE_DIR}/srcs/globalconsumer.qc\")
+    \"${CMAKE_SOURCE_DIR}/srcs/globalconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/entry.qc\")
 
 qore_qcc_compile_objects(QO_OBJECTS
     GROUP cmake-smoke
@@ -395,6 +487,14 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG
     NATIVE_REGISTERS
     STAMP_VAR QO_SCRIPT_AGG_STAMP)
 add_custom_target(qo-script-aggregate ALL DEPENDS ${QO_SCRIPT_AGG_STAMP})
+
+add_executable(qo-static-host
+    \"${CMAKE_SOURCE_DIR}/host.cpp\"
+    ${QO_OBJECTS}
+    ${QO_SCRIPT_AGG})
+add_dependencies(qo-static-host qo-objects qo-script-aggregate)
+target_include_directories(qo-static-host PRIVATE ${QORE_INCLUDE_DIRS})
+target_link_libraries(qo-static-host PRIVATE ${QORE_LIBRARIES})
 
 set(LATE_OBJECT_QMOD \"${LATE_MODULE_DIR}/LateObjectModule.qmod\")
 add_custom_command(
@@ -455,7 +555,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "typed-hash constructors in constant initializers become source-scanned build prerequisites: " + direct);
 
         string build1 = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertTrue(build1.find("batch bootstrapping cmake-smoke (20 sources)") != -1,
+        assertTrue(build1.find("batch bootstrapping cmake-smoke (21 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
         assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
         assertTrue(is_file(build_dir + "/linked.qo.qolink.json"),
@@ -466,6 +566,16 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "late-defined object module dependency built: " + build1);
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
             "late-defined aggregate module dependency built: " + build1);
+        assertTrue(is_file(build_dir + "/qo-static-host"),
+            "static AOT host linked from per-file and aggregate objects: " + build1);
+        string source_qore = realpath(qore_bin) ?? qore_bin;
+        string source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
+        string static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertEq("provider:state:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base\n",
+            source_out, "source-mode fixture output");
+        assertEq(source_out, static_out,
+            "statically linked AOT aggregate is load-equivalent to parsed source");
         string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
         assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
                 && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1

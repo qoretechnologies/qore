@@ -395,6 +395,13 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     if (right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
+    if (!err && left.getType() == NT_VARREF) {
+        VarRefNode* vrn = left.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vrn->isGlobalDecl() && (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) && vrn->ref.var) {
+            vrn->ref.var->preserveAOTInitExpr(right);
+        }
+    }
     return err;
 }
 

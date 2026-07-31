@@ -35,6 +35,7 @@
 #include "qore/intern/qore_debug_narrowing.h"
 
 #include <cassert>
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +62,8 @@ typedef std::set<int64, std::greater<int64>> ind_set_t;
 
 // global environment hash
 QoreHashNode* ENV;
+
+static std::atomic<uint64_t> qore_global_init_order{1};
 
 // Debug flag for type narrowing - controlled by --debug-show-narrowing command-line flag
 bool qore_debug_narrowing = false;
@@ -244,6 +247,28 @@ Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(r
 const Var* Var::parseGetVar() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
     return (val.type == QV_Ref) ? val.v.getPtr()->parseGetVar() : this;
+}
+
+void Var::preserveAOTInitExpr(const QoreValue& expr, bool self_storing) {
+    if (aot_init_expr.isNothing() && !expr.isNothing()) {
+        aot_init_expr = expr.refSelf();
+        aot_init_order = qore_global_init_order.fetch_add(1, std::memory_order_relaxed);
+        aot_init_self_storing = self_storing;
+    }
+}
+
+bool Var::isAOTInitDone() const {
+    QoreLValue<qore_gvar_ref_u>& value = getVal();
+    return value.type == QV_Ref ? value.v.getPtr()->isAOTInitDone() : aot_init_done;
+}
+
+void Var::setAOTInitDone() {
+    QoreLValue<qore_gvar_ref_u>& value = getVal();
+    if (value.type == QV_Ref) {
+        value.v.getPtr()->setAOTInitDone();
+    } else {
+        aot_init_done = true;
+    }
 }
 
 void Var::checkAssignType(const QoreProgramLocation* loc, const QoreTypeInfo *n_typeInfo) {

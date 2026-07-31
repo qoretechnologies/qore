@@ -12968,20 +12968,34 @@ static std::vector<size_t> topologicalSortInitFuncs(
     // Kahn's algorithm
     std::vector<size_t> order;
     order.reserve(n);
-    std::deque<size_t> queue;
+    auto ready_less = [&init_funcs](size_t lhs, size_t rhs) {
+        bool lhs_global = init_funcs[lhs].target_type == AOTCompiledInitFunc::GLOBAL_VAR
+            || init_funcs[lhs].target_type == AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT;
+        bool rhs_global = init_funcs[rhs].target_type == AOTCompiledInitFunc::GLOBAL_VAR
+            || init_funcs[rhs].target_type == AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT;
+        if (lhs_global != rhs_global) {
+            return !lhs_global;
+        }
+        if (lhs_global && init_funcs[lhs].source_order != init_funcs[rhs].source_order) {
+            return init_funcs[lhs].source_order < init_funcs[rhs].source_order;
+        }
+        return lhs < rhs;
+    };
+    std::set<size_t, decltype(ready_less)> queue(ready_less);
     for (size_t i = 0; i < n; ++i) {
         if (in_degree[i] == 0) {
-            queue.push_back(i);
+            queue.insert(i);
         }
     }
 
     while (!queue.empty()) {
-        size_t idx = queue.front();
-        queue.pop_front();
+        auto ready = queue.begin();
+        size_t idx = *ready;
+        queue.erase(ready);
         order.push_back(idx);
         for (size_t dep_idx : dependents[idx]) {
             if (--in_degree[dep_idx] == 0) {
-                queue.push_back(dep_idx);
+                queue.insert(dep_idx);
             }
         }
     }

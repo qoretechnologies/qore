@@ -617,6 +617,10 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         }
     }
 
+    if (!err && (type == VT_GLOBAL || type == VT_THREAD_LOCAL) && ref.var) {
+        ref.var->preserveAOTInitExpr(val, true);
+    }
+
     parse_context.typeInfo = typeInfo;
     return err;
 }

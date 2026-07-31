@@ -215,6 +215,13 @@ extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
+static bool isAOTInitFunctionName(const char* name) {
+    return name && (!strncmp(name, "__const_init::", 14)
+        || !strncmp(name, "__svar_init::", 13)
+        || !strncmp(name, "__gvar_init::", 13)
+        || !strncmp(name, "__module_init::", 15));
+}
+
 static std::string describeAOTClassRef(const char* class_ref);
 static std::string normalizeTypePaths(const std::string& sig);
 static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* method_name);
@@ -6186,9 +6193,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     // because the referenced constant's own init hasn't run yet (init order dependency).
     // Tolerating this is safe because the LLVM code doesn't use the slot for the
     // binary-op path (it uses qore_rt_binary_op directly).
-    bool is_init_func = (strncmp(name, "__const_init::", 14) == 0
-        || strncmp(name, "__svar_init::", 12) == 0
-        || strncmp(name, "__module_init::", 15) == 0);
+    bool is_init_func = isAOTInitFunctionName(name);
     for (auto& dt : deferred_expr_trees) {
         ExprTreeDeserializer deser(dt.blob_data, dt.blob_size, pgm, ctx);
         uint64_t bits = deser.deserialize();
@@ -8872,7 +8877,7 @@ static void registerAOTFunctionsFromSlotMaps(
     if (init_func_contexts) {
         int init_count = 0;
         for (auto& kv : func_map) {
-            if (kv.first.substr(0, 14) == "__const_init::" || kv.first.substr(0, 13) == "__svar_init::") {
+            if (isAOTInitFunctionName(kv.first.c_str())) {
                 ++init_count;
                 if (init_count <= 5) {
                     printd(5, "  init func in func_map: '%s'\n", kv.first.c_str());
@@ -8942,8 +8947,7 @@ static void registerAOTFunctionsFromSlotMaps(
             && (!*trace_slot_reg_env || std::strstr(func_name, trace_slot_reg_env));
 
         // Trace init-function slot-map entries when requested.
-        if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
-                || strncmp(func_name, "__svar_init::", 13) == 0)) {
+        if (init_func_contexts && isAOTInitFunctionName(func_name)) {
             printd(5, "  slot map entry: '%s' (in func_map: %s)\n",
                 func_name, func_map.count(func_name) ? "YES" : "NO");
         }
@@ -9399,9 +9403,7 @@ static void registerAOTFunctionsFromSlotMaps(
         // initial module loading and shared via qore_class_private), skip building a
         // duplicate context — the existing one is already correct and the variant is
         // shared between module and target programs.
-        bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
-            || strncmp(func_name, "__svar_init::", 13) == 0
-            || strncmp(func_name, "__module_init::", 15) == 0);
+        bool is_init_func = isAOTInitFunctionName(func_name);
 
         // Native-only script objects can contain bodies that are not present in
         // the linked aggregate metadata.  This happens when a standalone compile
@@ -9440,8 +9442,7 @@ static void registerAOTFunctionsFromSlotMaps(
             closure_binding ? &closure_local_slots : nullptr,
             &closure_bindings, local_owner_pgm);
         // Trace init-function context construction at high debug levels.
-        if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
-                || strncmp(func_name, "__svar_init::", 13) == 0)) {
+        if (init_func_contexts && isAOTInitFunctionName(func_name)) {
             printd(5, "  buildContextFromSlotMap('%s'): ctx=%p uvb=%p\n",
                 func_name, (void*)ctx, (void*)uvb);
         }
@@ -9456,9 +9457,7 @@ static void registerAOTFunctionsFromSlotMaps(
             }
         } else if (ctx) {
             // Check if this is an init function (for constants/static vars)
-            bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
-                || strncmp(func_name, "__svar_init::", 13) == 0
-                || strncmp(func_name, "__module_init::", 15) == 0);
+            bool is_init_func = isAOTInitFunctionName(func_name);
             if (is_init_func && init_func_contexts) {
                 AOTInitFuncExecInfo info;
                 info.ctx = ctx;
@@ -11853,10 +11852,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     std::unordered_map<std::string, const QoreAOTFunc*> func_map;
     for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
         const char* fname = init_funcs[i].name;
-        if (fname && init_funcs[i].fn_ptr
-                && (strncmp(fname, "__const_init::", 14) == 0
-                    || strncmp(fname, "__svar_init::", 13) == 0
-                    || strncmp(fname, "__module_init::", 15) == 0)) {
+        if (init_funcs[i].fn_ptr && isAOTInitFunctionName(fname)) {
             func_map[fname] = &init_funcs[i];
         }
     }
@@ -13497,6 +13493,8 @@ static int executeInitFunctions(
             }
 
             case AOTCompiledInitFunc::NS_CONSTANT:
+            case AOTCompiledInitFunc::GLOBAL_VAR:
+            case AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT:
             case AOTCompiledInitFunc::MODULE_INIT: {
                 qore_ns_private* ns = (prefer_shadow && shadow_root_ns)
                     ? findNamespaceByPath(shadow_root_ns, desc.ns_path) : nullptr;
@@ -13605,6 +13603,30 @@ static int executeInitFunctions(
         }
 
         const AOTInitFuncExecInfo* info = it->second;
+
+        if (desc.target_type == AOTCompiledInitFunc::GLOBAL_VAR
+                || desc.target_type == AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT) {
+            qore_ns_private* target_ns = findNamespaceByPath(root_ns, desc.ns_path);
+            Var* target_var = target_ns
+                ? target_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+            Var* shadow_var = nullptr;
+            if (shadow_root_ns) {
+                qore_ns_private* shadow_ns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                shadow_var = shadow_ns
+                    ? shadow_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+            }
+            bool same_storage = target_var && shadow_var
+                && target_var->parseGetVar() == shadow_var->parseGetVar();
+            bool target_done = !target_var || target_var->isAOTInitDone();
+            bool shadow_done = !write_shadow || !shadow_var || same_storage
+                || shadow_var->isAOTInitDone();
+            if ((target_var || shadow_var) && target_done && shadow_done) {
+                desc_done[di] = true;
+                ++executed;
+                ++this_round_executed;
+                continue;
+            }
+        }
 
         // Call the init function
         printd(5, "AOT init: calling '%s' fn_ptr=%p ctx=%p\n",
@@ -13921,6 +13943,97 @@ static int executeInitFunctions(
                 ++executed;
                 printd(2, "AOT init: initialized static var '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
+                break;
+            }
+
+            case AOTCompiledInitFunc::GLOBAL_VAR: {
+                qore_ns_private* target_ns = findNamespaceByPath(root_ns, desc.ns_path);
+                Var* target_var = target_ns
+                    ? target_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+                Var* shadow_var = nullptr;
+                if (shadow_root_ns) {
+                    qore_ns_private* shadow_ns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                    shadow_var = shadow_ns
+                        ? shadow_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+                }
+                if (!target_var && !shadow_var) {
+                    printd(0, "AOT init: global variable '%s::%s' not found in target or shadow\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+
+                auto assign_global = [&xsink, &result](Var* var) {
+                    if (!var || var->isAOTInitDone()) {
+                        return;
+                    }
+                    LValueHelper lvh(&xsink);
+                    if (var->getLValue(lvh, false)) {
+                        return;
+                    }
+                    lvh.assign(result.refSelf(), "<AOT global variable initializer>");
+                    if (!xsink) {
+                        var->setAOTInitDone();
+                    }
+                };
+
+                assign_global(target_var);
+                if (!xsink && write_shadow && shadow_var
+                        && (!target_var
+                            || target_var->parseGetVar() != shadow_var->parseGetVar())) {
+                    assign_global(shadow_var);
+                }
+                result.discard(&xsink);
+                if (xsink) {
+                    ++failed;
+                } else {
+                    ++executed;
+                    printd(2, "AOT init: initialized global variable '%s::%s'\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                }
+                break;
+            }
+
+            case AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT: {
+                qore_ns_private* target_ns = findNamespaceByPath(root_ns, desc.ns_path);
+                Var* target_var = target_ns
+                    ? target_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+                Var* shadow_var = nullptr;
+                if (shadow_root_ns) {
+                    qore_ns_private* shadow_ns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                    shadow_var = shadow_ns
+                        ? shadow_ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+                }
+                if (!target_var && !shadow_var) {
+                    printd(0, "AOT init: constructed global variable '%s::%s' not found\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+
+                if (target_var) {
+                    target_var->setAOTInitDone();
+                }
+                if (write_shadow && shadow_var && (!target_var
+                        || target_var->parseGetVar() != shadow_var->parseGetVar())) {
+                    LValueHelper lvh(&xsink);
+                    if (!shadow_var->getLValue(lvh, false)) {
+                        lvh.assign(result.refSelf(), "<AOT global variable constructor initializer>");
+                        if (!xsink) {
+                            shadow_var->setAOTInitDone();
+                        }
+                    }
+                }
+                result.discard(&xsink);
+                if (xsink) {
+                    ++failed;
+                } else {
+                    ++executed;
+                    printd(2, "AOT init: constructed global variable '%s::%s'\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                }
                 break;
             }
 

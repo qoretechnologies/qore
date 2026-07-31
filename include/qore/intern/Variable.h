@@ -117,9 +117,13 @@ private:
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred
+    QoreValue aot_init_expr{};       // preserved declaration initializer for AOT lowering
+    uint64_t aot_init_order = 0;     // process-unique parse order for initializer ordering
+    bool aot_init_self_storing = false; // initializer IR performs the global-variable store
     bool is_auto_type = false;          // true if declared type is an auto type
     bool no_narrowing = false;          // true if declared with auto! to disable type narrowing
     bool aot_import = false;            // true for AOT placeholders resolved by link/load context
+    bool aot_init_done = false;         // declaration initializer has run for this storage
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
     bool is_thread_local;               // is this a thread_local var?
@@ -131,7 +135,10 @@ private:
 protected:
     bool builtin = false;
 
-    DLLLOCAL ~Var() { delete parseTypeInfo; }
+    DLLLOCAL ~Var() {
+        aot_init_expr.discard(nullptr);
+        delete parseTypeInfo;
+    }
 
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {
         if (finalized) {
@@ -229,6 +236,27 @@ public:
         val.set(typeInfo);
         discard(val.assignInitial(v), nullptr);
     }
+
+    DLLLOCAL void preserveAOTInitExpr(const QoreValue& expr, bool self_storing = false);
+
+    DLLLOCAL bool hasAOTInitExpr() const {
+        return !aot_init_expr.isNothing();
+    }
+
+    DLLLOCAL QoreValue getAOTInitExpr() const {
+        return aot_init_expr;
+    }
+
+    DLLLOCAL uint64_t getAOTInitOrder() const {
+        return aot_init_order;
+    }
+
+    DLLLOCAL bool isAOTInitSelfStoring() const {
+        return aot_init_self_storing;
+    }
+
+    DLLLOCAL bool isAOTInitDone() const;
+    DLLLOCAL void setAOTInitDone();
 
     DLLLOCAL const Var* parseGetVar() const;
 
