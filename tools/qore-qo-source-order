@@ -64,7 +64,7 @@ CONSTRUCTED_DECL_TYPE_RE = re.compile(
 PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
 DECL_LINE_CHARS = frozenset("(;=")
-CACHE_VERSION = 32
+CACHE_VERSION = 33
 KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
 
 
@@ -623,12 +623,84 @@ def collect_hard_mentions(code: str) -> set[str]:
     return mentions
 
 
-def build_hard_graph(inputs: list[str],
-        true_parse_defines: set[str] | None = None
+SOURCE_SUMMARY_KEYS = (
+    "provides",
+    "classes",
+    "enums",
+    "hashdecls",
+    "functions",
+    "parse_defines",
+    "inheritance_mentions",
+    "hard_mentions",
+    "decl_type_mentions",
+    "hash_type_mentions",
+    "enum_type_mentions",
+    "call_ref_classes",
+    "call_ref_functions",
+    "constructed_decl_type_mentions",
+    "new_hash_type_mentions",
+    "new_object_mentions",
+    "class_for_name_mentions",
+    "create_object_mentions",
+    "static_call_mentions",
+    "static_ref_mentions",
+    "includes",
+    "parse_define_consumers",
+)
+
+
+def scan_source_summary(source: str,
+        true_parse_defines: set[str] | None = None) -> dict[str, list[str]]:
+    with open(source, "r", encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    code = apply_known_parse_conditionals(mask_qore_source(text), true_parse_defines)
+    literal_code = apply_known_parse_conditionals(
+        mask_qore_source(text, preserve_strings=True), true_parse_defines)
+    call_ref_classes, call_ref_functions = collect_call_ref_mentions(code)
+    return {
+        "provides": sorted(collect_provides(code)),
+        "classes": sorted(m.group(1) for m in CLASS_RE.finditer(code)),
+        "enums": sorted(m.group(1) for m in ENUM_RE.finditer(code)),
+        "hashdecls": sorted(m.group(1) for m in HASHDECL_RE.finditer(code)),
+        "functions": sorted(m.group(1) for m in SUB_RE.finditer(code)),
+        "parse_defines": sorted(collect_parse_defines(code)),
+        "inheritance_mentions": sorted(collect_inheritance_mentions(code)),
+        "hard_mentions": sorted(collect_hard_mentions(code)),
+        "decl_type_mentions": sorted(collect_decl_type_mentions(code)),
+        "hash_type_mentions": sorted(collect_hash_type_mentions(code)),
+        "enum_type_mentions": sorted(collect_enum_type_mentions(code)),
+        "call_ref_classes": sorted(call_ref_classes),
+        "call_ref_functions": sorted(call_ref_functions),
+        "constructed_decl_type_mentions": sorted(collect_constructed_decl_type_mentions(code)),
+        "new_hash_type_mentions": sorted(collect_new_hash_type_mentions(code)),
+        "new_object_mentions": sorted(collect_new_object_mentions(code)),
+        "class_for_name_mentions": sorted(collect_class_for_name_mentions(literal_code)),
+        "create_object_mentions": sorted(collect_create_object_mentions(literal_code)),
+        "static_call_mentions": sorted(collect_static_call_mentions(code)),
+        "static_ref_mentions": sorted(collect_static_ref_mentions(code)),
+        "includes": sorted(collect_includes(code)),
+        "parse_define_consumers": sorted(PARSE_DEFINE_CONSUMER_RE.findall(code)),
+    }
+
+
+def source_summary_valid(summary: object) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    return all(
+        isinstance(summary.get(key), list)
+        and all(isinstance(value, str) for value in summary[key])
+        for key in SOURCE_SUMMARY_KEYS
+    )
+
+
+def summary_set(summary: dict[str, list[str]], key: str) -> set[str]:
+    return set(summary[key])
+
+
+def build_hard_graph_from_summaries(inputs: list[str],
+        summaries: list[dict[str, list[str]]]
         ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]]:
-    masked: list[str] = []
-    literal_masked: list[str] = []
-    provides_by_source: list[set[str]] = []
+    provides_by_source = [summary_set(summary, "provides") for summary in summaries]
     provider_sources: dict[str, set[int]] = defaultdict(set)
     class_provider_sources: dict[str, set[int]] = defaultdict(set)
     enum_provider_sources: dict[str, set[int]] = defaultdict(set)
@@ -636,23 +708,18 @@ def build_hard_graph(inputs: list[str],
     function_provider_sources: dict[str, set[int]] = defaultdict(set)
     parse_define_provider_sources: dict[str, set[int]] = defaultdict(set)
 
-    for i, source in enumerate(inputs):
-        code = read_masked(source, true_parse_defines)
-        masked.append(code)
-        literal_masked.append(read_literal_masked(source, true_parse_defines))
-        provides = collect_provides(code)
-        provides_by_source.append(provides)
-        for symbol in provides:
+    for i, summary in enumerate(summaries):
+        for symbol in provides_by_source[i]:
             provider_sources[symbol].add(i)
-        for m in CLASS_RE.finditer(code):
-            class_provider_sources[m.group(1)].add(i)
-        for m in ENUM_RE.finditer(code):
-            enum_provider_sources[m.group(1)].add(i)
-        for m in HASHDECL_RE.finditer(code):
-            hashdecl_provider_sources[m.group(1)].add(i)
-        for m in SUB_RE.finditer(code):
-            function_provider_sources[m.group(1)].add(i)
-        for symbol in collect_parse_defines(code):
+        for symbol in summary["classes"]:
+            class_provider_sources[symbol].add(i)
+        for symbol in summary["enums"]:
+            enum_provider_sources[symbol].add(i)
+        for symbol in summary["hashdecls"]:
+            hashdecl_provider_sources[symbol].add(i)
+        for symbol in summary["functions"]:
+            function_provider_sources[symbol].add(i)
+        for symbol in summary["parse_defines"]:
             parse_define_provider_sources[symbol].add(i)
 
     unique_provider = {
@@ -704,23 +771,24 @@ def build_hard_graph(inputs: list[str],
         if required:
             required_edges.add((provider, consumer))
 
-    for consumer, code in enumerate(masked):
-        for symbol in collect_inheritance_mentions(code) & provider_symbols:
+    for consumer, summary in enumerate(summaries):
+        for symbol in summary_set(summary, "inheritance_mentions") & provider_symbols:
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer, required=True)
 
-        for symbol in collect_hard_mentions(code) & provider_symbols:
+        for symbol in summary_set(summary, "hard_mentions") & provider_symbols:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer, required=True)
 
         mentions = set()
-        mentions.update(collect_decl_type_mentions(code) & (unique_class_symbols | unique_hashdecl_symbols))
-        mentions.update(collect_hash_type_mentions(code) & unique_hashdecl_symbols)
-        for symbol in collect_enum_type_mentions(code) & unique_enum_symbols:
+        mentions.update(summary_set(summary, "decl_type_mentions")
+            & (unique_class_symbols | unique_hashdecl_symbols))
+        mentions.update(summary_set(summary, "hash_type_mentions") & unique_hashdecl_symbols)
+        for symbol in summary_set(summary, "enum_type_mentions") & unique_enum_symbols:
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
@@ -728,36 +796,36 @@ def build_hard_graph(inputs: list[str],
             # the consumer; unlike class/hashdecl type imports, unresolved enum
             # types are not link-deferred today.
             add_edge(provider, consumer, required=True)
-        call_ref_classes, call_ref_functions = collect_call_ref_mentions(code)
-        for symbol in call_ref_functions & unique_function_symbols:
+        for symbol in summary_set(summary, "call_ref_functions") & unique_function_symbols:
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
             # Function call references require the target function during
             # parse/commit today; direct calls can be deferred to the linker.
             add_edge(provider, consumer, required=True)
-        for symbol in call_ref_classes & unique_class_symbols:
+        for symbol in summary_set(summary, "call_ref_classes") & unique_class_symbols:
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer)
-        mentions.update(collect_constructed_decl_type_mentions(code)
+        mentions.update(summary_set(summary, "constructed_decl_type_mentions")
             & (unique_class_symbols | unique_hashdecl_symbols))
-        mentions.update(collect_new_hash_type_mentions(code) & unique_hashdecl_symbols)
-        for symbol in collect_new_object_mentions(code) & unique_class_symbols:
+        mentions.update(summary_set(summary, "new_hash_type_mentions") & unique_hashdecl_symbols)
+        for symbol in summary_set(summary, "new_object_mentions") & unique_class_symbols:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer)
-        for symbol in collect_class_for_name_mentions(literal_masked[consumer]) & unique_class_symbols:
+        for symbol in summary_set(summary, "class_for_name_mentions") & unique_class_symbols:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer)
-        mentions.update(collect_create_object_mentions(literal_masked[consumer]) & unique_class_symbols)
-        mentions.update(collect_static_call_mentions(code) & unique_class_symbols)
-        mentions.update(collect_static_ref_mentions(code) & unique_class_symbols)
-        for symbol in collect_static_ref_mentions(code) & unique_enum_symbols:
+        mentions.update(summary_set(summary, "create_object_mentions") & unique_class_symbols)
+        mentions.update(summary_set(summary, "static_call_mentions") & unique_class_symbols)
+        static_refs = summary_set(summary, "static_ref_mentions")
+        mentions.update(static_refs & unique_class_symbols)
+        for symbol in static_refs & unique_enum_symbols:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
                 continue
@@ -771,19 +839,30 @@ def build_hard_graph(inputs: list[str],
                 continue
             add_edge(provider, consumer)
 
-        for included in collect_includes(code):
+        for included in summary["includes"]:
             provider = unique_input_basename.get(os.path.basename(included))
             if provider is None or provider == consumer:
                 continue
             add_edge(provider, consumer, required=True)
 
-        for symbol in PARSE_DEFINE_CONSUMER_RE.findall(code):
+        for symbol in summary["parse_define_consumers"]:
             provider = unique_parse_define.get(symbol)
             if provider is None or provider == consumer:
                 continue
             add_edge(provider, consumer, required=True)
 
     return outgoing, incoming, required_edges
+
+
+def build_hard_graph(inputs: list[str],
+        true_parse_defines: set[str] | None = None
+        ) -> tuple[
+            dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]],
+            list[dict[str, list[str]]]
+        ]:
+    summaries = [scan_source_summary(source, true_parse_defines) for source in inputs]
+    outgoing, incoming, required_edges = build_hard_graph_from_summaries(inputs, summaries)
+    return outgoing, incoming, required_edges, summaries
 
 
 def graph_to_lists(graph: dict[int, set[int]], count: int) -> list[list[int]]:
@@ -878,16 +957,6 @@ def file_records(paths: list[str]) -> list[dict[str, object]]:
     return [file_record(path) for path in paths]
 
 
-def file_records_current(old_records: object, paths: list[str]) -> bool:
-    if not isinstance(old_records, list) or len(old_records) != len(paths):
-        return False
-    try:
-        current = file_records(paths)
-    except OSError:
-        return False
-    return old_records == current
-
-
 def order_edge_usable(provider: int, consumer: int, scc_ids: list[int],
         required_edges: set[tuple[int, int]]) -> bool:
     # The build graph may only include true compile prerequisites.  Other
@@ -896,26 +965,11 @@ def order_edge_usable(provider: int, consumer: int, scc_ids: list[int],
     return (provider, consumer) in required_edges
 
 
-def cache_current(cache_file: str, context: str, inputs: list[str]) -> bool:
-    try:
-        cache_mtime = os.path.getmtime(cache_file)
-        if os.path.getmtime(context) > cache_mtime:
-            return False
-        if os.path.getmtime(__file__) > cache_mtime:
-            return False
-        for path in inputs:
-            if os.path.getmtime(path) > cache_mtime:
-                return False
-    except OSError:
-        return False
-    return True
-
-
 def load_graph_cache(cache_file: str, context: str, inputs: list[str], outputs: list[str],
         true_parse_defines: set[str]
         ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]] | None:
-    fast_current = cache_current(cache_file, context, inputs)
     try:
+        cache_mtime_ns = os.stat(cache_file).st_mtime_ns
         with open(cache_file, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
@@ -937,27 +991,77 @@ def load_graph_cache(cache_file: str, context: str, inputs: list[str], outputs: 
         return None
     if len(required_data) != len(inputs):
         return None
-    if not fast_current:
+    old_records = data.get("input_records")
+    summaries = data.get("source_summaries")
+    if not isinstance(old_records, list) or len(old_records) != len(inputs):
+        return None
+    if not isinstance(summaries, list) or len(summaries) != len(inputs):
+        return None
+    if not all(source_summary_valid(summary) for summary in summaries):
+        return None
+
+    try:
+        if os.stat(context).st_mtime_ns > cache_mtime_ns:
+            return None
+        if os.stat(__file__).st_mtime_ns > cache_mtime_ns:
+            return None
+    except OSError:
+        return None
+
+    inspect: list[int] = []
+    for i, (path, old_record) in enumerate(zip(inputs, old_records)):
+        if not isinstance(old_record, dict):
+            return None
         try:
-            cache_mtime = os.path.getmtime(cache_file)
-            if os.path.getmtime(__file__) > cache_mtime:
-                return None
+            stat = os.stat(path)
         except OSError:
             return None
-        if not file_records_current(data.get("input_records"), inputs):
+        if old_record.get("path") != os.path.abspath(path):
             return None
-    return lists_to_graph(outgoing_data), lists_to_graph(incoming_data), edge_lists_to_pairs(required_data)
+        if old_record.get("size") != stat.st_size or stat.st_mtime_ns > cache_mtime_ns:
+            inspect.append(i)
+
+    outgoing = lists_to_graph(outgoing_data)
+    incoming = lists_to_graph(incoming_data)
+    required_edges = edge_lists_to_pairs(required_data)
+    if not inspect:
+        return outgoing, incoming, required_edges
+
+    records = list(old_records)
+    graph_changed = False
+    for i in inspect:
+        try:
+            record = file_record(inputs[i])
+        except OSError:
+            return None
+        if (record.get("size") != old_records[i].get("size")
+                or record.get("sha256") != old_records[i].get("sha256")):
+            try:
+                summaries[i] = scan_source_summary(inputs[i], true_parse_defines)
+            except OSError:
+                return None
+            graph_changed = True
+        records[i] = record
+
+    if graph_changed:
+        outgoing, incoming, required_edges = build_hard_graph_from_summaries(inputs, summaries)
+    save_graph_cache(cache_file, inputs, outputs, true_parse_defines,
+        outgoing, incoming, required_edges, summaries, records)
+    return outgoing, incoming, required_edges
 
 
 def save_graph_cache(cache_file: str, inputs: list[str], outputs: list[str], true_parse_defines: set[str],
         outgoing: dict[int, set[int]], incoming: dict[int, set[int]],
-        required_edges: set[tuple[int, int]]) -> None:
+        required_edges: set[tuple[int, int]],
+        summaries: list[dict[str, list[str]]],
+        input_records: list[dict[str, object]] | None = None) -> None:
     data = {
         "version": CACHE_VERSION,
         "inputs": inputs,
         "outputs": outputs,
         "parse_defines": sorted(true_parse_defines),
-        "input_records": file_records(inputs),
+        "input_records": input_records if input_records is not None else file_records(inputs),
+        "source_summaries": summaries,
         "outgoing": graph_to_lists(outgoing, len(inputs)),
         "incoming": graph_to_lists(incoming, len(inputs)),
         "required": edge_pairs_to_lists(required_edges, len(inputs)),
@@ -981,8 +1085,9 @@ def load_or_build_hard_graph(context: str, inputs: list[str],
     cached = load_graph_cache(cache_file, context, inputs, outputs, true_parse_defines)
     if cached:
         return cached
-    outgoing, incoming, required_edges = build_hard_graph(inputs, true_parse_defines)
-    save_graph_cache(cache_file, inputs, outputs, true_parse_defines, outgoing, incoming, required_edges)
+    outgoing, incoming, required_edges, summaries = build_hard_graph(inputs, true_parse_defines)
+    save_graph_cache(cache_file, inputs, outputs, true_parse_defines,
+        outgoing, incoming, required_edges, summaries)
     return outgoing, incoming, required_edges
 
 

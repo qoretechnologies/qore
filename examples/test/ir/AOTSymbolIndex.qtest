@@ -40,6 +40,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSourceSymbolManifestDefersShadowedLoadedClasses());
         addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
+        addTestCase("source-order cache incrementally refreshes changed providers and consumers",
+            \testSourceOrderCacheIncrementalRefresh());
         addTestCase("standalone abstract returns match deferred class types",
             \testStandaloneDeferredAbstractReturnTypes());
         addTestCase("standalone deferred class overload types stay distinct",
@@ -841,6 +843,45 @@ class AOTSymbolIndexTest inherits QUnit::Test {
 
         string out = run(sprintf("%s %s", env, app));
         assertEq("42\n", out, "linked executable resolves the unqualified cross-namespace function call");
+    }
+
+    testSourceOrderCacheIncrementalRefresh() {
+        TmpDir tmp = initDirs();
+        string provider_src = tmp_dir + "/cache-provider.qc";
+        string consumer_src = tmp_dir + "/cache-consumer.qc";
+        string provider_qo = tmp_dir + "/cache-provider.qo";
+        string consumer_qo = tmp_dir + "/cache-consumer.qo";
+        string context_file = tmp_dir + "/.qcc-context";
+        string cache_file = context_file + ".source-order-v2.json";
+        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
+            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+
+        write(provider_src, "%modern\nclass CacheBase {}\n");
+        write(consumer_src, "%modern\nclass CacheChild inherits CacheBase {}\n");
+        write(context_file,
+            "format=1\n"
+            "kind=qcc-object-group\n"
+            "group=CACHE_REFRESH\n"
+            "input=" + provider_src + "\n"
+            "input=" + consumer_src + "\n"
+            "output=" + provider_qo + "\n"
+            "output=" + consumer_qo + "\n");
+
+        string initial = run(sprintf("%s --direct %s %s", source_order, context_file, consumer_qo));
+        assertEq(provider_qo, trim(initial), "initial cache records the inherited-class provider");
+        assertTrue(is_file(cache_file), "source-order cache is created");
+
+        write(provider_src, "%modern\nclass CacheOther {}\n");
+        string provider_changed = run(sprintf("%s --direct %s %s",
+            source_order, context_file, consumer_qo));
+        assertEq("", trim(provider_changed),
+            "provider declaration changes remove stale cached dependency edges");
+
+        write(consumer_src, "%modern\nclass CacheChild inherits CacheOther {}\n");
+        string consumer_changed = run(sprintf("%s --direct %s %s",
+            source_order, context_file, consumer_qo));
+        assertEq(provider_qo, trim(consumer_changed),
+            "consumer reference changes add the new dependency edge");
     }
 
     testStandaloneDeferredAbstractReturnTypes() {
