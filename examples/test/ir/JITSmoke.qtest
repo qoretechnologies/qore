@@ -169,6 +169,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
         addTestCase("specialized hash-key select opcode", \testSelectHashKeyPositiveInt());
         addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
+        addTestCase("reference-output assigned state", \testReferenceOutputAssignedState());
         addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
         addTestCase("hash key access int opcode", \testHashKeyAccessInt());
         addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
@@ -6337,6 +6338,119 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
             string result = trim(runScript(code, mode));
             assertEq("30:40:50", result,
                     sprintf("map+select on typed int list %s", mode));
+        }
+    }
+
+    testReferenceOutputAssignedState() {
+        # Regression: taking a reference to a local (\var) is not an assignment, and a callee can
+        # also write NOTHING back through an untyped reference. Both the parse-time
+        # definite-assignment state and the IR assigned-value proof must therefore keep the runtime
+        # guard on hash accesses that follow a reference-passing call; eliding it made the fused
+        # hash-key truth helper dereference a null hash and crash with SIGSEGV.
+        string code = "%modern
+bool sub dont_set(reference<hash<auto>> out) {
+    return True;
+}
+bool sub set_true(reference<hash<auto>> out) {
+    out = {\"x\": 1};
+    return True;
+}
+bool sub set_other(reference<hash<auto>> out) {
+    out = {\"y\": 2};
+    return True;
+}
+bool sub dont_set_int(reference<int> out) {
+    return True;
+}
+bool sub clear_it(reference out) {
+    delete out;
+    return True;
+}
+# the callee returns True without ever writing through the reference
+hash<auto> unset_hash;
+printf(\"1:%y:%y\\n\", dont_set(\\unset_hash) && unset_hash.x, exists unset_hash);
+# the callee assigns a hash whose member is true
+hash<auto> set_hash;
+printf(\"2:%y:%y\\n\", set_true(\\set_hash) && set_hash.x, set_hash.x);
+# the callee assigns a hash whose member is missing
+hash<auto> other_hash;
+printf(\"3:%y:%y\\n\", set_other(\\other_hash) && other_hash.x, other_hash.y);
+# non-fused member access after the same reference call: the member value is used, not its truth
+hash<auto> plain_hash;
+dont_set(\\plain_hash);
+auto member = plain_hash.x;
+printf(\"4:%y:%y\\n\", exists member, exists plain_hash);
+# an already-assigned hash cleared by the callee through an untyped reference
+hash<auto> cleared_hash = {\"a\": 1};
+printf(\"5:%y:%y\\n\", clear_it(\\cleared_hash) && cleared_hash.a, exists cleared_hash);
+# unassigned int output; the local must not be read as a native int
+int unset_int;
+printf(\"6:%y:%y\\n\", dont_set_int(\\unset_int) && unset_int, exists unset_int);
+# loop-carried clear; the member access is parsed before the reference call, so only a
+# loop-aware proof stays correct on the second iteration
+hash<auto> loop_hash = {\"a\": 1};
+int seen = 0;
+for (int i = 0; i < 3; ++i) {
+    if (loop_hash.a) {
+        ++seen;
+    }
+    clear_it(\\loop_hash);
+}
+printf(\"7:%d:%y\\n\", seen, exists loop_hash);
+# an assigned hash keeps its fast path when no reference is taken
+hash<auto> fast_hash = {\"a\": 1};
+int fast = 0;
+for (int i = 0; i < 3; ++i) {
+    if (fast_hash.a) {
+        ++fast;
+    }
+}
+printf(\"8:%d:%y\\n\", fast, fast_hash.a);
+# the same shapes inside a function, where the hash is a plain (non closure-scoped) local
+hash<auto> sub inFunction() {
+    hash<auto> local_unset;
+    hash<auto> local_set;
+    hash<auto> local_cleared = {\"a\": 1};
+    bool unset_true = dont_set(\\local_unset) && local_unset.x;
+    bool set_true_result = set_true(\\local_set) && local_set.x;
+    bool cleared_true = clear_it(\\local_cleared) && local_cleared.a;
+    return {
+        \"unset\": unset_true,
+        \"set\": set_true_result,
+        \"cleared\": cleared_true,
+        \"unset_exists\": exists local_unset,
+        \"cleared_exists\": exists local_cleared,
+    };
+}
+printf(\"9:%y\\n\", inFunction());
+# a closure that clears the captured hash, invoked through a call that takes no reference
+# argument, so no call instruction names the write
+sub call_it(code c) { c(); }
+hash<auto> captured = {\"a\": 1};
+code clearer = sub () { delete captured; };
+call_it(clearer);
+printf(\"10:%y:%y\\n\", captured.a ? True : False, exists captured);
+# a captured hash that is only read stays correct too
+hash<auto> read_only_capture = {\"a\": 2};
+code reader = auto sub () { return read_only_capture.a; };
+printf(\"11:%y:%y\\n\", call_reader(reader), read_only_capture.a);
+auto sub call_reader(code c) { return c(); }
+";
+        string expected = "1:False:False\n"
+            "2:True:1\n"
+            "3:False:2\n"
+            "4:False:False\n"
+            "5:False:False\n"
+            "6:False:False\n"
+            "7:1:False\n"
+            "8:3:1\n"
+            "9:{unset: False, set: True, cleared: False, unset_exists: False, cleared_exists: False}\n"
+            "10:False:False\n"
+            "11:2:2";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string result = trim(runScript(code, mode));
+            assertEq(expected, result,
+                    sprintf("reference output assigned state %s", mode));
         }
     }
 

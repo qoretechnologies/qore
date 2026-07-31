@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -388,7 +388,11 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
             "cannot create a mutable reference to a read-only local variable");
         return -1;
     }
-    int lvalue_err = check_lvalue(lvexp);
+    // NOTE: creating a reference is not an assignment; the callee may return without ever writing
+    // through the reference, in which case the target keeps its previous (possibly NOTHING) value.
+    // Marking the target definitely-assigned here makes JIT/AOT elide the runtime hash/type guard
+    // and dereference a null value, so the lvalue check must not imply an assignment
+    int lvalue_err = check_lvalue(lvexp, false);
     if (lvalue_err) {
         if (lvalue_err == -1) {
             parse_error(*loc, "the reference operator was expecting an lvalue, got '%s' instead",

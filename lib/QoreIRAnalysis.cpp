@@ -726,17 +726,22 @@ static size_t qore_ir_get_effect_callee_arg_offset(
     return 0;
 }
 
-static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
+static const QoreClosureParseNode* qore_ir_get_created_closure_node(
         const QoreIRInstruction* inst) {
     if (!inst || inst->opcode != QoreIROpcode::CreateClosure) {
         return nullptr;
     }
     const auto* create = static_cast<const QoreIRCreateClosureInstruction*>(inst);
-    const QoreClosureParseNode* closure = create->closure_node;
-    if (!closure) {
-        closure = dynamic_cast<const QoreClosureParseNode*>(
-            create->expr.getInternalNode());
+    if (create->closure_node) {
+        return create->closure_node;
     }
+    return dynamic_cast<const QoreClosureParseNode*>(
+        create->expr.getInternalNode());
+}
+
+static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
+        const QoreIRInstruction* inst) {
+    const QoreClosureParseNode* closure = qore_ir_get_created_closure_node(inst);
     const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
     return ucf ? ucf->first() : nullptr;
 }
@@ -7112,11 +7117,16 @@ static QoreIRValueRepresentation qore_ir_conditional_native_representation(
     }
 }
 
+/** @param track_closure_locals when true, LoadClosure values are proven from the flow-sensitive
+    @ref known_locals set exactly like LoadLocal values instead of falling back to the
+    flow-insensitive parse-time value facts. Only callers that also track closure-variable stores
+    (and therefore kill closure variables at reference-passing calls) may enable this. */
 static bool qore_ir_value_is_proven_assigned(
         const QoreIRFunction& func, QoreIRValue value,
         const std::unordered_map<uint32_t, const QoreIRInstruction*>& definitions,
         const std::unordered_set<const LocalVar*>* known_locals,
-        std::unordered_set<uint32_t>& visiting, size_t& check_count) {
+        std::unordered_set<uint32_t>& visiting, size_t& check_count,
+        bool track_closure_locals = false) {
     if (!value.isValid()
             || qore_ir_analysis_cancelled(check_count,
                 "IR local assigned-value proof")
@@ -7134,7 +7144,10 @@ static bool qore_ir_value_is_proven_assigned(
                 || inst->opcode == QoreIROpcode::MakeHashConstKeys) {
             return finish(true);
         }
-        if (inst->opcode == QoreIROpcode::LoadLocal && known_locals) {
+        if ((inst->opcode == QoreIROpcode::LoadLocal
+                || (track_closure_locals
+                    && inst->opcode == QoreIROpcode::LoadClosure))
+                && known_locals) {
             const auto* load =
                 static_cast<const QoreIRLocalInstruction*>(inst);
             return finish(load->local
@@ -7147,7 +7160,8 @@ static bool qore_ir_value_is_proven_assigned(
             }
             for (QoreIRValue operand : inst->operands) {
                 if (!qore_ir_value_is_proven_assigned(func, operand,
-                        definitions, known_locals, visiting, check_count)) {
+                        definitions, known_locals, visiting, check_count,
+                        track_closure_locals)) {
                     return finish(false);
                 }
             }
@@ -7441,6 +7455,8 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
     size_t point_block = SIZE_MAX;
     std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
     std::unordered_set<const LocalVar*> universe;
+    std::unordered_set<const LocalVar*> captured_by_closure;
+    bool captured_by_closure_unknown = false;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (const auto& inst : func.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -7453,23 +7469,58 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             if (inst->result.isValid()) {
                 definitions.emplace(inst->result.id, inst.get());
             }
+            // Closure-scoped locals (top-level script variables and captured locals) are tracked
+            // here as well: their loads would otherwise be proven only from the flow-insensitive
+            // parse-time value facts, which do not see that a callee can write NOTHING back
+            // through a reference argument
             if (inst->opcode == QoreIROpcode::LoadLocal
                     || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::LoadClosure
+                    || inst->opcode == QoreIROpcode::StoreClosure
                     || inst->opcode == QoreIROpcode::UninstantiateLocal) {
                 const LocalVar* local =
                     static_cast<const QoreIRLocalInstruction*>(inst.get())
                         ->local;
                 const QoreTypeInfo* type = local
                     ? local->getTypeInfo() : nullptr;
-                if (local && !local->closureUse()
-                        && !QoreTypeInfo::isReference(type)) {
+                if (local && !QoreTypeInfo::isReference(type)) {
                     universe.insert(local);
+                }
+            }
+            // A closure capturing a local can write it (including writing NOTHING through
+            // "delete") from anywhere the closure is later invoked, and a closure reaches its
+            // call site as an opaque value, so no call instruction identifies the write. Such a
+            // local can therefore never be proven assigned across a call in this function
+            if (inst->opcode == QoreIROpcode::CreateClosure) {
+                const QoreClosureParseNode* closure =
+                    qore_ir_get_created_closure_node(inst.get());
+                const LVarSet* captures = closure ? closure->getVList() : nullptr;
+                if (!captures) {
+                    // an unresolvable closure may capture anything
+                    captured_by_closure_unknown = true;
+                } else {
+                    for (const LocalVar* capture : *captures) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR point assigned-value closure capture analysis")) {
+                            return false;
+                        }
+                        if (capture) {
+                            captured_by_closure.insert(capture);
+                        }
+                    }
                 }
             }
         }
     }
     if (point_block == SIZE_MAX || !cfg.reachable[point_block]) {
         return false;
+    }
+    if (captured_by_closure_unknown) {
+        universe.clear();
+    } else {
+        for (const LocalVar* capture : captured_by_closure) {
+            universe.erase(capture);
+        }
     }
 
     std::unordered_set<const LocalVar*> initially_known;
@@ -7492,12 +7543,17 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                 "IR point assigned-value transfer")) {
             return false;
         }
-        if (inst->opcode == QoreIROpcode::StoreLocal) {
+        if (inst->opcode == QoreIROpcode::StoreLocal
+                || inst->opcode == QoreIROpcode::StoreClosure) {
             const auto* store =
                 static_cast<const QoreIRLocalInstruction*>(inst);
+            // is_closure marks a closure-scoped target: it disqualifies a StoreLocal (which then
+            // does not describe the actual write) but is expected on StoreClosure
+            bool closure_store = inst->opcode == QoreIROpcode::StoreClosure;
             if (!store->local || !universe.count(store->local)
                     || store->operands.size() != 1 || store->weak
-                    || store->is_ref || store->is_closure) {
+                    || store->is_ref
+                    || (store->is_closure && !closure_store)) {
                 if (store->local) {
                     known.erase(store->local);
                 }
@@ -7506,7 +7562,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             std::unordered_set<uint32_t> visiting;
             if (qore_ir_value_is_proven_assigned(func,
                     store->operands[0], definitions, &known, visiting,
-                    check_count)) {
+                    check_count, true)) {
                 known.insert(store->local);
             } else {
                 known.erase(store->local);
@@ -7521,7 +7577,8 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             }
             return true;
         }
-        if (inst->opcode == QoreIROpcode::LoadLocal) {
+        if (inst->opcode == QoreIROpcode::LoadLocal
+                || inst->opcode == QoreIROpcode::LoadClosure) {
             return true;
         }
 
@@ -7641,7 +7698,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                 }
                 std::unordered_set<uint32_t> visiting;
                 if (!qore_ir_value_is_proven_assigned(func, value,
-                        definitions, &known, visiting, check_count)) {
+                        definitions, &known, visiting, check_count, true)) {
                     return false;
                 }
             }

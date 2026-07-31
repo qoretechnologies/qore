@@ -276,6 +276,14 @@ using QoreIRBoxedReturnParamQuery = std::function<bool(
     int8_t&)>;
 
 /** Proves that all values are assigned at the point immediately before an instruction.
+
+    Plain locals and closure-scoped locals (top-level script variables, captured locals, and any
+    local whose address has been taken with \\var, which the parser converts to a thread-safe
+    closure-scoped local) are both proven from a flow-sensitive must-analysis over the CFG rather
+    than from the parse-time value facts. This matters because a callee reached through a
+    reference argument can leave the target untouched or write NOTHING back to it, so the
+    assigned state must be killed at every call that passes a reference.
+
     @param func the IR function containing the instruction and values
     @param point the instruction defining the analysis point
     @param values the values that must all be assigned and non-NOTHING
