@@ -1687,6 +1687,23 @@ static uint64_t computeSourceHash(const char* label) {
     return XXH64(src.data(), static_cast<size_t>(sz), 0);
 }
 
+//! True when a preloaded AOT fragment was compiled from a different version of its source file.
+/** Returns false whenever staleness cannot be PROVEN — an object written without a source hash, or
+    a source file that is gone or unreadable — so the only behavior change is for a sibling that is
+    demonstrably out of date with respect to a source still on disk. */
+static bool aotFragmentSourceIsStale(const QoreAOTBinaryReader& reader) {
+    uint64_t recorded = reader.getHeader().source_hash;
+    if (!recorded) {
+        return false;
+    }
+    const char* label = reader.getLabel();
+    if (!label || !*label) {
+        return false;
+    }
+    uint64_t current = computeSourceHash(label);
+    return current && current != recorded;
+}
+
 static constexpr const char* QCC_LOG_PREFIX = "qcc: ";
 static constexpr const char* QCC_CODE_BODY_DESC = "Qore code variants";
 
@@ -14720,9 +14737,34 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
     return true;
 }
 
+//! Source location where a fast-entry callee variant is declared, or nullptr.
+static const QoreProgramLocation* aotFastEntryCalleeLocation(
+        const AbstractQoreFunctionVariant* variant) {
+    if (!variant) {
+        return nullptr;
+    }
+    UserVariantBase* uvb =
+        const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+    if (!uvb) {
+        return nullptr;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    return sig ? sig->getParseLocation() : nullptr;
+}
+
 //! Remove shared fast-entry declarations that lowering did not reference.
 /** Hidden undefined ELF symbols must be provided at link time even when they have no relocations.
-    Per-file batch objects therefore retain only declarations used by a direct cross-file call. */
+    Per-file batch objects therefore retain only declarations used by a direct cross-file call.
+
+    A declaration that DOES survive is a direct call into another object's fast entry, and that is a
+    build dependency on the callee's BODY, not just on its declaration: the fast entry exists at all
+    only while the callee's lowered body stays eligible, and the call sequence emitted here bakes in
+    that body's ABI/effect summary (parameter and return kinds, cache-invalidation and local-effect
+    flags).  A body-only edit in the callee therefore either drops the hidden `_fast` symbol — an
+    undefined-reference link failure in this object — or silently changes the contract this object
+    compiled against, while the callee's declaration hash and standard entry symbol stay identical.
+    Record the callee's source as a dependency of this object so an incremental build rebuilds it
+    with the callee; the active dependency sink turns that into a Make prerequisite. */
 static bool pruneUnusedAOTSharedFastEntryFunctions(llvm::Module& module,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
     size_t callee_i = 0;
@@ -14737,9 +14779,14 @@ static bool pruneUnusedAOTSharedFastEntryFunctions(llvm::Module& module,
             continue;
         }
         llvm::Function* fn = module.getFunction(info.fast_name);
-        if (fn && fn->isDeclaration() && fn->use_empty()) {
-            fn->eraseFromParent();
+        if (!fn || !fn->isDeclaration()) {
+            continue;
         }
+        if (fn->use_empty()) {
+            fn->eraseFromParent();
+            continue;
+        }
+        qore_aot_note_referenced_decl(aotFastEntryCalleeLocation(entry.first));
     }
     return true;
 }
@@ -27065,6 +27112,18 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                     static_cast<uint32_t>(frag.bytes.size()), index_error)) {
                 continue;
             }
+            // Fast-entry metadata describes the sibling's LOWERED BODY, so a
+            // sibling whose source has changed since its `.qo` was written
+            // describes a body that no longer exists: the entry may be gone (a
+            // hidden `_fast` symbol this object would then require but nothing
+            // defines) or its effect summary may have changed.  Importing it
+            // would make the outcome depend on the order in which the build
+            // rebuilds the two objects.  Skip the import instead — the ordinary
+            // name-resolved call path is always correct — and let the recorded
+            // build dependency rebuild this object once the sibling is current.
+            if (aotFragmentSourceIsStale(index_reader)) {
+                continue;
+            }
             QoreAOTSymbolIndex index;
             if (!readSymbolIndex(index_reader, index, index_error)) {
                 error = "cannot read sibling fast-entry metadata from '"
@@ -27491,11 +27550,18 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    if (!standalone_batch_callees.empty()
-            && !pruneUnusedAOTSharedFastEntryFunctions(*module,
-                standalone_batch_callees)) {
-        error = "operation cancelled during AOT shared fast-entry declaration pruning";
-        return false;
+    {
+        // Armed here so the surviving cross-file `_fast` declarations — direct
+        // calls into a preloaded sibling's body-derived entry — are recorded as
+        // build dependencies alongside the folded constants collected during
+        // parse+commit.
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        if (!standalone_batch_callees.empty()
+                && !pruneUnusedAOTSharedFastEntryFunctions(*module,
+                    standalone_batch_callees)) {
+            error = "operation cancelled during AOT shared fast-entry declaration pruning";
+            return false;
+        }
     }
 
     di_builder.finalize();
