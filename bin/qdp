@@ -243,6 +243,13 @@ class QdpCmd {
         set_signal_handler(SIGINT, \QdpCmd::signalHandler());
         set_signal_handler(SIGTERM, \QdpCmd::signalHandler());
 
+        # data provider modules that start background threads or external processes require
+        # DataProvider::shutdown() to be called before the process exits
+        # NOTE: exit() does not run on_exit blocks; all exit paths must use QdpCmd::exitProgram()
+        on_exit {
+            DataProvider::shutdown();
+        }
+
         # load any modules
         map load_module($1), opts.modules;
 
@@ -267,10 +274,6 @@ class QdpCmd {
         }
         if (!ARGV[0]) {
             usage();
-        }
-
-        on_exit {
-            DataProvider::shutdown();
         }
 
         DataProviderDataContextHelper dch;
@@ -1361,7 +1364,7 @@ class QdpCmd {
                         stderr.printf("  %s %s: %s\n", color.error("-"), err.err, err.desc);
                     }
                 }
-                exit(1);
+                QdpCmd::exitProgram(1);
             }
             rethrow;
         }
@@ -2075,7 +2078,7 @@ class QdpCmd {
                 }
             }
         }
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
@@ -2264,7 +2267,7 @@ class QdpCmd {
                 index ? cast<hash<DataProviderIndexInfo>>(index) : NOTHING
             );
             printf("Created index %y: %d bytes in %y (%y)\n", info.path, info.size, info.delta, info.summary);
-            exit(0);
+            QdpCmd::exitProgram(0);
         } catch (hash<ExceptionInfo> ex) {
             error("%s: %s", ex.err, ex.desc);
         }
@@ -2281,7 +2284,7 @@ class QdpCmd {
                 push result, app + {"actions": actions};
             }
             output(result);
-            exit(0);
+            QdpCmd::exitProgram(0);
         }
 
         foreach hash<DataProviderAppInfo> app in (l) {
@@ -2294,7 +2297,7 @@ class QdpCmd {
                     $1.short_desc), actions;
             }
         }
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static listConnections() {
@@ -2305,7 +2308,7 @@ class QdpCmd {
 
         if (opts.json || opts.yaml) {
             output(h);
-            exit(0);
+            QdpCmd::exitProgram(0);
         }
 
         if (!h) {
@@ -2317,7 +2320,7 @@ class QdpCmd {
                 map printf("%s\n", color.key($1)), keys h;
             }
         }
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static listFactories() {
@@ -2334,7 +2337,7 @@ class QdpCmd {
             } else {
                 output(flist);
             }
-            exit(0);
+            QdpCmd::exitProgram(0);
         }
 
         if (opts.verbose) {
@@ -2345,7 +2348,7 @@ class QdpCmd {
         } else {
             output(flist);
         }
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static listTypes() {
@@ -2362,7 +2365,7 @@ class QdpCmd {
             } else {
                 output(tlist);
             }
-            exit(0);
+            QdpCmd::exitProgram(0);
         }
 
         if (opts.verbose) {
@@ -2373,7 +2376,7 @@ class QdpCmd {
         } else {
             output(tlist);
         }
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     private static printHelpLine(string colored, string desc, int width) {
@@ -2517,7 +2520,7 @@ class QdpCmd {
         printf("  %s mydb/tables/users pipeline 'csvwrite{path=out.csv}' -d %s\n",
             script, color.dim("# Dry-run pipeline"));
 
-        exit(1);
+        QdpCmd::exitProgram(1);
     }
 
     static showDpqlHelp() {
@@ -2577,7 +2580,7 @@ class QdpCmd {
         printf("  %s\n", color.key("qdp mydb/tables/orders search '@items[0]{product_id} == 123'"));
         printf("  %s\n", color.key("qdp mydb/tables/users search '@address{city} == \"NYC\"'"));
         printf("  %s\n", color.key("qdp mydb/tables/events search '@tags[-1] == \"important\"'"));
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static showPipelineHelp() {
@@ -2712,12 +2715,31 @@ class QdpCmd {
         printf("\n%s\n", color.bold("OUTPUT"));
         printf("  %s\n", color.dim("Default: human-readable summary with record count and throughput."));
         printf("  %s\n", color.dim("With -J/-Y: structured pipeline info (name, status, record_count, duration, recs_per_sec)."));
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static error(string fmt) {
         stderr.printf("%s: %s %s\n", get_script_name(), color.error("ERROR:"), vsprintf(fmt, argv));
-        exit(1);
+        exitProgram(1);
+    }
+
+    #! Terminates the program after shutting down background data provider services
+    /** @param rc the return code for the process
+
+        @note This must be used instead of exit(); data provider modules that start background threads or external
+        processes (ex: the JavaScript / TypeScript action interface process pool) register shutdown handlers and
+        require DataProvider::shutdown() to be called before the process exits, otherwise external processes are
+        left orphaned.  Note that exit() does not run \c on_exit blocks, so the shutdown cannot be handled with a
+        scope guard alone
+    */
+    static exitProgram(softint rc = 0) {
+        try {
+            DataProvider::shutdown();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s: %s error shutting down data provider services: %s\n", get_script_name(),
+                color.error("ERROR:"), get_exception_string(ex));
+        }
+        exit(rc);
     }
 
     static showVersion() {
@@ -2730,7 +2752,7 @@ class QdpCmd {
         printf("YAML I/O: not available (yaml module not installed)\n");
 %endif
         printf("Line editing: supported (linenoise)\n");
-        exit(0);
+        QdpCmd::exitProgram(0);
     }
 
     static signalHandler(int sig) {
@@ -2933,7 +2955,7 @@ class MyObserver inherits Observer {
                     QdpCmd::color.error("disconnected from server"));
                 # restore original terminal attributes
                 stdin.setTerminalAttributes(TCSADRAIN, t);
-                exit(0);
+                QdpCmd::exitProgram(0);
             }
         }
         stdout.sync();

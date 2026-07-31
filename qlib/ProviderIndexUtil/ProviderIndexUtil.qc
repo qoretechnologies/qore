@@ -30,6 +30,15 @@ public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 const RoutingIndexVersion = 2;
 const MetadataCacheVersion = 2;
 
+#! The mode used when creating the provider index directory
+/** @note the execute bit is required, otherwise the directory cannot be traversed, and no index files in it can be
+    read or written
+*/
+const IndexDirMode = 0755;
+
+#! The mode used when creating provider index files
+const IndexFileMode = 0644;
+
 #! Data provider index
 public hashdecl DataProviderIndexInfo {
     #! Factory to module map
@@ -185,6 +194,23 @@ public class ProviderIndexUtil {
         #! Set of modules that have been successfully loaded; used to avoid calling load_module() which acquires
         #! the global module lock even when a module is already loaded
         static hash<string, bool> loaded_module_cache;
+
+        #! The last error encountered when reading the canonical data provider index, if any
+        /** This is set when the index exists but could not be read (ex: a permissions problem or a corrupt file);
+            it is not set when no index has been created yet
+        */
+        static *string index_read_error;
+    }
+
+    #! Returns any error encountered while reading the canonical data provider index
+    /** @return the description of the error encountered when trying to read the data provider index, if any;
+        @ref nothing is returned if the index was read successfully or if no index has been created yet
+
+        Callers can use this to distinguish an unreadable or corrupt index (which silently degrades the set of
+        known apps and factories) from a system where no index has been created at all
+    */
+    static *string getIndexReadError() {
+        return index_read_error;
     }
 
     #! Returns a list of cached app info
@@ -848,6 +874,8 @@ public class ProviderIndexUtil {
     #! Writes the data provider index to the configured directory
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
             hash<auto> summary) {
+        # verify that the target directory can be written to before writing anything
+        getWritableIndexDir();
         hash<ProviderIndexInfo> info = writeIndex(h, "data", delta, summary);
         *string cache_sha256;
         try {
@@ -884,9 +912,7 @@ public class ProviderIndexUtil {
             }
 
             binary data = msgpack_pack(app_index, MSGPACK_QORE_MODE);
-            File chunk_file();
-            chunk_file.open2(path: getMetadataCacheChunkPath(app), flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
-            chunk_file.write(data);
+            writeFileAtomic(getMetadataCacheChunkPath(app), data);
             chunks{app} = <DataProviderMetadataCacheChunkInfo>{
                 "size": data.size(),
                 "sha256": digest("sha256", data).toHex(),
@@ -897,9 +923,7 @@ public class ProviderIndexUtil {
             "version": MetadataCacheVersion,
             "apps": chunks,
         }, MSGPACK_QORE_MODE);
-        File f();
-        f.open2(path: getMetadataCachePath(), flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
-        f.write(data);
+        writeFileAtomic(getMetadataCachePath(), data);
         return digest("sha256", data).toHex();
 %endif
     }
@@ -1313,10 +1337,8 @@ public class ProviderIndexUtil {
         throw "PROVIDER-INDEX-ERROR", sprintf("YAML support is not available; cannot write %s provider index", type);
 %else
         string path = getIndexPath(type);
-        File f();
-        f.open2(path: path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
         string yaml = make_yaml(h, BlockStyle);
-        f.write(data: yaml);
+        writeFileAtomic(path, yaml);
         return <ProviderIndexInfo>{
             "path": path,
             "size": yaml.size(),
@@ -1324,6 +1346,34 @@ public class ProviderIndexUtil {
             "summary": summary,
         };
 %endif
+    }
+
+    #! Writes the given contents to the given path atomically
+    /** The contents are written to a temporary file in the target directory, flushed to disk, and then renamed
+        over the target path, so that the target file is never truncated or left partially written; if the process
+        crashes or is killed at any point, any existing file at the target path is left untouched
+
+        @param path the target path
+        @param contents the contents to write
+    */
+    static private writeFileAtomic(string path, data contents) {
+        string tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
+        # ensure that the temporary file is removed if the write or the rename fails
+        on_error {
+            try {
+                unlink(tmp_path);
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore errors removing the temporary file; the original error must be propagated
+            }
+        }
+        {
+            File f();
+            f.open2(path: tmp_path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: IndexFileMode);
+            f.write(contents);
+            # ensure that the data is on disk before the file is renamed over the target
+            f.sync();
+        }
+        rename(tmp_path, path);
     }
 
     #! Reads the index from the configured directory
@@ -1339,8 +1389,21 @@ public class ProviderIndexUtil {
         }
         try {
             string path = getIndexPath(type);
-            return parse_yaml(File::readTextFile(path));
+            *hash<auto> rv = parse_yaml(File::readTextFile(path));
+            if (type == "data") {
+                remove index_read_error;
+            }
+            return rv;
         } catch (hash<ExceptionInfo> ex) {
+            if (type == "data") {
+                # an index that has not been created yet is not an error; anything else (ex: a permissions
+                # problem or a corrupt file) is recorded so that callers can detect the degraded state
+                if (ex.arg == ENOENT) {
+                    remove index_read_error;
+                } else {
+                    index_read_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
             if (!quiet) {
                 log(LoggerLevel::LevelError, "Ignoring error reading data provider %s index: %s: %s",
                     type, ex.err, ex.desc);
@@ -1372,7 +1435,15 @@ public class ProviderIndexUtil {
     }
 
     #! Try to get the index directory from the environment variable
-    static *string tryGetIndexDir(*bool throw_exception) {
+    /** @param throw_exception if @ref True then errors result in a \c PROVIDER-INDEX-ERROR exception, otherwise
+        they are logged as warnings and @ref nothing is returned
+        @param for_write if @ref True then the directory is also verified to be readable, writable, and traversable
+        by the current user; this must be used before any index files are written, so that a permissions problem
+        results in an immediate and actionable error instead of a failure after the index has been built
+
+        @return the index directory
+    */
+    static *string tryGetIndexDir(*bool throw_exception, *bool for_write) {
         *string dir = ENV{ProviderIndexEnvVar};
         if (!dir.val()) {
             string err = sprintf("Environment variable %y is not set; provider index APIs cannot be used",
@@ -1388,9 +1459,12 @@ public class ProviderIndexUtil {
         *hash<StatInfo> info = hstat(dir);
         if (!info) {
             try {
-                mkdir_ex(dir, 0664, True);
+                # NOTE: the directory must be created with the execute bit set, otherwise it cannot be traversed,
+                # and no index files in it can be read or written
+                mkdir_ex(dir, IndexDirMode, True);
             } catch (hash<ExceptionInfo> ex) {
-                string err = sprintf("%s: %s", ex.err, ex.desc);
+                string err = sprintf("Cannot create provider index directory %y (from environment variable %y): "
+                    "%s: %s", dir, ProviderIndexEnvVar, ex.err, ex.desc);
                 if (throw_exception) {
                     rethrow "PROVIDER-INDEX-ERROR", err;
                 }
@@ -1398,15 +1472,53 @@ public class ProviderIndexUtil {
                 return;
             }
         } else if (info.type != "DIRECTORY") {
-            string err = sprintf("Environment variable %y is pointing to a %y; must be a directory",
-                ProviderIndexEnvVar);
+            string err = sprintf("Environment variable %y is pointing to %y with type %y; must be a directory",
+                ProviderIndexEnvVar, dir, info.type);
             if (throw_exception) {
                 throw "PROVIDER-INDEX-ERROR", err;
             }
             log(LoggerLevel::LevelWarn, "%s", err);
             return;
         }
+        if (for_write) {
+            if (*string err = checkIndexDirAccess(dir)) {
+                if (throw_exception) {
+                    throw "PROVIDER-INDEX-ERROR", err;
+                }
+                log(LoggerLevel::LevelWarn, "%s", err);
+                return;
+            }
+        }
         return dir;
+    }
+
+    #! Returns the index directory after verifying that index files can be written to it
+    /** @return the index directory
+
+        @throw PROVIDER-INDEX-ERROR the environment variable is not set, or the directory cannot be created, or the
+        directory is not readable, writable, and traversable by the current user
+    */
+    static string getWritableIndexDir() {
+        return tryGetIndexDir(True, True);
+    }
+
+    #! Checks that the given directory can be used for writing index files
+    /** @param dir the directory to check
+
+        @return an actionable error description if the directory cannot be used, otherwise @ref nothing
+    */
+    static private *string checkIndexDirAccess(string dir) {
+        # NOTE: is_writable() on a directory verifies that a file can actually be created in it, which requires
+        # both the write and the execute (traverse) bits
+        if (is_readable(dir) && is_writable(dir)) {
+            return;
+        }
+        *hash<StatInfo> info = hstat(dir);
+        return sprintf("Provider index directory %y (from environment variable %y) is not readable, writable, and "
+            "traversable by the current user (uid %d, gid %d); the directory has permissions %y (owner uid %d, "
+            "gid %d); fix the permissions (ex: \"chmod %s %s\") and retry", dir, ProviderIndexEnvVar, getuid(),
+            getgid(), info.perm ?? "<unknown>", info.uid ?? -1, info.gid ?? -1,
+            sprintf("%o", IndexDirMode), dir);
     }
 
     #! Log a message to the global logger if possible

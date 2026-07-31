@@ -2922,6 +2922,35 @@ foreach string module_name in (registry.getProcessModules()) {
       - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added @ref DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps() "DataProviderActionCatalog::cacheAllRegisteredApps()",
+        which populates the provider index app cache from all registered applications, so that a complete app
+        catalog can be recovered when the data provider index cannot be read
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+
+    - \c qdp and the <a href="../../modules/ProviderIndex/html/index.html#providerindexintro">ProviderIndex</a> and
+      <a href="../../modules/ProviderIndexUtil/html/index.html#providerindexutilintro">ProviderIndexUtil</a> modules
+      - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
+        @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
+        @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
+        never ran, and shutdown handlers registered by data provider modules that start background threads or
+        external processes (such as the TypeScript action interface process pool) were silently skipped, leaving
+        external processes orphaned; all \c qdp exit paths now shut down data provider services first
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - fixed the provider index directory being created without the execute bit (mode \c 0664), which made the
+        directory untraversable, so that no index file in it could be read or written; the directory is now
+        created with mode \c 0755
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - provider index files are now written atomically (written to a temporary file in the target directory and
+        renamed over the target), and the existing index is no longer moved out of the way before the new index
+        is created, so an interrupted or failed index creation can no longer leave the system with no index at all
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - an index directory that is not readable, writable, and traversable is now reported as an actionable
+        \c PROVIDER-INDEX-ERROR before the index is built, instead of as a file-open error after it
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - added \c ProviderIndexUtil::getIndexReadError() so that callers can distinguish an unreadable or corrupt
+        index from a system where no index has been created yet, and therefore avoid silently degrading to a
+        partial app catalog
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
 
     - @ref reflectionintro "reflection" module
       - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy

@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class QdpShutdownTest
+
+#! Verifies that qdp shuts down background data provider services on every exit path
+/** Data provider modules that start background threads or external processes (ex: the TypeScript action
+    interface process pool) register shutdown handlers and require DataProvider::shutdown() to be called before
+    the process exits, otherwise external processes are left orphaned; note that exit() does not run on_exit
+    blocks, so a scope guard alone is not enough
+
+    @see https://github.com/qoretechnologies/qore/issues/5383
+*/
+public class QdpShutdownTest inherits QUnit::Test {
+    constructor() : Test("QdpShutdownTest", "1.0") {
+        addTestCase("shutdown handlers run on the success exit path", \shutdownOnSuccess());
+        addTestCase("shutdown handlers run on the error exit path", \shutdownOnError());
+
+        set_return_value(main());
+    }
+
+    private string shellQuote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    private string getQdpPath() {
+        return normalize_dir(get_script_dir() + "/../../../../bin/qdp");
+    }
+
+    private string getQoreBinary() {
+        return getenv("QORE_BINARY") ?? "qore";
+    }
+
+    #! Runs qdp with the marker module loaded and returns the return code and whether the marker was written
+    private hash<auto> runQdp(string args) {
+        TmpDir tmp_dir("qdp-shutdown-");
+        string marker = tmp_dir.path + "/shutdown.txt";
+        string out_path = tmp_dir.path + "/out.txt";
+        string err_path = tmp_dir.path + "/err.txt";
+        # the marker module lives in this test's directory
+        string cmd = sprintf("QORE_MODULE_DIR=%s:${QORE_MODULE_DIR} QORE_TEST_QDP_SHUTDOWN_MARKER=%s "
+            "%s --enable-debug %s -m QdpShutdownMarker %s > %s 2> %s",
+            shellQuote(get_script_dir()),
+            shellQuote(marker),
+            shellQuote(getQoreBinary()),
+            shellQuote(getQdpPath()),
+            args,
+            shellQuote(out_path),
+            shellQuote(err_path));
+        int rc = system(cmd);
+        return {
+            "rc": rc,
+            "marker": hstat(marker).type == "REGULAR",
+            "err": ReadOnlyFile::readTextFile(err_path),
+        };
+    }
+
+    shutdownOnSuccess() {
+        hash<auto> result = runQdp("--list-connections");
+        assertEq(0, result.rc, sprintf("qdp --list-connections succeeded: %s", result.err));
+        assertTrue(result.marker, "data provider services are shut down on the success exit path");
+    }
+
+    shutdownOnError() {
+        hash<auto> result = runQdp("qore-test-no-such-provider info");
+        assertNeq(0, result.rc, "an unknown provider is an error");
+        assertTrue(result.marker, "data provider services are shut down on the error exit path");
+    }
+}

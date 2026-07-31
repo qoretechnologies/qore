@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class ProviderIndexWriteTest
+
+#! Tests for provider index directory handling and atomic index writes
+/** @see https://github.com/qoretechnologies/qore/issues/5383
+*/
+public class ProviderIndexWriteTest inherits QUnit::Test {
+    constructor() : Test("ProviderIndex write test", "1.0") {
+        # NOTE: the data provider index is read and cached once per process, so the read-error test case must run
+        # before any other test case can trigger index initialization
+        addTestCase("unreadable index is reported", \unreadableIndexIsReported());
+        addTestCase("index dir is created traversable", \indexDirIsCreatedTraversable());
+        addTestCase("index writes are atomic", \indexWritesAreAtomic());
+        addTestCase("unwritable index dir fails cleanly", \unwritableIndexDirFailsCleanly());
+        addTestCase("registered apps can be cached without an index", \registeredAppsCanBeCached());
+
+        set_return_value(main());
+    }
+
+    #! Returns a minimal index with the given factory map
+    private hash<DataProviderIndexInfo> makeIndex(*hash<string, string> factorymap) {
+        return <DataProviderIndexInfo>{
+            "factorymap": factorymap ?? {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {},
+            "actioninfomap": {},
+            "top_actioninfomap": {},
+        };
+    }
+
+    private checkModules() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    #! Sets the index environment variable and restores the original value when the caller's scope exits
+    private code setIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        };
+    }
+
+    #! An index that exists but cannot be parsed must be reported and not silently ignored
+    unreadableIndexIsReported() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        code restore = setIndexDir(dir);
+        on_exit restore();
+
+        assertNothing(ProviderIndexUtil::getIndexReadError(), "no read error before the index is read");
+
+        # write a corrupt index file
+        File f();
+        f.open2(path: sprintf("%s%sqore-data-index.yaml", dir, DirSep), flags: O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("this is: not: a valid: index\n\t- broken\n");
+        f.close();
+
+        # trigger index initialization
+        ProviderIndexUtil::tryGetAppInfo("QoreTestNoSuchApp");
+
+        *string err = ProviderIndexUtil::getIndexReadError();
+        assertTrue(err.val(), "a corrupt index is reported as a read error");
+    }
+
+    #! The index directory must be created with the execute bit set, otherwise it cannot be used at all
+    indexDirIsCreatedTraversable() {
+        checkModules();
+
+        string base = make_tmp_dir();
+        on_exit remove_tree(base);
+
+        string dir = join_paths(base, "index");
+        code restore = setIndexDir(dir);
+        on_exit restore();
+
+        assertEq(dir, ProviderIndexUtil::tryGetIndexDir(True), "the index directory is created on demand");
+
+        *hash<StatInfo> info = hstat(dir);
+        assertEq("DIRECTORY", info.type, "the index directory was created");
+        assertTrue(info.mode & 0100 ? True : False,
+            sprintf("the index directory is traversable by the owner (mode: %y)", info.perm));
+        assertTrue(is_writable(dir), "the index directory is writable");
+        assertTrue(is_readable(dir), "the index directory is readable");
+
+        # verify that the directory can actually be used
+        hash<ProviderIndexInfo> rv = ProviderIndexUtil::writeDataProviderIndex(makeIndex(), 0s, {});
+        assertEq(join_paths(dir, "qore-data-index.yaml"), rv.path, "the index was written to the new directory");
+        assertTrue(hstat(rv.path).size > 0, "the index file is not empty");
+    }
+
+    #! Index files must be replaced atomically, leaving no temporary files behind
+    indexWritesAreAtomic() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        code restore = setIndexDir(dir);
+        on_exit restore();
+
+        hash<DataProviderIndexInfo> first = makeIndex({"qore-test-factory-1": "/qore/test/module1.qm"});
+        hash<DataProviderIndexInfo> second = makeIndex({"qore-test-factory-2": "/qore/test/module2.qm"});
+
+        string path = ProviderIndexUtil::getIndexPath("data");
+        ProviderIndexUtil::writeDataProviderIndex(first, 0s, {});
+        assertTrue(File::readTextFile(path).find("qore-test-factory-1") >= 0, "the first index was written");
+        int inode = hstat(path).inode;
+
+        ProviderIndexUtil::writeDataProviderIndex(second, 0s, {});
+        assertTrue(File::readTextFile(path).find("qore-test-factory-2") >= 0, "the second index replaced the first");
+        assertNeq(inode, hstat(path).inode, "the index was replaced by an atomic rename and not truncated in place");
+
+        Dir d();
+        d.chdir(dir);
+        assertEq((), d.listFiles("^.*\\.tmp\\..*$"), "no temporary files are left behind");
+    }
+
+    #! A directory that cannot be written to must fail immediately with an actionable error
+    unwritableIndexDirFailsCleanly() {
+        checkModules();
+
+        if (!getuid()) {
+            testSkip("cannot test filesystem permissions as root");
+        }
+
+        string dir = make_tmp_dir();
+        on_exit {
+            chmod(dir, 0755);
+            remove_tree(dir);
+        }
+
+        code restore = setIndexDir(dir);
+        on_exit restore();
+
+        # create a valid index in a usable directory
+        string path = ProviderIndexUtil::getIndexPath("data");
+        ProviderIndexUtil::writeDataProviderIndex(makeIndex({"qore-test-original": "/qore/test/original.qm"}),
+            0s, {});
+        string orig = File::readTextFile(path);
+
+        # remove the execute bit; this makes the directory untraversable, so nothing in it can be read or written
+        chmod(dir, 0644);
+
+        try {
+            ProviderIndexUtil::writeDataProviderIndex(makeIndex({"qore-test-new": "/qore/test/new.qm"}), 0s, {});
+            fail("writing an index to an untraversable directory must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PROVIDER-INDEX-ERROR", ex.err, "an untraversable index directory gives an actionable error");
+            assertTrue(ex.desc.find("chmod") >= 0, sprintf("the error describes how to fix the problem: %y",
+                ex.desc));
+        }
+
+        # the pre-existing index must survive the failed write
+        chmod(dir, 0755);
+        assertEq(orig, File::readTextFile(path), "a failed index write leaves the existing index intact");
+    }
+
+    #! An unreadable index must be recoverable from the live registry instead of degrading the app catalog
+    registeredAppsCanBeCached() {
+        string app = "QoreTestIndexRecoveryApp";
+        string action = "recovery-action";
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Index Recovery App",
+            "short_desc": "Index recovery app",
+            "desc": "Index recovery app",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "index-recovery.svg",
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "path": "/" + action,
+            "action": action,
+            "display_name": "Recovery Action",
+            "short_desc": "Recovery action",
+            "desc": "Recovery action",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+        });
+
+        assertNothing(ProviderIndexUtil::tryGetAppInfo(app), "the app is not cached before recovery");
+
+        assertGt(0, DataProviderActionCatalog::cacheAllRegisteredApps(), "registered apps are cached");
+        assertEq(app, ProviderIndexUtil::tryGetAppInfo(app).name, "the registered app is visible in the cache");
+        assertEq(action, ProviderIndexUtil::tryGetApproximateAppAction(app, action).action,
+            "the registered action is visible in the cache");
+    }
+}

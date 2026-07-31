@@ -1580,6 +1580,41 @@ public class DataProviderActionCatalog {
         throw "APP-ERROR", sprintf("application %y is not registered", app);
     }
 
+    #! Populates the provider index app cache from all currently-registered applications
+    /** This makes all registered apps and their actions visible through the \c ProviderIndexUtil cache APIs
+        without reading the data provider index from the filesystem
+
+        Use this to recover a complete app catalog when the data provider index cannot be read (ex: a permissions
+        problem or a corrupt index file); note that all provider modules must be loaded first (ex: with
+        @ref DataProvider::registerKnownFactories()), otherwise only apps registered by already-loaded modules are
+        cached
+
+        @return the number of applications added to the cache
+    */
+    static int cacheAllRegisteredApps() {
+        int count = 0;
+        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
+            try {
+                ProviderIndexUtil::addAppToCache(app);
+                ++count;
+            } catch (hash<ExceptionInfo> ex) {
+                ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache data provider app %y: %s: %s",
+                    app.name, ex.err, ex.desc);
+                continue;
+            }
+            foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app.name,
+                False)) {
+                try {
+                    ProviderIndexUtil::addActionToCache(action);
+                } catch (hash<ExceptionInfo> ex) {
+                    ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache action %y for data provider app "
+                        "%y: %s: %s", action.action, app.name, ex.err, ex.desc);
+                }
+            }
+        }
+        return count;
+    }
+
     #! Returns all actions for the given application
     /** @param app the data provider application
         @param check_index if \c True, check the provider index for an on-demand module before reading registered

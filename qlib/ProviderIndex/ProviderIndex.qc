@@ -52,12 +52,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
             setEnvironmentVariable(dir);
         }
 
-        # check if environment variable is set
-        tryGetIndexDir(True);
-
-        # Handle the old index file cleanly
-        IndexFileHelper ifh("data");
-        on_error ifh.abort();
+        # check that the environment variable is set and that the index directory can be written to before
+        # starting the (potentially very long) index build; any existing index is left untouched until the new
+        # index has been written completely (index files are written atomically)
+        getWritableIndexDir();
 
         # make sure that all data providers are initialized immediately
         DataProvider::setOptions(DPO_DisableOnDemandInitialization | DPO_EnableOnDemandActions);
@@ -241,45 +239,6 @@ public class ProviderIndex inherits ProviderIndexUtil {
 
             index.factorymap{factory} = path;
             log(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory, path);
-        }
-    }
-}
-}
-
-namespace Priv {
-class IndexFileHelper {
-    public {}
-
-    private {
-        string orig_path;
-        string new_path;
-        bool restore;
-    }
-
-    #! Constructor
-    constructor(string type) {
-        orig_path = ProviderIndexUtil::getIndexPath(type);
-
-        # check if the index file exists and is readable
-        if (hstat(orig_path).type == "REGULAR") {
-            # if so, make a backup
-            new_path = orig_path + ".orig";
-            rename(orig_path, new_path);
-        }
-    }
-
-    destructor() {
-        # delete the backup file, if any
-        if (new_path.val()) {
-            unlink(new_path);
-        }
-    }
-
-    abort() {
-        if (new_path.val()) {
-            # restore the backup
-            rename(new_path, orig_path);
-            remove new_path;
         }
     }
 }

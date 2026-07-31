@@ -1321,6 +1321,11 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_6 DataProvider v3.6
+    - added @ref DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps() "DataProviderActionCatalog::cacheAllRegisteredApps()",
+      which populates the provider index app cache from all registered applications; this allows a complete app
+      catalog to be recovered when the data provider index cannot be read, instead of silently degrading to the
+      apps registered by already-loaded modules
+      (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
     - added @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider", which
       implements the shared watch processing sequence — fetch, cursor filtering, ascending sort, optional
       snapshot collapse, optional dispatch budget, in-order dispatch, advance-on-success, and the post-success

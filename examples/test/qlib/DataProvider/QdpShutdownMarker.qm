@@ -1,0 +1,55 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# QdpShutdownMarker.qm - test module that records that data provider services were shut down
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires reflection
+
+module QdpShutdownMarker {
+    version = "1.0";
+    desc = "Test module that writes a marker file when data provider services are shut down";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        QdpShutdownMarker::Marker::init();
+    };
+}
+
+public namespace QdpShutdownMarker {
+#! Registers a data provider shutdown handler that records that it was run
+/** Data provider modules that start background threads or external processes register shutdown handlers; this
+    simulates such a module so that tests can verify that the handlers are actually run before the process exits
+
+    @see https://github.com/qoretechnologies/qore/issues/5383
+*/
+public class Marker {
+    public {
+        #! The environment variable giving the path of the marker file to write
+        const MarkerEnvVar = "QORE_TEST_QDP_SHUTDOWN_MARKER";
+    }
+
+    #! Registers the shutdown handler if the marker environment variable is set
+    static init() {
+        if (!ENV{MarkerEnvVar}.val()) {
+            return;
+        }
+        DataProvider::registerShutdownHandler("qdp-shutdown-marker", \Marker::writeMarker());
+    }
+
+    #! Writes the marker file
+    static writeMarker() {
+        string path = ENV{MarkerEnvVar};
+        File f();
+        f.open2(path: path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
+        f.write("shutdown\n");
+    }
+}
+}
