@@ -1213,12 +1213,75 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
     return true;
 }
 
+using AOTStatementLocEntries = std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry>;
+using AOTStatementLocIndex = std::unordered_map<std::string, AOTStatementLocEntries>;
+
+static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
+        const std::unordered_set<std::string>& file_filter_set,
+        AOTStatementLocIndex& index,
+        std::string& error) {
+    if (!pgm) {
+        return true;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    std::vector<const QoreProgramLocation*> stmt_locs;
+    pp->getRegisteredStatementLocations(stmt_locs);
+
+    std::unordered_set<std::string> seen;
+    for (size_t i = 0; i < stmt_locs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location index construction")) {
+            error = "AOT statement-location index construction cancelled";
+            return false;
+        }
+        const QoreProgramLocation* loc = stmt_locs[i];
+        if (!loc || loc->start_line <= 0) {
+            continue;
+        }
+        const char* file = loc->getFileValue();
+        if (!file_filter_set.empty() && file_filter_set.find(file) == file_filter_set.end()) {
+            continue;
+        }
+        const char* source = loc->getSourceValue();
+        std::string key(file);
+        key.push_back('\n');
+        key.append(source);
+        key.push_back('\n');
+        key.append(std::to_string(loc->offset));
+        key.push_back('\n');
+        key.append(std::to_string(loc->start_line));
+        key.push_back(':');
+        key.append(std::to_string(loc->end_line));
+        if (!seen.insert(std::move(key)).second) {
+            continue;
+        }
+
+        AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
+        entry.start_line = static_cast<int16_t>(loc->start_line);
+        entry.end_line = static_cast<int16_t>(loc->end_line);
+        entry.offset = loc->offset;
+        entry.file = file;
+        entry.source = source;
+        index[file].push_back(std::move(entry));
+    }
+    return true;
+}
+
 static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
         std::vector<AOTCompiledFuncWithSlots>& func_slots,
         std::string& error,
         const char* file_filter = nullptr,
-        const std::unordered_set<std::string>* file_filter_set = nullptr) {
+        const std::unordered_set<std::string>* file_filter_set = nullptr,
+        const AOTStatementLocIndex* shared_index = nullptr) {
     if (!pgm || func_slots.empty()) {
+        return true;
+    }
+
+    if (shared_index && file_filter) {
+        auto i = shared_index->find(file_filter);
+        if (i != shared_index->end()) {
+            func_slots.front().aot_stmt_locs = i->second;
+        }
         return true;
     }
 
@@ -24845,6 +24908,18 @@ static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
     return true;
 }
 
+struct AOTBatchEmitTiming {
+    std::atomic<uint64_t> lowering_ns{0};
+    std::atomic<uint64_t> metadata_ns{0};
+    std::atomic<uint64_t> glue_ns{0};
+    std::atomic<uint64_t> object_ns{0};
+};
+
+static uint64_t aotElapsedNs(const std::chrono::steady_clock::time_point& start) {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count());
+}
+
 // Phase 4 slice 10i: emit the per-file `.qo` artifact for one source
 // file after the shared batch QoreProgram has been parsed.  Factored
 // out of compileScriptFile so compileScriptFilesBatch can reuse it
@@ -24868,7 +24943,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         bool report_artifact = true,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
             shared_batch_callees = nullptr,
-        const AOTConstantReverseMap* shared_const_reverse_map = nullptr) {
+        const AOTConstantReverseMap* shared_const_reverse_map = nullptr,
+        const AOTStatementLocIndex* shared_statement_locs = nullptr,
+        AOTBatchEmitTiming* batch_timing = nullptr) {
     // Global LLVM target init is process-wide and not safe to call
     // concurrently; run it exactly once so this emit can be invoked from a
     // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
@@ -24922,6 +24999,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
     const AOTConstantReverseMap& const_reverse_map = *const_reverse_map_ptr;
 
+    auto phase_start = batch_timing
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     if (shared_batch_callees
             && !declareAOTSharedFastEntryFunctions(ctx, *module, *shared_batch_callees)) {
         error = "operation cancelled during AOT shared fast-entry declaration";
@@ -24939,11 +25019,17 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         error = fatal_lowering_error;
         return false;
     }
+    if (batch_timing) {
+        batch_timing->lowering_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
+    }
 
     reportAOTCompileStats("script-context .qo (batch)",
         compiled_count, total_funcs, failed_count, compiled_funcs, target_triple);
 
     // Build the fragment metadata blob.
+    if (batch_timing) {
+        phase_start = std::chrono::steady_clock::now();
+    }
     std::vector<uint8_t> metadata_blob;
     // Hoisted so the function descriptors survive to the post-emission DWARF pass.
     std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
@@ -24985,7 +25071,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
 
         std::string ns_error;
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
-                target_canon.c_str(), &ns_error)) {
+                target_canon.c_str(), &ns_error, nullptr,
+                &const_reverse_map)) {
             error = "failed to serialize script namespace tree for "
                 + target_canon;
             if (!ns_error.empty()) {
@@ -25027,7 +25114,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
-        if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, target_canon.c_str())) {
+        if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, target_canon.c_str(), nullptr,
+                shared_statement_locs)) {
             return false;
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -25059,9 +25147,15 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         }
         emitted_func_slots.swap(func_slots);
     }
+    if (batch_timing) {
+        batch_timing->metadata_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
+    }
 
     // Merge init funcs into compiled_funcs BEFORE register-symbol
     // emission (slice 10f).
+    if (batch_timing) {
+        phase_start = std::chrono::steady_clock::now();
+    }
     for (auto& cif : compiled_init_funcs) {
         AOTCompiledFunc cf;
         cf.name = cif.name;
@@ -25117,9 +25211,18 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     if (getenv("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
+    if (batch_timing) {
+        batch_timing->glue_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
+    }
 
+    if (batch_timing) {
+        phase_start = std::chrono::steady_clock::now();
+    }
     if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
         return false;
+    }
+    if (batch_timing) {
+        batch_timing->object_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
     }
 
     if (compiled_count_out) {
@@ -25632,6 +25735,16 @@ bool QoreAOT::compileScriptFilesBatch(
         bool report_artifacts,
         const std::string* depfile_dir,
         bool depfile_targets_are_stamps) {
+    const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
+    const auto batch_start = std::chrono::steady_clock::now();
+    auto input_done = batch_start;
+    auto setup_done = batch_start;
+    auto parse_done = batch_start;
+    auto deps_done = batch_start;
+    auto discovery_done = batch_start;
+    auto constants_done = batch_start;
+    auto statement_locs_done = batch_start;
+
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -25711,6 +25824,7 @@ bool QoreAOT::compileScriptFilesBatch(
         entries.push_back(std::move(e));
         ++input_i;
     }
+    input_done = std::chrono::steady_clock::now();
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
@@ -25761,6 +25875,7 @@ bool QoreAOT::compileScriptFilesBatch(
     if (!parseStubFiles(*qpgm, stub_files, error)) {
         return false;
     }
+    setup_done = std::chrono::steady_clock::now();
 
     QoreAOTSourceDependencyMap batch_source_dependencies;
     struct AOTBatchDepMapGuard {
@@ -25813,6 +25928,7 @@ bool QoreAOT::compileScriptFilesBatch(
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
     }
+    parse_done = std::chrono::steady_clock::now();
 
     if (depfile_dir) {
         std::vector<std::string> canonical_stubs;
@@ -25869,6 +25985,7 @@ bool QoreAOT::compileScriptFilesBatch(
             std::sort(e.dep_sources.begin(), e.dep_sources.end());
         }
     }
+    deps_done = std::chrono::steady_clock::now();
 
     // Discover fast-entry ABIs once across the shared parse.  Each per-file
     // object receives declarations for this immutable map, while its normal
@@ -25901,6 +26018,7 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
     }
+    discovery_done = std::chrono::steady_clock::now();
 
     // Build the constant reverse map once for the whole batch.  It is derived
     // solely from the shared committed program's root namespace, so it is
@@ -25909,6 +26027,17 @@ bool QoreAOT::compileScriptFilesBatch(
     // to jobs times concurrently) and shrinks each worker's peak footprint.
     AOTConstantReverseMap batch_const_reverse_map =
         buildConstantReverseMap(qore_ns_private::get(*batch_pp->RootNS));
+    constants_done = std::chrono::steady_clock::now();
+
+    // Registered statement locations belong to the shared parsed program.
+    // Index and deduplicate them once by target file instead of making every
+    // worker scan the complete table while serializing its own fragment.
+    AOTStatementLocIndex batch_statement_locs;
+    if (!buildAOTProgramStatementLocIndex(*qpgm, batch_target_set,
+            batch_statement_locs, error)) {
+        return false;
+    }
+    statement_locs_done = std::chrono::steady_clock::now();
 
     // Now emit one .qo per target using the shared parsed program.  Each
     // emit is independent — its own LLVMContext/Module, file-filtered codegen
@@ -25922,8 +26051,25 @@ bool QoreAOT::compileScriptFilesBatch(
     // overrides it (1 = serial, identical to the old path).
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
     unsigned jobs = qoreAotChooseBatchJobs(entries.size());
+    AOTBatchEmitTiming emit_timing;
 
-    std::atomic<size_t> next_index{0};
+    // Long source files generally produce the largest LLVM modules. Dispatch
+    // them first so they overlap with the rest of the batch instead of leaving
+    // a few long-running workers after every short file has completed.
+    std::vector<size_t> work_order(entries.size());
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr, "AOT batch work ordering")) {
+            error = "cancelled during AOT batch work ordering";
+            return false;
+        }
+        work_order[i] = i;
+    }
+    std::stable_sort(work_order.begin(), work_order.end(), [&](size_t lhs, size_t rhs) {
+        return entries[lhs].source.size() > entries[rhs].source.size();
+    });
+
+    std::atomic<size_t> next_work{0};
     std::atomic<int> total_compiled_count{0};
     std::atomic<bool> stop{false};
     std::mutex err_mutex;   // guards first_error
@@ -25949,10 +26095,11 @@ bool QoreAOT::compileScriptFilesBatch(
             if (stop.load()) {
                 break;
             }
-            size_t i = next_index.fetch_add(1);
-            if (i >= entries.size()) {
+            size_t work = next_work.fetch_add(1);
+            if (work >= work_order.size()) {
                 break;
             }
+            size_t i = work_order[work];
             auto& e = entries[i];
             if (trace_emit) {
                 std::lock_guard<std::mutex> l(io_mutex);
@@ -25975,7 +26122,9 @@ bool QoreAOT::compileScriptFilesBatch(
                     per_err, e.module_cmd_begin, e.module_cmd_end,
                     &per_file_compiled_count, report_artifacts,
                     shared_batch_callees.empty() ? nullptr : &shared_batch_callees,
-                    &batch_const_reverse_map)) {
+                    &batch_const_reverse_map,
+                    &batch_statement_locs,
+                    trace_timing ? &emit_timing : nullptr)) {
                 std::lock_guard<std::mutex> l(err_mutex);
                 if (first_error.empty()) {
                     first_error = per_err;
@@ -26057,6 +26206,33 @@ bool QoreAOT::compileScriptFilesBatch(
 
     if (compiled_count_out) {
         *compiled_count_out = total_compiled_count.load();
+    }
+
+    if (trace_timing) {
+        const auto emit_done = std::chrono::steady_clock::now();
+        auto ms = [](auto begin, auto end) {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+        };
+        fprintf(stderr,
+            "AOT-BATCH-TIMING: sources=%zu jobs=%u input=%lldms setup=%lldms"
+            " parse=%lldms deps=%lldms discovery=%lldms constants=%lldms"
+            " stmt-locs=%lldms"
+            " emit-wall=%lldms lowering-cpu=%llums metadata-cpu=%llums"
+            " glue-cpu=%llums object-cpu=%llums total=%lldms\n",
+            entries.size(), jobs,
+            static_cast<long long>(ms(batch_start, input_done)),
+            static_cast<long long>(ms(input_done, setup_done)),
+            static_cast<long long>(ms(setup_done, parse_done)),
+            static_cast<long long>(ms(parse_done, deps_done)),
+            static_cast<long long>(ms(deps_done, discovery_done)),
+            static_cast<long long>(ms(discovery_done, constants_done)),
+            static_cast<long long>(ms(constants_done, statement_locs_done)),
+            static_cast<long long>(ms(statement_locs_done, emit_done)),
+            static_cast<unsigned long long>(emit_timing.lowering_ns.load() / 1000000),
+            static_cast<unsigned long long>(emit_timing.metadata_ns.load() / 1000000),
+            static_cast<unsigned long long>(emit_timing.glue_ns.load() / 1000000),
+            static_cast<unsigned long long>(emit_timing.object_ns.load() / 1000000),
+            static_cast<long long>(ms(batch_start, emit_done)));
     }
 
     return true;

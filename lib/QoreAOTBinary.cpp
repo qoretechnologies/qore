@@ -10312,11 +10312,14 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::METHODS);
 
-    // Build program-wide constant reverse map for BCA arg serialization
-    // This includes constants from ALL namespaces, not just the class's ancestors
-    AOTConstantReverseMap program_crm;
-    if (state.root_ns) {
-        buildProgramConstantReverseMapImpl(state.root_ns, program_crm);
+    // serializeNamespaceTree() already installs the complete program-wide map
+    // used by writeValue(). Reuse it for BCA argument serialization instead of
+    // walking every program constant a second time for each artifact.
+    AOTConstantReverseMap fallback_program_crm;
+    const AOTConstantReverseMap* program_crm = writer.const_reverse_map;
+    if (!program_crm && state.root_ns) {
+        buildProgramConstantReverseMapImpl(state.root_ns, fallback_program_crm);
+        program_crm = &fallback_program_crm;
     }
 
     uint32_t count = static_cast<uint32_t>(state.methods.size());
@@ -10496,7 +10499,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                         return false;
                                     }
                                     QoreValue arg_val = aotBCAArgValue(bca, ai);
-                                    if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, &program_crm,
+                                    if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, program_crm,
                                             method_class_path, method->getName(), base_path, bca_index, ai,
                                             bca->loc, error)) {
                                         return false;
@@ -18279,7 +18282,8 @@ bool QoreAOTBinaryDeserializer::deserializeEmbeddedSource(std::string& error) {
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const char* module_name, const std::unordered_set<std::string>* keep_modules,
         const char* compile_file, std::string* error,
-        const std::unordered_set<std::string>* compile_files) {
+        const std::unordered_set<std::string>* compile_files,
+        const AOTConstantReverseMap* shared_const_reverse_map) {
     // Phase 1: Collect all user-defined items into indexed vectors
     // When module_name is provided, filter out items from reexported dependencies
     // When keep_modules is provided, items from those modules are always included
@@ -18340,14 +18344,20 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     // object inside a parse-time-folded hash literal) as VT_CONST_REF entries
     // that resolve at load time. The writer takes a non-owning pointer; the
     // map is cleared after all sections that call writeValue are done.
-    AOTConstantReverseMap program_crm;
-    if (root_ns) {
-        buildProgramConstantReverseMapImpl(root_ns, program_crm);
+    AOTConstantReverseMap local_program_crm;
+    const AOTConstantReverseMap* program_crm = shared_const_reverse_map;
+    if (!program_crm || !extra_roots.empty()) {
+        if (shared_const_reverse_map) {
+            local_program_crm = *shared_const_reverse_map;
+        } else if (root_ns) {
+            buildProgramConstantReverseMapImpl(root_ns, local_program_crm);
+        }
+        for (qore_ns_private* extra_root : extra_roots) {
+            buildProgramConstantReverseMapImpl(extra_root, local_program_crm);
+        }
+        program_crm = &local_program_crm;
     }
-    for (qore_ns_private* extra_root : extra_roots) {
-        buildProgramConstantReverseMapImpl(extra_root, program_crm);
-    }
-    writer.const_reverse_map = &program_crm;
+    writer.const_reverse_map = program_crm;
 
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);
