@@ -34,6 +34,7 @@
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_Serializable.h"
+#include "qore/intern/SqlMutationContext.h"
 
 DLLLOCAL extern QoreClass* QC_ABSTRACTDATASOURCE;
 DLLLOCAL extern QoreClass* QC_ABSTRACTSQLSTATEMENT;
@@ -289,6 +290,288 @@ const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
  */
 const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
 ///@}
+
+/** @defgroup sql_mutation_effects SQL Mutation Declared Effect Constants
+    Values for the \c "effect" key of @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo".
+
+    This is a closed set; %Qore assigns no policy meaning to any of these values, it only reports
+    them to the observer unchanged.
+
+    @since %Qore 3.0
+*/
+///@{
+//! The operation cannot increase storage
+const SQL_MUTATION_EFFECT_NONE = SQL_MUTATION_EFFECT_NONE;
+
+//! The operation may increase storage, bounded by \c "max_growth_bytes" if declared
+const SQL_MUTATION_EFFECT_MAY_GROW = SQL_MUTATION_EFFECT_MAY_GROW;
+
+//! The operation only reclaims storage
+const SQL_MUTATION_EFFECT_RECLAIM_ONLY = SQL_MUTATION_EFFECT_RECLAIM_ONLY;
+///@}
+
+/** @defgroup sql_mutation_events SQL Mutation Observer Event Constants
+    Values for the \c "event" key of @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo".
+
+    @note New event codes may be added in future releases; observers must ignore unknown codes.
+
+    @since %Qore 3.0
+*/
+///@{
+//! A transaction has been started on the datasource
+const SQL_MUTATION_EVENT_TX_BEGIN = SQL_MUTATION_EVENT_TX_BEGIN;
+
+//! An operation is about to be executed; this is an @ref sql_mutation_admission "admission point"
+const SQL_MUTATION_EVENT_PRE_EXEC = SQL_MUTATION_EVENT_PRE_EXEC;
+
+//! An operation has been executed
+const SQL_MUTATION_EVENT_POST_EXEC = SQL_MUTATION_EVENT_POST_EXEC;
+
+//! A transaction outcome is known
+const SQL_MUTATION_EVENT_OUTCOME = SQL_MUTATION_EVENT_OUTCOME;
+
+//! A bounded stream is about to start; this is an @ref sql_mutation_admission "admission point"
+const SQL_MUTATION_EVENT_STREAM_BEGIN = SQL_MUTATION_EVENT_STREAM_BEGIN;
+
+//! A bounded stream has consumed more bytes; this is an @ref sql_mutation_admission "admission point"
+const SQL_MUTATION_EVENT_STREAM_PROGRESS = SQL_MUTATION_EVENT_STREAM_PROGRESS;
+
+//! A bounded stream has finished
+const SQL_MUTATION_EVENT_STREAM_END = SQL_MUTATION_EVENT_STREAM_END;
+///@}
+
+/** @defgroup sql_stmt_classes SQL Statement Class Constants
+    Values for the \c "stmt_class" key of @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo".
+
+    The statement class is derived structurally from the %Qore API used to issue the operation; no
+    %SQL text is ever inspected.
+
+    @since %Qore 3.0
+*/
+///@{
+//! A read operation: select(), selectRow(), selectRows(), the typed and columnar variants, or describe()
+const SQL_STMT_CLASS_READ = SQL_STMT_CLASS_READ;
+
+//! A mutating operation issued with Datasource::exec() or Datasource::execRaw()
+const SQL_STMT_CLASS_EXEC = SQL_STMT_CLASS_EXEC;
+
+//! A mutating operation issued with a prepared @ref Qore::SQL::SQLStatement "SQLStatement"
+const SQL_STMT_CLASS_STMT_EXEC = SQL_STMT_CLASS_STMT_EXEC;
+
+//! A transaction start
+const SQL_STMT_CLASS_BEGIN = SQL_STMT_CLASS_BEGIN;
+
+//! A commit, including an autocommit
+const SQL_STMT_CLASS_COMMIT = SQL_STMT_CLASS_COMMIT;
+
+//! A rollback
+const SQL_STMT_CLASS_ROLLBACK = SQL_STMT_CLASS_ROLLBACK;
+
+//! A bounded stream operation
+const SQL_STMT_CLASS_STREAM = SQL_STMT_CLASS_STREAM;
+///@}
+
+/** @defgroup sql_mutation_outcomes SQL Mutation Observer Outcome Constants
+    Values for the \c "outcome" key of @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo".
+
+    All outcomes are derived from control flow; no database error text is ever matched.
+
+    @since %Qore 3.0
+*/
+///@{
+//! The operation completed and the transaction remains open
+const SQL_MUTATION_OUTCOME_OK = SQL_MUTATION_OUTCOME_OK;
+
+//! The driver raised an exception and the connection is intact
+const SQL_MUTATION_OUTCOME_ERROR = SQL_MUTATION_OUTCOME_ERROR;
+
+//! The transaction was committed and the commit is known to have succeeded
+const SQL_MUTATION_OUTCOME_COMMIT = SQL_MUTATION_OUTCOME_COMMIT;
+
+//! A commit was attempted but its result is unknown
+/** %Qore never reports an ambiguous commit as a rollback; it cannot know whether the server applied
+    it.  A consumer holding a reservation for the operation must not release it on this outcome, and
+    must not create a second reservation if the operation is replayed.
+*/
+const SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS = SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS;
+
+//! The transaction was rolled back
+const SQL_MUTATION_OUTCOME_ROLLBACK = SQL_MUTATION_OUTCOME_ROLLBACK;
+
+//! A rollback was attempted and failed; no commit was attempted
+const SQL_MUTATION_OUTCOME_ROLLBACK_ERROR = SQL_MUTATION_OUTCOME_ROLLBACK_ERROR;
+
+//! The connection was lost or aborted with no commit in flight
+const SQL_MUTATION_OUTCOME_LOST_CONNECTION = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
+
+//! The operation was rejected at an admission point and was not executed
+const SQL_MUTATION_OUTCOME_NOT_EXECUTED = SQL_MUTATION_OUTCOME_NOT_EXECUTED;
+///@}
+
+/** @defgroup sql_mutation_masks SQL Mutation Observer Event Mask Constants
+    Values for the event mask given when registering a mutation observer with
+    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()".
+
+    @since %Qore 3.0
+*/
+///@{
+//! Transaction start and transaction outcome events
+const SQL_MUTATION_MASK_TX = SQL_MUTATION_MASK_TX;
+
+//! Pre- and post-execution events for mutating statements
+const SQL_MUTATION_MASK_EXEC = SQL_MUTATION_MASK_EXEC;
+
+//! Pre- and post-execution events for read operations
+const SQL_MUTATION_MASK_READ = SQL_MUTATION_MASK_READ;
+
+//! Bounded stream events
+const SQL_MUTATION_MASK_STREAM = SQL_MUTATION_MASK_STREAM;
+
+//! The default mask: transactions, mutating statements, and streams, but not reads
+const SQL_MUTATION_MASK_DEFAULT = SQL_MUTATION_MASK_DEFAULT;
+
+//! All events
+const SQL_MUTATION_MASK_ALL = SQL_MUTATION_MASK_ALL;
+///@}
+
+//! Producer-declared metadata describing a storage mutation
+/** %Qore performs no classification of %SQL text, database error text, or command tags; all
+    semantic metadata about an operation is supplied by the producer with
+    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" and is reported to the observer
+    unchanged.
+
+    %Qore validates only the structural rules given below and raises a
+    \c SQL-MUTATION-DECLARATION-ERROR exception if they are violated.
+
+    @see @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+
+    @since %Qore 3.0
+*/
+hashdecl Qore::SQL::SqlMutationInfo {
+    //! Stable operation or reservation identity; must be non-empty
+    /** This value is preserved unchanged across a restartable transaction replay, which is what
+        allows a consumer to recognize a replayed operation and avoid creating a second reservation.
+    */
+    string op_id;
+
+    //! Reviewed managed-path identity; must be non-empty
+    string path_id;
+
+    //! The producer's operation code; %Qore assigns no meaning to this value
+    int op_code = 0;
+
+    //! The declared storage effect; see @ref sql_mutation_effects
+    int effect = SQL_MUTATION_EFFECT_NONE;
+
+    //! Optional upper bound in bytes on the growth caused by the operation
+    /** When present the value must be > 0 and \c "effect" must be
+        @ref Qore::SQL::SQL_MUTATION_EFFECT_MAY_GROW "SQL_MUTATION_EFFECT_MAY_GROW"
+    */
+    *int max_growth_bytes;
+
+    //! Optional reclaim audit identity
+    /** When present the value must be a non-empty string and \c "effect" must be
+        @ref Qore::SQL::SQL_MUTATION_EFFECT_RECLAIM_ONLY "SQL_MUTATION_EFFECT_RECLAIM_ONLY"
+    */
+    *string reclaim_audit_id;
+
+    //! Optional producer attempt identity used to correlate replays
+    *string attempt_id;
+
+    //! Optional attempt number; when present the value must be >= 1
+    *int attempt;
+
+    //! Optional opaque producer extension data; propagated to the observer unchanged
+    *hash<auto> tags;
+}
+
+//! An event delivered to a datasource mutation observer
+/** @see @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+
+    @since %Qore 3.0
+*/
+hashdecl Qore::SQL::SqlMutationEventInfo {
+    //! The event code; see @ref sql_mutation_events
+    int event;
+
+    //! The structurally-derived statement class; see @ref sql_stmt_classes
+    int stmt_class;
+
+    //! The %Qore driver name
+    string driver;
+
+    //! The database name, if known
+    *string db;
+
+    //! The connection user name, if known
+    *string user;
+
+    //! The TID of the thread issuing the operation
+    int tid;
+
+    //! Transaction identity assigned by %Qore, unique within the process
+    /** This value is not stable across a restartable transaction replay, because a replay is a new
+        transaction; stability across a replay is carried by \c "info.op_id"
+    */
+    string tx_id;
+
+    //! The sequence of this event within the transaction
+    int tx_seq;
+
+    //! The transaction state at the boundary
+    bool in_transaction;
+
+    //! The autocommit state of the datasource
+    bool autocommit;
+
+    //! @ref True "True" if a mutation declaration was in effect
+    /** When this is @ref False "False" the operation was issued without any declaration; a consumer
+        that requires declarations can reject such an operation at an
+        @ref sql_mutation_admission "admission point"
+    */
+    bool declared;
+
+    //! The innermost mutation declaration in effect in the issuing thread, if any
+    *hash<SqlMutationInfo> info;
+
+    //! The outcome, on outcome events; see @ref sql_mutation_outcomes
+    *int outcome;
+
+    //! On outcome events, @ref True "True" if %Qore can prove that no commit was attempted
+    /** When this is @ref True "True" the operation can be safely replayed with the same
+        \c "info.op_id" and the same reservation.  When it is @ref False "False" a consumer must not
+        create a second reservation for a replay of the same operation.
+    */
+    *bool replay_safe;
+
+    //! The driver exception, on error and ambiguous outcomes
+    *hash<ExceptionInfo> ex;
+
+    //! The declared size of a bounded stream in bytes, on stream events
+    *int declared_bytes;
+
+    //! The number of bytes consumed by a bounded stream so far, on stream events
+    *int consumed_bytes;
+
+    //! The argument given when the observer was registered
+    auto arg;
+}
+
+//! An admission decision returned by a datasource mutation observer
+/** Returning @ref nothing from an observer admits the operation.
+
+    @since %Qore 3.0
+*/
+hashdecl Qore::SQL::SqlMutationDecisionInfo {
+    //! @ref False "False" to reject the operation
+    bool admit = True;
+
+    //! The exception error code to raise on rejection; defaults to \c "SQL-MUTATION-REJECTED"
+    *string err;
+
+    //! The exception description to raise on rejection
+    *string desc;
+}
 
 //! This class provides the %Qore interface to databases
 /** @par Overview
@@ -1722,4 +2005,118 @@ string str = Datasource::makeConfigString({
 */
 static string Datasource::makeConfigString(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);
+}
+
+//! Registers an opt-in structured mutation observer on the Datasource
+/** @par Example:
+    @code{.py}
+ds.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id);
+    @endcode
+
+    @param observer the callback to invoke; it is called with a single
+    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" argument
+    @param event_mask the bitmask of event classes to deliver; see @ref sql_mutation_masks
+    @param arg an argument reported unchanged in the \c "arg" key of every event
+
+    @note observer registration is scoped to this object; there is no process-global registry
+
+    @see
+    - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+      for the full observer contract
+    - @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+
+    @since %Qore 3.0
+*/
+nothing Datasource::setMutationObserver(code<*hash<SqlMutationDecisionInfo>(hash<SqlMutationEventInfo>)> observer, int event_mask = SQL_MUTATION_MASK_DEFAULT, auto arg)
+        [flags=NAMED_ARGS] {
+    ds->setMutationObserver(observer->refRefSelf(), event_mask, arg.refSelf(), xsink);
+}
+
+//! Removes any registered mutation observer from the Datasource
+/** @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+nothing Datasource::clearMutationObserver() {
+    ds->clearMutationObserver(xsink);
+}
+
+//! Returns @ref True "True" if a mutation observer is registered on the Datasource
+/** @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+bool Datasource::hasMutationObserver() [flags=RET_VALUE_ONLY] {
+    return ds->hasMutationObserver();
+}
+
+//! Pushes producer-declared mutation metadata for the current thread
+/** Prefer @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration", which removes the
+    declaration deterministically when it goes out of scope.
+
+    @param info the declaration; see @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo"
+
+    @throw SQL-MUTATION-DECLARATION-ERROR the declaration is invalid; nothing was pushed
+
+    @since %Qore 3.0
+*/
+nothing Datasource::pushMutationDeclaration(hash<SqlMutationInfo> info) [flags=NAMED_ARGS] {
+    ds->pushMutationDeclaration(info, xsink);
+}
+
+//! Removes the innermost mutation declaration for the current thread
+/** @throw SQL-MUTATION-DECLARATION-ERROR there is no active declaration in this thread to remove
+
+    @since %Qore 3.0
+*/
+nothing Datasource::popMutationDeclaration() {
+    ds->popMutationDeclaration(xsink);
+}
+
+//! Returns the innermost mutation declaration for the current thread, if any
+/** @since %Qore 3.0
+*/
+*hash<SqlMutationInfo> Datasource::getMutationDeclaration() [flags=RET_VALUE_ONLY] {
+    return ds->getMutationDeclaration();
+}
+
+//! Reports the start of a bounded stream to the mutation observer
+/** @param declared_bytes the declared size of the stream in bytes; if <= 0 then the
+    \c "max_growth_bytes" value of the current declaration is used, if any
+
+    @return @ref True "True" to continue streaming
+
+    @throw SQL-MUTATION-REJECTED the observer rejected the stream; the error code and description
+    can be overridden by the observer's decision
+
+    @since %Qore 3.0
+*/
+bool Datasource::reportMutationStreamBegin(int declared_bytes = 0) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamBegin(declared_bytes, xsink);
+}
+
+//! Reports bounded stream progress to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream so far
+
+    @return @ref True "True" to continue streaming
+
+    @throw SQL-MUTATION-REJECTED the observer stopped the stream; the error code and description
+    can be overridden by the observer's decision
+
+    @since %Qore 3.0
+*/
+bool Datasource::reportMutationStreamProgress(int consumed_bytes) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamProgress(consumed_bytes, xsink);
+}
+
+//! Reports the end of a bounded stream to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream
+    @param ok @ref False "False" if the stream failed
+
+    @return @ref True "True"
+
+    @since %Qore 3.0
+*/
+bool Datasource::reportMutationStreamEnd(int consumed_bytes, bool ok = True) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamEnd(consumed_bytes, ok, xsink);
 }

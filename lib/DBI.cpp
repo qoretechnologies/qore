@@ -135,9 +135,12 @@ void qore_dbi_method_list::add(int code, q_dbi_select_columnar_t method) {
     priv->l[code] = (void*)method;
 }
 
-// covers select_row
+// covers select_row and describe
 void qore_dbi_method_list::add(int code, q_dbi_select_row_t method) {
-    assert(code == QDBI_METHOD_SELECT_ROW);
+    // q_dbi_describe_t is the same function type as q_dbi_select_row_t, so a describe method always
+    // resolves to this overload rather than to the q_dbi_select_t one; without QDBI_METHOD_DESCRIBE
+    // here no driver can register a describe method in a debug build at all
+    assert(code == QDBI_METHOD_SELECT_ROW || code == QDBI_METHOD_DESCRIBE);
     assert(priv->l.find(code) == priv->l.end());
     priv->l[code] = (void*)method;
 }

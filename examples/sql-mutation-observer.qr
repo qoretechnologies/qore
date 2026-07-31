@@ -1,0 +1,186 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+#! Demonstrates the opt-in structured datasource mutation observer.
+/** The observer is a policy-neutral mechanism: %Qore reports deterministic boundaries and the
+    producer-declared metadata, and the consumer decides what to do with them.  This example
+    implements a toy storage admission policy on top of it: it holds a reservation per operation and
+    refuses to admit a mutation that would take the total over a ceiling.
+
+    Run against any DBI driver, for example:
+
+        examples/sql-mutation-observer.qr "sqlite3:@:memory:"
+        examples/sql-mutation-observer.qr "pgsql:user/pass@db"
+
+    See design/datasource-mutation-observer.md for the full contract.
+*/
+
+%exec-class MutationObserverExample
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+#! a toy, deliberately simplistic storage admission consumer
+class ToyAdmissionPolicy {
+    private {
+        #! the ceiling this policy will admit growth up to, in bytes
+        int ceiling;
+        #! outstanding reservations by operation identity
+        hash<string, int> reservations();
+    }
+
+    constructor(int ceiling) {
+        self.ceiling = ceiling;
+    }
+
+    int reserved() {
+        int total = 0;
+        foreach int v in (reservations.iterator()) {
+            total += v;
+        }
+        return total;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        switch (ev.event) {
+            case SQL_MUTATION_EVENT_PRE_EXEC: {
+                # a mutation with no declaration cannot be accounted for, so refuse it
+                if (!ev.declared) {
+                    return <SqlMutationDecisionInfo>{
+                        "admit": False,
+                        "err": "UNDECLARED-MUTATION",
+                        "desc": "the operation was issued without a mutation declaration",
+                    };
+                }
+                # reads and operations that cannot grow storage are always admitted
+                if (ev.stmt_class == SQL_STMT_CLASS_READ
+                    || ev.info.effect != SQL_MUTATION_EFFECT_MAY_GROW) {
+                    return NOTHING;
+                }
+                # a replay of an operation that already holds a reservation reuses it
+                if (exists reservations{ev.info.op_id}) {
+                    printf("  admit  %-10s reusing reservation of %d bytes\n", ev.info.op_id,
+                        reservations{ev.info.op_id});
+                    return NOTHING;
+                }
+                int want = ev.info.max_growth_bytes ?? 0;
+                if (reserved() + want > ceiling) {
+                    return <SqlMutationDecisionInfo>{
+                        "admit": False,
+                        "err": "QUOTA-EXCEEDED",
+                        "desc": sprintf("%d bytes reserved + %d requested exceeds the %d byte ceiling",
+                            reserved(), want, ceiling),
+                    };
+                }
+                reservations{ev.info.op_id} = want;
+                printf("  admit  %-10s reserving %d bytes (total %d/%d)\n", ev.info.op_id, want,
+                    reserved(), ceiling);
+                break;
+            }
+
+            case SQL_MUTATION_EVENT_OUTCOME: {
+                if (!ev.declared) {
+                    break;
+                }
+                printf("  outcome %-9s %s replay_safe=%y\n", ev.info.op_id, outcomeName(ev.outcome),
+                    ev.replay_safe);
+                # release the reservation only when Qore can prove that nothing was committed;
+                # an ambiguous commit must keep it, or storage would be undercounted forever
+                if (ev.replay_safe) {
+                    remove reservations{ev.info.op_id};
+                }
+                break;
+            }
+        }
+        return NOTHING;
+    }
+
+    static string outcomeName(*int outcome) {
+        switch (outcome) {
+            case SQL_MUTATION_OUTCOME_OK: return "ok";
+            case SQL_MUTATION_OUTCOME_ERROR: return "error";
+            case SQL_MUTATION_OUTCOME_COMMIT: return "commit";
+            case SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS: return "commit-ambiguous";
+            case SQL_MUTATION_OUTCOME_ROLLBACK: return "rollback";
+            case SQL_MUTATION_OUTCOME_ROLLBACK_ERROR: return "rollback-error";
+            case SQL_MUTATION_OUTCOME_LOST_CONNECTION: return "lost-connection";
+            case SQL_MUTATION_OUTCOME_NOT_EXECUTED: return "not-executed";
+        }
+        return sprintf("unknown(%y)", outcome);
+    }
+}
+
+class MutationObserverExample {
+    constructor() {
+        string connstr = ARGV[0] ?? ENV.QORE_DB_CONNSTR ?? "sqlite3:@:memory:";
+
+        Datasource ds(connstr);
+        ds.setAutoCommit(False);
+        ds.open();
+        printf("connected with the %y driver\n", ds.getDriverName());
+
+        # create the table with no observer attached
+        ds.execRaw("create table mutation_example (id integer, val varchar(64))");
+        ds.commit();
+
+        ToyAdmissionPolicy policy(4096);
+        ds.setMutationObserver(\policy.event(), SQL_MUTATION_MASK_DEFAULT);
+
+        printf("\n-- an undeclared mutation is refused --\n");
+        try {
+            ds.exec("insert into mutation_example values (%v, %v)", 1, "one");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  refused: %s: %s\n", ex.err, ex.desc);
+        }
+
+        printf("\n-- a declared mutation within the ceiling is admitted --\n");
+        {
+            SqlMutationDeclaration decl(ds, <SqlMutationInfo>{
+                "op_id": "insert-1",
+                "path_id": "mutation_example.insert",
+                "op_code": 1,
+                "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+                "max_growth_bytes": 1024,
+            });
+            ds.exec("insert into mutation_example values (%v, %v)", 1, "one");
+            ds.commit();
+        }
+
+        printf("\n-- a declared mutation over the ceiling is refused --\n");
+        try {
+            SqlMutationDeclaration decl(ds, <SqlMutationInfo>{
+                "op_id": "insert-2",
+                "path_id": "mutation_example.insert",
+                "op_code": 1,
+                "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+                "max_growth_bytes": 1048576,
+            });
+            ds.exec("insert into mutation_example values (%v, %v)", 2, "two");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  refused: %s: %s\n", ex.err, ex.desc);
+        }
+
+        printf("\n-- a reclaim is admitted even though a reservation is outstanding --\n");
+        {
+            SqlMutationDeclaration decl(ds, <SqlMutationInfo>{
+                "op_id": "cleanup-1",
+                "path_id": "mutation_example.delete",
+                "op_code": 2,
+                "effect": SQL_MUTATION_EFFECT_RECLAIM_ONLY,
+                "reclaim_audit_id": "audit-1",
+            });
+            ds.exec("delete from mutation_example where id = %v", 1);
+            ds.rollback();
+        }
+
+        printf("\n-- reads are never admitted against the quota --\n");
+        printf("  rows: %d\n", ds.selectRow("select count(1) as c from mutation_example").c);
+
+        printf("\nreservations outstanding: %d bytes\n", policy.reserved());
+
+        ds.clearMutationObserver();
+        ds.execRaw("drop table mutation_example");
+        ds.commit();
+    }
+}

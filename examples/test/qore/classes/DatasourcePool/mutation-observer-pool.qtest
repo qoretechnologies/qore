@@ -1,0 +1,253 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class MutationObserverPoolTest
+
+#! collects mutation observer events for assertions
+class PoolEventCollector {
+    private {
+        Mutex m();
+        list<hash<SqlMutationEventInfo>> events();
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        AutoLock al(m);
+        events += ev;
+        return NOTHING;
+    }
+
+    list<hash<SqlMutationEventInfo>> get() {
+        AutoLock al(m);
+        return events;
+    }
+
+    reset() {
+        AutoLock al(m);
+        events = ();
+    }
+
+    int size() {
+        AutoLock al(m);
+        return events.size();
+    }
+
+    #! returns all events with the given event code
+    list<hash<SqlMutationEventInfo>> withEvent(int event) {
+        AutoLock al(m);
+        return map $1, events, $1.event == event;
+    }
+
+    #! returns the distinct op_id values seen, in no particular order
+    list<string> opIds() {
+        AutoLock al(m);
+        hash<string, bool> ids();
+        foreach hash<SqlMutationEventInfo> ev in (events) {
+            if (exists ev.info.op_id) {
+                ids{ev.info.op_id} = True;
+            }
+        }
+        return keys ids;
+    }
+}
+
+public class MutationObserverPoolTest inherits QUnit::Test {
+    public {
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "pool-op",
+            "path_id": "orders.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 4096,
+        };
+
+        const PoolStr = "dbitest:u/p@db{min=1,max=4}";
+    }
+
+    constructor() : Test("MutationObserverPoolTest", "1.0", \ARGV) {
+        addTestCase("pool observer", \poolObserverTest());
+        addTestCase("declaration across connections", \declarationAcrossConnectionsTest());
+        addTestCase("lazily created connections", \lazyConnectionTest());
+        addTestCase("pool isolation", \poolIsolationTest());
+        addTestCase("concurrent tenants", \concurrentTenantsTest());
+        addTestCase("pool observer removal", \poolRemovalTest());
+
+        set_return_value(main());
+    }
+
+    private DatasourcePool getPool() {
+        try {
+            DatasourcePool dsp(PoolStr);
+            dsp.getServerVersion();
+            return dsp;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+    }
+
+    poolObserverTest() {
+        DatasourcePool dsp = getPool();
+        PoolEventCollector obs();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL, "tenant-1");
+        assertTrue(dsp.hasMutationObserver());
+
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            dsp.exec("insert into t values (1)");
+            dsp.commit();
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.get();
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_POST_EXEC,
+            SQL_MUTATION_EVENT_OUTCOME), map $1.event, l);
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, l.last().outcome);
+        assertEq("pool-op", l.last().info.op_id);
+        # the registration argument is reported unchanged in every event
+        assertEq(4, (map $1, l, $1.arg == "tenant-1").size());
+    }
+
+    declarationAcrossConnectionsTest() {
+        DatasourcePool dsp = getPool();
+        PoolEventCollector obs();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            # a pool releases and re-acquires connections around non-transactional operations; the
+            # declaration is scoped to the pool and the thread, so it survives that
+            dsp.select("select * from t");
+            dsp.exec("insert into t values (1)");
+            dsp.select("select * from t");
+            dsp.exec("insert into t values (2)");
+            dsp.commit();
+            dsp.select("select * from t");
+        }
+
+        # every event in the scope carried the declaration
+        assertEq(0, (map $1, obs.get(), !$1.declared).size());
+        assertEq(("pool-op",), obs.opIds());
+
+        obs.reset();
+        dsp.exec("insert into t values (3)");
+        dsp.rollback();
+        assertEq(0, (map $1, obs.get(), $1.declared).size());
+    }
+
+    lazyConnectionTest() {
+        DatasourcePool dsp = getPool();
+        PoolEventCollector obs();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+
+        # force the pool to open more connections after the observer was registered; each of them
+        # must inherit the observer
+        Counter c(3);
+        Mutex m();
+        Condition cond();
+        int waiting = 0;
+        code worker = sub () {
+            on_exit c.dec();
+            dsp.exec("insert into t values (1)");
+            {
+                AutoLock al(m);
+                if (++waiting == 3) {
+                    cond.broadcast();
+                } else {
+                    while (waiting < 3) {
+                        cond.wait(m);
+                    }
+                }
+            }
+            dsp.commit();
+        };
+        background worker();
+        background worker();
+        background worker();
+        c.waitForZero();
+
+        # 3 threads x (pre-exec, tx-begin, post-exec, outcome)
+        assertEq(12, obs.size());
+        assertEq(3, obs.withEvent(SQL_MUTATION_EVENT_OUTCOME).size());
+        assertEq(0, (map $1, obs.withEvent(SQL_MUTATION_EVENT_OUTCOME),
+            $1.outcome != SQL_MUTATION_OUTCOME_COMMIT).size());
+    }
+
+    poolIsolationTest() {
+        DatasourcePool dsp1 = getPool();
+        DatasourcePool dsp2 = getPool();
+        PoolEventCollector obs1();
+        PoolEventCollector obs2();
+        dsp1.setMutationObserver(\obs1.event(), SQL_MUTATION_MASK_ALL);
+        dsp2.setMutationObserver(\obs2.event(), SQL_MUTATION_MASK_ALL);
+
+        {
+            SqlMutationDeclaration decl(dsp1, OpInfo);
+            # the declaration is scoped to dsp1; dsp2 must not see it
+            assertEq("pool-op", dsp1.getMutationDeclaration().op_id);
+            assertEq(NOTHING, dsp2.getMutationDeclaration());
+
+            dsp1.exec("insert into t values (1)");
+            dsp1.commit();
+        }
+        dsp2.exec("insert into t values (2)");
+        dsp2.commit();
+
+        # observer state is per-pool: there is no process-global registry
+        assertEq(4, obs1.size());
+        assertEq(4, obs2.size());
+        assertEq(("pool-op",), obs1.opIds());
+        assertEq((), obs2.opIds());
+
+        dsp2.clearMutationObserver();
+        assertTrue(dsp1.hasMutationObserver());
+        assertFalse(dsp2.hasMutationObserver());
+    }
+
+    concurrentTenantsTest() {
+        DatasourcePool dsp = getPool();
+        PoolEventCollector obs();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+
+        Counter c(4);
+        code worker = sub (int i) {
+            on_exit c.dec();
+            SqlMutationDeclaration decl(dsp, cast<hash<SqlMutationInfo>>(OpInfo + {
+                "op_id": sprintf("op-%d", i),
+                "path_id": sprintf("tenant-%d.insert", i),
+            }));
+            dsp.exec("insert into t values (%v)", i);
+            dsp.commit();
+        };
+        for (int i = 0; i < 4; ++i) {
+            background worker(i);
+        }
+        c.waitForZero();
+
+        # each thread's declaration stayed with its own operations
+        assertEq(("op-0", "op-1", "op-2", "op-3"), sort(obs.opIds()));
+        assertEq(4, obs.withEvent(SQL_MUTATION_EVENT_OUTCOME).size());
+        # no event was ever reported with a declaration from another thread
+        foreach hash<SqlMutationEventInfo> ev in (obs.get()) {
+            assertEq(sprintf("tenant-%s.insert", (ev.info.op_id =~ x/op-(\d)/)[0]), ev.info.path_id);
+        }
+    }
+
+    poolRemovalTest() {
+        DatasourcePool dsp = getPool();
+        PoolEventCollector obs();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        dsp.exec("insert into t values (1)");
+        assertGt(0, obs.size());
+
+        int count = obs.size();
+        dsp.clearMutationObserver();
+        dsp.exec("insert into t values (2)");
+        dsp.commit();
+        assertEq(count, obs.size());
+        assertFalse(dsp.inTransaction());
+    }
+}

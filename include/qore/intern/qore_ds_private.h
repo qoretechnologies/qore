@@ -38,6 +38,7 @@
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/DatasourceStatementHelper.h"
+#include "qore/intern/SqlMutationContext.h"
 
 #include <map>
 #include <set>
@@ -60,6 +61,10 @@ struct qore_ds_private {
     bool autocommit = false;
     bool connection_aborted = false;
     bool keep_lock = false;
+    //! true while a driver commit call is in progress; used to derive commit ambiguity structurally
+    bool commit_in_progress = false;
+    //! set when the driver reports a lost or aborted connection; flushed at the next core boundary
+    bool mutation_conn_lost = false;
 
     mutable DBIDriver* dsl;
     const QoreEncoding* qorecharset = QCS_DEFAULT;
@@ -88,6 +93,25 @@ struct qore_ds_private {
     // DBI Event queue argument
     QoreValue event_arg{};
 
+    // mutation observer context, shared with the owning pool if any; nullptr = unmonitored
+    /** Atomic because an observer can be registered on a DatasourcePool or a ManagedDatasource
+        while other threads are executing statements on connections that already exist: the
+        registration runs under the pool or datasource lock, but statement execution does not hold
+        that lock, so readers are not serialized against the store.  See
+        design/datasource-mutation-observer.md.
+
+        The pointer is only ever replaced while it is null (lazy creation, and inheritance by a
+        connection that has not yet been handed out), so a reader that observes a non-null value
+        always observes a live, fully-constructed, already-referenced context.
+    */
+    std::atomic<SqlMutationContext*> mutation_ctx{nullptr};
+    // transaction identity assigned when the first observer event of a transaction is delivered
+    std::string tx_id;
+    // event sequence within the current transaction
+    int64 tx_seq = 0;
+    // declared size in bytes of the bounded stream in progress; -1 = no stream in progress
+    int64 stream_declared_bytes = -1;
+
     // interface for the parent class
     DatasourceStatementHelper* dsh;
     std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
@@ -105,6 +129,7 @@ struct qore_ds_private {
             opt(old.getCurrentOptionHash(true)),
             event_queue(old.event_queue ? old.event_queue->queueRefSelf() : nullptr),
             event_arg(old.event_arg.refSelf()),
+            mutation_ctx(old.getMutationCtx() ? old.getMutationCtx()->refSelf() : nullptr),
             dsh(dsh) {
     }
 
@@ -120,6 +145,14 @@ struct qore_ds_private {
         if (event_queue) {
             event_queue->deref(&xsink);
         }
+        if (SqlMutationContext* ctx = getMutationCtx()) {
+            ctx->deref(&xsink);
+        }
+    }
+
+    //! returns the mutation observer context or nullptr; this is the fast-path accessor
+    DLLLOCAL SqlMutationContext* getMutationCtx() const {
+        return mutation_ctx.load(std::memory_order_acquire);
     }
 
     DLLLOCAL void setPendingConnectionValues(const qore_ds_private* other) {
@@ -187,6 +220,102 @@ struct qore_ds_private {
         return h;
     }
 
+    //! returns true if an observer is registered and wants events for the given mask bit
+    /** this is the fast path for all mutation observer hooks; when no context has been created it
+        is a single predictable null pointer test
+    */
+    DLLLOCAL bool observes(int64 mask_bit) const {
+        SqlMutationContext* ctx = getMutationCtx();
+        return ctx && ctx->observes(mask_bit);
+    }
+
+    //! creates the mutation context if it does not yet exist; callers must serialize access
+    DLLLOCAL SqlMutationContext* getOrCreateMutationContext() {
+        SqlMutationContext* ctx = getMutationCtx();
+        if (!ctx) {
+            ctx = new SqlMutationContext;
+            mutation_ctx.store(ctx, std::memory_order_release);
+        }
+        return ctx;
+    }
+
+    //! replaces the mutation context; takes ownership of the reference passed
+    DLLLOCAL void setMutationContext(SqlMutationContext* ctx, ExceptionSink* xsink) {
+        SqlMutationContext* old = getMutationCtx();
+        if (old == ctx) {
+            if (ctx) {
+                ctx->deref(xsink);
+            }
+            return;
+        }
+        mutation_ctx.store(ctx, std::memory_order_release);
+        if (old) {
+            old->deref(xsink);
+        }
+    }
+
+    //! delivers an observer event; fills in the datasource-derived fields first
+    /** @return 0 to continue, -1 if an admission event was rejected
+
+        @note the transaction identity is assigned lazily here, so that a transaction that produced
+        no observable event never consumes an identity and never reports a terminal outcome
+    */
+    DLLLOCAL int dispatchMutationEvent(SqlMutationEvent& ev, ExceptionSink* xsink) {
+        SqlMutationContext* ctx = getMutationCtx();
+        assert(ctx);
+        if (!ctx->observes(ev.getMaskBit())) {
+            return 0;
+        }
+        if (tx_id.empty()) {
+            ctx->getNewTransactionId(tx_id);
+            tx_seq = 0;
+        }
+        ev.tx_id = tx_id.c_str();
+        ev.tx_seq = ++tx_seq;
+        ev.in_transaction = in_transaction;
+        ev.autocommit = autocommit;
+        return ctx->dispatch(ev, *ds, xsink);
+    }
+
+    //! emits a transaction start event
+    DLLLOCAL void dispatchMutationTxBegin(ExceptionSink* xsink) {
+        if (!observes(SQL_MUTATION_MASK_TX)) {
+            return;
+        }
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_TX_BEGIN, SQL_STMT_CLASS_BEGIN);
+        dispatchMutationEvent(ev, xsink);
+    }
+
+    //! emits a terminal transaction outcome event and ends the transaction identity
+    DLLLOCAL void dispatchMutationOutcome(int stmt_class, int outcome, int replay_safe,
+            ExceptionSink* driver_xsink, ExceptionSink* xsink) {
+        mutation_conn_lost = false;
+        if (observes(SQL_MUTATION_MASK_TX)) {
+            SqlMutationEvent ev(SQL_MUTATION_EVENT_OUTCOME, stmt_class);
+            ev.outcome = outcome;
+            ev.replay_safe = replay_safe;
+            ev.driver_xsink = driver_xsink;
+            dispatchMutationEvent(ev, xsink);
+        }
+        // the next operation starts a new transaction identity
+        tx_id.clear();
+        tx_seq = 0;
+    }
+
+    //! reports a connection loss recorded by the driver at the next core boundary
+    /** The event is not emitted from Datasource::connectionAborted()/connectionLost() because
+        those are called by the driver from inside a driver call; emitting there would run observer
+        code with driver state in flux and would report the transaction outcome before the result of
+        the statement that triggered it.
+    */
+    DLLLOCAL void flushMutationConnectionLost(ExceptionSink* xsink) {
+        if (!mutation_conn_lost) {
+            return;
+        }
+        // no commit was in flight, so no commit can have been applied: the operation can be replayed
+        dispatchMutationOutcome(SQL_STMT_CLASS_ROLLBACK, SQL_MUTATION_OUTCOME_LOST_CONNECTION, 1, xsink, xsink);
+    }
+
     DLLLOCAL void addStatement(QoreSQLStatement* stmt) {
         AutoLocker al(m);
         assert(stmt_set.find(stmt) == stmt_set.end());
@@ -206,6 +335,9 @@ struct qore_ds_private {
         transactionDone(false, true, xsink);
         // mark connection aborted
         connection_aborted = true;
+        if (getMutationCtx()) {
+            mutation_conn_lost = true;
+        }
         // close the datasource
         close();
     }
@@ -220,6 +352,9 @@ struct qore_ds_private {
         assert(isopen);
         // close statements but do not clear datasource or statements in the datasource
         transactionDone(false, false, xsink);
+        if (getMutationCtx() && in_transaction) {
+            mutation_conn_lost = true;
+        }
     }
 
     DLLLOCAL void connectionRecovered(ExceptionSink* xsink) {
@@ -244,7 +379,20 @@ struct qore_ds_private {
         assert(isopen);
         in_transaction = false;
         active_transaction = false;
-        return qore_dbi_private::get(*dsl)->commit(ds, xsink);
+        if (!getMutationCtx()) {
+            return qore_dbi_private::get(*dsl)->commit(ds, xsink);
+        }
+        // the flag is what makes commit ambiguity structural: any failure or connection loss while
+        // it is set means the core cannot know whether the server applied the commit
+        commit_in_progress = true;
+        int rc = qore_dbi_private::get(*dsl)->commit(ds, xsink);
+        commit_in_progress = false;
+        // a commit that did not demonstrably succeed is always ambiguous and is never reported as a
+        // rollback: the server may have applied it
+        const bool known = !rc && !*xsink && !connection_aborted;
+        dispatchMutationOutcome(SQL_STMT_CLASS_COMMIT,
+            known ? SQL_MUTATION_OUTCOME_COMMIT : SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, 0, xsink, xsink);
+        return rc;
     }
 
     DLLLOCAL int rollbackIntern(ExceptionSink* xsink) {
@@ -252,7 +400,15 @@ struct qore_ds_private {
         assert(isopen);
         in_transaction = false;
         active_transaction = false;
-        return qore_dbi_private::get(*dsl)->rollback(ds, xsink);
+        if (!getMutationCtx()) {
+            return qore_dbi_private::get(*dsl)->rollback(ds, xsink);
+        }
+        int rc = qore_dbi_private::get(*dsl)->rollback(ds, xsink);
+        const bool known = !rc && !*xsink && !connection_aborted;
+        // no commit was attempted either way, so the operation can always be replayed
+        dispatchMutationOutcome(SQL_STMT_CLASS_ROLLBACK,
+            known ? SQL_MUTATION_OUTCOME_ROLLBACK : SQL_MUTATION_OUTCOME_ROLLBACK_ERROR, 1, xsink, xsink);
+        return rc;
     }
 
     DLLLOCAL int commit(ExceptionSink* xsink) {
@@ -274,6 +430,13 @@ struct qore_ds_private {
             isopen = false;
             in_transaction = false;
             active_transaction = false;
+            commit_in_progress = false;
+            // a pending connection-loss event must keep the transaction identity it belongs to;
+            // it is cleared when the outcome is delivered at the next core boundary
+            if (!mutation_conn_lost) {
+                tx_id.clear();
+                tx_seq = 0;
+            }
             clearTypedResultHashDeclCache();
             return 0;
         }

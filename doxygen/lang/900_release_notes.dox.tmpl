@@ -649,6 +649,83 @@ int echoed = child.echo(value);
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Opt-In Structured Datasource Mutation Observer
+    @parblock
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    objects can now be given a structured <b>mutation observer</b> that receives deterministic
+    pre-execution and outcome boundaries for every operation, and that can admit or reject a
+    mutation before it runs.  This provides the datasource/driver boundary required by managed
+    multi-tenant storage admission; %Qore supplies mechanism only and no policy.
+
+    %Qore performs <b>no classification</b> of %SQL text, database error text, or command tags.  All
+    semantic metadata about an operation is supplied by the producer with the new
+    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" scope class, which is inherited
+    by every operation issued on the object from the same thread &mdash; including operations issued
+    far below the declaration site by <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or
+    any other layer:
+    @code{.py}
+{
+    SqlMutationDeclaration decl(dsp, <SqlMutationInfo>{
+        "op_id": op_id,
+        "path_id": "orders.insert",
+        "op_code": OP_INSERT,
+        "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+        "max_growth_bytes": 1048576,
+    });
+    table.insert(row);
+    dsp.commit();
+}   # the declaration is removed here
+    @endcode
+
+    An observer is registered per datasource or pool with
+    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()";
+    there is no process-global registry, and two pools in the same process are completely
+    independent.  It receives @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" hashes and
+    may return a @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash at an
+    @ref sql_mutation_admission "admission point":
+    @code{.py}
+dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+    if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC && over_quota(ev.info)) {
+        return <SqlMutationDecisionInfo>{"admit": False, "err": "QUOTA-EXCEEDED"};
+    }
+}, SQL_MUTATION_MASK_DEFAULT);
+    @endcode
+
+    Outcomes are derived from control flow, never from error text.  A commit that does not
+    demonstrably succeed is reported as
+    @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS" and
+    is <b>never</b> reported as a rollback, because %Qore cannot know whether the server applied it.
+    Every outcome event carries \c "replay_safe", which is @ref True "True" only when %Qore can prove
+    that no commit was attempted; together with the producer's stable \c "op_id" this is what lets a
+    consumer replay a restartable transaction without creating a second reservation.
+
+    Prepared @ref Qore::SQL::SQLStatement "SQLStatement" executions carry the same metadata, and
+    bounded streams (\c COPY and bulk writes) report declared and consumed byte counts without the
+    payload ever being buffered; DBI drivers use the new \c Datasource::reportMutationStreamBegin(),
+    \c reportMutationStreamProgress(), and \c reportMutationStreamEnd() C++ APIs, with equivalent
+    methods available to %Qore code.
+
+    Datasources with no observer registered retain their previous behavior and cost one predictable
+    pointer test per operation; no overhead is measurable on the unmonitored path.
+
+    New API:
+    - @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+    - @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo",
+      @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo", and
+      @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo"
+    - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()",
+      @ref Qore::SQL::AbstractDatasource::clearMutationObserver() "clearMutationObserver()",
+      @ref Qore::SQL::AbstractDatasource::hasMutationObserver() "hasMutationObserver()",
+      @ref Qore::SQL::AbstractDatasource::pushMutationDeclaration() "pushMutationDeclaration()",
+      @ref Qore::SQL::AbstractDatasource::popMutationDeclaration() "popMutationDeclaration()",
+      @ref Qore::SQL::AbstractDatasource::getMutationDeclaration() "getMutationDeclaration()",
+      @ref Qore::SQL::AbstractDatasource::reportMutationStreamBegin() "reportMutationStreamBegin()",
+      @ref Qore::SQL::AbstractDatasource::reportMutationStreamProgress() "reportMutationStreamProgress()", and
+      @ref Qore::SQL::AbstractDatasource::reportMutationStreamEnd() "reportMutationStreamEnd()"
+    - @ref sql_mutation_events, @ref sql_stmt_classes, @ref sql_mutation_outcomes,
+      @ref sql_mutation_effects, and @ref sql_mutation_masks constants
+    @endparblock
+
     @par New Required Libraries and Async Networking Stack
     @parblock
     The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 +
@@ -2833,6 +2910,10 @@ foreach string module_name in (registry.getProcessModules()) {
         remain compatible with MySQL 5.7 and current MariaDB releases
 
     - Core language
+      - fixed a bug where no DBI driver could register a \c QDBI_METHOD_DESCRIBE method in a debug build of
+        \c libqore; \c q_dbi_describe_t is the same function type as \c q_dbi_select_row_t, so a describe method
+        always resolves to the \c q_dbi_select_row_t overload of \c qore_dbi_method_list::add(), whose assertion
+        accepted only \c QDBI_METHOD_SELECT_ROW
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts
       - improved @ref Qore::backquote() "backquote()" and the @ref backquote_operator "backquote operator" on Linux

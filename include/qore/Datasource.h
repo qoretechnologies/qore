@@ -43,6 +43,8 @@
 class DBIDriver;
 class QoreColumnarResult;
 class DatasourceStatementHelper;
+class ResolvedCallReferenceNode;
+class SqlMutationContext;
 
 //! the base class for accessing databases in Qore through a Qore DBI driver
 /** This class is not thread-safe or even thread-aware.  Thread safety and thread
@@ -675,6 +677,107 @@ public:
         @since %Qore 0.8.13
     */
     DLLEXPORT QoreObject* getSQLStatementObjectForResultSet(void* stmt_private_data);
+
+    //! registers an opt-in structured mutation observer on this datasource
+    /** Takes ownership of the \a observer reference and of \a arg.  Any previously-registered
+        observer is replaced.
+
+        The observer receives deterministic pre-execution and outcome boundaries for autocommit and
+        explicit transactions; see design/datasource-mutation-observer.md for the full contract.
+
+        @param observer the callback to invoke; must not be nullptr
+        @param event_mask the bitmask of event classes to deliver; see \c SQL_MUTATION_MASK_*
+        @param arg an argument reported unchanged in every event
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+            ExceptionSink* xsink);
+
+    //! removes any registered mutation observer
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT void clearMutationObserver(ExceptionSink* xsink);
+
+    //! returns true if a mutation observer is registered on this datasource
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT bool hasMutationObserver() const;
+
+    //! pushes producer-declared mutation metadata for the current thread
+    /** Declarations nest; the innermost declaration in the calling thread is the one reported to
+        the observer.  Every push must be matched by a call to popMutationDeclaration().
+
+        @return 0 for OK, -1 if the declaration is invalid, in which case a
+        \c SQL-MUTATION-DECLARATION-ERROR exception has been raised and nothing was pushed
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink);
+
+    //! pops the innermost mutation declaration for the current thread
+    /** @return 0 for OK, -1 if there was no declaration to pop
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int popMutationDeclaration(ExceptionSink* xsink);
+
+    //! returns the innermost mutation declaration for the current thread or nullptr
+    /** the caller owns any reference returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* getMutationDeclaration() const;
+
+    //! returns true if a mutation observer wants bounded stream events
+    /** DBI drivers should call this before doing any bookkeeping for stream reporting, so that
+        unmonitored datasources do no extra work at all
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool sqlMutationObserverActive() const;
+
+    //! reports the start of a bounded stream to the mutation observer
+    /** The core never sees or buffers the stream payload; only byte counts are propagated.
+
+        @param declared_bytes the declared size of the stream in bytes; if <= 0 then the
+        \c "max_growth_bytes" value of the current declaration is used, if any
+
+        @return 0 to continue; -1 if the observer rejected the stream or raised an exception, in
+        which case an exception has been raised in \a xsink and the caller must abort the stream
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* xsink);
+
+    //! reports bounded stream progress to the mutation observer
+    /** @param consumed_bytes the total number of bytes consumed by the stream so far
+
+        @return 0 to continue; -1 if the observer rejected further streaming or raised an exception,
+        in which case an exception has been raised in \a xsink and the caller must abort the stream
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int reportMutationStreamProgress(int64 consumed_bytes, ExceptionSink* xsink);
+
+    //! reports the end of a bounded stream to the mutation observer
+    /** @param consumed_bytes the total number of bytes consumed by the stream
+        @param ok false if the stream failed
+
+        @return 0; stream end is a notification and cannot be rejected
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink);
+
+    //! returns the mutation observer context for this datasource or nullptr; internal only
+    DLLLOCAL SqlMutationContext* getMutationContext() const;
+
+    //! replaces the mutation observer context; takes ownership of the reference; internal only
+    DLLLOCAL void setMutationContext(SqlMutationContext* ctx, ExceptionSink* xsink);
+
+    //! returns the mutation observer context, creating it if necessary; internal only
+    DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
 };
 
 #endif // _QORE_DATASOURCE_H

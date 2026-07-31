@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class MutationObserverStmtTest
+
+#! collects mutation observer events for assertions
+class StmtEventCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        *hash<SqlMutationDecisionInfo> decision;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        return decision;
+    }
+
+    reset() {
+        events = ();
+        decision = NOTHING;
+    }
+
+    list<int> codes() {
+        return map $1.event, events;
+    }
+
+    list<hash<SqlMutationEventInfo>> withEvent(int event) {
+        return map $1, events, $1.event == event;
+    }
+
+    hash<SqlMutationEventInfo> outcome() {
+        list<hash<SqlMutationEventInfo>> l = withEvent(SQL_MUTATION_EVENT_OUTCOME);
+        if (l.size() != 1) {
+            throw "TEST-ERROR", sprintf("expecting exactly 1 outcome event; got %d", l.size());
+        }
+        return l[0];
+    }
+}
+
+public class MutationObserverStmtTest inherits QUnit::Test {
+    public {
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "stmt-op",
+            "path_id": "orders.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 8192,
+        };
+    }
+
+    private {
+        StmtEventCollector obs();
+    }
+
+    constructor() : Test("MutationObserverStmtTest", "1.0", \ARGV) {
+        addTestCase("prepared statement metadata", \preparedStatementTest());
+        addTestCase("statement commit", \statementCommitTest());
+        addTestCase("statement rollback", \statementRollbackTest());
+        addTestCase("statement failure", \statementFailureTest());
+        addTestCase("statement admission", \statementAdmissionTest());
+        addTestCase("statement in a pool", \statementPoolTest());
+        addTestCase("statement describe is a read", \statementDescribeTest());
+
+        set_return_value(main());
+    }
+
+    private Datasource getDs() {
+        Datasource ds;
+        try {
+            ds = new Datasource("dbitest:u/p@db");
+            ds.setAutoCommit(False);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        return ds;
+    }
+
+    preparedStatementTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            stmt.exec();
+            assertEq(1, stmt.affectedRows());
+            stmt.commit();
+        }
+
+        # a prepared statement carries exactly the same declaration as any other operation, because
+        # the declaration is read from the datasource and never from the statement
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_POST_EXEC,
+            SQL_MUTATION_EVENT_OUTCOME), obs.codes());
+        assertEq(SQL_STMT_CLASS_STMT_EXEC, obs.events[0].stmt_class);
+        assertEq("stmt-op", obs.events[0].info.op_id);
+        assertEq(8192, obs.events[0].info.max_growth_bytes);
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.events[2].outcome);
+    }
+
+    statementCommitTest() {
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        stmt.exec();
+        # SQLStatement::commit() does not go through Datasource::commit(), but the outcome boundary
+        # is still reported
+        stmt.commit();
+
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq(SQL_STMT_CLASS_COMMIT, obs.outcome().stmt_class);
+        assertFalse(obs.outcome().replay_safe);
+    }
+
+    statementRollbackTest() {
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        stmt.exec();
+        stmt.rollback();
+
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+        assertTrue(obs.outcome().replay_safe);
+    }
+
+    statementFailureTest() {
+        Datasource ds = getDs();
+        ds.setOption("fault", "stmt-exec");
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        assertThrows("DBI-TEST-STMT-EXEC-ERROR", \stmt.exec());
+
+        list<hash<SqlMutationEventInfo>> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC);
+        assertEq(1, post.size());
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, post[0].outcome);
+        assertEq("DBI-TEST-STMT-EXEC-ERROR", post[0].ex.err);
+        assertEq((), obs.withEvent(SQL_MUTATION_EVENT_OUTCOME));
+
+        ds.setOption("fault", "");
+        ds.rollback();
+    }
+
+    statementAdmissionTest() {
+        Datasource ds = getDs();
+        obs.decision = <SqlMutationDecisionInfo>{"admit": False, "err": "STMT-REJECTED"};
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        assertThrows("STMT-REJECTED", \stmt.exec());
+
+        # the statement was not executed
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
+        obs.decision = NOTHING;
+        stmt.close();
+        ds.rollback();
+    }
+
+    statementPoolTest() {
+        DatasourcePool dsp;
+        try {
+            dsp = new DatasourcePool("dbitest:u/p@db{min=1,max=2}");
+            dsp.getServerVersion();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        obs.reset();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            SQLStatement stmt(dsp);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            stmt.exec();
+            stmt.commit();
+        }
+
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq("stmt-op", obs.outcome().info.op_id);
+        assertEq(SQL_STMT_CLASS_STMT_EXEC, obs.events[0].stmt_class);
+    }
+
+    statementDescribeTest() {
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("select * from t");
+        hash<auto> desc = stmt.describe();
+        assertEq(("id", "val"), keys desc);
+
+        # describe is classified as a read, not as a mutation
+        assertEq(SQL_STMT_CLASS_READ, obs.events[0].stmt_class);
+        assertEq(0, (map $1, obs.events, $1.stmt_class == SQL_STMT_CLASS_STMT_EXEC).size());
+        stmt.close();
+        ds.rollback();
+    }
+}

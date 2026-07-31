@@ -143,6 +143,13 @@ public:
 
     DLLLOCAL void setEventQueue(Queue* q, QoreValue arg, ExceptionSink* xsink);
 
+    // mutation observer API; these two methods create the mutation context lazily, which the base
+    // class does not serialize, so they are serialized here with the datasource lock; the context
+    // itself is thread-safe, so no other mutation observer method needs to be overridden
+    DLLLOCAL void setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+            ExceptionSink* xsink);
+    DLLLOCAL int pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink);
+
     DLLLOCAL int transactionTid() const {
         return tid;
     }

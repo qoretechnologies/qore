@@ -1,0 +1,88 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+#! Measures the cost of the datasource mutation observer on the statement path.
+/** Three configurations are measured against the dbitest mock driver, which does no I/O, so what is
+    measured is core overhead only:
+
+    - \c unmonitored: no observer and no declaration; this is the fast path that must retain
+      current behavior and measurable performance
+    - \c declared: a declaration is in scope but no observer is registered; the declaration is inert
+    - \c monitored: an observer is registered and receives every boundary
+
+    The unmonitored overhead is the number that qoretechnologies/qore#5384 requires to be recorded;
+    see design/datasource-mutation-observer.md.
+*/
+
+%exec-class BenchDatasourceMutationObserver
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDatasourceMutationObserver {
+    public {
+        const Statements = 2000;
+
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "bench-op",
+            "path_id": "bench.insert",
+            "op_code": 1,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 4096,
+        };
+    }
+
+    private {
+        int event_count = 0;
+    }
+
+    constructor() {
+        Datasource probe;
+        try {
+            probe = new Datasource("dbitest:u/p@db");
+            probe.open();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("skipping: the dbitest driver is not available: %s: %s\n", ex.err, ex.desc);
+            stderr.printf("build it with: cmake --build build --target dbitest\n");
+            stderr.printf("and run with:  QORE_MODULE_DIR=build/modules/dbi_test\n");
+            exit(0);
+        }
+
+        runCase("unmonitored", False, False);
+        runCase("declared", True, False);
+        runCase("monitored", True, True);
+    }
+
+    private *hash<SqlMutationDecisionInfo> observe(hash<SqlMutationEventInfo> ev) {
+        ++event_count;
+        return NOTHING;
+    }
+
+    private runCase(string label, bool declare, bool monitor) {
+        Bench::BenchRunner r(sprintf("datasource_mutation_observer_%s", label));
+        r.iterations = 8;
+        r.warmup = 2;
+
+        Datasource ds("dbitest:u/p@db");
+        ds.setAutoCommit(True);
+        ds.open();
+        if (monitor) {
+            ds.setMutationObserver(\observe(), SQL_MUTATION_MASK_DEFAULT);
+        }
+
+        r.measure = sub () {
+            *SqlMutationDeclaration decl;
+            if (declare) {
+                decl = new SqlMutationDeclaration(ds, OpInfo);
+            }
+            for (int i = 0; i < Statements; ++i) {
+                ds.exec("insert into t values (%v)", i);
+            }
+        };
+
+        r.run();
+    }
+}

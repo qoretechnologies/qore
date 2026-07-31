@@ -492,4 +492,19 @@ DLLEXPORT extern const TypedHashDecl* hashdeclRegexMatchInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclFormatBounds;
 
+//! SqlMutationInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSqlMutationInfo;
+
+//! SqlMutationEventInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSqlMutationEventInfo;
+
+//! SqlMutationDecisionInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSqlMutationDecisionInfo;
+
 #endif

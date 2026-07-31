@@ -546,3 +546,14 @@ void ManagedDatasource::setEventQueue(Queue* q, QoreValue arg, ExceptionSink* xs
     AutoLocker al(&ds_lock);
     Datasource::setEventQueue(q, arg, xsink);
 }
+
+void ManagedDatasource::setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+        ExceptionSink* xsink) {
+    AutoLocker al(&ds_lock);
+    Datasource::setMutationObserver(observer, event_mask, arg, xsink);
+}
+
+int ManagedDatasource::pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink) {
+    AutoLocker al(&ds_lock);
+    return Datasource::pushMutationDeclaration(info, xsink);
+}

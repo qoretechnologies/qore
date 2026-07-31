@@ -283,6 +283,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Scanner.qpp
     lib/QC_Datasource.qpp
     lib/QC_DatasourcePool.qpp
+    lib/QC_SqlMutationDeclaration.qpp
     lib/QC_AbstractConnectionPool.qpp
     lib/QC_Dir.qpp
     lib/QC_ReadOnlyFile.qpp
@@ -1671,6 +1672,7 @@ set(LIBQORE_CPP_SRC
     lib/AbstractSmartLock.cpp
     lib/SmartMutex.cpp
     lib/Datasource.cpp
+    lib/SqlMutationContext.cpp
     lib/DatasourcePool.cpp
     lib/ConnectionPool.cpp
     lib/ManagedDatasource.cpp
@@ -2017,6 +2019,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractSmartLock.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SmartMutex.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/Datasource.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SqlMutationContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DatasourcePool.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ConnectionPool.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ManagedDatasource.cpp\"
@@ -2220,6 +2223,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_ColumnarResult.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Datasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DatasourcePool.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SqlMutationDeclaration.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractConnectionPool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SQLStatement.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Queue.cpp\"
@@ -2974,6 +2978,9 @@ add_subdirectory(modules/reflection)
 add_subdirectory(modules/logger_bin)
 # linenoise module
 add_subdirectory(modules/linenoise)
+
+# mock DBI driver for the test suite; not installed
+add_subdirectory(modules/dbi_test)
 # i18n module
 add_subdirectory(modules/i18n)
 # json module

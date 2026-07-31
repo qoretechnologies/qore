@@ -82,6 +82,7 @@
 #include "qore/intern/QC_ChannelIterator.h"
 
 #include "qore/intern/QC_Datasource.h"
+#include "qore/intern/QC_SqlMutationDeclaration.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_SQLStatement.h"
 
@@ -283,7 +284,10 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclEventPollInfo,
     * hashdeclTimerEventInfo,
     * hashdeclRegexMatchInfo,
-    * hashdeclFormatBounds;
+    * hashdeclFormatBounds,
+    * hashdeclSqlMutationInfo,
+    * hashdeclSqlMutationEventInfo,
+    * hashdeclSqlMutationDecisionInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
 const QoreEnumDecl* enumHTTP3Mode;
@@ -1587,12 +1591,18 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // create Qore::SQL namespace
     QoreNamespace* sqlns = new QoreNamespace("Qore::SQL");
 
+    // mutation observer hashdecls must be added before the classes that reference their types
+    hashdeclSqlMutationInfo = init_hashdecl_SqlMutationInfo(*sqlns);
+    hashdeclSqlMutationEventInfo = init_hashdecl_SqlMutationEventInfo(*sqlns);
+    hashdeclSqlMutationDecisionInfo = init_hashdecl_SqlMutationDecisionInfo(*sqlns);
+
     sqlns->addSystemClass(initColumnarResultClass(*sqlns));
     sqlns->addSystemClass(initAbstractSQLStatementClass(*sqlns));
     sqlns->addSystemClass(initAbstractDatasourceClass(*sqlns));
     sqlns->addSystemClass(initDatasourceClass(*sqlns));
     sqlns->addSystemClass(initDatasourcePoolClass(*sqlns));
     sqlns->addSystemClass(initSQLStatementClass(*sqlns));
+    sqlns->addSystemClass(initSqlMutationDeclarationClass(*sqlns));
 
     init_dbi_functions(*sqlns);
     init_dbi_constants(*sqlns);

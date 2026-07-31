@@ -1,0 +1,627 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class MutationObserverTest
+
+#! collects mutation observer events for assertions
+class EventCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        #! set to reject at the next admission point
+        *hash<SqlMutationDecisionInfo> decision;
+        #! error code to throw from the observer, if any
+        *string throw_err;
+        #! only throw on this event code; NOTHING = every event
+        *int throw_on_event;
+        #! the datasource to re-enter from the observer, if any
+        *AbstractDatasource reenter;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        if (reenter) {
+            # must not recurse: events raised inside an observer callback are suppressed
+            reenter.select("select 1");
+        }
+        if (throw_err.val() && (!exists throw_on_event || throw_on_event == ev.event)) {
+            throw throw_err, "injected observer failure";
+        }
+        return decision;
+    }
+
+    reset() {
+        events = ();
+        decision = NOTHING;
+        throw_err = NOTHING;
+        throw_on_event = NOTHING;
+        reenter = NOTHING;
+    }
+
+    #! returns all events with the given event code
+    list<hash<SqlMutationEventInfo>> withEvent(int event) {
+        return map $1, events, $1.event == event;
+    }
+
+    #! returns the single outcome event; asserts there is exactly one
+    hash<SqlMutationEventInfo> outcome() {
+        list<hash<SqlMutationEventInfo>> l = withEvent(SQL_MUTATION_EVENT_OUTCOME);
+        if (l.size() != 1) {
+            throw "TEST-ERROR", sprintf("expecting exactly 1 outcome event; got %d", l.size());
+        }
+        return l[0];
+    }
+
+    #! returns the sequence of event codes
+    list<int> codes() {
+        return map $1.event, events;
+    }
+
+    #! returns the number of distinct transaction identities seen
+    int txIdCount() {
+        hash<string, bool> ids();
+        foreach hash<SqlMutationEventInfo> ev in (events) {
+            ids{ev.tx_id} = True;
+        }
+        return ids.size();
+    }
+}
+
+public class MutationObserverTest inherits QUnit::Test {
+    public {
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "op-1",
+            "path_id": "orders.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 1048576,
+        };
+    }
+
+    private {
+        EventCollector obs();
+    }
+
+    constructor() : Test("MutationObserverTest", "1.0", \ARGV) {
+        addTestCase("no driver", \noDriverTest());
+        addTestCase("unmonitored behavior", \unmonitoredTest());
+        addTestCase("autocommit sequence", \autocommitSequenceTest());
+        addTestCase("explicit transaction sequence", \explicitTransactionTest());
+        addTestCase("known rollback", \rollbackTest());
+        addTestCase("driver exception", \driverExceptionTest());
+        addTestCase("commit ambiguity", \commitAmbiguityTest());
+        addTestCase("autocommit commit ambiguity", \autocommitAmbiguityTest());
+        addTestCase("restartable failover", \failoverTest());
+        addTestCase("failover replay identity", \failoverReplayTest());
+        addTestCase("admission rejection", \admissionRejectionTest());
+        addTestCase("observer exception on admission", \observerAdmissionExceptionTest());
+        addTestCase("observer exception on outcome", \observerOutcomeExceptionTest());
+        addTestCase("observer removal", \observerRemovalTest());
+        addTestCase("read classification", \readClassificationTest());
+        addTestCase("undeclared mutations", \undeclaredTest());
+        addTestCase("declaration validation", \declarationValidationTest());
+        addTestCase("declaration nesting", \declarationNestingTest());
+        addTestCase("declaration scope", \declarationScopeTest());
+        addTestCase("observer re-entrancy", \reentrancyTest());
+        addTestCase("event mask", \eventMaskTest());
+        addTestCase("reservation replay guard", \reservationReplayGuardTest());
+
+        set_return_value(main());
+    }
+
+    #! returns a monitored dbitest Datasource with autocommit disabled
+    private Datasource getDs(bool autocommit = False, int mask = SQL_MUTATION_MASK_ALL) {
+        Datasource ds("dbitest:u/p@db");
+        ds.setAutoCommit(autocommit);
+        ds.open();
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), mask);
+        return ds;
+    }
+
+    private checkDriver() {
+        try {
+            Datasource ds("dbitest:u/p@db");
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+    }
+
+    setUp() {
+        checkDriver();
+    }
+
+    noDriverTest() {
+        # the mock driver must be present for the rest of the suite to mean anything
+        Datasource ds("dbitest:u/p@db");
+        ds.open();
+        assertEq("dbitest", ds.getDriverName());
+        assertEq("DBI Test Driver", ds.getDriverRealName());
+        assertFalse(ds.hasMutationObserver());
+    }
+
+    unmonitoredTest() {
+        # an unmonitored datasource must behave exactly as before
+        Datasource ds("dbitest:u/p@db");
+        ds.setAutoCommit(False);
+        ds.open();
+        assertFalse(ds.hasMutationObserver());
+        assertEq(NOTHING, ds.getMutationDeclaration());
+        assertEq(1, ds.exec("insert into t values (1)"));
+        assertTrue(ds.currentThreadInTransaction());
+        ds.commit();
+        assertFalse(ds.currentThreadInTransaction());
+        assertEq({"id": (1, 2), "val": ("a", "b")}, ds.select("select * from t"));
+
+        # popping with no declaration and no context must be a clean error, not a crash
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", \ds.popMutationDeclaration());
+    }
+
+    autocommitSequenceTest() {
+        Datasource ds = getDs(True);
+        assertTrue(ds.hasMutationObserver());
+        ds.exec("insert into t values (1)");
+
+        # an autocommit mutation produces exactly pre-exec, post-exec, and a commit outcome
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC, SQL_MUTATION_EVENT_OUTCOME),
+            obs.codes());
+        assertEq(SQL_STMT_CLASS_EXEC, obs.events[0].stmt_class);
+        assertTrue(obs.events[0].autocommit);
+        assertEq(SQL_MUTATION_OUTCOME_OK, obs.events[1].outcome);
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertFalse(obs.outcome().replay_safe);
+        assertEq(SQL_STMT_CLASS_COMMIT, obs.outcome().stmt_class);
+
+        # all events of one operation share a transaction identity, numbered in order
+        assertEq(1, obs.txIdCount());
+        assertEq((1, 2, 3), map $1.tx_seq, obs.events);
+        assertEq("dbitest", obs.events[0].driver);
+        assertEq(gettid(), obs.events[0].tid);
+    }
+
+    explicitTransactionTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            ds.exec("insert into t values (1)");
+            ds.exec("insert into t values (2)");
+            ds.commit();
+        }
+
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_POST_EXEC,
+            SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC, SQL_MUTATION_EVENT_OUTCOME),
+            obs.codes());
+        assertEq(SQL_STMT_CLASS_BEGIN, obs.events[1].stmt_class);
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+
+        # the whole transaction shares one identity, and every event carries the declaration
+        assertEq(1, obs.txIdCount());
+        assertEq(6, (map $1, obs.events, $1.declared).size());
+        assertEq(6, (map $1, obs.events, $1.info.op_id == "op-1").size());
+        assertEq(SQL_MUTATION_EFFECT_MAY_GROW, obs.events[0].info.effect);
+        assertEq(1048576, obs.events[0].info.max_growth_bytes);
+
+        # the declaration is removed when it goes out of scope
+        assertEq(NOTHING, ds.getMutationDeclaration());
+    }
+
+    rollbackTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+        ds.rollback();
+
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+        # a rollback proves that no commit was attempted, so the operation can be replayed
+        assertTrue(obs.outcome().replay_safe);
+        assertEq(SQL_STMT_CLASS_ROLLBACK, obs.outcome().stmt_class);
+    }
+
+    driverExceptionTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+        ds.setOption("fault", "exec");
+        assertThrows("DBI-TEST-EXEC-ERROR", \ds.exec(), "insert into t values (2)");
+
+        # the statement failed but the transaction is still open and no outcome has been reported
+        list<hash<SqlMutationEventInfo>> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, post.last().outcome);
+        assertEq("DBI-TEST-EXEC-ERROR", post.last().ex.err);
+        assertEq((), obs.withEvent(SQL_MUTATION_EVENT_OUTCOME));
+        assertTrue(ds.currentThreadInTransaction());
+
+        ds.setOption("fault", "");
+        ds.rollback();
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+    }
+
+    commitAmbiguityTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            ds.exec("insert into t values (1)");
+            ds.setOption("fault", "commit");
+            assertThrows("DBI-TEST-COMMIT-ERROR", \ds.commit());
+        }
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        # a commit that did not demonstrably succeed is ambiguous and must never be reported as a
+        # rollback: the server may have applied it
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertNeq(SQL_MUTATION_OUTCOME_ROLLBACK, out.outcome);
+        assertFalse(out.replay_safe);
+        assertEq("DBI-TEST-COMMIT-ERROR", out.ex.err);
+        assertEq("op-1", out.info.op_id);
+
+        ds.setOption("fault", "");
+    }
+
+    autocommitAmbiguityTest() {
+        Datasource ds = getDs(True);
+        ds.setOption("fault", "commit");
+        assertThrows("DBI-TEST-COMMIT-ERROR", \ds.exec(), "insert into t values (1)");
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertFalse(out.replay_safe);
+
+        # a statement that itself fails in autocommit mode cannot have committed anything
+        obs.reset();
+        ds.setOption("fault", "exec");
+        assertThrows("DBI-TEST-EXEC-ERROR", \ds.exec(), "insert into t values (2)");
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+        assertTrue(obs.outcome().replay_safe);
+
+        ds.setOption("fault", "");
+    }
+
+    failoverTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+        ds.setOption("fault", "abort-on-exec");
+        assertThrows("DBI-TEST-CONNECTION-ERROR", \ds.exec(), "insert into t values (2)");
+
+        list<hash<SqlMutationEventInfo>> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC);
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, post.last().outcome);
+        assertTrue(post.last().replay_safe);
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        # no commit was in flight, so the core can prove that nothing was committed
+        assertEq(SQL_MUTATION_OUTCOME_LOST_CONNECTION, out.outcome);
+        assertTrue(out.replay_safe);
+
+        ds.setOption("fault", "");
+    }
+
+    failoverReplayTest() {
+        Datasource ds = getDs();
+
+        # first attempt: the connection is lost during the commit, so the outcome is unknown
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 1}));
+            ds.exec("insert into t values (1)");
+            ds.setOption("fault", "abort-on-commit");
+            assertThrows("DBI-TEST-CONNECTION-ERROR", \ds.commit());
+        }
+        hash<SqlMutationEventInfo> first = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, first.outcome);
+        assertFalse(first.replay_safe);
+        assertEq("op-1", first.info.op_id);
+        assertEq(1, first.info.attempt);
+
+        # replay: the same operation identity with a higher attempt number, so that a consumer can
+        # recognize the replay and not create a second reservation
+        obs.reset();
+        ds.setOption("fault", "");
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 2}));
+            ds.exec("insert into t values (1)");
+            ds.commit();
+        }
+        hash<SqlMutationEventInfo> second = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, second.outcome);
+        assertEq("op-1", second.info.op_id);
+        assertEq(2, second.info.attempt);
+        # the replay is a new transaction, so the transaction identity differs
+        assertNeq(first.tx_id, second.tx_id);
+    }
+
+    admissionRejectionTest() {
+        Datasource ds = getDs();
+        obs.decision = <SqlMutationDecisionInfo>{
+            "admit": False,
+            "err": "QUOTA-EXCEEDED",
+            "desc": "over the group storage ceiling",
+        };
+        assertThrows("QUOTA-EXCEEDED", "over the group storage ceiling", \ds.exec(),
+            "insert into t values (1)");
+
+        # the operation was not executed and no transaction was left open
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
+        assertFalse(ds.currentThreadInTransaction());
+
+        # the default error code is used when the observer does not give one
+        obs.reset();
+        obs.decision = <SqlMutationDecisionInfo>{"admit": False};
+        assertThrows("SQL-MUTATION-REJECTED", \ds.exec(), "insert into t values (1)");
+        assertFalse(ds.currentThreadInTransaction());
+
+        # an empty decision hash admits
+        obs.reset();
+        obs.decision = <SqlMutationDecisionInfo>{};
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+    }
+
+    observerAdmissionExceptionTest() {
+        Datasource ds = getDs();
+        obs.throw_err = "OBSERVER-ERROR";
+        obs.throw_on_event = SQL_MUTATION_EVENT_PRE_EXEC;
+
+        # admission is fail-closed: an observer that cannot decide must not have its silence read as
+        # consent
+        assertThrows("OBSERVER-ERROR", \ds.exec(), "insert into t values (1)");
+        assertFalse(ds.currentThreadInTransaction());
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
+    }
+
+    observerOutcomeExceptionTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+
+        obs.throw_err = "OBSERVER-ERROR";
+        obs.throw_on_event = SQL_MUTATION_EVENT_OUTCOME;
+        # the commit succeeded; the observer exception is reported but must not change the outcome
+        assertThrows("OBSERVER-ERROR", \ds.commit());
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # an observer that throws while handling an ambiguous commit must not turn it into a
+        # rollback
+        obs.reset();
+        obs.throw_err = "OBSERVER-ERROR";
+        obs.throw_on_event = SQL_MUTATION_EVENT_OUTCOME;
+        ds.exec("insert into t values (2)");
+        ds.setOption("fault", "commit");
+        # the driver exception is reported first; the observer exception follows it
+        assertThrows("DBI-TEST-COMMIT-ERROR", \ds.commit());
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, obs.outcome().outcome);
+        ds.setOption("fault", "");
+    }
+
+    observerRemovalTest() {
+        Datasource ds = getDs();
+        ds.exec("insert into t values (1)");
+        assertGt(0, obs.events.size());
+
+        ds.clearMutationObserver();
+        assertFalse(ds.hasMutationObserver());
+
+        # removing the observer mid-transaction restores plain behavior
+        int count = obs.events.size();
+        ds.exec("insert into t values (2)");
+        ds.commit();
+        assertEq(count, obs.events.size());
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    readClassificationTest() {
+        Datasource ds = getDs();
+        ds.select("select * from t");
+        ds.selectRow("select * from t");
+        ds.selectRows("select * from t");
+        ds.describe("select * from t");
+
+        # reads are identified structurally, without inspecting any SQL text
+        assertEq(4, obs.withEvent(SQL_MUTATION_EVENT_PRE_EXEC).size());
+        assertEq(8, (map $1, obs.events, $1.stmt_class == SQL_STMT_CLASS_READ).size());
+        assertEq((), obs.withEvent(SQL_MUTATION_EVENT_OUTCOME));
+
+        # a read is distinguishable from a mutation before any enforcing consumer is attached
+        obs.reset();
+        ds.exec("insert into t values (1)");
+        assertEq(SQL_STMT_CLASS_EXEC, obs.events[0].stmt_class);
+        ds.rollback();
+    }
+
+    undeclaredTest() {
+        Datasource ds = getDs();
+        # an undeclared mutation is reported as such so that a consumer can reject it rather than
+        # silently permitting it
+        ds.exec("insert into t values (1)");
+        assertFalse(obs.events[0].declared);
+        assertEq(NOTHING, obs.events[0].info);
+        ds.rollback();
+
+        obs.reset();
+        obs.decision = <SqlMutationDecisionInfo>{"admit": False, "err": "UNDECLARED"};
+        assertThrows("UNDECLARED", \ds.exec(), "insert into t values (2)");
+    }
+
+    declarationValidationTest() {
+        Datasource ds = getDs();
+
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "op_id",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{"op_id": "", "path_id": "p"});
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "path_id",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{"op_id": "o", "path_id": ""});
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "effect",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{"op_id": "o", "path_id": "p", "effect": 99});
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "max_growth_bytes",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{
+                "op_id": "o", "path_id": "p", "effect": SQL_MUTATION_EFFECT_MAY_GROW, "max_growth_bytes": 0});
+        # a growth bound is only meaningful for an operation that can grow
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "max_growth_bytes",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{
+                "op_id": "o", "path_id": "p", "effect": SQL_MUTATION_EFFECT_NONE, "max_growth_bytes": 10});
+        # a reclaim audit identity is only meaningful for a reclaim
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "reclaim_audit_id",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{
+                "op_id": "o", "path_id": "p", "effect": SQL_MUTATION_EFFECT_NONE, "reclaim_audit_id": "a"});
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", "attempt",
+            \ds.pushMutationDeclaration(), <SqlMutationInfo>{"op_id": "o", "path_id": "p", "attempt": 0});
+
+        # nothing was pushed by any of the failed calls
+        assertEq(NOTHING, ds.getMutationDeclaration());
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR", \ds.popMutationDeclaration());
+
+        # valid reclaim declaration
+        ds.pushMutationDeclaration(<SqlMutationInfo>{
+            "op_id": "o", "path_id": "p", "effect": SQL_MUTATION_EFFECT_RECLAIM_ONLY,
+            "reclaim_audit_id": "audit-1"});
+        assertEq("audit-1", ds.getMutationDeclaration().reclaim_audit_id);
+        ds.popMutationDeclaration();
+
+        # the constructor of the scope class validates too
+        assertThrows("SQL-MUTATION-DECLARATION-ERROR",
+            sub () { SqlMutationDeclaration decl(ds, <SqlMutationInfo>{"op_id": "", "path_id": "p"}); });
+        assertThrows("SQLMUTATIONDECLARATION-ERROR",
+            sub () { SqlMutationDeclaration decl(new Mutex(), OpInfo); });
+    }
+
+    declarationNestingTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration outer(ds, OpInfo);
+            assertEq("op-1", ds.getMutationDeclaration().op_id);
+            {
+                SqlMutationDeclaration inner(ds, cast<hash<SqlMutationInfo>>(OpInfo
+                    + {"op_id": "op-2", "path_id": "orders.delete"}));
+                # the innermost declaration in the thread is the one reported
+                assertEq("op-2", ds.getMutationDeclaration().op_id);
+                ds.exec("delete from t");
+                assertEq("op-2", obs.events[0].info.op_id);
+            }
+            obs.reset();
+            assertEq("op-1", ds.getMutationDeclaration().op_id);
+            ds.exec("insert into t values (1)");
+            assertEq("op-1", obs.events[0].info.op_id);
+        }
+        assertEq(NOTHING, ds.getMutationDeclaration());
+        ds.rollback();
+    }
+
+    declarationScopeTest() {
+        Datasource ds1 = getDs();
+        Datasource ds2("dbitest:u/p@db");
+        ds2.setAutoCommit(False);
+        ds2.open();
+
+        SqlMutationDeclaration decl(ds1, OpInfo);
+        # a declaration is scoped to the object it was made on; there is no global registry
+        assertEq("op-1", ds1.getMutationDeclaration().op_id);
+        assertEq(NOTHING, ds2.getMutationDeclaration());
+
+        # a declaration is scoped to the calling thread
+        Counter c(1);
+        *hash<SqlMutationInfo> other;
+        background sub () {
+            on_exit c.dec();
+            other = ds1.getMutationDeclaration();
+        }();
+        c.waitForZero();
+        assertEq(NOTHING, other);
+    }
+
+    reentrancyTest() {
+        Datasource ds = getDs();
+        obs.reenter = ds;
+        # the observer queries the same datasource; this must not recurse
+        ds.exec("insert into t values (1)");
+        obs.reenter = NOTHING;
+
+        # only the events of the outer operation were delivered; the read issued from inside the
+        # observer produced none
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_POST_EXEC),
+            obs.codes());
+        assertEq(0, obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC)[0].stmt_class - SQL_STMT_CLASS_EXEC);
+
+        ds.rollback();
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+    }
+
+    #! models what an enforcing consumer does with the outcome contract
+    /** A reservation is created at the admission point and released only when the core proves that
+        nothing was committed.  An ambiguous outcome must leave the reservation in place, and a
+        replay of the same operation must not create a second one.
+    */
+    reservationReplayGuardTest() {
+        Datasource ds = getDs();
+
+        hash<string, int> reservations();
+        ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+            if (!ev.declared) {
+                return NOTHING;
+            }
+            string op_id = ev.info.op_id;
+            switch (ev.event) {
+                case SQL_MUTATION_EVENT_PRE_EXEC: {
+                    # a replay of an operation that already holds a reservation reuses it
+                    if (!exists reservations{op_id}) {
+                        reservations{op_id} = ev.info.max_growth_bytes;
+                    }
+                    break;
+                }
+                case SQL_MUTATION_EVENT_OUTCOME: {
+                    # release only when the core can prove that no commit was applied
+                    if (ev.replay_safe) {
+                        remove reservations{op_id};
+                    }
+                    break;
+                }
+            }
+            return NOTHING;
+        }, SQL_MUTATION_MASK_ALL);
+
+        # first attempt: the connection is lost during the commit, so the outcome is unknown
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 1}));
+            ds.exec("insert into t values (1)");
+            ds.setOption("fault", "abort-on-commit");
+            assertThrows("DBI-TEST-CONNECTION-ERROR", \ds.commit());
+        }
+        # the reservation survives an ambiguous outcome
+        assertEq({"op-1": 1048576}, reservations);
+
+        # the replay reuses the reservation instead of creating a second one
+        ds.setOption("fault", "");
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 2}));
+            ds.exec("insert into t values (1)");
+            ds.commit();
+        }
+        assertEq(1, reservations.size());
+        assertEq({"op-1": 1048576}, reservations);
+
+        # a rollback proves nothing was committed, so the reservation is released
+        {
+            SqlMutationDeclaration decl(ds, cast<hash<SqlMutationInfo>>(OpInfo + {"op_id": "op-2"}));
+            ds.exec("insert into t values (2)");
+            ds.rollback();
+        }
+        assertEq({"op-1": 1048576}, reservations);
+    }
+
+    eventMaskTest() {
+        # the default mask covers transactions, mutations, and streams, but not reads
+        Datasource ds = getDs(False, SQL_MUTATION_MASK_DEFAULT);
+        ds.select("select * from t");
+        assertEq((), obs.events);
+
+        ds.exec("insert into t values (1)");
+        assertGt(0, obs.events.size());
+        ds.rollback();
+
+        # transactions only
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_TX);
+        ds.exec("insert into t values (1)");
+        ds.commit();
+        assertEq((SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_OUTCOME), obs.codes());
+    }
+}

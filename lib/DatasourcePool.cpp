@@ -69,6 +69,13 @@ Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink*
         ds->setEventQueue(q, arg.refSelf(), nullptr);
     }
 
+    // share the pool's mutation observer context with every connection, so that an observer
+    // registered on the pool applies to connections opened later and a per-thread declaration
+    // survives connection allocation and release within a transaction
+    if (mctx) {
+        ds->setMutationContext(mctx->refSelf(), xsink);
+    }
+
     // set options
     ConstHashIterator hi(opts);
     while (hi.next()) {
@@ -781,6 +788,103 @@ void DatasourcePool::setEventQueue(Queue* q, QoreValue arg, ExceptionSink* xsink
     }
 
     config.setQueue(q, arg, xsink);
+}
+
+SqlMutationContext* DatasourcePool::getOrCreateMutationContext() {
+    // must be called with the pool lock held
+    SqlMutationContext* mctx = config.getMutationContext();
+    if (mctx) {
+        return mctx;
+    }
+    mctx = config.getOrCreateMutationContext();
+    // fan out to the connections that already exist; connections created later inherit the context
+    // from the config in DatasourceConfig::get()
+    ExceptionSink xsink;
+    for (unsigned i = 0; i < cmax; ++i) {
+        pool[i]->setMutationContext(mctx->refSelf(), &xsink);
+    }
+    assert(!xsink);
+    return mctx;
+}
+
+void DatasourcePool::setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+        ExceptionSink* xsink) {
+    AutoLocker al((QoreThreadLock*)this);
+    getOrCreateMutationContext()->setObserver(observer, event_mask, arg, xsink);
+}
+
+void DatasourcePool::clearMutationObserver(ExceptionSink* xsink) {
+    AutoLocker al((QoreThreadLock*)this);
+    SqlMutationContext* mctx = config.getMutationContext();
+    if (mctx) {
+        mctx->clearObserver(xsink);
+    }
+}
+
+bool DatasourcePool::hasMutationObserver() const {
+    AutoLocker al((QoreThreadLock*)const_cast<DatasourcePool*>(this));
+    SqlMutationContext* mctx = config.getMutationContext();
+    return mctx && mctx->hasObserver();
+}
+
+int DatasourcePool::pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink) {
+    SqlMutationContext* mctx;
+    {
+        AutoLocker al((QoreThreadLock*)this);
+        mctx = getOrCreateMutationContext();
+    }
+    return mctx->pushDeclaration(info, xsink);
+}
+
+int DatasourcePool::popMutationDeclaration(ExceptionSink* xsink) {
+    SqlMutationContext* mctx;
+    {
+        AutoLocker al((QoreThreadLock*)this);
+        mctx = config.getMutationContext();
+    }
+    if (!mctx) {
+        xsink->raiseException(SQL_MUTATION_DECLARATION_ERR, "there is no active mutation declaration in this thread "
+            "to remove");
+        return -1;
+    }
+    return mctx->popDeclaration(xsink);
+}
+
+QoreHashNode* DatasourcePool::getMutationDeclaration() const {
+    SqlMutationContext* mctx;
+    {
+        AutoLocker al((QoreThreadLock*)const_cast<DatasourcePool*>(this));
+        mctx = config.getMutationContext();
+    }
+    return mctx ? mctx->getDeclaration() : nullptr;
+}
+
+// NOTE: the stream methods acquire and hold the connection (DAH_ACQUIRE) rather than borrowing it
+// temporarily, because the declared size of a stream is per-connection state; a temporary
+// acquisition could report progress for a stream on a different connection than the one it was
+// started on.  The connection is released by the caller's commit or rollback, as with exec().
+int DatasourcePool::reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->reportMutationStreamBegin(declared_bytes, xsink);
+}
+
+int DatasourcePool::reportMutationStreamProgress(int64 consumed_bytes, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->reportMutationStreamProgress(consumed_bytes, xsink);
+}
+
+int DatasourcePool::reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink, DAH_ACQUIRE);
+    if (!dpah) {
+        return -1;
+    }
+    return dpah->reportMutationStreamEnd(consumed_bytes, ok, xsink);
 }
 
 QoreListNode* DatasourcePool::getCapabilityList() const {

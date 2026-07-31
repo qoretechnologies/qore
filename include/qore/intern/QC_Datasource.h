@@ -53,5 +53,10 @@ DLLLOCAL extern QoreClass* QC_ABSTRACTSQLSTATEMENT;
 
 DLLLOCAL QoreClass* initDatasourceClass(QoreNamespace& ns);
 
+// mutation observer hashdecls; see design/datasource-mutation-observer.md
+DLLLOCAL TypedHashDecl* init_hashdecl_SqlMutationInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SqlMutationEventInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SqlMutationDecisionInfo(QoreNamespace& ns);
+
 #endif // _QORE_LIB_INTERN
 #endif // _QORE_SQL_OBJECTS_DATASOURCE_H

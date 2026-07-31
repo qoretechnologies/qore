@@ -1,0 +1,286 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class MutationObserverPgsqlTest
+
+#! collects mutation observer events for assertions
+class PgsqlEventCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        *hash<SqlMutationDecisionInfo> decision;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        return decision;
+    }
+
+    reset() {
+        events = ();
+        decision = NOTHING;
+    }
+
+    list<int> codes() {
+        return map $1.event, events;
+    }
+
+    list<hash<SqlMutationEventInfo>> withEvent(int event) {
+        return map $1, events, $1.event == event;
+    }
+
+    hash<SqlMutationEventInfo> outcome() {
+        list<hash<SqlMutationEventInfo>> l = withEvent(SQL_MUTATION_EVENT_OUTCOME);
+        if (l.size() != 1) {
+            throw "TEST-ERROR", sprintf("expecting exactly 1 outcome event; got %d", l.size());
+        }
+        return l[0];
+    }
+}
+
+#! verifies the mutation observer against a real PostgreSQL server
+/** Runs only when a PostgreSQL connection is available; the fault-injection paths (driver
+    exception, restartable failover, commit ambiguity, bounded streams) are covered
+    driver-independently in mutation-observer.qtest and mutation-stream.qtest with the dbitest mock
+    driver, which can be made to fail deterministically.
+*/
+public class MutationObserverPgsqlTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const OptionColumn = 22;
+
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "pg-op-1",
+            "path_id": "mutation_observer_test.insert",
+            "op_code": 7,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 65536,
+        };
+
+        const TableName = "qore_mutation_observer_test";
+    }
+
+    private {
+        PgsqlEventCollector obs();
+        *string connstr;
+    }
+
+    constructor() : Test("MutationObserverPgsqlTest", "1.0", \ARGV, MyOpts) {
+        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL ?? ENV.QORE_DB_CONNSTR;
+
+        addTestCase("pgsql autocommit", \autocommitTest());
+        addTestCase("pgsql explicit transaction", \explicitTransactionTest());
+        addTestCase("pgsql rollback", \rollbackTest());
+        addTestCase("pgsql driver exception", \driverExceptionTest());
+        addTestCase("pgsql admission rejection", \admissionRejectionTest());
+        addTestCase("pgsql prepared statement", \preparedStatementTest());
+        addTestCase("pgsql pool", \poolTest());
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set the PostgreSQL connection string "
+            "(ex: \"pgsql:user/pass@db\")", OptionColumn);
+    }
+
+    private Datasource getDs(bool autocommit = False) {
+%ifdef NoPgsql
+        testSkip("pgsql module not available");
+%endif
+        if (!connstr.val()) {
+            testSkip("no PostgreSQL connection; set QORE_DB_CONNSTR_PGSQL");
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            if (ds.getDriverName() != "pgsql") {
+                testSkip(sprintf("connection is for the %y driver, not pgsql", ds.getDriverName()));
+            }
+            ds.setAutoCommit(autocommit);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
+        }
+        obs.reset();
+        return ds;
+    }
+
+    #! creates the test table with no observer attached and returns the datasource
+    private Datasource setupTable(bool autocommit = False) {
+        Datasource ds = getDs(autocommit);
+        ds.execRaw(sprintf("drop table if exists %s", TableName));
+        ds.execRaw(sprintf("create table %s (id integer, val varchar(64))", TableName));
+        if (!autocommit) {
+            ds.commit();
+        }
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        return ds;
+    }
+
+    private dropTable(Datasource ds) {
+        ds.clearMutationObserver();
+        try {
+            ds.execRaw(sprintf("drop table if exists %s", TableName));
+            if (!ds.getAutoCommit()) {
+                ds.commit();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore cleanup failures
+        }
+    }
+
+    autocommitTest() {
+        Datasource ds = setupTable(True);
+        on_exit dropTable(ds);
+
+        ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one");
+
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC, SQL_MUTATION_EVENT_OUTCOME),
+            obs.codes());
+        assertEq(SQL_STMT_CLASS_EXEC, obs.events[0].stmt_class);
+        assertTrue(obs.events[0].autocommit);
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertFalse(obs.outcome().replay_safe);
+        assertEq("pgsql", obs.events[0].driver);
+
+        # the row is really there
+        assertEq(1, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    explicitTransactionTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one");
+            ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 2, "two");
+            ds.commit();
+        }
+
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_TX_BEGIN, SQL_MUTATION_EVENT_POST_EXEC,
+            SQL_MUTATION_EVENT_PRE_EXEC, SQL_MUTATION_EVENT_POST_EXEC, SQL_MUTATION_EVENT_OUTCOME),
+            obs.codes());
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq(0, (map $1, obs.events, !$1.declared).size());
+        assertEq("pg-op-1", obs.outcome().info.op_id);
+        assertEq(2, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    rollbackTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one");
+        ds.rollback();
+
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+        assertTrue(obs.outcome().replay_safe);
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        ds.commit();
+    }
+
+    driverExceptionTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        # a real SQL error from the server: the transaction stays open and no outcome is reported
+        assertThrows("DBI:PGSQL:ERROR", \ds.execRaw(), "insert into no_such_table_here values (1)");
+
+        list<hash<SqlMutationEventInfo>> post = obs.withEvent(SQL_MUTATION_EVENT_POST_EXEC);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, post.last().outcome);
+        assertEq("DBI:PGSQL:ERROR", post.last().ex.err);
+        assertEq((), obs.withEvent(SQL_MUTATION_EVENT_OUTCOME));
+
+        ds.rollback();
+        assertEq(SQL_MUTATION_OUTCOME_ROLLBACK, obs.outcome().outcome);
+    }
+
+    admissionRejectionTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        obs.decision = <SqlMutationDecisionInfo>{
+            "admit": False,
+            "err": "QUOTA-EXCEEDED",
+            "desc": "over the group storage ceiling",
+        };
+        assertThrows("QUOTA-EXCEEDED", \ds.exec(),
+            (sprintf("insert into %s values (%%v, %%v)", TableName), 1, "one"));
+
+        # nothing was executed and no transaction was left open
+        assertEq((SQL_MUTATION_EVENT_PRE_EXEC,), obs.codes());
+        assertFalse(ds.currentThreadInTransaction());
+
+        obs.reset();
+        assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        ds.commit();
+    }
+
+    preparedStatementTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            SQLStatement stmt(ds);
+            stmt.prepare(sprintf("insert into %s values (%%v, %%v)", TableName));
+            stmt.bind(1, "one");
+            stmt.exec();
+            stmt.commit();
+        }
+
+        assertEq(SQL_STMT_CLASS_STMT_EXEC, obs.events[0].stmt_class);
+        assertEq("pg-op-1", obs.events[0].info.op_id);
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq(1, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+    }
+
+    poolTest() {
+%ifdef NoPgsql
+        testSkip("pgsql module not available");
+%endif
+        if (!connstr.val()) {
+            testSkip("no PostgreSQL connection; set QORE_DB_CONNSTR_PGSQL");
+        }
+        Datasource setup = setupTable();
+        on_exit dropTable(setup);
+
+        DatasourcePool dsp;
+        try {
+            dsp = new DatasourcePool(connstr + "{min=1,max=2}");
+            dsp.getServerVersion();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
+        }
+
+        obs.reset();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL, "tenant-1");
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            dsp.exec(sprintf("insert into %s values (%%v, %%v)", TableName), 3, "three");
+            dsp.commit();
+        }
+
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
+        assertEq("pg-op-1", obs.outcome().info.op_id);
+        assertEq("tenant-1", obs.outcome().arg);
+        assertEq(1, dsp.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        dsp.rollback();
+    }
+}

@@ -1,0 +1,141 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_SqlMutationDeclaration.qpp SqlMutationDeclaration class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+
+#include "qore/intern/QC_SqlMutationDeclaration.h"
+#include "qore/intern/SqlMutationContext.h"
+
+DLLLOCAL extern QoreClass* QC_ABSTRACTDATASOURCE;
+
+//! Declares producer-owned metadata for storage mutations issued in the current thread
+/** @par Overview
+    %Qore performs no classification of %SQL text, database error text, or command tags, so a
+    consumer that needs to know what an operation does must be told by the producer.  This class is
+    how a producer says it: while a %SqlMutationDeclaration object is in scope, every operation
+    issued on the given datasource or pool from the same thread carries the declared metadata,
+    including operations issued far below the declaration site by
+    <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or any other layer.
+
+    The declaration is removed deterministically when the object goes out of scope.
+
+    @par Example:
+    @code{.py}
+{
+    SqlMutationDeclaration decl(dsp, <SqlMutationInfo>{
+        "op_id": op_id,
+        "path_id": "orders.insert",
+        "op_code": OP_INSERT,
+        "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+        "max_growth_bytes": 1048576,
+    });
+    table.insert(row);
+    dsp.commit();
+}   # the declaration is removed here
+    @endcode
+
+    @par Nesting
+    Declarations nest; the innermost declaration in the calling thread is the one reported to the
+    observer.
+
+    @par Replay
+    The \c "op_id" value is reported unchanged when an operation is replayed after a restartable
+    transaction failure, which is what allows a consumer to recognize the replay and avoid creating
+    a second reservation.  Use \c "attempt" to distinguish attempts.
+
+    @note
+    - a declaration with no observer registered is inert; it costs a hash reference and a push onto
+      a per-thread stack
+    - this class is not available with the @ref PO_NO_DATABASE parse option
+
+    @see
+    - @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo"
+    - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+
+    @since %Qore 3.0
+*/
+qclass SqlMutationDeclaration [dom=DATABASE; arg=QoreSqlMutationDeclaration* decl; ns=Qore::SQL];
+
+//! Pushes the given declaration on the datasource or pool for the current thread
+/** @param ds the @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object to declare on
+    @param info the declaration; see @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo" for the
+    structural rules enforced
+
+    @throw SQLMUTATIONDECLARATION-ERROR the \a ds argument is not an
+    @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object
+    @throw SQL-MUTATION-DECLARATION-ERROR the declaration is invalid; nothing was pushed
+
+    @since %Qore 3.0
+*/
+SqlMutationDeclaration::constructor(object ds, hash<SqlMutationInfo> info) [flags=NAMED_ARGS] {
+    QoreObject* dso = const_cast<QoreObject*>(ds);
+    if (!dso->validInstanceOf(*QC_ABSTRACTDATASOURCE)) {
+        xsink->raiseException("SQLMUTATIONDECLARATION-ERROR", "expecting an object of class "
+            "\"Qore::SQL::AbstractDatasource\" as the first argument to "
+            "SqlMutationDeclaration::constructor(); got an object of class \"%s\" instead",
+            dso->getClassName());
+        return;
+    }
+
+    // push through the object's own API so that user subclasses of AbstractDatasource work here too
+    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+    call_args->push(info->hashRefSelf(), xsink);
+    if (*xsink) {
+        return;
+    }
+    dso->evalMethod("pushMutationDeclaration", *call_args, xsink).discard(xsink);
+    if (*xsink) {
+        return;
+    }
+
+    self->setPrivate(CID_SQLMUTATIONDECLARATION, new QoreSqlMutationDeclaration(dso));
+}
+
+//! Removes the declaration from the datasource or pool
+/** @par Example:
+    @code{.py}
+delete decl;
+    @endcode
+
+    @since %Qore 3.0
+*/
+SqlMutationDeclaration::destructor() {
+    decl->doDestructor(xsink);
+    decl->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw SQLMUTATIONDECLARATION-COPY-ERROR objects of this class cannot be copied
+
+    @since %Qore 3.0
+*/
+SqlMutationDeclaration::copy() {
+    xsink->raiseException("SQLMUTATIONDECLARATION-COPY-ERROR", "objects of this class cannot be copied");
+}

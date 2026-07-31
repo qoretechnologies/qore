@@ -36,6 +36,7 @@
 #include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Serializable.h"
+#include "qore/intern/SqlMutationContext.h"
 
 DLLLOCAL extern QoreClass* QC_ABSTRACTDATASOURCE;
 DLLLOCAL extern QoreClass* QC_ABSTRACTSQLSTATEMENT;
@@ -1274,4 +1275,124 @@ AbstractSQLStatement DatasourcePool::getSQLStatement() {
      }
 
     return new QoreObject(QC_SQLSTATEMENT, getProgram(), new QoreSQLStatement(ds));
+}
+
+//! Registers an opt-in structured mutation observer on the DatasourcePool
+/** @par Example:
+    @code{.py}
+dsp.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id);
+    @endcode
+
+    @param observer the callback to invoke; it is called with a single
+    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" argument
+    @param event_mask the bitmask of event classes to deliver; see @ref sql_mutation_masks
+    @param arg an argument reported unchanged in the \c "arg" key of every event
+
+    @note
+    - the observer applies to every connection in the pool, including connections opened later
+    - observer registration is scoped to this object; two pools in the same process are completely
+      independent
+
+    @see
+    - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+      for the full observer contract
+    - @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::setMutationObserver(code<*hash<SqlMutationDecisionInfo>(hash<SqlMutationEventInfo>)> observer, int event_mask = SQL_MUTATION_MASK_DEFAULT, auto arg)
+        [flags=NAMED_ARGS] {
+    ds->setMutationObserver(observer->refRefSelf(), event_mask, arg.refSelf(), xsink);
+}
+
+//! Removes any registered mutation observer from the DatasourcePool
+/** @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::clearMutationObserver() {
+    ds->clearMutationObserver(xsink);
+}
+
+//! Returns @ref True "True" if a mutation observer is registered on the DatasourcePool
+/** @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+bool DatasourcePool::hasMutationObserver() [flags=RET_VALUE_ONLY] {
+    return ds->hasMutationObserver();
+}
+
+//! Pushes producer-declared mutation metadata for the current thread
+/** Prefer @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration", which removes the
+    declaration deterministically when it goes out of scope.
+
+    The declaration is scoped to the pool and to the calling thread, so it remains in effect across
+    connection allocation and release within a transaction.
+
+    @param info the declaration; see @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo"
+
+    @throw SQL-MUTATION-DECLARATION-ERROR the declaration is invalid; nothing was pushed
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::pushMutationDeclaration(hash<SqlMutationInfo> info) [flags=NAMED_ARGS] {
+    ds->pushMutationDeclaration(info, xsink);
+}
+
+//! Removes the innermost mutation declaration for the current thread
+/** @throw SQL-MUTATION-DECLARATION-ERROR there is no active declaration in this thread to remove
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::popMutationDeclaration() {
+    ds->popMutationDeclaration(xsink);
+}
+
+//! Returns the innermost mutation declaration for the current thread, if any
+/** @since %Qore 3.0
+*/
+*hash<SqlMutationInfo> DatasourcePool::getMutationDeclaration() [flags=RET_VALUE_ONLY] {
+    return ds->getMutationDeclaration();
+}
+
+//! Reports the start of a bounded stream to the mutation observer
+/** @param declared_bytes the declared size of the stream in bytes; if <= 0 then the
+    \c "max_growth_bytes" value of the current declaration is used, if any
+
+    @return @ref True "True" to continue streaming
+
+    @throw SQL-MUTATION-REJECTED the observer rejected the stream; the error code and description
+    can be overridden by the observer's decision
+
+    @since %Qore 3.0
+*/
+bool DatasourcePool::reportMutationStreamBegin(int declared_bytes = 0) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamBegin(declared_bytes, xsink);
+}
+
+//! Reports bounded stream progress to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream so far
+
+    @return @ref True "True" to continue streaming
+
+    @throw SQL-MUTATION-REJECTED the observer stopped the stream; the error code and description
+    can be overridden by the observer's decision
+
+    @since %Qore 3.0
+*/
+bool DatasourcePool::reportMutationStreamProgress(int consumed_bytes) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamProgress(consumed_bytes, xsink);
+}
+
+//! Reports the end of a bounded stream to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream
+    @param ok @ref False "False" if the stream failed
+
+    @return @ref True "True"
+
+    @since %Qore 3.0
+*/
+bool DatasourcePool::reportMutationStreamEnd(int consumed_bytes, bool ok = True) [flags=NAMED_ARGS] {
+    return !ds->reportMutationStreamEnd(consumed_bytes, ok, xsink);
 }

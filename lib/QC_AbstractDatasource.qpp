@@ -32,6 +32,7 @@
 #include <qore/QoreColumnarResult.h>
 
 #include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/SqlMutationContext.h"
 
 class AbstractDatasource {};
 
@@ -641,4 +642,186 @@ if (!(caps & DBI_CAP_TRANSACTION_MANAGEMENT))
 */
 int AbstractDatasource::getCapabilities() [flags=RET_VALUE_ONLY] {
     return 0;
+}
+
+//! Registers an opt-in structured mutation observer on the object
+/** @par Example:
+    @code{.py}
+ds.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id);
+    @endcode
+
+    @param observer the callback to invoke; it is called with a single
+    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" argument and may return a
+    @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash
+    @param event_mask the bitmask of event classes to deliver; see @ref sql_mutation_masks
+    @param arg an argument reported unchanged in the \c "arg" key of every event
+
+    @par Observer Semantics
+    @anchor sql_mutation_admission
+    @parblock
+    @ref Qore::SQL::SQL_MUTATION_EVENT_PRE_EXEC "SQL_MUTATION_EVENT_PRE_EXEC",
+    @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_BEGIN "SQL_MUTATION_EVENT_STREAM_BEGIN", and
+    @ref Qore::SQL::SQL_MUTATION_EVENT_STREAM_PROGRESS "SQL_MUTATION_EVENT_STREAM_PROGRESS" are
+    <b>admission points</b>; every other event is a notification.
+
+    At an admission point:
+    - returning @ref nothing, or a hash with \c "admit" set to @ref True "True", admits the operation;
+    - returning a hash with \c "admit" set to @ref False "False" rejects it: %Qore raises the given
+      \c "err" and \c "desc" (defaulting to \c SQL-MUTATION-REJECTED), does not execute the
+      operation, and does not change the transaction state;
+    - an exception thrown by the observer propagates and the operation is not executed.  Admission
+      is fail-closed by design.
+
+    At a notification event:
+    - the return value is ignored;
+    - an exception thrown by the observer is raised <b>after</b> the real outcome has been
+      determined and applied.  The database outcome, the transaction state, and the value returned
+      to the caller are unaffected.  In particular an observer that throws while handling
+      @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS"
+      does not turn that outcome into a rollback.
+
+    Operations issued from inside an observer callback do not generate events, so an observer may
+    query the same object without recursing.
+    @endparblock
+
+    @note
+    - %Qore performs no classification of %SQL text, database error text, or command tags; all
+      semantic metadata comes from the producer through
+      @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+    - observer registration is scoped to this object; there is no process-global registry
+    - this method must be re-implemented in subclasses of AbstractDatasource; it is implemented in
+      @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    - this method was added as a non-abstract method in %Qore 3.0 to avoid breaking existing
+      subclasses of AbstractDatasource
+
+    @see
+    - @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
+    - clearMutationObserver()
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::setMutationObserver(code<*hash<SqlMutationDecisionInfo>(hash<SqlMutationEventInfo>)>[doc] observer, int[doc] event_mask = SQL_MUTATION_MASK_DEFAULT,
+        auto[doc] arg) [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+}
+
+//! Removes any registered mutation observer from the object
+/** @note this method must be re-implemented in subclasses of AbstractDatasource; it is implemented in
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+
+    @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::clearMutationObserver() {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+}
+
+//! Returns @ref True "True" if a mutation observer is registered on the object
+/** @note this base class method always returns @ref False "False"
+
+    @see setMutationObserver()
+
+    @since %Qore 3.0
+*/
+bool AbstractDatasource::hasMutationObserver() [flags=RET_VALUE_ONLY] {
+    return false;
+}
+
+//! Pushes producer-declared mutation metadata for the current thread
+/** Prefer @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration", which removes the
+    declaration deterministically when it goes out of scope.
+
+    Declarations nest; the innermost declaration in the calling thread is the one reported to the
+    observer.  Every call must be matched by a call to popMutationDeclaration().
+
+    @param info the declaration; see @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo" for the
+    structural rules enforced
+
+    @throw SQL-MUTATION-DECLARATION-ERROR the declaration is invalid; nothing was pushed
+
+    @note this method must be re-implemented in subclasses of AbstractDatasource; it is implemented in
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::pushMutationDeclaration(hash<SqlMutationInfo>[doc] info) [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+}
+
+//! Removes the innermost mutation declaration for the current thread
+/** @throw SQL-MUTATION-DECLARATION-ERROR there is no active declaration in this thread to remove
+
+    @note this method must be re-implemented in subclasses of AbstractDatasource; it is implemented in
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+
+    @see pushMutationDeclaration()
+
+    @since %Qore 3.0
+*/
+nothing AbstractDatasource::popMutationDeclaration() {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+}
+
+//! Returns the innermost mutation declaration for the current thread, if any
+/** @note this base class method always returns @ref nothing
+
+    @see pushMutationDeclaration()
+
+    @since %Qore 3.0
+*/
+*hash<SqlMutationInfo> AbstractDatasource::getMutationDeclaration() [flags=RET_VALUE_ONLY] {
+    return QoreValue();
+}
+
+//! Reports the start of a bounded stream to the mutation observer
+/** %Qore never sees or buffers the stream payload; only byte counts are propagated.  This method is
+    for producers of bulk or \c COPY streams; DBI drivers use the equivalent C++ API.
+
+    @param declared_bytes the declared size of the stream in bytes; if <= 0 then the
+    \c "max_growth_bytes" value of the current declaration is used, if any
+
+    @return @ref True "True" to continue streaming
+
+    @note the observer can reject the stream, in which case an exception is thrown
+
+    @since %Qore 3.0
+*/
+bool AbstractDatasource::reportMutationStreamBegin(int[doc] declared_bytes = 0) [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+    return false;
+}
+
+//! Reports bounded stream progress to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream so far
+
+    @return @ref True "True" to continue streaming
+
+    @note the observer can stop the stream, in which case an exception is thrown
+
+    @since %Qore 3.0
+*/
+bool AbstractDatasource::reportMutationStreamProgress(int[doc] consumed_bytes) [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+    return false;
+}
+
+//! Reports the end of a bounded stream to the mutation observer
+/** @param consumed_bytes the total number of bytes consumed by the stream
+    @param ok @ref False "False" if the stream failed
+
+    @return @ref True "True"; stream end is a notification and cannot be rejected
+
+    @since %Qore 3.0
+*/
+bool AbstractDatasource::reportMutationStreamEnd(int[doc] consumed_bytes, bool[doc] ok = True) [flags=NAMED_ARGS] {
+    xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
+        "the desired functionality; it is implemented in Datasource and DatasourcePool for example");
+    return false;
 }

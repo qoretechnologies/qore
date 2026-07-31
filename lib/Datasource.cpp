@@ -954,9 +954,55 @@ QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, const QoreL
     return rv.release();
 }
 
+//! mutation observer admission point for a read operation
+/** Reads are identified structurally by the core API used; no SQL text is inspected.
+
+    @return 0 to continue; -1 if the observer rejected the operation, in which case an exception has
+    been raised in \a xsink and the operation must not be executed
+*/
+static int ds_mutation_read_pre(qore_ds_private* priv, ExceptionSink* xsink) {
+    if (!priv->observes(SQL_MUTATION_MASK_READ)) {
+        return 0;
+    }
+    SqlMutationEvent ev(SQL_MUTATION_EVENT_PRE_EXEC, SQL_STMT_CLASS_READ);
+    return priv->dispatchMutationEvent(ev, xsink);
+}
+
+//! mutation observer result boundary for a read operation
+static void ds_mutation_read_post(qore_ds_private* priv, ExceptionSink* xsink) {
+    if (!priv->getMutationCtx()) {
+        return;
+    }
+    if (priv->observes(SQL_MUTATION_MASK_READ)) {
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, SQL_STMT_CLASS_READ);
+        if (priv->connection_aborted) {
+            ev.outcome = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
+            ev.replay_safe = 1;
+        } else {
+            ev.outcome = *xsink ? SQL_MUTATION_OUTCOME_ERROR : SQL_MUTATION_OUTCOME_OK;
+        }
+        ev.driver_xsink = xsink;
+        priv->dispatchMutationEvent(ev, xsink);
+    }
+    // a connection lost during a read still ends any open transaction
+    priv->flushMutationConnectionLost(xsink);
+
+    // in autocommit mode the read is its own implicit transaction, which Datasource::autoCommit()
+    // is about to close; no commit outcome is reported for a read, but the transaction identity
+    // must not leak into the next operation
+    if (priv->autocommit) {
+        priv->tx_id.clear();
+        priv->tx_seq = 0;
+    }
+}
+
 QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return QoreValue();
+    }
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->select(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -969,7 +1015,11 @@ QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* ar
 
 QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return QoreValue();
+    }
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectTyped(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -983,7 +1033,11 @@ QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNod
 QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, const QoreListNode* args,
         ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return nullptr;
+    }
     QoreColumnarResult* rv = qore_dbi_private::get(*priv->dsl)->selectColumnar(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -996,7 +1050,11 @@ QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, cons
 
 QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return QoreValue();
+    }
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectRows(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -1009,7 +1067,11 @@ QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode
 
 QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return QoreValue();
+    }
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectRowsTyped(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -1022,7 +1084,11 @@ QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreLis
 
 QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return nullptr;
+    }
     QoreHashNode* rv = qore_dbi_private::get(*priv->dsl)->selectRow(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -1036,8 +1102,23 @@ QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListN
 QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, const QoreListNode* args,
         ExceptionSink* xsink) {
     assert(xsink);
-    if (!priv->autocommit && !priv->in_transaction && beginImplicitTransaction(xsink))
+
+    // mutation observer admission point; delivered before any implicit transaction is started so
+    // that a rejected operation can never leave an open transaction behind
+    if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_PRE_EXEC, SQL_STMT_CLASS_EXEC);
+        if (priv->dispatchMutationEvent(ev, xsink)) {
+            return QoreValue();
+        }
+    }
+
+    const bool tx_begin = !priv->autocommit && !priv->in_transaction;
+    if (tx_begin && beginImplicitTransaction(xsink))
         return QoreValue();
+
+    if (tx_begin && priv->getMutationCtx()) {
+        priv->dispatchMutationTxBegin(xsink);
+    }
 
     assert(priv->isopen && priv->private_data);
 
@@ -1049,11 +1130,53 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
     if (priv->connection_aborted) {
         assert(*xsink);
         assert(!rv);
+        if (priv->getMutationCtx()) {
+            if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+                SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, SQL_STMT_CLASS_EXEC);
+                ev.outcome = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
+                // no commit was in flight, so the operation can be replayed
+                ev.replay_safe = 1;
+                ev.driver_xsink = xsink;
+                priv->dispatchMutationEvent(ev, xsink);
+            }
+            priv->flushMutationConnectionLost(xsink);
+        }
         return QoreValue();
     }
 
+    const bool stmt_ok = !*xsink;
+
+    if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, SQL_STMT_CLASS_EXEC);
+        ev.outcome = stmt_ok ? SQL_MUTATION_OUTCOME_OK : SQL_MUTATION_OUTCOME_ERROR;
+        ev.driver_xsink = xsink;
+        priv->dispatchMutationEvent(ev, xsink);
+    }
+
     if (priv->autocommit) {
+        if (priv->getMutationCtx()) {
+            priv->commit_in_progress = true;
+        }
         qore_dbi_private::get(*priv->dsl)->autoCommit(this, xsink);
+        if (priv->getMutationCtx()) {
+            priv->commit_in_progress = false;
+            int outcome;
+            int replay_safe;
+            if (!stmt_ok) {
+                // the statement itself failed, so in autocommit mode nothing can have been
+                // committed; this is structural, not derived from the error
+                outcome = SQL_MUTATION_OUTCOME_ROLLBACK;
+                replay_safe = 1;
+            } else if (*xsink || priv->connection_aborted) {
+                // the commit did not demonstrably succeed; the server may still have applied it
+                outcome = SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS;
+                replay_safe = 0;
+            } else {
+                outcome = SQL_MUTATION_OUTCOME_COMMIT;
+                replay_safe = 0;
+            }
+            priv->dispatchMutationOutcome(SQL_STMT_CLASS_COMMIT, outcome, replay_safe, xsink, xsink);
+        }
     } else {
         priv->statementExecuted(*xsink);
     }
@@ -1083,7 +1206,11 @@ QoreValue Datasource::execRaw(const QoreString* query_str, ExceptionSink* xsink)
 
 QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    if (ds_mutation_read_pre(priv, xsink)) {
+        return nullptr;
+    }
     QoreHashNode* rv = qore_dbi_private::get(*priv->dsl)->describe(this, query_str, args, xsink);
+    ds_mutation_read_post(priv, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag
@@ -1109,6 +1236,9 @@ int Datasource::beginTransaction(ExceptionSink* xsink) {
     if (!rc && !priv->in_transaction) {
         priv->in_transaction = true;
         assert(!priv->active_transaction);
+        if (priv->getMutationCtx()) {
+            priv->dispatchMutationTxBegin(xsink);
+        }
     }
     return rc;
 }
@@ -1190,6 +1320,9 @@ void Datasource::reset(ExceptionSink* xsink) {
         // close any open transaction(s)
         priv->in_transaction = false;
         priv->active_transaction = false;
+        priv->commit_in_progress = false;
+        priv->tx_id.clear();
+        priv->tx_seq = 0;
     }
 }
 
@@ -1385,4 +1518,111 @@ QoreHashNode* Datasource::getEventQueueHash(Queue*& q, int event_code) const {
 
 QoreObject* Datasource::getSQLStatementObjectForResultSet(void* stmt_private_data) {
     return new QoreObject(QC_SQLSTATEMENT, getProgram(), new QoreSQLStatement(this, stmt_private_data, priv->dsh, STMT_EXECED));
+}
+
+void Datasource::setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+        ExceptionSink* xsink) {
+    assert(observer);
+    priv->getOrCreateMutationContext()->setObserver(observer, event_mask, arg, xsink);
+}
+
+void Datasource::clearMutationObserver(ExceptionSink* xsink) {
+    if (SqlMutationContext* ctx = priv->getMutationCtx()) {
+        ctx->clearObserver(xsink);
+    }
+}
+
+bool Datasource::hasMutationObserver() const {
+    SqlMutationContext* ctx = priv->getMutationCtx();
+    return ctx && ctx->hasObserver();
+}
+
+int Datasource::pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink) {
+    return priv->getOrCreateMutationContext()->pushDeclaration(info, xsink);
+}
+
+int Datasource::popMutationDeclaration(ExceptionSink* xsink) {
+    SqlMutationContext* ctx = priv->getMutationCtx();
+    if (!ctx) {
+        xsink->raiseException(SQL_MUTATION_DECLARATION_ERR, "there is no active mutation declaration in this thread "
+            "to remove");
+        return -1;
+    }
+    return ctx->popDeclaration(xsink);
+}
+
+QoreHashNode* Datasource::getMutationDeclaration() const {
+    SqlMutationContext* ctx = priv->getMutationCtx();
+    return ctx ? ctx->getDeclaration() : nullptr;
+}
+
+bool Datasource::sqlMutationObserverActive() const {
+    return priv->observes(SQL_MUTATION_MASK_STREAM);
+}
+
+int Datasource::reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* xsink) {
+    assert(xsink);
+    if (declared_bytes <= 0) {
+        // fall back to the declared growth bound, if the producer declared one
+        declared_bytes = -1;
+        if (SqlMutationContext* ctx = priv->getMutationCtx()) {
+            ReferenceHolder<QoreHashNode> decl(ctx->getDeclaration(), xsink);
+            if (decl) {
+                int64 mgb = decl->getKeyValue("max_growth_bytes").getAsBigInt();
+                if (mgb > 0) {
+                    declared_bytes = mgb;
+                }
+            }
+        }
+    }
+    priv->stream_declared_bytes = declared_bytes;
+
+    if (!priv->observes(SQL_MUTATION_MASK_STREAM)) {
+        return 0;
+    }
+    SqlMutationEvent ev(SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_STMT_CLASS_STREAM);
+    ev.declared_bytes = declared_bytes;
+    ev.consumed_bytes = 0;
+    return priv->dispatchMutationEvent(ev, xsink);
+}
+
+int Datasource::reportMutationStreamProgress(int64 consumed_bytes, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!priv->observes(SQL_MUTATION_MASK_STREAM)) {
+        return 0;
+    }
+    SqlMutationEvent ev(SQL_MUTATION_EVENT_STREAM_PROGRESS, SQL_STMT_CLASS_STREAM);
+    ev.declared_bytes = priv->stream_declared_bytes;
+    ev.consumed_bytes = consumed_bytes < 0 ? 0 : consumed_bytes;
+    return priv->dispatchMutationEvent(ev, xsink);
+}
+
+int Datasource::reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink) {
+    assert(xsink);
+    const int64 declared_bytes = priv->stream_declared_bytes;
+    priv->stream_declared_bytes = -1;
+
+    if (!priv->observes(SQL_MUTATION_MASK_STREAM)) {
+        return 0;
+    }
+    SqlMutationEvent ev(SQL_MUTATION_EVENT_STREAM_END, SQL_STMT_CLASS_STREAM);
+    ev.declared_bytes = declared_bytes;
+    ev.consumed_bytes = consumed_bytes < 0 ? 0 : consumed_bytes;
+    ev.outcome = ok ? SQL_MUTATION_OUTCOME_OK : SQL_MUTATION_OUTCOME_ERROR;
+    ev.driver_xsink = xsink;
+    // stream end is a notification: it cannot reject anything that has already been streamed
+    priv->dispatchMutationEvent(ev, xsink);
+    return 0;
+}
+
+SqlMutationContext* Datasource::getMutationContext() const {
+    return priv->getMutationCtx();
+}
+
+void Datasource::setMutationContext(SqlMutationContext* ctx, ExceptionSink* xsink) {
+    priv->setMutationContext(ctx, xsink);
+}
+
+SqlMutationContext* Datasource::getOrCreateMutationContext() {
+    return priv->getOrCreateMutationContext();
 }

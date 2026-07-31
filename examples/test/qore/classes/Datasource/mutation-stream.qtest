@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class MutationStreamTest
+
+#! collects bounded stream events for assertions
+class StreamCollector {
+    public {
+        list<hash<SqlMutationEventInfo>> events();
+        #! abort the stream once this many bytes have been consumed; 0 = never
+        int abort_after = 0;
+    }
+
+    *hash<SqlMutationDecisionInfo> event(hash<SqlMutationEventInfo> ev) {
+        events += ev;
+        if (abort_after && ev.event == SQL_MUTATION_EVENT_STREAM_PROGRESS
+            && ev.consumed_bytes > abort_after) {
+            return <SqlMutationDecisionInfo>{
+                "admit": False,
+                "err": "STREAM-OVER-BUDGET",
+                "desc": sprintf("stream consumed %d bytes", ev.consumed_bytes),
+            };
+        }
+        return NOTHING;
+    }
+
+    reset() {
+        events = ();
+        abort_after = 0;
+    }
+
+    list<hash<SqlMutationEventInfo>> streamEvents() {
+        return map $1, events, $1.event >= SQL_MUTATION_EVENT_STREAM_BEGIN;
+    }
+}
+
+public class MutationStreamTest inherits QUnit::Test {
+    public {
+        const CopyInfo = <SqlMutationInfo>{
+            "op_id": "copy-1",
+            "path_id": "orders.copy",
+            "op_code": 9,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 1000,
+        };
+    }
+
+    private {
+        StreamCollector obs();
+    }
+
+    constructor() : Test("MutationStreamTest", "1.0", \ARGV) {
+        addTestCase("driver stream", \driverStreamTest());
+        addTestCase("declared bytes fallback", \declaredBytesFallbackTest());
+        addTestCase("stream abort", \streamAbortTest());
+        addTestCase("qore level stream", \qoreLevelStreamTest());
+        addTestCase("unmonitored stream", \unmonitoredStreamTest());
+
+        set_return_value(main());
+    }
+
+    private Datasource getDs(int chunk = 400) {
+        Datasource ds;
+        try {
+            ds = new Datasource("dbitest:u/p@db");
+            ds.setAutoCommit(True);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        ds.setOption("stream-chunk", chunk);
+        obs.reset();
+        ds.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        return ds;
+    }
+
+    driverStreamTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            # the mock driver streams through the C++ API a real driver uses for COPY
+            assertEq(1000, ds.execRaw("dbitest-copy 1000"));
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_PROGRESS, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_END), map $1.event, l);
+
+        # declared and consumed bytes are exposed without the payload ever being buffered
+        assertEq(0, (map $1, l, $1.declared_bytes != 1000).size());
+        assertEq((0, 400, 800, 1000, 1000), map $1.consumed_bytes, l);
+        assertEq(SQL_STMT_CLASS_STREAM, l[0].stmt_class);
+        assertEq("copy-1", l[0].info.op_id);
+        assertEq(SQL_MUTATION_OUTCOME_OK, l.last().outcome);
+    }
+
+    declaredBytesFallbackTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            # 0 declared bytes falls back to the declared growth bound
+            assertTrue(ds.reportMutationStreamBegin(0));
+        }
+        assertEq(1000, obs.streamEvents()[0].declared_bytes);
+        ds.reportMutationStreamEnd(0);
+
+        # with no declaration and no explicit size there is no declared bound to report
+        obs.reset();
+        assertTrue(ds.reportMutationStreamBegin(0));
+        assertEq(NOTHING, obs.streamEvents()[0].declared_bytes);
+        ds.reportMutationStreamEnd(0);
+    }
+
+    streamAbortTest() {
+        Datasource ds = getDs();
+        obs.abort_after = 500;
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            # the observer stops the stream once it has exceeded what it will admit
+            assertThrows("STREAM-OVER-BUDGET", \ds.execRaw(), "dbitest-copy 1000");
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        # begin, one admitted progress report, the rejected one, and the end boundary
+        assertEq((SQL_MUTATION_EVENT_STREAM_BEGIN, SQL_MUTATION_EVENT_STREAM_PROGRESS,
+            SQL_MUTATION_EVENT_STREAM_PROGRESS, SQL_MUTATION_EVENT_STREAM_END), map $1.event, l);
+        assertEq(800, l.last().consumed_bytes);
+        assertEq(SQL_MUTATION_OUTCOME_ERROR, l.last().outcome);
+    }
+
+    qoreLevelStreamTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, CopyInfo);
+            assertTrue(ds.reportMutationStreamBegin(2048));
+            assertTrue(ds.reportMutationStreamProgress(1024));
+            assertTrue(ds.reportMutationStreamProgress(2048));
+            assertTrue(ds.reportMutationStreamEnd(2048));
+        }
+
+        list<hash<SqlMutationEventInfo>> l = obs.streamEvents();
+        assertEq(4, l.size());
+        assertEq(0, (map $1, l, $1.declared_bytes != 2048).size());
+        assertEq((0, 1024, 2048, 2048), map $1.consumed_bytes, l);
+        assertEq("copy-1", l.last().info.op_id);
+    }
+
+    unmonitoredStreamTest() {
+        # with no observer the stream API is a no-op that always continues
+        Datasource ds;
+        try {
+            ds = new Datasource("dbitest:u/p@db");
+            ds.setAutoCommit(True);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+        assertFalse(ds.hasMutationObserver());
+        assertTrue(ds.reportMutationStreamBegin(100));
+        assertTrue(ds.reportMutationStreamProgress(50));
+        assertTrue(ds.reportMutationStreamEnd(100));
+        assertEq(1000, ds.execRaw("dbitest-copy 1000"));
+    }
+}

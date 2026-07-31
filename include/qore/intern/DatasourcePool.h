@@ -41,6 +41,7 @@
 
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/QoreSQLStatement.h"
+#include "qore/intern/SqlMutationContext.h"
 
 #include <map>
 #include <deque>
@@ -68,6 +69,8 @@ protected:
     Queue* q;
     // Queue argument
     QoreValue arg{};
+    // mutation observer context shared by every connection in the pool; nullptr = unmonitored
+    SqlMutationContext* mctx = nullptr;
 
 public:
     DLLLOCAL DatasourceConfig(DBIDriver* n_driver, const char* n_user, const char* n_pass, const char* n_db,
@@ -81,13 +84,15 @@ public:
     DLLLOCAL DatasourceConfig(const DatasourceConfig& old) :
         driver(old.driver), user(old.user), pass(old.pass), db(old.db), encoding(old.encoding), host(old.host),
         port(old.port), opts(old.opts ? old.opts->hashRefSelf() : nullptr),
-        q(old.q ? old.q->queueRefSelf() : nullptr), arg(old.arg.refSelf()) {
+        q(old.q ? old.q->queueRefSelf() : nullptr), arg(old.arg.refSelf()),
+        mctx(old.mctx ? old.mctx->refSelf() : nullptr) {
     }
 
     DLLLOCAL ~DatasourceConfig() {
         assert(!q);
         assert(!arg);
         assert(!opts);
+        assert(!mctx);
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
@@ -107,6 +112,10 @@ public:
             opts = nullptr;
 #endif
         }
+        if (mctx) {
+            mctx->deref(xsink);
+            mctx = nullptr;
+        }
     }
 
     // the first connection (opened in the DatasourcePool constructor) is passed with an xsink obj
@@ -119,6 +128,22 @@ public:
         q = n_q;
         arg.discard(xsink);
         arg = n_arg;
+    }
+
+    //! returns the mutation context, creating it if necessary; the config keeps the reference
+    /** New connections created from this config inherit the context, which is what makes an
+        observer registered on the pool apply to connections opened later, and what keeps a
+        per-thread declaration valid across connection allocation and release
+    */
+    DLLLOCAL SqlMutationContext* getOrCreateMutationContext() {
+        if (!mctx) {
+            mctx = new SqlMutationContext;
+        }
+        return mctx;
+    }
+
+    DLLLOCAL SqlMutationContext* getMutationContext() const {
+        return mctx;
     }
 };
 
@@ -154,6 +179,11 @@ protected:
     void addSQL(const char* cmd, const QoreString* sql);
     void resetSQL();
 #endif
+
+    //! returns the pool-wide mutation context, creating and fanning it out if necessary
+    /** must be called with the pool lock held
+    */
+    DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
 
     DLLLOCAL Datasource* getAllocatedDS();
     DLLLOCAL Datasource* getDSIntern(bool& new_ds, int64& wait_total, ExceptionSink* xsink);
@@ -235,6 +265,18 @@ public:
     DLLLOCAL QoreValue getOption(const char* opt, ExceptionSink* xsink) {
         return pool[0]->getOption(opt, xsink);
     }
+
+    // mutation observer API; the context is owned by the pool config and shared by every connection
+    DLLLOCAL void setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
+            ExceptionSink* xsink);
+    DLLLOCAL void clearMutationObserver(ExceptionSink* xsink);
+    DLLLOCAL bool hasMutationObserver() const;
+    DLLLOCAL int pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink);
+    DLLLOCAL int popMutationDeclaration(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getMutationDeclaration() const;
+    DLLLOCAL int reportMutationStreamBegin(int64 declared_bytes, ExceptionSink* xsink);
+    DLLLOCAL int reportMutationStreamProgress(int64 consumed_bytes, ExceptionSink* xsink);
+    DLLLOCAL int reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink);
 
     // functions supporting DatasourceStatementHelper
     DLLLOCAL DatasourceStatementHelper* helperRefSelfImpl() {

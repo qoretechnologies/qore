@@ -357,23 +357,79 @@ int QoreSQLStatement::exec(const QoreListNode* args, ExceptionSink* xsink) {
     return execIntern(dba, xsink);
 }
 
+//! mutation observer admission point for a prepared statement execution
+/** @return 0 to continue; -1 if the observer rejected the operation, in which case the statement
+    must not be executed
+
+    @note prepared statements carry exactly the same declaration as any other operation, because the
+    declaration is read from the shared per-datasource mutation context and never from the statement
+*/
+static int stmt_mutation_pre(qore_ds_private* dsp, int stmt_class, ExceptionSink* xsink) {
+    if (dsp->observes(stmt_class == SQL_STMT_CLASS_READ ? SQL_MUTATION_MASK_READ : SQL_MUTATION_MASK_EXEC)) {
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_PRE_EXEC, stmt_class);
+        if (dsp->dispatchMutationEvent(ev, xsink)) {
+            return -1;
+        }
+    }
+    if (dsp->getMutationCtx() && !dsp->in_transaction) {
+        dsp->dispatchMutationTxBegin(xsink);
+    }
+    return 0;
+}
+
+//! mutation observer result boundary for a prepared statement execution
+static void stmt_mutation_post(qore_ds_private* dsp, int stmt_class, int rc, ExceptionSink* xsink) {
+    if (!dsp->getMutationCtx()) {
+        return;
+    }
+    if (dsp->observes(stmt_class == SQL_STMT_CLASS_READ ? SQL_MUTATION_MASK_READ : SQL_MUTATION_MASK_EXEC)) {
+        SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, stmt_class);
+        if (dsp->connection_aborted) {
+            ev.outcome = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
+            // no commit was in flight, so the operation can be replayed
+            ev.replay_safe = 1;
+        } else {
+            ev.outcome = (rc || *xsink) ? SQL_MUTATION_OUTCOME_ERROR : SQL_MUTATION_OUTCOME_OK;
+        }
+        ev.driver_xsink = xsink;
+        dsp->dispatchMutationEvent(ev, xsink);
+    }
+    dsp->flushMutationConnectionLost(xsink);
+}
+
 int QoreSQLStatement::execIntern(DBActionHelper& dba, ExceptionSink* xsink) {
+    qore_ds_private* dsp = priv->ds->priv;
+
+    if (stmt_mutation_pre(dsp, SQL_STMT_CLASS_STMT_EXEC, xsink)) {
+        return -1;
+    }
+
     int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_exec(this, xsink);
     if (!rc)
         status = STMT_EXECED;
 
     //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s@%s: %s\n", this, priv->ds, priv->ds->getUsername(), priv->ds->getDBName(), str.getBuffer());
 
+    stmt_mutation_post(dsp, SQL_STMT_CLASS_STMT_EXEC, rc, xsink);
+
     priv->ds->priv->statementExecuted(rc);
     return rc;
 }
 
 int QoreSQLStatement::execDescribeIntern(DBActionHelper& dba, ExceptionSink* xsink) {
+    qore_ds_private* dsp = priv->ds->priv;
+
+    if (stmt_mutation_pre(dsp, SQL_STMT_CLASS_READ, xsink)) {
+        return -1;
+    }
+
     int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_exec_describe(this, xsink);
     if (!rc)
         status = STMT_EXECED;
 
     //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s@%s: %s\n", this, priv->ds, priv->ds->getUsername(), priv->ds->getDBName(), str.getBuffer());
+
+    stmt_mutation_post(dsp, SQL_STMT_CLASS_READ, rc, xsink);
 
     priv->ds->priv->statementExecuted(rc);
     return rc;
