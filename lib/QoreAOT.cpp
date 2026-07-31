@@ -25658,10 +25658,13 @@ static uint64_t qoreAotAvailableMemoryBytes() {
 
 // Choose the AOT batch worker-thread count.  An explicit QORE_AOT_BATCH_JOBS
 // always wins (1 = serial, identical to the pre-parallel path).  Otherwise the
-// default is hardware concurrency, but capped by available memory so a large
-// parallel -O3 codegen run cannot exhaust RAM: each worker runs an independent
-// LLVM -O3 backend on top of the shared parsed program, and on a big core file
-// set that private working set is on the order of ~1 GB per worker.
+// default is hardware concurrency, capped at the measured throughput knee and
+// then by available memory so a large parallel -O3 codegen run cannot exhaust
+// RAM: each worker runs an independent LLVM -O3 backend on top of the shared
+// parsed program, and on a big core file set that private working set is on the
+// order of ~1 GB per worker. More than 12 concurrent -O3 modules increases
+// allocator/cache contention on large and medium batches without improving
+// throughput; QORE_AOT_BATCH_JOBS remains available for host-specific tuning.
 //
 // @param num_entries number of files in the batch (final clamp; never spin up
 //        more workers than files)
@@ -25677,6 +25680,11 @@ static unsigned qoreAotChooseBatchJobs(size_t num_entries) {
     }
 
     if (!explicit_jobs) {
+        constexpr unsigned max_auto_jobs = 12;
+        if (jobs > max_auto_jobs) {
+            jobs = max_auto_jobs;
+        }
+
         // Per-worker peak for a single -O3 emit over a large core file.
         // Overridable for tuning / testing without recompiling.
         uint64_t per_worker = 1024ull * 1024ull * 1024ull; // 1 GiB default
