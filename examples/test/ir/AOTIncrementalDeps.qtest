@@ -50,6 +50,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
+        addTestCase("cross-file fast entry is a build dependency", \testCrossFileFastEntryDep());
+        addTestCase("stale sibling fast entries are not imported", \testStaleSiblingFastEntry());
         # NOTE: enum members route through the SAME constant hook — they are
         # registered as ConstantList entries, so a folded `SiblingEnum::Member`
         # is captured identically to a constant.  An end-to-end enum case is not
@@ -181,5 +183,155 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string deps = provider_dep + consumer_dep;
         assertEq(-1, deps.find("qorus-bootstrap-fallback"),
             "batch depfiles are real qcc depfiles, not wrapper fallback depfiles: " + deps);
+    }
+
+    # A callee body that qualifies for a direct cross-file fast entry.
+    private string fastEligibleCallee() {
+        return "%new-style\n%require-types\n"
+            "namespace FastX {\n"
+            "our bool fx_blocked;\n"
+            "sub fasthelper(string value) {\n"
+            "    if (fx_blocked || !value.val()) {\n"
+            "        throw \"EMPTY\", \"value is empty\";\n"
+            "    }\n"
+            "}\n"
+            "}\n";
+    }
+
+    # The SAME declaration with a body that cannot have a fast entry: the
+    # closure capture forces `value` into a real runtime local, so the direct
+    # unboxed-argument entry disappears while the signature, the declaration
+    # hash, and the standard entry symbol all stay identical.
+    private string fastIneligibleCallee() {
+        return "%new-style\n%require-types\n"
+            "namespace FastX {\n"
+            "our bool fx_blocked;\n"
+            "sub fasthelper(string value) {\n"
+            "    auto closure = string sub () { return value; };\n"
+            "    if (fx_blocked || !closure().val()) {\n"
+            "        throw \"EMPTY\", \"value is empty\";\n"
+            "    }\n"
+            "}\n"
+            "}\n";
+    }
+
+    private string fastCaller() {
+        return "%new-style\n%require-types\n"
+            "namespace FastX {\n"
+            "sub fastcaller(string value) {\n"
+            "    fasthelper(value);\n"
+            "}\n"
+            "}\n";
+    }
+
+    # batch-compile the fast-entry callee/caller pair into lib_dir
+    private string batchCompileFastPair() {
+        return run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s/fastcallee.qc %s/fastcaller.qc",
+            env, qcc_bin, lib_dir, lib_dir, tmp_dir, tmp_dir));
+    }
+
+    # incrementally recompile one source of the pair against the sibling .qo dir,
+    # exactly as an incremental build driven by the emitted depfiles does
+    private string recompileFastSource(string name) {
+        string object = trim(run(sprintf("find %s -maxdepth 1 -name '*%s_qc.qo'", lib_dir, name)));
+        assertTrue(is_file(object), "batch object for " + name + " exists: " + object);
+        return run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s/%s.qc",
+            env, qcc_bin, lib_dir, object, tmp_dir, name));
+    }
+
+    # undefined `_fast` symbols an object requires from another object
+    private string undefinedFastSymbols(string name) {
+        string object = trim(run(sprintf("find %s -maxdepth 1 -name '*%s_qc.qo'", lib_dir, name)));
+        string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, object));
+        string rv = "";
+        foreach string line in (dump.split("\n")) {
+            if (line.find(" U ") != -1 && line.find("_fast") != -1) {
+                rv += trim(line) + "\n";
+            }
+        }
+        return rv;
+    }
+
+    # link every object in lib_dir into one executable; qcc's link mode fails on
+    # an undefined hidden `_fast` symbol exactly as the reported Qorus link did
+    private string linkFastPair() {
+        return run(sprintf("%s %s -o %s/fastapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
+    }
+
+    # A direct cross-file call into a sibling's fast entry hard-requires a hidden
+    # symbol whose existence is derived from the CALLEE'S BODY, not its
+    # declaration.  A body-only edit that costs the callee its fast entry leaves
+    # an unchanged caller referencing a symbol nothing defines, so the callee
+    # must be recorded as a build dependency of the caller.
+    testCrossFileFastEntryDep() {
+        TmpDir tmp = initDirs();
+        write(tmp_dir + "/fastcallee.qc", fastEligibleCallee());
+        write(tmp_dir + "/fastcaller.qc", fastCaller());
+
+        string out = batchCompileFastPair();
+        assertEq("", undefinedFastSymbols("fastcallee"),
+            "the callee defines its own fast entry: " + out);
+        assertTrue(undefinedFastSymbols("fastcaller").find("_fast") != -1,
+            "the caller emits a direct cross-file fast-entry reference: " + out);
+
+        string caller_dep = run(sprintf("cat %s/*fastcaller_qc.qo.d", lib_dir));
+        assertTrue(caller_dep.find("fastcallee.qc") != -1,
+            "the caller's depfile records the fast-entry callee source: " + caller_dep);
+        string callee_dep = run(sprintf("cat %s/*fastcallee_qc.qo.d", lib_dir));
+        assertEq(-1, callee_dep.find("fastcaller.qc"),
+            "the fast-entry edge is one-way, not an all-to-all batch edge: " + callee_dep);
+
+        assertTrue(linkFastPair().find("undefined reference") == -1,
+            "the freshly batch-compiled pair links");
+
+        # a body-only edit: same declaration, no fast entry any more
+        write(tmp_dir + "/fastcallee.qc", fastIneligibleCallee());
+        # the depfile above makes both objects out of date, so an incremental
+        # build recompiles both
+        recompileFastSource("fastcallee");
+        recompileFastSource("fastcaller");
+        assertEq("", undefinedFastSymbols("fastcaller"),
+            "the rebuilt caller no longer requires the removed fast entry");
+        string link = linkFastPair();
+        assertEq(-1, link.find("undefined reference"),
+            "the incrementally rebuilt pair links: " + link);
+        assertTrue(is_file(tmp_dir + "/fastapp"), "link produced an executable: " + link);
+    }
+
+    # The rebuild order of two objects that changed together is not fixed (make
+    # runs independent recipes in any order, and in parallel), so a caller can be
+    # recompiled while the callee's `.qo` is still the pre-edit one.  Importing
+    # fast entries from that stale object would bake in a reference to an entry
+    # the very next recompile deletes.  qcc must detect the sibling is out of
+    # date with its source and fall back to the ordinary call path.
+    testStaleSiblingFastEntry() {
+        TmpDir tmp = initDirs();
+        write(tmp_dir + "/fastcallee.qc", fastEligibleCallee());
+        write(tmp_dir + "/fastcaller.qc", fastCaller());
+        string out = batchCompileFastPair();
+        assertTrue(undefinedFastSymbols("fastcaller").find("_fast") != -1,
+            "the caller starts with a direct cross-file fast-entry reference: " + out);
+
+        # sanity: with the sibling `.qo` still current, the optimization survives
+        # an incremental recompile of the caller alone
+        recompileFastSource("fastcaller");
+        assertTrue(undefinedFastSymbols("fastcaller").find("_fast") != -1,
+            "a current sibling still provides its fast entry to an incremental rebuild");
+        string caller_dep = run(sprintf("cat %s/*fastcaller_qc.qo.d", lib_dir));
+        assertTrue(caller_dep.find("fastcallee.qc") != -1,
+            "the incremental caller depfile also records the callee source: " + caller_dep);
+
+        # now edit the callee and rebuild the CALLER first
+        write(tmp_dir + "/fastcallee.qc", fastIneligibleCallee());
+        recompileFastSource("fastcaller");
+        assertEq("", undefinedFastSymbols("fastcaller"),
+            "no fast entry is imported from a sibling .qo that is stale with its source");
+
+        recompileFastSource("fastcallee");
+        string link = linkFastPair();
+        assertEq(-1, link.find("undefined reference"),
+            "the pair links whichever object was rebuilt first: " + link);
+        assertTrue(is_file(tmp_dir + "/fastapp"), "link produced an executable: " + link);
     }
 }

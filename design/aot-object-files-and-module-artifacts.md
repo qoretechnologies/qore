@@ -114,6 +114,37 @@ workflow without separate header files.
 The preload step must not execute user code. It only creates declaration shells
 needed for parse-time name and type resolution.
 
+### Cross-File Fast Entries Are Body Dependencies
+
+Batch script compiles and `-L` preload both let a caller call a callee in
+another object through its `_fast` entry: a hidden, direct, unboxed-argument
+entry point. That reference is not a declaration dependency, it is a dependency
+on the callee's **lowered body**:
+
+- the fast entry exists only while that body stays eligible for one, and
+- the emitted call sequence bakes in the body's ABI and effect summary
+  (parameter/return kinds, cache-invalidation and runtime-local effects,
+  importable scalar/string/aggregate body summaries).
+
+A body-only edit therefore changes or removes the fast entry while the callee's
+declaration hash and standard entry symbol are untouched. Two rules keep that
+sound in incremental builds:
+
+- an object that emits a direct cross-file `_fast` reference records the
+  callee's source file as a build dependency, so the caller is recompiled
+  whenever the callee's body changes — without it the caller keeps an
+  undefined-reference to a `_fast` symbol the callee no longer defines;
+- fast-entry metadata is never imported from a preloaded `.qo` whose recorded
+  source hash no longer matches its on-disk source. A stale sibling describes a
+  body that is about to be replaced, so importing from it would make the result
+  depend on the order in which the build recompiles the two objects. Staleness
+  must be *proven* — a missing source or a missing hash leaves the sibling
+  usable.
+
+Other cross-unit references stay dependency-free: they resolve by name at
+load/register time, so a stale dependent picks up the new provider
+automatically.
+
 ## Module Aggregation
 
 `qcc -m <module-dir>` is the preferred clean-build path for split-directory
