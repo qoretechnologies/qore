@@ -30,6 +30,9 @@
 # we explicitly test deprecated behavior
 %disable-warning deprecated
 
+# Test servers use IPv4 unless a case explicitly selects another family. Keep endpoints on IPv4 loopback because an
+# unrelated IPv6-only listener can independently own the same ephemeral port number.
+
 class AltHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         return makeResponse(201, "a1, " + hdr.method + ", " + hdr.path + ", " + cx.raw_path);
@@ -712,7 +715,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("/route", "/route", MimeTypeHtml, new SimpleStringHandler("/route"));
         mServer.setDefaultHandler("my-handler", mHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        url = "http://localhost:" + port;
+        url = "http://127.0.0.1:" + port;
         mServer.waitForAsyncIo();
 
         # Set up second server
@@ -728,7 +731,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mAsyncServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         mAsyncServer.setDefaultHandler("my-handler", new ReqHandler());
         asyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        asyncUrl = "http://localhost:" + asyncPort;
+        asyncUrl = "http://127.0.0.1:" + asyncPort;
 
         # Add HTTPS listener for async server
         asyncSslPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{
@@ -736,7 +739,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
-        asyncSslUrl = "https://localhost:" + asyncSslPort;
+        asyncSslUrl = "https://127.0.0.1:" + asyncSslPort;
 
         # Add WebSocket handler for async server
         mWsHandler = new TestWsHandler({"logger": asyncLogger});
@@ -1006,7 +1009,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "enable_h3": True,
         });
         qServer.waitForAsyncIo();
-        string sslUrl = "https://localhost:" + linfo.port;
+        string sslUrl = "https://127.0.0.1:" + linfo.port;
 
         # Helper: connect with H3 advertised via Alt-Svc — this is the path
         # that wedged on the broken build.  Use AUTO so the client follows the
@@ -1058,7 +1061,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         for (int i = 0; i < N; ++i) {
             Socket s();
             try {
-                s.connect("localhost:" + linfo.port, 5s);
+                s.connect("127.0.0.1:" + linfo.port, 5s);
                 # Force the WANT_READ path on the server side
                 usleep(50ms);
                 s.upgradeClientToSSL(5000);
@@ -1261,7 +1264,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # RFC 7540 Section 3.5: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
         {
             Socket sock();
-            sock.connect("localhost:" + port);
+            sock.connect("127.0.0.1:" + port);
             on_exit sock.close();
 
             # Send HTTP/2 connection preface
@@ -1292,7 +1295,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 2: PRI method with non-HTTP/2 path should also be rejected
         {
             Socket sock();
-            sock.connect("localhost:" + port);
+            sock.connect("127.0.0.1:" + port);
             on_exit sock.close();
 
             # Send PRI with a different path
@@ -1323,7 +1326,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 3: Also test with async mode server
         {
             Socket sock();
-            sock.connect("localhost:" + asyncPort);
+            sock.connect("127.0.0.1:" + asyncPort);
             on_exit sock.close();
 
             # Send HTTP/2 connection preface to async server
@@ -1434,7 +1437,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "non-sensitive query parameters are preserved");
 
         Socket sock();
-        sock.connect("localhost:" + port);
+        sock.connect("127.0.0.1:" + port);
         on_exit sock.close();
         sock.send("GET /query%20path?category=Compliance%20%26%20Audit&limit=100 HTTP/1.1\r\n"
             "Host: localhost\r\nConnection: close\r\n\r\n");
@@ -1444,7 +1447,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "/query%20path?category=Compliance%20%26%20Audit&limit=100", resp.body);
 
         Socket mask_sock();
-        mask_sock.connect("localhost:" + port);
+        mask_sock.connect("127.0.0.1:" + port);
         on_exit mask_sock.close();
         mask_sock.send("GET /masked%20path?p%61ssword=secret&limit=100 HTTP/1.1\r\n"
             "Host: localhost\r\nConnection: close\r\n\r\n");
@@ -1453,7 +1456,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("/masked path?password=<masked>...", resp.body);
 
         Socket token_mask_sock();
-        token_mask_sock.connect("localhost:" + port);
+        token_mask_sock.connect("127.0.0.1:" + port);
         on_exit token_mask_sock.close();
         token_mask_sock.send("GET /masked%20path?subscription=true&token=secret%3F%26still-secret&limit=100 HTTP/1.1\r\n"
             "Host: localhost\r\nConnection: close\r\n\r\n");
@@ -1514,7 +1517,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(info.port > 0);
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
-        HTTPClient client({"url": "http://localhost:" + info.port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + info.port, "timeout": 5s});
         client.connect();
         on_exit client.disconnect();
         assertEq("listener-async-ok", client.get("/ok"));
@@ -1751,7 +1754,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 1: Client closes connection immediately after sending request
         {
             Socket sock();
-            sock.connect("localhost:" + asyncPort);
+            sock.connect("127.0.0.1:" + asyncPort);
             sock.send("GET /disconnect HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
             # Read response (server should handle gracefully)
             try {
@@ -1778,7 +1781,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 3: Multiple rapid connect/disconnect cycles
         for (int i = 0; i < 5; ++i) {
             Socket sock();
-            sock.connect("localhost:" + asyncPort);
+            sock.connect("127.0.0.1:" + asyncPort);
             sock.send("GET /rapid" + i + " HTTP/1.1\r\nHost: localhost\r\n\r\n");
             sock.close();  # Close immediately
         }
@@ -1805,7 +1808,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
 
         # Connect WebSocket client to async server
-        string wsUrl = "ws://localhost:" + asyncPort + "/ws";
+        string wsUrl = "ws://127.0.0.1:" + asyncPort + "/ws";
         WebSocketClient wsc(callback, {"url": wsUrl, "timeout": 5s});
         hash<auto> connect_info = wsc.connect();
         on_exit wsc.disconnect();
@@ -1838,7 +1841,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
 
         # Connect WebSocket client to async SSL server (wss://)
-        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
             "timeout": 10s,
@@ -1867,7 +1870,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     asyncModeWebSocketHttp2StatusTest() {
         # Verify HTTP/2 WebSocket CONNECT succeeds (expects 200 OK)
         code callback = sub (*data msg) { };
-        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
             "timeout": 10s,
@@ -1895,7 +1898,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
 
         # Connect WebSocket client to async SSL server (wss://) with HTTP/2 disabled
-        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
             "timeout": 10s,
@@ -1970,7 +1973,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test with HTTP/2 (auto) client cert
         {
             HTTPClient client({
-                "url": "https://localhost:" + certPort,
+                "url": "https://127.0.0.1:" + certPort,
                 "timeout": 5s,
                 "ssl_verify_cert": False,
                 "ssl_cert_path": cert_fn,
@@ -1982,7 +1985,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test with explicit HTTP/1.1 client cert
         {
             HTTPClient client({
-                "url": "https://localhost:" + certPort,
+                "url": "https://127.0.0.1:" + certPort,
                 "timeout": 5s,
                 "ssl_verify_cert": False,
                 "ssl_cert_path": cert_fn,
@@ -2025,7 +2028,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         authServer.waitForAsyncIo();
 
         # First attempt: Connect WITHOUT valid token - should get 401
-        string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
+        string wssUrlNoToken = "wss://127.0.0.1:" + authSslPort + "/ws";
         bool connectSucceeded = False;
         try {
             WebSocketClient wscBad(sub (*data msg) {}, {
@@ -2062,7 +2065,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
         };
 
-        string wssUrl = "wss://localhost:" + authSslPort + "/ws";
+        string wssUrl = "wss://127.0.0.1:" + authSslPort + "/ws";
         WebSocketClient wscGood(callback, {
             "url": wssUrl,
             "timeout": 10s,
@@ -2102,7 +2105,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         persistServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         persistServer.setDefaultHandler("persistent", handler);
         int persistPort = persistServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string persistUrl = "http://localhost:" + persistPort;
+        string persistUrl = "http://127.0.0.1:" + persistPort;
 
         # Create client with keep-alive
         HTTPClient client({"url": persistUrl, "timeout": 10s});
@@ -2164,7 +2167,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         epServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         epServer.setDefaultHandler("persistent", handler);
         int epPort = epServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string epUrl = "http://localhost:" + epPort;
+        string epUrl = "http://127.0.0.1:" + epPort;
 
         HTTPClient client({"url": epUrl, "timeout": 10s});
         client.connect();
@@ -2233,7 +2236,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         transServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         transServer.setDefaultHandler("persistent", handler);
         int transPort = transServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string transUrl = "http://localhost:" + transPort;
+        string transUrl = "http://127.0.0.1:" + transPort;
 
         HTTPClient client({"url": transUrl, "timeout": 10s});
         client.connect();
@@ -2272,7 +2275,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         closeServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         closeServer.setDefaultHandler("persistent", handler);
         int closePort = closeServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string closeUrl = "http://localhost:" + closePort;
+        string closeUrl = "http://127.0.0.1:" + closePort;
 
         {
             HTTPClient client({"url": closeUrl, "timeout": 10s});
@@ -2315,7 +2318,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         errServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         errServer.setDefaultHandler("persistent", handler);
         int errPort = errServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string errUrl = "http://localhost:" + errPort;
+        string errUrl = "http://127.0.0.1:" + errPort;
 
         HTTPClient client({"url": errUrl, "timeout": 10s});
         client.connect();
@@ -2362,7 +2365,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         concServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         concServer.setDefaultHandler("persistent", handler);
         int concPort = concServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string concUrl = "http://localhost:" + concPort;
+        string concUrl = "http://127.0.0.1:" + concPort;
 
         # Create multiple clients
         list<HTTPClient> clients = ();
@@ -2416,7 +2419,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         npServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         npServer.setDefaultHandler("persistent", handler);
         int npPort = npServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string npUrl = "http://localhost:" + npPort;
+        string npUrl = "http://127.0.0.1:" + npPort;
 
         HTTPClient client({"url": npUrl, "timeout": 10s});
         client.connect();
@@ -2615,7 +2618,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             });
             on_exit mAsyncServer.stopListenerID(linfo.id);
 
-            string disabledUrl = "https://localhost:" + linfo.port;
+            string disabledUrl = "https://127.0.0.1:" + linfo.port;
 
             # Create an HTTP/2 client and try to connect - it should fall back to HTTP/1.1
             # because the server won't offer HTTP/2 via ALPN
@@ -2720,7 +2723,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         background sub () {
             try {
-                HTTPClient client({"url": "http://localhost:" + port, "timeout": 10s});
+                HTTPClient client({"url": "http://127.0.0.1:" + port, "timeout": 10s});
                 client.connect();
                 client.get("/slow");
                 client.disconnect();
@@ -2751,7 +2754,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         assertTrue(server1.waitForAsyncIo(15s), "async I/O should be ready after start");
 
-        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 10s});
+        HTTPClient client1({"url": "http://127.0.0.1:" + port1, "timeout": 10s});
         client1.connect();
         on_exit client1.disconnect();
         assertEq("GET, restart1, /restart1", client1.get("/restart1"));
@@ -2769,7 +2772,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         assertTrue(server2.waitForAsyncIo(15s), "async I/O should restart after stop");
 
-        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 10s});
+        HTTPClient client2({"url": "http://127.0.0.1:" + port2, "timeout": 10s});
         client2.connect();
         on_exit client2.disconnect();
         assertEq("GET, restart2, /restart2", client2.get("/restart2"));
@@ -2818,7 +2821,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Test 1: Basic inline handler response
         {
-            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
             client.connect();
             on_exit client.disconnect();
             hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -2829,7 +2832,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Test 2: Inline handler works on keep-alive connections
         {
-            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
             client.connect();
             on_exit client.disconnect();
             # First request
@@ -2844,7 +2847,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Test 3: Non-inline handler still works alongside inline handler
         {
-            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
             client.connect();
             on_exit client.disconnect();
             hash<auto> resp = client.send(NOTHING, "GET", "/regular");
@@ -2863,7 +2866,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                     on_exit slow_done.dec();
                     try {
                         HTTPClient client({
-                            "url": "http://localhost:" + test_port,
+                            "url": "http://127.0.0.1:" + test_port,
                             "timeout": 15s,
                         });
                         client.connect();
@@ -2884,7 +2887,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Now the thread pool is fully occupied. Inline handler should still work
             # because it runs on the I/O thread, not the pool.
             HTTPClient inline_client({
-                "url": "http://localhost:" + test_port,
+                "url": "http://127.0.0.1:" + test_port,
                 "timeout": 5s,
             });
             inline_client.connect();
@@ -2920,7 +2923,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
-        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
         client.connect();
         on_exit client.disconnect();
 
@@ -2965,7 +2968,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(server.waitForAsyncIo(5s),
             "request-preparation HTTP/1 listener is ready");
         HTTPClient h1({
-            "url": "http://localhost:" + h1_listener.port,
+            "url": "http://127.0.0.1:" + h1_listener.port,
             "timeout": 5s,
             "error_passthru": True,
         });
@@ -3001,7 +3004,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "enable_h3": False,
         });
         HTTPClient h2({
-            "url": "https://localhost:" + h2_listener.port,
+            "url": "https://127.0.0.1:" + h2_listener.port,
             "timeout": 10s,
             "ssl_verify_cert": False,
             "http_version": "2.0",
@@ -3067,7 +3070,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(server.waitForAsyncIo(5s), "async I/O ready");
 
         HTTPClient h2client({
-            "url": "https://localhost:" + linfo.port,
+            "url": "https://127.0.0.1:" + linfo.port,
             "timeout": 10s,
             "ssl_verify_cert": False,
             "http_version": "auto",
@@ -3129,7 +3132,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Open a connection and make a request to establish keep-alive
         Socket sock();
-        sock.connect("localhost:" + test_port);
+        sock.connect("127.0.0.1:" + test_port);
         sock.send("GET /idle-test HTTP/1.1\r\nHost: localhost\r\n\r\n");
         # Read the full HTTP response (header + body) using protocol-aware methods
         hash<auto> resp = readRawHttpResponse(sock);
@@ -3158,7 +3161,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(closed, "idle connection should be closed by server after TTL");
 
         # Verify the server is still operational
-        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
         client.connect();
         on_exit client.disconnect();
         assertEq("GET, afteridle, /afteridle", client.get("/afteridle"));
@@ -3187,7 +3190,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test: HTTP/1.1 with Connection: close — server should close connection after response
         {
             Socket sock();
-            sock.connect("localhost:" + test_port);
+            sock.connect("127.0.0.1:" + test_port);
             sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
             # Read the HTTP response properly
             hash<auto> resp = readRawHttpResponse(sock);
@@ -3213,7 +3216,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Control test: HTTP/1.1 without Connection: close — connection stays open (keep-alive)
         {
             Socket sock();
-            sock.connect("localhost:" + test_port);
+            sock.connect("127.0.0.1:" + test_port);
             sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
             hash<auto> resp = readRawHttpResponse(sock);
             assertEq(200, resp.status_code, "response should be 200");
@@ -3227,7 +3230,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }
 
         # Verify server is still operational
-        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
         client.connect();
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -3257,7 +3260,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test: HTTP/1.0 request without Connection: Keep-Alive — should close
         {
             Socket sock();
-            sock.connect("localhost:" + test_port);
+            sock.connect("127.0.0.1:" + test_port);
             sock.send("GET /inline HTTP/1.0\r\nHost: localhost\r\n\r\n");
             # Read the HTTP response properly
             hash<auto> resp = readRawHttpResponse(sock);
@@ -3281,7 +3284,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }
 
         # Verify server is still operational
-        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
         client.connect();
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -3309,7 +3312,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Establish a WebSocket connection
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
         on_exit { try { ws_client.disconnect(); } catch () {} }
         ws_client.connect();
 
@@ -3353,7 +3356,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
         on_exit {
             try {
                 ws_client.disconnect();
@@ -3411,7 +3414,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
         }
         for (int i = 0; i < num_clients; ++i) {
-            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
             ws.connect();
             clients += ws;
         }
@@ -3450,7 +3453,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Start a WebSocket connection (streaming)
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
         on_exit { try { ws_client.disconnect(); } catch () {} }
         ws_client.connect();
 
@@ -3460,7 +3463,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             background sub () {
                 on_exit http_done.dec();
                 try {
-                    HTTPClient hclient({"url": "http://localhost:" + test_port, "timeout": 5s});
+                    HTTPClient hclient({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
                     hclient.connect();
                     hclient.get("/http/test");
                     hclient.disconnect();
@@ -3509,7 +3512,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
             listener_info += info;
             # Make a request to ensure the listener is working
-            HTTPClient client({"url": "http://localhost:" + info.port, "timeout": 2s});
+            HTTPClient client({"url": "http://127.0.0.1:" + info.port, "timeout": 2s});
             client.connect();
             assertEq("GET, test, /test", client.get("/test"));
             client.disconnect();
@@ -3531,7 +3534,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             background sub () {
                 on_exit done.dec();
                 try {
-                    HTTPClient client({"url": "http://localhost:" + final_port, "timeout": 5s});
+                    HTTPClient client({"url": "http://127.0.0.1:" + final_port, "timeout": 5s});
                     client.connect();
                     string result = client.get("/test");
                     if (result != "GET, test, /test") {
@@ -3597,7 +3600,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             # Create many connections
             for (int i = 0; i < num_connections; ++i) {
-                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+                HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
                 client.connect();
                 try {
                     assertEq("GET, test, /test", client.get("/test"));
@@ -3659,7 +3662,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "cache should return to baseline after all connections close");
 
             # Verify we can still make new connections (cache is clean)
-            HTTPClient verify_client({"url": "http://localhost:" + test_port, "timeout": 2s});
+            HTTPClient verify_client({"url": "http://127.0.0.1:" + test_port, "timeout": 2s});
             verify_client.connect();
             assertEq("GET, test2, /test2", verify_client.get("/test2"));
             verify_client.disconnect();
@@ -3686,7 +3689,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             # Create many HTTP/2 connections (HTTP/2 is negotiated via ALPN over SSL)
             for (int i = 0; i < num_connections; ++i) {
-                HTTPClient client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+                HTTPClient client({"url": "https://127.0.0.1:" + ssl_port, "timeout": 2s,
                     "ssl_verify_cert": False, "http2": True});
                 client.connect();
                 assertEq("GET, test, /test", client.get("/test"));
@@ -3739,7 +3742,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "cache should return to baseline after all HTTP/2 connections close");
 
             # Verify we can still make new HTTP/2 connections (cache is clean)
-            HTTPClient verify_client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+            HTTPClient verify_client({"url": "https://127.0.0.1:" + ssl_port, "timeout": 2s,
                 "ssl_verify_cert": False, "http2": True});
             verify_client.connect();
             assertEq("GET, test2, /test2", verify_client.get("/test2"));
@@ -3779,7 +3782,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 1: Client connects and immediately closes (before SSL handshake)
         {
             Socket sock();
-            sock.connect("localhost:" + ssl_port);
+            sock.connect("127.0.0.1:" + ssl_port);
             sock.close();  # Close immediately - server will see EOF during SSL_accept
             usleep(100ms);  # Give server time to process
         }
@@ -3787,13 +3790,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 2: Multiple rapid connect/close cycles
         for (int i = 0; i < 10; ++i) {
             Socket sock();
-            sock.connect("localhost:" + ssl_port);
+            sock.connect("127.0.0.1:" + ssl_port);
             sock.close();
         }
         usleep(500ms);  # Give server time to process all
 
         # Critical: Verify server is still responsive (I/O thread not blocked)
-        HTTPClient verify_client({"url": "https://localhost:" + ssl_port,
+        HTTPClient verify_client({"url": "https://127.0.0.1:" + ssl_port,
             "timeout": 2s, "ssl_verify_cert": False});
         verify_client.connect();
         assertEq("GET, test, /test", verify_client.get("/test"),
@@ -3848,13 +3851,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 try {
                     if (i % 2 == 0) {
                         # HTTP connections
-                        HTTPClient client({"url": "http://localhost:" + http_port, "timeout": 2s});
+                        HTTPClient client({"url": "http://127.0.0.1:" + http_port, "timeout": 2s});
                         client.connect();
                         client.get("/test");
                         client.disconnect();
                     } else {
                         # HTTPS connections
-                        HTTPClient client({"url": "https://localhost:" + https_port,
+                        HTTPClient client({"url": "https://127.0.0.1:" + https_port,
                             "timeout": 2s, "ssl_verify_cert": False});
                         client.connect();
                         client.get("/test");
@@ -3882,7 +3885,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertTrue(elapsed < 5s, "I/O thread should not block - requests should be fast");
 
         # Verify server still responsive
-        HTTPClient verify({"url": "http://localhost:" + http_port, "timeout": 2s});
+        HTTPClient verify({"url": "http://127.0.0.1:" + http_port, "timeout": 2s});
         verify.connect();
         assertEq("GET, final, /final", verify.get("/final"));
         verify.disconnect();
@@ -3909,7 +3912,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Raw HTTP/1.1 server that closes after max_requests_per_conn
         Socket listener();
-        listener.bind("localhost:0");
+        listener.bind("127.0.0.1:0");
         listener.listen();
         int port = listener.getSocketInfo().port;
 
@@ -3963,7 +3966,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # --- Scenario 1: immediate requests across server close ---
         {
             RestClientIo rc({
-                "url": "http://localhost:" + port,
+                "url": "http://127.0.0.1:" + port,
                 "data": "json",
                 "connect_timeout": 2s,
                 "timeout": 2s,
@@ -3988,7 +3991,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # --- Scenario 2: idle gap triggers server close, then request ---
         {
             RestClientIo rc({
-                "url": "http://localhost:" + port,
+                "url": "http://127.0.0.1:" + port,
                 "data": "json",
                 "connect_timeout": 2s,
                 "timeout": 2s,
@@ -4029,7 +4032,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         {
             bool srv3_stop = False;
             Socket srv3_listener();
-            srv3_listener.bind("localhost:0");
+            srv3_listener.bind("127.0.0.1:0");
             srv3_listener.listen();
             int srv3_port = srv3_listener.getSocketInfo().port;
 
@@ -4077,7 +4080,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
 
             RestClientIo rc({
-                "url": "http://localhost:" + srv3_port,
+                "url": "http://127.0.0.1:" + srv3_port,
                 "data": "json",
                 "connect_timeout": 2s,
                 "timeout": 2s,
@@ -4122,7 +4125,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         {
             bool srv4_stop = False;
             Socket srv4_listener();
-            srv4_listener.bind("localhost:0");
+            srv4_listener.bind("127.0.0.1:0");
             srv4_listener.listen();
             int srv4_port = srv4_listener.getSocketInfo().port;
 
@@ -4191,7 +4194,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
 
             RestClientIo rc({
-                "url": "http://localhost:" + srv4_port,
+                "url": "http://127.0.0.1:" + srv4_port,
                 "data": "json",
                 "connect_timeout": 5s,
                 "timeout": 15s,
@@ -4237,7 +4240,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         {
             bool srv4b_stop = False;
             Socket srv4b_listener();
-            srv4b_listener.bind("localhost:0");
+            srv4b_listener.bind("127.0.0.1:0");
             srv4b_listener.listen();
             int srv4b_port = srv4b_listener.getSocketInfo().port;
 
@@ -4310,7 +4313,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
 
             RestClientIo rc({
-                "url": "http://localhost:" + srv4b_port,
+                "url": "http://127.0.0.1:" + srv4b_port,
                 "data": "json",
                 "connect_timeout": 5s,
                 "timeout": 15s,
@@ -4357,7 +4360,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             date start = now_us();
             try {
                 RestClientIo rc({
-                    "url": "http://localhost:59999",
+                    "url": "http://127.0.0.1:59999",
                     "connect_timeout": 10s,
                     "timeout": 10s,
                 });
@@ -4380,7 +4383,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             date start = now_us();
             try {
                 RestClientIo rc({
-                    "url": "https://localhost:59999",
+                    "url": "https://127.0.0.1:59999",
                     "connect_timeout": 10s,
                     "timeout": 10s,
                 });
