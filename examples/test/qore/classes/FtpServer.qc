@@ -444,17 +444,11 @@ class FtpServer {
         hash<auto> ctrl_info = ns.getSocketInfo();
         string data_host = ctrl_info.address;
         int data_family = ctrl_info.family;
-        # get random port
-        int dport;
-        while (True) {
-            dport = 10000 + (rand() % 40000);
-            try {
-                data.bindINET(data_host, dport, True, data_family);
-                break;
-            } catch (hash ex) {
-                continue;
-            }
-        }
+        # Let the kernel select an unused ephemeral port.  Guessing from a broad
+        # range can select a Kubernetes NodePort: bind() succeeds locally, but
+        # the client's loopback connection is then redirected by OUTPUT DNAT.
+        data.bindINET(data_host, 0, True, data_family);
+        int dport = data.getSocketInfo().port;
         data.listen();
         ftpSend(ns, 229, "Entering Extended Passive Mode (|||%d|)", dport);
 
