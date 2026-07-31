@@ -298,6 +298,17 @@ bookkeeping entirely when nothing is observing.
 
 Equivalent methods exist on `AbstractDatasource` for Qore-level producers.
 
+A driver compiled against an older `libqore` must guard these calls; `QORE_HAVE_SQL_MUTATION_OBSERVER`
+is defined in `qore-version.h` when they are available:
+
+```cpp
+#ifdef QORE_HAVE_SQL_MUTATION_OBSERVER
+    if (ds->reportMutationStreamProgress(consumed, xsink)) {
+        // the consumer stopped the stream; abort it
+    }
+#endif
+```
+
 `declared_bytes` defaults to the declaration's `max_growth_bytes` when
 `reportMutationStreamBegin()` is passed 0.  `STREAM_PROGRESS` is an admission point precisely so that
 a consumer can stop a stream that has exceeded what it declared, without the core knowing what a
