@@ -7173,6 +7173,11 @@ static const char* aotFuncSlotSourceFile(const AOTCompiledFuncWithSlots& func, s
     return nullptr;
 }
 
+static const char* aotFuncSourceFile(const AOTCompiledFuncWithSlots& func) {
+    return !func.aot_locs.empty() && !func.aot_locs.front().file.empty()
+        ? func.aot_locs.front().file.c_str() : nullptr;
+}
+
 static bool aotAppendCallImportRecords(const std::vector<AOTCompiledFuncWithSlots>* funcs,
         std::vector<QoreAOTSymbolIndexRecord>& imported, const char* compile_file,
         const std::unordered_set<std::string>* compile_files, std::string* error) {
@@ -7236,15 +7241,27 @@ static bool aotAppendGlobalImportRecords(const std::vector<AOTCompiledFuncWithSl
             return false;
         }
         const AOTCompiledFuncWithSlots& func = (*funcs)[i];
+        const char* consumer_file = aotFuncSourceFile(func);
         for (size_t j = 0; j < func.slot_ids.globals.size(); ++j) {
             if (!aotCheckSymbolIndexCancel(j, error, "AOT symbol-index global import slot collection")) {
                 return false;
             }
             const AOTGlobalSlotId& global = func.slot_ids.globals[j];
-            if (!global.is_aot_import || global.name.empty()) {
+            if (global.name.empty()) {
                 continue;
             }
-            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            std::string provider_file;
+            const Var* provider_var = nullptr;
+            if (!global.is_aot_import) {
+                provider_var = global.global_var;
+                const QoreProgramLocation* provider_loc = provider_var
+                    ? provider_var->getParseLocation() : nullptr;
+                provider_file = aotLocationFile(provider_loc);
+                if (provider_file.empty()
+                        || !shouldSkipByCompileFile(provider_file.c_str(), compile_file, compile_files)) {
+                    continue;
+                }
+            }
             if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
                 continue;
             }
@@ -7262,12 +7279,23 @@ static bool aotAppendGlobalImportRecords(const std::vector<AOTCompiledFuncWithSl
             rec.metadata_slot = static_cast<uint32_t>(std::min<size_t>(j, UINT32_MAX));
             rec.qore_path = global.name;
             rec.consumer_source_file = consumer_file ? consumer_file : "";
-            rec.declaration_hash = aotHashParts({
-                "global-import",
-                rec.qore_path,
-                global.type_path,
-                global.is_thread_local ? "thread_local" : "global",
-            });
+            rec.provider_source_file = std::move(provider_file);
+            if (provider_var) {
+                rec.declaration_hash = aotHashParts({
+                    "global",
+                    rec.qore_path,
+                    aotVisibility(provider_var->isPublic()),
+                    aotTypePathString(provider_var->getTypeInfo(), provider_var->isNoNarrowing()),
+                    provider_var->isThreadLocal() ? "thread_local" : "global",
+                });
+            } else {
+                rec.declaration_hash = aotHashParts({
+                    "global-import",
+                    rec.qore_path,
+                    global.type_path,
+                    global.is_thread_local ? "thread_local" : "global",
+                });
+            }
             imported.push_back(std::move(rec));
         }
     }

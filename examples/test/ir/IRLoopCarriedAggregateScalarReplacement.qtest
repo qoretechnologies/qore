@@ -74,6 +74,25 @@ int sub nestedListLoop() {
     return values[0] * 100 + values[1];
 }
 
+auto sub getLoopLimit() {
+    return 5;
+}
+
+bool sub loopStopRequested() {
+    return False;
+}
+
+int sub hashShortCircuitLoop() {
+    int max_rows = getLoopLimit();
+    hash<auto> values = {\"left\": 1, \"right\": 2};
+    while (!loopStopRequested() && values.left < max_rows) {
+        int limit = min(2, max_rows - values.left);
+        values.right += limit;
+        values.left += limit;
+    }
+    return values.left * 100 + values.right;
+}
+
 hash<string, int> sub hashReturnLoop(int rounds) {
     hash<string, int> values = {\"left\": 1, \"right\": 2};
     for (int i = 0; i < rounds; ++i) {
@@ -190,9 +209,9 @@ bool sub conditionalLoop(bool assign) {
     return values.left === NOTHING;
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     hashLoopControl(10), listLoopControl(10),
-    hashdeclLoopHeterogeneous(), nestedListLoop(),
+    hashdeclLoopHeterogeneous(), nestedListLoop(), hashShortCircuitLoop(),
     dynamicHashSelectorLoop(), dynamicListSelectorLoop(),
     aliasedLoop(), removedLoop(), deletedLoop(), escapedLoop(),
     conditionalLoop(False), conditionalLoop(True),
@@ -210,7 +229,7 @@ string sub runMode(string mode) {
         libqore_dir, qore_bin, mode, script_path));
 }
 
-string expected = "505:505:540:708:52:110:14:1:1:64:1:0:15:15:540\n";
+string expected = "505:505:540:708:506:52:110:14:1:1:64:1:0:15:15:540\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -275,6 +294,7 @@ if (!is_file(exe) || !is_file(disabled) || !is_file(return_disabled)) {
 if (enabled_compile !~ /IR-OPT-AOT: hashLoopControl:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: listLoopControl:.*scalar-lists=1/
         || enabled_compile !~ /IR-OPT-AOT: hashdeclLoopHeterogeneous:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: hashShortCircuitLoop:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: nestedListLoop:.*scalar-lists=1/
         || enabled_compile !~ /IR-OPT-AOT: dynamicHashSelectorLoop:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: dynamicListSelectorLoop:.*scalar-lists=1/

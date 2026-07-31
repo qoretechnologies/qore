@@ -38,6 +38,11 @@
     - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
       artifacts by default for better startup and runtime performance (see
       @ref exec_mode_aot "AOT Compilation")
+    - downstream CMake object groups now seed clean AOT builds with one shared-parse
+      batch compilation while retaining exact per-file incremental rebuilds;
+      <tt>qcc --batch-build-sidecars</tt> emits the dependency and manifest
+      sidecars required to move between the two modes without an all-to-all
+      source dependency
     - explicit <tt>.qmod</tt> paths now fall back to the complete separated source module directory when the binary
       artifact is missing or cannot be loaded, ensuring sibling <tt>.qc</tt> and <tt>.ql</tt> component files are
       parsed along with the main <tt>.qm</tt> file

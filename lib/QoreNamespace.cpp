@@ -1769,7 +1769,7 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() bword: %s nscx: %p ('%s' root: %d)\n", bword,
     //  nscx, nscx ? nscx->name.c_str() : "n/a", nscx ? nscx->root : false);
     if (!defer_source_global && nscx) {
-        rv = nscx->getConstantValue(bword, typeInfo, found);
+        rv = nscx->getConstantValue(bword, typeInfo, found, loc);
         if (found) {
             //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() bword: %s nscx: %p (%s) got rv: %s\n",
             //  bword, nscx, nscx ? nscx->name.c_str() : "n/a", rv.getTypeName());
@@ -4290,9 +4290,10 @@ QoreClass* qore_ns_private::parseFindLocalClass(const char* cname) {
    return classList.find(cname);
 }
 
-QoreValue qore_ns_private::getConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found) {
+QoreValue qore_ns_private::getConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+        const QoreProgramLocation* consumer_loc) {
     assert(!found);
-    return constant.find(cname, typeInfo, found);
+    return constant.find(cname, typeInfo, found, consumer_loc);
 }
 
 QoreNamespace* qore_ns_private::resolveNameScope(const QoreProgramLocation* loc, const NamedScope& nscope) const {

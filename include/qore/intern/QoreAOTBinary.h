@@ -1796,6 +1796,7 @@ struct AOTGlobalSlotId {
     std::string type_path;   //!< type path
     bool is_thread_local = false; //!< true if thread-local variable
     bool is_aot_import = false; //!< true if this slot must resolve from the linked/loaded context
+    const Var* global_var = nullptr; //!< compile-time only: declaration used for dependency attribution
 };
 
 //! Identity for an expression slot

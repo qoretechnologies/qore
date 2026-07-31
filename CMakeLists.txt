@@ -2859,6 +2859,7 @@ install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cma
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
+    tools/qore-qo-batch-bootstrap
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc

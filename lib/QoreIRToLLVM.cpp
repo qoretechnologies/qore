@@ -9537,6 +9537,58 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_alloca_map.clear();
     iterator_cleanup_allocas.clear();
     pending_phis.clear();
+
+    // Native PHIs can be introduced by cross-block scalar replacement in a
+    // dominating block that appears after one of its users in the IR block
+    // vector (for example, a short-circuit condition merge followed by the
+    // loop body). Predeclare these PHIs before lowering any block so valid SSA
+    // does not depend on block storage order. QoreValue PHIs remain deferred
+    // to their normal lowering point because AOT can specialize their type
+    // from native call-result metadata collected while lowering predecessors.
+    size_t native_phi_predeclare_count = 0;
+    for (const auto& block : func.blocks) {
+        if (native_phi_predeclare_count++
+                && !(native_phi_predeclare_count % 100)
+                && qore_check_cancel(nullptr,
+                    "LLVM native PHI predeclaration")) {
+            error = "cancelled during LLVM native PHI predeclaration";
+            return false;
+        }
+        auto llvm_block_it = block_map.find(block.get());
+        if (llvm_block_it == block_map.end()) {
+            error = "missing LLVM basic block mapping during native PHI predeclaration";
+            return false;
+        }
+        llvm::BasicBlock* llvm_block = llvm_block_it->second;
+        size_t phi_i = 0;
+        for (const auto& inst_ptr : block->instructions) {
+            if (phi_i++ && !(phi_i % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM native PHI predeclaration")) {
+                error = "cancelled during LLVM native PHI predeclaration";
+                return false;
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::Phi) {
+                break;
+            }
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(
+                inst_ptr.get());
+            if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {
+                continue;
+            }
+            llvm::Type* phi_type = phi->value_kind
+                    == QoreIRPhiValueKind::NativeFloat
+                ? double_type
+                : phi->value_kind == QoreIRPhiValueKind::NativeBool
+                    ? i1_type : i64_type;
+            llvm::IRBuilder<> phi_builder(llvm_block);
+            llvm::PHINode* phi_node = phi_builder.CreatePHI(
+                phi_type, phi->incoming.size());
+            values[phi->result.id] = phi_node;
+            pending_phis.push_back({
+                phi_node, phi, block.get(), phi->value_kind});
+        }
+    }
     local_reload_trackers.clear();
     local_reload_deferred.clear();
     local_reload_epoch = nullptr;
@@ -13833,6 +13885,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Phi nodes ===
         case QoreIROpcode::Phi: {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
+            // Explicit native PHIs are predeclared before block lowering so
+            // users in earlier-stored blocks can resolve them.
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue
+                    && values.count(inst->result.id)) {
+                return true;
+            }
             QoreIRPhiValueKind phi_value_kind = phi->value_kind;
             BatchCalleeReturnKind native_phi_kind =
                 BatchCalleeReturnKind::Boxed;

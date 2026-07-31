@@ -145,20 +145,40 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         TmpDir tmp = initDirs();
         string a = tmp_dir + "/batch_a.qc";
         string b = tmp_dir + "/batch_b.qc";
-        write(a, "%new-style\npublic const BatchMagic = 41;\n");
-        write(b, "%new-style\nclass BatchUser { static int f() { return BatchMagic + 1; } }\n");
+        write(a, "%new-style\npublic const BatchMagic = 41;\n"
+            + "our hash<auto> BatchGlobal = {\"value\": 1};\n");
+        write(b, "%new-style\nclass BatchUser { static int f() { return BatchMagic + BatchGlobal.value; } }\n");
 
         string out = run(sprintf(
-            "%s %s -c --parse-option=PO_MODERN --output-dir=%s --depfile-dir=%s %s %s",
+            "%s %s -c --parse-option=PO_MODERN --batch-build-sidecars --output-dir=%s --depfile-dir=%s %s %s",
             env, qcc_bin, lib_dir, lib_dir, a, b));
         string count = trim(run(sprintf("find %s -maxdepth 1 -name '*.qo.d' | wc -l", lib_dir)));
         assertEq(2, count.toInt(), "batch compile emitted one depfile per .qo: " + out);
 
-        string deps = run(sprintf("cat %s/*.qo.d", lib_dir));
-        assertTrue(deps.find("batch_a.qc") != -1,
-            "batch depfiles include first batch source: " + deps);
-        assertTrue(deps.find("batch_b.qc") != -1,
-            "batch depfiles include second batch source: " + deps);
+        string provider_dep = run(sprintf("cat %s/*batch_a_qc.qo.d", lib_dir));
+        string consumer_dep = run(sprintf("cat %s/*batch_b_qc.qo.d", lib_dir));
+        assertTrue(provider_dep.find("batch_a.qc") != -1,
+            "provider depfile includes its own source: " + provider_dep);
+        assertEq(-1, provider_dep.find("batch_b.qc"),
+            "provider depfile does not create an all-to-all batch edge: " + provider_dep);
+        assertTrue(consumer_dep.find("batch_a.qc") != -1
+                && consumer_dep.find("batch_b.qc") != -1,
+            "consumer depfile includes its source and folded-constant provider: " + consumer_dep);
+        string consumer_index = run(sprintf("%s --dump-index-json %s/*batch_b_qc.qo",
+            qcc_bin, lib_dir));
+        assertTrue(consumer_index.find("\"qore_path\": \"BatchGlobal\"") != -1
+                && consumer_index.find("batch_a.qc") != -1,
+            "batch consumer index attributes a cross-file global to its provider: " + consumer_index);
+        assertTrue(consumer_dep.find(".qo.stamp:") != -1,
+            "batch build-sidecar depfile targets the success stamp: " + consumer_dep);
+        foreach string suffix in (".idx.json", ".status.json", ".content.stamp",
+                ".stamp", ".source.manifest.json") {
+            string sidecar_count = trim(run(sprintf(
+                "find %s -maxdepth 1 -name '*.qo%s' | wc -l", lib_dir, suffix)));
+            assertEq(2, sidecar_count.toInt(),
+                "batch compile emits every per-object " + suffix + " sidecar: " + out);
+        }
+        string deps = provider_dep + consumer_dep;
         assertEq(-1, deps.find("qorus-bootstrap-fallback"),
             "batch depfiles are real qcc depfiles, not wrapper fallback depfiles: " + deps);
     }

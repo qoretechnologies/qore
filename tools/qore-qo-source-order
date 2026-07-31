@@ -1069,6 +1069,71 @@ def emit_cmake_direct_map(prefix: str, context: str, inputs: list[str], outputs:
         print(f'set({prefix}_{target} "{deps}")')
 
 
+def parse_make_depfile_inputs(path: str) -> list[str]:
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    text = text.replace("\\\n", "")
+    colon = text.find(":")
+    if colon < 0:
+        return []
+
+    values: list[str] = []
+    token: list[str] = []
+    escaped = False
+    for ch in text[colon + 1:]:
+        if escaped:
+            token.append(ch)
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        elif ch.isspace():
+            if token:
+                values.append("".join(token))
+                token = []
+        else:
+            token.append(ch)
+    if token:
+        values.append("".join(token))
+    return values
+
+
+def batch_artifact_current(context: str, inputs: list[str], outputs: list[str],
+        target: int, bootstrap_stamp: str | None) -> bool:
+    output = outputs[target]
+    required = [
+        output,
+        output + ".d",
+        output + ".idx.json",
+        output + ".status.json",
+        output + ".content.stamp",
+        output + ".stamp",
+        output + ".source.manifest.json",
+        output + ".source-parse-defines",
+    ]
+    if bootstrap_stamp:
+        required.append(bootstrap_stamp)
+    try:
+        for path in required:
+            if not os.path.isfile(path):
+                return False
+        stamp_time = os.stat(output + ".stamp").st_mtime_ns
+        if bootstrap_stamp and os.stat(bootstrap_stamp).st_mtime_ns > stamp_time:
+            return False
+        if os.stat(inputs[target]).st_mtime_ns > stamp_time:
+            return False
+
+        direct = build_direct_prerequisite_order(context, inputs, outputs, target)
+        for provider in direct:
+            if os.stat(outputs[provider] + ".content.stamp").st_mtime_ns > stamp_time:
+                return False
+        for dep in parse_make_depfile_inputs(output + ".d"):
+            if os.path.exists(dep) and os.stat(dep).st_mtime_ns > stamp_time:
+                return False
+    except OSError:
+        return False
+    return True
+
+
 def build_prerequisite_order(context: str, inputs: list[str], outputs: list[str], target: int) -> list[int]:
     outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
     scc_ids = compute_scc_ids(outgoing, len(inputs))
@@ -1095,6 +1160,16 @@ def main() -> int:
         "--source-symbol-manifest",
         metavar="FILE",
         help="write a qcc source-symbol precedence manifest for all context inputs",
+    )
+    parser.add_argument(
+        "--batch-artifact-current",
+        metavar="BOOTSTRAP_STAMP",
+        help="check whether a batch-seeded output and all precise dependencies are current",
+    )
+    parser.add_argument(
+        "--artifact-current",
+        action="store_true",
+        help="check output freshness without requiring a batch-bootstrap marker",
     )
     parser.add_argument("context")
     parser.add_argument("target_output", nargs="?")
@@ -1124,6 +1199,11 @@ def main() -> int:
     except ValueError:
         print(f"{sys.argv[0]}: target output not present in context: {args.target_output}", file=sys.stderr)
         return 1
+
+    if args.batch_artifact_current or args.artifact_current:
+        return 0 if batch_artifact_current(
+            args.context, inputs, outputs, target_index,
+            args.batch_artifact_current if not args.artifact_current else None) else 1
 
     if args.direct:
         order = build_direct_prerequisite_order(args.context, inputs, outputs, target_index)

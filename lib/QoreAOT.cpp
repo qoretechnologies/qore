@@ -211,6 +211,8 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 // for every normal program, so the resolution-path hooks are a single pointer
 // test off the hot path.
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
+static thread_local QoreAOTSourceDependencyMap* aot_dep_map = nullptr;
+static thread_local const char* aot_dep_consumer_file = nullptr;
 static thread_local bool aot_source_parse_active = false;
 static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
 static thread_local const std::unordered_set<std::string>* aot_preloaded_source_labels = nullptr;
@@ -218,6 +220,16 @@ static thread_local bool aot_allow_preloaded_source_symbols = false;
 
 void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
     aot_dep_sink = sink;
+}
+
+void qore_aot_set_dep_map(QoreAOTSourceDependencyMap* dependencies) {
+    aot_dep_map = dependencies;
+}
+
+static const char* qore_aot_set_dep_consumer_file(const char* source_file) {
+    const char* old = aot_dep_consumer_file;
+    aot_dep_consumer_file = source_file;
+    return old;
 }
 
 bool qore_aot_set_source_parse_active(bool active) {
@@ -413,15 +425,25 @@ std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* 
     return rv;
 }
 
-void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
-    if (!aot_dep_sink || !loc) {
+void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
+        const QoreProgramLocation* consumer_loc) {
+    if ((!aot_dep_sink && !aot_dep_map) || !provider_loc) {
         return;
     }
-    const char* f = loc->getFile();
+    const char* f = provider_loc->getFile();
     // Skip synthetic locations ("<builtin>", "<run-time>", …) — only real
     // source files are build dependencies.
-    if (f && *f && *f != '<') {
+    if (!f || !*f || *f == '<') {
+        return;
+    }
+    if (aot_dep_sink) {
         aot_dep_sink->insert(f);
+    }
+    if (aot_dep_map) {
+        const char* consumer = consumer_loc ? consumer_loc->getFile() : aot_dep_consumer_file;
+        if (consumer && *consumer && *consumer != '<') {
+            (*aot_dep_map)[consumer].insert(f);
+        }
     }
 }
 
@@ -24716,7 +24738,8 @@ static std::string escapeMakeDepPath(const std::string& path) {
 
 static bool writeAOTMakeDepfile(const std::string& depfile_path,
         const std::string& output_path, const std::vector<std::string>& deps,
-        std::string& error, const char* cancel_context) {
+        std::string& error, const char* cancel_context,
+        const char* depfile_target = nullptr) {
     FILE* f = fopen(depfile_path.c_str(), "w");
     if (!f) {
         error = "cannot open depfile '" + depfile_path + "' for writing: " + strerror(errno);
@@ -24734,7 +24757,8 @@ static bool writeAOTMakeDepfile(const std::string& depfile_path,
         return false;
     };
 
-    if (fprintf(f, "%s:", escapeMakeDepPath(canonicalizeDepPath(output_path)).c_str()) < 0) {
+    std::string target = depfile_target ? depfile_target : output_path;
+    if (fprintf(f, "%s:", escapeMakeDepPath(canonicalizeDepPath(target)).c_str()) < 0) {
         return fail_write("write");
     }
     for (size_t i = 0; i < deps.size(); ++i) {
@@ -25606,7 +25630,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& parse_option_flags,
         int* compiled_count_out,
         bool report_artifacts,
-        const std::string* depfile_dir) {
+        const std::string* depfile_dir,
+        bool depfile_targets_are_stamps) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -25651,19 +25676,13 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string source;
         std::string out_path;
         std::string depfile_path;
+        std::vector<std::string> dep_sources;
         size_t module_cmd_begin = 0;
         size_t module_cmd_end = 0;
     };
     std::vector<SrcEntry> entries;
     entries.reserve(target_files.size());
-    std::vector<std::string> batch_dep_sources;
-    std::unordered_set<std::string> batch_dep_seen;
-    auto add_batch_dep = [&](const std::string& path) {
-        std::string canon = canonicalizeDepPath(path);
-        if (batch_dep_seen.insert(canon).second) {
-            batch_dep_sources.push_back(std::move(canon));
-        }
-    };
+    std::unordered_set<std::string> batch_target_set;
     size_t input_i = 0;
     for (const std::string& f : target_files) {
         if (input_i && !(input_i % 100) && qore_check_cancel(nullptr, "AOT batch input collection")) {
@@ -25688,15 +25707,10 @@ bool QoreAOT::compileScriptFilesBatch(
         if (!dep_dir.empty()) {
             e.depfile_path = dep_dir + "/" + fileBasenameKeepExt(e.out_path) + ".d";
         }
-        add_batch_dep(e.canon);
+        batch_target_set.insert(e.canon);
         entries.push_back(std::move(e));
         ++input_i;
     }
-    for (const std::string& stub : stub_files) {
-        add_batch_dep(stub);
-    }
-    std::sort(batch_dep_sources.begin(), batch_dep_sources.end());
-
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
@@ -25748,6 +25762,25 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
+    QoreAOTSourceDependencyMap batch_source_dependencies;
+    struct AOTBatchDepMapGuard {
+        explicit AOTBatchDepMapGuard(QoreAOTSourceDependencyMap* dependencies) {
+            qore_aot_set_dep_map(dependencies);
+        }
+        ~AOTBatchDepMapGuard() {
+            qore_aot_set_dep_map(nullptr);
+        }
+    } batch_dep_guard(depfile_dir ? &batch_source_dependencies : nullptr);
+    struct AOTBatchDepConsumerGuard {
+        explicit AOTBatchDepConsumerGuard(const char* source_file)
+                : old(qore_aot_set_dep_consumer_file(source_file)) {
+        }
+        ~AOTBatchDepConsumerGuard() {
+            qore_aot_set_dep_consumer_file(old);
+        }
+        const char* old;
+    };
+
     qore_program_private* batch_pp = qore_program_private::get(**qpgm);
     for (size_t i = 0; i < entries.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT batch source parsing")) {
@@ -25759,8 +25792,11 @@ bool QoreAOT::compileScriptFilesBatch(
         // once with the first emitted source so linked binaries replay the
         // same setup once before batch deserialization.
         e.module_cmd_begin = i == 0 ? 0 : batch_pp->module_parse_commands.size();
-        qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+        {
+            AOTBatchDepConsumerGuard consumer_guard(e.canon.c_str());
+            qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                &xsink, &wsink, QP_WARN_DEFAULT);
+        }
         if (xsink.isException()) {
             xsink.handleExceptions();
             error = "parse error in target file: " + e.canon;
@@ -25776,6 +25812,62 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
+    }
+
+    if (depfile_dir) {
+        std::vector<std::string> canonical_stubs;
+        canonical_stubs.reserve(stub_files.size());
+        for (size_t i = 0; i < stub_files.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT batch stub dependency collection")) {
+                error = "cancelled during AOT batch stub dependency collection";
+                return false;
+            }
+            canonical_stubs.push_back(canonicalizeDepPath(stub_files[i]));
+        }
+        for (size_t i = 0; i < entries.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT batch dependency attribution")) {
+                error = "cancelled during AOT batch dependency attribution";
+                return false;
+            }
+            SrcEntry& e = entries[i];
+            std::unordered_set<std::string> seen;
+            seen.insert(e.canon);
+            e.dep_sources.push_back(e.canon);
+            size_t stub_i = 0;
+            for (const std::string& stub : canonical_stubs) {
+                if (stub_i++ && !(stub_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch per-source stub dependency collection")) {
+                    error = "cancelled during AOT batch per-source stub dependency collection";
+                    return false;
+                }
+                if (seen.insert(stub).second) {
+                    e.dep_sources.push_back(stub);
+                }
+            }
+            auto dep_it = batch_source_dependencies.find(e.canon);
+            if (dep_it == batch_source_dependencies.end()) {
+                continue;
+            }
+            size_t dep_i = 0;
+            for (const std::string& dep : dep_it->second) {
+                if (dep_i++ && !(dep_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch source dependency collection")) {
+                    error = "cancelled during AOT batch source dependency collection";
+                    return false;
+                }
+                std::string canon = canonicalizeDepPath(dep);
+                if (batch_target_set.count(canon) && seen.insert(canon).second) {
+                    e.dep_sources.push_back(std::move(canon));
+                }
+            }
+            std::sort(e.dep_sources.begin(), e.dep_sources.end());
+        }
     }
 
     // Discover fast-entry ABIs once across the shared parse.  Each per-file
@@ -25869,6 +25961,15 @@ bool QoreAOT::compileScriptFilesBatch(
             }
             std::string per_err;
             int per_file_compiled_count = 0;
+            std::unordered_set<std::string> emit_dependencies;
+            struct AOTBatchEmitDepGuard {
+                explicit AOTBatchEmitDepGuard(std::unordered_set<std::string>* dependencies) {
+                    qore_aot_set_dep_sink(dependencies);
+                }
+                ~AOTBatchEmitDepGuard() {
+                    qore_aot_set_dep_sink(nullptr);
+                }
+            } emit_dep_guard(e.depfile_path.empty() ? nullptr : &emit_dependencies);
             if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                     e.out_path, opt_level, target_triple, include_source,
                     per_err, e.module_cmd_begin, e.module_cmd_end,
@@ -25882,15 +25983,45 @@ bool QoreAOT::compileScriptFilesBatch(
                 stop.store(true);
                 break;
             }
-            if (!e.depfile_path.empty()
-                    && !writeAOTMakeDepfile(e.depfile_path, e.out_path,
-                        batch_dep_sources, per_err, "AOT batch depfile emission")) {
-                std::lock_guard<std::mutex> l(err_mutex);
-                if (first_error.empty()) {
-                    first_error = per_err;
+            if (!e.depfile_path.empty()) {
+                std::unordered_set<std::string> seen(e.dep_sources.begin(), e.dep_sources.end());
+                size_t dep_i = 0;
+                for (const std::string& dep : emit_dependencies) {
+                    if (dep_i++ && !(dep_i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT batch emitted dependency collection")) {
+                        std::lock_guard<std::mutex> l(err_mutex);
+                        if (first_error.empty()) {
+                            first_error = "cancelled during AOT batch emitted dependency collection";
+                        }
+                        stop.store(true);
+                        break;
+                    }
+                    std::string canon = canonicalizeDepPath(dep);
+                    if (batch_target_set.count(canon) && seen.insert(canon).second) {
+                        e.dep_sources.push_back(std::move(canon));
+                    }
                 }
-                stop.store(true);
-                break;
+                if (stop.load()) {
+                    break;
+                }
+                std::sort(e.dep_sources.begin(), e.dep_sources.end());
+            }
+            if (!e.depfile_path.empty()) {
+                std::string depfile_target;
+                if (depfile_targets_are_stamps) {
+                    depfile_target = e.out_path + ".stamp";
+                }
+                if (!writeAOTMakeDepfile(e.depfile_path, e.out_path,
+                        e.dep_sources, per_err, "AOT batch depfile emission",
+                        depfile_target.empty() ? nullptr : depfile_target.c_str())) {
+                    std::lock_guard<std::mutex> l(err_mutex);
+                    if (first_error.empty()) {
+                        first_error = per_err;
+                    }
+                    stop.store(true);
+                    break;
+                }
             }
             local_compiled += per_file_compiled_count;
             if (report_artifacts && qccAOTVerbose()) {
@@ -32965,6 +33096,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         gid.type_path = getSlotTypePath(var->getTypeInfo());
         gid.is_thread_local = var->isThreadLocal();
         gid.is_aot_import = var->isAOTImport();
+        gid.global_var = var;
     }
 
     // Extract body local identities

@@ -209,7 +209,7 @@ public:
         // `qcc -c -L` compile that folds the value still rebuilds when the
         // defining file changes (the folded literal leaves no trace in the
         // emitted `.qo`).  No-op unless an AOT dependency sink is active.
-        qore_aot_note_referenced_decl(this->loc);
+        qore_aot_note_referenced_decl(this->loc, loc);
 
         constantTypeInfo = getParseTypeInfo();
         return val;
@@ -388,11 +388,12 @@ public:
     DLLLOCAL const ConstantEntry* findEntry(const char* name) const;
 
     DLLLOCAL QoreValue find(const char* name, const QoreTypeInfo*& constantTypeInfo, ClassAccess& access,
-            bool& found);
+            bool& found, const QoreProgramLocation* consumer_loc = nullptr);
 
-    DLLLOCAL QoreValue find(const char* name, const QoreTypeInfo*& constantTypeInfo, bool& found) {
+    DLLLOCAL QoreValue find(const char* name, const QoreTypeInfo*& constantTypeInfo, bool& found,
+            const QoreProgramLocation* consumer_loc = nullptr) {
         ClassAccess access;
-        return find(name, constantTypeInfo, access, found);
+        return find(name, constantTypeInfo, access, found, consumer_loc);
     }
 
     DLLLOCAL bool inList(const char* name) const;

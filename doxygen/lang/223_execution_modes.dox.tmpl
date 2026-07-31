@@ -157,6 +157,12 @@ qcc -c --output-dir=build/aot src/lib.qr src/main.qr src/worker.qr
 qcc -o app build/aot/*.qo
     @endcode
 
+    Build integrations can add \c --batch-build-sidecars and
+    <tt>--depfile-dir=build/aot</tt> to the batch \c -c command. This emits the
+    index, manifest, status, dependency, success-stamp, and content-stamp
+    sidecars needed to seed later per-file incremental builds from the one
+    shared parse.
+
     For incremental per-file builds, use \c -L to preload sibling \c .qo
     declarations before parsing the changed source:
 
@@ -225,6 +231,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --context=DIR|Context directory for split-module or per-file object compilation
     |\c -L DIR|Preload sibling \c .qo declarations for script-context compilation
     |\c --output-dir=DIR|Output directory for batch \c -c compilation
+    |\c --depfile-dir=DIR|Write one dependency file per batch output into \c DIR
+    |\c --batch-build-sidecars|Write incremental-build sidecars for every batch output; requires \c --depfile-dir
     |\c -l, \c --load=MOD|Load a module into the compile program before parsing
     |\c --stub=FILE|Preload declaration-only Qore source supplied by a host
     |\c --define=NAME[=VALUE]|Set a parser define before parsing

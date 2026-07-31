@@ -1,0 +1,157 @@
+#!/bin/sh
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Seed a standalone qcc object group with one shared-parse batch compile.
+
+set -eu
+
+if [ "$#" -ne 4 ]; then
+    echo "usage: $0 CONTEXT BOOTSTRAP_STAMP BATCH_SCRIPT SOURCE_ORDER_HELPER" >&2
+    exit 2
+fi
+
+context=$1
+bootstrap_stamp=$2
+batch_script=$3
+source_order_tool=$4
+lock_dir="${bootstrap_stamp}.lock"
+lock_owned=false
+outputs_file=
+
+cleanup() {
+    if [ -n "$outputs_file" ]; then
+        rm -f "$outputs_file"
+    fi
+    if [ "$lock_owned" = true ]; then
+        rm -f "$lock_dir/pid"
+        rmdir "$lock_dir" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+if [ ! -f "$context" ]; then
+    echo "$0: missing qcc context: $context" >&2
+    exit 1
+fi
+if [ ! -f "$batch_script" ]; then
+    echo "$0: missing qcc batch script: $batch_script" >&2
+    exit 1
+fi
+if [ ! -x "$source_order_tool" ]; then
+    echo "$0: missing qcc source-order helper: $source_order_tool" >&2
+    exit 1
+fi
+
+mkdir -p "$(dirname "$bootstrap_stamp")"
+waited=false
+while ! mkdir "$lock_dir" 2>/dev/null; do
+    if [ -r "$lock_dir/pid" ]; then
+        owner=
+        IFS= read -r owner < "$lock_dir/pid" || true
+        case "$owner" in
+            *[!0-9]*|'')
+                rm -f "$lock_dir/pid"
+                rmdir "$lock_dir" 2>/dev/null || true
+                continue
+                ;;
+            *)
+                if ! kill -0 "$owner" 2>/dev/null; then
+                    rm -f "$lock_dir/pid"
+                    rmdir "$lock_dir" 2>/dev/null || true
+                    continue
+                fi
+                waited=true
+                ;;
+        esac
+    else
+        # Allow an owner that just created the directory to publish its pid;
+        # reclaim the directory if it remains ownerless.
+        sleep 1
+        if [ ! -r "$lock_dir/pid" ]; then
+            rmdir "$lock_dir" 2>/dev/null || true
+            continue
+        fi
+    fi
+    sleep 1
+done
+lock_owned=true
+printf '%s\n' "$$" > "$lock_dir/pid"
+
+outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
+sed -n 's/^output=//p' "$context" > "$outputs_file"
+
+complete=true
+while IFS= read -r output; do
+    [ -n "$output" ] || continue
+    for sidecar in \
+            "$output" \
+            "$output.d" \
+            "$output.idx.json" \
+            "$output.status.json" \
+            "$output.content.stamp" \
+            "$output.stamp" \
+            "$output.source.manifest.json"; do
+        if [ ! -f "$sidecar" ]; then
+            complete=false
+            break
+        fi
+    done
+done < "$outputs_file"
+
+# Recursive Make invocations can request the same generated rule concurrently.
+# A follower skips the work only when the first owner left every output and its
+# exact dependencies current.  This also prevents a stale marker from hiding a
+# crashed or incomplete bootstrap.
+if [ "$waited" = true ] && [ "$complete" = true ] \
+        && [ -f "$bootstrap_stamp" ]; then
+    while IFS= read -r output; do
+        [ -n "$output" ] || continue
+        if ! "$source_order_tool" --batch-artifact-current \
+                "$bootstrap_stamp" "$context" "$output"; then
+            complete=false
+            break
+        fi
+    done < "$outputs_file"
+    if [ "$complete" = true ]; then
+        exit 0
+    fi
+fi
+
+had_bootstrap=false
+if [ -f "$bootstrap_stamp" ]; then
+    had_bootstrap=true
+fi
+
+if [ "$had_bootstrap" = false ] && [ "$complete" = true ]; then
+    while IFS= read -r output; do
+        [ -n "$output" ] || continue
+        if ! "$source_order_tool" --artifact-current "$context" "$output"; then
+            complete=false
+            break
+        fi
+    done < "$outputs_file"
+fi
+
+touch "$bootstrap_stamp"
+
+if [ "$had_bootstrap" = true ] || [ "$complete" = false ]; then
+    if ! sh "$batch_script"; then
+        echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
+        # Keep the new marker but do not advance any object stamps.  Every
+        # per-source command therefore observes an older or missing stamp and
+        # rebuilds through the established incremental path.
+        exit 0
+    fi
+fi
+
+# Batch parsing has no preloaded source objects, so it inherits no parse
+# defines from siblings.  Clear this per-source input before later delta builds.
+# Touch success stamps after the bootstrap marker when adopting an existing
+# complete tree so dependent custom commands are immediately current.
+while IFS= read -r output; do
+    [ -n "$output" ] || continue
+    : > "$output.source-parse-defines"
+    touch "$output.stamp"
+done < "$outputs_file"

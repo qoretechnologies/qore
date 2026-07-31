@@ -55,6 +55,15 @@ if [ ! -f "$context_file" ] && [ -f "$qo_dir/.qcc-context" ]; then
     context_file="$qo_dir/.qcc-context"
 fi
 source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
+batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
+
+if [ -n "$batch_bootstrap_stamp" ] && [ -x "$source_order_tool" ] \
+        && [ -f "$context_file" ] && command -v python3 >/dev/null 2>&1; then
+    if "$source_order_tool" --batch-artifact-current "$batch_bootstrap_stamp" \
+            "$context_file" "$output"; then
+        exit 0
+    fi
+fi
 
 cleanup_stage_dir() {
     stage_dir=${1:-}

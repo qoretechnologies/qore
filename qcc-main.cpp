@@ -706,6 +706,9 @@ static bool depfile_qo_input_content_stamps = false;
 // in batch `-c --output-dir=DIR` mode.  Each depfile basename matches
 // the generated object basename with `.d` appended.
 static const char* depfile_dir = nullptr;
+// Batch mode: emit the standard per-object index/manifest/status/stamp sidecars
+// using paths derived from each generated `.qo`.
+static bool batch_build_sidecars = false;
 // --write-index-json=FILE writes the same build-consumable symbol index JSON as
 // --dump-index-json, but as a sidecar next to a generated artifact.
 static const char* write_index_json_path = nullptr;
@@ -844,6 +847,11 @@ static void print_usage(const char* prog) {
     printf("      --depfile-dir=DIR  Batch `-c --output-dir` mode only: emit one\n"
            "                         Make-format dependency file per generated `.qo` into\n"
            "                         DIR.  Each depfile is named `<object>.qo.d`.\n");
+    printf("      --batch-build-sidecars\n"
+           "                         Batch `-c --output-dir` mode only: emit index,\n"
+           "                         manifest, status, success-stamp, and content-stamp\n"
+           "                         sidecars for every generated `.qo`; requires\n"
+           "                         --depfile-dir.\n");
     printf("      --write-index-json=FILE\n"
            "                         Write build-consumable AOT symbol-index JSON for\n"
            "                         the generated artifact to FILE\n");
@@ -1025,6 +1033,7 @@ static struct option long_options[] = {
     {"depfile-qo-input-content-stamps", no_argument, nullptr, 0x11c},
     {"source-symbol-manifest", required_argument, nullptr, 0x11d},
     {"jobs",              required_argument, nullptr, 0x11e},
+    {"batch-build-sidecars", no_argument,   nullptr, 0x11f},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1203,6 +1212,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                     fprintf(stderr, "error: --jobs must be >= 1\n");
                     return -1;
                 }
+                break;
+            case 0x11f:  // --batch-build-sidecars
+                batch_build_sidecars = true;
                 break;
             case 'F':
                 from_objects = true;
@@ -6854,6 +6866,11 @@ int main(int argc, char** argv) {
             "error: --depfile-target requires --depfile=FILE\n");
         return 1;
     }
+    if (batch_build_sidecars && !depfile_dir) {
+        fprintf(stderr,
+            "error: --batch-build-sidecars requires --depfile-dir=DIR\n");
+        return 1;
+    }
     if (skip_if_manifest_current && !write_manifest_path) {
         fprintf(stderr,
             "error: --skip-if-manifest-current requires --write-manifest=FILE\n");
@@ -7584,15 +7601,83 @@ int main(int argc, char** argv) {
             depfile_dir_arg = depfile_dir;
             depfile_dir_ptr = &depfile_dir_arg;
         }
+        std::vector<std::string> batch_objects;
+        std::vector<QCCFileFingerprint> batch_output_before;
+        if (batch_build_sidecars) {
+            batch_objects.reserve(batch_sources.size());
+            batch_output_before.reserve(batch_sources.size());
+            for (size_t i = 0; i < batch_sources.size(); ++i) {
+                if (i && !(i % 100)
+                        && qcc_check_cancel("qcc batch sidecar input collection")) {
+                    fprintf(stderr, "error: cancelled during batch sidecar input collection\n");
+                    qore_cleanup();
+                    return 1;
+                }
+                const std::string& source = batch_sources[i];
+                std::string object;
+                if (!get_batch_object_path(source, batch_output_dir, object, error)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
+                batch_output_before.push_back(qcc_file_fingerprint(object));
+                batch_objects.push_back(std::move(object));
+            }
+        }
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines,
-            parse_option_flags, nullptr, true, depfile_dir_ptr);
+            parse_option_flags, nullptr, true, depfile_dir_ptr,
+            batch_build_sidecars);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
+        }
+        if (batch_build_sidecars) {
+            for (size_t i = 0; i < batch_objects.size(); ++i) {
+                if (i && !(i % 100)
+                        && qcc_check_cancel("qcc batch sidecar emission")) {
+                    fprintf(stderr, "error: cancelled during batch sidecar emission\n");
+                    qore_cleanup();
+                    return 1;
+                }
+                const std::string& object = batch_objects[i];
+                std::string index = object + ".idx.json";
+                std::string manifest_path = object + ".source.manifest.json";
+                std::string status = object + ".status.json";
+                std::string stamp = object + ".stamp";
+                std::string content_stamp = object + ".content.stamp";
+                size_t slash = object.find_last_of("/\\");
+                std::string object_basename = slash == std::string::npos
+                    ? object : object.substr(slash + 1);
+                std::string depfile = depfile_dir_arg + "/" + object_basename + ".d";
+
+                write_index_json_path = index.c_str();
+                write_manifest_path = manifest_path.c_str();
+                write_status_json_path = status.c_str();
+                success_stamp_path = stamp.c_str();
+                content_stamp_path = content_stamp.c_str();
+
+                QCCBuildManifest manifest;
+                manifest.kind = "script-file";
+                manifest.output = object;
+                manifest.index_json = index;
+                manifest.depfile = depfile;
+                manifest.inputs.push_back(batch_sources[i]);
+                if (!finish_qcc_build(manifest, argv[0], batch_output_before[i],
+                        true, false, false, error)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
+            }
+            write_index_json_path = nullptr;
+            write_manifest_path = nullptr;
+            write_status_json_path = nullptr;
+            success_stamp_path = nullptr;
+            content_stamp_path = nullptr;
         }
         qore_cleanup();
         return 0;

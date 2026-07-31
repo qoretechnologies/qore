@@ -55,6 +55,7 @@ enum class QoreAOTSourceSymbolKind : unsigned char {
 };
 
 using QoreAOTSourceSymbolMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
+using QoreAOTSourceDependencyMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
 
 struct QoreAOTSourceSymbolManifest {
     QoreAOTSourceSymbolMap classes;
@@ -85,6 +86,9 @@ struct QoreAOTSourceSymbolManifest {
 //! thread.  The caller owns the set and must clear the sink before it is
 //! destroyed (use an RAII guard).
 DLLLOCAL void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink);
+
+//! Set (or clear) the active per-consumer dependency map for batch compilation.
+DLLLOCAL void qore_aot_set_dep_map(QoreAOTSourceDependencyMap* dependencies);
 
 //! Set (or clear) the active sibling-source parse flag for the current thread.
 //! Returns the previous value so callers can restore it.
@@ -126,7 +130,8 @@ DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramL
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */
-DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* loc);
+DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
+        const QoreProgramLocation* consumer_loc = nullptr);
 
 //! Record a source-parse type import for the active single-file AOT compile.
 /** This is a narrow wrapper around Program-private import tracking for modules

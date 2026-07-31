@@ -9,7 +9,10 @@
   shipped** on `feature/aot-build-link-stabilization`: `qcc -c`/`-o app *.qo`/
   `--from-objects`/`-a`, the relink-surviving `qore_aot_pcloc` section (ELF +
   Mach-O), per-file `.qo` indexes + `qore-qo-source-order` link ordering, and
-  lazy exception source locations that survive into linked executables. See
+  lazy exception source locations that survive into linked executables.
+  Downstream standalone object groups now use an adaptive batch bootstrap:
+  clean trees parse once while incremental rebuilds retain exact per-file
+  recompilation. See
   `design/aot-object-files-and-module-artifacts.md`,
   `design/aot-script-context.md`, `design/aot-lazy-loc-innermost-frame.md`.
 
@@ -134,18 +137,26 @@ explicit opt-in.
 **Informs:** how much dev-loop time is saved. Sets expectation that
 fresh/CI builds still need Phase 3.
 
-**2026-06-26 note — relation to per-file `.qo` incremental builds.** A
-related, coarser dev-loop win is per-file split-dir compilation (rebuild only
-the changed `.qc`'s `.qo`, then relink) instead of the current whole-dir
-`qcc -m`. The scaffolding exists (`QORE_QCC_COMPILE_OBJECTS`/`qore-qo-source-order`)
-but is **disabled**: measurement showed per-file re-parses the full context N
-times so *clean* builds are slower (DataProvider 93 s vs 69 s @ -j8), and the
-per-file path hits a latent SIGSEGV in `extractAOTSlotIdentities`
-(`lib/QoreAOT.cpp:15613`) on some modules (e.g. `FileLocationHandlerHttp.qc`)
-that whole-dir avoids (see `cmake/QoreMacros.cmake:1454-1465`). Unblocking it =
-fix the SIGSEGV + add an opt-in flag for dev loops; it does not help clean/CI
-builds. Per-function content-addressed caching (this phase) is the more general
-answer and subsumes most of the per-file benefit without the re-parse penalty.
+**2026-07-31 update — adaptive per-file `.qo` builds.**
+`QORE_QCC_COMPILE_OBJECTS` now combines both useful compilation modes. On a
+clean or incomplete tree, one batch `qcc -c` invocation parses the full context
+once and writes each object's index, manifest, status, stamp, content stamp,
+and exact dependency file. Subsequent source or provider changes use the
+per-file incremental helper, preserving narrow rebuild granularity without
+paying N full-context parses. A serialized bootstrap lock prevents recursive
+Make invocations from starting the same batch concurrently, and an incomplete
+or failed bootstrap falls back to the established per-file path without
+marking stale outputs current.
+
+On the Qorus QWF object group (176 sources), clean compilation improved from
+62.10 s with independent per-file processes to 16.07 s with the batch
+bootstrap (3.86x). A full clean Qorus build completed in 5:13.53, a no-op build
+in 1.93 s, and a direct one-source incremental rebuild in 5.28 s. A final
+recheck after QWF grew to 177 sources completed in 16.09 s. Exact
+cross-file constant and global dependencies keep the optimization correct
+without restoring all-to-all invalidation. Per-function content-addressed
+caching remains complementary: it can reduce code generation inside the one
+batch or changed source after dependency selection has occurred.
 
 ### Phase 3: Parallel codegen (split-after-opt + make jobserver)
 
@@ -506,14 +517,16 @@ Introduce three levels, selectable via qcc flags:
 
 ## Entry point for next session
 
-Phases 1, 5a shipped; Phase 4 substantially shipped (this branch). The
-build is well-parallelized across modules and incrementally scoped; the
-gross opt-level dial is a measured dead end. Pick one of:
+Phases 1, 5a shipped; Phase 4 substantially shipped, including adaptive batch
+bootstrap for downstream standalone object groups. The build is
+well-parallelized across modules and incrementally scoped; the gross opt-level
+dial is a measured dead end. Pick one of:
 
 1. **Phase 2 (per-function caching)** — best dev-loop ROI; content-addressed
    `.o` cache keyed on IR+toolchain hash, skips codegen for unchanged
-   functions. Subsumes most of the disabled per-file `.qo` incremental win
-   without its re-parse penalty.
+   functions. Complements exact per-file dependency selection and adaptive
+   clean-tree batching by avoiding repeated code generation within the source
+   or batch selected for recompilation.
 2. **Phase 3 (parallel codegen)** — the one remaining large clean-build lever
    (~45% on big modules via split-after-opt). Architectural change to the
    emit path; reuses the Phase 4 aggregate-link plumbing. Do as a dedicated,

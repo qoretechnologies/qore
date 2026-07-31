@@ -280,6 +280,10 @@ function(QORE_QCC_HELPER_PATH _out_var _name)
             AND DEFINED QORE_QCC_SOURCE_ORDER_HELPER
             AND NOT "${QORE_QCC_SOURCE_ORDER_HELPER}" STREQUAL "")
         set(_qore_qcc_helper "${QORE_QCC_SOURCE_ORDER_HELPER}")
+    elseif ("${_name}" STREQUAL "qore-qo-batch-bootstrap"
+            AND DEFINED QORE_QCC_BATCH_BOOTSTRAP_HELPER
+            AND NOT "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}" STREQUAL "")
+        set(_qore_qcc_helper "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}")
     elseif (DEFINED QORE_CMAKE_DIR AND EXISTS "${QORE_CMAKE_DIR}/${_name}")
         set(_qore_qcc_helper "${QORE_CMAKE_DIR}/${_name}")
     elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../tools/${_name}")
@@ -352,6 +356,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_GET_QCC_DEPS(_qore_qcc_deps QCC_COMMAND "${_qore_qcc_command}")
     QORE_QCC_HELPER_PATH(_qore_qcc_incremental_helper qore-qo-incremental)
     QORE_QCC_HELPER_PATH(_qore_qcc_source_order_helper qore-qo-source-order)
+    QORE_QCC_HELPER_PATH(_qore_qcc_batch_bootstrap_helper qore-qo-batch-bootstrap)
 
     set(_qore_qcc_outputs)
     set(_qore_qcc_stamps)
@@ -483,6 +488,56 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
+    set(_qore_qcc_bootstrap_stamp)
+    set(_qore_qcc_bootstrap_target)
+    if (_qore_qcc_count GREATER 1)
+        set(_qore_qcc_batch_script "${_QORE_QCO_SCRIPT_DIR}/qcc-batch.sh")
+        set(_qore_qcc_batch_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
+        foreach(_qore_qcc_arg
+                ${_qore_qcc_warning_flags}
+                ${_qore_qcc_stub_flags}
+                ${_qore_qcc_load_flags}
+                ${_qore_qcc_define_flags}
+                ${_qore_qcc_parse_option_flags}
+                ${_qore_qcc_source_symbol_flags}
+                ${_qore_qcc_metadata_compression_flags}
+                ${_qore_qcc_manifest_input_flags})
+            set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
+        endforeach()
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} -c --batch-build-sidecars --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
+        foreach(_qore_qcc_source ${_qore_qcc_abs_sources})
+            set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_source}'")
+        endforeach()
+        string(APPEND _qore_qcc_batch_cmd "\n")
+        QORE_WRITE_IF_CHANGED("${_qore_qcc_batch_script}" "${_qore_qcc_batch_cmd}")
+
+        set(_qore_qcc_bootstrap_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-batch-bootstrap.stamp")
+        set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
+        add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
+            COMMAND ${_qore_qcc_batch_bootstrap_helper}
+                ${_qore_qcc_context_path}
+                ${_qore_qcc_bootstrap_stamp}
+                ${_qore_qcc_batch_script}
+                ${_qore_qcc_source_order_helper}
+            DEPENDS
+                ${_qore_qcc_batch_script}
+                ${_qore_qcc_context_path}
+                ${_qore_qcc_source_symbols}
+                ${_QORE_QCO_STUBS}
+                ${_QORE_QCO_DEPENDS}
+                ${_qore_qcc_load_module_target_deps}
+                ${_qore_qcc_deps}
+                ${_qore_qcc_batch_bootstrap_helper}
+                ${_qore_qcc_source_order_helper}
+                ${_QORE_QCO_MANIFEST_INPUTS}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "qcc -c: batch bootstrapping ${_QORE_QCO_GROUP} (${_qore_qcc_count} sources)"
+            VERBATIM)
+        add_custom_target(${_qore_qcc_bootstrap_target}
+            DEPENDS ${_qore_qcc_bootstrap_stamp})
+    endif ()
+
     if (_qore_qcc_count GREATER 0)
         math(EXPR _qore_qcc_last "${_qore_qcc_count} - 1")
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
@@ -490,6 +545,9 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             list(GET _qore_qcc_stamps ${_qore_qcc_idx} _qore_qcc_stamp)
             add_custom_target(${_qore_qcc_order_target}
                 DEPENDS ${_qore_qcc_stamp})
+            if (_qore_qcc_bootstrap_target)
+                add_dependencies(${_qore_qcc_order_target} ${_qore_qcc_bootstrap_target})
+            endif ()
         endforeach()
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
             list(GET _qore_qcc_abs_sources ${_qore_qcc_idx} _qore_qcc_source)
@@ -520,10 +578,12 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_output}.source.manifest.json
                     ${_qore_qcc_output}.source-parse-defines
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
-                COMMAND ${_qore_qcc_incremental_helper}
-                    ${_qore_qcc_output}
-                    ${_qore_qcc_source}
-                    ${_qore_qcc_single_script}
+                COMMAND ${CMAKE_COMMAND} -E env
+                    "QORE_QCC_BATCH_BOOTSTRAP_STAMP=${_qore_qcc_bootstrap_stamp}"
+                    ${_qore_qcc_incremental_helper}
+                        ${_qore_qcc_output}
+                        ${_qore_qcc_source}
+                        ${_qore_qcc_single_script}
                 DEPENDS
                     ${_qore_qcc_source}
                     ${_qore_qcc_source_symbols}

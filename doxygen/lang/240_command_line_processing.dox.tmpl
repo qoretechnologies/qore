@@ -95,6 +95,8 @@
     |<tt>--context=</tt><em>dir</em>|Context directory for per-file or split-module compilation
     |<tt>-L</tt> <em>dir</em>|Preload sibling \c .qo declarations from a directory
     |<tt>--output-dir=</tt><em>dir</em>|Output directory for batch \c -c builds
+    |<tt>--depfile-dir=</tt><em>dir</em>|Write one dependency file per batch output into <em>dir</em>
+    |<tt>--batch-build-sidecars</tt>|Write incremental-build index, manifest, status, dependency, and stamp sidecars for every batch output; requires \c --depfile-dir
     |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources
     |<tt>--stub=</tt><em>file</em>|Preload declaration-only source supplied by a host
     |<tt>--define=</tt><em>name</em><tt>[=</tt><em>value</em><tt>]</tt>|Set parser defines before parsing

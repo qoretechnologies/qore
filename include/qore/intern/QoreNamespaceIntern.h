@@ -550,7 +550,8 @@ public:
         return enumList.find(name);
     }
 
-    DLLLOCAL QoreValue getConstantValue(const char* name, const QoreTypeInfo*& typeInfo, bool& found);
+    DLLLOCAL QoreValue getConstantValue(const char* name, const QoreTypeInfo*& typeInfo, bool& found,
+            const QoreProgramLocation* consumer_loc = nullptr);
     DLLLOCAL QoreClass* parseFindLocalClass(const char* name);
     DLLLOCAL qore_ns_private* parseAddNamespace(QoreNamespace* nns);
 

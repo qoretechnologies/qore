@@ -747,7 +747,7 @@ const ConstantEntry* ConstantList::findEntry(const char* name) const {
 }
 
 QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantTypeInfo, ClassAccess& access,
-        bool& found) {
+        bool& found, const QoreProgramLocation* consumer_loc) {
     cnemap_t::iterator i = cnemap.find(name);
     if (i != cnemap.end()) {
         if (!i->second->parseInit(ptr)) {
@@ -757,7 +757,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // AOT incremental dependency: see ConstantEntry::get().  Records
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
-            qore_aot_note_referenced_decl(i->second->loc);
+            qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
             return i->second->val;
         }
         constantTypeInfo = nothingTypeInfo;
