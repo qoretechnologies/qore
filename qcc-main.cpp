@@ -702,6 +702,14 @@ static const char* depfile_target_path = nullptr;
 // depend on semantic object changes while still passing the real `.qo` files to
 // qcc for linking and manifest verification.
 static bool depfile_qo_input_content_stamps = false;
+enum class DepfileModuleDepsMode {
+    Source,
+    Artifact,
+    None,
+};
+// Module depfiles default to source prerequisites so their contents do not
+// depend on whether a sibling .qmod happened to exist when qcc ran.
+static DepfileModuleDepsMode depfile_module_deps_mode = DepfileModuleDepsMode::Source;
 // --depfile-dir=DIR emits one Make-format depfile per generated `.qo`
 // in batch `-c --output-dir=DIR` mode.  Each depfile basename matches
 // the generated object basename with `.d` appended.
@@ -756,6 +764,172 @@ static std::vector<std::string> qcc_depfile_explicit_inputs(
         }
     }
     return rv;
+}
+
+static const char* depfile_module_deps_mode_name() {
+    switch (depfile_module_deps_mode) {
+        case DepfileModuleDepsMode::Source:
+            return "source";
+        case DepfileModuleDepsMode::Artifact:
+            return "artifact";
+        case DepfileModuleDepsMode::None:
+            return "none";
+    }
+    return "source";
+}
+
+static bool has_source_extension(const std::string& path) {
+    size_t dot = path.rfind('.');
+    if (dot == std::string::npos) {
+        return false;
+    }
+    const std::string ext = path.substr(dot);
+    return ext == ".qm" || ext == ".qc" || ext == ".ql";
+}
+
+static void add_module_source_dir(const std::string& dir,
+        std::vector<std::string>& sources) {
+    DIR* d = opendir(dir.c_str());
+    if (!d) {
+        return;
+    }
+    std::vector<std::string> found;
+    while (dirent* ent = readdir(d)) {
+        std::string name = ent->d_name;
+        if (name == "." || name == ".." || !has_source_extension(name)) {
+            continue;
+        }
+        std::string path = join_path(dir, name.c_str());
+        if (depfile_dependency_exists(path)) {
+            found.push_back(std::move(path));
+        }
+    }
+    closedir(d);
+    std::sort(found.begin(), found.end());
+    sources.insert(sources.end(), found.begin(), found.end());
+}
+
+static bool add_module_sources_from_root(const std::string& root,
+        const std::string& name, std::vector<std::string>& sources) {
+    std::string single = join_path(root, (name + ".qm").c_str());
+    if (depfile_dependency_exists(single)) {
+        sources.push_back(std::move(single));
+        return true;
+    }
+
+    std::string split = join_path(root, name.c_str());
+    std::string main = join_path(split, (name + ".qm").c_str());
+    if (!depfile_dependency_exists(main)) {
+        return false;
+    }
+    add_module_source_dir(split, sources);
+    return true;
+}
+
+static void append_module_search_paths(std::vector<std::string>& paths,
+        const char* path_list) {
+    if (!path_list || !*path_list) {
+        return;
+    }
+    const char* begin = path_list;
+    for (const char* p = path_list; ; ++p) {
+        if (*p != QORE_PATH_SEP && *p) {
+            continue;
+        }
+        if (p != begin) {
+            paths.emplace_back(begin, p - begin);
+        }
+        if (!*p) {
+            break;
+        }
+        begin = p + 1;
+    }
+}
+
+static std::string module_name_from_path(const std::string& path) {
+    size_t slash = path.rfind('/');
+    std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+    size_t dot = name.rfind('.');
+    if (dot != std::string::npos) {
+        name.resize(dot);
+    }
+    size_t api = name.rfind("-api-");
+    if (api != std::string::npos) {
+        name.resize(api);
+    }
+    return name;
+}
+
+static std::vector<std::string> qcc_module_depfile_inputs(
+        const std::vector<std::string>& resolved_deps) {
+    if (depfile_module_deps_mode == DepfileModuleDepsMode::Artifact) {
+        return resolved_deps;
+    }
+    if (depfile_module_deps_mode == DepfileModuleDepsMode::None) {
+        return {};
+    }
+
+    std::vector<std::string> search_paths;
+    append_module_search_paths(search_paths, getenv("QORE_MODULE_DIR"));
+    search_paths.emplace_back(qore_user_module_ver_dir);
+    search_paths.emplace_back(qore_module_ver_dir);
+    search_paths.emplace_back(qore_user_module_dir);
+    search_paths.emplace_back(qore_module_dir);
+
+    std::vector<std::string> sources;
+    for (const std::string& dep : resolved_deps) {
+        if (has_source_extension(dep)) {
+            std::string name = module_name_from_path(dep);
+            std::string parent = dirname_of(dep);
+            size_t slash = parent.rfind('/');
+            std::string parent_name = slash == std::string::npos
+                ? parent : parent.substr(slash + 1);
+            if (parent_name == name) {
+                add_module_source_dir(parent, sources);
+            } else {
+                sources.push_back(dep);
+            }
+            continue;
+        }
+
+        if (dep.size() < 5 || dep.compare(dep.size() - 5, 5, ".qmod")) {
+            // Binary modules and other module artifacts have no Qore source
+            // representation that qcc can expand.
+            sources.push_back(dep);
+            continue;
+        }
+        std::string name = module_name_from_path(dep);
+        std::string parent = dirname_of(dep);
+        size_t before = sources.size();
+        size_t slash = parent.rfind('/');
+        std::string parent_name = slash == std::string::npos
+            ? parent : parent.substr(slash + 1);
+        if (parent_name == name) {
+            std::string main = join_path(parent, (name + ".qm").c_str());
+            if (depfile_dependency_exists(main)) {
+                add_module_source_dir(parent, sources);
+            }
+        } else {
+            add_module_sources_from_root(parent, name, sources);
+        }
+        if (sources.size() != before) {
+            continue;
+        }
+        for (const std::string& root : search_paths) {
+            if (add_module_sources_from_root(root, name, sources)) {
+                break;
+            }
+        }
+        if (sources.size() == before) {
+            // Preserve a dependency edge when only an installed/generated
+            // qmod is available. For in-tree builds the source root is on
+            // QORE_MODULE_DIR, so artifact presence does not affect the form.
+            sources.push_back(dep);
+        }
+    }
+    std::sort(sources.begin(), sources.end());
+    sources.erase(std::unique(sources.begin(), sources.end()), sources.end());
+    return sources;
 }
 
 // Preserve temporary .qo/glue files generated by one-shot multi-source
@@ -844,6 +1018,9 @@ static void print_usage(const char* prog) {
            "                         dependency as .qo.content.stamp.  Intended for\n"
            "                         qo-link build rules that already depend on qcc\n"
            "                         content stamps to avoid mtime-only relinks.\n");
+    printf("      --depfile-module-deps=MODE\n"
+           "                         Module dependency form: source (default), artifact,\n"
+           "                         or none. Source expands split modules to .qm/.qc/.ql.\n");
     printf("      --depfile-dir=DIR  Batch `-c --output-dir` mode only: emit one\n"
            "                         Make-format dependency file per generated `.qo` into\n"
            "                         DIR.  Each depfile is named `<object>.qo.d`.\n");
@@ -1034,6 +1211,7 @@ static struct option long_options[] = {
     {"source-symbol-manifest", required_argument, nullptr, 0x11d},
     {"jobs",              required_argument, nullptr, 0x11e},
     {"batch-build-sidecars", no_argument,   nullptr, 0x11f},
+    {"depfile-module-deps", required_argument, nullptr, 0x120},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1215,6 +1393,19 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x11f:  // --batch-build-sidecars
                 batch_build_sidecars = true;
+                break;
+            case 0x120:  // --depfile-module-deps
+                if (!strcmp(optarg, "source")) {
+                    depfile_module_deps_mode = DepfileModuleDepsMode::Source;
+                } else if (!strcmp(optarg, "artifact")) {
+                    depfile_module_deps_mode = DepfileModuleDepsMode::Artifact;
+                } else if (!strcmp(optarg, "none")) {
+                    depfile_module_deps_mode = DepfileModuleDepsMode::None;
+                } else {
+                    fprintf(stderr, "error: invalid --depfile-module-deps value '%s' "
+                        "(must be source, artifact, or none)\n", optarg);
+                    return 1;
+                }
                 break;
             case 'F':
                 from_objects = true;
@@ -6386,6 +6577,8 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
         script_aggregate_native_registers, 4);
     write_json_file_bool_field(f, "depfile_qo_input_content_stamps",
         depfile_qo_input_content_stamps, 4);
+    write_json_file_string_field(f, "depfile_module_deps",
+        depfile_module_deps_mode_name(), 4);
     write_json_file_string_field(f, "aggregate_symbol", manifest.aggregate_symbol, 4, "");
     fputs("  },\n", f);
 
@@ -8021,13 +8214,13 @@ int main(int argc, char** argv) {
                 printf("qcc: compiled per-file .qo (-O%d%s): %s\n", opt_level,
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = target source + every sibling .qm/.qc/.ql in --context=DIR
-            // (matches compileSeparatedModuleFile's dir scan) + the .qmod files
-            // of modules loaded for the %requires closure.
+            // deps = the source context plus dependency modules in the selected form.
+            std::vector<std::string> module_deps =
+                qcc_module_depfile_inputs(dep_module_files);
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       source_file, context_dir,
-                                      &dep_module_files)) {
+                                      &module_deps)) {
                 rc = 1;
             }
         }
@@ -8057,11 +8250,13 @@ int main(int argc, char** argv) {
             // source_file is the split-module directory itself;
             // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
             // Leave `source` empty so the target dir is not double-listed.
-            // dep_module_files adds the .qmod files of the %requires closure.
+            // Dependency modules use the selected deterministic depfile form.
+            std::vector<std::string> module_deps =
+                qcc_module_depfile_inputs(dep_module_files);
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       std::string(), source_file,
-                                      &dep_module_files)) {
+                                      &module_deps)) {
                 rc = 1;
             }
         }
@@ -8089,10 +8284,12 @@ int main(int argc, char** argv) {
                     compile_only ? ", relocatable .qo" : "",
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = the .qm file + the .qmod files of the %requires closure
+            // deps = the .qm file plus dependency modules in the selected form.
+            std::vector<std::string> module_deps =
+                qcc_module_depfile_inputs(dep_module_files);
             if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
                                                source_file, nullptr,
-                                               &dep_module_files)) {
+                                               &module_deps)) {
                 rc = 1;
             }
         }

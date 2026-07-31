@@ -175,6 +175,12 @@
     model automatically. All take keyword arguments; see the macro definitions for the
     full argument set.
 
+    Standard user-module AOT rules request \c --depfile-module-deps=source.
+    Therefore module depfiles are independent of whether a required sibling's
+    generated \c .qmod exists when \c qcc runs, and a split dependency is
+    represented by its complete \c .qm / \c .qc / \c .ql source set. A resolved
+    artifact is retained only when no source representation is available.
+
     - \c qore_qcc_compile_objects() — compile one or more Qore sources to relocatable
       \c .qo objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
       \c PARSE_DEFINES, \c PARSE_OPTIONS, \c INCLUDE_DIR, \c MODULE_DIR, …); emits the

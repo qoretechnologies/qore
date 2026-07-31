@@ -50,6 +50,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
+        addTestCase("module depfiles use deterministic dependency forms",
+            \testModuleDependencyForms());
         # NOTE: enum members route through the SAME constant hook — they are
         # registered as ConstantList entries, so a folded `SiblingEnum::Member`
         # is captured identically to a constant.  An end-to-end enum case is not
@@ -181,5 +183,97 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string deps = provider_dep + consumer_dep;
         assertEq(-1, deps.find("qorus-bootstrap-fallback"),
             "batch depfiles are real qcc depfiles, not wrapper fallback depfiles: " + deps);
+    }
+
+    testModuleDependencyForms() {
+        TmpDir tmp = initDirs();
+        string source_root = tmp_dir + "/modules";
+        string dep_source = source_root + "/Dep";
+        string artifact_root = tmp_dir + "/qmods";
+        string dep_artifact_dir = artifact_root + "/Dep";
+        mkdir(source_root);
+        mkdir(dep_source);
+        mkdir(artifact_root);
+        mkdir(dep_artifact_dir);
+
+        write(dep_source + "/Dep.qm", "%modern\n"
+            + "module Dep { version = \"1.0\"; desc = \"dep\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            + "public namespace Dep { public string sub value() { return helper(); } }\n");
+        write(dep_source + "/Extra.qc",
+            "public namespace Dep { public string sub helper() { return \"ok\"; } }\n");
+        string dep_qmod = dep_artifact_dir + "/Dep.qmod";
+        string dep_out = run(sprintf("%s %s -m -o %s %s",
+            env, qcc_bin, dep_qmod, dep_source));
+        assertTrue(is_file(dep_qmod), "compiled split dependency module: " + dep_out);
+
+        string consumer = tmp_dir + "/Consumer.qm";
+        write(consumer, "%modern\n%requires Dep\n"
+            + "module Consumer { version = \"1.0\"; desc = \"consumer\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            + "public namespace Consumer { public string sub value() { return Dep::value(); } }\n");
+        string module_env = sprintf("%s QORE_MODULE_DIR=%s:%s", env,
+            artifact_root, source_root);
+
+        string source_depfile = tmp_dir + "/source.d";
+        string source_out = run(sprintf("%s %s -m --depfile=%s -o %s/source.qmod %s",
+            module_env, qcc_bin, source_depfile, tmp_dir, consumer));
+        string source_deps = File::readTextFile(source_depfile);
+        assertTrue(is_file(tmp_dir + "/source.qmod"),
+            "compiled consumer with source dependency mode: " + source_out);
+        assertTrue(source_deps.find("Dep/Dep.qm") != -1
+                && source_deps.find("Dep/Extra.qc") != -1,
+            "default source mode expands the complete split module: " + source_deps);
+        assertEq(-1, source_deps.find("Dep.qmod"),
+            "default source mode excludes the generated dependency artifact: " + source_deps);
+
+        string artifact_depfile = tmp_dir + "/artifact.d";
+        string artifact_out = run(sprintf("%s %s -m --depfile-module-deps=artifact"
+            + " --depfile=%s -o %s/artifact.qmod %s", module_env, qcc_bin,
+            artifact_depfile, tmp_dir, consumer));
+        string artifact_deps = File::readTextFile(artifact_depfile);
+        assertTrue(is_file(tmp_dir + "/artifact.qmod"),
+            "compiled consumer with artifact dependency mode: " + artifact_out);
+        assertTrue(artifact_deps.find("Dep/Dep.qmod") != -1,
+            "artifact mode preserves the resolved qmod prerequisite: " + artifact_deps);
+        assertEq(-1, artifact_deps.find("Dep/Extra.qc"),
+            "artifact mode does not expand dependency sources: " + artifact_deps);
+
+        string artifact_only_depfile = tmp_dir + "/artifact-only.d";
+        string artifact_only_env = sprintf("%s QORE_MODULE_DIR=%s", env,
+            artifact_root);
+        string artifact_only_out = run(sprintf("%s %s -m --depfile=%s"
+            + " -o %s/artifact-only.qmod %s", artifact_only_env, qcc_bin,
+            artifact_only_depfile, tmp_dir, consumer));
+        string artifact_only_deps = File::readTextFile(artifact_only_depfile);
+        assertTrue(is_file(tmp_dir + "/artifact-only.qmod"),
+            "compiled consumer with artifact-only dependency: " + artifact_only_out);
+        assertTrue(artifact_only_deps.find("Dep/Dep.qmod") != -1,
+            "source mode retains an artifact when no source representation is available: "
+                + artifact_only_deps);
+
+        string none_depfile = tmp_dir + "/none.d";
+        string none_out = run(sprintf("%s %s -m --depfile-module-deps=none"
+            + " --depfile=%s -o %s/none.qmod %s", module_env, qcc_bin,
+            none_depfile, tmp_dir, consumer));
+        string none_deps = File::readTextFile(none_depfile);
+        assertTrue(is_file(tmp_dir + "/none.qmod"),
+            "compiled consumer with omitted module dependencies: " + none_out);
+        assertEq(-1, none_deps.find("/Dep/"),
+            "none mode omits dependency module files: " + none_deps);
+        assertTrue(none_deps.find("Consumer.qm") != -1,
+            "none mode retains the consumer's own source: " + none_deps);
+
+        string moved_qmod = dep_qmod + ".saved";
+        run(sprintf("mv %s %s", dep_qmod, moved_qmod));
+        string fallback_depfile = tmp_dir + "/fallback.d";
+        string fallback_out = run(sprintf("%s %s -m --depfile=%s -o %s/fallback.qmod %s",
+            module_env, qcc_bin, fallback_depfile, tmp_dir, consumer));
+        string fallback_deps = File::readTextFile(fallback_depfile);
+        assertTrue(is_file(tmp_dir + "/fallback.qmod"),
+            "compiled consumer with source-loaded dependency: " + fallback_out);
+        assertTrue(fallback_deps.find("Dep/Dep.qm") != -1
+                && fallback_deps.find("Dep/Extra.qc") != -1,
+            "source mode is complete when no dependency artifact exists: " + fallback_deps);
+        assertEq(-1, fallback_deps.find("Dep.qmod"),
+            "source mode is independent of dependency artifact availability: " + fallback_deps);
     }
 }

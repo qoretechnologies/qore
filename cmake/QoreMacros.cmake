@@ -1600,7 +1600,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} -m ${_source_root}
-                --depfile=${_qmod_dep} -o ${_qmod_out}
+                --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
@@ -1635,7 +1635,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} -m ${_source_root}
-                --depfile=${_qmod_dep} -o ${_qmod_out}
+                --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}

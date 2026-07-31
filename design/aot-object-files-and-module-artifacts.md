@@ -291,6 +291,12 @@ information comes from parsed Qore metadata:
 
 - `--depfile=<path>` emits Make/Ninja dependencies for single-source compile,
   `--script-aggregate`, and `--link-qo` single-output commands.
+- `--depfile-module-deps=source|artifact|none` selects how module-mode depfiles
+  represent `%requires` dependencies. `source` is the deterministic default and
+  expands a split module to its complete `.qm`/`.qc`/`.ql` source set, retaining
+  the resolved artifact only when no source representation can be found;
+  `artifact` preserves the resolved-file behavior; `none` leaves cross-module
+  edges to the build system.
 - `--write-index-json=<path>` emits the AOT symbol index JSON for the generated
   object or aggregate.
 - `--write-manifest=<path>` emits a deterministic manifest containing qcc

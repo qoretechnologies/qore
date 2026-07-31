@@ -238,6 +238,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --define=NAME[=VALUE]|Set a parser define before parsing
     |\c --parse-option=NAME|OR a parse option into the compile program
     |\c --depfile=FILE|Write a Make-format dependency file
+    |\c --depfile-module-deps=MODE|For module depfiles, record dependency sources (default), resolved artifact files, or none; source mode expands split modules to all \c .qm / \c .qc / \c .ql files and retains an artifact only when no source representation is available
     |\c --from-objects|Aggregate \c .qo inputs into a \c .qmod with \c -m
     |\c -a, \c --archive|Create a \c .qoa archive from \c .qo inputs
     |\c -S, \c --static|Static link single-source executables against \c libqore
