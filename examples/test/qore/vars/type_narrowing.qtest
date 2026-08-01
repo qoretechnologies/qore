@@ -67,6 +67,7 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("list<auto!> from reference", \listAutoNoNarrowFromRefTest());
         addTestCase("reference<hash<auto!>> write-through", \hashAutoNoNarrowReferenceWriteThroughTest());
         addTestCase("reference<list<auto!>> write-through", \listAutoNoNarrowReferenceWriteThroughTest());
+        addTestCase("auto! target through broad reference", \autoNoNarrowBroadReferenceTargetTest());
         addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
         addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
         addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
@@ -1706,6 +1707,30 @@ hash<auto> sub run_test() {
         l += "string";
         assertEq("string", l[1]);
         assertEq("list<auto>", l.fullType());
+    }
+
+    private static nothing assignBroadHashReference(reference<hash<auto>> h) {
+        h.impact_values = ({"metric_name": "exposure"},);
+    }
+
+    private static nothing assignBroadListReference(reference<list<auto>> l) {
+        l[1] = {"metric_name": "exposure"};
+    }
+
+    autoNoNarrowBroadReferenceTargetTest() {
+        hash<auto!> h = {"source_event_ids": ("event-id",)};
+        assertEq("hash<auto>", h.fullType(),
+            "creating a broad reference must preserve hash<auto!> storage semantics");
+        TypeNarrowingTest::assignBroadHashReference(\h);
+        assertEq("hash<auto>", h.fullType());
+        assertEq("exposure", h.impact_values[0].metric_name);
+
+        list<auto!> l = ("event-id", "pending");
+        assertEq("list<auto>", l.fullType(),
+            "creating a broad reference must preserve list<auto!> storage semantics");
+        TypeNarrowingTest::assignBroadListReference(\l);
+        assertEq("list<auto>", l.fullType());
+        assertEq("exposure", l[1].metric_name);
     }
 
     # Runtime tests for hash<auto> - narrowed type should be preserved

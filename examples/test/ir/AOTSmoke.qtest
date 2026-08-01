@@ -6743,11 +6743,19 @@ public namespace AOTNoNarrowRefSig {
             h.(key) = val;
             return sprintf(\"%d:%s\", h.n, h.s);
         }
+
+        static string putBroad(reference<hash<auto>> h) {
+            h.impact_values = ({\"metric_name\": \"exposure\"},);
+            return sprintf(\"%s:%s\", h.fullType(), h.impact_values[0].metric_name);
+        }
     }
 
     public string sub run() {
         hash<auto!> h = {\"n\": 1};
-        return C::put(\\h, \"s\", \"x\") + \":\" + h.s + \"\\n\";
+        hash<auto!> broad = {\"source_event_ids\": (\"event-id\",)};
+        string broad_type = broad.fullType();
+        return C::put(\\h, \"s\", \"x\") + \":\" + h.s + \":\" + broad_type + \":\"
+            + C::putBroad(\\broad) + \"\\n\";
     }
 }
 ";
@@ -6762,7 +6770,7 @@ public namespace AOTNoNarrowRefSig {
         string qmod_path = tmp_dir + "/AOTNoNarrowRefSig.qmod";
         hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
         assertTrue(result.compiled, "no-narrow reference signature module compiled: " + result.compile_out);
-        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "2"),
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "3"),
             "no-narrow reference signature module fully precompiled: " + result.compile_out);
 
         unlink(qm_path);
@@ -6771,8 +6779,8 @@ public namespace AOTNoNarrowRefSig {
             "-l AOTNoNarrowRefSig -e 'printf(\"%%s\", AOTNoNarrowRefSig::run());' 2>&1",
             libqore_dir, tmp_dir, qore_bin));
 
-        assertEq("1:x:x\n", out,
-            "source-stripped AOT qmod registers reference<hash<auto!>> signatures");
+        assertEq("1:x:x:hash<auto>:hash<auto>:exposure\n", out,
+            "source-stripped AOT qmod preserves auto! targets through broad reference signatures");
     }
 
     # Regression: the JIT/AOT COW store helpers (qore_rt_hash_key_store_cow*(),

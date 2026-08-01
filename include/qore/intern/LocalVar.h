@@ -557,7 +557,11 @@ public:
             LocalVarValue* val = thread_instantiate_lvar();
             val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
-            thread_instantiate_closure_var(name.c_str(), ti, nval, assign, read_only);
+            // Closure/thread-safe storage must retain the lvalue-only auto! marker. Without it,
+            // merely creating a reference to a hash<auto!>/list<auto!> local changes the storage
+            // path and lets its initializer keep a narrowed runtime container type.
+            const QoreTypeInfo* lvalue_ti = runtimeTypeInfo ? runtimeTypeInfo : getTypeInfoForLValue();
+            thread_instantiate_closure_var(name.c_str(), lvalue_ti, nval, assign, read_only);
         }
     }
 

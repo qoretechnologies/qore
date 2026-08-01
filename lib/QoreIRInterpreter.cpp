@@ -10823,6 +10823,26 @@ load_local_done:
                     }
                 }
 
+                // Keep the IR closure cache consistent with the lvalue. LValueHelper normalizes
+                // auto! containers during the write-through below, so normalize the cached value
+                // first as well; otherwise later loads can observe the narrowed RHS type.
+                ValueHolder no_narrow_holder(xsink);
+                if (!local_inst->weak && local_inst->local->isNoNarrowContainer()) {
+                    no_narrow_holder = coerceIRLocalValue(local_inst->local, val, xsink);
+                    if (xsink && *xsink) {
+                        if (inst->exception_target) {
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    val = *no_narrow_holder;
+                }
+
                 // Ensure variable is instantiated before store (same as LoadClosure)
                 bool has_env_cvv = thread_has_runtime_closure_env()
                     && thread_try_get_runtime_closure_var(local_inst->local);
