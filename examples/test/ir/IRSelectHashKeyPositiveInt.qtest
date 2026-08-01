@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRSelectHashKeyPositiveIntTest
+
+#! tests the optimized "select <list>, $1.<key> > 0" opcode (SelectHashKeyPositiveInt)
+/** the IR interpreter and the JIT/AOT runtime helper must produce identical results to the
+    reference (AST) implementation, including raising \c INVALID-MEMBER when an unknown member of a
+    hashdecl-typed hash is accessed
+
+    the tested code is at the top level of the generated scripts on purpose: only the top-level
+    block is compiled synchronously under \c --exec-mode=jit, so a function body would still be
+    running at the IR tier while its background compilation completes
+*/
+class IRSelectHashKeyPositiveIntTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRSelectHashKeyPositiveIntTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("select hash-key positive-int matches AST in all exec modes",
+            \testExecModesSelectHashKeyPositiveInt());
+        addTestCase("select hash-key positive-int matches AST without prehashed keys",
+            \testSelectHashKeyPositiveIntNoPrehashedKeys());
+        addTestCase("select hash-key positive-int raises INVALID-MEMBER in all exec modes",
+            \testSelectHashKeyPositiveIntRaises());
+        addTestCase("select hash-key positive-int opcode is kept inside a try block",
+            \testSelectHashKeyPositiveIntUsedInsideTry());
+
+        set_return_value(main());
+    }
+
+    private string expectedOutput() {
+        return "plain:a,d\n"
+            "empty:\n"
+            "missing-key:x,z\n"
+            "non-hash:p,r\n"
+            "hashdecl-member:r1,r3\n"
+            "hashdecl-unknown-member:INVALID-MEMBER\n"
+            "typed-list:t2,t3\n"
+            "large:83\n";
+    }
+
+    private string selectCode() {
+        return "%modern
+
+hashdecl SelRec {
+    int n;
+    string id;
+}
+
+string sub ids(list<auto> l) {
+    list<string> rv = ();
+    foreach auto e in (l) {
+        rv += e.id;
+    }
+    return join(\",\", rv);
+}
+
+# returning through a declared list<auto> keeps the element type opaque at the use site, so the
+# \"count\" key cannot be resolved at parse time and the hashdecl member check is deferred to the
+# runtime implementation under test
+list<auto> sub records() {
+    return (
+        new hash<SelRec>({\"n\": 3, \"id\": \"r1\"}),
+        new hash<SelRec>({\"n\": 0, \"id\": \"r2\"}),
+        new hash<SelRec>({\"n\": 7, \"id\": \"r3\"}),
+        new hash<SelRec>({\"n\": -1, \"id\": \"r4\"}),
+    );
+}
+
+# positive values are selected; zero, negative, and missing keys are not
+list<auto> plain = (
+    {\"count\": 1, \"id\": \"a\"},
+    {\"count\": 0, \"id\": \"b\"},
+    {\"count\": -3, \"id\": \"c\"},
+    {\"count\": 5, \"id\": \"d\"},
+);
+list<auto> empty = ();
+# hashes without the key are silently skipped (no exception for a non-hashdecl hash)
+list<auto> missing_key = (
+    {\"count\": 2, \"id\": \"x\"},
+    {\"other\": 9, \"id\": \"y\"},
+    {\"count\": 4, \"id\": \"z\"},
+);
+# non-hash elements are skipped
+list<auto> non_hash = (
+    {\"count\": 3, \"id\": \"p\"},
+    \"string-element\",
+    42,
+    (1, 2),
+    NULL,
+    {\"count\": 8, \"id\": \"r\"},
+);
+list<auto> recs = records();
+# a typed list preserves its complex element type in the result
+list<hash<auto>> typed = (
+    {\"count\": 0, \"id\": \"t1\"},
+    {\"count\": 6, \"id\": \"t2\"},
+    {\"count\": 1, \"id\": \"t3\"},
+);
+# more than 100 elements to cross the cancellation-check boundary in the loop
+list<auto> large = ();
+for (int i = 0; i < 250; ++i) {
+    large += {\"count\": i % 3 == 0 ? i : 0, \"id\": sprintf(\"b%d\", i)};
+}
+
+printf(\"plain:%s\\n\", ids(select plain, \$1.count > 0));
+printf(\"empty:%s\\n\", ids(select empty, \$1.count > 0));
+printf(\"missing-key:%s\\n\", ids(select missing_key, \$1.count > 0));
+printf(\"non-hash:%s\\n\", ids(select non_hash, \$1.count > 0));
+printf(\"hashdecl-member:%s\\n\", ids(select recs, \$1.n > 0));
+# the specialized opcode is used inside try blocks too: it routes a raised exception to the
+# enclosing landing pad via exception_target, so this must be caught here
+try {
+    list<auto> bad = (select recs, \$1.count > 0);
+    printf(\"hashdecl-unknown-member:no-exception:%d\\n\", bad.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"hashdecl-unknown-member:%s\\n\", ex.err);
+}
+printf(\"typed-list:%s\\n\", ids(select typed, \$1.count > 0));
+printf(\"large:%d\\n\", (select large, \$1.count > 0).size());
+";
+    }
+
+    #! a select over a hashdecl element with an unknown member, with no enclosing try block
+    /** covers the throwing path of the specialized opcode when it must unwind out of the frame
+        rather than branch to a local landing pad
+    */
+    private string raisingCode() {
+        return "%modern
+
+hashdecl SelRec {
+    int n;
+}
+
+list<hash<auto>> sub records() {
+    return (new hash<SelRec>({\"n\": 3}),);
+}
+
+list<hash<auto>> recs = records();
+printf(\"before\\n\");
+printf(\"%y\\n\", (select recs, \$1.count > 0));
+printf(\"after\\n\");
+";
+    }
+
+    private string runScript(string mode, string script_path, *string env) {
+        return backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            env ?? "", libqore_dir, qore_bin, mode, script_path));
+    }
+
+    #! normalizes an aborting run to a comparable summary (the raw output carries timestamps)
+    private string raiseSummary(string mode, string script_path) {
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; echo rc=$?",
+            libqore_dir, qore_bin, mode, script_path));
+        return sprintf("before=%d after=%d err=%s rc=%s",
+            out =~ /before/ ? 1 : 0,
+            out =~ /after/ ? 1 : 0,
+            (out =~ x/(INVALID-MEMBER)/)[0] ?? "none",
+            (out =~ x/rc=([0-9]+)/)[0] ?? "?");
+    }
+
+    testExecModesSelectHashKeyPositiveInt() {
+        TmpFile script("qore-ir-select-hash-key-", ".q");
+        script.file.write(selectCode());
+        script.file.close();
+
+        string ast = runScript("ast", script.path);
+        assertEq(expectedOutput(), ast, "AST select hash-key positive-int baseline");
+        assertEq(ast, runScript("ir", script.path), "IR select hash-key positive-int matches AST");
+        assertEq(ast, runScript("jit", script.path), "JIT select hash-key positive-int matches AST");
+        assertEq(ast, runScript("tiered", script.path),
+            "tiered select hash-key positive-int matches AST");
+    }
+
+    testSelectHashKeyPositiveIntNoPrehashedKeys() {
+        TmpFile script("qore-ir-select-hash-key-nph-", ".q");
+        script.file.write(selectCode());
+        script.file.close();
+
+        # the JIT helper has separate prehashed and non-prehashed key lookup paths
+        string env = "QORE_DISABLE_AOT_PREHASHED_KEYS=1";
+        assertEq(expectedOutput(), runScript("jit", script.path, env),
+            "JIT select hash-key positive-int without prehashed keys");
+        assertEq(expectedOutput(), runScript("tiered", script.path, env),
+            "tiered select hash-key positive-int without prehashed keys");
+    }
+
+    #! guards the optimization: the opcode must not regress to the generic lowering inside a try
+    testSelectHashKeyPositiveIntUsedInsideTry() {
+        TmpFile script("qore-ir-select-hash-key-try-", ".q");
+        script.file.write("%modern
+hashdecl SelRec {
+    int n;
+}
+list<hash<auto>> sub records() {
+    return (new hash<SelRec>({\"n\": 3}),);
+}
+list<hash<auto>> recs = records();
+try {
+    printf(\"%y\\n\", (select recs, \$1.count > 0));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+");
+        script.file.close();
+
+        string dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=jit --ir-dump %s 2>&1",
+            libqore_dir, qore_bin, script.path));
+        assertTrue(dump =~ /select\.hashkey\.positive\.int/,
+            "specialized select opcode is still used inside a try block");
+        assertTrue(dump =~ /INVALID-MEMBER/,
+            "the exception is still caught by the enclosing try block");
+    }
+
+    testSelectHashKeyPositiveIntRaises() {
+        TmpFile script("qore-ir-select-hash-key-raise-", ".q");
+        script.file.write(raisingCode());
+        script.file.close();
+
+        # the statement before the select runs, the one after it does not, and the process aborts
+        string expected = "before=1 after=0 err=INVALID-MEMBER rc=3";
+        assertEq(expected, raiseSummary("ast", script.path),
+            "AST select hash-key positive-int raises INVALID-MEMBER");
+        assertEq(expected, raiseSummary("ir", script.path),
+            "IR select hash-key positive-int raises INVALID-MEMBER");
+        assertEq(expected, raiseSummary("jit", script.path),
+            "JIT select hash-key positive-int raises INVALID-MEMBER");
+        assertEq(expected, raiseSummary("tiered", script.path),
+            "tiered select hash-key positive-int raises INVALID-MEMBER");
+    }
+}

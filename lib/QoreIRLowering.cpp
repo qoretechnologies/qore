@@ -13683,19 +13683,25 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
             QoreValue hk_constant;
             QoreIROpcode hk_opcode = analyzeMapHashKeyPattern(map->getLeft(), key_name, hk_constant);
 
-            if (hk_opcode != QoreIROpcode::MapAny
-                    && (hk_opcode != QoreIROpcode::MapHashKeyOffsetAny
-                        || exception_stack.empty())) {
-                // Check if value type is known int for MapHashKeyInt detection
-                if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
-                    // Check if the value type for this key is known to be int
-                    const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
-                    if (hash_val_type
-                            && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
-                        hk_opcode = QoreIROpcode::MapHashKeyInt;
-                    }
+            // Check if value type is known int for MapHashKeyInt detection
+            if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
+                // Check if the value type for this key is known to be int
+                const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
+                if (hash_val_type
+                        && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
+                    hk_opcode = QoreIROpcode::MapHashKeyInt;
                 }
+            }
 
+            // MapHashKeyValue and MapHashKeyOffsetAny can raise INVALID-MEMBER when an element
+            // turns out at runtime to be a hashdecl-typed hash without the key.  The int variants
+            // require a statically known int-valued element hash, which a hashdecl can never
+            // satisfy (an unknown member of a known hashdecl is a parse error), so they cannot
+            // raise.
+            bool hk_can_raise = hk_opcode == QoreIROpcode::MapHashKeyValue
+                || hk_opcode == QoreIROpcode::MapHashKeyOffsetAny;
+
+            if (hk_opcode != QoreIROpcode::MapAny) {
                 // Lower all operands before creating the specialized instruction so that the
                 // resulting IR remains in SSA definition order for AOT compilation.
                 QoreIRValue list_val = lowerExpression(map->getRight(), error);
@@ -13717,6 +13723,13 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
                 inst->operands.push_back(list_val);
                 if (const_ir.isValid()) {
                     inst->operands.push_back(const_ir);
+                }
+                // Route a raised exception to the enclosing try/catch landing pad instead of
+                // giving up the specialized opcode there: the interpreter branches to this block
+                // and codegen's exception check targets it, so the fast path is kept inside try
+                // blocks at the cost of one check per map operation (not per element).
+                if (hk_can_raise && !exception_stack.empty()) {
+                    inst->exception_target = exception_stack.back();
                 }
                 return inst->result;
             }
@@ -13903,10 +13916,6 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
 
     // For optimized patterns, emit optimized opcode with just the list
     if (opt_opcode != QoreIROpcode::SelectAny) {
-        if (opt_opcode == QoreIROpcode::SelectHashKeyPositiveInt
-                && !exception_stack.empty()) {
-            return lowerSelectNative(select, expr, error);
-        }
         // Lower the list (left operand of select)
         QoreIRValue list_val = lowerExpression(select->getLeft(), error);
         if (!list_val.isValid()) {
@@ -13940,6 +13949,12 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
             auto* inst = builder.createMapHashKey(opt_opcode,
                 select_hash_key.c_str(), nullptr, select->loc);
             inst->operands.push_back(list_val);
+            // This opcode can raise INVALID-MEMBER when an element turns out at runtime to be a
+            // hashdecl-typed hash without the key: route that to the enclosing try/catch landing
+            // pad so the specialized opcode is kept inside try blocks.
+            if (!exception_stack.empty()) {
+                inst->exception_target = exception_stack.back();
+            }
             return inst->result;
         }
         if (!exception_stack.empty()) {
@@ -14019,6 +14034,12 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
                 auto* inst = builder.createMapHashKey(QoreIROpcode::HashMapTwoKeys,
                     key1_name.c_str(), key2_name.c_str(), map->loc);
                 inst->operands.push_back(list_val);
+                // HashMapTwoKeys can raise INVALID-MEMBER when an element turns out at runtime to
+                // be a hashdecl-typed hash without one of the keys: route that to the enclosing
+                // try/catch landing pad so the specialized opcode is kept inside try blocks.
+                if (!exception_stack.empty()) {
+                    inst->exception_target = exception_stack.back();
+                }
                 return inst->result;
             }
         }

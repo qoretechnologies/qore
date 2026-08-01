@@ -6864,27 +6864,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_float(uint64_t list_val) {
 }
 
 // Fully specialized hash-key map operations (single runtime call per entire map)
-extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_value(uint64_t list_val, const char* key) {
+// note: the map hash-key helpers below use the checking key accessor so that accessing an unknown
+// member of a hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST)
+// implementation; the generated code performs an exception check after each call
+extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_value(uint64_t list_val, const char* key,
+        ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
-    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
     qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
-            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(key);
-            qore_rt_append_map_result(result_priv, **result, val.refSelf(), nullptr);
+            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(key, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            qore_rt_append_map_result(result_priv, **result, val.refSelf(), xsink);
         } else {
-            qore_rt_append_map_result(result_priv, **result, QoreValue(), nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(), xsink);
+        }
+        if (!result_priv && *xsink) {
+            return toBits(QoreValue());
         }
     }
     return toBits(result.release());
 }
 
+// note: this opcode is only selected when the list element type is statically a hash with int
+// values, so a hashdecl-typed element cannot reach it (an unknown hashdecl member is a parse error
+// when the element type is known); the non-checking accessor is therefore correct and cannot raise
+//
+// a key access on a hash<string, int> returns *int (the key may be absent), so the result element
+// type is *int and a missing key yields NOTHING, as with the reference (AST) implementation
 extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_int(uint64_t list_val, const char* key) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
@@ -6892,20 +6908,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_int(uint64_t list_val, const 
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
-    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntOrNothingTypeInfo), nullptr);
     qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
+            bool exists = false;
+            QoreValue val = qore_hash_private::get(*elem.get<const QoreHashNode>())
+                ->getKeyValueExistenceIntern(key, exists);
             qore_rt_append_map_result(result_priv, **result,
-                QoreValue(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt()), nullptr);
+                exists ? QoreValue(val.getAsBigInt()) : QoreValue(), nullptr);
         } else {
-            qore_rt_append_map_result(result_priv, **result, QoreValue(0ll), nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(), nullptr);
         }
     }
     return toBits(result.release());
 }
 
+// note: int-typed element values only; see qore_rt_map_hash_key_int() above
 extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_int(uint64_t list_val, const char* key, int64_t offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
@@ -6992,6 +7012,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_any_prehashed(
         qore_rt_select_precomputed_hash(hash64, hash32), true, offset, xsink);
 }
 
+// note: int-typed element values only; see qore_rt_map_hash_key_int() above
 extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, const char* key, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
@@ -7013,29 +7034,31 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, 
     return toBits(result.release());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1, const char* key2) {
+extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1,
+        const char* key2, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
-    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), nullptr);
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
             const QoreHashNode* h = elem.get<const QoreHashNode>();
-            QoreValue k = h->getKeyValue(key1);
-            QoreValue val = h->getKeyValue(key2);
-            QoreString key_str;
-            if (k.getType() == NT_STRING) {
-                QoreStringValueHelper sh(k);
-                key_str.set(sh->c_str());
-            } else {
-                QoreStringValueHelper sh(k);
-                key_str.set(sh->c_str());
+            // note: the checking accessor is used here so that accessing an unknown member of a
+            // hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST) implementation
+            QoreValue k = h->getKeyValue(key1, xsink);
+            QoreValue val = *xsink ? QoreValue() : h->getKeyValue(key2, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
             }
-            result->setKeyValue(key_str.c_str(), val.refSelf(), nullptr);
+            QoreStringValueHelper sh(k);
+            result->setKeyValue(sh->c_str(), val.refSelf(), xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
         }
     }
     return toBits(result.release());
@@ -7048,7 +7071,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_
     static const bool enabled =
         std::getenv("QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD") == nullptr;
     if (!enabled) {
-        return qore_rt_hash_map_two_keys(list_val, key1, key2);
+        return qore_rt_hash_map_two_keys(list_val, key1, key2, xsink);
     }
 
     QoreValue value = fromBits(list_val);
@@ -7075,10 +7098,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_
         const qore_hash_private* input_priv =
             qore_hash_private::get(*element.get<const QoreHashNode>());
         bool exists;
+        // note: the checking accessors are used here so that accessing an unknown member of a
+        // hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST) implementation
         QoreValue key_value =
-            input_priv->getKeyValueExistencePrehashedIntern(key1, key1_hash, exists);
-        QoreValue mapped =
-            input_priv->getKeyValueExistencePrehashedIntern(key2, key2_hash, exists);
+            input_priv->getKeyValueExistencePrehashed(key1, key1_hash, exists, xsink);
+        QoreValue mapped = *xsink
+            ? QoreValue()
+            : input_priv->getKeyValueExistencePrehashed(key2, key2_hash, exists, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         QoreStringValueHelper key_string(key_value);
         result_priv->setKeyValueIntern(key_string->c_str(), mapped.refSelf());
     }
@@ -7113,7 +7142,7 @@ static uint64_t qore_rt_select_hash_key_positive_int_impl(uint64_t list_val,
     const QoreTypeInfo* list_type = qore_list_private::get(*l)->complexTypeInfo;
     const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     ReferenceHolder<QoreListNode> result(
-        new QoreListNode(element_type ? element_type : autoTypeInfo), nullptr);
+        new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
     size_t sz = l->size();
     for (size_t i = 0; i < sz; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink,
@@ -7124,12 +7153,18 @@ static uint64_t qore_rt_select_hash_key_positive_int_impl(uint64_t list_val,
         if (elem.getType() != NT_HASH) {
             continue;
         }
-        const QoreHashNode* hash = elem.get<const QoreHashNode>();
+        const qore_hash_private* hash_priv = qore_hash_private::get(*elem.get<const QoreHashNode>());
+        bool exists;
+        // note: the checking variants are used here so that accessing an unknown member of a
+        // hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST) implementation
         QoreValue value = prehashed
-            ? qore_hash_private::get(*hash)->getKeyValuePrehashed(key, key_hash, nullptr)
-            : hash->getKeyValue(key);
+            ? hash_priv->getKeyValueExistencePrehashed(key, key_hash, exists, xsink)
+            : hash_priv->getKeyValueExistence(key, exists, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         if (value.getAsBigInt() > 0) {
-            result->push(elem.refSelf(), nullptr);
+            result->push(elem.refSelf(), xsink);
         }
     }
     return toBits(result.release());

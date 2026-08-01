@@ -27147,11 +27147,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
             auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_value",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const});
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::MapHashKeyInt: {

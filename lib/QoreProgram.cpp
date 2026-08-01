@@ -1232,10 +1232,8 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 }
 
 // Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified.
-// Returns the number of the program's own functions/methods submitted for eager compilation, used to
-// decide whether the --exec-mode=jit synchronous barrier is affordable for this program's size.
-static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
-    size_t eager_count = 0;
+// Native (LLVM) compilation is never done here; see the call site for why.
+static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
     // Walk functions in this namespace
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
@@ -1264,7 +1262,6 @@ static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t e
 
             // Eagerly compile to IR/JIT as requested
             uvb->eagerlyCompileForExecMode(func->getName(), exec_mode);
-            ++eager_count;
         }
     }
 
@@ -1300,7 +1297,6 @@ static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t e
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
-                ++eager_count;
             }
         }
 
@@ -1318,7 +1314,6 @@ static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t e
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
-                ++eager_count;
             }
         }
     }
@@ -1335,10 +1330,9 @@ static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t e
             if (child_priv->imported) {
                 continue;
             }
-            eager_count += eagerlyCompileAllFunctions(child_priv, exec_mode);
+            eagerlyCompileAllFunctions(child_priv, exec_mode);
         }
     }
-    return eager_count;
 }
 
 // called when the program's ref count = 0 (but the dc count may not go to 0 yet)

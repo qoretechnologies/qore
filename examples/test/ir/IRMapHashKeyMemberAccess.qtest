@@ -1,0 +1,231 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRMapHashKeyMemberAccessTest
+
+#! tests the optimized "map $1.<key>, list<hash>" opcodes (MapHashKey* and HashMapTwoKeys)
+/** the IR interpreter and the JIT/AOT runtime helpers must produce identical results to the
+    reference (AST) implementation, including raising \c INVALID-MEMBER when an unknown member of a
+    hashdecl-typed hash is accessed
+
+    the tested code is at the top level of the generated scripts on purpose: only the top-level
+    block is compiled synchronously under \c --exec-mode=jit, so a function body would still be
+    running at the IR tier while its background compilation completes
+*/
+class IRMapHashKeyMemberAccessTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRMapHashKeyMemberAccessTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("map hash-key member access matches AST in all exec modes",
+            \testExecModesMapHashKeyMemberAccess());
+        addTestCase("map hash-key member access matches AST without prehashed keys",
+            \testMapHashKeyMemberAccessNoPrehashedKeys());
+        addTestCase("map hash-key opcodes raise INVALID-MEMBER in all exec modes",
+            \testMapHashKeyMemberAccessRaises());
+        addTestCase("map hash-key opcodes are kept inside a try block",
+            \testMapHashKeyOpcodesUsedInsideTry());
+
+        set_return_value(main());
+    }
+
+    private string expectedOutput() {
+        return "map-value:           [1, 4, null]\n"
+            "map-value-decl:      INVALID-MEMBER\n"
+            "map-offset-any:      [2, 5, 1]\n"
+            "map-offset-any-decl: INVALID-MEMBER\n"
+            "map-two-keys:        {a: 1, b: 4, c: null}\n"
+            "map-two-keys-decl:   INVALID-MEMBER\n"
+            "map-int:             [1, 4, -2]\n"
+            "map-offset-int:      [11, 14, 8]\n"
+            "map-scale-int:       [3, 12, -6]\n";
+    }
+
+    private string mapCode() {
+        return "%modern
+
+hashdecl MapRec {
+    int n;
+}
+
+# returning through a declared list<hash<auto>> keeps the element type opaque at the use site, so
+# the \"count\" key cannot be resolved at parse time and the hashdecl member check is deferred to
+# the runtime implementation under test
+list<hash<auto>> sub records() {
+    return (new hash<MapRec>({\"n\": 3}), new hash<MapRec>({\"n\": 5}));
+}
+
+# the third element has no \"count\" key: a plain hash must not raise
+list<hash<auto>> plain = (
+    {\"count\": 1, \"id\": \"a\"},
+    {\"count\": 4, \"id\": \"b\"},
+    {\"other\": 9, \"id\": \"c\"},
+);
+# int-typed element values select the specialized integer opcodes; the type system keeps
+# hashdecl-typed hashes out of these, so they only verify the non-hashdecl behavior
+list<hash<string, int>> ints = ({\"count\": 1}, {\"count\": 4}, {\"count\": -2});
+# \"count\" is not a member of MapRec, so every access must raise INVALID-MEMBER
+list<hash<auto>> recs = records();
+
+printf(\"map-value:           %y\\n\", (map \$1.count, plain));
+# the specialized opcodes are used inside try blocks too: they route a raised exception to the
+# enclosing landing pad via exception_target, so these must be caught here
+try {
+    printf(\"map-value-decl:      %y\\n\", (map \$1.count, recs));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"map-value-decl:      %s\\n\", ex.err);
+}
+printf(\"map-offset-any:      %y\\n\", (map \$1.count + 1, plain));
+try {
+    printf(\"map-offset-any-decl: %y\\n\", (map \$1.count + 1, recs));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"map-offset-any-decl: %s\\n\", ex.err);
+}
+printf(\"map-two-keys:        %y\\n\", (map {\$1.id: \$1.count}, plain));
+try {
+    printf(\"map-two-keys-decl:   %y\\n\", (map {\$1.n: \$1.count}, recs));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"map-two-keys-decl:   %s\\n\", ex.err);
+}
+printf(\"map-int:             %y\\n\", (map \$1.count, ints));
+printf(\"map-offset-int:      %y\\n\", (map \$1.count + 10, ints));
+printf(\"map-scale-int:       %y\\n\", (map \$1.count * 3, ints));
+";
+    }
+
+    #! a map over a hashdecl element with an unknown member, with no enclosing try block
+    /** covers the throwing path of the specialized opcodes when they must unwind out of the frame
+        rather than branch to a local landing pad; \a map_expr selects which opcode is exercised
+    */
+    private string raisingCode(string map_expr) {
+        return sprintf("%%modern
+
+hashdecl MapRec {
+    int n;
+}
+
+list<hash<auto>> sub records() {
+    return (new hash<MapRec>({\"n\": 3}),);
+}
+
+list<hash<auto>> recs = records();
+printf(\"before\\n\");
+printf(\"%%y\\n\", (%s));
+printf(\"after\\n\");
+", map_expr);
+    }
+
+    private string runScript(string mode, string script_path, *string env) {
+        return backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            env ?? "", libqore_dir, qore_bin, mode, script_path));
+    }
+
+    #! normalizes an aborting run to a comparable summary (the raw output carries timestamps)
+    private string raiseSummary(string mode, string script_path) {
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; echo rc=$?",
+            libqore_dir, qore_bin, mode, script_path));
+        return sprintf("before=%d after=%d err=%s rc=%s",
+            out =~ /before/ ? 1 : 0,
+            out =~ /after/ ? 1 : 0,
+            (out =~ x/(INVALID-MEMBER)/)[0] ?? "none",
+            (out =~ x/rc=([0-9]+)/)[0] ?? "?");
+    }
+
+    testExecModesMapHashKeyMemberAccess() {
+        TmpFile script("qore-ir-map-hash-key-", ".q");
+        script.file.write(mapCode());
+        script.file.close();
+
+        string ast = runScript("ast", script.path);
+        assertEq(expectedOutput(), ast, "AST map hash-key member access baseline");
+        assertEq(ast, runScript("ir", script.path), "IR map hash-key member access matches AST");
+        assertEq(ast, runScript("jit", script.path), "JIT map hash-key member access matches AST");
+        assertEq(ast, runScript("tiered", script.path),
+            "tiered map hash-key member access matches AST");
+    }
+
+    testMapHashKeyMemberAccessNoPrehashedKeys() {
+        TmpFile script("qore-ir-map-hash-key-nph-", ".q");
+        script.file.write(mapCode());
+        script.file.close();
+
+        # the two-key projection helper has separate prehashed and non-prehashed key lookup paths
+        string env = "QORE_DISABLE_AOT_PREHASHED_KEYS=1";
+        assertEq(expectedOutput(), runScript("jit", script.path, env),
+            "JIT map hash-key member access without prehashed keys");
+        assertEq(expectedOutput(), runScript("tiered", script.path, env),
+            "tiered map hash-key member access without prehashed keys");
+
+        # the fast hash build in the two-key projection helper has its own key lookups
+        string slow_env = "QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD=1";
+        assertEq(expectedOutput(), runScript("jit", script.path, slow_env),
+            "JIT map hash-key member access without the two-key fast build");
+    }
+
+    #! guards the optimization: the opcodes must not regress to the generic lowering inside a try
+    testMapHashKeyOpcodesUsedInsideTry() {
+        hash<string, string> cases = {
+            "map.hashkey.value": "map $1.count, recs",
+            "map.hashkey.offset.any": "map $1.count + 1, recs",
+            "hashmap.twokeys": "map {$1.n: $1.count}, recs",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            TmpFile script("qore-ir-map-hash-key-try-", ".q");
+            script.file.write(sprintf("%%modern
+hashdecl MapRec {
+    int n;
+}
+list<hash<auto>> sub records() {
+    return (new hash<MapRec>({\"n\": 3}),);
+}
+list<hash<auto>> recs = records();
+try {
+    printf(\"%%y\\n\", (%s));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%%s\\n\", ex.err);
+}
+", i.value));
+            script.file.close();
+
+            string dump = backquote(sprintf(
+                "LD_LIBRARY_PATH=%s %s -b --exec-mode=jit --ir-dump %s 2>&1",
+                libqore_dir, qore_bin, script.path));
+            assertTrue(dump.find(i.key) != -1,
+                sprintf("%s is still used inside a try block", i.key));
+            assertTrue(dump =~ /INVALID-MEMBER/,
+                sprintf("%s exception is still caught by the enclosing try block", i.key));
+        }
+    }
+
+    testMapHashKeyMemberAccessRaises() {
+        # the statement before the map runs, the one after it does not, and the process aborts
+        string expected = "before=1 after=0 err=INVALID-MEMBER rc=3";
+        hash<string, string> cases = {
+            "map-value": "map $1.count, recs",
+            "map-offset-any": "map $1.count + 1, recs",
+            "map-two-keys": "map {$1.n: $1.count}, recs",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            TmpFile script("qore-ir-map-hash-key-raise-", ".q");
+            script.file.write(raisingCode(i.value));
+            script.file.close();
+
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(expected, raiseSummary(mode, script.path),
+                    sprintf("%s %s raises INVALID-MEMBER", mode, i.key));
+            }
+        }
+    }
+}

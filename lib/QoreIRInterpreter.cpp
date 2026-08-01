@@ -9189,14 +9189,35 @@ load_local_done:
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     size_t sz = l->size();
                     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+                    bool routed_to_handler = false;
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
-                            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str());
+                            // note: the checking accessor is used here so that accessing an
+                            // unknown member of a hashdecl-typed hash raises INVALID-MEMBER, as
+                            // with the reference (AST) implementation
+                            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(
+                                mhk->key1.c_str(), xsink);
+                            if (*xsink) {
+                                if (inst->exception_target) {
+                                    prev_block = block;
+                                    block = inst->exception_target;
+                                    ip = 0;
+                                    routed_to_handler = true;
+                                    break;
+                                }
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
                             result->push(val.refSelf(), xsink);
                         } else {
                             result->push(QoreValue(), xsink);
                         }
+                    }
+                    // the partially built result is discarded by the ReferenceHolder
+                    if (routed_to_handler) {
+                        break;
                     }
                     out = result.release();
                 }
@@ -9214,14 +9235,24 @@ load_local_done:
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     size_t sz = l->size();
-                    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                    // note: a key access on a hash<string, int> returns *int (the key may be
+                    // absent), so the result element type is *int and a missing key yields
+                    // NOTHING, as with the reference (AST) implementation
+                    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntOrNothingTypeInfo),
+                        xsink);
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
-                            result->push(
-                                elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt(), xsink);
+                            // note: this opcode is only selected when the list element type is
+                            // statically a hash with int values, so a hashdecl-typed element
+                            // cannot reach it; the non-checking accessor cannot raise here
+                            bool exists = false;
+                            QoreValue val = qore_hash_private::get(*elem.get<const QoreHashNode>())
+                                ->getKeyValueExistenceIntern(mhk->key1.c_str(), exists);
+                            result->push(exists ? QoreValue(val.getAsBigInt()) : QoreValue(),
+                                xsink);
                         } else {
-                            result->push(0ll, xsink);
+                            result->push(QoreValue(), xsink);
                         }
                     }
                     out = result.release();
@@ -9246,6 +9277,9 @@ load_local_done:
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
+                            // note: this opcode is only selected when the list element type is
+                            // statically a hash with int values, so a hashdecl-typed element
+                            // cannot reach it; the non-checking accessor cannot raise here
                             result->push(
                                 elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
                                     + offset,
@@ -9270,6 +9304,12 @@ load_local_done:
                 QoreValue out = fromBits(qore_rt_map_hash_key_offset_any(toBits(list_val),
                     mhk->key1.c_str(), offset, xsink));
                 if (*xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -9294,6 +9334,9 @@ load_local_done:
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
+                            // note: this opcode is only selected when the list element type is
+                            // statically a hash with int values, so a hashdecl-typed element
+                            // cannot reach it; the non-checking accessor cannot raise here
                             result->push(
                                 elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
                                     * scale,
@@ -9323,6 +9366,7 @@ load_local_done:
                     ReferenceHolder<QoreListNode> result(
                         new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
                     size_t sz = l->size();
+                    bool routed_to_handler = false;
                     for (size_t i = 0; i < sz; ++i) {
                         if (i && !(i % 100) && qore_check_cancel(xsink,
                                 "IR select hash-key positive-int loop")) {
@@ -9334,11 +9378,30 @@ load_local_done:
                         if (elem.getType() != NT_HASH) {
                             continue;
                         }
+                        // note: the checking accessor is used here so that accessing an unknown
+                        // member of a hashdecl-typed hash raises INVALID-MEMBER, as with the
+                        // reference (AST) implementation
                         QoreValue value = elem.get<const QoreHashNode>()->getKeyValue(
-                            select_inst->key1.c_str());
+                            select_inst->key1.c_str(), xsink);
+                        if (*xsink) {
+                            if (inst->exception_target) {
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                routed_to_handler = true;
+                                break;
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
                         if (value.getAsBigInt() > 0) {
                             result->push(elem.refSelf(), xsink);
                         }
+                    }
+                    // the partially built result is discarded by the ReferenceHolder
+                    if (routed_to_handler) {
+                        break;
                     }
                     out = result.release();
                 }
@@ -9356,16 +9419,40 @@ load_local_done:
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     size_t sz = l->size();
-                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), nullptr);
+                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+                    bool routed_to_handler = false;
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
                             const QoreHashNode* h = elem.get<const QoreHashNode>();
-                            QoreValue k = h->getKeyValue(mhk->key1.c_str());
-                            QoreValue val = h->getKeyValue(mhk->key2.c_str());
-                            QoreStringValueHelper key_str(k);
-                            result->setKeyValue(key_str->c_str(), val.refSelf(), nullptr);
+                            // note: the checking accessor is used here so that accessing an
+                            // unknown member of a hashdecl-typed hash raises INVALID-MEMBER, as
+                            // with the reference (AST) implementation
+                            QoreValue k = h->getKeyValue(mhk->key1.c_str(), xsink);
+                            QoreValue val = *xsink
+                                ? QoreValue()
+                                : h->getKeyValue(mhk->key2.c_str(), xsink);
+                            if (!*xsink) {
+                                QoreStringValueHelper key_str(k);
+                                result->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                            }
+                            if (*xsink) {
+                                if (inst->exception_target) {
+                                    prev_block = block;
+                                    block = inst->exception_target;
+                                    ip = 0;
+                                    routed_to_handler = true;
+                                    break;
+                                }
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
                         }
+                    }
+                    // the partially built result is discarded by the ReferenceHolder
+                    if (routed_to_handler) {
+                        break;
                     }
                     out = result.release();
                 }
