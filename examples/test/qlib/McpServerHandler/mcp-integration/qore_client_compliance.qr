@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Validates the Qore McpClient against a reference MCP server built with the official MCP
+# Python SDK.  The SDK server is an independent implementation of the same specification, so
+# this catches a misreading on the Qore side that a Qore-client-against-Qore-server test
+# cannot.
+#
+# The protocol revision exercised is whichever one the reference server implements; the
+# harness runs this once per supported revision.
+#
+# Usage:
+#   qore qore_client_compliance.qr <server_url> [expected_protocol_version]
+
+%requires json
+%requires McpClient
+
+%exec-class QoreClientCompliance
+
+class QoreClientCompliance {
+    private {
+        string url;
+        *string expected_version;
+        int passed = 0;
+        list<string> failures = ();
+    }
+
+    constructor() {
+        *string u = ARGV[0];
+        if (!u.val()) {
+            stderr.printf("usage: qore_client_compliance.qr <server_url> [expected_version]\n");
+            exit(2);
+        }
+        url = u;
+        expected_version = ARGV[1];
+
+        printf("============================================================\n");
+        printf("Qore McpClient compliance test against the SDK reference server\n");
+        printf("server: %s\n", url);
+        if (expected_version.val()) {
+            printf("expected protocol version: %s\n", expected_version);
+        }
+        printf("============================================================\n");
+
+        try {
+            run();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("\nFATAL: %s: %s\n%s\n", ex.err, ex.desc, get_exception_string(ex));
+            exit(1);
+        }
+
+        printf("\n============================================================\n");
+        printf("passed: %d   failed: %d\n", passed, failures.size());
+        foreach string f in (failures) {
+            printf("  FAILED: %s\n", f);
+        }
+        printf("============================================================\n");
+        exit(failures ? 1 : 0);
+    }
+
+    private check(string name, bool ok, *string detail) {
+        if (ok) {
+            ++passed;
+            printf("  PASS  %s\n", name);
+        } else {
+            failures += name;
+            printf("  FAIL  %s%s\n", name, detail.val() ? ": " + detail : "");
+        }
+    }
+
+    private run() {
+        McpClient::McpClient client(url);
+
+        # registering these declares the matching client capabilities, so a server that wants
+        # to ask for them may
+        client.setCallback("onElicitation", auto sub (hash<auto> params) {
+            return {"action": "accept", "content": {}};
+        });
+        client.setCallback("onSampling", auto sub (hash<auto> params) {
+            return {
+                "role": "assistant",
+                "content": {"type": "text", "text": "sampled"},
+                "model": "qore-test-model",
+                "stopReason": "endTurn",
+            };
+        });
+        client.setCallback("onListRoots", auto sub (hash<auto> params) {
+            return {"roots": ({"uri": "file:///workspace", "name": "workspace"},)};
+        });
+
+        printf("\n[initialization]\n");
+        hash<auto> info = client.initialize(<McpClientInfo>{
+            "name": "QoreComplianceClient",
+            "version": "1.0",
+        });
+        string version = client.getProtocolVersion();
+        check("negotiated a protocol version", McpClient::AllMcpVersions{version},
+            sprintf("negotiated %y", version));
+        if (expected_version.val()) {
+            check("negotiated the expected protocol version", version == expected_version,
+                sprintf("expected %y, got %y", expected_version, version));
+        }
+        check("the era matches the negotiated version",
+            client.isModern() == McpClient::mcp_is_modern_version(version),
+            sprintf("isModern=%y for %y", client.isModern(), version));
+        check("the server identified itself", exists client.getServerInfo(),
+            sprintf("serverInfo=%y", client.getServerInfo()));
+        check("the server reported capabilities", exists client.getServerCapabilities());
+
+        printf("\n[tools]\n");
+        list<auto> tools = client.listTools();
+        list<string> names = map $1.name, tools;
+        check("tools/list returned tools", names.size() > 0, sprintf("names=%y", names));
+        check("every tool has a name and an input schema",
+            (select tools, !$1.name.val() || $1.inputSchema.typeCode() != NT_HASH).empty(),
+            sprintf("tools=%y", names));
+
+        if (names.contains("echo")) {
+            hash<auto> result = client.callTool("echo", {"message": "hello from qore"});
+            check("tools/call returned content", result.content.size() > 0);
+            check("tools/call echoed the argument",
+                result.content[0].text =~ /hello from qore/,
+                sprintf("content=%y", result.content));
+        }
+        if (names.contains("add")) {
+            hash<auto> result = client.callTool("add", {"a": 2, "b": 3});
+            check("a typed tool call returns the computed value",
+                result.content[0].text =~ /5/, sprintf("content=%y", result.content));
+        }
+        if (names.contains("failing_tool")) {
+            bool reported = False;
+            try {
+                hash<auto> result = client.callTool("failing_tool");
+                reported = result.isError ?? False;
+            } catch (hash<ExceptionInfo> ex) {
+                reported = True;
+            }
+            check("a failing tool is reported as an error", reported);
+        }
+
+        printf("\n[resources]\n");
+        list<auto> resources = client.listResources();
+        check("resources/list returned resources", resources.size() > 0,
+            sprintf("resources=%y", (map $1.uri, resources)));
+        if (resources) {
+            hash<auto> content = client.readResource(resources[0].uri);
+            check("resources/read returned contents", content.contents.size() > 0);
+        }
+
+        printf("\n[prompts]\n");
+        list<auto> prompts = client.listPrompts();
+        check("prompts/list returned prompts", prompts.size() > 0,
+            sprintf("prompts=%y", (map $1.name, prompts)));
+        if (prompts) {
+            hash<auto> got = client.getPrompt(prompts[0].name, {"name": "Alice"});
+            check("prompts/get returned messages", got.messages.size() > 0);
+        }
+
+        printf("\n[era-specific behaviour]\n");
+        if (client.isModern()) {
+            hash<auto> discovery = client.getDiscovery();
+            check("server/discover reported supported versions",
+                discovery.supportedVersions.typeCode() == NT_LIST
+                    && discovery.supportedVersions.size() > 0,
+                sprintf("supportedVersions=%y", discovery.supportedVersions));
+            check("the negotiated version is one the server advertises",
+                discovery.supportedVersions.contains(version));
+            bool refused = False;
+            try {
+                client.ping();
+            } catch (hash<ExceptionInfo> ex) {
+                refused = ex.err == "MCP-DEPRECATED-METHOD";
+            }
+            check("ping is refused against a stateless server", refused);
+        } else {
+            check("ping works against a handshake-based server", client.ping());
+            if (client.isHttpSseTransport()) {
+                # on the HTTP+SSE transport the session is identified by the endpoint the
+                # server announced, not by an Mcp-Session-Id header
+                check("an endpoint to post to was announced",
+                    client.getSsePostEndpoint().val(),
+                    sprintf("endpoint=%y", client.getSsePostEndpoint()));
+            } else {
+                check("a session was established", client.getSessionId().val(),
+                    sprintf("session=%y", client.getSessionId()));
+            }
+            bool refused = False;
+            try {
+                client.discover();
+            } catch (hash<ExceptionInfo> ex) {
+                refused = ex.err == "MCP-DEPRECATED-METHOD";
+            }
+            check("server/discover is refused against a handshake-based server", refused);
+        }
+
+        client.close();
+
+        printf("\n[reconnection]\n");
+        # a client must be reusable after close(), and must reach the same conclusion about
+        # the server's protocol era the second time
+        McpClient::McpClient again(url);
+        again.initialize(<McpClientInfo>{"name": "QoreComplianceClient", "version": "1.0"});
+        check("a second client negotiates the same version",
+            again.getProtocolVersion() == version,
+            sprintf("first=%y second=%y", version, again.getProtocolVersion()));
+        check("a second client lists the same tools",
+            (map $1.name, again.listTools()) == names);
+        again.close();
+    }
+}

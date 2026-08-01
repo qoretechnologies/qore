@@ -46,7 +46,23 @@ public class McpToolInfoDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Input Schema",
                 "short_desc": "JSON Schema for input",
-                "desc": "JSON Schema defining the tool's input parameters",
+                "desc": "JSON Schema defining the tool's input parameters; properties may "
+                    "carry an \"x-mcp-header\" annotation naming an HTTP header that the "
+                    "client mirrors the value into",
+            },
+            "outputSchema": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Output Schema",
+                "short_desc": "JSON Schema for structured output",
+                "desc": "JSON Schema describing the tool's structured content, if any",
+            },
+            "execution": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Execution",
+                "short_desc": "Execution metadata",
+                "desc": "Execution metadata such as \"taskSupport\", which tells the client "
+                    "whether the server may answer a call with a task handle instead of a "
+                    "result",
             },
         };
     }

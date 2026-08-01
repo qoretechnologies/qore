@@ -28,16 +28,22 @@ from contextlib import asynccontextmanager
 
 try:
     from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
     from mcp.client.sse import sse_client
     from mcp.types import (
         Tool, Resource, Prompt, TextContent,
         CallToolResult, ReadResourceResult, GetPromptResult,
     )
 except ImportError as e:
-    print(f"ERROR: MCP SDK not installed. Run: pip install mcp httpx")
+    print("ERROR: MCP SDK not installed. Run: pip install mcp httpx")
     print(f"Import error: {e}")
     sys.exit(2)
+
+# Streamable HTTP was introduced in protocol revision 2025-03-26; SDK releases that implement
+# only 2024-11-05 have no such client, and for those the SSE transport is the only one to test.
+try:
+    from mcp.client.streamable_http import streamablehttp_client
+except ImportError:
+    streamablehttp_client = None
 
 
 @dataclass
@@ -64,6 +70,11 @@ class McpComplianceTest:
             async with sse_client(self.server_url) as (read, write):
                 yield read, write
         else:
+            if streamablehttp_client is None:
+                raise RuntimeError(
+                    "this MCP SDK release has no Streamable HTTP client; that transport was "
+                    "introduced in protocol revision 2025-03-26"
+                )
             # Streamable HTTP - returns (read, write, get_session_id)
             async with streamablehttp_client(self.server_url) as (read, write, _):
                 yield read, write

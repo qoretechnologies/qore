@@ -1,0 +1,8 @@
+# Python dependencies for the modern-era (2026-07-28) MCP integration tests
+# Install into a dedicated venv with: pip install -r requirements-modern.txt
+#
+# NOTE: the mcp 1.x and 2.x SDKs cannot be installed side by side; the legacy-era tests
+# use requirements-legacy.txt in a separate virtual environment.
+
+mcp==2.0.0
+httpx>=0.25.0

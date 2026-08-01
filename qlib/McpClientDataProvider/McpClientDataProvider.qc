@@ -49,14 +49,27 @@ public class McpClientDataProvider inherits McpClientDataProviderBase {
             "children_can_support_apis": True,
         };
 
-        #! Child providers
+        #! Child providers available with every protocol version
         const ChildMap = {
             "tools": Class::forName("McpClientDataProvider::McpToolsDataProvider"),
             "resources": Class::forName("McpClientDataProvider::McpResourcesDataProvider"),
             "prompts": Class::forName("McpClientDataProvider::McpPromptsDataProvider"),
             "completion": Class::forName("McpClientDataProvider::McpCompletionDataProvider"),
-            "ping": Class::forName("McpClientDataProvider::McpPingDataProvider"),
             "events": Class::forName("McpClientDataProvider::McpNotificationEventDataProvider"),
+        };
+
+        #! Child providers for methods removed in 2026-07-28
+        /** \c ping was removed when MCP became stateless; it is only advertised when the
+            server speaks a handshake-based protocol version, so that a provider tree built
+            against a modern server does not offer an operation that server cannot perform.
+        */
+        const LegacyChildMap = {
+            "ping": Class::forName("McpClientDataProvider::McpPingDataProvider"),
+        };
+
+        #! Child providers introduced in 2026-07-28
+        const ModernChildMap = {
+            "discover": Class::forName("McpClientDataProvider::McpDiscoverDataProvider"),
         };
     }
 
@@ -79,13 +92,21 @@ public class McpClientDataProvider inherits McpClientDataProviderBase {
     }
 
     #! Returns a list of child data provider names
+    /** The set depends on the protocol version in use: operations that a given protocol
+        revision does not define are not advertised.
+    */
     private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
+        return keys getChildMap();
+    }
+
+    #! Returns the child providers available for the protocol version in use
+    private hash<auto> getChildMap() {
+        return ChildMap + (mcp.isModern() ? ModernChildMap : LegacyChildMap);
     }
 
     #! Returns the given child provider or \c NOTHING if the given child is unknown
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
+        *Class cls = getChildMap(){name};
         if (!cls) {
             return NOTHING;
         }

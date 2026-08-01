@@ -18,6 +18,10 @@ class TestMcpServerHandler inherits McpServerHandler {
         registerTool("add", "Adds two numbers", NOTHING, \addTool());
         registerTool("slow_task", "A slow task for testing async/tasks", NOTHING, \slowTask());
         registerTool("failing_tool", "A tool that always fails", NOTHING, \failingTool());
+        # tools that exercise the Multi Round-Trip Request pattern; with a handshake-based
+        # client these become server-initiated requests on the event stream instead
+        registerTool("confirm", "Asks the client to confirm an action", NOTHING, \confirmTool());
+        registerTool("sampler", "Asks the client for an LLM completion", NOTHING, \samplerTool());
 
         # Register test resources
         registerResource("test://static/hello", "hello", "A static hello resource", "text/plain",
@@ -37,6 +41,50 @@ class TestMcpServerHandler inherits McpServerHandler {
             {"name": "content", "description": "Content to summarize", "required": True},
             {"name": "style", "description": "Summary style", "required": False},
         ), \summarizePrompt());
+
+        setInstructions("Qore MCP integration test server");
+    }
+
+    private hash<auto> confirmTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "confirm": {
+                "method": "elicitation/create",
+                "params": {
+                    "mode": "form",
+                    "message": sprintf("Deploy %s?", args.build ?? "the build"),
+                    "requestedSchema": {"type": "object", "properties": {}},
+                },
+            },
+        }, {"build": args.build});
+        return {
+            "content": ({
+                "type": "text",
+                "text": sprintf("%s", answers.confirm.action),
+            },),
+        };
+    }
+
+    private hash<auto> samplerTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "llm": {
+                "method": "sampling/createMessage",
+                "params": {
+                    "maxTokens": 32,
+                    "messages": ({
+                        "role": "user",
+                        "content": {"type": "text", "text": "say something"},
+                    },),
+                },
+            },
+        }, {"asked": True});
+        return {
+            "content": ({
+                "type": "text",
+                "text": answers.llm.content.text ?? "",
+            },),
+        };
     }
 
     private hash<auto> echoTool(*hash<auto> args) {

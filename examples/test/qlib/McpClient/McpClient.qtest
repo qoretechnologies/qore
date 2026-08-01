@@ -186,6 +186,19 @@ class TestMcpServerHandler inherits McpServerHandler {
 }
 
 class McpClientTest inherits QUnit::Test {
+    public {
+        #! Options pinning a client to the newest handshake-based protocol version
+        /** \c ping, \c logging/setLevel, and the session-scoped Tasks API
+            (\c tasks/result, \c tasks/list) were removed in
+            @ref McpClient::McpVersion::V2026_07_28 "2026-07-28"; the tests that cover them
+            must therefore talk to the server using a protocol version that still has them.
+        */
+        const LegacyOpts = {
+            "protocol_version": McpClient::MCP_Version_Latest_Legacy,
+        };
+
+    }
+
     private {
         Logger logger;
         TestMcpServerHandler mcp_server;
@@ -380,7 +393,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     pingTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
 
         bool result = client.ping();
@@ -498,7 +511,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     logLevelTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
 
         # Test valid log levels
@@ -630,9 +643,30 @@ class McpClientTest inherits QUnit::Test {
         assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_03_26}, "2025-03-26 should be known");
         assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_06_18}, "2025-06-18 should be known");
         assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2025_11_25}, "2025-11-25 should be known");
+        assertTrue(McpClient::AllMcpVersions{McpClient::McpVersion::V2026_07_28}, "2026-07-28 should be known");
 
-        # Verify latest version constant
-        assertEq(McpClient::McpVersion::V2025_11_25, McpClient::MCP_Version_Latest, "Latest should be 2025-11-25");
+        # Verify latest version constants
+        assertEq(McpClient::McpVersion::V2026_07_28, McpClient::MCP_Version_Latest, "Latest should be 2026-07-28");
+        assertEq(McpClient::McpVersion::V2025_11_25, McpClient::MCP_Version_Latest_Legacy,
+            "Latest legacy should be 2025-11-25");
+
+        # Verify the modern/legacy classification: only 2026-07-28 and later convey the
+        # protocol version, client identity, and capabilities as per-request metadata
+        assertTrue(McpClient::mcp_is_modern_version(McpClient::McpVersion::V2026_07_28),
+            "2026-07-28 is a modern version");
+        foreach string v in (keys McpClient::McpLegacyVersions) {
+            assertFalse(McpClient::mcp_is_modern_version(v), sprintf("%s is a legacy version", v));
+            assertTrue(McpClient::AllMcpVersions{v}, sprintf("%s is a known version", v));
+        }
+        assertFalse(McpClient::mcp_is_modern_version("1900-01-01"), "unknown versions are not modern");
+        assertFalse(McpClient::mcp_is_modern_version(NOTHING), "a missing version is not modern");
+        assertEq(McpClient::AllMcpVersions.size(),
+            McpClient::McpModernVersions.size() + McpClient::McpLegacyVersions.size(),
+            "every known version is classified as exactly one of modern or legacy");
+        assertEq(McpClient::AllMcpVersions.size(), McpClient::McpSupportedVersions.size(),
+            "every known version appears in the supported-version list");
+        assertEq(McpClient::McpVersion::V2026_07_28, McpClient::McpSupportedVersions[0],
+            "the supported-version list is ordered newest first");
 
         # Test that client handles version negotiation correctly
         McpClient::McpClient client3(base_url);
@@ -683,7 +717,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     standardTaskToolCallTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "TaskClient", "version": "1.0"});
         on_exit client.close();
 
@@ -735,7 +769,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     taskSurvivesSseListenerReconnectTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "TaskReconnectClient", "version": "1.0"});
         on_exit client.close();
 
@@ -764,7 +798,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     taskCancelPropagatesToToolCallTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "TaskCancelClient", "version": "1.0"});
         on_exit client.close();
 
@@ -797,7 +831,7 @@ class McpClientTest inherits QUnit::Test {
     }
 
     taskCancelledOnSessionDeleteTest() {
-        McpClient::McpClient client(base_url);
+        McpClient::McpClient client(base_url, LegacyOpts);
         client.initialize(<McpClientInfo>{"name": "CancelClient", "version": "1.0"});
         on_exit client.close();
 
