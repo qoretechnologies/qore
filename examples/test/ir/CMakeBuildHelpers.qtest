@@ -597,6 +597,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
         assertTrue(read(build_dir + "/qo-vars.txt").find(
                 "script_aggregate_index=" + build_dir + "/script-aggregate-indexed.qo.idx.json") != -1,
             "script aggregate helper exports the requested index path");
+        write(build_dir + "/script-aggregate.qo.idx.json", "legacy index\n");
+        string reconfigure = run(sprintf("cd %s && cmake -S . -B %s%s",
+            src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertFalse(is_file(build_dir + "/script-aggregate.qo.idx.json"),
+            "script aggregate helper removes an unrequested legacy index: " + reconfigure);
         assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
             "late-defined object module dependency built: " + build1);
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),

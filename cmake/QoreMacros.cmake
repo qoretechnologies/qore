@@ -834,9 +834,14 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     endif ()
     set(_qore_qsa_index_byproducts)
     set(_qore_qsa_index_flags)
+    set(_qore_qsa_index_cleanup)
     if (_QORE_QSA_INDEX_JSON_VAR)
         list(APPEND _qore_qsa_index_byproducts ${_qore_qsa_idx})
         list(APPEND _qore_qsa_index_flags --write-index-json=${_qore_qsa_idx})
+    else ()
+        file(REMOVE "${_qore_qsa_idx}")
+        set(_qore_qsa_index_cleanup
+            COMMAND ${CMAKE_COMMAND} -E rm -f ${_qore_qsa_idx})
     endif ()
 
     set(_qore_qsa_context_content "format=1\nkind=qcc-script-aggregate\nqcc=${_qore_qcc_command}\n")
@@ -863,6 +868,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
             ${_qore_qsa_status}
             ${_qore_qsa_content_stamp}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_qore_qsa_dir}
+        ${_qore_qsa_index_cleanup}
         COMMAND ${CMAKE_COMMAND} -E env
             "QORE_INCLUDE_DIR=${_QORE_QSA_INCLUDE_DIR}"
             "QORE_MODULE_DIR=${_QORE_QSA_MODULE_DIR}"
