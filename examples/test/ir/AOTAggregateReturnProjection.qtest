@@ -12,6 +12,17 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
+string sub findFastNativeLine(string dump, string qore_path) {
+    string marker = sprintf("\"qore_path\": \"%s\", \"source_file\":", qore_path);
+    foreach string line in (dump.split("\n")) {
+        if (line.find(marker) != -1
+                && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+            return line;
+        }
+    }
+    return "";
+}
+
 string code = "%modern
 %disable-warning duplicate-hash-key
 
@@ -1767,121 +1778,39 @@ if (!is_file(qo)) {
 string dump = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, qo));
-string row_line;
-string values_line;
-string floats_line;
-string tagged_line;
-string float_constant_line;
-string forward_row_line;
-string tagged_wrapper_line;
-string word_wrapper_line;
-string computed_wrapper_line;
-string nested_computed_wrapper_line;
-string computed_float_wrapper_line;
-string empty_values_line;
-string empty_row_line;
-string constant_values_line;
-string constant_row_line;
-string conditional_values_line;
-string conditional_computed_values_line;
-string conditional_computed_floats_line;
-string conditional_compared_values_line;
-string variable_shape_line;
-string conditional_different_computed_line;
-string computed_row_line;
-string computed_values_line;
-string computed_floats_line;
-string bounded_values_line;
-string compared_values_line;
-string forward_auto_line;
-string forward_optional_line;
-foreach string line in (dump.split("\n")) {
-    if (line.find("makeRow(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        row_line = line;
-    } else if (line.find("makeValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        values_line = line;
-    } else if (line.find("makeFloats(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        floats_line = line;
-    } else if (line.find("makeTagged(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        tagged_line = line;
-    } else if (line.find("makeFloatConstant(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        float_constant_line = line;
-    } else if (line.find("forwardRow(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        forward_row_line = line;
-    } else if (line.find("taggedWrapper(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        tagged_wrapper_line = line;
-    } else if (line.find("wordWrapper(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        word_wrapper_line = line;
-    } else if (line.find("computedWrapper(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        computed_wrapper_line = line;
-    } else if (line.find("nestedComputedWrapper(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        nested_computed_wrapper_line = line;
-    } else if (line.find("computedFloatWrapper(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        computed_float_wrapper_line = line;
-    } else if (line.find("makeEmptyValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        empty_values_line = line;
-    } else if (line.find("makeEmptyRow(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        empty_row_line = line;
-    } else if (line.find("makeConstantValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        constant_values_line = line;
-    } else if (line.find("makeConstantRow(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        constant_row_line = line;
-    } else if (line.find("makeConditionalValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        conditional_values_line = line;
-    } else if (line.find("makeConditionalComputedValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        conditional_computed_values_line = line;
-    } else if (line.find("makeConditionalComputedFloats(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        conditional_computed_floats_line = line;
-    } else if (line.find("makeConditionalComparedValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        conditional_compared_values_line = line;
-    } else if (line.find("makeVariableShape(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        variable_shape_line = line;
-    } else if (line.find("makeConditionalDifferentComputed(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        conditional_different_computed_line = line;
-    } else if (line.find("makeComputedRow(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        computed_row_line = line;
-    } else if (line.find("makeComputedValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        computed_values_line = line;
-    } else if (line.find("makeComputedFloats(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        computed_floats_line = line;
-    } else if (line.find("makeBoundedValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        bounded_values_line = line;
-    } else if (line.find("makeComparedValues(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        compared_values_line = line;
-    } else if (line.find("forwardAuto(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        forward_auto_line = line;
-    } else if (line.find("forwardOptional(") != -1
-            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
-        forward_optional_line = line;
-    }
-}
+string row_line = findFastNativeLine(dump, "makeRow(int,int,int)");
+string values_line = findFastNativeLine(dump, "makeValues(int,int,int)");
+string floats_line = findFastNativeLine(dump, "makeFloats(float,float)");
+string tagged_line = findFastNativeLine(dump, "makeTagged(int)");
+string float_constant_line = findFastNativeLine(dump, "makeFloatConstant(float)");
+string forward_row_line = findFastNativeLine(dump, "forwardRow(int,int,int)");
+string tagged_wrapper_line = findFastNativeLine(dump, "taggedWrapper(int)");
+string word_wrapper_line = findFastNativeLine(dump, "wordWrapper(string,string)");
+string computed_wrapper_line = findFastNativeLine(dump, "computedWrapper(int,int,int)");
+string nested_computed_wrapper_line = findFastNativeLine(dump, "nestedComputedWrapper(int)");
+string computed_float_wrapper_line = findFastNativeLine(dump, "computedFloatWrapper(float,float)");
+string empty_values_line = findFastNativeLine(dump, "makeEmptyValues()");
+string empty_row_line = findFastNativeLine(dump, "makeEmptyRow()");
+string constant_values_line = findFastNativeLine(dump, "makeConstantValues()");
+string constant_row_line = findFastNativeLine(dump, "makeConstantRow()");
+string conditional_values_line = findFastNativeLine(dump,
+    "makeConditionalValues(bool,int,int)");
+string conditional_computed_values_line = findFastNativeLine(dump,
+    "makeConditionalComputedValues(bool,int,int,int)");
+string conditional_computed_floats_line = findFastNativeLine(dump,
+    "makeConditionalComputedFloats(bool,float,float,float)");
+string conditional_compared_values_line = findFastNativeLine(dump,
+    "makeConditionalComparedValues(bool,bool,bool,int,int)");
+string variable_shape_line = findFastNativeLine(dump, "makeVariableShape(bool,int)");
+string conditional_different_computed_line = findFastNativeLine(dump,
+    "makeConditionalDifferentComputed(bool,int)");
+string computed_row_line = findFastNativeLine(dump, "makeComputedRow(int,int,int)");
+string computed_values_line = findFastNativeLine(dump, "makeComputedValues(int)");
+string computed_floats_line = findFastNativeLine(dump, "makeComputedFloats(float)");
+string bounded_values_line = findFastNativeLine(dump, "makeBoundedValues(int,int)");
+string compared_values_line = findFastNativeLine(dump, "makeComparedValues(int,int)");
+string forward_auto_line = findFastNativeLine(dump, "forwardAuto(auto)");
+string forward_optional_line = findFastNativeLine(dump, "forwardOptional(*int)");
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || row_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
         || row_line.find("\"aggregate_return_keys\": [\"left\", \"middle\", \"right\"]") == -1
