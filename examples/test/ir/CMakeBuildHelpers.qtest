@@ -496,6 +496,21 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG
     STAMP_VAR QO_SCRIPT_AGG_STAMP)
 add_custom_target(qo-script-aggregate ALL DEPENDS ${QO_SCRIPT_AGG_STAMP})
 
+qore_qcc_script_aggregate(QO_SCRIPT_AGG_INDEXED
+    OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate-indexed.qo\"
+    AGGREGATE QORE_CMAKE_SCRIPT_INDEXED_SMOKE
+    MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
+    SOURCES ${QO_SOURCES}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    LOAD_MODULES LateAggregateModule
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    NATIVE_REGISTERS
+    STAMP_VAR QO_SCRIPT_AGG_INDEXED_STAMP
+    INDEX_JSON_VAR QO_SCRIPT_AGG_INDEX)
+add_custom_target(qo-script-aggregate-indexed ALL DEPENDS ${QO_SCRIPT_AGG_INDEXED_STAMP})
+
 add_executable(qo-static-host
     \"${CMAKE_SOURCE_DIR}/host.cpp\"
     ${QO_OBJECTS}
@@ -535,7 +550,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"link_stamp=${QO_LINK_STAMP}\\n\"
     \"link_map=${QO_LINK_MAP}\\n\"
     \"script_aggregate=${QO_SCRIPT_AGG}\\n\"
-    \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\")
+    \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\"
+    \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\")
 ");
 
         string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
@@ -574,6 +590,13 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "linked .qo map built: " + build1);
         assertTrue(is_file(build_dir + "/script-aggregate.qo"),
             "script aggregate .qo built: " + build1);
+        assertFalse(is_file(build_dir + "/script-aggregate.qo.idx.json"),
+            "script aggregate omits the optional index sidecar by default: " + build1);
+        assertTrue(is_file(build_dir + "/script-aggregate-indexed.qo.idx.json"),
+            "script aggregate writes the requested index sidecar: " + build1);
+        assertTrue(read(build_dir + "/qo-vars.txt").find(
+                "script_aggregate_index=" + build_dir + "/script-aggregate-indexed.qo.idx.json") != -1,
+            "script aggregate helper exports the requested index path");
         assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
             "late-defined object module dependency built: " + build1);
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),

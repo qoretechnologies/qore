@@ -832,6 +832,12 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     if (_QORE_QSA_NATIVE_REGISTERS)
         list(APPEND _qore_qsa_native_flags --script-aggregate-native-registers)
     endif ()
+    set(_qore_qsa_index_byproducts)
+    set(_qore_qsa_index_flags)
+    if (_QORE_QSA_INDEX_JSON_VAR)
+        list(APPEND _qore_qsa_index_byproducts ${_qore_qsa_idx})
+        list(APPEND _qore_qsa_index_flags --write-index-json=${_qore_qsa_idx})
+    endif ()
 
     set(_qore_qsa_context_content "format=1\nkind=qcc-script-aggregate\nqcc=${_qore_qcc_command}\n")
     string(APPEND _qore_qsa_context_content "aggregate=${_QORE_QSA_AGGREGATE}\n")
@@ -853,7 +859,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
         BYPRODUCTS
             ${_QORE_QSA_OUTPUT}
             ${_qore_qsa_manifest}
-            ${_qore_qsa_idx}
+            ${_qore_qsa_index_byproducts}
             ${_qore_qsa_status}
             ${_qore_qsa_content_stamp}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_qore_qsa_dir}
@@ -866,7 +872,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
                 -o ${_QORE_QSA_OUTPUT}
                 --script-aggregate=${_QORE_QSA_AGGREGATE}
                 ${_qore_qsa_native_flags}
-                --write-index-json=${_qore_qsa_idx}
+                ${_qore_qsa_index_flags}
                 --write-status-json=${_qore_qsa_status}
                 --success-stamp=${_qore_qsa_stamp}
                 --content-stamp=${_qore_qsa_content_stamp}
