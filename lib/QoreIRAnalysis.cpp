@@ -746,6 +746,46 @@ static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
     return ucf ? ucf->first() : nullptr;
 }
 
+bool qore_ir_collect_resolved_callees(const QoreIRFunction& func,
+        std::vector<const AbstractQoreFunctionVariant*>& callees) {
+    callees.clear();
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+        closure_values;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR body dependency closure analysis")) {
+                callees.clear();
+                return false;
+            }
+            const AbstractQoreFunctionVariant* closure =
+                qore_ir_get_created_closure_variant(inst_ptr.get());
+            if (closure && inst_ptr->result.isValid()) {
+                closure_values.emplace(inst_ptr->result.id, closure);
+            }
+        }
+    }
+    std::unordered_set<const AbstractQoreFunctionVariant*> seen;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR body dependency call analysis")) {
+                callees.clear();
+                return false;
+            }
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(inst_ptr.get(),
+                    has_ref_args, &closure_values);
+            if (callee && seen.insert(callee).second) {
+                callees.push_back(callee);
+            }
+        }
+    }
+    return true;
+}
+
 static bool qore_ir_is_non_overridable_method_call(const QoreIRInstruction& inst) {
     const QoreMethod* method = nullptr;
     const QoreClass* qc = nullptr;

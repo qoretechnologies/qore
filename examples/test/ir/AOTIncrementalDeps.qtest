@@ -54,6 +54,9 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             \testModuleDependencyForms());
         addTestCase("cross-file fast entry is a build dependency", \testCrossFileFastEntryDep());
         addTestCase("stale sibling fast entries are not imported", \testStaleSiblingFastEntry());
+        addTestCase("inlined body summary is a build dependency", \testBodySummaryDep());
+        addTestCase("body summary dependencies are transitive", \testTransitiveBodySummaryDep());
+        addTestCase("ordinary cross-file call has no body dependency", \testOrdinaryCallNotBodyDep());
         # NOTE: enum members route through the SAME constant hook — they are
         # registered as ConstantList entries, so a folded `SiblingEnum::Member`
         # is captured identically to a constant.  An end-to-end enum case is not
@@ -427,5 +430,92 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         assertEq(-1, link.find("undefined reference"),
             "the pair links whichever object was rebuilt first: " + link);
         assertTrue(is_file(tmp_dir + "/fastapp"), "link produced an executable: " + link);
+    }
+
+    private string objectPath(string name) {
+        return trim(run(sprintf("find %s -maxdepth 1 -name '*%s_qc.qo'", lib_dir, name)));
+    }
+
+    private string objectDep(string name) {
+        return File::readTextFile(objectPath(name) + ".d");
+    }
+
+    private recompileSummarySource(string name) {
+        string object = objectPath(name);
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s.d -o %s %s/%s.qc",
+            env, qcc_bin, lib_dir, object, object, tmp_dir, name));
+        assertTrue(is_file(object), "recompiled summary source " + name + ": " + out);
+    }
+
+    testBodySummaryDep() {
+        TmpDir tmp = initDirs();
+        write(tmp_dir + "/sumcallee.qc", "%modern\nnamespace SumX { int sub scale(int x) { return x * 3; } }\n");
+        write(tmp_dir + "/sumcaller.qc", "%modern\nnamespace SumX {\n"
+            "int sub useScale(int x) { return scale(x) + 1; }\n"
+            "}\nint sub main() { printf(\"%d\\n\", SumX::useScale(10)); return 0; }\n");
+        string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s/sumcallee.qc %s/sumcaller.qc",
+            env, qcc_bin, lib_dir, lib_dir, tmp_dir, tmp_dir));
+        string dep = objectDep("sumcaller");
+        assertTrue(dep.find("sumcallee.qc") != -1,
+            "summary consumer records the callee body: " + dep + out);
+        assertEq("", undefinedFastSymbols("sumcaller"),
+            "the imported summary leaves no fast-entry symbol");
+
+        write(tmp_dir + "/sumcallee.qc", "%modern\nnamespace SumX { int sub scale(int x) { return x * 4; } }\n");
+        recompileSummarySource("sumcallee");
+        recompileSummarySource("sumcaller");
+        string link = run(sprintf("%s %s -o %s/sumapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
+        assertTrue(is_file(tmp_dir + "/sumapp"), "summary pair links: " + link);
+        assertEq("41", trim(run(sprintf("%s %s/sumapp", env, tmp_dir))),
+            "incremental rebuild uses the changed callee summary");
+    }
+
+    testTransitiveBodySummaryDep() {
+        TmpDir tmp = initDirs();
+        write(tmp_dir + "/leaf.qc", "%modern\nnamespace SumT { int sub leaf(int x) { return x * 3; } }\n");
+        write(tmp_dir + "/middle.qc", "%modern\nnamespace SumT { int sub middle(int x) { return leaf(x) + 1; } }\n");
+        write(tmp_dir + "/top.qc", "%modern\nnamespace SumT { int sub top(int x) { return middle(x) + 2; } }\n"
+            "int sub main() { printf(\"%d\\n\", SumT::top(10)); return 0; }\n");
+        string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s/leaf.qc %s/middle.qc %s/top.qc",
+            env, qcc_bin, lib_dir, lib_dir, tmp_dir, tmp_dir, tmp_dir));
+        string middle_dep = objectDep("middle");
+        string top_dep = objectDep("top");
+        assertTrue(middle_dep.find("leaf.qc") != -1,
+            "middle summary records its leaf provider: " + middle_dep + out);
+        assertTrue(top_dep.find("middle.qc") != -1 && top_dep.find("leaf.qc") != -1,
+            "top summary records direct and transitive providers: " + top_dep + out);
+        string middle_index = run(sprintf("%s --dump-index-json %s", qcc_bin,
+            objectPath("middle")));
+        assertTrue(middle_index.find("body_dependency_files") != -1
+                && middle_index.find("leaf.qc") != -1,
+            "summary provenance is durable in the object index: " + middle_index);
+        string leaf_dep = objectDep("leaf");
+        assertEq(-1, leaf_dep.find("middle.qc"),
+            "transitive provenance remains one-way: " + leaf_dep);
+        assertEq(-1, leaf_dep.find("top.qc"),
+            "transitive provenance does not create an all-to-all edge: " + leaf_dep);
+
+        # Re-import the middle summary from its object and verify that its
+        # serialized leaf provenance survives the single-file `-L` path.
+        recompileSummarySource("top");
+        top_dep = objectDep("top");
+        assertTrue(top_dep.find("middle.qc") != -1 && top_dep.find("leaf.qc") != -1,
+            "preloaded summary preserves transitive body provenance: " + top_dep);
+    }
+
+    testOrdinaryCallNotBodyDep() {
+        TmpDir tmp = initDirs();
+        write(tmp_dir + "/ordinarycallee.qc", fastIneligibleCallee());
+        write(tmp_dir + "/ordinarycaller.qc", fastCaller());
+        string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s/ordinarycallee.qc %s/ordinarycaller.qc",
+            env, qcc_bin, lib_dir, lib_dir, tmp_dir, tmp_dir));
+        assertEq("", undefinedFastSymbols("ordinarycaller"),
+            "ordinary caller has no body-derived fast symbol: " + out);
+        string dep = objectDep("ordinarycaller");
+        assertEq(-1, dep.find("ordinarycallee.qc"),
+            "ordinary runtime-resolved call does not depend on the callee body: " + dep);
     }
 }

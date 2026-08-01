@@ -447,6 +447,24 @@ void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
     }
 }
 
+void qore_aot_note_dependency_file(const char* provider_file,
+        const char* consumer_file) {
+    if ((!aot_dep_sink && !aot_dep_map) || !provider_file
+            || !*provider_file || *provider_file == '<') {
+        return;
+    }
+    if (aot_dep_sink) {
+        aot_dep_sink->insert(provider_file);
+    }
+    if (aot_dep_map) {
+        const char* consumer = consumer_file ? consumer_file
+            : aot_dep_consumer_file;
+        if (consumer && *consumer && *consumer != '<') {
+            (*aot_dep_map)[consumer].insert(provider_file);
+        }
+    }
+}
+
 void qore_aot_record_source_parse_type_import(QoreProgram* pgm, const QoreProgramLocation* loc,
         const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing) {
     if (pgm) {
@@ -1196,6 +1214,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                     node.third, node.param, node.int_constant,
                     node.string_constant});
             }
+            entry.body_dependency_files = info.body_dependency_files;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -11741,10 +11760,116 @@ static bool qore_aot_collect_float_expression_summaries(
     return true;
 }
 
+static bool resolveAOTBatchBodyDependencyProvenance(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    using Variant = const AbstractQoreFunctionVariant*;
+    std::vector<Variant> variants;
+    variants.reserve(batch_callees.size());
+    std::unordered_map<Variant, size_t> ids;
+    ids.reserve(batch_callees.size());
+    std::vector<std::unordered_set<std::string>> dependencies;
+    dependencies.reserve(batch_callees.size());
+    std::vector<uint8_t> body_contracts;
+    body_contracts.reserve(batch_callees.size());
+    size_t check_count = 0;
+    for (auto& [variant, info] : batch_callees) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT body dependency provenance initialization")) {
+            return false;
+        }
+        size_t id = variants.size();
+        variants.push_back(variant);
+        ids.emplace(variant, id);
+        dependencies.emplace_back(info.body_dependency_files.begin(),
+            info.body_dependency_files.end());
+        body_contracts.push_back(info.hasBodyContract());
+        const UserVariantBase* uvb = variant
+            ? variant->getUserVariantBase() : nullptr;
+        const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+        const QoreProgramLocation* loc = sig ? sig->getParseLocation() : nullptr;
+        const char* file = loc ? loc->getFile() : nullptr;
+        if (file && *file && *file != '<') {
+            dependencies.back().insert(file);
+        }
+    }
+
+    std::vector<std::vector<size_t>> callers(variants.size());
+    for (const auto& [caller, func] : functions) {
+        auto caller_id = ids.find(caller);
+        if (caller_id == ids.end() || !func) {
+            continue;
+        }
+        std::vector<Variant> callees;
+        if (!qore_ir_collect_resolved_callees(*func, callees)) {
+            return false;
+        }
+        for (Variant callee : callees) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT body dependency graph construction")) {
+                return false;
+            }
+            auto callee_id = ids.find(callee);
+            if (callee_id != ids.end()
+                    && body_contracts[callee_id->second]
+                    && callee_id->second != caller_id->second) {
+                callers[callee_id->second].push_back(caller_id->second);
+            }
+        }
+    }
+
+    std::vector<size_t> worklist;
+    worklist.reserve(variants.size());
+    for (size_t i = 0; i < variants.size(); ++i) {
+        worklist.push_back(i);
+    }
+    std::vector<uint8_t> queued(variants.size(), 1);
+    while (!worklist.empty()) {
+        size_t callee_id = worklist.back();
+        worklist.pop_back();
+        queued[callee_id] = 0;
+        for (size_t caller_id : callers[callee_id]) {
+            bool changed = false;
+            for (const std::string& dependency : dependencies[callee_id]) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT transitive body dependency propagation")) {
+                    return false;
+                }
+                changed |= dependencies[caller_id].insert(dependency).second;
+            }
+            if (changed && !queued[caller_id]) {
+                queued[caller_id] = 1;
+                worklist.push_back(caller_id);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < variants.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT body dependency provenance finalization")) {
+            return false;
+        }
+        auto found = batch_callees.find(variants[i]);
+        assert(found != batch_callees.end());
+        found->second.body_dependency_files.assign(dependencies[i].begin(),
+            dependencies[i].end());
+        std::sort(found->second.body_dependency_files.begin(),
+            found->second.body_dependency_files.end());
+    }
+    return true;
+}
+
 bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
-        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
+        bool collect_body_dependency_provenance) {
     if (std::getenv("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
             || std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return true;
@@ -13351,8 +13476,13 @@ bool qore_ir_resolve_batch_function_summaries(
             functions, batch_callees, check_count)) {
         return false;
     }
-    return qore_aot_collect_float_expression_summaries(
-        functions, batch_callees, check_count);
+    if (!qore_aot_collect_float_expression_summaries(
+            functions, batch_callees, check_count)) {
+        return false;
+    }
+    return !collect_body_dependency_provenance
+        || resolveAOTBatchBodyDependencyProvenance(functions,
+            batch_callees);
 }
 
 size_t qore_ir_fuse_batch_aggregate_return_projections(
@@ -13648,7 +13778,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
     }
     return qore_ir_resolve_batch_function_summaries(
-        functions, batch_callees);
+        functions, batch_callees, true);
 }
 
 static size_t projectAOTNonescapingObjectScalars(
@@ -14860,6 +14990,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     }
     info.boxed_return_kind = static_cast<BatchCalleeBoxedReturnKind>(
         rec.boxed_return_kind);
+    info.body_dependency_files = rec.body_dependency_files;
     info.fast_name = callable ? rec.native_symbol : std::string();
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
@@ -27360,13 +27491,20 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // have their LLVM code in their own .qo's, so we do not re-emit
     // them here.
     std::string fatal_lowering_error;
-    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
-        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
-        failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
-        /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error,
-        nullptr, nullptr, standalone_batch_callees.empty()
-            ? nullptr : &standalone_batch_callees);
+    {
+        // Body-summary imports are consumed while IR is analyzed and lowered,
+        // before unused fast declarations are pruned.  Keep the per-object
+        // dependency sink active for this complete consumption window.
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder,
+            di_cu, compiled_funcs, compiled_init_funcs, total_funcs,
+            compiled_count, failed_count, total_ir_insts_all,
+            &const_reverse_map, nullptr, /*compile_module=*/nullptr,
+            /*compile_file=*/target_canon.c_str(), /*metadata_only=*/false,
+            nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr,
+            standalone_batch_callees.empty()
+                ? nullptr : &standalone_batch_callees);
+    }
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;

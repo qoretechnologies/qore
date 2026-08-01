@@ -40,6 +40,7 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/xxhash.h"
 
@@ -76,6 +77,38 @@ static QoreIRPrecomputedStringHash qore_ir_precompute_string_hash(const std::str
         XXH64(value.data(), value.size(), 0),
         XXH32(value.data(), value.size(), 0),
     };
+}
+
+std::unordered_map<const AbstractQoreFunctionVariant*,
+        BatchCalleeInfo>::const_iterator QoreIRToLLVM::findBatchCallee(
+        const AbstractQoreFunctionVariant* variant) const {
+    assert(batch_callees);
+    auto found = batch_callees->find(variant);
+    if (!variant || found == batch_callees->end()) {
+        return found;
+    }
+    if (!found->second.hasBodyContract()) {
+        return found;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    qore_aot_note_referenced_decl(sig ? sig->getParseLocation() : nullptr);
+    for (const std::string& dependency : found->second.body_dependency_files) {
+        qore_aot_note_dependency_file(dependency.c_str());
+    }
+    return found;
+}
+
+const BatchCalleeInfo* QoreIRToLLVM::getBatchCallee(
+        const AbstractQoreFunctionVariant* variant) const {
+    if (!batch_callees) {
+        return nullptr;
+    }
+    auto found = findBatchCallee(variant);
+    if (found == batch_callees->end()) {
+        return nullptr;
+    }
+    return &found->second;
 }
 
 static bool qore_ir_use_prehashed_keys() {
@@ -10440,7 +10473,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (owner_has_parse_reference || !variant || !batch_callees) {
                 return static_cast<const QoreClosureParseNode*>(nullptr);
             }
-            auto summary = batch_callees->find(variant);
+            auto summary = findBatchCallee(variant);
             if (summary == batch_callees->end()
                     || summary->second.capture_locals.size() != captures->size()) {
                 return static_cast<const QoreClosureParseNode*>(nullptr);
@@ -10482,7 +10515,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         ucf ? ucf->first() : nullptr;
                     const BatchCalleeInfo* summary_info = nullptr;
                     if (variant && batch_callees) {
-                        auto summary = batch_callees->find(variant);
+                        auto summary = findBatchCallee(variant);
                         if (summary != batch_callees->end()) {
                             summary_info = &summary->second;
                         }
@@ -10568,7 +10601,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         ? ucf->first() : nullptr;
                     const BatchCalleeInfo* summary_info = nullptr;
                     if (variant && batch_callees) {
-                        auto summary = batch_callees->find(variant);
+                        auto summary = findBatchCallee(variant);
                         if (summary != batch_callees->end()) {
                             summary_info = &summary->second;
                         }
@@ -10727,7 +10760,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
             const BatchCalleeInfo* summary_info = nullptr;
             if (variant && batch_callees) {
-                auto summary = batch_callees->find(variant);
+                auto summary = findBatchCallee(variant);
                 if (summary != batch_callees->end()) {
                     summary_info = &summary->second;
                 }
@@ -15090,7 +15123,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             method_call = true;
                         }
                     }
-                    auto it = variant ? batch_callees->find(variant) : batch_callees->end();
+                    auto it = variant ? findBatchCallee(variant) : batch_callees->end();
                     bool generic_specialization_matches =
                         it != batch_callees->end()
                         && qore_ir_generic_fast_entry_matches(
@@ -15213,10 +15246,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
 
                     // Check if callee is in the batch module
-                    if (!invoke_explicit_inst && batch_callees
-                            && call->getVariant()
-                            && batch_callees->count(call->getVariant())) {
-                        const auto& callee_info = batch_callees->at(call->getVariant());
+                    const BatchCalleeInfo* invoke_batch_callee =
+                        !invoke_explicit_inst && call->getVariant()
+                            ? getBatchCallee(call->getVariant()) : nullptr;
+                    if (invoke_batch_callee) {
+                        const auto& callee_info = *invoke_batch_callee;
                         if (callee_info.approach_b_eligible
                                 && qore_ir_fast_entry_args_need_no_binding(
                                     call->getVariant(), inv->expr, arg_start, nargs)
@@ -15336,7 +15370,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (batch_callees && aot_call
                             && aot_call->getVariant()
                             && !inv->has_ref_args) {
-                        auto it = batch_callees->find(aot_call->getVariant());
+                        auto it = findBatchCallee(aot_call->getVariant());
                         bool generic_specialization_matches =
                             it != batch_callees->end()
                             && qore_ir_generic_fast_entry_matches(
@@ -15552,7 +15586,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Function* aot_static_batch_fn = nullptr;
                     if (batch_callees && static_call && static_call->getVariant()
                             && !inv->has_ref_args) {
-                        auto it = batch_callees->find(static_call->getVariant());
+                        auto it = findBatchCallee(static_call->getVariant());
                         bool generic_specialization_matches =
                             it != batch_callees->end()
                             && qore_ir_generic_fast_entry_matches(
@@ -17244,7 +17278,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             if (aot_mode && batch_callees && aot_direct_variant
                     && !direct_inst->has_ref_args) {
-                auto it = batch_callees->find(aot_direct_variant);
+                auto it = findBatchCallee(aot_direct_variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -17281,17 +17315,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
-            bool is_approach_b = !aot_mode && !explicit_inst
-                    && batch_callees && direct_inst->variant
-                    && batch_callees->count(direct_inst->variant)
-                    && batch_callees->at(direct_inst->variant).approach_b_eligible
+            const BatchCalleeInfo* direct_batch_callee =
+                !aot_mode && !explicit_inst && direct_inst->variant
+                    ? getBatchCallee(direct_inst->variant) : nullptr;
+            bool is_approach_b = direct_batch_callee
+                    && direct_batch_callee->approach_b_eligible
                     && qore_ir_fast_entry_args_need_no_binding(
                         direct_inst->variant, direct_inst->expr, arg_start, nargs);
             const BatchCalleeInfo* aggregate_projection_callee =
                 aot_approach_b_callee;
             if (!aot_mode && fused_aggregate_projection && is_approach_b) {
-                aggregate_projection_callee =
-                    &batch_callees->at(direct_inst->variant);
+                aggregate_projection_callee = direct_batch_callee;
             }
             bool aot_context_independent_fast_entry_call = aot_approach_b_callee
                     && aot_approach_b_callee->context_independent_fast_entry;
@@ -17334,7 +17368,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     aot_context_independent_fast_entry_call = false;
                 }
                 if (is_approach_b) {
-                    const auto& callee_info = batch_callees->at(direct_inst->variant);
+                    const auto& callee_info = *direct_batch_callee;
                     if (fastEntryNativeArgsNeedNothingGuard(
                             callee_info, raw_arg_ids)) {
                         is_approach_b = false;
@@ -18592,10 +18626,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                 }
-            } else if (!explicit_inst && batch_callees
-                    && direct_inst->variant
-                    && batch_callees->count(direct_inst->variant)) {
-                const auto& callee_info = batch_callees->at(direct_inst->variant);
+            } else if (direct_batch_callee) {
+                const auto& callee_info = *direct_batch_callee;
                 if (is_approach_b) {
                     // Approach B: direct LLVM call to fast entry function.
                     // Args are passed directly as i64 values (NaN-boxed), bypassing
@@ -18777,7 +18809,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         direct_inst->qc, direct_inst->variant)
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->has_ref_args) {
-                auto it = batch_callees->find(direct_inst->variant);
+                auto it = findBatchCallee(direct_inst->variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -19041,7 +19073,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         invoke_inst->qc, invoke_inst->variant)
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->has_ref_args) {
-                auto it = batch_callees->find(invoke_inst->variant);
+                auto it = findBatchCallee(invoke_inst->variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -19305,7 +19337,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Function* aot_static_batch_fn = nullptr;
             if (aot_mode && batch_callees && direct_inst->variant
                     && !direct_inst->has_ref_args) {
-                auto it = batch_callees->find(direct_inst->variant);
+                auto it = findBatchCallee(direct_inst->variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -19677,7 +19709,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !std::getenv("QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY")) {
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
-                auto it = batch_callees->find(direct_inst->variant);
+                auto it = findBatchCallee(direct_inst->variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -20599,7 +20631,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !std::getenv("QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY")) {
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
-                auto it = batch_callees->find(invoke_inst->variant);
+                auto it = findBatchCallee(invoke_inst->variant);
                 bool generic_specialization_matches =
                     it != batch_callees->end()
                     && qore_ir_generic_fast_entry_matches(
@@ -22842,7 +22874,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !std::getenv("QORE_DISABLE_AOT_KNOWN_CALLREF_FAST_ENTRY")) {
                 const AbstractQoreFunctionVariant* variant =
                     known_call_ref->second;
-                auto callee = batch_callees->find(variant);
+                auto callee = findBatchCallee(variant);
                 const auto* call = static_cast<const QoreIRExprInstruction*>(
                     inst);
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
@@ -23223,7 +23255,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? immediate_ucf->first() : nullptr;
             const BatchCalleeInfo* immediate_closure_info = nullptr;
             if (immediate_variant && batch_callees) {
-                auto summary = batch_callees->find(immediate_variant);
+                auto summary = findBatchCallee(immediate_variant);
                 if (summary != batch_callees->end()) {
                     immediate_closure_info = &summary->second;
                 }
@@ -23238,7 +23270,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (immediate_closure && !aot_mode && current_ir_func
                     && immediate_variant && batch_callees
                     && std::getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
-                auto callee = batch_callees->find(immediate_variant);
+                auto callee = findBatchCallee(immediate_variant);
                 const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
                 if (callee != batch_callees->end()
@@ -24850,7 +24882,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? ucf->first() : nullptr;
                     const BatchCalleeInfo* summary_info = nullptr;
                     if (variant && batch_callees) {
-                        auto summary = batch_callees->find(variant);
+                        auto summary = findBatchCallee(variant);
                         if (summary != batch_callees->end()) {
                             summary_info = &summary->second;
                         }

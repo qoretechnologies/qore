@@ -114,12 +114,14 @@ workflow without separate header files.
 The preload step must not execute user code. It only creates declaration shells
 needed for parse-time name and type resolution.
 
-### Cross-File Fast Entries Are Body Dependencies
+### Cross-File Body Contracts Are Body Dependencies
 
-Batch script compiles and `-L` preload both let a caller call a callee in
-another object through its `_fast` entry: a hidden, direct, unboxed-argument
-entry point. That reference is not a declaration dependency, it is a dependency
-on the callee's **lowered body**:
+Batch script compiles and `-L` preload let a caller consume a callee's lowered
+body contract from another object. The contract can provide a `_fast` entry (a
+hidden, direct, unboxed-argument entry point), or an importable scalar, string,
+collection, aggregate, or object-operation summary that replaces the call
+entirely. This is not a declaration dependency, it is a dependency on the
+callee's **lowered body**:
 
 - the fast entry exists only while that body stays eligible for one, and
 - the emitted call sequence bakes in the body's ABI and effect summary
@@ -130,10 +132,13 @@ A body-only edit therefore changes or removes the fast entry while the callee's
 declaration hash and standard entry symbol are untouched. Two rules keep that
 sound in incremental builds:
 
-- an object that emits a direct cross-file `_fast` reference records the
-  callee's source file as a build dependency, so the caller is recompiled
-  whenever the callee's body changes — without it the caller keeps an
-  undefined-reference to a `_fast` symbol the callee no longer defines;
+- an object that consumes a cross-file body contract records the callee's
+  source file as a build dependency, so the caller is recompiled whenever the
+  callee's body changes. Without it the caller can keep an undefined reference
+  to a removed `_fast` symbol or machine code folded from an obsolete summary;
+- imported body-summary provenance is transitive. If `top.qc` folds a summary
+  from `middle.qc`, and that summary incorporated `leaf.qc`, `top.qo` records
+  both sources even when no native symbol from either callee survives;
 - fast-entry metadata is never imported from a preloaded `.qo` whose recorded
   source hash no longer matches its on-disk source. A stale sibling describes a
   body that is about to be replaced, so importing from it would make the result
@@ -141,9 +146,10 @@ sound in incremental builds:
   must be *proven* — a missing source or a missing hash leaves the sibling
   usable.
 
-Other cross-unit references stay dependency-free: they resolve by name at
-load/register time, so a stale dependent picks up the new provider
-automatically.
+Each symbol-index body-contract record carries its sorted, duplicate-free
+`body_dependency_files` provenance. Ordinary cross-unit references stay
+dependency-free: they resolve by name at load/register time, so a stale
+dependent picks up the new provider automatically.
 
 ## Module Aggregation
 
@@ -202,6 +208,10 @@ Hashes are split by use:
   values are marked as `not-foldable:<type>:<reason>`;
 - implementation/native body changes are represented by the native symbol
   association and future linker metadata, not by changing API hashes.
+
+Version 36 adds `body_dependency_files` to native body-contract records. The
+field is consumed only when code generation actually imports that contract; it
+is not a general declaration dependency.
 
 Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol

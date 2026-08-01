@@ -298,7 +298,10 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 35;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 36;
+
+//! Maximum source files in one serialized body-summary provenance set.
+constexpr size_t QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES = 100000;
 
 //! Maximum serialized nodes in a bounded pure native-integer expression summary.
 constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 64;
@@ -444,6 +447,7 @@ struct QoreAOTSymbolIndexRecord {
     int8_t boxed_return_param = -1;
     std::string fast_specialization_key;
     uint8_t boxed_return_kind = 0;
+    std::vector<std::string> body_dependency_files;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -511,6 +515,7 @@ struct QoreAOTFastEntryIndexInfo {
     int8_t boxed_return_param = -1;
     std::string specialization_key;
     uint8_t boxed_return_kind = 0;
+    std::vector<std::string> body_dependency_files;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

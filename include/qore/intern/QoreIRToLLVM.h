@@ -105,6 +105,16 @@ public:
         batch_callees = callees;
     }
 
+    //! Find a batch callee and record its body-summary provenance when AOT
+    //! object dependency collection is active.
+    std::unordered_map<const AbstractQoreFunctionVariant*,
+        BatchCalleeInfo>::const_iterator findBatchCallee(
+            const AbstractQoreFunctionVariant* variant) const;
+
+    //! Return a batch callee through the dependency-recording lookup.
+    const BatchCalleeInfo* getBatchCallee(
+        const AbstractQoreFunctionVariant* variant) const;
+
     //! Set fast entry mode for Approach B: parameters are passed as LLVM function
     //! arguments instead of being loaded from the thread-local variable stack.
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")

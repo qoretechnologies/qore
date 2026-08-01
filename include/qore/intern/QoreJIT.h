@@ -458,6 +458,45 @@ struct BatchCalleeInfo {
     std::string object_compound_get_member; //!< Exact guarded object member compound-return name
     int8_t object_compound_get_param = -1;  //!< RHS parameter for object_compound_get_member
     uint8_t object_compound_get_op = 0;      //!< LVCompoundOp value
+    //! Source files whose lowered bodies contributed to this entry's imported
+    //! summary or fast-entry contract. Entries are sorted and duplicate-free.
+    std::vector<std::string> body_dependency_files;
+
+    bool hasImportableBodySummary() const {
+        return scalar_leaf.kind != AOTScalarLeafKind::None
+            || static_cast<bool>(int_expression)
+            || static_cast<bool>(float_expression)
+            || static_cast<bool>(fixed_hash_remap)
+            || static_cast<bool>(string_op)
+            || static_cast<bool>(string_expression)
+            || static_cast<bool>(collection_op)
+            || static_cast<bool>(aggregate_return)
+            || forwarded_return_param >= 0 || boxed_return_param >= 0
+            || static_cast<bool>(composed_int)
+            || static_cast<bool>(context_int)
+            || static_cast<bool>(global_int)
+            || !object_getter_member.empty()
+            || !object_constructor_members.empty()
+            || !object_set_get_member.empty()
+            || !object_compound_get_member.empty();
+    }
+
+    bool hasBodyEffectContract() const {
+        return !may_invalidate_external_caches
+            || !may_modify_runtime_locals
+            || !modified_runtime_locals.empty()
+            || never_returns_nothing
+            || boxed_return_kind != BatchCalleeBoxedReturnKind::Unknown
+            || std::find(param_noescape.begin(), param_noescape.end(), 1)
+                != param_noescape.end()
+            || std::find(param_may_modify.begin(), param_may_modify.end(), 0)
+                != param_may_modify.end();
+    }
+
+    bool hasBodyContract() const {
+        return approach_b_eligible || hasImportableBodySummary()
+            || hasBodyEffectContract();
+    }
 };
 
 //! Populate conservative interprocedural summaries for a batch of lowered
@@ -466,7 +505,8 @@ DLLLOCAL bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*,
-            BatchCalleeInfo>& batch_callees);
+            BatchCalleeInfo>& batch_callees,
+        bool collect_body_dependency_provenance = false);
 
 //! Fuse exact fixed aggregate return projections in an owned compilation IR.
 DLLLOCAL size_t qore_ir_fuse_batch_aggregate_return_projections(

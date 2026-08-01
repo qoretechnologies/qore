@@ -3465,6 +3465,9 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
     if (!rec.provider_source_file.empty()) {
         printf(" provider=%s", rec.provider_source_file.c_str());
     }
+    if (!rec.body_dependency_files.empty()) {
+        printf(" body_deps=%zu", rec.body_dependency_files.size());
+    }
     if (rec.metadata_slot != UINT32_MAX) {
         printf(" slot=%u", rec.metadata_slot);
     }
@@ -5244,7 +5247,7 @@ static bool json_collect_context_values(const std::vector<std::pair<std::string,
     return true;
 }
 
-static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsigned indent) {
+static bool json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsigned indent) {
     printf("%*s{", static_cast<int>(indent), "");
     json_print_string("kind");
     printf(": ");
@@ -5459,7 +5462,21 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         printf("}");
     }
     printf("]");
+    printf(", \"body_dependency_files\": [");
+    for (size_t i = 0; i < rec.body_dependency_files.size(); ++i) {
+        if (i && !(i % 100)
+                && qcc_check_cancel(
+                    "AOT body dependency JSON output")) {
+            return false;
+        }
+        if (i) {
+            printf(", ");
+        }
+        json_print_string(rec.body_dependency_files[i]);
+    }
+    printf("]");
     printf("}");
+    return true;
 }
 
 static bool json_print_symbol_array(const char* key,
@@ -5475,7 +5492,9 @@ static bool json_print_symbol_array(const char* key,
             printf(",");
         }
         printf("\n");
-        json_print_symbol_record(records[i], indent + 2);
+        if (!json_print_symbol_record(records[i], indent + 2)) {
+            return false;
+        }
     }
     if (!records.empty()) {
         printf("\n%*s", static_cast<int>(indent), "");
@@ -6153,6 +6172,20 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
                 static_cast<long long>(node.int_constant));
             json_file_string(f, node.string_constant);
             fputc('}', f);
+        }
+        fputc(']', f);
+        fputs(", \"body_dependency_files\": [", f);
+        for (size_t j = 0; j < rec.body_dependency_files.size(); ++j) {
+            if (j && !(j % 100)
+                    && qcc_check_cancel(
+                        "AOT body dependency sidecar output")) {
+                error = "AOT body dependency sidecar output cancelled";
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, rec.body_dependency_files[j]);
         }
         fputc(']', f);
         fputc('}', f);

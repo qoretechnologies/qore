@@ -6865,8 +6865,8 @@ static bool aotSymbolRecordLess(const QoreAOTSymbolIndexRecord& a,
     return a.native_symbol < b.native_symbol;
 }
 
-static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
-        const QoreAOTSymbolIndexRecord& rec) {
+static bool writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
+        const QoreAOTSymbolIndexRecord& rec, std::string* error) {
     writer.writeU8(static_cast<uint8_t>(rec.kind));
     writer.writeU8(static_cast<uint8_t>(rec.dependency_class));
     writer.writeU16(rec.flags);
@@ -7019,6 +7019,26 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
             writer.writeF64(value->float_value);
         }
     }
+    if (rec.body_dependency_files.size()
+            > QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES) {
+        if (error) {
+            *error = "too many AOT body dependency files";
+        }
+        return false;
+    }
+    writer.writeU32(static_cast<uint32_t>(rec.body_dependency_files.size()));
+    for (size_t i = 0; i < rec.body_dependency_files.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT body dependency serialization")) {
+            if (error) {
+                *error = "AOT body dependency serialization cancelled";
+            }
+            return false;
+        }
+        writer.writeStringRef(rec.body_dependency_files[i].c_str());
+    }
+    return true;
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7036,7 +7056,9 @@ static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
         if (!aotCheckSymbolIndexCancel(i, error, operation)) {
             return false;
         }
-        writeSymbolIndexRecord(writer, records[i]);
+        if (!writeSymbolIndexRecord(writer, records[i], error)) {
+            return false;
+        }
     }
     return true;
 }
@@ -7144,6 +7166,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.float_expression_nodes = info.float_expression_nodes;
     rec.string_expression_nodes = info.string_expression_nodes;
     rec.fast_specialization_key = info.specialization_key;
+    rec.body_dependency_files = info.body_dependency_files;
     native.push_back(std::move(rec));
 }
 
@@ -8691,6 +8714,33 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             value->float_value = QoreAOTBinaryReader::readF64(ptr);
         }
         rec.aggregate_return_value_selects.push_back(select);
+    }
+    if (version < 36) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX body dependency count";
+        return false;
+    }
+    uint32_t dependency_count = QoreAOTBinaryReader::readU32(ptr);
+    if (dependency_count > QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES) {
+        error = "invalid SYMBOL_INDEX body dependency count";
+        return false;
+    }
+    rec.body_dependency_files.reserve(dependency_count);
+    for (uint32_t i = 0; i < dependency_count; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT body dependency deserialization")) {
+            error = "AOT body dependency deserialization cancelled";
+            return false;
+        }
+        std::string dependency;
+        if (!readSymbolIndexString(reader, ptr, end, dependency, error,
+                "body_dependency_file")) {
+            return false;
+        }
+        rec.body_dependency_files.push_back(std::move(dependency));
     }
     return true;
 }

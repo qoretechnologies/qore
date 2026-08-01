@@ -142,6 +142,13 @@ bool qore_ir_compute_function_effect_summaries(
 DLLLOCAL bool qore_ir_variant_has_reference_params(
     const AbstractQoreFunctionVariant* variant);
 
+//! Collect resolved direct callees represented by a lowered function.
+/** Closure values are tracked through CreateClosure/CallClosureDirect pairs.
+    The output is duplicate-free and excludes unresolved or dynamic calls. */
+DLLLOCAL bool qore_ir_collect_resolved_callees(
+    const QoreIRFunction& func,
+    std::vector<const AbstractQoreFunctionVariant*>& callees);
+
 //! Returns locals that cannot safely use native scalar storage because a load may
 //! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was
 //! cancelled. @p initially_assigned contains locals that are assigned on function

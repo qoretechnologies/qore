@@ -133,6 +133,12 @@ DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramL
 DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
         const QoreProgramLocation* consumer_loc = nullptr);
 
+//! Record a source file directly into the active AOT dependency sink.
+/** Used for transitive body-summary provenance deserialized from sibling
+    objects, where no live declaration location is available. */
+DLLLOCAL void qore_aot_note_dependency_file(const char* provider_file,
+        const char* consumer_file = nullptr);
+
 //! Record a source-parse type import for the active single-file AOT compile.
 /** This is a narrow wrapper around Program-private import tracking for modules
     that need to report a link-time class/hashdecl dependency without including
