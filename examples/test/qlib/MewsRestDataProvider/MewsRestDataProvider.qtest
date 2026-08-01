@@ -32,6 +32,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
     constructor() : Test("MewsRestClientDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("test", \mainTest());
         addTestCase("action", \actionTest());
+        addTestCase("date range", \dateRangeTest());
 
         try {
             setupConnection();
@@ -91,21 +92,8 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             }
             assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
-            # Handle connection/protocol errors
-            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
-                delete mews;
-                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
-            }
-            *softint status_code = getHttpStatusCode(ex);
-            if (status_code == 429 || status_code == 408) {
-                delete mews;
-                testSkip("Rate limited");
-            }
-            if (status_code && status_code >= 500) {
-                delete mews;
-                testSkip("external service unavailable: HTTP " + status_code);
-            }
+            # skips the test case if the external service is unavailable
+            checkExternalError(ex);
             rethrow;
         }
     }
@@ -147,22 +135,68 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             # assertLe(bound, actual) asserts actual <= bound
             assertLe(2, recs.size());
         } catch (hash<ExceptionInfo> ex) {
-            # Handle connection/protocol errors
-            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
-                delete mews;
-                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
-            }
-            *softint status_code = getHttpStatusCode(ex);
-            if (status_code == 429 || status_code == 408) {
-                delete mews;
-                testSkip("Rate limited");
-            }
-            if (status_code && status_code >= 500) {
-                delete mews;
-                testSkip("external service unavailable: HTTP " + status_code);
-            }
+            # skips the test case if the external service is unavailable
+            checkExternalError(ex);
             rethrow;
+        }
+    }
+
+    #! Verifies that an open-ended date range stays inside the Mews interval limit
+    /** The %Mews API rejects intervals longer than a fixed 92 days
+        (<tt>400 Bad Request: The interval must not exceed 3M1D</tt>).  When only one bound of a date range
+        is given, @ref MewsRestDataProvider::MewsRestTableDataProvider "MewsRestTableDataProvider" fills in
+        the other one with its maximum search delta, which must therefore be an absolute duration; a
+        calendar-based delta (ex: \c 3M) is wall-clock preserving in %Qore, so it yields 92 days + 1 hour
+        whenever the range crosses a DST fall-back transition, and the server rejects the request.
+
+        The start date below carries its own DST-observing time zone, so a calendar-based delta would
+        cross the 2025-10-26 transition and fail no matter which time zone the test is run in.
+    */
+    dateRangeTest() {
+        if (!mews) {
+            testSkip("no connection");
+        }
+
+        try {
+            AbstractDataProvider orderitems = mews.getChildProviderPath("tables/orderitems");
+
+            TimeZone tz("Europe/Prague");
+            date start = tz.date("20250801090000");
+
+            # the end bound is filled in automatically here and must produce the same result as an
+            # explicit in-range end bound covering the same window
+            *hash<auto> rec = orderitems.searchSingleRecord({"ClosedUtcStart": start}, {"limit": 1});
+            *hash<auto> expected = orderitems.searchSingleRecord({
+                "ClosedUtcStart": start,
+                "ClosedUtcEnd": start + 2160h,
+            }, {"limit": 1});
+            assertEq(expected, rec);
+        } catch (hash<ExceptionInfo> ex) {
+            # skips the test case if the external service is unavailable
+            checkExternalError(ex);
+            rethrow;
+        }
+    }
+
+    #! Skips the running test case if the exception indicates that the external service is unavailable
+    /** Returns normally for any other error, in which case the caller must rethrow, so that genuine
+        failures (ex: a malformed request rejected with \c 400 Bad Request) are always reported.
+
+        @note this cannot rethrow itself; \c rethrow is only allowed directly in a catch block
+    */
+    private checkExternalError(hash<ExceptionInfo> ex) {
+        if (QUnit::Test::isConnectionError(ex)) {
+            delete mews;
+            testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+        }
+        *softint status_code = getHttpStatusCode(ex);
+        if (status_code == 429 || status_code == 408) {
+            delete mews;
+            testSkip("rate limited: HTTP " + status_code);
+        }
+        if (status_code && status_code >= 500) {
+            delete mews;
+            testSkip("external service unavailable: HTTP " + status_code);
         }
     }
 

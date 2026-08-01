@@ -51,7 +51,17 @@ hashdecl MewsTableApiConfig {
     hash<string, bool> default_extent;
 
     #! Maximum time difference for searches
-    date max_delta = 3M;
+    /** @note This must be an \a absolute duration (i.e. expressed in hours, minutes, or seconds and not in
+        months or days), because %Qore performs calendar arithmetic with month and day components; adding
+        \c 3M or \c 92D to a local date/time value yields a wall-clock-preserving result whose absolute
+        length varies with the calendar (89 - 92 days) and gains or loses an hour when the range crosses a
+        DST transition.  Mews rejects intervals longer than a fixed 92 days with
+        <tt>400 Bad Request: The interval must not exceed 3M1D</tt>, so a calendar-based value can silently
+        produce an out-of-range request (ex: \c 3M added to a summer timestamp in a DST-observing time zone
+        gives 92 days + 1 hour).  The default is 90 days expressed in hours, which stays safely inside the
+        server-side limit for every start date and time zone.
+    */
+    date max_delta = 2160h;
 
     #! Does not support the "Limitation" option
     bool no_limitation;
