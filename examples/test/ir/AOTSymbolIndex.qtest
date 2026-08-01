@@ -33,6 +33,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("slot-map dump parses global slot flags", \testDumpInfoGlobalSlotFlags());
         addTestCase("source parse defines in symbol index", \testSourceParseDefines());
         addTestCase("standalone global import resolves at link time", \testStandaloneGlobalImport());
+        addTestCase("qo link accepts builtin runtime imports", \testQoLinkBuiltinRuntimeImports());
         addTestCase("standalone deferred global lvalue paths resolve at link time",
             \testStandaloneDeferredGlobalLValuePathImport());
         addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
@@ -42,6 +43,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
         addTestCase("source-order cache incrementally refreshes changed providers and consumers",
             \testSourceOrderCacheIncrementalRefresh());
+        addTestCase("source order requires static parameter default providers",
+            \testSourceOrderRequiresStaticParameterDefaultProvider());
         addTestCase("standalone abstract returns match deferred class types",
             \testStandaloneDeferredAbstractReturnTypes());
         addTestCase("standalone deferred class overload types stay distinct",
@@ -506,6 +509,40 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertEq("linked\n", out, "linked executable lazily resolves Qorus global: " + out);
     }
 
+    testQoLinkBuiltinRuntimeImports() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/builtin-imports.qc";
+        string qo = tmp_dir + "/builtin-imports.qo";
+        string agg = tmp_dir + "/builtin-imports-aggregate.qo";
+
+        write(src,
+            "%new-style\n"
+            "auto sub aot_builtin_runtime_imports() {\n"
+            "    return {\"env\": ENV, \"argv\": ARGV, \"qore_argv\": QORE_ARGV};\n"
+            "}\n");
+
+        string compile_out = run(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo, src));
+        assertTrue(is_file(qo), "source referencing runtime builtins compiles: " + compile_out);
+
+        string index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, qo));
+        foreach string name in ("ENV", "ARGV", "QORE_ARGV") {
+            assertTrue(index.find(sprintf("\"qore_path\": \"Qore::%s\"", name)) != -1,
+                sprintf("index records Qore::%s builtin import: %s", name, index));
+        }
+        assertTrue(index.find("\"provider_source_file\": \"<builtin>\"") != -1,
+            "index identifies the runtime builtin provider: " + index);
+
+        string link_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_BUILTIN_IMPORTS"
+            " -o %s %s", env, qcc_bin, agg, qo));
+        assertTrue(is_file(agg), "qo-link accepts runtime builtin imports: " + link_out);
+        string link_map = File::readTextFile(agg + ".qolink.json");
+        assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
+            "qo-link map has no unresolved builtin imports: " + link_map);
+        assertTrue(link_map.find("\"providers\": [\"<builtin>\"]") != -1,
+            "qo-link map records the external builtin provider: " + link_map);
+    }
+
     testStandaloneDeferredGlobalLValuePathImport() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo-global-lvalue";
@@ -882,6 +919,103 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             source_order, context_file, consumer_qo));
         assertEq(provider_qo, trim(consumer_changed),
             "consumer reference changes add the new dependency edge");
+    }
+
+    testSourceOrderRequiresStaticParameterDefaultProvider() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-default-order";
+        mkdir(qo_dir);
+        string base_src = tmp_dir + "/static-default-base.qc";
+        string body_src = tmp_dir + "/static-body-consumer.qc";
+        string shape_src = tmp_dir + "/static-call-shapes.qc";
+        string provider_src = tmp_dir + "/static-default-provider.qc";
+        string child_src = tmp_dir + "/static-default-child.qc";
+        string base_qo = qo_dir + "/static-default-base.qo";
+        string body_qo = qo_dir + "/static-body-consumer.qo";
+        string shape_qo = qo_dir + "/static-call-shapes.qo";
+        string provider_qo = qo_dir + "/static-default-provider.qo";
+        string child_qo = qo_dir + "/static-default-child.qo";
+        string context_file = tmp_dir + "/.qcc-context";
+        string manifest = tmp_dir + "/source-symbols.manifest";
+        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
+            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+
+        write(base_src,
+            "%modern\n"
+            "class AOTStaticDefaultBase {\n"
+            "    static string parse(string ctx = AOTStaticDefaultProvider::getContext()) { return ctx; }\n"
+            "}\n");
+        write(body_src,
+            "%modern\n"
+            "class AOTStaticBodyConsumer {\n"
+            "    static string value() { return AOTStaticDefaultProvider::getContext(); }\n"
+            "}\n");
+        write(shape_src,
+            "%modern\n"
+            "class AOTStaticCallShapes {\n"
+            "    constructor() : AOTStaticShapeBase(AOTStaticDefaultProvider::getContext()) {}\n"
+            "    static check() { @assert(AOTStaticDefaultProvider::getContext() == \"provider\"); }\n"
+            "}\n");
+        write(provider_src,
+            "%modern\n"
+            "class AOTStaticDefaultProvider {\n"
+            "    static string getContext() { return \"provider\"; }\n"
+            "}\n");
+        write(child_src,
+            "%modern\n"
+            "class AOTStaticDefaultChild inherits AOTStaticDefaultBase {}\n");
+        write(context_file,
+            "format=1\n"
+            "kind=qcc-object-group\n"
+            "group=STATIC_DEFAULT_ORDER\n"
+            "input=" + base_src + "\n"
+            "input=" + body_src + "\n"
+            "input=" + shape_src + "\n"
+            "input=" + provider_src + "\n"
+            "input=" + child_src + "\n"
+            "output=" + base_qo + "\n"
+            "output=" + body_qo + "\n"
+            "output=" + shape_qo + "\n"
+            "output=" + provider_qo + "\n"
+            "output=" + child_qo + "\n");
+
+        string manifest_out = run(sprintf("%s --source-symbol-manifest %s %s",
+            source_order, manifest, context_file));
+        assertTrue(is_file(manifest), "source-symbol manifest was written: " + manifest_out);
+
+        string base_direct = run(sprintf("%s --direct %s %s",
+            source_order, context_file, base_qo));
+        assertEq(provider_qo, trim(base_direct),
+            "static call in a parameter default requires its provider first");
+        string body_direct = run(sprintf("%s --direct %s %s",
+            source_order, context_file, body_qo));
+        assertEq("", trim(body_direct),
+            "static call in a method body remains link-deferred");
+        string shape_direct = run(sprintf("%s --direct %s %s",
+            source_order, context_file, shape_qo));
+        assertEq("", trim(shape_direct),
+            "pseudo-calls and base initializers do not look like parameter defaults");
+        string child_order = run(sprintf("%s %s %s", source_order, context_file, child_qo));
+        assertTrue(child_order.find(provider_qo) != -1 && child_order.find(base_qo) != -1,
+            "derived source inherits the provider-before-base ordering: " + child_order);
+
+        string body_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, body_qo, body_src));
+        assertTrue(is_file(body_qo),
+            "ordinary static body call compiles before its provider: " + body_out);
+        string provider_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static default provider compiles: " + provider_out);
+        string base_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, base_qo, base_src));
+        assertTrue(is_file(base_qo), "static default base compiles after its provider: " + base_out);
+        string child_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, child_qo, child_src));
+        assertTrue(is_file(child_qo), "derived source restores the static default: " + child_out);
     }
 
     testStandaloneDeferredAbstractReturnTypes() {

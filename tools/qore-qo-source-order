@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+from bisect import bisect_left
 from collections import defaultdict
 
 
@@ -63,8 +64,14 @@ CONSTRUCTED_DECL_TYPE_RE = re.compile(
 )
 PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
+PAREN_RE = re.compile(r"[()]")
 DECL_LINE_CHARS = frozenset("(;=")
-CACHE_VERSION = 33
+CALLABLE_MODIFIERS = {
+    "public", "private", "internal", "static", "abstract", "final", "synchronized", "deprecated",
+}
+NON_CALLABLE_NAMES = {"if", "for", "while", "switch", "catch", "foreach", "map", "foldl", "foldr"}
+NON_TYPE_PREFIXES = {"return", "throw", "new", "case"}
+CACHE_VERSION = 37
 KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
 
 
@@ -541,6 +548,74 @@ def collect_static_call_mentions(code: str) -> set[str]:
     return {simple_name(m.group(1)) for m in STATIC_CALL_RE.finditer(code)}
 
 
+def is_callable_declaration(code: str, open_pos: int, close_pos: int) -> bool:
+    tail = close_pos + 1
+    while tail < len(code) and code[tail].isspace():
+        tail += 1
+    if tail >= len(code) or code[tail] not in "{:;":
+        return False
+
+    search_start = max(0, open_pos - 4096)
+    header_start = max(code.rfind(ch, search_start, open_pos) for ch in ";{}") + 1
+    header_start = max(header_start, search_start)
+    name_end = open_pos
+    while name_end > header_start and code[name_end - 1].isspace():
+        name_end -= 1
+    name_start = name_end
+    while name_start > header_start and (code[name_start - 1].isalnum() or code[name_start - 1] == "_"):
+        name_start -= 1
+    if name_start == name_end or not (code[name_start].isalpha() or code[name_start] == "_"):
+        return False
+    name = code[name_start:name_end]
+    prefix = code[header_start:name_start].strip()
+
+    if name == "constructor":
+        return not prefix or all(word in CALLABLE_MODIFIERS for word in prefix.split())
+    if name in NON_CALLABLE_NAMES:
+        return False
+    if re.search(r"\bsub\s*$", prefix):
+        return True
+    if not prefix:
+        # A bare identifier followed by ';' is an ordinary call, while an
+        # untyped method declaration must introduce a body or base-init list.
+        return code[tail] in "{:"
+    if prefix.endswith("::") or any(ch in prefix for ch in "=.?!+/-%&|[]()@\\"):
+        return False
+    first_word = prefix.split(None, 1)[0]
+    return first_word not in NON_TYPE_PREFIXES
+
+
+def iter_parenthesized_ranges(code: str):
+    stack: list[int] = []
+    for match in PAREN_RE.finditer(code):
+        pos = match.start()
+        ch = match.group(0)
+        if ch == "(":
+            stack.append(pos)
+        elif ch == ")" and stack:
+            yield stack.pop(), pos
+
+
+def collect_param_default_static_call_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    static_positions = [match.start() for match in STATIC_CALL_RE.finditer(code)]
+    if not static_positions:
+        return mentions
+    for open_pos, close_pos in iter_parenthesized_ranges(code):
+        match_index = bisect_left(static_positions, open_pos)
+        if match_index >= len(static_positions) or static_positions[match_index] >= close_pos:
+            continue
+        if not is_callable_declaration(code, open_pos, close_pos):
+            continue
+        for parameter in split_top_level(code[open_pos + 1:close_pos]):
+            default_parts = split_top_level(parameter, "=")
+            if len(default_parts) < 2:
+                continue
+            default_expr = "=".join(default_parts[1:])
+            mentions.update(collect_static_call_mentions(default_expr))
+    return mentions
+
+
 def collect_static_ref_mentions(code: str) -> set[str]:
     return {simple_name(m.group(1)) for m in STATIC_REF_RE.finditer(code)}
 
@@ -643,6 +718,7 @@ SOURCE_SUMMARY_KEYS = (
     "class_for_name_mentions",
     "create_object_mentions",
     "static_call_mentions",
+    "param_default_static_call_mentions",
     "static_ref_mentions",
     "includes",
     "parse_define_consumers",
@@ -677,6 +753,8 @@ def scan_source_summary(source: str,
         "class_for_name_mentions": sorted(collect_class_for_name_mentions(literal_code)),
         "create_object_mentions": sorted(collect_create_object_mentions(literal_code)),
         "static_call_mentions": sorted(collect_static_call_mentions(code)),
+        "param_default_static_call_mentions": sorted(
+            collect_param_default_static_call_mentions(code)),
         "static_ref_mentions": sorted(collect_static_ref_mentions(code)),
         "includes": sorted(collect_includes(code)),
         "parse_define_consumers": sorted(PARSE_DEFINE_CONSUMER_RE.findall(code)),
@@ -823,6 +901,14 @@ def build_hard_graph_from_summaries(inputs: list[str],
             add_edge(provider, consumer)
         mentions.update(summary_set(summary, "create_object_mentions") & unique_class_symbols)
         mentions.update(summary_set(summary, "static_call_mentions") & unique_class_symbols)
+        for symbol in summary_set(summary, "param_default_static_call_mentions") & unique_class_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            # Static method calls in parameter defaults are restored during
+            # sibling finalization and therefore require the provider method
+            # map to exist when the consumer artifact is generated.
+            add_edge(provider, consumer, required=True)
         static_refs = summary_set(summary, "static_ref_mentions")
         mentions.update(static_refs & unique_class_symbols)
         for symbol in static_refs & unique_enum_symbols:

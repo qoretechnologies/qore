@@ -4505,6 +4505,12 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             issue.consumer = input.path;
             issue.path = rec.qore_path;
             issue.dependency_class = qoreAOTDependencyClassName(dep_class);
+            if (dep_class == QoreAOTDependencyClass::QORE_API
+                    && rec.provider_source_file == "<builtin>") {
+                issue.providers.push_back(rec.provider_source_file);
+                plan.resolved_imports.push_back(std::move(issue));
+                continue;
+            }
             auto provider_it = providers.exact.find(rec.qore_path);
             std::vector<const QoreAOTSymbolIndexRecord*> deferred_callable_candidates;
             std::vector<const QoreAOTSymbolIndexRecord*> suffix_candidates;
