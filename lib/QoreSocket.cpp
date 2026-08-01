@@ -9400,11 +9400,27 @@ static bool sse_is_digits(const char* str) {
 QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclSseMessageInfo, xsink), xsink);
     assert(!*xsink);
+    // an empty buffer has no fields to parse; guard here so that the unsigned loop bound
+    // below cannot underflow
+    if (buf.empty()) {
+        return rv.release();
+    }
     SimpleRefHolder<QoreStringNode> field;
     SimpleRefHolder<QoreStringNode> value;
     int do_value = 0;
     for (size_t i = 0, e = buf.size() - 1; i < e; ++i) {
         char c = buf[i];
+        // An event stream is split into lines on CRLF, CR, or LF, and the terminator is never
+        // part of the field name or value.  Servers that use CRLF are common, so treating only
+        // LF as a terminator leaves a trailing CR on every field, and a stream that uses bare
+        // CR is not parsed at all.
+        if (c == '\r') {
+            // a CRLF pair is a single line terminator
+            if ((i + 1) < buf.size() && buf[i + 1] == '\n') {
+                ++i;
+            }
+            c = '\n';
+        }
         if (c == '\n') {
             if (field && !field->empty()) {
                 if ((**field == "event") || (**field == "data")) {
@@ -9488,15 +9504,28 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
 
     // Parse complete SSE events (terminated by double newline)
     while (true) {
-        // Look for \n\n or \r\n\r\n boundary
-        qore_offset_t pos = sse_buffer.find("\n\n");
-        size_t sep_len = 2;
-        if (pos < 0) {
-            pos = sse_buffer.find("\r\n\r\n");
-            sep_len = 4;
-            if (pos < 0) {
-                break;
+        // An event is dispatched by a blank line, and a line may be terminated by CRLF, LF, or
+        // CR; take whichever boundary appears first so that a stream mixing terminators is
+        // still framed at the right place.
+        static const struct {
+            const char* sep;
+            size_t len;
+        } sse_separators[] = {
+            {"\r\n\r\n", 4},
+            {"\n\n", 2},
+            {"\r\r", 2},
+        };
+        qore_offset_t pos = -1;
+        size_t sep_len = 0;
+        for (const auto& s : sse_separators) {
+            qore_offset_t p = sse_buffer.find(s.sep);
+            if (p >= 0 && (pos < 0 || p < pos || (p == pos && s.len > sep_len))) {
+                pos = p;
+                sep_len = s.len;
             }
+        }
+        if (pos < 0) {
+            break;
         }
         // Extract the event text (without the terminator)
         QoreString event_text(sse_buffer.c_str(), pos);
