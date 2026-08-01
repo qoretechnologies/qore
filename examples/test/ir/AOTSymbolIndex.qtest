@@ -39,6 +39,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
         addTestCase("source symbol manifest defers shadowed loaded classes",
             \testSourceSymbolManifestDefersShadowedLoadedClasses());
+        addTestCase("source symbol manifest records exact callable providers",
+            \testSourceSymbolManifestRecordsExactCallableProviders());
         addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
         addTestCase("source-order cache incrementally refreshes changed providers and consumers",
@@ -774,6 +776,104 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string out = run(sprintf("%s %s", env, app));
         assertEq("static-7:provider\n", out,
             "linked executable resolves the source-local shadowed class: " + out);
+    }
+
+    testSourceSymbolManifestRecordsExactCallableProviders() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-source-providers";
+        mkdir(qo_dir);
+        string base_src = tmp_dir + "/provider-base.qc";
+        string derived_src = tmp_dir + "/provider-derived.qc";
+        string function_src = tmp_dir + "/provider-function.qc";
+        string decoy_src = tmp_dir + "/provider-decoys.qc";
+        string consumer_src = tmp_dir + "/provider-consumer.qc";
+        string main_src = tmp_dir + "/provider-main.qr";
+        string manifest = tmp_dir + "/source-symbols.manifest";
+        string base_qo = qo_dir + "/base.qo";
+        string derived_qo = qo_dir + "/derived.qo";
+        string function_qo = qo_dir + "/function.qo";
+        string decoy_qo = qo_dir + "/decoys.qo";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/source-provider-app";
+
+        write(base_src,
+            "%modern\n"
+            "class AOTExactProviderBase {\n"
+            "    private string inheritedLabel() { return \"method\"; }\n"
+            "}\n");
+        write(derived_src,
+            "%modern\n"
+            "class AOTExactProviderDerived inherits AOTExactProviderBase {}\n");
+        write(function_src,
+            "%modern\n"
+            "string sub aot_exact_provider_call() { return \"function\"; }\n");
+        write(decoy_src,
+            "%modern\n"
+            "class AOTExactProviderDecoyOne {\n"
+            "    static string aot_exact_provider_call() { return \"decoy-one\"; }\n"
+            "}\n"
+            "class AOTExactProviderDecoyTwo {\n"
+            "    string aot_exact_provider_call() { return \"decoy-two\"; }\n"
+            "}\n");
+        write(consumer_src,
+            "%modern\n"
+            "class AOTExactProviderConsumer inherits AOTExactProviderDerived {\n"
+            "    string run() {\n"
+            "        return AOTExactProviderDerived::inheritedLabel() + \":\"\n"
+            "            + aot_exact_provider_call();\n"
+            "    }\n"
+            "    string callRef() {\n"
+            "        code c = \\AOTExactProviderDerived::inheritedLabel();\n"
+            "        return c();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%modern\n"
+            "int sub main() {\n"
+            "    AOTExactProviderConsumer c();\n"
+            "    printf(\"%s:%s\\n\", c.run(), c.callRef());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+        write(manifest,
+            "format=1\n"
+            "class\tAOTExactProviderBase\t" + base_src + "\n"
+            "class\tAOTExactProviderDerived\t" + derived_src + "\n"
+            "class\tAOTExactProviderConsumer\t" + consumer_src + "\n"
+            "function\taot_exact_provider_call\t" + function_src + "\n");
+
+        list<hash<string, string>> sources = (
+            ("src": base_src, "qo": base_qo),
+            ("src": derived_src, "qo": derived_qo),
+            ("src": function_src, "qo": function_qo),
+            ("src": decoy_src, "qo": decoy_qo),
+            ("src": consumer_src, "qo": consumer_qo),
+            ("src": main_src, "qo": main_qo));
+        foreach hash<string, string> source in (sources) {
+            string compile_out = run(sprintf(
+                "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+                env, qcc_bin, qo_dir, manifest, source.qo, source.src));
+            assertTrue(is_file(source.qo), "source-provider fixture compiles: " + compile_out);
+        }
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTExactProviderBase::inheritedLabel\"") != -1,
+            "consumer records the declaring base method instead of the derived receiver: " + consumer_index);
+        assertTrue(consumer_index.find("\"qore_path\": \"aot_exact_provider_call\"") != -1,
+            "consumer records the deferred function import: " + consumer_index);
+        assertTrue(consumer_index.find("\"provider_source_file\": \"" + base_src + "\"") != -1,
+            "consumer records the inherited method provider source: " + consumer_index);
+        assertTrue(consumer_index.find("\"provider_source_file\": \"" + function_src + "\"") != -1,
+            "consumer records the unique function provider source: " + consumer_index);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s %s %s %s",
+            env, qcc_bin, app, base_qo, derived_qo, function_qo, decoy_qo, consumer_qo, main_qo));
+        assertTrue(is_file(app),
+            "closed-world link uses provider provenance to reject same-name decoys: " + link_out);
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("method:function:method\n", out,
+            "linked executable preserves deferred inherited-method, call-reference, and function semantics");
     }
 
     testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken() {

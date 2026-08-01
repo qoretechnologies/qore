@@ -7492,6 +7492,7 @@ static bool aotAppendFunctionImportRecords(QoreProgram* pgm, std::vector<QoreAOT
         ir.dependency_class = QoreAOTDependencyClass::QORE_API;
         ir.qore_path = rec.qore_path;
         ir.consumer_source_file = rec.source_file;
+        ir.provider_source_file = rec.provider_source_file;
         imported.push_back(std::move(ir));
     }
     return true;

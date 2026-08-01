@@ -45,6 +45,7 @@ class QoreClass;
 class QoreNamespace;
 class QoreTypeInfo;
 class TypedHashDecl;
+class QoreMethod;
 class ExceptionSink;
 
 enum class QoreAOTSourceSymbolKind : unsigned char {
@@ -143,6 +144,11 @@ DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc
     lose namespace context when a source reference was written relatively. */
 DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* loc,
         const char* qore_path, QoreAOTSourceSymbolKind kind);
+
+//! Record a deferred source function or method import with exact provider provenance when available.
+DLLLOCAL void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
+        const QoreProgramLocation* loc, const char* qore_path, bool method,
+        const QoreMethod* resolved_method = nullptr);
 
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic

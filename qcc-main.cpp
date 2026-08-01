@@ -4320,6 +4320,28 @@ static std::vector<const QoreAOTSymbolIndexRecord*> dedupe_qo_provider_candidate
     return out;
 }
 
+static bool qo_link_filter_provider_source(const QoreAOTSymbolIndexRecord& rec,
+        std::vector<const QoreAOTSymbolIndexRecord*>& candidates, std::string& error) {
+    if (rec.provider_source_file.empty() || rec.provider_source_file.front() == '<') {
+        return true;
+    }
+
+    std::vector<const QoreAOTSymbolIndexRecord*> filtered;
+    filtered.reserve(candidates.size());
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link provider-source filtering", error)) {
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord* candidate = candidates[i];
+        if (candidate->source_file == rec.provider_source_file
+                || candidate->provider_source_file == rec.provider_source_file) {
+            filtered.push_back(candidate);
+        }
+    }
+    candidates.swap(filtered);
+    return true;
+}
+
 static void qo_link_prefer_shallowest_provider_for_bare_import(const QoreAOTSymbolIndexRecord& rec,
         std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
     if (!qo_link_path_is_bare_name(rec.qore_path) || is_deferred_callable_qo_import(rec) || candidates.size() <= 1) {
@@ -4539,7 +4561,16 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
 
             std::vector<const QoreAOTSymbolIndexRecord*> candidates =
                 dedupe_qo_provider_candidates(rec, *candidates_ptr);
+            if (!qo_link_filter_provider_source(rec, candidates, error)) {
+                return false;
+            }
             qo_link_prefer_shallowest_provider_for_bare_import(rec, candidates);
+            if (candidates.empty()) {
+                if (!optional_import) {
+                    plan.unresolved_imports.push_back(std::move(issue));
+                }
+                continue;
+            }
             for (size_t k = 0; k < candidates.size(); ++k) {
                 if (!qo_link_check_cancel(k, "AOT qo-link provider validation", error)) {
                     return false;

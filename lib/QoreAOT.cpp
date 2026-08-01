@@ -437,6 +437,62 @@ std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* 
     return rv;
 }
 
+static std::string qore_aot_get_unique_source_symbol_provider(const char* qore_path,
+        QoreAOTSourceSymbolKind kind) {
+    if (!aot_source_parse_active || !aot_source_symbol_manifest
+            || aot_source_symbol_manifest->empty() || !qore_path || !*qore_path) {
+        return std::string();
+    }
+
+    std::string path = qore_aot_clean_source_symbol_path(qore_path);
+    if (path.empty()) {
+        return std::string();
+    }
+    const std::unordered_set<std::string>* providers = qore_aot_find_source_symbol_providers(
+        qore_aot_source_symbol_map(kind), path, kind);
+    return providers && providers->size() == 1 ? *providers->begin() : std::string();
+}
+
+void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
+        const QoreProgramLocation* loc, const char* qore_path, bool method,
+        const QoreMethod* resolved_method) {
+    if (!pgm || !qore_path || !*qore_path) {
+        return;
+    }
+
+    std::string path = qore_aot_clean_source_symbol_path(qore_path);
+    std::string provider;
+    if (method) {
+        std::string class_path;
+        size_t pos = path.rfind("::");
+        if (pos != std::string::npos) {
+            class_path = path.substr(0, pos);
+        }
+        provider = qore_aot_get_unique_source_symbol_provider(class_path.c_str(),
+            QoreAOTSourceSymbolKind::Class);
+        if (resolved_method && resolved_method->getClass()) {
+            std::string resolved_class_path = qore_aot_clean_source_symbol_path(
+                resolved_method->getClass()->getNamespacePath().c_str());
+            std::string resolved_provider = qore_aot_get_unique_source_symbol_provider(
+                resolved_class_path.c_str(), QoreAOTSourceSymbolKind::Class);
+            if (!resolved_provider.empty()) {
+                path = resolved_class_path;
+                path += "::";
+                path += resolved_method->getName();
+                provider = std::move(resolved_provider);
+            }
+        }
+        qore_program_private::recordSourceParseMethodImport(pgm, loc, path.c_str(),
+            provider.empty() ? nullptr : provider.c_str());
+        return;
+    }
+
+    provider = qore_aot_get_unique_source_symbol_provider(path.c_str(),
+        QoreAOTSourceSymbolKind::Function);
+    qore_program_private::recordSourceParseFunctionImport(pgm, loc, path.c_str(),
+        provider.empty() ? nullptr : provider.c_str());
+}
+
 void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
         const QoreProgramLocation* consumer_loc) {
     if ((!aot_dep_sink && !aot_dep_map) || !provider_loc) {

@@ -1212,8 +1212,8 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
         }
 
         if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-            qore_program_private::recordSourceParseFunctionImport(pgm, loc,
-                defer_source_function ? deferred_source_function_path.c_str() : c_str);
+            qore_aot_record_source_parse_call_import(pgm, loc,
+                defer_source_function ? deferred_source_function_path.c_str() : c_str, false);
         }
 
         const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
@@ -1668,7 +1668,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     const char* function_path = deferred_source_function_path.empty()
                         ? scope->ostr : deferred_source_function_path.c_str();
                     if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-                        qore_program_private::recordSourceParseFunctionImport(pgm, loc, function_path);
+                        qore_aot_record_source_parse_call_import(pgm, loc, function_path, false);
                     }
 
                     const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
@@ -1695,6 +1695,19 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 }
 
                 {
+                    const QoreMethod* import_method = nullptr;
+                    if (defer_source_static_receiver) {
+                        QoreClass* import_qc = qore_root_ns_private::parseFindScopedClassWithMethod(
+                            loc, *scope, false);
+                        if (import_qc) {
+                            qore_class_private* import_priv = qore_class_private::get(*import_qc);
+                            import_method = pc && class_ctx
+                                ? import_priv->parseFindAnyMethodStaticFirst(
+                                    scope->getIdentifier(), class_ctx)
+                                : import_priv->parseFindStaticMethod(
+                                    scope->getIdentifier(), class_ctx);
+                        }
+                    }
                     if (defer_source_static_receiver && deferred_source_receiver_path != source_receiver_path) {
                         std::string method_path = deferred_source_receiver_path;
                         method_path += "::";
@@ -1703,7 +1716,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                         scope = new NamedScope(strdup(method_path.c_str()));
                     }
                     if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-                        qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                        qore_aot_record_source_parse_call_import(pgm, loc, scope->ostr,
+                            true, import_method);
                     }
 
                     return parseArgs(parse_context, nullptr, nullptr);
