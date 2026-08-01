@@ -103,7 +103,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
         hash<string, bool> seen;
         foreach string line in (out.split("\n")) {
             # "<value> <type> <name>" for a defined symbol
-            *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(\S+)\s*$/);
+            *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(.+?)\s*$/);
             if (m && exists m[0]) {
                 seen{m[0]} = True;
             }
@@ -120,6 +120,8 @@ class AOTParallelCodegenTest inherits QUnit::Test {
             body += sprintf("int sub qoe_f%d(int x) { switch (x) { case 1: return %d; default: "
                 "return x * %d; } }\n", i, i, i + 1);
         }
+        body += "string sub qoe_space_key() { hash<auto> h = (\"key with spaces\": 1); "
+            "return h.\"key with spaces\"; }\n";
         write(src, body);
 
         # Same basename in two dirs so registration-symbol names (which embed the basename)

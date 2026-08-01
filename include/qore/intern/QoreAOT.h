@@ -876,6 +876,14 @@ public:
                 `.qo`; each depfile is named `<output-basename>.d`
         @param depfile_targets_are_stamps use `<output>.stamp` as each depfile
                 target instead of the `.qo` itself
+        @param script_aggregate_output optional aggregate object to emit from
+                the same committed program before parallel per-file lowering
+        @param script_aggregate_symbol aggregate registration symbol; required
+                when @p script_aggregate_output is set
+        @param script_aggregate_native_registers emit per-file native-register
+                calls from the optional aggregate
+        @param script_aggregate_compiled_count_out optional aggregate variant
+                count output
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -893,7 +901,11 @@ public:
             int* compiled_count_out = nullptr,
             bool report_artifacts = true,
             const std::string* depfile_dir = nullptr,
-            bool depfile_targets_are_stamps = false);
+            bool depfile_targets_are_stamps = false,
+            const std::string* script_aggregate_output = nullptr,
+            const std::string* script_aggregate_symbol = nullptr,
+            bool script_aggregate_native_registers = false,
+            int* script_aggregate_compiled_count_out = nullptr);
 
     //! Compile aggregate script metadata for a list of already-compiled
     //! script-context `.qo` objects.
@@ -937,6 +949,8 @@ public:
         @param register_native_inputs emit calls to each per-file
                 `*_script_native_register` symbol after aggregate metadata
                 registration
+        @param parsed_program optional already committed program containing
+                @p target_files; avoids reparsing when called from batch mode
         @return true on success, false on failure
     */
     static bool compileScriptAggregate(
@@ -953,7 +967,8 @@ public:
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
             int* compiled_count_out = nullptr,
-            bool register_native_inputs = false);
+            bool register_native_inputs = false,
+            QoreProgram* parsed_program = nullptr);
 
     //! Compile an object-driven script register aggregate for existing `.qo` inputs.
     /**

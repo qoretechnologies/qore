@@ -585,6 +585,11 @@ static std::vector<std::string> parse_option_flags;
 // alongside the per-file `.qo` objects produced by batch script compilation.
 static const char* script_aggregate_symbol = nullptr;
 static bool script_aggregate_native_registers = false;
+// Batch mode can emit the runtime metadata aggregate from the already parsed
+// program, avoiding a second full-source qcc invocation on clean builds.
+static const char* batch_script_aggregate_symbol = nullptr;
+static const char* batch_script_aggregate_output = nullptr;
+static std::vector<std::string> batch_script_aggregate_manifest_inputs;
 // --link-qo emits an object-driven aggregate register object from existing
 // script-context `.qo` inputs, without reparsing the original sources.
 static bool link_qo = false;
@@ -1042,6 +1047,15 @@ static void print_usage(const char* prog) {
            "                         manifest, status, success-stamp, and content-stamp\n"
            "                         sidecars for every generated `.qo`; requires\n"
            "                         --depfile-dir.\n");
+    printf("      --batch-script-aggregate=SYM\n"
+           "                         Batch `-c --output-dir` mode: emit a metadata-only\n"
+           "                         runtime aggregate from the shared parsed program;\n"
+           "                         requires --batch-script-aggregate-output.\n");
+    printf("      --batch-script-aggregate-output=FILE\n"
+           "                         Output path for --batch-script-aggregate.\n");
+    printf("      --batch-script-aggregate-manifest-input=FILE\n"
+           "                         Record FILE in the fused aggregate manifest; may\n"
+           "                         be repeated for standalone-manifest equivalence.\n");
     printf("      --write-index-json=FILE\n"
            "                         Write build-consumable AOT symbol-index JSON for\n"
            "                         the generated artifact to FILE\n");
@@ -1079,7 +1093,8 @@ static void print_usage(const char* prog) {
            "                         exposing init_SYM_qo(); link it with the\n"
            "                         per-file .qo objects from batch script mode\n");
     printf("      --script-aggregate-native-registers\n"
-           "                         With --script-aggregate, emit calls to linked\n"
+           "                         With --script-aggregate or --batch-script-aggregate,\n"
+           "                         emit calls to linked\n"
            "                         per-file *_script_native_register() entries so\n"
            "                         native bodies are bound from per-file slot maps\n");
     printf("      --link-qo          Link existing script-context .qo objects into\n"
@@ -1230,6 +1245,9 @@ static struct option long_options[] = {
     {"depfile-module-deps", required_argument, nullptr, 0x120},
     {"compile-contract-stamp", required_argument, nullptr, 0x121},
     {"depfile-compile-contract-stamps", no_argument, nullptr, 0x122},
+    {"batch-script-aggregate", required_argument, nullptr, 0x123},
+    {"batch-script-aggregate-output", required_argument, nullptr, 0x124},
+    {"batch-script-aggregate-manifest-input", required_argument, nullptr, 0x125},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1430,6 +1448,15 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x122:  // --depfile-compile-contract-stamps
                 depfile_compile_contract_stamps = true;
+                break;
+            case 0x123:  // --batch-script-aggregate
+                batch_script_aggregate_symbol = optarg;
+                break;
+            case 0x124:  // --batch-script-aggregate-output
+                batch_script_aggregate_output = optarg;
+                break;
+            case 0x125:  // --batch-script-aggregate-manifest-input
+                batch_script_aggregate_manifest_inputs.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -6698,6 +6725,7 @@ struct QCCBuildManifest {
     std::string aggregate_symbol;
     std::vector<std::string> inputs;
     std::vector<std::string> extra_inputs;
+    bool include_command_manifest_inputs = true;
 };
 
 struct QCCFileFingerprint {
@@ -6885,7 +6913,9 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
         all_inputs.push_back(stub);
     }
     all_inputs.insert(all_inputs.end(), manifest.extra_inputs.begin(), manifest.extra_inputs.end());
-    all_inputs.insert(all_inputs.end(), manifest_inputs.begin(), manifest_inputs.end());
+    if (manifest.include_command_manifest_inputs) {
+        all_inputs.insert(all_inputs.end(), manifest_inputs.begin(), manifest_inputs.end());
+    }
     if (!manifest.depfile.empty() && is_file(manifest.depfile)) {
         all_inputs.push_back(manifest.depfile);
         read_make_depfile_inputs(manifest.depfile, all_inputs);
@@ -7618,15 +7648,42 @@ int main(int argc, char** argv) {
             "error: --strict-call-relocations and --allow-unresolved-imports are only valid with --link-qo\n");
         return 1;
     }
-    if (script_aggregate_native_registers && !script_aggregate_symbol) {
+    if ((batch_script_aggregate_symbol == nullptr)
+            != (batch_script_aggregate_output == nullptr)) {
         fprintf(stderr,
-            "error: --script-aggregate-native-registers is only valid with --script-aggregate\n");
+            "error: --batch-script-aggregate and --batch-script-aggregate-output"
+            " must be used together\n");
+        return 1;
+    }
+    if (batch_script_aggregate_symbol
+            && (!compile_only || !batch_output_dir)) {
+        fprintf(stderr,
+            "error: --batch-script-aggregate requires -c and --output-dir\n");
+        return 1;
+    }
+    if (!batch_script_aggregate_manifest_inputs.empty()
+            && !batch_script_aggregate_symbol) {
+        fprintf(stderr,
+            "error: --batch-script-aggregate-manifest-input requires "
+            "--batch-script-aggregate\n");
+        return 1;
+    }
+    if (batch_script_aggregate_symbol && optind + 1 >= argc) {
+        fprintf(stderr,
+            "error: --batch-script-aggregate requires at least two source files\n");
+        return 1;
+    }
+    if (script_aggregate_native_registers && !script_aggregate_symbol
+            && !batch_script_aggregate_symbol) {
+        fprintf(stderr,
+            "error: --script-aggregate-native-registers requires a script aggregate mode\n");
         return 1;
     }
 
     if (link_qo) {
         if (compile_only || module_mode || archive_mode || from_objects || context_dir
-                || batch_output_dir || script_aggregate_symbol) {
+                || batch_output_dir || script_aggregate_symbol
+                || batch_script_aggregate_symbol) {
             fprintf(stderr,
                 "error: --link-qo cannot be combined with compile/module/archive/source aggregate modes\n");
             return 1;
@@ -8278,10 +8335,11 @@ int main(int argc, char** argv) {
                 "with batch -c --output-dir mode\n");
             return 1;
         }
-        if (qcc_single_output_sidecars_requested()) {
+        if (qcc_single_output_sidecars_requested()
+                && !batch_script_aggregate_output) {
             fprintf(stderr,
                 "error: qcc build sidecars are single-output only; use one qcc "
-                "invocation per output when qcc build sidecars or stamps are used\n");
+                "invocation per output, or request a fused batch script aggregate\n");
             return 1;
         }
 
@@ -8304,6 +8362,11 @@ int main(int argc, char** argv) {
         }
         std::vector<std::string> batch_objects;
         std::vector<QCCFileFingerprint> batch_output_before;
+        QCCFileFingerprint aggregate_output_before;
+        if (batch_script_aggregate_output) {
+            aggregate_output_before = qcc_file_fingerprint(
+                batch_script_aggregate_output);
+        }
         if (batch_build_sidecars) {
             batch_objects.reserve(batch_sources.size());
             batch_output_before.reserve(batch_sources.size());
@@ -8325,18 +8388,34 @@ int main(int argc, char** argv) {
                 batch_objects.push_back(std::move(object));
             }
         }
+        int aggregate_compiled_count = 0;
+        std::string aggregate_output_arg = batch_script_aggregate_output
+            ? batch_script_aggregate_output : "";
+        std::string aggregate_symbol_arg = batch_script_aggregate_symbol
+            ? batch_script_aggregate_symbol : "";
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines,
             parse_option_flags, nullptr, true, depfile_dir_ptr,
-            batch_build_sidecars);
+            batch_build_sidecars,
+            batch_script_aggregate_output ? &aggregate_output_arg : nullptr,
+            batch_script_aggregate_symbol ? &aggregate_symbol_arg : nullptr,
+            script_aggregate_native_registers,
+            batch_script_aggregate_output ? &aggregate_compiled_count : nullptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
         }
         if (batch_build_sidecars) {
+            const char* aggregate_index_path = write_index_json_path;
+            const char* aggregate_manifest_path = write_manifest_path;
+            const char* aggregate_status_path = write_status_json_path;
+            const char* aggregate_success_stamp_path = success_stamp_path;
+            const char* aggregate_content_stamp_path = content_stamp_path;
+            const char* aggregate_compile_contract_stamp_path =
+                compile_contract_stamp_path;
             for (size_t i = 0; i < batch_objects.size(); ++i) {
                 if (i && !(i % 100)
                         && qcc_check_cancel(
@@ -8417,12 +8496,35 @@ int main(int argc, char** argv) {
                     return 1;
                 }
             }
-            write_index_json_path = nullptr;
-            write_manifest_path = nullptr;
-            write_status_json_path = nullptr;
-            success_stamp_path = nullptr;
-            content_stamp_path = nullptr;
-            compile_contract_stamp_path = nullptr;
+            write_index_json_path = aggregate_index_path;
+            write_manifest_path = aggregate_manifest_path;
+            write_status_json_path = aggregate_status_path;
+            success_stamp_path = aggregate_success_stamp_path;
+            content_stamp_path = aggregate_content_stamp_path;
+            compile_contract_stamp_path = aggregate_compile_contract_stamp_path;
+        }
+        if (batch_script_aggregate_output) {
+            QCCBuildManifest manifest;
+            manifest.kind = "script-aggregate";
+            manifest.output = batch_script_aggregate_output;
+            manifest.index_json = write_index_json_path
+                ? write_index_json_path : "";
+            manifest.aggregate_symbol = batch_script_aggregate_symbol;
+            manifest.inputs = batch_sources;
+            manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
+            manifest.include_command_manifest_inputs = false;
+            if (!finish_qcc_build(manifest, argv[0], aggregate_output_before,
+                    true, false, false, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            if (qcc_output_verbose()) {
+                printf("qcc: compiled fused script aggregate .qo (-O%d, %d variants%s): %s\n",
+                    opt_level, aggregate_compiled_count,
+                    source_mode_suffix(include_source),
+                    batch_script_aggregate_output);
+            }
         }
         qore_cleanup();
         return 0;

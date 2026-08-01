@@ -333,17 +333,30 @@ function(QORE_QCC_LOAD_MODULE_TARGET_DEPS _out_var)
     set(${_out_var} ${_qore_qcc_load_module_target_deps} PARENT_SCOPE)
 endfunction()
 
+# Compile a source group through one shared parse. BOOTSTRAP_AGGREGATE_OUTPUT
+# and BOOTSTRAP_AGGREGATE_SYMBOL optionally emit a script aggregate during the
+# initial batch build; CONTEXT and MANIFEST_INPUTS let its later standalone
+# rule adopt the same manifest without reparsing.
 function(QORE_QCC_COMPILE_OBJECTS _out_var)
-    set(options WARNINGS_ARE_ERRORS)
+    set(options WARNINGS_ARE_ERRORS BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
     set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
         STAMPS_VAR CONTENT_STAMPS_VAR COMPILE_CONTRACT_STAMPS_VAR
-        ORDER_TARGETS_VAR CONTEXT_VAR)
+        ORDER_TARGETS_VAR CONTEXT_VAR BOOTSTRAP_AGGREGATE_OUTPUT
+        BOOTSTRAP_AGGREGATE_SYMBOL BOOTSTRAP_AGGREGATE_CONTEXT)
     set(multiValueArgs SOURCES STUBS LOAD_MODULES PARSE_DEFINES PARSE_OPTIONS
-        MANIFEST_INPUTS DEPENDS)
+        MANIFEST_INPUTS DEPENDS BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS)
     cmake_parse_arguments(_QORE_QCO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if (NOT _QORE_QCO_GROUP)
         message(FATAL_ERROR "QORE_QCC_COMPILE_OBJECTS(${_out_var}) requires GROUP")
+    endif ()
+    if ((NOT _QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT
+            AND _QORE_QCO_BOOTSTRAP_AGGREGATE_SYMBOL)
+            OR (_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT
+            AND NOT _QORE_QCO_BOOTSTRAP_AGGREGATE_SYMBOL))
+        message(FATAL_ERROR
+            "QORE_QCC_COMPILE_OBJECTS(${_out_var}) requires both "
+            "BOOTSTRAP_AGGREGATE_OUTPUT and BOOTSTRAP_AGGREGATE_SYMBOL")
     endif ()
     string(REGEX REPLACE "[^A-Za-z0-9_]" "_" _qore_qcc_group_id "${_QORE_QCO_GROUP}")
     if (_qore_qcc_group_id MATCHES "^[0-9]")
@@ -410,6 +423,14 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context input ${_qore_qcc_abs_sources})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context output ${_qore_qcc_outputs})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context manifest_input ${_QORE_QCO_MANIFEST_INPUTS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context bootstrap_aggregate_output
+        ${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context bootstrap_aggregate_symbol
+        ${_QORE_QCO_BOOTSTRAP_AGGREGATE_SYMBOL})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context bootstrap_aggregate_context
+        ${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context bootstrap_aggregate_manifest_input
+        ${_QORE_QCO_BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS})
     QORE_WRITE_IF_CHANGED("${_qore_qcc_context_path}" "${_qore_qcc_context}")
 
     set(_qore_qcc_source_symbols "${_QORE_QCO_SCRIPT_DIR}/source-symbols.manifest")
@@ -489,6 +510,34 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     if (_QORE_QCO_WARNINGS_ARE_ERRORS)
         list(APPEND _qore_qcc_warning_flags --warnings-are-errors)
     endif ()
+    set(_qore_qcc_bootstrap_aggregate_flags)
+    set(_qore_qcc_bootstrap_aggregate_dir "${_QORE_QCO_OUTPUT_DIR}")
+    if (_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT)
+        list(APPEND _qore_qcc_bootstrap_aggregate_flags
+            "--batch-script-aggregate=${_QORE_QCO_BOOTSTRAP_AGGREGATE_SYMBOL}"
+            "--batch-script-aggregate-output=${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}"
+            "--write-status-json=${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.status.json"
+            "--success-stamp=${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.stamp"
+            "--content-stamp=${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.content.stamp"
+            "--write-manifest=${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.script-aggregate.manifest.json")
+        if (_QORE_QCO_BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
+            list(APPEND _qore_qcc_bootstrap_aggregate_flags
+                --script-aggregate-native-registers)
+        endif ()
+        foreach(_qore_qcc_aggregate_manifest_input
+                ${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT}
+                ${_qore_qcc_deps}
+                ${_QORE_QCO_BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS})
+            list(APPEND _qore_qcc_bootstrap_aggregate_flags
+                "--batch-script-aggregate-manifest-input=${_qore_qcc_aggregate_manifest_input}")
+        endforeach()
+        get_filename_component(_qore_qcc_bootstrap_aggregate_dir
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}" DIRECTORY)
+        if (NOT _qore_qcc_bootstrap_aggregate_dir)
+            set(_qore_qcc_bootstrap_aggregate_dir
+                "${CMAKE_CURRENT_BINARY_DIR}")
+        endif ()
+    endif ()
 
     set(_qore_qcc_single_script "${_QORE_QCO_SCRIPT_DIR}/qcc-single.sh")
     set(_qore_qcc_single_cmd "#!/bin/sh\nset -e\nsrc=$1\nout=$2\npreload_dir=$3\nif [ -z \"$preload_dir\" ]; then\n    preload_dir='${_QORE_QCO_OUTPUT_DIR}'\nfi\nextra_parse_define_file=\${QORE_QCC_SOURCE_PARSE_DEFINE_FILE:-\${QORUS_QO_SOURCE_PARSE_DEFINE_FILE:-}}\nmanifest_input_file=\${QORE_QCC_SOURCE_MANIFEST_INPUT_FILE:-\${QORUS_QO_SOURCE_MANIFEST_INPUT_FILE:-}}\nset --\nif [ -n \"$extra_parse_define_file\" ] && [ -f \"$extra_parse_define_file\" ]; then\n    set -- \"$@\" \"--manifest-input=$extra_parse_define_file\"\n    while IFS= read -r def; do\n        [ -n \"$def\" ] || continue\n        set -- \"$@\" \"--define=$def\"\n    done < \"$extra_parse_define_file\"\nfi\nif [ -n \"$manifest_input_file\" ] && [ -f \"$manifest_input_file\" ]; then\n    while IFS= read -r dep; do\n        [ -n \"$dep\" ] || continue\n        set -- \"$@\" \"--manifest-input=$dep\"\n    done < \"$manifest_input_file\"\nfi\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' '${_qore_qcc_command}'")
@@ -507,6 +556,12 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
+    if (_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT
+            AND _qore_qcc_count LESS 2)
+        message(FATAL_ERROR
+            "QORE_QCC_COMPILE_OBJECTS(${_out_var}) bootstrap aggregate "
+            "requires at least two sources")
+    endif ()
     set(_qore_qcc_bootstrap_stamp)
     set(_qore_qcc_bootstrap_target)
     if (_qore_qcc_count GREATER 1)
@@ -523,7 +578,11 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_manifest_input_flags})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} -c --batch-build-sidecars --depfile-compile-contract-stamps --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} -c")
+        foreach(_qore_qcc_arg ${_qore_qcc_bootstrap_aggregate_flags})
+            set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
+        endforeach()
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} --batch-build-sidecars --depfile-compile-contract-stamps --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
         foreach(_qore_qcc_source ${_qore_qcc_abs_sources})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_source}'")
         endforeach()
@@ -534,6 +593,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${_qore_qcc_bootstrap_aggregate_dir}
             COMMAND ${_qore_qcc_batch_bootstrap_helper}
                 ${_qore_qcc_context_path}
                 ${_qore_qcc_bootstrap_stamp}
@@ -550,6 +611,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_batch_bootstrap_helper}
                 ${_qore_qcc_source_order_helper}
                 ${_QORE_QCO_MANIFEST_INPUTS}
+                ${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT}
+                ${_QORE_QCO_BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "qcc -c: batch bootstrapping ${_QORE_QCO_GROUP} (${_qore_qcc_count} sources)"
             VERBATIM)

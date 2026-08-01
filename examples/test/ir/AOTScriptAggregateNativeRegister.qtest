@@ -105,15 +105,26 @@ int main(int, char**) {
 }
 ");
 
-        string qo_out = run(sprintf("%s %s -c --output-dir=%s %s %s",
-            env, qcc_bin, qo_dir, provider, consumer));
+        string qo_out = run(sprintf(
+            "%s %s -c --output-dir=%s --batch-script-aggregate=NATIVE_REGISTER_AGG"
+            " --batch-script-aggregate-output=%s --script-aggregate-native-registers %s %s",
+            env, qcc_bin, qo_dir, aggregate, provider, consumer));
         assertTrue(qo_out.find("script-context .qo") != -1,
             "batch .qo compile emitted script objects: " + qo_out);
-
-        string aggregate_out = run(sprintf(
-            "%s %s -c --script-aggregate=NATIVE_REGISTER_AGG --script-aggregate-native-registers -o %s %s %s",
-            env, qcc_bin, aggregate, provider, consumer));
-        assertTrue(is_file(aggregate), "native-register script aggregate compiled: " + aggregate_out);
+        assertTrue(is_file(aggregate),
+            "batch compile emitted native-register script aggregate: " + qo_out);
+        string invalid_out = run(sprintf(
+            "%s %s -c --output-dir=%s --batch-script-aggregate=MISSING_OUTPUT %s %s",
+            env, qcc_bin, qo_dir, provider, consumer));
+        assertTrue(invalid_out.find(
+                "--batch-script-aggregate and --batch-script-aggregate-output must be used together") != -1,
+            "batch aggregate symbol requires an output path: " + invalid_out);
+        invalid_out = run(sprintf(
+            "%s %s -c --output-dir=%s --batch-script-aggregate-manifest-input=%s %s %s",
+            env, qcc_bin, qo_dir, provider, provider, consumer));
+        assertTrue(invalid_out.find(
+                "--batch-script-aggregate-manifest-input requires --batch-script-aggregate") != -1,
+            "batch aggregate manifest input requires aggregate mode: " + invalid_out);
 
         string aggregate_dump = run(sprintf("%s %s --dump-info --dump-symbols %s",
             env, qcc_bin, aggregate));

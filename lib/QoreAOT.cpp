@@ -21283,6 +21283,26 @@ static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
     return true;  // `dest` closes at scope end -> all bytes on disk
 }
 
+static bool shellSingleQuote(const std::string& value, std::string& quoted) {
+    quoted.clear();
+    quoted.reserve(value.size() + 2);
+    quoted.push_back('\'');
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr, "AOT shell argument quoting")) {
+            return false;
+        }
+        char c = value[i];
+        if (c == '\'') {
+            quoted += "'\\''";
+        } else {
+            quoted.push_back(c);
+        }
+    }
+    quoted.push_back('\'');
+    return true;
+}
+
 // Default-on parallel codegen tuning. JOBS_CAP bounds the auto-selected job count (= CPU
 // count when QCC_JOBS is unset). SPLIT_THRESHOLD_DEFAULT is the optimized-IR instruction
 // count below which a module is NOT split (the split overhead would outweigh the win, and
@@ -21588,18 +21608,86 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
             std::string lf = out_o + ".loc." + std::to_string(getpid());
             FILE* lfp = fopen(lf.c_str(), "w");
             if (lfp) {
-                for (const auto& s : to_localize) {
-                    fprintf(lfp, "%s\n", s.c_str());
+                std::vector<std::string> direct_localize;
+                bool cancelled = false;
+                for (size_t i = 0; i < to_localize.size(); ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT split symbol localization")) {
+                        cancelled = true;
+                        break;
+                    }
+                    const std::string& s = to_localize[i];
+                    bool file_safe = !s.empty()
+                        && s.find('#') == std::string::npos;
+                    for (size_t j = 0; j < s.size(); ++j) {
+                        if (j && !(j % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT split symbol classification")) {
+                            cancelled = true;
+                            break;
+                        }
+                        unsigned char c = s[j];
+                        if (std::isspace(c)) {
+                            file_safe = false;
+                            break;
+                        }
+                    }
+                    if (cancelled) {
+                        break;
+                    }
+                    if (file_safe) {
+                        fprintf(lfp, "%s\n", s.c_str());
+                    } else {
+                        direct_localize.push_back(s);
+                    }
                 }
                 bool wok = (fclose(lfp) == 0);
-                if (wok) {
-                    std::string cmd = "objcopy --localize-symbols='" + lf + "' '" + out_o + "'";
-                    if (system(cmd.c_str()) != 0) {
-                        printd(0, "AOT: objcopy --localize-symbols failed for '%s' (continuing)\n",
-                            out_o.c_str());
+                if (cancelled) {
+                    all = false;
+                    error = "operation cancelled during AOT split symbol localization";
+                } else if (!wok) {
+                    all = false;
+                    error = "failed to write AOT split symbol-localization list";
+                } else {
+                    std::string quoted;
+                    if (!shellSingleQuote(lf, quoted)) {
+                        all = false;
+                        error = "operation cancelled during AOT split symbol-list quoting";
+                    }
+                    std::string cmd = "objcopy --localize-symbols=" + quoted;
+                    for (size_t i = 0; all && i < direct_localize.size(); ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT direct symbol localization")) {
+                            all = false;
+                            error = "operation cancelled during AOT direct symbol localization";
+                            break;
+                        }
+                        const std::string& s = direct_localize[i];
+                        if (!shellSingleQuote(s, quoted)) {
+                            all = false;
+                            error = "operation cancelled during AOT split symbol quoting";
+                            break;
+                        }
+                        cmd += " --localize-symbol=" + quoted;
+                    }
+                    if (all && !shellSingleQuote(out_o, quoted)) {
+                        all = false;
+                        error = "operation cancelled during AOT output-path quoting";
+                    }
+                    cmd += " " + quoted;
+                    if (all && system(cmd.c_str()) != 0) {
+                        all = false;
+                        error = "objcopy failed to localize split-codegen symbols for '"
+                            + out_o + "'";
                     }
                 }
                 remove(lf.c_str());
+            } else {
+                all = false;
+                error = "cannot write AOT split symbol-localization list '"
+                    + lf + "': " + strerror(errno);
             }
         }
     }
@@ -26382,7 +26470,11 @@ bool QoreAOT::compileScriptFilesBatch(
         int* compiled_count_out,
         bool report_artifacts,
         const std::string* depfile_dir,
-        bool depfile_targets_are_stamps) {
+        bool depfile_targets_are_stamps,
+        const std::string* script_aggregate_output,
+        const std::string* script_aggregate_symbol,
+        bool script_aggregate_native_registers,
+        int* script_aggregate_compiled_count_out) {
     const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
@@ -26395,6 +26487,10 @@ bool QoreAOT::compileScriptFilesBatch(
 
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
+        return false;
+    }
+    if ((script_aggregate_output == nullptr) != (script_aggregate_symbol == nullptr)) {
+        error = "compileScriptFilesBatch: aggregate output and symbol must be provided together";
         return false;
     }
 
@@ -26577,6 +26673,20 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
     parse_done = std::chrono::steady_clock::now();
+
+    // Emit the aggregate before per-file lowering. Per-file lowering can
+    // populate shared expression caches, and doing this after the parallel
+    // worker phase would make aggregate metadata depend on worker order.
+    if (script_aggregate_output
+            && !QoreAOT::compileScriptAggregate(target_files,
+                *script_aggregate_output, *script_aggregate_symbol,
+                parse_options, error, opt_level, target_triple, include_source,
+                require_modules, stub_files, parse_defines, parse_option_flags,
+                script_aggregate_compiled_count_out,
+                script_aggregate_native_registers, *qpgm)) {
+        return false;
+    }
+    const auto aggregate_done = std::chrono::steady_clock::now();
 
     if (depfile_dir) {
         std::vector<std::string> canonical_stubs;
@@ -26861,6 +26971,8 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
+    const auto per_file_emit_done = std::chrono::steady_clock::now();
+
     if (compiled_count_out) {
         *compiled_count_out = total_compiled_count.load();
     }
@@ -26872,7 +26984,7 @@ bool QoreAOT::compileScriptFilesBatch(
         };
         fprintf(stderr,
             "AOT-BATCH-TIMING: sources=%zu jobs=%u input=%lldms setup=%lldms"
-            " parse=%lldms deps=%lldms discovery=%lldms constants=%lldms"
+            " parse=%lldms aggregate=%lldms deps=%lldms discovery=%lldms constants=%lldms"
             " stmt-locs=%lldms"
             " emit-wall=%lldms lowering-cpu=%llums metadata-cpu=%llums"
             " glue-cpu=%llums object-cpu=%llums total=%lldms\n",
@@ -26880,11 +26992,12 @@ bool QoreAOT::compileScriptFilesBatch(
             static_cast<long long>(ms(batch_start, input_done)),
             static_cast<long long>(ms(input_done, setup_done)),
             static_cast<long long>(ms(setup_done, parse_done)),
-            static_cast<long long>(ms(parse_done, deps_done)),
+            static_cast<long long>(ms(parse_done, aggregate_done)),
+            static_cast<long long>(ms(aggregate_done, deps_done)),
             static_cast<long long>(ms(deps_done, discovery_done)),
             static_cast<long long>(ms(discovery_done, constants_done)),
             static_cast<long long>(ms(constants_done, statement_locs_done)),
-            static_cast<long long>(ms(statement_locs_done, emit_done)),
+            static_cast<long long>(ms(statement_locs_done, per_file_emit_done)),
             static_cast<unsigned long long>(emit_timing.lowering_ns.load() / 1000000),
             static_cast<unsigned long long>(emit_timing.metadata_ns.load() / 1000000),
             static_cast<unsigned long long>(emit_timing.glue_ns.load() / 1000000),
@@ -26909,7 +27022,8 @@ bool QoreAOT::compileScriptAggregate(
         const std::vector<std::string>& parse_defines,
         const std::vector<std::string>& parse_option_flags,
         int* compiled_count_out,
-        bool register_native_inputs) {
+        bool register_native_inputs,
+        QoreProgram* parsed_program) {
     if (target_files.empty()) {
         error = "compileScriptAggregate: target_files is empty";
         return false;
@@ -26989,45 +27103,50 @@ bool QoreAOT::compileScriptAggregate(
 
     ExceptionSink xsink;
     ExceptionSink wsink;
-    QoreProgramHelper qpgm(po, xsink);
-    if (xsink.isException()) {
-        xsink.handleExceptions();
-        error = "failed to create QoreProgram for script aggregate compile";
-        return false;
-    }
-    qpgm->setScriptPath(entries.front().canon.c_str());
-
-    apply_parse_defines(*qpgm, parse_defines);
-
-    if (!loadRequireModules(*qpgm, require_modules, error)) {
-        return false;
-    }
-    if (!parseStubFiles(*qpgm, stub_files, error)) {
-        return false;
-    }
-
-    for (size_t i = 0; i < entries.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT aggregate source parsing")) {
-            error = "operation cancelled during AOT aggregate source parsing";
-            return false;
-        }
-        const SrcEntry& e = entries[i];
-        qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+    std::unique_ptr<QoreProgramHelper> owned_qpgm;
+    QoreProgram* qpgm = parsed_program;
+    if (!qpgm) {
+        owned_qpgm = std::make_unique<QoreProgramHelper>(po, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
-            error = "parse error in target file: " + e.canon;
+            error = "failed to create QoreProgram for script aggregate compile";
             return false;
         }
-    }
-    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
-    if (xsink.isException()) {
-        xsink.handleExceptions();
-        error = "parse commit failed in aggregate compile";
-        return false;
-    }
-    if (qoreAotHandleWarnings(wsink, error, "script aggregate parsing")) {
-        return false;
+        qpgm = **owned_qpgm;
+        qpgm->setScriptPath(entries.front().canon.c_str());
+
+        apply_parse_defines(qpgm, parse_defines);
+
+        if (!loadRequireModules(qpgm, require_modules, error)) {
+            return false;
+        }
+        if (!parseStubFiles(qpgm, stub_files, error)) {
+            return false;
+        }
+
+        for (size_t i = 0; i < entries.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT aggregate source parsing")) {
+                error = "operation cancelled during AOT aggregate source parsing";
+                return false;
+            }
+            const SrcEntry& e = entries[i];
+            qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                &xsink, &wsink, QP_WARN_DEFAULT);
+            if (xsink.isException()) {
+                xsink.handleExceptions();
+                error = "parse error in target file: " + e.canon;
+                return false;
+            }
+        }
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            error = "parse commit failed in aggregate compile";
+            return false;
+        }
+        if (qoreAotHandleWarnings(wsink, error, "script aggregate parsing")) {
+            return false;
+        }
     }
 
     llvm::InitializeNativeTarget();
@@ -27057,12 +27176,12 @@ bool QoreAOT::compileScriptAggregate(
             llvm::DEBUG_METADATA_VERSION);
     }
 
-    qore_program_private* pp = qore_program_private::get(**qpgm);
+    qore_program_private* pp = qore_program_private::get(*qpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
     std::string fatal_lowering_error;
-    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/nullptr,
@@ -27094,7 +27213,7 @@ bool QoreAOT::compileScriptAggregate(
         hdr.source_hash = aggregate_hash;
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         writer.feature_flags = hdr.feature_flags;
-        if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+        if (!appendModulePathListSections(writer, qpgm, hdr.feature_flags)) {
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
@@ -27168,7 +27287,7 @@ bool QoreAOT::compileScriptAggregate(
             func_slots.push_back(std::move(fws));
             ++init_slot_i;
         }
-        if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, nullptr, &target_set)) {
+        if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, nullptr, &target_set)) {
             return false;
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {

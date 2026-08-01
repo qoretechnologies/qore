@@ -233,10 +233,14 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --output-dir=DIR|Output directory for batch \c -c compilation
     |\c --depfile-dir=DIR|Write one dependency file per batch output into \c DIR
     |\c --batch-build-sidecars|Write incremental-build sidecars for every batch output; requires \c --depfile-dir
+    |\c --batch-script-aggregate=SYM|Also emit runtime aggregate metadata from the committed batch program, avoiding a second parse; requires \c --batch-script-aggregate-output
+    |\c --batch-script-aggregate-output=FILE|Output path for the fused batch runtime aggregate
+    |\c --batch-script-aggregate-manifest-input=FILE|Record a fused-aggregate manifest input; repeat to match a standalone aggregate rule
     |\c -l, \c --load=MOD|Load a module into the compile program before parsing
     |\c --stub=FILE|Preload declaration-only Qore source supplied by a host
     |\c --define=NAME[=VALUE]|Set a parser define before parsing
     |\c --parse-option=NAME|OR a parse option into the compile program
+    |\c --script-aggregate-native-registers|Bind aggregate metadata to the linked per-file native bodies; valid with standalone or fused batch script aggregates
     |\c --depfile=FILE|Write a Make-format dependency file
     |\c --depfile-module-deps=MODE|For module depfiles, record dependency sources (default), resolved artifact files, or none; source mode expands split modules to all \c .qm / \c .qc / \c .ql files and retains an artifact only when no source representation is available
     |\c --from-objects|Aggregate \c .qo inputs into a \c .qmod with \c -m

@@ -454,6 +454,10 @@ set(QO_SOURCES
     \"${CMAKE_SOURCE_DIR}/srcs/globalconsumer.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/entry.qc\")
 
+set(QO_SCRIPT_AGG_OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate.qo\")
+set(QO_SCRIPT_AGG_CONTEXT
+    \"${QO_SCRIPT_AGG_OUTPUT}.script-aggregate-context\")
+
 qore_qcc_compile_objects(QO_OBJECTS
     GROUP cmake-smoke
     OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
@@ -461,14 +465,18 @@ qore_qcc_compile_objects(QO_OBJECTS
     INCLUDE_DIR \"${QORE_INCLUDE_DIR}\"
     MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
-    LOAD_MODULES LateObjectModule
+    LOAD_MODULES LateObjectModule LateAggregateModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
     STAMPS_VAR QO_STAMPS
     CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
     COMPILE_CONTRACT_STAMPS_VAR QO_COMPILE_CONTRACT_STAMPS
     ORDER_TARGETS_VAR QO_ORDER_TARGETS
-    CONTEXT_VAR QO_CONTEXT)
+    CONTEXT_VAR QO_CONTEXT
+    BOOTSTRAP_AGGREGATE_OUTPUT \"${QO_SCRIPT_AGG_OUTPUT}\"
+    BOOTSTRAP_AGGREGATE_SYMBOL QORE_CMAKE_SCRIPT_SMOKE
+    BOOTSTRAP_AGGREGATE_CONTEXT \"${QO_SCRIPT_AGG_CONTEXT}\"
+    BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
 add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
 
 qore_qcc_link_objects(QO_LINK
@@ -483,13 +491,13 @@ qore_qcc_link_objects(QO_LINK
 add_custom_target(qo-link ALL DEPENDS ${QO_LINK_STAMP})
 
 qore_qcc_script_aggregate(QO_SCRIPT_AGG
-    OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate.qo\"
+    OUTPUT \"${QO_SCRIPT_AGG_OUTPUT}\"
     AGGREGATE QORE_CMAKE_SCRIPT_SMOKE
     MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
     INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
-    LOAD_MODULES LateAggregateModule
+    LOAD_MODULES LateObjectModule LateAggregateModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
     NATIVE_REGISTERS
@@ -585,6 +593,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
         string build1 = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(build1.find("batch bootstrapping cmake-smoke (21 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
+        assertTrue(build1.find("script aggregate .qo") != -1,
+            "clean object-group build emits its script aggregate during bootstrap: " + build1);
+        assertEq(-1, build1.find("qcc --script-aggregate: QORE_CMAKE_SCRIPT_SMOKE"),
+            "standalone aggregate rule adopts the fused output without running: " + build1);
         assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
         assertTrue(is_file(build_dir + "/linked.qo.qolink.json"),
             "linked .qo map built: " + build1);

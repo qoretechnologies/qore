@@ -349,6 +349,12 @@ information comes from parsed Qore metadata:
 
 - `--depfile=<path>` emits Make/Ninja dependencies for single-source compile,
   `--script-aggregate`, and `--link-qo` single-output commands.
+- `--batch-script-aggregate=<symbol>` with
+  `--batch-script-aggregate-output=<path>` emits runtime aggregate metadata
+  from the same committed program used for batch `.qo` compilation. Clean
+  builds can therefore avoid reparsing the complete source set in a second qcc
+  process; standalone `--script-aggregate` remains available for incremental
+  aggregate rebuilds and callers without a shared batch parse.
 - `--depfile-module-deps=source|artifact|none` selects how module-mode depfiles
   represent `%requires` dependencies. `source` is the deterministic default and
   expands a split module to its complete `.qm`/`.qc`/`.ql` source set, retaining
