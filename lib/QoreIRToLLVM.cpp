@@ -93,8 +93,29 @@ std::unordered_map<const AbstractQoreFunctionVariant*,
     const UserVariantBase* uvb = variant->getUserVariantBase();
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     qore_aot_note_referenced_decl(sig ? sig->getParseLocation() : nullptr);
+    qore_aot_note_body_contract(
+        found->second.body_contract_qore_path.c_str(),
+        found->second.body_contract_source_file.c_str(),
+        found->second.body_contract_hash.c_str());
+    size_t dependency_i = 0;
     for (const std::string& dependency : found->second.body_dependency_files) {
+        if (++dependency_i % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT imported body dependency collection")) {
+            return batch_callees->end();
+        }
         qore_aot_note_dependency_file(dependency.c_str());
+    }
+    for (const auto& dependency
+            : found->second.body_contract_dependencies) {
+        if (++dependency_i % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT imported body contract collection")) {
+            return batch_callees->end();
+        }
+        qore_aot_note_body_contract(dependency.qore_path.c_str(),
+            dependency.provider_source_file.c_str(),
+            dependency.body_contract_hash.c_str());
     }
     return found;
 }

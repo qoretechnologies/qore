@@ -7038,6 +7038,30 @@ static bool writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         }
         writer.writeStringRef(rec.body_dependency_files[i].c_str());
     }
+    writer.writeStringRef(rec.body_contract_hash.c_str());
+    if (rec.body_contract_dependencies.size()
+            > QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES) {
+        if (error) {
+            *error = "too many AOT body contract dependencies";
+        }
+        return false;
+    }
+    writer.writeU32(static_cast<uint32_t>(
+        rec.body_contract_dependencies.size()));
+    for (size_t i = 0; i < rec.body_contract_dependencies.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT body contract dependency serialization")) {
+            if (error) {
+                *error = "AOT body contract dependency serialization cancelled";
+            }
+            return false;
+        }
+        const auto& dependency = rec.body_contract_dependencies[i];
+        writer.writeStringRef(dependency.qore_path.c_str());
+        writer.writeStringRef(dependency.provider_source_file.c_str());
+        writer.writeStringRef(dependency.body_contract_hash.c_str());
+    }
     return true;
 }
 
@@ -7166,7 +7190,10 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.float_expression_nodes = info.float_expression_nodes;
     rec.string_expression_nodes = info.string_expression_nodes;
     rec.fast_specialization_key = info.specialization_key;
+    rec.source_file = info.body_contract_source_file;
+    rec.body_contract_hash = info.body_contract_hash;
     rec.body_dependency_files = info.body_dependency_files;
+    rec.body_contract_dependencies = info.body_contract_dependencies;
     native.push_back(std::move(rec));
 }
 
@@ -7842,7 +7869,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const std::vector<AOTCompiledFuncWithSlots>* func_slots, std::string* error,
         const std::unordered_set<std::string>* compile_files,
         const std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>*
-            fast_entry_map) {
+            fast_entry_map,
+        const QoreAOTBodyContractDependencyMap* body_contract_imports) {
     if (!root_ns) {
         if (error) {
             *error = "missing root namespace for AOT symbol index";
@@ -7912,6 +7940,24 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         }
         if (!aotAppendFunctionImportRecords(pgm, imported, compile_file, compile_files, error)) {
             return false;
+        }
+    }
+    if (body_contract_imports) {
+        size_t import_i = 0;
+        for (const auto& [key, dependency] : *body_contract_imports) {
+            if (!aotCheckSymbolIndexCancel(import_i++, error,
+                    "AOT body contract import collection")) {
+                return false;
+            }
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = QoreAOTSymbolKind::FUNCTION;
+            rec.dependency_class = QoreAOTDependencyClass::NATIVE_BODY;
+            rec.qore_path = dependency.qore_path;
+            rec.consumer_source_file = compile_file ? compile_file : "";
+            rec.provider_source_file = dependency.provider_source_file;
+            rec.body_contract_hash = dependency.body_contract_hash;
+            rec.abi_kind = "qore_body_contract_import_v1";
+            imported.push_back(std::move(rec));
         }
     }
 
@@ -8148,6 +8194,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
                 auto fast_it = fast_entry_map->find(v);
                 if (fast_it != fast_entry_map->end()) {
                     aotAddFastEntryRecord(native, key, fast_it->second);
+                    rec.body_contract_hash =
+                        fast_it->second.body_contract_hash;
                 }
             }
             defined.push_back(std::move(rec));
@@ -8209,6 +8257,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
                 auto fast_it = fast_entry_map->find(v);
                 if (fast_it != fast_entry_map->end()) {
                     aotAddFastEntryRecord(native, key, fast_it->second);
+                    rec.body_contract_hash =
+                        fast_it->second.body_contract_hash;
                 }
             }
             defined.push_back(std::move(rec));
@@ -8741,6 +8791,47 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             return false;
         }
         rec.body_dependency_files.push_back(std::move(dependency));
+    }
+    if (version < 37) {
+        return true;
+    }
+    if (!readSymbolIndexString(reader, ptr, end,
+            rec.body_contract_hash, error, "body_contract_hash")
+            || static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)
+                && error.empty()) {
+            error = "truncated SYMBOL_INDEX body contract dependency count";
+        }
+        return false;
+    }
+    uint32_t contract_dependency_count =
+        QoreAOTBinaryReader::readU32(ptr);
+    if (contract_dependency_count
+            > QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES) {
+        error = "invalid SYMBOL_INDEX body contract dependency count";
+        return false;
+    }
+    rec.body_contract_dependencies.reserve(contract_dependency_count);
+    for (uint32_t i = 0; i < contract_dependency_count; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT body contract dependency deserialization")) {
+            error = "AOT body contract dependency deserialization cancelled";
+            return false;
+        }
+        QoreAOTBodyContractDependency dependency;
+        if (!readSymbolIndexString(reader, ptr, end,
+                dependency.qore_path, error,
+                "body_contract_dependency.qore_path")
+                || !readSymbolIndexString(reader, ptr, end,
+                    dependency.provider_source_file, error,
+                    "body_contract_dependency.provider_source_file")
+                || !readSymbolIndexString(reader, ptr, end,
+                    dependency.body_contract_hash, error,
+                    "body_contract_dependency.body_contract_hash")) {
+            return false;
+        }
+        rec.body_contract_dependencies.push_back(std::move(dependency));
     }
     return true;
 }

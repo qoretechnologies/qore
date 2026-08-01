@@ -212,6 +212,8 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 // test off the hot path.
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
 static thread_local QoreAOTSourceDependencyMap* aot_dep_map = nullptr;
+static thread_local QoreAOTBodyContractDependencyMap*
+    aot_body_contract_dep_sink = nullptr;
 static thread_local const char* aot_dep_consumer_file = nullptr;
 static thread_local bool aot_source_parse_active = false;
 static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
@@ -224,6 +226,16 @@ void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
 
 void qore_aot_set_dep_map(QoreAOTSourceDependencyMap* dependencies) {
     aot_dep_map = dependencies;
+}
+
+void qore_aot_set_body_contract_dep_sink(
+        QoreAOTBodyContractDependencyMap* dependencies) {
+    aot_body_contract_dep_sink = dependencies;
+}
+
+const QoreAOTBodyContractDependencyMap*
+qore_aot_get_body_contract_dep_sink() {
+    return aot_body_contract_dep_sink;
 }
 
 static const char* qore_aot_set_dep_consumer_file(const char* source_file) {
@@ -463,6 +475,24 @@ void qore_aot_note_dependency_file(const char* provider_file,
             (*aot_dep_map)[consumer].insert(provider_file);
         }
     }
+}
+
+void qore_aot_note_body_contract(const char* qore_path,
+        const char* provider_file, const char* body_contract_hash) {
+    if (!aot_body_contract_dep_sink || !qore_path || !*qore_path
+            || !provider_file || !*provider_file
+            || *provider_file == '<' || !body_contract_hash
+            || !*body_contract_hash) {
+        return;
+    }
+    std::string key(qore_path);
+    key.push_back('\n');
+    key += provider_file;
+    key.push_back('\n');
+    key += body_contract_hash;
+    aot_body_contract_dep_sink->emplace(std::move(key),
+        QoreAOTBodyContractDependency{
+            qore_path, provider_file, body_contract_hash});
 }
 
 void qore_aot_record_source_parse_type_import(QoreProgram* pgm, const QoreProgramLocation* loc,
@@ -1034,7 +1064,9 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
         const char* compile_file = nullptr,
         const std::unordered_set<std::string>* compile_files = nullptr,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
-            batch_callees = nullptr) {
+            batch_callees = nullptr,
+        const QoreAOTBodyContractDependencyMap*
+            body_contract_imports = nullptr) {
     std::unordered_map<std::string, std::string> native_symbols;
     if (!buildAOTNativeSymbolMap(compiled_funcs, native_symbols, error,
             "AOT native-symbol map collection")) {
@@ -1060,9 +1092,8 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             ++entry_i;
             bool callable = info.approach_b_eligible
                 && !info.fast_name.empty();
-            if (!variant || (!callable
-                    && info.object_set_get_member.empty()
-                    && info.object_compound_get_member.empty())) {
+            if (!variant || (!info.hasBodyContract()
+                    && info.body_contract_dependencies.empty())) {
                 continue;
             }
             QoreAOTFastEntryIndexInfo entry;
@@ -1215,6 +1246,11 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                     node.string_constant});
             }
             entry.body_dependency_files = info.body_dependency_files;
+            entry.body_contract_source_file =
+                info.body_contract_source_file;
+            entry.body_contract_hash = info.body_contract_hash;
+            entry.body_contract_dependencies =
+                info.body_contract_dependencies;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -1222,7 +1258,9 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
     std::string symbol_error;
     if (!serializeSymbolIndex(writer, root_ns, module_name, keep_modules, compile_file,
             &native_symbols, &init_native_symbols, func_slots, &symbol_error,
-            compile_files, fast_entries.empty() ? nullptr : &fast_entries)) {
+            compile_files, fast_entries.empty() ? nullptr : &fast_entries,
+            body_contract_imports ? body_contract_imports
+                : qore_aot_get_body_contract_dep_sink())) {
         error = "failed to serialize AOT symbol index";
         if (!symbol_error.empty()) {
             error += ": " + symbol_error;
@@ -11760,6 +11798,323 @@ static bool qore_aot_collect_float_expression_summaries(
     return true;
 }
 
+class AOTBodyContractHasher {
+public:
+    AOTBodyContractHasher() {
+        addString("qore-aot-body-contract-v1");
+    }
+
+    void addU64(uint64_t value) {
+        uint8_t bytes[8];
+        for (unsigned i = 0; i < sizeof(bytes); ++i) {
+            bytes[i] = static_cast<uint8_t>(value >> (i * 8));
+        }
+        addBytes(bytes, sizeof(bytes));
+    }
+
+    void addI64(int64_t value) {
+        addU64(static_cast<uint64_t>(value));
+    }
+
+    void addDouble(double value) {
+        uint64_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(value));
+        std::memcpy(&bits, &value, sizeof(bits));
+        addU64(bits);
+    }
+
+    void addString(const std::string& value) {
+        addU64(value.size());
+        addBytes(value.data(), value.size());
+    }
+
+    std::string digest() const {
+        if (cancelled) {
+            return {};
+        }
+        char buf[32];
+        snprintf(buf, sizeof(buf), "fnv1a64:%016llx",
+            static_cast<unsigned long long>(hash));
+        return buf;
+    }
+
+private:
+    void addBytes(const void* data, size_t size) {
+        if (cancelled) {
+            return;
+        }
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        for (size_t i = 0; i < size; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT body contract byte hashing")) {
+                cancelled = true;
+                return;
+            }
+            hash ^= bytes[i];
+            hash *= 1099511628211ULL;
+        }
+    }
+
+    uint64_t hash = 1469598103934665603ULL;
+    bool cancelled = false;
+};
+
+static std::string qoreAOTBodyContractHash(const BatchCalleeInfo& info) {
+    AOTBodyContractHasher hash;
+    size_t check_count = 0;
+    auto cancelled = [&check_count]() {
+        return ++check_count % 100 == 0
+            && qore_check_cancel(nullptr,
+                "AOT body contract hashing");
+    };
+    hash.addU64(info.approach_b_eligible);
+    hash.addU64(info.generic_specialized_fast_entry);
+    hash.addU64(info.implicit_self_method);
+    hash.addU64(info.context_independent_fast_entry);
+    hash.addU64(info.may_invalidate_external_caches);
+    hash.addU64(info.may_modify_runtime_locals
+        || !info.modified_runtime_locals.empty());
+    std::vector<std::string> modified_runtime_locals;
+    modified_runtime_locals.reserve(info.modified_runtime_locals.size());
+    for (const void* local_ptr : info.modified_runtime_locals) {
+        if (cancelled()) {
+            return {};
+        }
+        const auto* local = static_cast<const LocalVar*>(local_ptr);
+        std::string identity = local ? local->getNameStr() : std::string();
+        identity.push_back('\n');
+        identity += local && local->getTypeInfo()
+            ? qore_get_aot_serializable_type_path(local->getTypeInfo())
+            : std::string();
+        modified_runtime_locals.push_back(std::move(identity));
+    }
+    std::sort(modified_runtime_locals.begin(),
+        modified_runtime_locals.end());
+    hash.addU64(modified_runtime_locals.size());
+    for (const std::string& identity : modified_runtime_locals) {
+        hash.addString(identity);
+    }
+    hash.addU64(info.never_returns_nothing);
+    hash.addU64(static_cast<uint8_t>(info.return_kind));
+    hash.addU64(static_cast<uint8_t>(info.boxed_return_kind));
+    hash.addString(info.specialization_key);
+    hash.addU64(info.num_params);
+    hash.addU64(info.param_kinds.size());
+    for (BatchCalleeParamKind kind : info.param_kinds) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(static_cast<uint8_t>(kind));
+    }
+    hash.addU64(info.param_rejects_nothing.size());
+    for (uint8_t value : info.param_rejects_nothing) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.param_noescape.size());
+    for (uint8_t value : info.param_noescape) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.param_may_modify.size());
+    for (uint8_t value : info.param_may_modify) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.capture_locals.size());
+    for (const LocalVar* local : info.capture_locals) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addString(local ? local->getNameStr() : std::string());
+        hash.addString(local && local->getTypeInfo()
+            ? qore_get_aot_serializable_type_path(local->getTypeInfo())
+            : std::string());
+    }
+    hash.addU64(info.capture_kinds.size());
+    for (BatchCalleeParamKind kind : info.capture_kinds) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(static_cast<uint8_t>(kind));
+    }
+
+    hash.addU64(static_cast<uint8_t>(info.scalar_leaf.kind));
+    hash.addU64(info.scalar_leaf.opcode);
+    hash.addI64(info.scalar_leaf.lhs_param);
+    hash.addI64(info.scalar_leaf.rhs_param);
+    hash.addI64(info.scalar_leaf.lhs_int);
+    hash.addI64(info.scalar_leaf.rhs_int);
+    hash.addDouble(info.scalar_leaf.lhs_float);
+    hash.addDouble(info.scalar_leaf.rhs_float);
+    hash.addI64(info.scalar_leaf.true_scale);
+    hash.addI64(info.scalar_leaf.true_offset);
+    hash.addI64(info.scalar_leaf.false_scale);
+    hash.addI64(info.scalar_leaf.false_offset);
+
+    hash.addU64(info.int_expression.nodes.size());
+    for (const auto& node : info.int_expression.nodes) {
+        hash.addU64(static_cast<uint8_t>(node.kind));
+        hash.addU64(node.lhs);
+        hash.addU64(node.rhs);
+        hash.addU64(node.third);
+        hash.addI64(node.param);
+        hash.addI64(node.constant);
+        hash.addString(node.key);
+    }
+    hash.addU64(info.float_expression.nodes.size());
+    for (const auto& node : info.float_expression.nodes) {
+        hash.addU64(static_cast<uint8_t>(node.kind));
+        hash.addU64(node.lhs);
+        hash.addU64(node.rhs);
+        hash.addI64(node.param);
+        hash.addDouble(node.constant);
+        hash.addString(node.key);
+    }
+    hash.addU64(info.fixed_hash_remap.input_keys.size());
+    for (const std::string& key : info.fixed_hash_remap.input_keys) {
+        hash.addString(key);
+    }
+    hash.addU64(info.fixed_hash_remap.output_keys.size());
+    for (const std::string& key : info.fixed_hash_remap.output_keys) {
+        hash.addString(key);
+    }
+    hash.addString(info.fixed_hash_remap.result_type_info
+        ? qore_get_aot_serializable_type_path(
+            info.fixed_hash_remap.result_type_info)
+        : std::string());
+
+    hash.addU64(static_cast<uint8_t>(info.string_op.kind));
+    hash.addI64(info.string_op.base_param);
+    hash.addI64(info.string_op.arg0_param);
+    hash.addI64(info.string_op.arg1_param);
+    hash.addU64(info.string_expression.nodes.size());
+    for (const auto& node : info.string_expression.nodes) {
+        hash.addU64(static_cast<uint8_t>(node.kind));
+        hash.addU64(node.lhs);
+        hash.addU64(node.rhs);
+        hash.addU64(node.third);
+        hash.addI64(node.param);
+        hash.addI64(node.int_constant);
+        hash.addString(node.string_constant);
+    }
+
+    hash.addU64(static_cast<uint8_t>(info.collection_op.kind));
+    hash.addI64(info.collection_op.base_param);
+    hash.addI64(info.collection_op.index_param);
+    hash.addU64(info.collection_op.string_index_char);
+    hash.addString(info.collection_op.key);
+    hash.addU64(static_cast<uint8_t>(info.aggregate_return.kind));
+    hash.addU64(info.aggregate_return.value_params.size());
+    for (int8_t value : info.aggregate_return.value_params) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addI64(value);
+    }
+    hash.addU64(info.aggregate_return.value_kinds.size());
+    for (AOTAggregateReturnValueKind value
+            : info.aggregate_return.value_kinds) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(static_cast<uint8_t>(value));
+    }
+    hash.addU64(info.aggregate_return.value_ints.size());
+    for (int64_t value : info.aggregate_return.value_ints) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addI64(value);
+    }
+    hash.addU64(info.aggregate_return.value_floats.size());
+    for (double value : info.aggregate_return.value_floats) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addDouble(value);
+    }
+    hash.addU64(info.aggregate_return.keys.size());
+    for (const std::string& key : info.aggregate_return.keys) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addString(key);
+    }
+    hash.addI64(info.aggregate_return.shape_condition_param);
+    hash.addU64(info.aggregate_return.shape_true_size);
+    hash.addU64(info.aggregate_return.shape_false_size);
+    hash.addU64(info.aggregate_return.value_selects.size());
+    for (const auto& select : info.aggregate_return.value_selects) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(select.value_index);
+        hash.addI64(select.condition_param);
+        for (const auto* value
+                : {&select.true_value, &select.false_value}) {
+            hash.addU64(static_cast<uint8_t>(value->kind));
+            hash.addI64(value->param);
+            hash.addI64(value->int_value);
+            hash.addDouble(value->float_value);
+        }
+    }
+
+    hash.addI64(info.forwarded_return_param);
+    hash.addI64(info.boxed_return_param);
+    hash.addU64(static_cast<uint8_t>(info.composed_int.source_kind));
+    hash.addI64(info.composed_int.base_param);
+    hash.addI64(info.composed_int.value_param);
+    hash.addI64(info.composed_int.source_scale);
+    hash.addI64(info.composed_int.value_scale);
+    hash.addI64(info.composed_int.offset);
+    hash.addI64(info.context_int.value_param);
+    hash.addI64(info.context_int.local_slot);
+    hash.addI64(info.context_int.value_scale);
+    hash.addI64(info.context_int.context_scale);
+    hash.addI64(info.context_int.offset);
+    hash.addI64(info.global_int.value_param);
+    hash.addI64(info.global_int.global_slot);
+    hash.addI64(info.global_int.value_scale);
+    hash.addI64(info.global_int.global_scale);
+    hash.addI64(info.global_int.offset);
+
+    hash.addString(info.object_getter_member);
+    hash.addU64(info.object_constructor_members.size());
+    for (const std::string& member : info.object_constructor_members) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addString(member);
+    }
+    hash.addU64(info.object_constructor_params.size());
+    for (int8_t param : info.object_constructor_params) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addI64(param);
+    }
+    hash.addString(info.object_set_get_member);
+    hash.addI64(info.object_set_get_param);
+    hash.addString(info.object_compound_get_member);
+    hash.addI64(info.object_compound_get_param);
+    hash.addU64(info.object_compound_get_op);
+    return hash.digest();
+}
+
+static std::string qoreAOTBodyDependencyKey(
+        const QoreAOTBodyContractDependency& dependency) {
+    return dependency.qore_path + "\n" + dependency.provider_source_file
+        + "\n" + dependency.body_contract_hash;
+}
+
 static bool resolveAOTBatchBodyDependencyProvenance(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
@@ -11772,6 +12127,8 @@ static bool resolveAOTBatchBodyDependencyProvenance(
     ids.reserve(batch_callees.size());
     std::vector<std::unordered_set<std::string>> dependencies;
     dependencies.reserve(batch_callees.size());
+    std::vector<QoreAOTBodyContractDependencyMap> contract_dependencies;
+    contract_dependencies.reserve(batch_callees.size());
     std::vector<uint8_t> body_contracts;
     body_contracts.reserve(batch_callees.size());
     size_t check_count = 0;
@@ -11786,6 +12143,16 @@ static bool resolveAOTBatchBodyDependencyProvenance(
         ids.emplace(variant, id);
         dependencies.emplace_back(info.body_dependency_files.begin(),
             info.body_dependency_files.end());
+        contract_dependencies.emplace_back();
+        for (const auto& dependency : info.body_contract_dependencies) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT body contract provenance initialization")) {
+                return false;
+            }
+            contract_dependencies.back().emplace(
+                qoreAOTBodyDependencyKey(dependency), dependency);
+        }
         body_contracts.push_back(info.hasBodyContract());
         const UserVariantBase* uvb = variant
             ? variant->getUserVariantBase() : nullptr;
@@ -11793,7 +12160,18 @@ static bool resolveAOTBatchBodyDependencyProvenance(
         const QoreProgramLocation* loc = sig ? sig->getParseLocation() : nullptr;
         const char* file = loc ? loc->getFile() : nullptr;
         if (file && *file && *file != '<') {
-            dependencies.back().insert(file);
+            info.body_contract_source_file = file;
+        }
+        if (info.body_contract_qore_path.empty() && variant
+                && !info.call_ref_path.empty()) {
+            info.body_contract_qore_path = getVariantKey(
+                info.call_ref_path.c_str(), variant);
+        }
+        if (info.hasBodyContract() && info.body_contract_hash.empty()) {
+            info.body_contract_hash = qoreAOTBodyContractHash(info);
+            if (info.body_contract_hash.empty()) {
+                return false;
+            }
         }
     }
 
@@ -11834,6 +12212,21 @@ static bool resolveAOTBatchBodyDependencyProvenance(
         queued[callee_id] = 0;
         for (size_t caller_id : callers[callee_id]) {
             bool changed = false;
+            const BatchCalleeInfo& callee_info =
+                batch_callees.at(variants[callee_id]);
+            if (!callee_info.body_contract_hash.empty()
+                    && !callee_info.body_contract_qore_path.empty()
+                    && !callee_info.body_contract_source_file.empty()) {
+                QoreAOTBodyContractDependency dependency = {
+                    callee_info.body_contract_qore_path,
+                    callee_info.body_contract_source_file,
+                    callee_info.body_contract_hash};
+                changed |= contract_dependencies[caller_id].emplace(
+                    qoreAOTBodyDependencyKey(dependency),
+                    std::move(dependency)).second;
+                changed |= dependencies[caller_id].insert(
+                    callee_info.body_contract_source_file).second;
+            }
             for (const std::string& dependency : dependencies[callee_id]) {
                 if (++check_count % 100 == 0
                         && qore_check_cancel(nullptr,
@@ -11841,6 +12234,16 @@ static bool resolveAOTBatchBodyDependencyProvenance(
                     return false;
                 }
                 changed |= dependencies[caller_id].insert(dependency).second;
+            }
+            for (const auto& [key, dependency]
+                    : contract_dependencies[callee_id]) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT transitive body contract propagation")) {
+                    return false;
+                }
+                changed |= contract_dependencies[caller_id].emplace(
+                    key, dependency).second;
             }
             if (changed && !queued[caller_id]) {
                 queued[caller_id] = 1;
@@ -11861,6 +12264,26 @@ static bool resolveAOTBatchBodyDependencyProvenance(
             dependencies[i].end());
         std::sort(found->second.body_dependency_files.begin(),
             found->second.body_dependency_files.end());
+        found->second.body_contract_dependencies.clear();
+        found->second.body_contract_dependencies.reserve(
+            contract_dependencies[i].size());
+        for (const auto& [key, dependency] : contract_dependencies[i]) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT body contract provenance finalization")) {
+                return false;
+            }
+            found->second.body_contract_dependencies.push_back(dependency);
+        }
+        std::sort(found->second.body_contract_dependencies.begin(),
+            found->second.body_contract_dependencies.end(),
+            [](const QoreAOTBodyContractDependency& lhs,
+                    const QoreAOTBodyContractDependency& rhs) {
+                return std::tie(lhs.qore_path, lhs.provider_source_file,
+                           lhs.body_contract_hash)
+                    < std::tie(rhs.qore_path, rhs.provider_source_file,
+                           rhs.body_contract_hash);
+            });
     }
     return true;
 }
@@ -11872,7 +12295,9 @@ bool qore_ir_resolve_batch_function_summaries(
         bool collect_body_dependency_provenance) {
     if (std::getenv("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
             || std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
-        return true;
+        return !collect_body_dependency_provenance
+            || resolveAOTBatchBodyDependencyProvenance(functions,
+                batch_callees);
     }
     size_t check_count = 0;
     std::unordered_map<const AbstractQoreFunctionVariant*,
@@ -14990,7 +15415,11 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     }
     info.boxed_return_kind = static_cast<BatchCalleeBoxedReturnKind>(
         rec.boxed_return_kind);
+    info.body_contract_qore_path = rec.qore_path;
+    info.body_contract_source_file = rec.source_file;
+    info.body_contract_hash = rec.body_contract_hash;
     info.body_dependency_files = rec.body_dependency_files;
+    info.body_contract_dependencies = rec.body_contract_dependencies;
     info.fast_name = callable ? rec.native_symbol : std::string();
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
@@ -26328,14 +26757,23 @@ bool QoreAOT::compileScriptFilesBatch(
             std::string per_err;
             int per_file_compiled_count = 0;
             std::unordered_set<std::string> emit_dependencies;
+            QoreAOTBodyContractDependencyMap body_contract_dependencies;
             struct AOTBatchEmitDepGuard {
-                explicit AOTBatchEmitDepGuard(std::unordered_set<std::string>* dependencies) {
+                AOTBatchEmitDepGuard(
+                        std::unordered_set<std::string>* dependencies,
+                        QoreAOTBodyContractDependencyMap*
+                            body_contract_dependencies) {
                     qore_aot_set_dep_sink(dependencies);
+                    qore_aot_set_body_contract_dep_sink(
+                        body_contract_dependencies);
                 }
                 ~AOTBatchEmitDepGuard() {
                     qore_aot_set_dep_sink(nullptr);
+                    qore_aot_set_body_contract_dep_sink(nullptr);
                 }
-            } emit_dep_guard(e.depfile_path.empty() ? nullptr : &emit_dependencies);
+            } emit_dep_guard(e.depfile_path.empty()
+                    ? nullptr : &emit_dependencies,
+                &body_contract_dependencies);
             if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                     e.out_path, opt_level, target_triple, include_source,
                     per_err, e.module_cmd_begin, e.module_cmd_end,
@@ -27087,6 +27525,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // sibling preload/resolution phases, whose cross-references are not the
     // target's dependencies.
     std::unordered_set<std::string> aot_referenced_files;
+    QoreAOTBodyContractDependencyMap body_contract_dependencies;
     std::unordered_set<std::string>* aot_dep_sink_arg =
         parsed_files ? &aot_referenced_files : nullptr;
 
@@ -27496,6 +27935,15 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         // before unused fast declarations are pruned.  Keep the per-object
         // dependency sink active for this complete consumption window.
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        struct AOTBodyContractDepSinkGuard {
+            explicit AOTBodyContractDepSinkGuard(
+                    QoreAOTBodyContractDependencyMap* dependencies) {
+                qore_aot_set_body_contract_dep_sink(dependencies);
+            }
+            ~AOTBodyContractDepSinkGuard() {
+                qore_aot_set_body_contract_dep_sink(nullptr);
+            }
+        } body_dep_guard(&body_contract_dependencies);
         compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder,
             di_cu, compiled_funcs, compiled_init_funcs, total_funcs,
             compiled_count, failed_count, total_ir_insts_all,
@@ -27605,7 +28053,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                 nullptr, nullptr, target_canon.c_str(), nullptr,
-                standalone_batch_callees.empty() ? nullptr : &standalone_batch_callees)) {
+                standalone_batch_callees.empty()
+                    ? nullptr : &standalone_batch_callees,
+                &body_contract_dependencies)) {
             return false;
         }
         if (!compiled_init_funcs.empty()) {

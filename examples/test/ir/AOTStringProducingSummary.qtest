@@ -342,7 +342,7 @@ if (!is_file(provider_qo)) {
 
 string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s", libqore_dir, qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"36\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
         || !(provider_index =~ /\"qore_path\": \"concatPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 9/)
         || !(provider_index =~ /\"qore_path\": \"concatTriple\(string,string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 10/)
         || !(provider_index =~ /\"qore_path\": \"convertInt\(int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 11/)

@@ -3433,6 +3433,9 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
     if (!rec.value_hash.empty()) {
         printf(" value=%s", rec.value_hash.c_str());
     }
+    if (!rec.body_contract_hash.empty()) {
+        printf(" body=%s", rec.body_contract_hash.c_str());
+    }
     if (!rec.native_symbol.empty()) {
         if (native_record) {
             printf(" %s->%s",
@@ -4234,7 +4237,9 @@ static bool qo_link_provider_matches_hashes(const QoreAOTSymbolIndexRecord& rec,
         const QoreAOTSymbolIndexRecord& provider) {
     return (rec.signature_hash.empty() || rec.signature_hash == provider.signature_hash)
         && (rec.declaration_hash.empty() || rec.declaration_hash == provider.declaration_hash)
-        && (rec.value_hash.empty() || rec.value_hash == provider.value_hash);
+        && (rec.value_hash.empty() || rec.value_hash == provider.value_hash)
+        && (rec.body_contract_hash.empty()
+            || rec.body_contract_hash == provider.body_contract_hash);
 }
 
 static bool qo_link_call_provider_matches_hashes(const QoreAOTCallRelocationRecord& rec,
@@ -4440,7 +4445,6 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             QoreAOTDependencyClass dep_class = rec.dependency_class;
             if (dep_class == QoreAOTDependencyClass::MODULE_API
                     || dep_class == QoreAOTDependencyClass::MODULE_RUNTIME
-                    || dep_class == QoreAOTDependencyClass::NATIVE_BODY
                     || dep_class == QoreAOTDependencyClass::DYNAMIC) {
                 continue;
             }
@@ -4504,6 +4508,13 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 mismatch = true;
             } else if (!rec.value_hash.empty() && rec.value_hash != provider->value_hash) {
                 issue.expected = "value=" + rec.value_hash + " actual=" + provider->value_hash;
+                mismatch = true;
+            } else if (!rec.body_contract_hash.empty()
+                    && rec.body_contract_hash
+                        != provider->body_contract_hash) {
+                issue.expected = "body_contract="
+                    + rec.body_contract_hash + " actual="
+                    + provider->body_contract_hash;
                 mismatch = true;
             }
             if (mismatch) {
@@ -5290,6 +5301,10 @@ static bool json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     printf(": ");
     json_print_string(rec.value_hash);
     printf(", ");
+    json_print_string("body_contract_hash");
+    printf(": ");
+    json_print_string(rec.body_contract_hash);
+    printf(", ");
     json_print_string("native_symbol");
     printf(": ");
     json_print_string(rec.native_symbol);
@@ -5473,6 +5488,26 @@ static bool json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
             printf(", ");
         }
         json_print_string(rec.body_dependency_files[i]);
+    }
+    printf("]");
+    printf(", \"body_contract_dependencies\": [");
+    for (size_t i = 0; i < rec.body_contract_dependencies.size(); ++i) {
+        if (i && !(i % 100)
+                && qcc_check_cancel(
+                    "AOT body contract dependency JSON output")) {
+            return false;
+        }
+        if (i) {
+            printf(", ");
+        }
+        const auto& dependency = rec.body_contract_dependencies[i];
+        printf("{\"qore_path\": ");
+        json_print_string(dependency.qore_path);
+        printf(", \"provider_source_file\": ");
+        json_print_string(dependency.provider_source_file);
+        printf(", \"body_contract_hash\": ");
+        json_print_string(dependency.body_contract_hash);
+        printf("}");
     }
     printf("]");
     printf("}");
@@ -5996,6 +6031,8 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         json_file_string(f, rec.declaration_hash);
         fputs(", \"value_hash\": ", f);
         json_file_string(f, rec.value_hash);
+        fputs(", \"body_contract_hash\": ", f);
+        json_file_string(f, rec.body_contract_hash);
         fputs(", \"native_symbol\": ", f);
         json_file_string(f, rec.native_symbol);
         fputs(", \"abi_kind\": ", f);
@@ -6186,6 +6223,29 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
                 fputs(", ", f);
             }
             json_file_string(f, rec.body_dependency_files[j]);
+        }
+        fputc(']', f);
+        fputs(", \"body_contract_dependencies\": [", f);
+        for (size_t j = 0;
+                j < rec.body_contract_dependencies.size(); ++j) {
+            if (j && !(j % 100)
+                    && qcc_check_cancel(
+                        "AOT body contract dependency sidecar output")) {
+                error = "AOT body contract dependency sidecar output cancelled";
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            const auto& dependency =
+                rec.body_contract_dependencies[j];
+            fputs("{\"qore_path\": ", f);
+            json_file_string(f, dependency.qore_path);
+            fputs(", \"provider_source_file\": ", f);
+            json_file_string(f, dependency.provider_source_file);
+            fputs(", \"body_contract_hash\": ", f);
+            json_file_string(f, dependency.body_contract_hash);
+            fputc('}', f);
         }
         fputc(']', f);
         fputc('}', f);
@@ -6866,6 +6926,83 @@ static bool get_batch_object_path(const std::string& source_path,
     return true;
 }
 
+static bool validate_script_object_body_contracts(
+        const std::vector<std::string>& object_paths) {
+    bool initialize_qore = !q_libqore_initalized();
+    if (initialize_qore) {
+        qore_init(QL_GPL, "UTF-8", true);
+    }
+
+    std::vector<QOLinkInputInfo> inputs;
+    inputs.reserve(object_paths.size());
+    std::string error;
+    for (size_t i = 0; i < object_paths.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT executable body contract input collection", error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            if (initialize_qore) {
+                qore_cleanup();
+            }
+            return false;
+        }
+        QOLinkInputInfo input;
+        if (!collect_qo_link_input(object_paths[i].c_str(), input, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            if (initialize_qore) {
+                qore_cleanup();
+            }
+            return false;
+        }
+        inputs.push_back(std::move(input));
+    }
+
+    QOLinkPlan plan;
+    if (!validate_qo_link_inputs(inputs, plan, error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        if (initialize_qore) {
+            qore_cleanup();
+        }
+        return false;
+    }
+
+    auto body_issues = [&error](const std::vector<QOLinkIssue>& issues,
+            std::vector<QOLinkIssue>& result) {
+        for (size_t i = 0; i < issues.size(); ++i) {
+            if (!qo_link_check_cancel(i,
+                    "AOT executable body contract issue filtering", error)) {
+                return false;
+            }
+            if (issues[i].dependency_class == "native_body") {
+                result.push_back(issues[i]);
+            }
+        }
+        return true;
+    };
+    std::vector<QOLinkIssue> unresolved;
+    std::vector<QOLinkIssue> ambiguous;
+    std::vector<QOLinkIssue> mismatches;
+    if (!body_issues(plan.unresolved_imports, unresolved)
+            || !body_issues(plan.ambiguous_imports, ambiguous)
+            || !body_issues(plan.hash_mismatches, mismatches)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        if (initialize_qore) {
+            qore_cleanup();
+        }
+        return false;
+    }
+    bool valid = unresolved.empty() && ambiguous.empty()
+        && mismatches.empty();
+    if (!valid) {
+        print_qo_link_issues("unresolved body contract", unresolved);
+        print_qo_link_issues("ambiguous body contract", ambiguous);
+        print_qo_link_issues("body contract hash mismatch", mismatches);
+    }
+    if (initialize_qore) {
+        qore_cleanup();
+    }
+    return valid;
+}
+
 //! Link script-context `.qo` fragments into an executable.
 static int link_script_objects_to_executable(const std::string& output,
         const std::vector<std::string>& object_paths,
@@ -6875,6 +7012,9 @@ static int link_script_objects_to_executable(const std::string& output,
     if (object_paths.empty()) {
         fprintf(stderr, "error: %s link failed for output '%s': no .qo inputs\n",
             mode_label, output.c_str());
+        return 1;
+    }
+    if (!validate_script_object_body_contracts(object_paths)) {
         return 1;
     }
 

@@ -49,6 +49,7 @@
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
 #include <qore/TypedHashDecl.h>
+#include "qore/intern/qore_aot_deps.h"
 
 class AbstractQoreNode;
 class QoreValue;
@@ -298,7 +299,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 36;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 37;
 
 //! Maximum source files in one serialized body-summary provenance set.
 constexpr size_t QORE_AOT_WIRE_BODY_DEPENDENCY_MAX_FILES = 100000;
@@ -381,6 +382,7 @@ struct QoreAOTSymbolIndexRecord {
     std::string signature_hash;
     std::string declaration_hash;
     std::string value_hash;
+    std::string body_contract_hash;
     std::string native_symbol;
     std::string abi_kind;
     std::string consumer_source_file;
@@ -448,6 +450,7 @@ struct QoreAOTSymbolIndexRecord {
     std::string fast_specialization_key;
     uint8_t boxed_return_kind = 0;
     std::vector<std::string> body_dependency_files;
+    std::vector<QoreAOTBodyContractDependency> body_contract_dependencies;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -515,7 +518,10 @@ struct QoreAOTFastEntryIndexInfo {
     int8_t boxed_return_param = -1;
     std::string specialization_key;
     uint8_t boxed_return_kind = 0;
+    std::string body_contract_source_file;
+    std::string body_contract_hash;
     std::vector<std::string> body_dependency_files;
+    std::vector<QoreAOTBodyContractDependency> body_contract_dependencies;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.
@@ -1316,7 +1322,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     std::string* error = nullptr,
     const std::unordered_set<std::string>* compile_files = nullptr,
     const std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>*
-        fast_entry_map = nullptr);
+        fast_entry_map = nullptr,
+    const QoreAOTBodyContractDependencyMap* body_contract_imports = nullptr);
 
 //! Read the optional SYMBOL_INDEX section.
 /** @return true on success or if the section is absent, false on corrupt data

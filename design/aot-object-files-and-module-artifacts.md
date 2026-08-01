@@ -151,6 +151,16 @@ Each symbol-index body-contract record carries its sorted, duplicate-free
 dependency-free: they resolve by name at load/register time, so a stale
 dependent picks up the new provider automatically.
 
+Starting with symbol-index version 37, each exportable lowered body contract
+also has a deterministic `body_contract_hash`. An object that imports a fast
+entry or body summary records the provider path, source file, and exact hash as
+a `native_body` import. Both the explicit link planner and ordinary script
+object linking reject an unresolved, ambiguous, or hash-mismatched body
+contract. This preserves incremental build correctness even when a build tool
+does not rebuild a caller after a provider body changes. Source-only edits that
+leave the lowered contract unchanged retain the same hash and remain link
+compatible.
+
 ## Module Aggregation
 
 `qcc -m <module-dir>` is the preferred clean-build path for split-directory
@@ -212,6 +222,13 @@ Hashes are split by use:
 Version 36 adds `body_dependency_files` to native body-contract records. The
 field is consumed only when code generation actually imports that contract; it
 is not a general declaration dependency.
+
+Version 37 adds `body_contract_hash` and structured
+`body_contract_dependencies`. A consumed contract is emitted as a required
+`native_body` import with ABI kind `qore_body_contract_import_v1`; link planning
+matches it against the exact hash on the provider's defined function or method
+record. Dependencies remain transitive, so a summary folded through an
+intermediate object still names and hashes its original provider.
 
 Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol

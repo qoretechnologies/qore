@@ -461,11 +461,32 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "summary consumer records the callee body: " + dep + out);
         assertEq("", undefinedFastSymbols("sumcaller"),
             "the imported summary leaves no fast-entry symbol");
+        string caller_index = run(sprintf("%s --dump-index-json %s", qcc_bin,
+            objectPath("sumcaller")));
+        assertTrue(caller_index.find("qore_body_contract_import_v1") != -1
+                && caller_index.find("\"body_contract_hash\": \"fnv1a64:") != -1,
+            "summary consumer records an exact semantic body contract: " + caller_index);
+
+        # A source-only edit that leaves the imported contract unchanged must
+        # not invalidate the old caller.
+        write(tmp_dir + "/sumcallee.qc", "%modern\nnamespace SumX {\n"
+            "# contract-preserving source edit\n"
+            "int sub scale(int x) { return x * 3; }\n}\n");
+        recompileSummarySource("sumcallee");
+        string link = run(sprintf("%s %s -o %s/sumapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
+        assertEq(-1, link.find("body_contract"),
+            "an unchanged semantic body contract remains link-compatible: " + link);
+        assertEq("31", trim(run(sprintf("%s %s/sumapp", env, tmp_dir))),
+            "contract-preserving rebuild keeps the original result");
 
         write(tmp_dir + "/sumcallee.qc", "%modern\nnamespace SumX { int sub scale(int x) { return x * 4; } }\n");
         recompileSummarySource("sumcallee");
+        string stale_link = run(sprintf("%s %s -o %s/sumapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
+        assertTrue(stale_link.find("body_contract") != -1,
+            "link rejects a stale caller with the old folded contract: " + stale_link);
+
         recompileSummarySource("sumcaller");
-        string link = run(sprintf("%s %s -o %s/sumapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
+        link = run(sprintf("%s %s -o %s/sumapp %s/*.qo", env, qcc_bin, tmp_dir, lib_dir));
         assertTrue(is_file(tmp_dir + "/sumapp"), "summary pair links: " + link);
         assertEq("41", trim(run(sprintf("%s %s/sumapp", env, tmp_dir))),
             "incremental rebuild uses the changed callee summary");
@@ -491,6 +512,11 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         assertTrue(middle_index.find("body_dependency_files") != -1
                 && middle_index.find("leaf.qc") != -1,
             "summary provenance is durable in the object index: " + middle_index);
+        string top_index = run(sprintf("%s --dump-index-json %s", qcc_bin,
+            objectPath("top")));
+        assertTrue(top_index.find("qore_body_contract_import_v1") != -1
+                && top_index.find("leaf.qc") != -1,
+            "top records the transitive semantic leaf contract: " + top_index);
         string leaf_dep = objectDep("leaf");
         assertEq(-1, leaf_dep.find("middle.qc"),
             "transitive provenance remains one-way: " + leaf_dep);
@@ -503,6 +529,27 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         top_dep = objectDep("top");
         assertTrue(top_dep.find("middle.qc") != -1 && top_dep.find("leaf.qc") != -1,
             "preloaded summary preserves transitive body provenance: " + top_dep);
+
+        write(tmp_dir + "/leaf.qc", "%modern\nnamespace SumT { int sub leaf(int x) { return x * 4; } }\n");
+        recompileSummarySource("leaf");
+        string stale_link = run(sprintf("%s %s -o %s/transitive-app %s/*.qo",
+            env, qcc_bin, tmp_dir, lib_dir));
+        assertTrue(stale_link.find("body_contract") != -1,
+            "link rejects callers with a stale transitive leaf contract: " + stale_link);
+
+        recompileSummarySource("middle");
+        stale_link = run(sprintf("%s %s -o %s/transitive-app %s/*.qo",
+            env, qcc_bin, tmp_dir, lib_dir));
+        assertTrue(stale_link.find("body_contract") != -1,
+            "link rejects top after only the middle contract is refreshed: " + stale_link);
+
+        recompileSummarySource("top");
+        string link = run(sprintf("%s %s -o %s/transitive-app %s/*.qo",
+            env, qcc_bin, tmp_dir, lib_dir));
+        assertEq(-1, link.find("body_contract"),
+            "fully refreshed transitive contracts link: " + link);
+        assertEq("43", trim(run(sprintf("%s %s/transitive-app", env, tmp_dir))),
+            "transitive rebuild uses the changed leaf summary");
     }
 
     testOrdinaryCallNotBodyDep() {

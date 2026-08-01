@@ -57,6 +57,15 @@ enum class QoreAOTSourceSymbolKind : unsigned char {
 using QoreAOTSourceSymbolMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
 using QoreAOTSourceDependencyMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
 
+struct QoreAOTBodyContractDependency {
+    std::string qore_path;
+    std::string provider_source_file;
+    std::string body_contract_hash;
+};
+
+using QoreAOTBodyContractDependencyMap =
+    std::unordered_map<std::string, QoreAOTBodyContractDependency>;
+
 struct QoreAOTSourceSymbolManifest {
     QoreAOTSourceSymbolMap classes;
     QoreAOTSourceSymbolMap hashdecls;
@@ -89,6 +98,14 @@ DLLLOCAL void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink);
 
 //! Set (or clear) the active per-consumer dependency map for batch compilation.
 DLLLOCAL void qore_aot_set_dep_map(QoreAOTSourceDependencyMap* dependencies);
+
+//! Set (or clear) the active body-contract import sink for the current thread.
+DLLLOCAL void qore_aot_set_body_contract_dep_sink(
+        QoreAOTBodyContractDependencyMap* dependencies);
+
+//! Return the active body-contract import sink, or nullptr when inactive.
+DLLLOCAL const QoreAOTBodyContractDependencyMap*
+    qore_aot_get_body_contract_dep_sink();
 
 //! Set (or clear) the active sibling-source parse flag for the current thread.
 //! Returns the previous value so callers can restore it.
@@ -138,6 +155,10 @@ DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_
     objects, where no live declaration location is available. */
 DLLLOCAL void qore_aot_note_dependency_file(const char* provider_file,
         const char* consumer_file = nullptr);
+
+//! Record one exact imported body contract in the active AOT object sink.
+DLLLOCAL void qore_aot_note_body_contract(const char* qore_path,
+        const char* provider_file, const char* body_contract_hash);
 
 //! Record a source-parse type import for the active single-file AOT compile.
 /** This is a narrow wrapper around Program-private import tracking for modules

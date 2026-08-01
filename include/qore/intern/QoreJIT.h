@@ -47,6 +47,7 @@
 
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
+#include "qore/intern/qore_aot_deps.h"
 
 class ExceptionSink;
 class LocalVar;
@@ -461,6 +462,10 @@ struct BatchCalleeInfo {
     //! Source files whose lowered bodies contributed to this entry's imported
     //! summary or fast-entry contract. Entries are sorted and duplicate-free.
     std::vector<std::string> body_dependency_files;
+    std::string body_contract_qore_path;
+    std::string body_contract_source_file;
+    std::string body_contract_hash;
+    std::vector<QoreAOTBodyContractDependency> body_contract_dependencies;
 
     bool hasImportableBodySummary() const {
         return scalar_leaf.kind != AOTScalarLeafKind::None
