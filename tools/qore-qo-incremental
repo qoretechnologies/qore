@@ -85,6 +85,10 @@ prepare_preload_dir() {
         [ "$preload_name" = "$target_name" ] && continue
         [ -e "$preload_dir/$preload_name" ] && continue
         ln -s "$preload_qo" "$preload_dir/$preload_name"
+        if [ -f "$preload_qo.compile-contract.stamp" ]; then
+            ln -s "$preload_qo.compile-contract.stamp" \
+                "$preload_dir/$preload_name.compile-contract.stamp"
+        fi
     done < "$preload_file"
 }
 
@@ -188,7 +192,10 @@ select_manifest_inputs() {
     while IFS= read -r preload_qo; do
         [ -n "$preload_qo" ] || continue
         [ "$preload_qo" = "$output" ] && continue
-        if [ -f "$preload_qo" ]; then
+        if [ -f "$preload_qo.compile-contract.stamp" ]; then
+            printf '%s\n' "$preload_qo.compile-contract.stamp" \
+                >> "$resolved_file"
+        elif [ -f "$preload_qo" ]; then
             printf '%s\n' "$preload_qo" >> "$resolved_file"
         fi
     done < "$requested_file"

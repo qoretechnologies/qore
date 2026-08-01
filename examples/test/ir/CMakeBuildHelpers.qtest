@@ -79,6 +79,7 @@ qore_qcc_sidecar_paths(\"${CMAKE_BINARY_DIR}/sample.qo\"
     STATUS_JSON SAMPLE_STATUS
     SUCCESS_STAMP SAMPLE_STAMP
     CONTENT_STAMP SAMPLE_CONTENT_STAMP
+    COMPILE_CONTRACT_STAMP SAMPLE_COMPILE_CONTRACT_STAMP
     MANIFEST_JSON SAMPLE_MANIFEST)
 qore_qcc_sidecar_flags(SAMPLE_FLAGS \"${CMAKE_BINARY_DIR}/sample.qo\" ALL)
 file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
@@ -86,6 +87,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
     \"deps=${QCC_DEPS}\\n\"
     \"depfile=${SAMPLE_DEPFILE}\\n\"
     \"status=${SAMPLE_STATUS}\\n\"
+    \"compile_contract_stamp=${SAMPLE_COMPILE_CONTRACT_STAMP}\\n\"
     \"flags=${SAMPLE_FLAGS}\\n\")
 ");
 
@@ -104,6 +106,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
             "sidecar depfile path exported: " + vars);
         assertTrue(vars.find("--content-stamp=" + build_dir + "/sample.qo.content.stamp") != -1,
             "sidecar content-stamp flag exported: " + vars);
+        assertTrue(vars.find("--compile-contract-stamp="
+                + build_dir + "/sample.qo.compile-contract.stamp") != -1,
+            "sidecar compile-contract flag exported: " + vars);
+        assertTrue(vars.find("--depfile-compile-contract-stamps") != -1,
+            "sidecar compile-contract dependency flag exported: " + vars);
         assertTrue(vars.find("--skip-if-manifest-current") != -1,
             "sidecar manifest skip flag exported: " + vars);
 
@@ -459,6 +466,7 @@ qore_qcc_compile_objects(QO_OBJECTS
     WARNINGS_ARE_ERRORS
     STAMPS_VAR QO_STAMPS
     CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
+    COMPILE_CONTRACT_STAMPS_VAR QO_COMPILE_CONTRACT_STAMPS
     ORDER_TARGETS_VAR QO_ORDER_TARGETS
     CONTEXT_VAR QO_CONTEXT)
 add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
@@ -520,6 +528,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"objects=${QO_OBJECTS}\\n\"
     \"stamps=${QO_STAMPS}\\n\"
     \"content_stamps=${QO_CONTENT_STAMPS}\\n\"
+    \"compile_contract_stamps=${QO_COMPILE_CONTRACT_STAMPS}\\n\"
     \"order_targets=${QO_ORDER_TARGETS}\\n\"
     \"context=${QO_CONTEXT}\\n\"
     \"link=${QO_LINK}\\n\"
@@ -533,6 +542,9 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
         assertTrue(is_file(build_dir + "/qo-vars.txt"),
             "configured generic qcc helper project: " + configure);
+        assertTrue(read(build_dir + "/qo-vars.txt").find(
+                ".qo.compile-contract.stamp") != -1,
+            "qcc object helper exports compile-contract stamps");
 
         string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
         assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_1 \"\"\\)"),
@@ -609,6 +621,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
                 && no_op.find("qcc --link-qo:") == -1
                 && no_op.find("qcc --script-aggregate:") == -1,
             "no-op rebuild does not rerun qcc helper targets: " + no_op);
+
+        write(provider, read(provider) + "# compile-contract no-op\n");
+        string semantic_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(-1, semantic_no_op.find("consumer.qc"),
+            "comment-only provider edit does not recompile consumer: "
+                + semantic_no_op);
 
         string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
         string provider_body = read(provider);

@@ -357,6 +357,17 @@ information comes from parsed Qore metadata:
   edges to the build system.
 - `--write-index-json=<path>` emits the AOT symbol index JSON for the generated
   object or aggregate.
+- `--compile-contract-stamp=<path>` emits a canonical, write-if-changed digest
+  input containing the object's declaration, folded-value, and lowered-body
+  contract hashes. Compile consumers should depend on this stamp instead of the
+  complete object whenever they use the object only for preload metadata.
+- `--depfile-compile-contract-stamps` rewrites source dependencies covered by
+  exact imported symbol/body contracts to the corresponding provider
+  `.qo.compile-contract.stamp`. A comment-only provider rebuild then leaves the
+  caller current through both its explicit metadata edge and its
+  compiler-generated depfile. Final links still use `.content.stamp`, because a
+  provider implementation can change without changing any compile-time
+  consumer contract.
 - `--write-manifest=<path>` emits a deterministic manifest containing qcc
   options, selected environment, sidecar paths, output hash/size, and hashes of
   all known inputs.

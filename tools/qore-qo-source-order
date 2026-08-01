@@ -1211,6 +1211,7 @@ def batch_artifact_current(context: str, inputs: list[str], outputs: list[str],
         output + ".idx.json",
         output + ".status.json",
         output + ".content.stamp",
+        output + ".compile-contract.stamp",
         output + ".stamp",
         output + ".source.manifest.json",
         output + ".source-parse-defines",
@@ -1229,7 +1230,10 @@ def batch_artifact_current(context: str, inputs: list[str], outputs: list[str],
 
         direct = build_direct_prerequisite_order(context, inputs, outputs, target)
         for provider in direct:
-            if os.stat(outputs[provider] + ".content.stamp").st_mtime_ns > stamp_time:
+            contract_stamp = outputs[provider] + ".compile-contract.stamp"
+            if not os.path.isfile(contract_stamp):
+                contract_stamp = outputs[provider] + ".content.stamp"
+            if os.stat(contract_stamp).st_mtime_ns > stamp_time:
                 return False
         for dep in parse_make_depfile_inputs(output + ".d"):
             if os.path.exists(dep) and os.stat(dep).st_mtime_ns > stamp_time:

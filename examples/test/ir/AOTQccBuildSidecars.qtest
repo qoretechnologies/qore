@@ -57,8 +57,10 @@ class AOTQccBuildSidecarsTest inherits QUnit::Test {
         string status = qo + ".status.json";
         string success_stamp = qo + ".success.stamp";
         string content_stamp = qo + ".content.stamp";
+        string compile_contract_stamp = qo + ".compile-contract.stamp";
 
         write(src, "%new-style
+%define QccSidecarContractDefine 1
 public class QccSidecarSingle {
     public {
         const C = 41;
@@ -74,9 +76,10 @@ public class QccSidecarSingle {
             "%s %s -v -c --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
+            " --compile-contract-stamp=%s"
             " -o %s %s",
             env, qcc_bin, dep, success_stamp, idx, manifest, status, success_stamp,
-            content_stamp, qo, src);
+            content_stamp, compile_contract_stamp, qo, src);
         string first = run(cmd);
         assertTrue(is_file(qo), "compiled single source .qo: " + first);
         assertTrue(is_file(dep), "wrote single source depfile: " + first);
@@ -85,6 +88,8 @@ public class QccSidecarSingle {
         assertTrue(is_file(status), "wrote single source status JSON: " + first);
         assertTrue(is_file(success_stamp), "touched single source success stamp: " + first);
         assertTrue(is_file(content_stamp), "touched single source content stamp: " + first);
+        assertTrue(is_file(compile_contract_stamp),
+            "wrote single source compile-contract stamp: " + first);
 
         string single_dep_text = File::readTextFile(dep);
         assertTrue(single_dep_text.find(success_stamp + ":") == 0,
@@ -94,6 +99,17 @@ public class QccSidecarSingle {
         string index_json = File::readTextFile(idx);
         assertContains(index_json, "\"provides\"", "index JSON has provides");
         assertContains(index_json, "QccSidecarSingle::C", "index JSON has class constant");
+        assertContains(index_json, "\"compile_contract_hash\"",
+            "index JSON has semantic compile-contract hash");
+        string compile_contract = File::readTextFile(compile_contract_stamp);
+        assertContains(compile_contract, "native\t",
+            "compile contract includes native capability rows");
+        assertContains(compile_contract, "QccSidecarSingle::f()",
+            "compile contract includes native fast-entry capability");
+        assertContains(compile_contract, "source_parse_define",
+            "compile contract includes source parse-define context");
+        assertContains(compile_contract, "QccSidecarContractDefine=1",
+            "compile contract includes source parse-define value");
         string manifest_json = File::readTextFile(manifest);
         assertContains(manifest_json, "\"kind\": \"script-file\"", "manifest records mode");
         assertContains(manifest_json, "\"inputs\"", "manifest records inputs");
@@ -111,12 +127,28 @@ public class QccSidecarSingle {
         assertContains(status_json, "\"output_changed\": false", "status records skip without content change");
 
         unlink(content_stamp);
+        unlink(compile_contract_stamp);
         string third = run(cmd);
         assertContains(third, "manifest current, skipped script-file",
             "manifest skip creates a missing content-stamp baseline");
         assertTrue(is_file(content_stamp), "manifest skip recreated missing content stamp: " + third);
+        assertTrue(is_file(compile_contract_stamp),
+            "manifest skip recreated missing compile-contract stamp: " + third);
         assertContains(File::readTextFile(status), "\"output_changed\": false",
             "status still records no content change when baseline stamp is recreated");
+
+        string contract_before = File::readTextFile(compile_contract_stamp);
+        write(src, File::readTextFile(src) + "# semantic no-op\n");
+        string comment_rebuild = run(cmd);
+        assertEq(contract_before, File::readTextFile(compile_contract_stamp),
+            "source-only edit preserves compile contract: " + comment_rebuild);
+
+        string changed = File::readTextFile(src);
+        changed =~ s/const C = 41/const C = 42/;
+        write(src, changed);
+        string semantic_rebuild = run(cmd);
+        assertNeq(contract_before, File::readTextFile(compile_contract_stamp),
+            "folded value edit changes compile contract: " + semantic_rebuild);
     }
 
     testScriptPreloadManifestInputs() {
@@ -124,6 +156,9 @@ public class QccSidecarSingle {
         string provider_src = tmp.path + "/provider.qc";
         string consumer_src = tmp.path + "/consumer.qc";
         string provider_qo = tmp.path + "/provider.qo";
+        string provider_compile_contract_stamp = provider_qo
+            + ".compile-contract.stamp";
+        string preload_dir = tmp.path + "/preload";
         string consumer_qo = tmp.path + "/consumer.qo";
         string dep = consumer_qo + ".d";
         string dep_target = consumer_qo + ".success.stamp";
@@ -147,26 +182,66 @@ public class QccSidecarConsumer {
 ");
 
         string provider_cmd = sprintf(
-            "%s %s -c --parse-option=PO_MODERN -o %s %s",
-            env, qcc_bin, provider_qo, provider_src);
+            "%s %s -c --parse-option=PO_MODERN --compile-contract-stamp=%s -o %s %s",
+            env, qcc_bin, provider_compile_contract_stamp, provider_qo,
+            provider_src);
         string provider_out = run(provider_cmd);
         assertTrue(is_file(provider_qo), "compiled provider preload .qo: " + provider_out);
+        mkdir(preload_dir);
+        run(sprintf("ln -s %s %s/provider.qo", provider_qo, preload_dir));
+        run(sprintf("ln -s %s %s/provider.qo.compile-contract.stamp",
+            provider_compile_contract_stamp, preload_dir));
 
         string consumer_cmd = sprintf(
-            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
+            "%s %s -v -c -L %s --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
+            " --depfile-compile-contract-stamps"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --manifest-skip-qo-library-inputs -o %s %s",
-            env, qcc_bin, tmp.path, dep, dep_target, idx, manifest, consumer_qo, consumer_src);
+            env, qcc_bin, preload_dir, dep, dep_target, idx, manifest,
+            consumer_qo, consumer_src);
         string consumer_out = run(consumer_cmd);
         assertTrue(is_file(consumer_qo), "compiled consumer with preload .qo: " + consumer_out);
         assertTrue(File::readTextFile(dep).find(dep_target + ":") == 0,
             "preload depfile target names override");
+        string dep_text = File::readTextFile(dep);
+        assertContains(dep_text, provider_compile_contract_stamp,
+            "preload depfile uses provider compile contract");
+        assertEq(-1, dep_text.find(preload_dir),
+            "preload depfile resolves temporary contract symlink");
+        assertEq(-1, dep_text.find(provider_src),
+            "preload depfile omits provider source covered by exact imports");
         string manifest_json = File::readTextFile(manifest);
-        assertTrue(manifest_json.find(provider_qo) == -1,
+        assertTrue(manifest_json.find(sprintf("\"path\": \"%s\",", provider_qo)) == -1,
             "preloaded provider .qo omitted from manifest: " + manifest_json);
+        assertContains(manifest_json, provider_compile_contract_stamp,
+            "rewritten provider contract is retained in manifest");
+
+        string provider_contract = File::readTextFile(
+            provider_compile_contract_stamp);
+        string provider_changed = File::readTextFile(provider_src);
+        provider_changed =~ s/return 7/return 8/;
+        write(provider_src, provider_changed);
+        provider_out = run(provider_cmd);
+        assertNeq(provider_contract,
+            File::readTextFile(provider_compile_contract_stamp),
+            "provider semantic change updates its compile contract: "
+                + provider_out);
+        string changed_consumer = run(consumer_cmd);
+        assertEq(-1, changed_consumer.find("manifest current, skipped"),
+            "changed provider contract invalidates consumer manifest: "
+                + changed_consumer);
+
+        write(provider_src, File::readTextFile(provider_src)
+            + "# provider semantic no-op\n");
+        provider_out = run(provider_cmd);
+        string unchanged_consumer = run(consumer_cmd);
+        assertContains(unchanged_consumer, "manifest current, skipped",
+            "unchanged provider contract keeps consumer manifest current: "
+                + provider_out + unchanged_consumer);
 
         string explicit_cmd = sprintf(
             "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
+            " --depfile-compile-contract-stamps"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --manifest-skip-qo-library-inputs --manifest-input=%s -o %s %s",
             env, qcc_bin, tmp.path, dep, dep_target, idx, manifest, provider_qo, consumer_qo,

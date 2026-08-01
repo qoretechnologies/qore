@@ -180,7 +180,8 @@ endfunction()
 
 function(QORE_QCC_SIDECAR_PATHS _output)
     set(options)
-    set(oneValueArgs DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP MANIFEST_JSON)
+    set(oneValueArgs DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
+        COMPILE_CONTRACT_STAMP MANIFEST_JSON)
     cmake_parse_arguments(_QORE_QSP "${options}" "${oneValueArgs}" "" ${ARGN})
 
     if (_QORE_QSP_DEPFILE)
@@ -198,6 +199,10 @@ function(QORE_QCC_SIDECAR_PATHS _output)
     if (_QORE_QSP_CONTENT_STAMP)
         set(${_QORE_QSP_CONTENT_STAMP} "${_output}.content.stamp" PARENT_SCOPE)
     endif ()
+    if (_QORE_QSP_COMPILE_CONTRACT_STAMP)
+        set(${_QORE_QSP_COMPILE_CONTRACT_STAMP}
+            "${_output}.compile-contract.stamp" PARENT_SCOPE)
+    endif ()
     if (_QORE_QSP_MANIFEST_JSON)
         set(${_QORE_QSP_MANIFEST_JSON} "${_output}.source.manifest.json" PARENT_SCOPE)
     endif ()
@@ -205,7 +210,8 @@ endfunction()
 
 function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
-        MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT QO_INPUT_CONTENT_STAMPS
+        COMPILE_CONTRACT_STAMP MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT
+        QO_INPUT_CONTENT_STAMPS COMPILE_CONTRACT_DEPENDENCIES
         SCRIPT_AGGREGATE_NATIVE_REGISTERS)
     set(oneValueArgs DEPFILE_TARGET QOLINK_MAP AGGREGATE_SYMBOL SCRIPT_AGGREGATE)
     cmake_parse_arguments(_QORE_QSF "${options}" "${oneValueArgs}" "" ${ARGN})
@@ -216,6 +222,8 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
         set(_QORE_QSF_STATUS_JSON TRUE)
         set(_QORE_QSF_SUCCESS_STAMP TRUE)
         set(_QORE_QSF_CONTENT_STAMP TRUE)
+        set(_QORE_QSF_COMPILE_CONTRACT_STAMP TRUE)
+        set(_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES TRUE)
         set(_QORE_QSF_MANIFEST_JSON TRUE)
         set(_QORE_QSF_SKIP_IF_MANIFEST_CURRENT TRUE)
     endif ()
@@ -238,6 +246,13 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     endif ()
     if (_QORE_QSF_CONTENT_STAMP)
         list(APPEND _flags "--content-stamp=${_output}.content.stamp")
+    endif ()
+    if (_QORE_QSF_COMPILE_CONTRACT_STAMP)
+        list(APPEND _flags
+            "--compile-contract-stamp=${_output}.compile-contract.stamp")
+    endif ()
+    if (_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES)
+        list(APPEND _flags "--depfile-compile-contract-stamps")
     endif ()
     if (_QORE_QSF_MANIFEST_JSON)
         list(APPEND _flags "--write-manifest=${_output}.source.manifest.json")
@@ -321,7 +336,8 @@ endfunction()
 function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(options WARNINGS_ARE_ERRORS)
     set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
-        STAMPS_VAR CONTENT_STAMPS_VAR ORDER_TARGETS_VAR CONTEXT_VAR)
+        STAMPS_VAR CONTENT_STAMPS_VAR COMPILE_CONTRACT_STAMPS_VAR
+        ORDER_TARGETS_VAR CONTEXT_VAR)
     set(multiValueArgs SOURCES STUBS LOAD_MODULES PARSE_DEFINES PARSE_OPTIONS
         MANIFEST_INPUTS DEPENDS)
     cmake_parse_arguments(_QORE_QCO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -361,6 +377,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_outputs)
     set(_qore_qcc_stamps)
     set(_qore_qcc_content_stamps)
+    set(_qore_qcc_compile_contract_stamps)
     set(_qore_qcc_order_targets)
     set(_qore_qcc_abs_sources)
     set(_qore_qcc_index 0)
@@ -374,6 +391,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         list(APPEND _qore_qcc_outputs "${_qore_qcc_output}")
         list(APPEND _qore_qcc_stamps "${_qore_qcc_output}.stamp")
         list(APPEND _qore_qcc_content_stamps "${_qore_qcc_output}.content.stamp")
+        list(APPEND _qore_qcc_compile_contract_stamps
+            "${_qore_qcc_output}.compile-contract.stamp")
         list(APPEND _qore_qcc_order_targets "${_qore_qcc_order_target}")
         math(EXPR _qore_qcc_index "${_qore_qcc_index} + 1")
     endforeach()
@@ -484,7 +503,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
     endforeach()
-    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
@@ -504,7 +523,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_manifest_input_flags})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} -c --batch-build-sidecars --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} -c --batch-build-sidecars --depfile-compile-contract-stamps --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
         foreach(_qore_qcc_source ${_qore_qcc_abs_sources})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_source}'")
         endforeach()
@@ -555,11 +574,11 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             set(_qore_qcc_stamp "${_qore_qcc_output}.stamp")
             set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
             set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
-            set(_qore_qcc_direct_dep_content_stamps)
+            set(_qore_qcc_direct_dep_compile_contract_stamps)
             set(_qore_qcc_direct_dep_order_targets)
             foreach(_qore_qcc_direct_dep ${_qore_qcc_direct_deps})
-                list(APPEND _qore_qcc_direct_dep_content_stamps
-                    "${_qore_qcc_direct_dep}.content.stamp")
+                list(APPEND _qore_qcc_direct_dep_compile_contract_stamps
+                    "${_qore_qcc_direct_dep}.compile-contract.stamp")
                 list(FIND _qore_qcc_outputs "${_qore_qcc_direct_dep}" _qore_qcc_direct_dep_idx)
                 if (NOT _qore_qcc_direct_dep_idx EQUAL -1)
                     list(GET _qore_qcc_order_targets ${_qore_qcc_direct_dep_idx}
@@ -575,6 +594,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_output}.idx.json
                     ${_qore_qcc_output}.status.json
                     ${_qore_qcc_output}.content.stamp
+                    ${_qore_qcc_output}.compile-contract.stamp
                     ${_qore_qcc_output}.source.manifest.json
                     ${_qore_qcc_output}.source-parse-defines
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
@@ -594,7 +614,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_load_module_target_deps}
                     ${_qore_qcc_deps}
                     ${_qore_qcc_direct_dep_order_targets}
-                    ${_qore_qcc_direct_dep_content_stamps}
+                    ${_qore_qcc_direct_dep_compile_contract_stamps}
                     ${_qore_qcc_incremental_helper}
                     ${_qore_qcc_source_order_helper}
                     ${_QORE_QCO_MANIFEST_INPUTS}
@@ -608,6 +628,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set_source_files_properties(${_qore_qcc_outputs}
         PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
     set_source_files_properties(${_qore_qcc_stamps} ${_qore_qcc_content_stamps}
+        ${_qore_qcc_compile_contract_stamps}
         PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
 
     set(${_out_var} ${_qore_qcc_outputs} PARENT_SCOPE)
@@ -616,6 +637,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     endif ()
     if (_QORE_QCO_CONTENT_STAMPS_VAR)
         set(${_QORE_QCO_CONTENT_STAMPS_VAR} ${_qore_qcc_content_stamps} PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_COMPILE_CONTRACT_STAMPS_VAR)
+        set(${_QORE_QCO_COMPILE_CONTRACT_STAMPS_VAR}
+            ${_qore_qcc_compile_contract_stamps} PARENT_SCOPE)
     endif ()
     if (_QORE_QCO_ORDER_TARGETS_VAR)
         set(${_QORE_QCO_ORDER_TARGETS_VAR} ${_qore_qcc_order_targets} PARENT_SCOPE)
