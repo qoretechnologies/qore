@@ -162,9 +162,17 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         const MaxIoRetries = 5;
 
         #! Headers required for the OpenAI assistant API
+        /** @deprecated the OpenAI Assistants API is deprecated and will be removed by OpenAI on
+            @ref OpenAiAssistantApiSunsetDate "2026-08-26"; use the Responses and Conversations APIs instead
+        */
         const AssistantApiHdr = {
             "OpenAI-Beta": "assistants=v2",
         };
+
+        #! The date when OpenAI will remove the Assistants API
+        /** @since OpenAiDataProvider 1.6
+        */
+        const OpenAiAssistantApiSunsetDate = 2026-08-26Z;
     }
 
     private {
@@ -179,6 +187,12 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
 
         #! lock for first time initialization
         static Mutex m();
+
+        #! True once the Assistants API deprecation warning has been issued in this process
+        static bool assistant_deprecation_warned = False;
+
+        #! lock serializing access to \c assistant_deprecation_warned
+        static Mutex deprecation_lock();
     }
 
     #! Creates the object
@@ -239,6 +253,7 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         return {
             "models": True,
             "assistants": True,
+            "conversation_items": True,
         };
     }
 
@@ -254,6 +269,7 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         switch (type) {
             case "models": return getReferenceModels();
             case "assistants": return getReferenceAssistants();
+            case "conversation_items": return getReferenceConversationItems(action_opts.conversation_id);
         }
     }
 
@@ -287,8 +303,152 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         return rv;
     }
 
+    #! Returns the items in a conversation as reference data
+    /** @param conversation_id the ID of the conversation whose items should be listed; supplied by the
+        controlling \c conversation_id action option
+
+        @return the items in the conversation, or @ref nothing if no conversation has been selected yet
+
+        @note There is no OpenAI endpoint that lists conversations, so \c conversation_id itself cannot be
+        populated as reference data and must be entered manually or supplied from an upstream step.
+
+        @since OpenAiDataProvider 1.6
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceConversationItems(*string conversation_id) {
+        if (!conversation_id.val()) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv;
+        string path = OpenAiDataProviderCommon::conversationPath(conversation_id) + "/items";
+        foreach hash<auto> item in (doRestCommand("GET", path).body."data") {
+            string desc = sprintf("%s item%s", item.type ?? "unknown",
+                item.role.val() ? sprintf(" from %s", item.role) : "");
+            rv += <AllowedValueInfo>{
+                "display_name": item.id,
+                "short_desc": desc,
+                "desc": desc,
+                "value": item.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns the REST path for the given conversation
+    /** @param conversation_id the ID of the conversation
+
+        @return the REST path for the given conversation
+
+        @since OpenAiDataProvider 1.6
+    */
+    static string conversationPath(string conversation_id) {
+        return "conversations/" + encode_url(conversation_id, True);
+    }
+
+    #! Returns the REST path for the given conversation item
+    /** @param conversation_id the ID of the conversation
+        @param item_id the ID of the item in the conversation
+
+        @return the REST path for the given conversation item
+
+        @since OpenAiDataProvider 1.6
+    */
+    static string conversationItemPath(string conversation_id, string item_id) {
+        return OpenAiDataProviderCommon::conversationPath(conversation_id) + "/items/" + encode_url(item_id, True);
+    }
+
+    #! Returns the REST path for the given response
+    /** @param id the ID of the response
+
+        @return the REST path for the given response
+
+        @since OpenAiDataProvider 1.6
+    */
+    static string responsePath(string id) {
+        return "responses/" + encode_url(id, True);
+    }
+
+    #! Returns a URI query string for the given parameters
+    /** Keys with no value are omitted; list values are serialized as repeated keys as required by the OpenAI API.
+
+        @param params the query parameters to serialize
+
+        @return a URI query string starting with \c "?" or an empty string if there are no parameters with values
+
+        @since OpenAiDataProvider 1.6
+    */
+    static string makeQueryString(*hash<auto> params) {
+        list<string> args;
+        foreach hash<auto> i in (params.pairIterator()) {
+            if (!exists i.value) {
+                continue;
+            }
+            string key = encode_url(i.key, True);
+            # lists are serialized as repeated keys (OpenAPI "form" style with "explode": true)
+            foreach auto val in (i.value.typeCode() == NT_LIST ? i.value : (i.value,)) {
+                args += sprintf("%s=%s", key, encode_url(string(val), True));
+            }
+        }
+        return args ? "?" + args.join("&") : "";
+    }
+
+    #! Returns the server-side conversation ID from a response object, if any
+    /** The Responses API returns the conversation as a \c conversation object with an \c id key; earlier
+        pre-release builds returned a flat \c conversation_id string, which is still accepted here.
+
+        @param resp the response hash returned by the API
+
+        @return the conversation ID or @ref nothing if the response is not bound to a conversation
+
+        @since OpenAiDataProvider 1.6
+    */
+    static *string getResponseConversationId(*hash<auto> resp) {
+        if (resp.conversation.typeCode() == NT_HASH && exists resp.conversation.id) {
+            return resp.conversation.id;
+        }
+        if (resp.conversation.typeCode() == NT_STRING) {
+            return resp.conversation;
+        }
+        return resp.conversation_id;
+    }
+
+    #! Converts conversation timestamps from Unix seconds to Qore dates
+    /** @param conv the conversation hash returned by the API
+
+        @return the conversation hash with \c created_at converted to a date
+
+        @since OpenAiDataProvider 1.6
+    */
+    static hash<auto> fixConversationTimestamps(hash<auto> conv) {
+        if (exists conv.created_at && conv.created_at.typeCode() != NT_DATE) {
+            # hash addition is used rather than in-place assignment so that a narrowly-typed argument
+            # (ex: hash<string, int>) is widened instead of raising a RUNTIME-TYPE-ERROR
+            return conv + {"created_at": localtime(conv.created_at)};
+        }
+        return conv;
+    }
+
+    #! Issues a one-time warning that the OpenAI Assistants API is deprecated
+    /** @param replacement a description of the supported replacement for the caller
+
+        @since OpenAiDataProvider 1.6
+    */
+    private warnAssistantApiDeprecated(string replacement) {
+        {
+            AutoLock al(deprecation_lock);
+            if (assistant_deprecation_warned) {
+                return;
+            }
+            assistant_deprecation_warned = True;
+        }
+        warn("the OpenAI Assistants API is deprecated and will be removed by OpenAI on %s; use %s instead",
+            format_date("YYYY-MM-DD", OpenAiAssistantApiSunsetDate), replacement);
+    }
+
     #! Makes a REST call and returns the response; handles rate limit responses
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
+        if (hdr && hdr."OpenAI-Beta" == AssistantApiHdr."OpenAI-Beta") {
+            warnAssistantApiDeprecated("the `conversations` and `responses` data providers");
+        }
         int retries = 0;
         while (True) {
             try {

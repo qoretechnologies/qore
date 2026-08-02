@@ -191,6 +191,11 @@ module McpClient {
     @section McpClient_relnotes McpClient Release Notes
 
     @subsection McpClient_1_0 McpClient v1.0
+    - added support for the @ref mcp_apps "MCP Apps extension" (\c io.modelcontextprotocol/ui) under the
+      \c enable_ui option: the client negotiates the extension, surfaces \c _meta.ui through
+      @ref McpClient::McpClient::getToolUiMeta() "getToolUiMeta()", and fetches an interface with its sandbox
+      policy through @ref McpClient::McpClient::getUiResource() "getUiResource()".  Rendering is a browser's job
+      and is deliberately out of scope
     - initial release with full MCP protocol support
     - async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
       protocol negotiation and connection pooling

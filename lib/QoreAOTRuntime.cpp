@@ -1150,6 +1150,55 @@ static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
     return true;
 }
 
+//! Records why the most recent expression-slot resolution failed.
+/** Slot resolution reports failure as a bare 0, which surfaces to the user as an
+    "unsupported AOT slot metadata" error naming only the enclosing function -- with no hint that the
+    real cause is a symbol that could not be resolved.  This carries the detail from the resolution
+    site to the error that is finally reported.
+
+    Thread-local because several Programs can register AOT slots concurrently. */
+static thread_local std::string aot_slot_resolve_error;
+
+//! Describes an unresolvable AOT symbol, naming the modules that could have provided it
+/** An AOT artifact only references symbols that resolved when it was compiled, so a symbol that
+    cannot be resolved now means a module providing it is missing, or is older than the one compiled
+    against.  Listing the modules actually loaded in this Program turns an opaque failure into a
+    version/staleness comparison the caller can act on.
+
+    @param what the kind of symbol, e.g. \c "function"
+    @param sym the symbol name as recorded in the slot map
+    @param pgm the Program the symbol was looked up in
+
+    @return a description naming the symbol and the loaded modules */
+static std::string describeUnresolvedAOTSymbol(const char* what, const char* sym, QoreProgram* pgm) {
+    std::string msg = what;
+    msg += " '";
+    msg += sym ? sym : "(unnamed)";
+    msg += "' could not be resolved; the AOT artifact was compiled against a build where it existed, so a "
+        "module providing it is missing or older than the one compiled against";
+    if (pgm) {
+        ReferenceHolder<QoreListNode> features(qore_program_private::get(*pgm)->getFeatureList(), nullptr);
+        if (features && !features->empty()) {
+            msg += " (modules loaded here: ";
+            ConstListIterator li(*features);
+            bool first = true;
+            while (li.next()) {
+                const QoreStringNode* f = li.getValue().get<const QoreStringNode>();
+                if (!f) {
+                    continue;
+                }
+                if (!first) {
+                    msg += ", ";
+                }
+                first = false;
+                msg += f->c_str();
+            }
+            msg += ")";
+        }
+    }
+    return msg;
+}
+
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
     if (!pgm) {
@@ -1166,6 +1215,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
             if (!fe) {
                 printd(0, "AOT v2: cannot resolve function '%s' for expr slot\n", ref1);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("function", ref1, pgm);
                 return 0;
             }
             // Create a FunctionCallNode with no args (args handled by native code).
@@ -1282,6 +1332,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for static method '%s'\n",
                     class_desc.c_str(), ref2);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("class", class_desc.c_str(), pgm);
                 return 0;
             }
             const QoreMethod* m = findAOTStaticMethod(qc, method_name);
@@ -1434,6 +1485,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for new object\n",
                     class_desc.c_str());
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("class", class_desc.c_str(), pgm);
                 return 0;
             }
             const QoreMethod* cons = qc->getConstructor();
@@ -6920,7 +6972,16 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (trace_slot_reg) {
             fprintf(stderr, "[aot-slot-reg] SKIP '%s': unsupported expr slots\n", name);
         }
-        setBuildError("unsupported AOT slot metadata; source fallback is disabled");
+        // name the symbol that failed to resolve when one was recorded; without it the caller sees only
+        // "unsupported AOT slot metadata" and has no way to tell a stale module from a real metadata problem
+        std::string msg = "unsupported AOT slot metadata";
+        if (!aot_slot_resolve_error.empty()) {
+            msg += ": ";
+            msg += aot_slot_resolve_error;
+            aot_slot_resolve_error.clear();
+        }
+        msg += "; source fallback is disabled";
+        setBuildError(msg);
         delete ctx;
         return nullptr;
     }
@@ -10866,7 +10927,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_name,
     QoreProgram* shadow_pgm,
     const char* mod_path,
-    bool write_shadow);
+    bool write_shadow,
+    ExceptionSink* failure_sink);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11253,7 +11315,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
                     }
                 }
             }
@@ -11356,7 +11418,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_name,
     QoreProgram* shadow_pgm,
     const char* mod_path,
-    bool write_shadow);
+    bool write_shadow,
+    ExceptionSink* failure_sink);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -11932,7 +11995,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             init_descriptors, mod_name.c_str(),
             init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
             mod_path.empty() ? nullptr : mod_path.c_str(),
-            write_shadow);
+            write_shadow, &xsink);
         return finish(failed == 0);
     }
 
@@ -12445,7 +12508,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
                     }
                 }
             }
@@ -13067,6 +13130,35 @@ DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
     return it->second.pgm;
 }
 
+DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) {
+    if (!name) {
+        return 0;
+    }
+
+    QoreProgram* pgm = nullptr;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        auto it = aot_module_map.find(name);
+        if (it == aot_module_map.end() || !it->second.pgm) {
+            return 0;
+        }
+        pgm = it->second.pgm;
+        qore_program_private::get(*pgm)->merged_aot_modules.insert(name);
+    }
+
+    AOTModuleInitRunResult result = runAOTModuleInitForProgram(name, pgm, xsink);
+    if (xsink) {
+        return -1;
+    }
+    if (result.hard_error) {
+        xsink.raiseException("MODULE-LOAD-ERROR", "AOT module '%s' initialization failed: %s", name,
+            result.error.c_str());
+        return -1;
+    }
+    retryPendingAOTModuleInitsForProgram(pgm, xsink);
+    return xsink ? -1 : 0;
+}
+
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     std::vector<QoreProgram*> programs;
     {
@@ -13422,7 +13514,8 @@ static int executeInitFunctions(
         const char* mod_name,
         QoreProgram* shadow_pgm,
         const char* mod_path,
-        bool write_shadow) {
+        bool write_shadow,
+        ExceptionSink* failure_sink) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -13587,6 +13680,14 @@ static int executeInitFunctions(
         if (is_module_init != run_module_init) {
             continue;
         }
+        // A source module's init closure runs once when the module is registered globally, not once for every
+        // Program that imports it.  The first AOT initialization pass owns the shared shadow population and is
+        // therefore the equivalent global execution.  Later imports still initialize program-local constants and
+        // variables in pass 0, but must not repeat module-registration or other external side effects in pass 1.
+        if (is_module_init && !write_shadow) {
+            desc_done[di] = true;
+            continue;
+        }
         if (aotInitTraceEnabled()) {
             fprintf(stderr, "[aot-init] descriptor module=%s pass=%d round=%d name=%s target=%d ns=%s item=%s\n",
                 mod_name ? mod_name : "<none>", pass, round, desc.name.c_str(),
@@ -13722,6 +13823,9 @@ static int executeInitFunctions(
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(), err_cstr, desc_cstr,
                 is_pending ? " (will retry)" : "");
+            if (failure_sink && !*failure_sink && run_module_init) {
+                failure_sink->raiseException(err_cstr, "%s", desc_cstr);
+            }
             xsink.clear();
             if (!run_module_init) {
                 // Leave pass-0 init descriptors retryable until the fixpoint
@@ -14083,9 +14187,17 @@ static int executeInitFunctions(
                 printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
                     descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
                     last_error_pending[di] ? " (pending)" : "");
+                if (failure_sink && !*failure_sink) {
+                    failure_sink->raiseException(last_error[di].c_str(), "%s", last_desc[di].c_str());
+                }
             } else {
                 printd(0, "AOT init: '%s' remained pending after %d rounds\n",
                     descriptors[di].name.c_str(), 32);
+                if (failure_sink && !*failure_sink) {
+                    failure_sink->raiseException("AOT-INIT-ERROR",
+                        "AOT initializer '%s' remained pending after %d rounds",
+                        descriptors[di].name.c_str(), 32);
+                }
             }
             ++failed;
         }
@@ -14737,7 +14849,7 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true);
+                    /*write_shadow=*/true, /*failure_sink=*/nullptr);
             }
         }
     }
@@ -14941,7 +15053,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             label ? label : "<script>",
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true,
+                            /*failure_sink=*/nullptr);
                     }
                 }
             } else {
@@ -15290,7 +15403,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
-                    /*write_shadow=*/true);
+                    /*write_shadow=*/true,
+                    /*failure_sink=*/nullptr);
                 if (time_on) {
                     us_init += now_us() - t1;
                 }

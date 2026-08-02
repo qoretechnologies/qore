@@ -68,7 +68,7 @@ public class OpenAiResponseStreamEventDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiResponseStreamEvent") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
@@ -289,7 +289,8 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         *hash<auto> effective_metadata = ctx.metadata ?? metadata;
         hash<auto> ctx_data = {
             "previous_response_id": payload.response.id,
-            "conversation_id": payload.response.conversation_id ?? ctx.conversation_id,
+            "conversation_id": OpenAiDataProviderCommon::getResponseConversationId(payload.response)
+                ?? ctx.conversation_id,
         };
         if (effective_metadata) {
             ctx_data.metadata = effective_metadata;

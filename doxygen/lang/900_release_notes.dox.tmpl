@@ -789,6 +789,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     declared child is reported by get_module_hash() under the
     \c "child-modules" key.
 
+    AOT-compiled optional children now run their module initializer exactly
+    once without exporting the child's private namespace through its parent.
+    This makes extension registration and initializer error reporting
+    consistent between source and precompiled modules.
+
     See @ref try-child-module "%try-child-module" and
     @ref user_module_children "Child Modules" for details.
     @endparblock
@@ -1720,6 +1725,11 @@ foreach string module_name in (registry.getProcessModules()) {
         \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
         subclass of \c OpenAiLlmProvider with the xAI default URL applied
 
+    - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
+      - added optional AsyncAPI 3.0 validation for deserialized
+        @ref HttpClientStreamingIo::SseObservable "SseObservable" SSE event data via the \c asyncapi,
+        \c validator, and \c asyncapi_channel options
+
     - @ref httpserverintro "HttpServer" module
       - implemented async I/O mode for high-concurrency connection handling, enabled by default: a single
         I/O thread handles accept/SSL/header reading while requests dispatch to a ThreadPool — many more
@@ -1735,11 +1745,6 @@ foreach string module_name in (registry.getProcessModules()) {
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
       - new \c StreamResponseProducer worker-thread response-body streamer for non-I/O-thread-safe
         @ref Qore::InputStream "InputStream" bodies on HTTP/2 and HTTP/3
-
-    - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
-      - added optional AsyncAPI 3.0 validation for deserialized
-        @ref HttpClientStreamingIo::SseObservable "SseObservable" SSE event data via the \c asyncapi,
-        \c validator, and \c asyncapi_channel options
 
     - @ref loggerintro "Logger" module
       - added memory-based backpressure to \c LoggerAppenderQueue to prevent unbounded memory growth when
@@ -2014,6 +2019,12 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref aftershiprestclientintro "AftershipRestClient" module
       - new module providing a REST client for the <a href="https://www.aftership.com/">Aftership</a> tracking and returns API
+
+    - @ref aguiintro "AgUi" module
+      - new module implementing the <a href="https://docs.ag-ui.com">AG-UI</a> (Agent User Interaction) protocol:
+        an emitter that formats agent events into a caller-supplied stream, and a client that parses such a stream
+        back into typed events and reconstructs the run's state.  Neither owns a socket, so both drop into an
+        existing HTTP/SSE or WebSocket transport unchanged
 
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
@@ -2358,6 +2369,12 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref jsonldintro "JsonLd" module
       - new module providing <a href="https://www.w3.org/TR/json-ld11/">JSON-LD 1.1</a> processing,
         implementing the W3C expansion, compaction, flattening, framing and RDF serialization algorithms
+
+    - @ref jsonpatchintro "JsonPatch" module
+      - new module implementing <a href="https://www.rfc-editor.org/rfc/rfc6902">RFC 6902</a> JSON Patch
+        generation and application over %Qore data, plus the
+        <a href="https://www.rfc-editor.org/rfc/rfc6901">RFC 6901</a> JSON Pointer operations the
+        @ref jsonintro "json" module does not provide (splitting, joining and unescaping)
 
     - @ref jsonrpcclientiointro "JsonRpcClientIo" module
       - new module providing a pure-%Qore <a href="https://www.jsonrpc.org/specification">JSON-RPC</a>
@@ -2754,6 +2771,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - HTTP/3 and QUIC
+      - fixed a peer-initiated stream abort being invisible to the application: ngtcp2's \c stream_reset
+        callback was never registered, and a peer \c STOP_SENDING reaches the application only as a stream
+        close carrying the peer's error code, which was not reported either.  A client that abandoned a
+        long-lived response stream while keeping its connection for other requests therefore left the server
+        writing into a stream nobody read, until the whole QUIC session closed
+
     - Build
       - fixed \c libqore being unloadable with \c dlopen() on musl targets (Alpine Linux), which broke embedding
         Qore in Python (\c "import qoreloader" failed with \c "initial-exec TLS resolves to dynamic definition").
@@ -2761,6 +2785,40 @@ foreach string module_name in (registry.getProcessModules()) {
         from source with \c --disable-initial-exec-tls: distribution packages compile jemalloc's thread-specific
         data with the initial-exec TLS model, which musl's dynamic linker refuses in any library opened with
         \c dlopen()
+
+    - @ref dataproviderintro "DataProvider" module
+      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
+        an empty string key, preventing bulk operations from flushing correctly
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added @ref DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps() "DataProviderActionCatalog::cacheAllRegisteredApps()",
+        which populates the provider index app cache from all registered applications, so that a complete app
+        catalog can be recovered when the data provider index cannot be read
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+
+    - \c qdp and the <a href="../../modules/ProviderIndex/html/index.html#providerindexintro">ProviderIndex</a> and
+      <a href="../../modules/ProviderIndexUtil/html/index.html#providerindexutilintro">ProviderIndexUtil</a> modules
+      - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
+        @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
+        @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
+        never ran, and shutdown handlers registered by data provider modules that start background threads or
+        external processes (such as the TypeScript action interface process pool) were silently skipped, leaving
+        external processes orphaned; all \c qdp exit paths now shut down data provider services first
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - fixed the provider index directory being created without the execute bit (mode \c 0664), which made the
+        directory untraversable, so that no index file in it could be read or written; the directory is now
+        created with mode \c 0755
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - provider index files are now written atomically (written to a temporary file in the target directory and
+        renamed over the target), and the existing index is no longer moved out of the way before the new index
+        is created, so an interrupted or failed index creation can no longer leave the system with no index at all
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - an index directory that is not readable, writable, and traversable is now reported as an actionable
+        \c PROVIDER-INDEX-ERROR before the index is built, instead of as a file-open error after it
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - added \c ProviderIndexUtil::getIndexReadError() so that callers can distinguish an unreadable or corrupt
+        index from a system where no index has been created yet, and therefore avoid silently degrading to a
+        partial app catalog
+        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
 
     - @ref mysqlsqlutilintro "MysqlSqlUtil" module
       - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
@@ -2843,40 +2901,6 @@ foreach string module_name in (registry.getProcessModules()) {
       imported into a @ref Qore::Program "Program"; objects now hold a reference to the class handle of their
       class, so objects that outlive the @ref Qore::Program "Program" that created them (such as objects held in
       class constants by binary modules) no longer refer to freed memory when destroyed
-
-    - @ref dataproviderintro "DataProvider" module
-      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
-        an empty string key, preventing bulk operations from flushing correctly
-        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-      - added @ref DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps() "DataProviderActionCatalog::cacheAllRegisteredApps()",
-        which populates the provider index app cache from all registered applications, so that a complete app
-        catalog can be recovered when the data provider index cannot be read
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
-
-    - \c qdp and the <a href="../../modules/ProviderIndex/html/index.html#providerindexintro">ProviderIndex</a> and
-      <a href="../../modules/ProviderIndexUtil/html/index.html#providerindexutilintro">ProviderIndexUtil</a> modules
-      - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
-        @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
-        @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
-        never ran, and shutdown handlers registered by data provider modules that start background threads or
-        external processes (such as the TypeScript action interface process pool) were silently skipped, leaving
-        external processes orphaned; all \c qdp exit paths now shut down data provider services first
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
-      - fixed the provider index directory being created without the execute bit (mode \c 0664), which made the
-        directory untraversable, so that no index file in it could be read or written; the directory is now
-        created with mode \c 0755
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
-      - provider index files are now written atomically (written to a temporary file in the target directory and
-        renamed over the target), and the existing index is no longer moved out of the way before the new index
-        is created, so an interrupted or failed index creation can no longer leave the system with no index at all
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
-      - an index directory that is not readable, writable, and traversable is now reported as an actionable
-        \c PROVIDER-INDEX-ERROR before the index is built, instead of as a file-open error after it
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
-      - added \c ProviderIndexUtil::getIndexReadError() so that callers can distinguish an unreadable or corrupt
-        index from a system where no index has been created yet, and therefore avoid silently degrading to a
-        partial app catalog
-        (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
 
     - @ref reflectionintro "reflection" module
       - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy

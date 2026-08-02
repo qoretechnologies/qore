@@ -26,26 +26,73 @@
 public namespace A2aClient {
 
 #! A2A task state enum
-/** @since json 1.11
+/** The values are the A2A v0.3 wire representation; use
+    @ref A2aClient::a2aTranslateTaskStateToV10() "a2aTranslateTaskStateToV10()" to convert them to the v1.0
+    \c TASK_STATE_* form.
+
+    @since json 1.11
 */
 public enum A2aTaskState : string {
-    #! Task is waiting to be processed
-    Pending = "pending",
+    #! Task has been submitted and acknowledged but is not yet being processed
+    Submitted = "submitted",
     #! Task is currently being processed
-    Active = "active",
+    Working = "working",
     #! Task requires additional user input
     InputRequired = "input-required",
     #! Task requires authentication
     AuthRequired = "auth-required",
     #! Task completed successfully
+    /** This is a terminal state
+    */
     Completed = "completed",
     #! Task failed with an error
+    /** This is a terminal state
+    */
     Failed = "failed",
     #! Task was canceled
+    /** This is a terminal state
+    */
     Canceled = "canceled",
     #! Task was rejected by the agent
+    /** This is a terminal state
+    */
     Rejected = "rejected",
+    #! Task is in an unknown or indeterminate state
+    Unknown = "unknown",
+
+    #! Task has been submitted and acknowledged but is not yet being processed
+    /** @deprecated Use @ref A2aTaskState::Submitted instead; this alias previously had the non-conformant wire
+        value \c "pending", which no A2A peer accepts
+    */
+    Pending = "submitted",
+    #! Task is currently being processed
+    /** @deprecated Use @ref A2aTaskState::Working instead; this alias previously had the non-conformant wire
+        value \c "active", which no A2A peer accepts
+    */
+    Active = "working",
 }
+
+#! The A2A v0.3 task states that are terminal
+/** A task in one of these states accepts no further messages and any stream for it must be closed.
+
+    @since A2aClient 1.0
+*/
+public const A2aTerminalTaskStatesV03 = {
+    A2aTaskState::Completed: True,
+    A2aTaskState::Failed: True,
+    A2aTaskState::Canceled: True,
+    A2aTaskState::Rejected: True,
+};
+
+#! The A2A v1.0 task states that are terminal
+/** @since A2aClient 1.0
+*/
+public const A2aTerminalTaskStatesV10 = {
+    "TASK_STATE_COMPLETED": True,
+    "TASK_STATE_FAILED": True,
+    "TASK_STATE_CANCELED": True,
+    "TASK_STATE_REJECTED": True,
+};
 
 #! A2A message role enum
 /** @since json 1.11
@@ -85,23 +132,115 @@ public enum A2aSecuritySchemeType : string {
     MutualTls = "mutualTLS",
 }
 
-#! A2A error codes per specification
+/** @defgroup a2a_error_codes A2A JSON-RPC Error Codes
+    The error codes assigned by the A2A specification.  These values are identical in v0.3 and v1.0, except that
+    \c -32008 and \c -32009 were added in v1.0.
+
+    A2A-specific errors occupy the JSON-RPC implementation-defined server-error range (\c -32000 to \c -32099);
+    protocol-level failures use the standard JSON-RPC codes instead (ex: \c -32602 for invalid parameters).
+
+    @since A2aClient 1.0
+*/
+#/@{
+#! The specified task ID does not correspond to an existing or accessible task
+public const A2A_ERR_TASK_NOT_FOUND = -32001;
+
+#! An attempt was made to cancel a task that is not in a cancelable state
+public const A2A_ERR_TASK_NOT_CANCELABLE = -32002;
+
+#! The client attempted to use push notifications but the agent does not support them
+public const A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED = -32003;
+
+#! The requested operation, or a specific aspect of it, is not supported by this agent
+public const A2A_ERR_UNSUPPORTED_OPERATION = -32004;
+
+#! A media type in the request is not supported by the agent or the invoked skill
+public const A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED = -32005;
+
+#! The agent returned a response that does not conform to the specification for the method
+public const A2A_ERR_INVALID_AGENT_RESPONSE = -32006;
+
+#! The agent does not have an extended agent card configured
+public const A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED = -32007;
+
+#! The client did not declare support for an extension the agent marks as required
+/** @note added in A2A v1.0
+*/
+public const A2A_ERR_EXTENSION_SUPPORT_REQUIRED = -32008;
+
+#! The A2A protocol version requested via the \c A2A-Version service parameter is not supported
+/** @note added in A2A v1.0
+*/
+public const A2A_ERR_VERSION_NOT_SUPPORTED = -32009;
+
+#! Maps each A2A error code to its specification error name
+public const A2aErrorNameMap = {
+    A2A_ERR_TASK_NOT_FOUND: "TaskNotFoundError",
+    A2A_ERR_TASK_NOT_CANCELABLE: "TaskNotCancelableError",
+    A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED: "PushNotificationNotSupportedError",
+    A2A_ERR_UNSUPPORTED_OPERATION: "UnsupportedOperationError",
+    A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED: "ContentTypeNotSupportedError",
+    A2A_ERR_INVALID_AGENT_RESPONSE: "InvalidAgentResponseError",
+    A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED: "ExtendedAgentCardNotConfiguredError",
+    A2A_ERR_EXTENSION_SUPPORT_REQUIRED: "ExtensionSupportRequiredError",
+    A2A_ERR_VERSION_NOT_SUPPORTED: "VersionNotSupportedError",
+};
+#/@}
+
+#! The specified task ID does not correspond to an existing or accessible task
+/** @note Before the initial release this constant had the value \c -32002, which the A2A specification assigns to
+    \c TaskNotCancelableError; it now carries the conformant \c TaskNotFoundError code
+*/
+public const A2A_ERR_NOT_FOUND = A2A_ERR_TASK_NOT_FOUND;
+
+#! An operation was attempted that conflicts with the task's current state
+/** @note Before the initial release this constant had the value \c -32003, which the A2A specification assigns to
+    \c PushNotificationNotSupportedError; it now carries the conformant \c TaskNotCancelableError code
+*/
+public const A2A_ERR_CONFLICT = A2A_ERR_TASK_NOT_CANCELABLE;
+
+#! The parameters provided for the method are invalid
+/** The A2A specification does not assign a code for invalid parameters; the standard JSON-RPC
+    \c "Invalid params" code is used.
+
+    @note Before the initial release this constant had the value \c -32004, which the A2A specification assigns to
+    \c UnsupportedOperationError
+*/
+public const A2A_ERR_INVALID_ARGUMENT = -32602;
+
+#! Authorization failed
+/** @deprecated This is not an A2A protocol error; authorization failures are signaled with HTTP status codes
+    (\c 401 and \c 403) as described in section 7 of the A2A specification.  The value was moved out of the
+    range the specification assigns so that it can no longer be mistaken for an A2A error.
+*/
 public const A2A_ERR_UNAUTHORIZED = -32000;
-public const A2A_ERR_FORBIDDEN = -32001;
-public const A2A_ERR_NOT_FOUND = -32002;
-public const A2A_ERR_CONFLICT = -32003;
-public const A2A_ERR_INVALID_ARGUMENT = -32004;
-public const A2A_ERR_SERVICE_UNAVAILABLE = -32005;
-public const A2A_ERR_REQUEST_TIMEOUT = -32006;
+
+#! Access to the resource is forbidden
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32001, which the A2A specification assigns to \c TaskNotFoundError.
+*/
+public const A2A_ERR_FORBIDDEN = -32010;
+
+#! The service is unavailable
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32005, which the A2A specification assigns to \c ContentTypeNotSupportedError.
+*/
+public const A2A_ERR_SERVICE_UNAVAILABLE = -32011;
+
+#! The request timed out
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32006, which the A2A specification assigns to \c InvalidAgentResponseError.
+*/
+public const A2A_ERR_REQUEST_TIMEOUT = -32012;
 
 #! Valid task state transitions
 public const A2aValidTransitions = {
-    A2aTaskState::Pending: {
-        A2aTaskState::Active: True,
+    A2aTaskState::Submitted: {
+        A2aTaskState::Working: True,
         A2aTaskState::Canceled: True,
         A2aTaskState::Rejected: True,
     },
-    A2aTaskState::Active: {
+    A2aTaskState::Working: {
         A2aTaskState::InputRequired: True,
         A2aTaskState::AuthRequired: True,
         A2aTaskState::Completed: True,
@@ -109,13 +248,13 @@ public const A2aValidTransitions = {
         A2aTaskState::Canceled: True,
     },
     A2aTaskState::InputRequired: {
-        A2aTaskState::Active: True,
+        A2aTaskState::Working: True,
         A2aTaskState::Completed: True,
         A2aTaskState::Failed: True,
         A2aTaskState::Canceled: True,
     },
     A2aTaskState::AuthRequired: {
-        A2aTaskState::Active: True,
+        A2aTaskState::Working: True,
         A2aTaskState::Completed: True,
         A2aTaskState::Failed: True,
         A2aTaskState::Canceled: True,
@@ -209,6 +348,16 @@ public hashdecl A2aAgentCapabilities {
 
     #! Whether extended agent card is supported
     *bool extendedAgentCard;
+
+    #! Whether the agent exposes task status change history
+    /** @since A2aClient 1.0
+    */
+    *bool stateTransitionHistory;
+
+    #! The protocol extensions the agent supports
+    /** @since A2aClient 1.0
+    */
+    *list<hash<A2aAgentExtension>> extensions;
 }
 
 #! A2A Agent Interface entry (v1.0)
@@ -400,6 +549,23 @@ public hashdecl A2aDataPart {
 
     @since json 1.11
 */
+#! Callback name that receives every streaming event regardless of kind
+/** @see @ref A2aClient::A2aClient::setCallback()
+*/
+public const A2aAnyEventCallback = "*";
+
+#! Convenience callback names accepted by @ref A2aClient::A2aClient::setCallback()
+/** Maps each convenience name to the event type it selects.  The event types themselves are
+    the v0.3 names; a v1.0 stream is normalized to them by
+    @ref A2aClient::a2aTranslateSseEventToV03() before any callback runs, so a caller
+    registers once and does not care which protocol version the peer speaks.
+*/
+public const A2aLegacyCallbackNames = {
+    "onTaskStatusUpdate": "TaskStatusUpdateEvent",
+    "onTaskArtifactUpdate": "TaskArtifactUpdateEvent",
+    "onTaskMessageUpdate": "TaskMessageUpdateEvent",
+};
+
 public class A2aClient {
     public {
         #! Default connect timeout (30 seconds)
@@ -450,13 +616,19 @@ public class A2aClient {
         Counter sse_cnt();
 
         #! Callbacks for events
-        hash<string, code> callbacks;
+        hash<string, code<nothing(string, hash<auto>)>> callbacks;
 
         #! Detected/configured A2A protocol version
         string protocol_version = A2aVersionV03;
 
         #! Extra headers for all requests (e.g., auth tokens)
         hash<auto> default_headers;
+
+        #! Extension URIs requested on every call, sent in the \c A2A-Extensions service parameter
+        list<string> requested_extensions();
+
+        #! Extension URIs the agent activated on the last call
+        list<string> activated_extensions();
 
         #! Protocol for the connection manager ("h1", "h2", "h3", or "auto")
         string protocol = "auto";
@@ -723,11 +895,36 @@ public class A2aClient {
         });
     }
 
-    #! Sets a callback for the given event
-    /** @param name the callback name (e.g., \c "onTaskStatusUpdate", \c "onTaskArtifactUpdate")
-        @param cb the callback code
+    #! Sets a callback fired for each event received on a streaming call
+    /** Registered callbacks are dispatched by @ref sendMessageStream() and
+        @ref resubscribeTask() alongside the per-call \c on_event handler, so a caller can
+        register a handler once instead of passing one to every streaming call.
+
+        The callback name is the event type: \c "TaskStatusUpdateEvent",
+        \c "TaskArtifactUpdateEvent" or \c "TaskMessageUpdateEvent", or one of the
+        @ref A2aLegacyCallbackNames "convenience aliases" (\c "onTaskStatusUpdate", …).
+        Register under @ref A2aAnyEventCallback to receive every event.
+
+        A v1.0 stream is normalized to the v0.3 event names before dispatch, so the same
+        registration works against a peer speaking either protocol version.
+
+        @param name the event type, a convenience alias, or @ref A2aAnyEventCallback
+        @param cb called with the event kind and the event data
+
+        @note a callback that throws is logged and does not abort the stream: one bad handler
+        must not tear down a subscription the caller is relying on
+
+        @par Example:
+        @code{.py}
+client.setCallback("onTaskStatusUpdate", sub (string kind, hash<auto> data) {
+    printf("task %y is now %y\n", data.params.id, data.params.status.state);
+});
+client.sendMessageStream(msg, sub (string kind, hash<auto> data) {});
+        @endcode
+
+        @see @ref removeCallback()
     */
-    setCallback(string name, code cb) {
+    setCallback(string name, code<nothing(string, hash<auto>)> cb) {
         lck.lock();
         on_exit lck.unlock();
         callbacks{name} = cb;
@@ -740,6 +937,65 @@ public class A2aClient {
         lck.lock();
         on_exit lck.unlock();
         remove callbacks{name};
+    }
+
+    #! Requests the given protocol extensions on every subsequent call
+    /** The URIs are sent in the \c A2A-Extensions service parameter; the agent activates the subset it
+        supports and echoes it back, which @ref getActivatedExtensions() reports.
+
+        @param uris the extension URIs to request; pass an empty list to stop requesting extensions
+
+        @note An agent that does not support a requested extension ignores it, so requesting an extension is
+        always safe; use @ref checkRequiredExtensions() to verify that everything the agent marks as
+        \c required has been requested.
+
+        @since A2aClient 1.0
+    */
+    requestExtensions(softlist<string> uris) {
+        lck.lock();
+        on_exit lck.unlock();
+        requested_extensions = (map trim($1), uris, trim($1).val()) ?? ();
+    }
+
+    #! Returns the extension URIs requested on every call
+    /** @since A2aClient 1.0
+    */
+    list<string> getRequestedExtensions() {
+        lck.lock();
+        on_exit lck.unlock();
+        return requested_extensions;
+    }
+
+    #! Returns the extension URIs the agent activated on the last call
+    /** An agent reports the extensions it actually applied by echoing the \c A2A-Extensions service parameter
+        in its response; an agent that activates none, or that does not implement extensions at all, yields an
+        empty list.
+
+        @return the activated extension URIs
+
+        @since A2aClient 1.0
+    */
+    list<string> getActivatedExtensions() {
+        lck.lock();
+        on_exit lck.unlock();
+        return activated_extensions;
+    }
+
+    #! Verifies that every extension the agent marks as required has been requested
+    /** @param card the agent card to check against; the cached agent card is used if not given
+
+        @return the required extension URIs that have not been requested; an empty list if all requirements
+        are met
+
+        @note The agent card must have been fetched, or supplied here, for this check to be meaningful; with
+        no card at all every check trivially passes.
+
+        @since A2aClient 1.0
+    */
+    list<string> checkRequiredExtensions(*hash<auto> card) {
+        list<string> required = a2aGetRequiredCardExtensions(card ?? getCachedAgentCard());
+        hash<string, bool> requested = (map {$1: True}, getRequestedExtensions()) ?? {};
+        return (map $1, required, !requested{$1}) ?? ();
     }
 
     #! Returns the cached agent card, if any
@@ -762,6 +1018,37 @@ public class A2aClient {
         # Recreate the manager so the client can be reused after close
         mgr = createConnectionManager();
         sse_stop_flag = False;
+    }
+
+    #! Returns the headers carrying the requested extensions, if any
+    /** @return a hash with the \c A2A-Extensions service parameter, or an empty hash if no extensions are
+        requested so that the header is omitted entirely
+
+        @since A2aClient 1.0
+    */
+    private hash<auto> getExtensionRequestHeaders() {
+        *string value = a2aMakeExtensionsHeader(getRequestedExtensions());
+        return value ? {A2aExtensionsHeader: value} : {};
+    }
+
+    #! Records the extensions the agent activated from a response's headers
+    /** @param resp_headers the response headers; header names are matched case-insensitively as required for
+        HTTP
+
+        @since A2aClient 1.0
+    */
+    private setActivatedExtensions(*hash<auto> resp_headers) {
+        *string value;
+        foreach string key in (keys resp_headers) {
+            if (key.lwr() == A2aExtensionsHeader.lwr()) {
+                value = resp_headers{key};
+                break;
+            }
+        }
+        list<string> active = a2aParseExtensionsHeader(value);
+        lck.lock();
+        on_exit lck.unlock();
+        activated_extensions = active;
     }
 
     #! Performs a JSON-RPC call and returns the result
@@ -810,8 +1097,11 @@ public class A2aClient {
             hash<auto> req_headers = {
                 "Content-Type": MimeTypeJson,
                 "Accept": MimeTypeJson,
-            } + default_headers + wire_headers;
+            } + default_headers + wire_headers + getExtensionRequestHeaders();
             hash<auto> resp = mgr.request(url, "POST", url_path, req_headers, body, timeout);
+
+            # record the extensions the agent activated, whether or not the call itself succeeded
+            setActivatedExtensions(resp.headers ?? resp."response-headers" ?? resp);
 
             if (resp.status_code < 200 || resp.status_code >= 300) {
                 throw "A2A-HTTP-ERROR", sprintf("HTTP %d calling %y",
@@ -940,6 +1230,7 @@ public class A2aClient {
                     }
 
                     on_event(event_type, data);
+                    dispatchCallbacks(event_type, data);
                 } catch (hash<ExceptionInfo> ex) {
                     logDebug("Error parsing SSE event: %s: %s", ex.err, ex.desc);
                 }
@@ -950,6 +1241,39 @@ public class A2aClient {
                 rethrow;
             }
             throw "A2A-ERROR", sprintf("Stream request failed for %y: %s: %s", method, ex.err, ex.desc);
+        }
+    }
+
+    #! Dispatches a streaming event to every callback registered for it
+    /** Called for each event on a streaming call, after the per-call handler.  A snapshot is
+        taken under the lock and the callbacks run outside it, so a handler may register or
+        remove callbacks without deadlocking.
+
+        @param event_type the event kind as it appears on the wire
+        @param data the event data
+    */
+    private dispatchCallbacks(string event_type, hash<auto> data) {
+        list<code<nothing(string, hash<auto>)>> cbs;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            if (!callbacks) {
+                return;
+            }
+            foreach string name in (keys callbacks) {
+                if (name == event_type || name == A2aAnyEventCallback
+                        || A2aLegacyCallbackNames{name} == event_type) {
+                    cbs += callbacks{name};
+                }
+            }
+        }
+        foreach code<nothing(string, hash<auto>)> cb in (cbs) {
+            try {
+                cb(event_type, data);
+            } catch (hash<ExceptionInfo> ex) {
+                # one bad handler must not tear down a subscription the caller relies on
+                logDebug("A2A event callback for %y threw: %s: %s", event_type, ex.err, ex.desc);
+            }
         }
     }
 

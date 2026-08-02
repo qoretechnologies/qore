@@ -17,9 +17,11 @@
 
 class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
     public {
-        hash<auto> last_request;
+        # optional: bodyless requests (GET, DELETE, and POST .../cancel) send no body at all
+        *hash<auto> last_request;
         string last_method;
         string last_path;
+        *hash<auto> last_hdr;
         hash<auto> response_body;
         hash<auto> last_stream_request;
         list<hash<SseMessageInfo>> stream_events;
@@ -32,6 +34,7 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
         last_method = method;
         last_path = path;
         last_request = body;
+        last_hdr = hdr;
         if (!response_body) {
             response_body = {
                 "id": "resp_test",
@@ -163,6 +166,17 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("response action create", \responseActionCreateTest());
         addTestCase("response action stream", \responseActionStreamTest());
         addTestCase("response action invalid args", \responseActionInvalidArgsTest());
+        addTestCase("conversation helpers", \conversationHelpersTest());
+        addTestCase("conversation provider tree", \conversationProviderTreeTest());
+        addTestCase("conversation CRUD", \conversationCrudTest());
+        addTestCase("conversation items", \conversationItemsTest());
+        addTestCase("conversation negative", \conversationNegativeTest());
+        addTestCase("response cancel and input items", \responseCancelAndInputItemsTest());
+        addTestCase("response conversation binding", \responseConversationBindingTest());
+        addTestCase("conversation action catalog", \conversationActionCatalogTest());
+        addTestCase("assistants API still functional", \assistantsApiStillFunctionalTest());
+        addTestCase("function call output input", \functionCallOutputInputTest());
+        addTestCase("conversation reference data", \conversationReferenceDataTest());
 
         try {
             setupConnection();
@@ -942,6 +956,493 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             assertEq("INVALID-REQUEST", ex.err);
         }
         assertTrue(caught, "Should reject missing model");
+    }
+
+    conversationHelpersTest() {
+        checkModule();
+
+        # path builders URL-encode the ID segments
+        assertEq("conversations/conv_1", OpenAiDataProviderCommon::conversationPath("conv_1"));
+        assertEq("conversations/conv%2F1", OpenAiDataProviderCommon::conversationPath("conv/1"));
+        assertEq("conversations/conv_1/items/msg_2",
+            OpenAiDataProviderCommon::conversationItemPath("conv_1", "msg_2"));
+        assertEq("conversations/c%201/items/m%202",
+            OpenAiDataProviderCommon::conversationItemPath("c 1", "m 2"));
+        assertEq("responses/resp_3", OpenAiDataProviderCommon::responsePath("resp_3"));
+
+        # query strings: empty, scalar, list-valued, and missing values
+        assertEq("", OpenAiDataProviderCommon::makeQueryString());
+        assertEq("", OpenAiDataProviderCommon::makeQueryString({}));
+        assertEq("", OpenAiDataProviderCommon::makeQueryString({"limit": NOTHING}));
+        assertEq("?limit=5", OpenAiDataProviderCommon::makeQueryString({"limit": 5}));
+        assertEq("?order=asc&after=msg_1",
+            OpenAiDataProviderCommon::makeQueryString({"order": "asc", "after": "msg_1"}));
+        # list values are repeated keys, not a comma-joined value
+        assertEq("?include=a&include=b", OpenAiDataProviderCommon::makeQueryString({"include": ("a", "b")}));
+        assertEq("?q=a%26b", OpenAiDataProviderCommon::makeQueryString({"q": "a&b"}));
+        # a key with a value of 0 or False is still serialized; only NOTHING is dropped
+        assertEq("?limit=0", OpenAiDataProviderCommon::makeQueryString({"limit": 0}));
+
+        # timestamp conversion
+        hash<auto> fixed = OpenAiDataProviderCommon::fixConversationTimestamps({"created_at": 1741900000});
+        assertEq(NT_DATE, fixed.created_at.typeCode());
+        assertEq(1741900000, get_epoch_seconds(fixed.created_at));
+        # already a date: left alone
+        date d = 2026-01-02T03:04:05Z;
+        assertEq(d, OpenAiDataProviderCommon::fixConversationTimestamps({"created_at": d}).created_at);
+        # no timestamp: unchanged
+        assertEq({"id": "conv_1"}, OpenAiDataProviderCommon::fixConversationTimestamps({"id": "conv_1"}));
+
+        # conversation ID extraction from a response
+        assertEq("c1", OpenAiDataProviderCommon::getResponseConversationId({"conversation": {"id": "c1"}}));
+        assertEq("c2", OpenAiDataProviderCommon::getResponseConversationId({"conversation": "c2"}));
+        assertEq("c3", OpenAiDataProviderCommon::getResponseConversationId({"conversation_id": "c3"}));
+        assertNothing(OpenAiDataProviderCommon::getResponseConversationId({}));
+        assertNothing(OpenAiDataProviderCommon::getResponseConversationId());
+        assertNothing(OpenAiDataProviderCommon::getResponseConversationId({"conversation": {}}));
+    }
+
+    conversationProviderTreeTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+        OpenAiDataProvider prov(rest);
+
+        assertTrue(prov.getChildProviderNames().contains("conversations"));
+
+        AbstractDataProvider conv = prov.getChildProviderEx("conversations");
+        assertEq("conversations", conv.getName());
+        assertEq(("create", "delete", "get", "items", "update"), conv.getChildProviderNames());
+
+        AbstractDataProvider items = conv.getChildProviderEx("items");
+        assertEq(("create", "delete", "get", "list"), items.getChildProviderNames());
+
+        AbstractDataProvider resp = prov.getChildProviderEx("responses");
+        assertTrue(resp.getChildProviderNames().contains("cancel"));
+        assertTrue(resp.getChildProviderNames().contains("input-items"));
+
+        # every new type must have its fields registered; an empty field list means the HashDataType
+        # constructor swallowed the Fields hash as options
+        assertEq(("id", "object", "created_at", "metadata"), keys OpenAiConversationDataType.getFields());
+        assertEq(("id", "object", "deleted"), keys OpenAiDeletedConversationDataType.getFields());
+        assertEq(("conversation_id",), keys OpenAiConversationIdRequestType.getFields());
+        assertEq(("conversation_id", "item_id"), keys OpenAiConversationItemIdRequestType.getFields());
+        assertEq(("object", "data", "has_more", "first_id", "last_id"),
+            keys OpenAiConversationItemListDataType.getFields());
+        assertEq(("id", "type", "role", "status", "content"), keys OpenAiConversationItemDataType.getFields());
+        assertGt(0, OpenAiConversationCreateRequestType.getFields().size());
+        assertGt(0, OpenAiResponseItemListDataType.getFields().size());
+
+        # the item list "data" field must be a typed list, not a bare hash
+        assertEq("ConversationItemList", OpenAiConversationItemListDataType.getFields().data.getType().getName());
+    }
+
+    conversationCrudTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+
+        # create
+        rest.response_body = {
+            "id": "conv_abc",
+            "object": "conversation",
+            "created_at": 1741900000,
+            "metadata": {"topic": "demo"},
+        };
+        OpenAiConversationCreateDataProvider create(rest);
+        hash<auto> conv = create.doRequest({"metadata": {"topic": "demo"}});
+        assertEq("POST", rest.last_method);
+        assertEq("conversations", rest.last_path);
+        assertEq({"topic": "demo"}, rest.last_request.metadata);
+        assertEq("conv_abc", conv.id);
+        # created_at must be converted from Unix seconds to a date
+        assertEq(NT_DATE, conv.created_at.typeCode());
+        assertEq(1741900000, get_epoch_seconds(conv.created_at));
+
+        # get
+        OpenAiConversationGetDataProvider get(rest);
+        conv = get.doRequest({"conversation_id": "conv_abc"});
+        assertEq("GET", rest.last_method);
+        assertEq("conversations/conv_abc", rest.last_path);
+        assertEq("conv_abc", conv.id);
+
+        # update: the conversation_id must be in the path, never in the body
+        OpenAiConversationUpdateDataProvider update(rest);
+        conv = update.doRequest({"conversation_id": "conv_abc", "metadata": {"topic": "changed"}});
+        assertEq("POST", rest.last_method);
+        assertEq("conversations/conv_abc", rest.last_path);
+        assertEq({"metadata": {"topic": "changed"}}, rest.last_request);
+        assertNothing(rest.last_request.conversation_id);
+
+        # delete
+        rest.response_body = {
+            "id": "conv_abc",
+            "object": "conversation.deleted",
+            "deleted": True,
+        };
+        OpenAiConversationDeleteDataProvider del(rest);
+        hash<auto> deleted = del.doRequest({"conversation_id": "conv_abc"});
+        assertEq("DELETE", rest.last_method);
+        assertEq("conversations/conv_abc", rest.last_path);
+        assertTrue(deleted.deleted);
+        assertEq("conversation.deleted", deleted.object);
+    }
+
+    conversationItemsTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+        rest.response_body = {
+            "object": "list",
+            "data": (
+                {
+                    "id": "msg_1",
+                    "type": "message",
+                    "role": "user",
+                    "status": "completed",
+                    "content": ({"type": "input_text", "text": "hello"},),
+                },
+            ),
+            "has_more": False,
+            "first_id": "msg_1",
+            "last_id": "msg_1",
+        };
+
+        # list with no filters: no query string at all
+        OpenAiConversationItemListDataProvider list(rest);
+        hash<auto> res = list.doRequest({"conversation_id": "conv_abc"});
+        assertEq("GET", rest.last_method);
+        assertEq("conversations/conv_abc/items", rest.last_path);
+        assertEq("msg_1", res.data[0].id);
+        assertFalse(res.has_more);
+
+        # list with filters: query parameters are emitted in the declared order
+        list.doRequest({
+            "conversation_id": "conv_abc",
+            "after": "msg_0",
+            "include": ("message.input_image.image_url",),
+            "limit": 10,
+            "order": "asc",
+        });
+        assertEq("conversations/conv_abc/items"
+            "?after=msg_0&include=message.input_image.image_url&limit=10&order=asc", rest.last_path);
+
+        # create: items go in the body, the conversation ID in the path
+        OpenAiConversationItemCreateDataProvider create(rest);
+        create.doRequest({
+            "conversation_id": "conv_abc",
+            "items": ({"role": "user", "content": ({"type": "input_text", "text": "hi"},)},),
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("conversations/conv_abc/items", rest.last_path);
+        assertEq(("items",), keys rest.last_request);
+        assertEq("user", rest.last_request.items[0].role);
+
+        # create with include: include is a query parameter, not a body field
+        create.doRequest({
+            "conversation_id": "conv_abc",
+            "items": ({"role": "user", "content": ({"type": "input_text", "text": "hi"},)},),
+            "include": ("message.input_image.image_url",),
+        });
+        assertEq("conversations/conv_abc/items?include=message.input_image.image_url", rest.last_path);
+        assertEq(("items",), keys rest.last_request);
+
+        # get a single item
+        rest.response_body = {
+            "id": "msg_1",
+            "type": "message",
+            "role": "user",
+        };
+        OpenAiConversationItemGetDataProvider get(rest);
+        hash<auto> item = get.doRequest({"conversation_id": "conv_abc", "item_id": "msg_1"});
+        assertEq("GET", rest.last_method);
+        assertEq("conversations/conv_abc/items/msg_1", rest.last_path);
+        assertEq("msg_1", item.id);
+
+        # delete an item: the API returns the conversation, so timestamps are converted
+        rest.response_body = {
+            "id": "conv_abc",
+            "object": "conversation",
+            "created_at": 1741900000,
+        };
+        OpenAiConversationItemDeleteDataProvider del(rest);
+        hash<auto> conv = del.doRequest({"conversation_id": "conv_abc", "item_id": "msg_1"});
+        assertEq("DELETE", rest.last_method);
+        assertEq("conversations/conv_abc/items/msg_1", rest.last_path);
+        assertEq(NT_DATE, conv.created_at.typeCode());
+    }
+
+    conversationNegativeTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+
+        # required fields are enforced by the request type before any REST call is made
+        OpenAiConversationGetDataProvider get(rest);
+        assertThrows("INVALID-REQUEST", "conversation_id", \get.doRequest(), ({},));
+
+        OpenAiConversationItemGetDataProvider item_get(rest);
+        assertThrows("INVALID-REQUEST", "item_id", \item_get.doRequest(), ({"conversation_id": "conv_abc"},));
+
+        # metadata is required on update
+        OpenAiConversationUpdateDataProvider update(rest);
+        assertThrows("INVALID-REQUEST", "metadata", \update.doRequest(), ({"conversation_id": "conv_abc"},));
+
+        # no REST call was made for any of the rejected requests
+        assertNothing(rest.last_method);
+
+        # unknown children are rejected
+        OpenAiDataProvider prov(rest);
+        AbstractDataProvider conv = prov.getChildProviderEx("conversations");
+        assertThrows("INVALID-CHILD-PROVIDER", \conv.getChildProviderEx(), ("nonexistent",));
+    }
+
+    responseCancelAndInputItemsTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+
+        rest.response_body = {
+            "id": "resp_bg",
+            "status": "cancelled",
+        };
+        OpenAiResponseCancelDataProvider cancel(rest);
+        hash<auto> res = cancel.doRequest({"id": "resp_bg"});
+        assertEq("POST", rest.last_method);
+        assertEq("responses/resp_bg/cancel", rest.last_path);
+        assertEq("cancelled", res.status);
+
+        rest.response_body = {
+            "object": "list",
+            "data": ({"id": "msg_1", "type": "message", "role": "user"},),
+            "has_more": False,
+            "first_id": "msg_1",
+            "last_id": "msg_1",
+        };
+        OpenAiResponseInputItemsDataProvider items(rest);
+        hash<auto> il = items.doRequest({"id": "resp_bg"});
+        assertEq("GET", rest.last_method);
+        assertEq("responses/resp_bg/input_items", rest.last_path);
+        assertEq("msg_1", il.data[0].id);
+
+        items.doRequest({"id": "resp_bg", "limit": 100, "order": "desc"});
+        assertEq("responses/resp_bg/input_items?limit=100&order=desc", rest.last_path);
+    }
+
+    responseConversationBindingTest() {
+        checkModule();
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+
+        # the API returns the conversation as an object with an "id" key; the saved context must pick it up.
+        # a flat "conversation_id" response field does not exist in the API and previously broke this path
+        rest.response_body = {
+            "id": "resp_conv",
+            "status": "completed",
+            "conversation": {"id": "conv_bound"},
+            "output": ({"content": ({"text": "ok"},),},),
+        };
+        TestConversationStore store();
+        prov.setConversationContextStore(store);
+
+        hash<auto!> req = {
+            "conversation": "conv_bound",
+            "conversation_key": "user-conv",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": ({"type": "input_text", "text": "hello"},),
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+
+        # the conversation ID is sent to the API unchanged...
+        assertEq("conv_bound", rest.last_request.conversation);
+        # ...and the internal-only fields are stripped from the request
+        assertNothing(rest.last_request.conversation_key);
+        assertNothing(rest.last_request.conversation_context);
+        # ...and the returned conversation ID lands in the saved context
+        assertEq("conv_bound", resp.conversation_context.conversation_id);
+        assertEq("conv_bound", store.last_saved.conversation_id);
+        assertEq("resp_conv", store.last_saved.previous_response_id);
+
+        # the request and response types both expose the conversation field
+        assertTrue(exists OpenAiModelCreateResponseRequestDataType.getFields().conversation);
+        assertTrue(exists OpenAiModelCreateResponseResponseDataType.getFields().conversation);
+    }
+
+    conversationActionCatalogTest() {
+        checkModule();
+        # every new action must resolve, carry options, and declare an output type; an action with no options
+        # renders an empty, unusable form in the UI
+        hash<string, string> expected = {
+            "create-conversation": "/conversations/create",
+            "get-conversation": "/conversations/get",
+            "update-conversation": "/conversations/update",
+            "delete-conversation": "/conversations/delete",
+            "list-conversation-items": "/conversations/items/list",
+            "create-conversation-items": "/conversations/items/create",
+            "get-conversation-item": "/conversations/items/get",
+            "delete-conversation-item": "/conversations/items/delete",
+            "cancel-response": "/responses/cancel",
+            "list-response-input-items": "/responses/input-items",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                OpenAiDataProvider::AppName, i.key
+            );
+            assertEq(i.value, action.path, i.key);
+            assertEq(DPAT_API, action.action_code, i.key);
+            assertGt(0, action.options.size(), i.key);
+            assertTrue(exists action.output_type, i.key);
+        }
+
+        # required options are present and marked required
+        hash<DataProviderActionInfo> get_conv = DataProviderActionCatalog::getAppAction(
+            OpenAiDataProvider::AppName, "get-conversation"
+        );
+        assertTrue(get_conv.options.conversation_id.required);
+        assertEq(OpenAiConversationDataType, get_conv.output_type);
+
+        # item-level actions declare a cascading dropdown: item_id is filtered by the selected conversation
+        foreach string act in (("get-conversation-item", "delete-conversation-item")) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                OpenAiDataProvider::AppName, act
+            );
+            assertTrue(action.options.conversation_id.has_dependents, act);
+            assertEq(("refetch",), action.options.conversation_id.on_change, act);
+            assertEq(("conversation_id",), action.options.item_id.depends_on, act);
+            assertEq("conversation_items", action.options.item_id.ref_data, act);
+            # conversation_id itself cannot be a dropdown: OpenAI has no list-conversations endpoint
+            assertNothing(action.options.conversation_id.ref_data, act);
+        }
+    }
+
+    conversationReferenceDataTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+        OpenAiDataProvider prov(rest);
+
+        assertTrue(prov.getSupportedReferenceData().conversation_items);
+
+        rest.response_body = {
+            "object": "list",
+            "data": (
+                {"id": "msg_1", "type": "message", "role": "user"},
+                {"id": "fc_1", "type": "function_call"},
+            ),
+            "has_more": False,
+        };
+        list<hash<AllowedValueInfo>> vals = prov.getReferenceData("conversation_items", {
+            "conversation_id": "conv_abc",
+        });
+        assertEq("GET", rest.last_method);
+        assertEq("conversations/conv_abc/items", rest.last_path);
+        assertEq(2, vals.size());
+        assertEq("msg_1", vals[0].value);
+        assertEq("msg_1", vals[0].display_name);
+        assertEq("message item from user", vals[0].short_desc);
+        # an item with no role must not produce a dangling "from" in its description
+        assertEq("fc_1", vals[1].value);
+        assertEq("function_call item", vals[1].short_desc);
+
+        # with no controlling value the dropdown stays empty and no REST call is made
+        FakeOpenAiRestClient rest2();
+        OpenAiDataProvider prov2(rest2);
+        assertNothing(prov2.getReferenceData("conversation_items", {}));
+        assertNothing(prov2.getReferenceData("conversation_items", {"conversation_id": ""}));
+        assertNothing(rest2.last_method);
+    }
+
+    assistantsApiStillFunctionalTest() {
+        checkModule();
+        # deprecating the Assistants API providers must not change their behavior before OpenAI's sunset date:
+        # they must still be reachable and still send the "OpenAI-Beta: assistants=v2" header
+        FakeOpenAiRestClient rest();
+        OpenAiDataProvider prov(rest);
+        assertTrue(prov.getChildProviderNames().contains("assistants"));
+        assertTrue(prov.getChildProviderNames().contains("threads"));
+
+        rest.response_body = {
+            "id": "thread_1",
+            "object": "thread",
+            "created_at": 1741900000,
+        };
+        AbstractDataProvider get = prov.getChildProviderEx("threads").getChildProviderEx("get");
+        hash<auto> thread = get.doRequest({"thread_id": "thread_1"});
+        assertEq("GET", rest.last_method);
+        assertEq("threads/thread_1", rest.last_path);
+        assertEq("assistants=v2", rest.last_hdr."OpenAI-Beta");
+        assertEq("thread_1", thread.id);
+
+        # the sunset date is exposed so callers can gate their own migration
+        assertEq(2026-08-26Z, OpenAiDataProviderCommon::OpenAiAssistantApiSunsetDate);
+    }
+
+    functionCallOutputInputTest() {
+        checkModule();
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+
+        # a function tool result is returned as a "function_call_output" input item; the wrapper key supplies the
+        # "type" discriminator that the API requires on the wire
+        hash<auto!> req = {
+            "previous_response_id": "resp_prev",
+            "input": (
+                {
+                    "function_call_output": {
+                        "call_id": "call_abc123",
+                        "output": "{\"answer\":5}",
+                    },
+                },
+            ),
+        };
+        prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("responses", rest.last_path);
+        assertEq("resp_prev", rest.last_request.previous_response_id);
+        hash<auto> item = rest.last_request.input[0];
+        assertEq("function_call_output", item.type);
+        assertEq("call_abc123", item.call_id);
+        assertEq("{\"answer\":5}", item.output);
+
+        # a content-list output is passed through unchanged
+        req = {
+            "previous_response_id": "resp_prev",
+            "input": (
+                {
+                    "function_call_output": {
+                        "call_id": "call_xyz",
+                        "output": ({"type": "input_text", "text": "done"},),
+                        "status": "completed",
+                    },
+                },
+            ),
+        };
+        prov.doRequest(req);
+        item = rest.last_request.input[0];
+        assertEq("function_call_output", item.type);
+        assertEq("completed", item.status);
+        assertEq(({"type": "input_text", "text": "done"},), item.output);
+
+        # message input items are unaffected by the discriminator handling
+        req = {
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": ({"type": "input_text", "text": "hi"},),
+                    },
+                },
+            ),
+        };
+        prov.doRequest(req);
+        item = rest.last_request.input[0];
+        assertNothing(item.type);
+        assertEq("user", item.role);
+
+        # call_id is mandatory
+        assertThrows("RUNTIME-TYPE-ERROR", "call_id", \prov.doRequest(), ({
+            "input": ({"function_call_output": {"output": "x"}},),
+        },));
     }
 
     private usageIntern() {

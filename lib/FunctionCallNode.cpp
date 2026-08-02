@@ -1328,6 +1328,8 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             QoreAOTSourceSymbolKind::Class);
         bool defer_source_class = !deferred_source_class_path.empty();
         if (!defer_source_class && (oc = qore_root_ns_private::parseFindScopedClass(loc, *name, false))) {
+            qore_aot_record_resolved_source_parse_class_import(
+                parse_context.pgm ? parse_context.pgm : getProgram(), loc, oc);
             // check if parse options allow access to this class
             int64 cflags = oc->getDomain();
             if (cflags && qore_program_private::parseAddDomain(parse_context.pgm, cflags)) {

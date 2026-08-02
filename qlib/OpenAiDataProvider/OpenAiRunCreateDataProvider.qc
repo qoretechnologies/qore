@@ -25,6 +25,9 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
+/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
+    use the `responses/create` data provider with the `conversation` field set instead
+*/
 public class OpenAiRunCreateDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
@@ -94,7 +97,7 @@ public class OpenAiRunCreateDataProvider inherits OpenAiDataProviderCommon {
 }
 
 #! OpenAI truncation strategy type
-public class OpenAiTrunctationStrategyDataType inherits HashDataType {
+public class OpenAiTruncationStrategyDataType inherits HashDataType {
     public {
         #! fields
         const Fields = {
@@ -142,7 +145,7 @@ public class OpenAiTrunctationStrategyDataType inherits HashDataType {
 }
 
 #! Constant for the truncation strategy type
-public const OpenAiTrunctationStrategyDataType = new OpenAiTrunctationStrategyDataType();
+public const OpenAiTruncationStrategyDataType = new OpenAiTruncationStrategyDataType();
 
 #! The run request data type
 public class OpenAiRunCreateRequestType inherits HashDataType {
@@ -218,7 +221,7 @@ public class OpenAiRunCreateRequestType inherits HashDataType {
                 "short_desc": "Controls for how a thread will be truncated prior to the run",
                 "desc": "Controls for how a thread will be truncated prior to the run. Use this to control the "
                     "initial context window of the run",
-                "type": OpenAiTrunctationStrategyDataType.getOrNothingType(),
+                "type": OpenAiTruncationStrategyDataType.getOrNothingType(),
             },
         } + OpenAiChatCompletionRequestType::Fields{"tool_choice", "response_format"};
     }
@@ -343,7 +346,7 @@ public class OpenAiRequiredActionDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiRunRequest") {
+    constructor() : HashDataType("OpenAiRequiredAction") {
         addQoreFields(Fields);
     }
 }
@@ -373,7 +376,7 @@ public class OpenAiRunErrorDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiRunRequest") {
+    constructor() : HashDataType("OpenAiRunError") {
         addQoreFields(Fields);
     }
 }

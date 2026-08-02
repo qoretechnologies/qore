@@ -133,12 +133,15 @@ public class OpenAiImageCreateRequestType inherits HashDataType {
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "dall-e-2",
+                        "display_name": "DALL·E 2",
                     },
                     <AllowedValueInfo>{
                         "value": "dall-e-3",
+                        "display_name": "DALL·E 3",
                     },
                     <AllowedValueInfo>{
                         "value": "gpt-image-1",
+                        "display_name": "GPT Image 1",
                     },
                 ),
                 "default_value": "dall-e-2",
@@ -381,7 +384,7 @@ public class OpenAiCreateImageResponseType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiImageDataType") {
+    constructor() : HashDataType("OpenAiCreateImageResponse") {
         addQoreFields(Fields);
     }
 }

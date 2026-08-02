@@ -17,6 +17,35 @@
 
 %exec-class A2aServerHandlerTest
 
+#! Captures push-notification webhook deliveries so their shape can be asserted
+class WebhookCapture inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        string body_str = body
+            ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
+            : "";
+        auto parsed;
+        try {
+            parsed = parse_json(body_str);
+        } catch () {
+            parsed = NOTHING;
+        }
+        requests += {
+            "content_type": hdr."content-type",
+            "token": hdr{"x-a2a-notification-token"},
+            "body": parsed,
+        };
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, "{}");
+    }
+
+    reset() {
+        requests = ();
+    }
+}
+
 class A2aServerHandlerTest inherits QUnit::Test {
     private {
         Logger logger;
@@ -24,6 +53,9 @@ class A2aServerHandlerTest inherits QUnit::Test {
         HttpServer http;
         int port;
         string base_url;
+        HttpServer webhook_http;
+        WebhookCapture webhook;
+        string webhook_url;
     }
 
     constructor() : QUnit::Test("A2aServerHandler test", "1.0") {
@@ -42,9 +74,12 @@ class A2aServerHandlerTest inherits QUnit::Test {
         addTestCase("json-rpc tasks/get test", \jsonRpcTasksGetTest());
         addTestCase("json-rpc tasks/cancel test", \jsonRpcTasksCancelTest());
         addTestCase("json-rpc push notification config test", \jsonRpcPushNotificationConfigTest());
+        addTestCase("push notification webhook body v0.3", \pushNotificationWebhookV03Test());
+        addTestCase("push notification webhook body v1.0", \pushNotificationWebhookV10Test());
         addTestCase("json-rpc error codes test", \jsonRpcErrorCodesTest());
         addTestCase("session management test", \sessionManagementTest());
         addTestCase("concurrent tasks test", \concurrentTasksTest());
+        addTestCase("registered stream callback test", \registeredStreamCallbackTest());
         addTestCase("message handler error test", \messageHandlerErrorTest());
         addTestCase("http method handling test", \httpMethodHandlingTest());
         addTestCase("task with context and metadata test", \taskWithContextAndMetadataTest());
@@ -62,6 +97,9 @@ class A2aServerHandlerTest inherits QUnit::Test {
         addTestCase("v1.0 send message params test", \v10SendMessageParamsTest());
         addTestCase("v1.0 version detection test", \v10VersionDetectionTest());
         addTestCase("non-root path SSE streaming test", \nonRootPathSseStreamTest());
+        addTestCase("extension negotiation test", \extensionNegotiationTest());
+        addTestCase("required extension test", \requiredExtensionTest());
+        addTestCase("client extension round trip test", \clientExtensionRoundTripTest());
 
         set_return_value(main());
     }
@@ -144,11 +182,20 @@ class A2aServerHandlerTest inherits QUnit::Test {
         port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         base_url = sprintf("http://localhost:%d", port);
+
+        # separate server used to capture push-notification webhook deliveries
+        webhook = new WebhookCapture();
+        webhook_http = new HttpServer(http_opts);
+        webhook_http.setDefaultHandler("webhook", webhook);
+        webhook_url = sprintf("http://localhost:%d/webhook",
+            webhook_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
     }
 
     globalTearDown() {
         http.stop();
         delete http;
+        webhook_http.stop();
+        delete webhook_http;
     }
 
     agentCardServingTest() {
@@ -595,6 +642,263 @@ class A2aServerHandlerTest inherits QUnit::Test {
         });
 
         client.close();
+    }
+
+    #! Sends a JSON-RPC request with the given extra headers and returns the raw response
+    private hash<auto> rpcWithHeaders(hash<auto> request, *hash<auto> extra) {
+        Qore::HTTPClient http_client({"url": base_url});
+        return http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson} + extra);
+    }
+
+    #! Returns the A2A-Extensions response header value, matched case-insensitively
+    /** @note HTTPClient::send() returns the response headers lowercased at the top level of the response hash
+    */
+    private static *string getExtensionsHeader(hash<auto> resp) {
+        hash<auto> hdrs = resp."response-headers" ?? resp;
+        foreach string key in (keys hdrs) {
+            if (key.lwr() == A2aExtensionsHeader.lwr()) {
+                return hdrs{key};
+            }
+        }
+    }
+
+    extensionNegotiationTest() {
+        const string ExtUri = "https://example.com/extensions/test/v1";
+        const string OtherUri = "https://example.com/extensions/other/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "ExtAgent", "description": "ext", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        assertEq({}, h.getSupportedExtensions());
+
+        h.registerExtension(<A2aAgentExtension>{
+            "uri": ExtUri,
+            "description": "a test extension",
+        });
+        assertEq((ExtUri,), keys h.getSupportedExtensions());
+        # registering the same URI twice is an error
+        assertThrows("A2A-EXTENSION-ERROR", \h.registerExtension(),
+            (<A2aAgentExtension>{"uri": ExtUri},));
+
+        # the extension is advertised in the agent card
+        hash<auto> card = h.getAgentCard();
+        hash<string, hash<A2aAgentExtension>> declared = a2aGetCardExtensions(card);
+        assertEq((ExtUri,), keys declared);
+        assertEq("a test extension", declared{ExtUri}.description);
+        assertFalse(declared{ExtUri}.required);
+        assertEq((), a2aGetRequiredCardExtensions(card));
+
+        # a request that opts in has the extension echoed back
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("ext", h);
+        string ext_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        Qore::HTTPClient c({"url": ext_url});
+        hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
+        hash<auto> resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: ExtUri});
+        assertEq(ExtUri, getExtensionsHeader(resp), "the activated extension must be echoed");
+
+        # an unsupported extension is ignored, not rejected, and is not echoed
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: OtherUri});
+        assertNothing(getExtensionsHeader(resp), "an unsupported extension must not be echoed");
+        assertTrue(parse_json(resp.body).hasKey("error"), "the call itself still runs");
+
+        # a mixed request activates only the supported subset, preserving request order
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: OtherUri + "," + ExtUri});
+        assertEq(ExtUri, getExtensionsHeader(resp));
+
+        # no header at all means no extensions are activated
+        resp = c.send(make_json(req), "POST", "", {"Content-Type": MimeTypeJson});
+        assertNothing(getExtensionsHeader(resp));
+    }
+
+    requiredExtensionTest() {
+        const string ReqUri = "https://example.com/extensions/required/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "ReqAgent", "description": "req", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        h.registerExtension(<A2aAgentExtension>{
+            "uri": ReqUri,
+            "description": "must be supported",
+            "required": True,
+        });
+        assertEq((ReqUri,), a2aGetRequiredCardExtensions(h.getAgentCard()));
+
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("req", h);
+        string req_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        Qore::HTTPClient c({"url": req_url});
+        hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
+
+        # a client that does not opt in is rejected with ExtensionSupportRequiredError
+        hash<auto> resp = c.send(make_json(req), "POST", "", {"Content-Type": MimeTypeJson});
+        hash<auto> body = parse_json(resp.body);
+        assertEq(A2A_ERR_EXTENSION_SUPPORT_REQUIRED, body.error.code);
+        assertRegex(ReqUri, body.error.message);
+
+        # opting in lets the request through to normal dispatch
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: ReqUri});
+        body = parse_json(resp.body);
+        assertEq(A2A_ERR_TASK_NOT_FOUND, body.error.code, "the request reached the tasks/get handler");
+        assertEq(ReqUri, getExtensionsHeader(resp));
+    }
+
+    clientExtensionRoundTripTest() {
+        const string SupUri = "https://example.com/extensions/supported/v1";
+        const string ReqUri = "https://example.com/extensions/needed/v1";
+        const string UnkUri = "https://example.com/extensions/unknown/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "RtAgent", "description": "rt", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        h.registerExtension(<A2aAgentExtension>{"uri": SupUri, "description": "supported"});
+        h.registerExtension(<A2aAgentExtension>{"uri": ReqUri, "description": "needed", "required": True});
+
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("rt", h);
+        string rt_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        A2aClient::A2aClient client(rt_url);
+        assertEq((), client.getRequestedExtensions());
+        assertEq((), client.getActivatedExtensions());
+
+        # the card tells the client what the agent requires
+        hash<auto> card = client.getAgentCard();
+        assertEq((ReqUri,), a2aGetRequiredCardExtensions(card));
+        # with nothing requested, the required extension is reported as missing
+        assertEq((ReqUri,), client.checkRequiredExtensions(card));
+
+        # requesting the supported and unknown extensions still leaves the required one missing, and the
+        # server rejects the call
+        client.requestExtensions((SupUri, UnkUri));
+        assertEq((SupUri, UnkUri), client.getRequestedExtensions());
+        assertEq((ReqUri,), client.checkRequiredExtensions(card));
+        assertThrows("A2A-ERROR", "ExtensionSupportRequired|" + ReqUri, \client.getTask(), ("nope",));
+
+        # opting into everything satisfies the requirement; only the two supported ones are activated
+        client.requestExtensions((SupUri, ReqUri, UnkUri));
+        assertEq((), client.checkRequiredExtensions(card));
+        assertThrows("A2A-ERROR", \client.getTask(), ("nope",));
+        assertEq((SupUri, ReqUri), client.getActivatedExtensions(),
+            "only the extensions the agent implements are activated");
+
+        # clearing the request restores the initial state
+        client.requestExtensions(());
+        assertEq((), client.getRequestedExtensions());
+    }
+
+    pushNotificationWebhookV03Test() {
+        webhook.reset();
+        A2aClient::A2aClient client(base_url);
+        hash<A2aTaskInfo> task = handler.createTask();
+
+        client.setPushNotificationConfig(task.id, {
+            "url": webhook_url,
+            "token": "secret-token",
+        });
+
+        # the delivery POST is made synchronously from updateTaskState(), so no waiting is required
+        handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq(1, webhook.requests.size(), "one webhook delivery expected");
+
+        hash<auto> req = webhook.requests[0];
+        # v0.3 posts the bare Task object with application/json, not a JSON-RPC envelope
+        assertEq(MimeTypeJson, trim((req.content_type.split(";"))[0]));
+        assertEq("secret-token", req.token);
+        assertNothing(req.body.jsonrpc, "the v0.3 webhook body must not be a JSON-RPC envelope");
+        assertNothing(req.body.method);
+        assertNothing(req.body.params);
+        assertEq(task.id, req.body.id);
+        assertEq("task", req.body.kind);
+        # the state must be the canonical v0.3 value
+        assertEq("working", req.body.status.state);
+
+        # the internal version key must never be exposed to clients
+        hash<auto> listed = client.listPushNotificationConfigs(task.id);
+        assertEq(1, listed.pushNotificationConfigs.size());
+        assertFalse(listed.pushNotificationConfigs[0].hasKey("_a2a_version"));
+        hash<auto> got = client.getPushNotificationConfig(task.id);
+        assertFalse(got.pushNotificationConfig.hasKey("_a2a_version"));
+    }
+
+    pushNotificationWebhookV10Test() {
+        webhook.reset();
+        # registering the config over v1.0 must make deliveries use the v1.0 body shape and media type
+        A2aClient::A2aClient client(base_url);
+        client.setProtocolVersion(A2aVersionV10);
+        hash<A2aTaskInfo> task = handler.createTask();
+
+        client.setPushNotificationConfig(task.id, {"url": webhook_url});
+        handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq(1, webhook.requests.size(), "one webhook delivery expected");
+
+        hash<auto> req = webhook.requests[0];
+        assertEq(MimeTypeA2aJson, trim((req.content_type.split(";"))[0]));
+        # v1.0 posts a StreamResponse: a single-key hash discriminated by the event kind
+        assertNothing(req.body.jsonrpc, "the v1.0 webhook body must not be a JSON-RPC envelope");
+        assertEq(("statusUpdate",), keys req.body);
+        assertEq(task.id, req.body.statusUpdate.taskId);
+        # v1.0 deliveries carry TASK_STATE_* values, never the v0.3 spelling
+        assertEq("TASK_STATE_WORKING", req.body.statusUpdate.state);
+        # no notification token was configured, so the header must be absent
+        assertNothing(req.token);
+
+        # reaching a terminal state also delivers in v1.0 form
+        webhook.reset();
+        handler.updateTaskState(task.id, A2aTaskState::Completed);
+        assertEq(1, webhook.requests.size());
+        assertEq("TASK_STATE_COMPLETED", webhook.requests[0].body.statusUpdate.state);
+        assertTrue(A2aClient::A2aTerminalTaskStatesV10{webhook.requests[0].body.statusUpdate.state});
+
+        # a task with configs registered from clients of both versions must deliver each in its own shape
+        webhook.reset();
+        hash<A2aTaskInfo> mixed = handler.createTask();
+        A2aClient::A2aClient v03_client(base_url);
+        v03_client.setProtocolVersion(A2aVersionV03);
+        v03_client.setPushNotificationConfig(mixed.id, {"url": webhook_url});
+        client.setPushNotificationConfig(mixed.id, {"url": webhook_url});
+
+        handler.updateTaskState(mixed.id, A2aTaskState::Working);
+        assertEq(2, webhook.requests.size(), "one delivery per registered config");
+        # exactly one v0.3 body (bare Task) and one v1.0 body (StreamResponse)
+        int v03_bodies = 0;
+        int v10_bodies = 0;
+        foreach hash<auto> r in (webhook.requests) {
+            if (r.body.hasKey("statusUpdate")) {
+                ++v10_bodies;
+                assertEq(MimeTypeA2aJson, trim((r.content_type.split(";"))[0]));
+                assertEq("TASK_STATE_WORKING", r.body.statusUpdate.state);
+            } else {
+                ++v03_bodies;
+                assertEq(MimeTypeJson, trim((r.content_type.split(";"))[0]));
+                assertEq("task", r.body.kind);
+                assertEq("working", r.body.status.state);
+            }
+        }
+        assertEq(1, v03_bodies);
+        assertEq(1, v10_bodies);
     }
 
     jsonRpcPushNotificationConfigTest() {
@@ -1367,6 +1671,8 @@ class A2aServerHandlerTest inherits QUnit::Test {
             {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
         hash<auto> body = parse_json(resp.body);
         assertTrue(body.hasKey("result"), "Should have result");
+        # the task carries the context ID through from the message; v0.3 and v1.0 both define contextId on
+        # the Message object, so nothing is hoisted to the params level
         assertEq("ctx-v10-1", body.result.contextId, "contextId should be preserved from message");
     }
 
@@ -1493,5 +1799,65 @@ class A2aServerHandlerTest inherits QUnit::Test {
         hash<auto> task2 = client.getTask(task_id);
         assertEq(A2aTaskState::Completed, task2.status.state,
             "Second getTask should also work");
+    }
+
+    #! Callbacks registered with setCallback() must actually fire on a streaming call
+    /** They used to be stored and never invoked: setCallback() wrote into a hash that nothing
+        read, so a caller registering "onTaskStatusUpdate" silently received nothing.
+    */
+    registeredStreamCallbackTest() {
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                token_callback({"parts": ({"type": "text", "text": "chunk"},)});
+            });
+        on_exit handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(base_url);
+        on_exit client.close();
+
+        list<hash<auto>> per_call = ();
+        list<hash<auto>> every = ();
+        list<hash<auto>> status_only = ();
+        list<hash<auto>> legacy_alias = ();
+        int threw = 0;
+
+        client.setCallback(A2aClient::A2aAnyEventCallback,
+            sub (string kind, hash<auto> data) { every += {"k": kind}; });
+        client.setCallback("TaskStatusUpdateEvent",
+            sub (string kind, hash<auto> data) { status_only += {"k": kind}; });
+        client.setCallback("onTaskStatusUpdate",
+            sub (string kind, hash<auto> data) { legacy_alias += {"k": kind}; });
+        # a handler that throws must not abort the stream for the others
+        client.setCallback("TaskMessageUpdateEvent", sub (string kind, hash<auto> data) {
+            ++threw;
+            throw "TEST-CALLBACK-ERROR", "deliberate";
+        });
+
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "cb test"},)},
+            sub (string event_type, hash<auto> event_data) {
+                per_call += {"k": event_type};
+            },
+        );
+
+        assertTrue(per_call.size() >= 2, "the per-call handler still receives every event");
+        assertEq(per_call.size(), every.size(),
+            sprintf("the catch-all callback sees exactly what the per-call handler sees; "
+                "per_call=%y every=%y", (map $1.k, per_call), (map $1.k, every)));
+        assertTrue(status_only.size() > 0,
+            sprintf("a kind-specific callback fires; kinds seen=%y", (map $1.k, every)));
+        assertEq(status_only.size(), legacy_alias.size(),
+            "the legacy alias selects the same events as the wire kind");
+        assertTrue(threw > 0, "the throwing callback ran");
+
+        # removing a callback stops delivery
+        client.removeCallback(A2aClient::A2aAnyEventCallback);
+        int before = every.size();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "cb test 2"},)},
+            sub (string event_type, hash<auto> event_data) {},
+        );
+        assertEq(before, every.size(), "a removed callback receives nothing further");
+        assertTrue(status_only.size() > 0, "callbacks that were not removed still fire");
     }
 }

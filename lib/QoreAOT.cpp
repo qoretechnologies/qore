@@ -216,6 +216,11 @@ static thread_local QoreAOTBodyContractDependencyMap*
     aot_body_contract_dep_sink = nullptr;
 static thread_local const char* aot_dep_consumer_file = nullptr;
 static thread_local bool aot_source_parse_active = false;
+// Records imports for expressions that resolve against another source already
+// parsed in the same batch.  This is deliberately separate from
+// aot_source_parse_active: source-parse mode also defers unresolved symbols,
+// while batch parsing must preserve the normal parse semantics.
+static thread_local bool aot_resolved_source_import_recording_active = false;
 static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
 static thread_local const std::unordered_set<std::string>* aot_preloaded_source_labels = nullptr;
 static thread_local bool aot_allow_preloaded_source_symbols = false;
@@ -252,6 +257,12 @@ bool qore_aot_set_source_parse_active(bool active) {
 
 bool qore_aot_source_parse_active() {
     return aot_source_parse_active;
+}
+
+static bool qore_aot_set_resolved_source_import_recording_active(bool active) {
+    bool old = aot_resolved_source_import_recording_active;
+    aot_resolved_source_import_recording_active = active;
+    return old;
 }
 
 const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
@@ -491,6 +502,40 @@ void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
         QoreAOTSourceSymbolKind::Function);
     qore_program_private::recordSourceParseFunctionImport(pgm, loc, path.c_str(),
         provider.empty() ? nullptr : provider.c_str());
+}
+
+void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
+        const QoreProgramLocation* loc, const QoreClass* resolved_class) {
+    if ((!aot_source_parse_active && !aot_resolved_source_import_recording_active)
+            || !pgm || !loc || !resolved_class) {
+        return;
+    }
+
+    const QoreProgramLocation* provider_loc = qore_class_private::get(*resolved_class)->loc;
+    const char* consumer_file = loc->getFile();
+    const char* provider_file = provider_loc ? provider_loc->getFile() : nullptr;
+    if (!consumer_file || !*consumer_file || *consumer_file == '<'
+            || !provider_file || !*provider_file || *provider_file == '<') {
+        return;
+    }
+
+    // Batch and single-source AOT parsing use canonical source labels, so a
+    // direct comparison is sufficient and avoids filesystem calls for every
+    // resolved constructor expression.
+    if (!strcmp(consumer_file, provider_file)) {
+        return;
+    }
+
+    std::string class_path = resolved_class->getNamespacePath(false);
+    if (class_path.empty()) {
+        return;
+    }
+    std::string type_path = "object<::";
+    type_path += class_path;
+    type_path += '>';
+    qore_program_private::recordSourceParseTypeImport(pgm, loc, class_path.c_str(), type_path.c_str(), false,
+        false);
+    qore_aot_note_referenced_decl(provider_loc, loc);
 }
 
 void qore_aot_note_referenced_decl(const QoreProgramLocation* provider_loc,
@@ -26698,6 +26743,16 @@ bool QoreAOT::compileScriptFilesBatch(
         }
         const char* old;
     };
+
+    struct AOTBatchResolvedSourceImportGuard {
+        AOTBatchResolvedSourceImportGuard()
+                : old(qore_aot_set_resolved_source_import_recording_active(true)) {
+        }
+        ~AOTBatchResolvedSourceImportGuard() {
+            qore_aot_set_resolved_source_import_recording_active(old);
+        }
+        bool old;
+    } resolved_source_import_guard;
 
     qore_program_private* batch_pp = qore_program_private::get(**qpgm);
     for (size_t i = 0; i < entries.size(); ++i) {

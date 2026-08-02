@@ -125,7 +125,7 @@ public class OpenAiSimpleChatCompletionResponseType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiSimpleChatCompletionRequest") {
+    constructor() : HashDataType("OpenAiSimpleChatCompletionResponse") {
         addQoreFields(Fields);
     }
 }

@@ -239,6 +239,15 @@ matters.
   an AOT-compiled user module has no `QoreUserModule` but does register a module
   Program with the AOT runtime.  Without this, a child installed next to its
   AOT-compiled parent outside the standard search path is reported absent.
+- An AOT child loaded with `pgm = nullptr` is initialized in its private module
+  Program after registration.  This executes the child's `init` closure just as
+  source-module loading does, while preserving the rule that the optional
+  child's namespace is not merged into the parent.  Module-init side effects
+  execute only during the first shared AOT initialization; importing the child
+  explicitly later does not repeat registrations or other global effects.  An
+  exception from that initializer retains its original error code and detail,
+  marks the child attachment as failed, and is raised again on later attempts
+  to load the parent, matching the source-module failure contract.
 - The directive is stripped from embedded source before it is re-parsed at
   runtime (`stripRequiresDirectives()`), because at that point the declaration
   has already arrived through the description function.

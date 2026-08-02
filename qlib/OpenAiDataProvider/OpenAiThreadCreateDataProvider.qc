@@ -25,6 +25,9 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
+/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
+    use the `conversations/create` data provider instead
+*/
 public class OpenAiThreadCreateDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
@@ -155,7 +158,7 @@ public class OpenAiThreadCreateResponseDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiThreadCreateRequest") {
+    constructor() : HashDataType("OpenAiThreadCreateResponse") {
         addQoreFields(Fields);
     }
 }

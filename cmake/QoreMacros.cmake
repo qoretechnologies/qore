@@ -135,6 +135,32 @@ function(QORE_CONTENT_DIGEST_TARGET _target)
     endif ()
 endfunction()
 
+# Returns the in-tree binary-module directories as a colon-separated QORE_MODULE_DIR fragment.
+#
+# Binary modules are emitted to <build>/modules/<name>/<name>-api-<ver>.qmod, and none of those
+# directories is on the module path by default.  Without them, a user module that %requires an
+# in-tree binary module (ex: a module using json's jws_sign()) resolves the *installed* copy of
+# that module at AOT parse time, so anything added to the module in this tree is invisible.  The
+# artifact still compiles, but every slot referencing the new symbol fails to register at runtime.
+#
+# The list is derived from the source tree because the binary directories do not exist yet on a
+# fresh configure; entries that never materialize are simply ignored when the path is searched.
+function(QORE_GET_BINARY_MODULE_PATH _out_var)
+    set(_qore_bm_path "")
+    file(GLOB _qore_bm_dirs LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/modules/*")
+    foreach (_qore_bm_dir ${_qore_bm_dirs})
+        if (IS_DIRECTORY "${_qore_bm_dir}")
+            get_filename_component(_qore_bm_name "${_qore_bm_dir}" NAME)
+            if (_qore_bm_path STREQUAL "")
+                set(_qore_bm_path "${CMAKE_BINARY_DIR}/modules/${_qore_bm_name}")
+            else ()
+                set(_qore_bm_path "${_qore_bm_path}:${CMAKE_BINARY_DIR}/modules/${_qore_bm_name}")
+            endif ()
+        endif ()
+    endforeach ()
+    set(${_out_var} "${_qore_bm_path}" PARENT_SCOPE)
+endfunction()
+
 function(QORE_GET_QCC_COMMAND _out_var)
     if (TARGET qcc)
         set(_qore_qcc_command $<TARGET_FILE:qcc>)
@@ -1417,6 +1443,13 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
     if (NOT DEFINED QORE_QM_METADATA_ENV)
         set(_qore_external_module_path
             "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}/qlib-qmod:${CMAKE_BINARY_DIR}")
+        # see QORE_GET_BINARY_MODULE_PATH(): in-tree binary modules take precedence over installed ones
+        QORE_GET_BINARY_MODULE_PATH(_qore_external_binary_module_path)
+        if (NOT "${_qore_external_binary_module_path}" STREQUAL "")
+            set(_qore_external_module_path
+                "${_qore_external_binary_module_path}:${_qore_external_module_path}")
+        endif()
+        unset(_qore_external_binary_module_path)
         if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
                 AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
             set(_qore_external_module_path
@@ -1754,6 +1787,14 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # resolution does not depend on generated source-tree symlinks.
         set(_qore_user_module_path
             "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}/qlib-qmod:${CMAKE_BINARY_DIR}")
+        # in-tree binary modules must come first so that a user module which %requires one
+        # resolves the just-built copy rather than the one installed on the system
+        QORE_GET_BINARY_MODULE_PATH(_qore_user_binary_module_path)
+        if (NOT "${_qore_user_binary_module_path}" STREQUAL "")
+            set(_qore_user_module_path
+                "${_qore_user_binary_module_path}:${_qore_user_module_path}")
+        endif()
+        unset(_qore_user_binary_module_path)
         if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
                 AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
             set(_qore_user_module_path

@@ -207,6 +207,43 @@ public:
         return result;
     }
 
+    //! Records that a stream key has a Qore-side listener wanting close notification
+    /** Mirrors, in the priv, the QPP layer's @c stream_listeners member hash so
+        the I/O thread can queue an @c onStreamData() wakeup for a listener-only
+        stream (one with no inbound Queue, i.e. an SSE response stream) when its
+        QUIC session dies.  @ref closeSessionStreams() can only walk C++ state;
+        the QoreObject member hash is not reachable from there.
+
+        @param stream_key composite key "session_id:stream_id"
+    */
+    DLLLOCAL void registerStreamCloseNotify(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        close_notify_streams.insert(stream_key);
+    }
+
+    //! Drops a stream key registered with @ref registerStreamCloseNotify()
+    /** @param stream_key composite key "session_id:stream_id"
+    */
+    DLLLOCAL void deregisterStreamCloseNotify(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        close_notify_streams.erase(stream_key);
+        peer_closed_streams.erase(stream_key);
+    }
+
+    //! Returns true if the given stream can no longer carry data to the peer
+    /** True when the peer reset the stream, when its QUIC session closed, or
+        when the whole listener operation is closed.
+
+        @param stream_key composite key "session_id:stream_id"
+    */
+    DLLLOCAL bool isStreamPeerClosed(const std::string& stream_key) const {
+        if (h3_state.load(std::memory_order_acquire) == H3State::CLOSED) {
+            return true;
+        }
+        AutoLocker al(op_lock);
+        return peer_closed_streams.find(stream_key) != peer_closed_streams.end();
+    }
+
     //! Registers a Queue to receive the persistent-session close signal
     /** Bound to a QUIC session: when the peer resets a stream on that session or
         the session closes, continuePoll() pushes a \c {"type":"close"} hash to
@@ -397,6 +434,23 @@ private:
 
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;
+
+    //! Stream keys whose Qore-side listener wants a close notification
+    /** Populated by @ref registerStreamCloseNotify() from
+        @c Http3ServerPollOperation::registerStreamListener() and cleared by
+        @ref deregisterStreamCloseNotify().  Protected by @c op_lock.
+    */
+    std::unordered_set<std::string> close_notify_streams;
+
+    //! Stream keys the peer reset, or whose QUIC session closed
+    /** Read by @ref isStreamPeerClosed() from worker threads; written by
+        @ref deliverSessionLifecycleEvents() / @ref closeSessionStreams() on the
+        I/O thread.  Protected by @c op_lock.  Entries are dropped by
+        @ref deregisterStreamCloseNotify() when the owner tears the stream down,
+        so the set stays bounded even though the H3 poll operation is
+        listener-scoped and long-lived.
+    */
+    std::unordered_set<std::string> peer_closed_streams;
 
     //! Persistent-session close-delivery Queues (session_id -> C++ Queue*)
     /** Bound via registerPersistentSessionQueue(); continuePoll() pushes a

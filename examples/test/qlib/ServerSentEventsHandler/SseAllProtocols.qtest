@@ -61,6 +61,9 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         #! Counter signalled when a new connection registers
         Counter registered(1);
 
+        #! Counter signalled when a connection is deregistered
+        Counter deregistered(1);
+
         #! Most-recently-registered connection (so the test can push events)
         *ServerSentEventHandler::ServerSentEventConnection last_conn;
     }
@@ -69,9 +72,19 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
     constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
     }
 
+    reset() {
+        registered = new Counter(1);
+        deregistered = new Counter(1);
+        last_conn = NOTHING;
+    }
+
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
         last_conn = conn;
         registered.dec();
+    }
+
+    deregisterConnectionImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        deregistered.dec();
     }
 }
 
@@ -553,6 +566,16 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2RestClientIoImmediateReadySse());
         addTestCase("H3 RestClientIo SSE immediate ready completes",
             \testHttp3RestClientIoImmediateReadySse());
+        addTestCase("H1 SSE connection is deregistered when the peer disconnects",
+            \testHttp1SseDeregisterOnDisconnect());
+        addTestCase("H2 SSE connection is deregistered when the peer disconnects",
+            \testHttp2SseDeregisterOnDisconnect());
+        addTestCase("H3 SSE connection is deregistered when the peer disconnects",
+            \testHttp3SseDeregisterOnDisconnect());
+        addTestCase("H2 SSE connection is deregistered when only the stream is reset",
+            \testHttp2SseDeregisterOnStreamReset());
+        addTestCase("H3 SSE connection is deregistered when only the stream is reset",
+            \testHttp3SseDeregisterOnStreamReset());
         set_return_value(main());
     }
 
@@ -605,8 +628,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     #! Reset per-test state on the shared handler
     private resetHandler() {
-        handler.registered = new Counter(1);
-        handler.last_conn = NOTHING;
+        handler.reset();
     }
 
     #! Drives one end-to-end SSE round trip: connect, push, read, assert
@@ -1280,6 +1302,104 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     testHttp3RestClientIoImmediateReadySse() {
         runRestClientIoImmediateReadySseFlow("H3 RestClientIo immediate ready", "h3",
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    #! Asserts that dropping the client deregisters the SSE connection on the server
+    /** Regression coverage for multiplexed transports: HTTP/2 and HTTP/3 carry many streams on
+        one connection, so neither a socket close nor a failed write reports the death of a
+        single SSE response stream.  Before the transport-level close notification existed, the
+        H1 case below passed and both multiplexed cases leaked the registration forever — the
+        server kept the entry, kept writing heartbeats into a dead stream, and never ran the
+        connection-closed hooks.
+    */
+    private runSseDeregisterOnDisconnectFlow(string label, string proto, string url) {
+        handler.reset();
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": connection should register on server");
+        assertEq(1, handler.getConnectionIds().size(), label + ": one registered connection");
+
+        # drop the client entirely: the transport goes away under the SSE stream
+        stream.cancel();
+        delete mgr;
+
+        assertEq(0, handler.deregistered.waitForZero(SseTestTimeout),
+            label + ": connection should be deregistered after the peer disconnects");
+        assertEq((), handler.getConnectionIds() ?? (),
+            label + ": no connections remain registered");
+    }
+
+    #! Asserts that resetting only the SSE stream deregisters it, leaving the connection usable
+    /** A pooled multiplexed client cancels the SSE stream and keeps the connection for other
+        requests.  The connection-close path cannot see that, so this exercises the per-stream
+        peer-reset notification specifically; the ping afterwards proves the connection really
+        did stay up, so the deregistration came from the stream reset and not from a connection
+        teardown.
+    */
+    private runSseDeregisterOnStreamResetFlow(string label, string proto, string url) {
+        handler.reset();
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+        on_exit delete mgr;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": connection should register on server");
+
+        # cancel ONLY the SSE stream; the connection stays up and in use
+        stream.cancel();
+
+        hash<auto> resp = mgr.request(url, "GET", "/ping");
+        assertEq(200, resp.status_code, label + ": connection still serves other requests");
+
+        assertEq(0, handler.deregistered.waitForZero(SseTestTimeout),
+            label + ": connection should be deregistered after the stream is reset");
+        assertEq((), handler.getConnectionIds() ?? (),
+            label + ": no connections remain registered");
+    }
+
+    #! Creates a connection manager pinned to the given protocol
+    private HttpClientIo::HttpClientConnectionManager makeManager(string proto) {
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> opts =
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            };
+        if (proto != "h1") {
+            opts.protocol = proto;
+        }
+        return new HttpClientIo::HttpClientConnectionManager(opts);
+    }
+
+    testHttp1SseDeregisterOnDisconnect() {
+        runSseDeregisterOnDisconnectFlow("H1 SSE deregister", "h1",
+            sprintf("http://127.0.0.1:%d", h1_port));
+    }
+
+    testHttp2SseDeregisterOnDisconnect() {
+        runSseDeregisterOnDisconnectFlow("H2 SSE deregister", "h2",
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3SseDeregisterOnDisconnect() {
+        runSseDeregisterOnDisconnectFlow("H3 SSE deregister", "h3",
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp2SseDeregisterOnStreamReset() {
+        runSseDeregisterOnStreamResetFlow("H2 SSE stream-reset deregister", "h2",
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3SseDeregisterOnStreamReset() {
+        runSseDeregisterOnStreamResetFlow("H3 SSE stream-reset deregister", "h3",
             sprintf("https://127.0.0.1:%d", h3_port));
     }
 }

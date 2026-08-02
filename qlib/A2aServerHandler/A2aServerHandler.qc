@@ -77,6 +77,25 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Default session timeout in seconds (1 hour)
         const DefaultSessionTimeoutSecs = 3600;
+
+        #! Timeout in milliseconds for delivering a push notification to a webhook
+        /** @since A2aServerHandler 1.0
+        */
+        const PushNotificationTimeoutMs = 10000;
+
+        #! Header carrying the client's opaque notification token on webhook deliveries
+        /** @since A2aServerHandler 1.0
+        */
+        const A2aNotificationTokenHeader = "X-A2A-Notification-Token";
+    }
+
+    private {
+        #! Internal key recording the protocol version negotiated when a push config was registered
+        /** Stripped from every push config returned to a client.
+
+            @since A2aServerHandler 1.0
+        */
+        const PushConfigVersionKey = "_a2a_version";
     }
 
     private {
@@ -105,7 +124,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         /** The token_callback is called for each partial message chunk during streaming.
             The handler runs in a background thread.
         */
-        *code stream_message_handler;
+        *code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> stream_message_handler;
 
         #! Context history: contextId -> accumulated message list for multi-turn conversations
         hash<string, list<hash<auto>>> context_history;
@@ -128,6 +147,8 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         #! Push notification config ID counter
         int push_config_id_counter = 0;
 
+        #! Protocol extensions this agent supports, keyed by URI
+        hash<string, hash<A2aAgentExtension>> extension_map;
     }
 
     #! Creates the handler with a logger, agent card, and authenticator
@@ -177,7 +198,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         token/chunk and return when done. The task will be transitioned to \c Completed automatically
         when the handler returns, or to \c Failed if an exception is thrown.
     */
-    setStreamMessageHandler(*code handler) {
+    setStreamMessageHandler(*code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler) {
         stream_message_handler = handler;
     }
 
@@ -268,6 +289,28 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             *string a2a_version = hdr{A2aVersionHeader} ?? hdr{A2aVersionHeader.lwr()};
             cx.a2a_version = a2a_version;
 
+            # negotiate protocol extensions; the activated subset is echoed on the response
+            cx.a2a_extensions = negotiateExtensions(hdr);
+
+            # a client that does not opt into an extension the agent marks as required cannot be served
+            list<string> missing = getMissingRequiredExtensions(cx);
+            if (missing) {
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "body": make_json({
+                        "jsonrpc": "2.0",
+                        "id": NOTHING,
+                        "error": {
+                            "code": A2A_ERR_EXTENSION_SUPPORT_REQUIRED,
+                            "message": sprintf("this agent requires the following extension%s, which the "
+                                "request did not declare support for in the %s header: %y",
+                                missing.size() == 1 ? "" : "s", A2aExtensionsHeader, missing),
+                        },
+                    }),
+                    "hdr": {"Content-Type": MimeTypeJson},
+                };
+            }
+
             # Intercept streaming methods — return SSE via send_callback for incremental delivery
             # Only use SSE path when the client accepts text/event-stream; otherwise
             # fall through to JSON-RPC dispatch for polling-based streaming
@@ -306,7 +349,13 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                 }
             }
 
-            return JsonRpcHandler::handleRequest(cx, hdr, b);
+            hash<HttpResponseInfo> rv = JsonRpcHandler::handleRequest(cx, hdr, b);
+            # report which of the requested extensions were actually activated
+            hash<auto> ext_hdr = getExtensionResponseHeaders(cx);
+            if (ext_hdr) {
+                rv.hdr = (rv.hdr ?? {}) + ext_hdr;
+            }
+            return rv;
         }
 
         return AbstractHttpRequestHandler::makeResponse(405, "Method not allowed");
@@ -510,6 +559,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (version == A2aVersionV10) {
             params = a2aTranslateSendMessageParamsToV03(params);
         }
+        params = normalizeSendParamsContext(params);
 
         # Create a new task
         hash<A2aTaskInfo> task = createTask(params.contextId, params.metadata, params.sessionId);
@@ -626,6 +676,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (version == A2aVersionV10) {
             params = a2aTranslateSendMessageParamsToV03(params);
         }
+        params = normalizeSendParamsContext(params);
 
         # Create a new task
         hash<A2aTaskInfo> task = createTask(params.contextId, params.metadata, params.sessionId);
@@ -661,7 +712,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
 
         # Capture variables for background thread
-        code handler = stream_message_handler;
+        code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler = stream_message_handler;
         *string context_id = params.contextId;
         hash<auto> user_message = params.message;
 
@@ -677,7 +728,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         list<hash<auto>> assembled_parts = ();
 
         # Token callback that the handler calls for each chunk
-        code token_callback = sub (hash<auto> partial) {
+        code<nothing(hash<auto>)> token_callback = sub (hash<auto> partial) {
             # Track parts for assembly
             if (partial.parts) {
                 assembled_parts += partial.parts;
@@ -817,8 +868,11 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (!push_configs{params.id}) {
             push_configs{params.id} = ();
         }
+        # record the negotiated version so that webhook deliveries use the body shape and media type that the
+        # registering client understands
         hash<auto> config = params.pushNotificationConfig + {
             "id": sprintf("%d", ++push_config_id_counter),
+            PushConfigVersionKey: cx.a2a_version ?? a2aDetectVersionFromMethod(cx.method),
         };
         push_configs{params.id} += config;
 
@@ -837,7 +891,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         return {
             "id": params.id,
-            "pushNotificationConfig": push_configs{params.id}[0] ?? {},
+            "pushNotificationConfig": (push_configs{params.id}[0] ?? {}) - PushConfigVersionKey,
         };
     }
 
@@ -853,7 +907,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         return {
             "id": params.id,
-            "pushNotificationConfigs": push_configs{params.id} ?? (),
+            "pushNotificationConfigs": (map $1 - PushConfigVersionKey, push_configs{params.id} ?? ()),
         };
     }
 
@@ -913,6 +967,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (version == A2aVersionV10) {
             params = a2aTranslateSendMessageParamsToV03(params);
         }
+        params = normalizeSendParamsContext(params);
 
         # Create task
         hash<A2aTaskInfo> task = createTask(params.contextId, params.metadata, params.sessionId);
@@ -967,11 +1022,11 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Background thread for send_callback-based SSE streaming
     private streamMessageCallbackBackground(string task_id, hash<A2aTaskInfo> task,
-            hash<auto> handler_message, code handler, *string context_id,
+            hash<auto> handler_message, code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler, *string context_id,
             hash<auto> user_message, Queue queue, string version) {
         list<hash<auto>> assembled_parts = ();
 
-        code token_callback = sub (hash<auto> partial) {
+        code<nothing(hash<auto>)> token_callback = sub (hash<auto> partial) {
             if (partial.parts) {
                 assembled_parts += partial.parts;
             }
@@ -1162,6 +1217,107 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         throw "JSONRPC-ERROR", message, code;
     }
 
+    #! Lifts the context ID from the message onto the params for internal use
+    /** Neither the v0.3 \c MessageSendParams object nor the v1.0 \c SendMessageRequest defines a top-level
+        context ID; both carry it on the \c Message.  The rest of the handler works with a params-level
+        \c contextId, so it is derived here.  A params-level value sent by a lenient client is honored when the
+        message does not carry one.
+
+        @param params the send-message parameters
+
+        @return the parameters with \c contextId set from the message when either carries one
+
+        @since A2aServerHandler 1.0
+    */
+    private hash<auto> normalizeSendParamsContext(hash<auto> params) {
+        *string ctx = params.message.contextId ?? params.contextId;
+        if (!ctx.val()) {
+            return params;
+        }
+        return params + {"contextId": ctx};
+    }
+
+    #! Registers a protocol extension that this agent supports
+    /** Registering an extension both advertises it in the agent card's \c capabilities.extensions array and
+        makes it eligible for activation when a client requests it with the \c A2A-Extensions service
+        parameter.
+
+        @param ext the extension to support
+
+        @throw A2A-EXTENSION-ERROR if an extension with the same URI is already registered
+
+        @note An agent that registers a \c required extension rejects any request that does not opt into it.
+
+        @since A2aServerHandler 1.0
+    */
+    registerExtension(hash<A2aAgentExtension> ext) {
+        AutoWriteLock al(rwl);
+        if (extension_map{ext.uri}) {
+            throw "A2A-EXTENSION-ERROR", sprintf("extension %y is already registered", ext.uri);
+        }
+        extension_map{ext.uri} = ext;
+        agent_card.capabilities.extensions = map extension_map{$1}, keys extension_map;
+    }
+
+    #! Returns the extensions this agent supports, keyed by URI
+    /** @since A2aServerHandler 1.0
+    */
+    hash<string, hash<A2aAgentExtension>> getSupportedExtensions() {
+        AutoReadLock al(rwl);
+        return extension_map ?? {};
+    }
+
+    #! Determines which requested extensions are activated for a request
+    /** @param hdr the request headers
+
+        @return the activated extension URIs, in the order the client requested them
+
+        @since A2aServerHandler 1.0
+    */
+    private list<string> negotiateExtensions(hash<auto> hdr) {
+        *string value;
+        foreach string key in (keys hdr) {
+            if (key.lwr() == A2aExtensionsHeader.lwr()) {
+                value = hdr{key};
+                break;
+            }
+        }
+        list<string> requested = a2aParseExtensionsHeader(value);
+        if (!requested) {
+            return ();
+        }
+        AutoReadLock al(rwl);
+        # an extension the agent does not implement is ignored rather than rejected
+        # note: map over an empty source yields NOTHING, so coerce to an empty list
+        return (map $1, requested, exists extension_map{$1}) ?? ();
+    }
+
+    #! Returns the URIs of registered extensions marked as required that the client did not request
+    /** @param cx the request context
+
+        @return the missing required extension URIs
+
+        @since A2aServerHandler 1.0
+    */
+    private list<string> getMissingRequiredExtensions(hash<auto> cx) {
+        hash<string, bool> active = map {$1: True}, cx.a2a_extensions ?? ();
+        AutoReadLock al(rwl);
+        return (map $1, keys extension_map, extension_map{$1}.required && !active{$1}) ?? ();
+    }
+
+    #! Returns the response headers echoing the extensions activated for a request
+    /** @param cx the request context
+
+        @return a hash with the \c A2A-Extensions service parameter, or an empty hash when no extension was
+        activated so that the header is omitted entirely
+
+        @since A2aServerHandler 1.0
+    */
+    private hash<auto> getExtensionResponseHeaders(hash<auto> cx) {
+        *string value = a2aMakeExtensionsHeader(cx.a2a_extensions);
+        return value ? {A2aExtensionsHeader: value} : {};
+    }
+
     #! Sends push notifications for a task event
     private sendTaskPushNotification(string task_id, string event_type, hash<auto> event_data) {
         *list<hash<auto>> configs;
@@ -1174,22 +1330,66 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             return;
         }
 
+        # the body depends only on the protocol version, so build it at most once per version rather than
+        # once per config; the v0.3 body requires a read lock to render the current task
+        hash<string, string> body_cache;
+
         foreach hash<auto> config in (configs) {
             try {
+                string version = config{PushConfigVersionKey} ?? A2aVersionV03;
+                if (!exists body_cache{version}) {
+                    body_cache{version} =
+                        make_json(makePushNotificationPayload(task_id, event_type, event_data, version));
+                }
                 # Deliver push notification via HTTP POST
-                Qore::HTTPClient push_client({"url": config.url, "timeout": 10000});
-                hash<auto> payload = {
-                    "jsonrpc": "2.0",
-                    "method": event_type,
-                    "params": event_data + {"id": task_id},
+                Qore::HTTPClient push_client({"url": config.url, "timeout": PushNotificationTimeoutMs});
+                hash<auto> hdr = {
+                    "Content-Type": version == A2aVersionV10 ? MimeTypeA2aJson : MimeTypeJson,
                 };
-                push_client.send(make_json(payload), "POST", NOTHING,
-                    {"Content-Type": MimeTypeJson});
+                # the client's opaque notification token is echoed back in a dedicated header
+                if (config.token.val()) {
+                    hdr{A2aNotificationTokenHeader} = config.token;
+                }
+                push_client.send(body_cache{version}, "POST", NOTHING, hdr);
             } catch (hash<ExceptionInfo> ex) {
                 error("Push notification delivery failed for task %y to %y: %s: %s",
                     task_id, config.url, ex.err, ex.desc);
             }
         }
+    }
+
+    #! Builds the webhook body for a push notification
+    /** The A2A specification defines the webhook body independently of the JSON-RPC binding:
+        - v0.3 posts the bare @ref A2aClient::A2aTaskInfo "Task" object
+        - v1.0 posts a \c StreamResponse object, a single-key hash discriminated by \c task, \c message,
+          \c statusUpdate, or \c artifactUpdate
+
+        Neither version wraps the body in a JSON-RPC envelope.
+
+        @param task_id the task the event belongs to
+        @param event_type the v0.3 event type name (ex: \c "TaskStatusUpdateEvent")
+        @param event_data the event payload in v0.3 form
+        @param version the A2A protocol version negotiated when the push config was registered
+
+        @return the webhook body to serialize
+
+        @since A2aServerHandler 1.0
+    */
+    private hash<auto> makePushNotificationPayload(string task_id, string event_type, hash<auto> event_data,
+            string version) {
+        if (version == A2aVersionV10) {
+            # a2aTranslateSseEventToV10() already returns the single-key StreamResponse hash and renames
+            # "id" to "taskId"
+            return a2aTranslateSseEventToV10(event_type, event_data + {"id": task_id});
+        }
+        # v0.3: post the current Task object
+        AutoReadLock al(rwl);
+        *hash<A2aTaskInfo> task = task_map{task_id};
+        if (task) {
+            return getTaskResponse(task, NOTHING, A2aVersionV03) + {"kind": "task"};
+        }
+        # the task disappeared between the event and delivery; fall back to the event payload
+        return event_data + {"id": task_id};
     }
 
     #! Sends an event to SSE connections belonging to the task's session

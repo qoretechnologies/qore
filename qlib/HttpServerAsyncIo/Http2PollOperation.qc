@@ -96,20 +96,54 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
         }
     }
 
+    #! Removes a listener registered with @ref registerStreamListener()
+    /** Idempotent; safe to call from a listener's own \c notifyIo() (the
+        registration lock is never held while listener code runs).
+
+        Keeps the listener map bounded on a long-lived multiplexed connection:
+        without this, one entry accumulates per completed stream.
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    deregisterStreamListener(int stream_id) {
+        AutoLock al(stream_listener_mutex);
+        remove stream_listeners{stream_id};
+        remove pending_stream_data{stream_id};
+    }
+
     #! Called on a worker thread when stream data has been drained to a Queue
     /** Dispatched by the async I/O controller after the C++ drain pushes data.
         Wakes the handler thread for the given stream.
+
+        @note the registration lock is released before \c notifyIo() runs, so a
+        listener may deregister itself (or register another stream) from inside
+        the callback without hitting the non-recursive Mutex.
+
         @param stream_key stream identifier (string representation of stream_id)
     */
     nothing onStreamData(string stream_key) {
         int stream_id = stream_key.toInt();
-        AutoLock al(stream_listener_mutex);
-        *object listener = stream_listeners{stream_id};
+        *object listener;
+        {
+            AutoLock al(stream_listener_mutex);
+            listener = stream_listeners{stream_id};
+            if (!listener && !isStreamPeerClosed(stream_id)) {
+                # Buffer the notification — the handler hasn't registered yet.
+                #
+                # A wakeup for a stream the peer already reset is deliberately NOT buffered:
+                # nothing will ever read from a dead stream, and a listener registering
+                # afterwards gets the truth from isStreamPeerClosed() anyway.  Buffering it
+                # would add one entry per reset for the lifetime of the connection, which on a
+                # long-lived multiplexed connection is unbounded.
+                #
+                # NOTE: isStreamPeerClosed() takes the C++ operation lock while this Mutex is
+                # held.  Nothing acquires them in the other order — the I/O thread holds the
+                # operation lock but never touches this Qore-level Mutex.
+                pending_stream_data{stream_id} = True;
+            }
+        }
         if (listener) {
             listener.notifyIo();
-        } else {
-            # Buffer the notification — the handler hasn't registered yet
-            pending_stream_data{stream_id} = True;
         }
     }
 
@@ -117,12 +151,19 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
     /** Called when the H2 connection dies (TCP reset, GOAWAY, error). Each
         listener's notifyIo() will detect the closed stream context and clean up,
         unblocking handler threads waiting on stream_done.waitForZero().
+
+        @note the registration lock is released before any \c notifyIo() runs, so
+        a listener may deregister itself from inside the callback.
     */
     notifyStreamListenersClosed() {
-        AutoLock al(stream_listener_mutex);
-        foreach hash<auto> i in (stream_listeners.pairIterator()) {
+        list<object> listeners;
+        {
+            AutoLock al(stream_listener_mutex);
+            listeners = map $1, stream_listeners.iterator();
+        }
+        foreach object listener in (listeners) {
             try {
-                i.value.notifyIo();
+                listener.notifyIo();
             } catch () {
                 # Ignore errors from already-destroyed listeners
             }
@@ -219,7 +260,7 @@ if (css_stream > 0) {
         @par Example:
         @code{.py}
 # In HttpServer handler context
-code push = h2op.getPushResourceCallback();
+code<int(string, *hash<auto>)> push = h2op.getPushResourceCallback();
 if (push) {
     int stream_id = push("/style.css", {"content-type": "text/css"});
     if (stream_id > 0) {
@@ -229,7 +270,7 @@ if (push) {
 }
         @endcode
     */
-    *code getPushResourceCallback() {
+    *code<int(string, *hash<auto>)> getPushResourceCallback() {
         string state = getH2State();
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             return NOTHING;

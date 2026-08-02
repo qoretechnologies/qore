@@ -89,6 +89,14 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_2_0 Version 1.2.0
+    - fixed SSE connections over HTTP/2 and HTTP/3 never being deregistered when the peer disconnected: those
+      transports multiplex, so neither a socket close nor a failed write reports the death of one response
+      stream, and the connection stayed registered (and heartbeated) forever.  The transport now reports the
+      teardown explicitly, for a reset of the single stream as well as for the loss of the whole connection
+    - added the internal @ref ServerSentEventHandler::ServerSentEventHandler::createConnectionIntern()
+      "createConnectionIntern()" seam so that a handler needing a specific connection type for certain requests
+      cannot be displaced by a subclass customizing the documented
+      @ref ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl() "getConnectionImpl()" factory
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
       @ref ServerSentEventHandler::ServerSentEventHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or
       non-reading client whose outbound event queue reaches the limit is dropped instead of growing server memory

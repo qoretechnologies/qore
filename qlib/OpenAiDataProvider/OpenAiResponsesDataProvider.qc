@@ -45,9 +45,11 @@ public class OpenAiResponsesDataProvider inherits OpenAiDataProviderCommon {
     private {
         #! Child data providers
         const ChildMap = {
+            "cancel": Class::forName("OpenAiDataProvider::OpenAiResponseCancelDataProvider"),
             "create": Class::forName("OpenAiDataProvider::OpenAiResponseCreateDataProvider"),
             "delete": Class::forName("OpenAiDataProvider::OpenAiResponseDeleteDataProvider"),
             "get": Class::forName("OpenAiDataProvider::OpenAiResponseGetDataProvider"),
+            "input-items": Class::forName("OpenAiDataProvider::OpenAiResponseInputItemsDataProvider"),
             "stream": Class::forName("OpenAiDataProvider::OpenAiResponseStreamDataProvider"),
         };
     }

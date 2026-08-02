@@ -159,7 +159,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiAssistantCreateRequestType.getFields() - ("model",)
             ),
-            "output_type": OpenAiFileUploadFromLocationDataProvider::ResponseType,
+            "output_type": OpenAiAssistantCreateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -177,10 +177,15 @@ module OpenAiDataProvider {
                     "example_value": "asst_pOVJLN6z0hTsW1UKpALakcLA",
                 },
             },
+            # every field is optional on an update, so nothing is preselected automatically;
+            # without an explicit set the action opens with an empty form
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                OpenAiAssistantUpdateRequestType.getFields()
+                OpenAiAssistantUpdateRequestType::Fields{"name", "model", "instructions",},
+                {"preselected": True})
+                + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiAssistantUpdateRequestType::Fields - ("name", "model", "instructions")
             ),
-            "output_type": OpenAiDeleteResponseType,
+            "output_type": OpenAiAssistantUpdateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -216,7 +221,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiThreadCreateRequestType.getFields() - ("messages",)
             ),
-            "output_type": OpenAiFileUploadFromLocationDataProvider::ResponseType,
+            "output_type": OpenAiThreadCreateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -234,7 +239,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiThreadUpdateRequestType.getFields() - "thread_id"
             ),
-            "output_type": OpenAiDeleteResponseType,
+            "output_type": OpenAiThreadUpdateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -304,6 +309,183 @@ module OpenAiDataProvider {
                 OpenAiModelCreateResponseRequestDataType::Fields - "input"
             ),
             "output_type": OpenAiResponseStreamEventDataType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/create",
+            "action": "create-conversation",
+            "display_name": "Create a Conversation",
+            "short_desc": "Create a conversation to hold response history",
+            "desc": "Create a conversation to hold response history.\n\n"
+                "Conversations are the Responses API replacement for Assistants API threads; pass the resulting "
+                "conversation ID in the `conversation` field of a create-response request",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationCreateRequestType::Fields{"items",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationCreateRequestType::Fields - ("items",)
+            ),
+            "output_type": OpenAiConversationCreateDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/get",
+            "action": "get-conversation",
+            "display_name": "Get a Conversation",
+            "short_desc": "Retrieve a conversation",
+            "desc": "Retrieve a conversation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationIdRequestType::Fields{"conversation_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": OpenAiConversationGetDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/update",
+            "action": "update-conversation",
+            "display_name": "Update a Conversation",
+            "short_desc": "Update the metadata of a conversation",
+            "desc": "Update the metadata of a conversation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationUpdateRequestType::Fields{"conversation_id", "metadata"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": OpenAiConversationUpdateDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/delete",
+            "action": "delete-conversation",
+            "display_name": "Delete a Conversation",
+            "short_desc": "Delete a conversation",
+            "desc": "Delete a conversation.\n\n"
+                "**Note**: items in the conversation are not deleted",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationIdRequestType::Fields{"conversation_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": OpenAiConversationDeleteDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/items/list",
+            "action": "list-conversation-items",
+            "display_name": "List Conversation Items",
+            "short_desc": "List the items in a conversation",
+            "desc": "List the items in a conversation.\n\n"
+                "Items are messages, tool calls, and tool call outputs recorded against the conversation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemListRequestType::Fields{"conversation_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemListRequestType::Fields{"limit", "order"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemListRequestType::Fields - ("conversation_id", "limit", "order")
+            ),
+            "output_type": OpenAiConversationItemListDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/items/create",
+            "action": "create-conversation-items",
+            "display_name": "Add Items to a Conversation",
+            "short_desc": "Add items to a conversation",
+            "desc": "Add items to a conversation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemCreateRequestType::Fields{"conversation_id", "items"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemCreateRequestType::Fields - ("conversation_id", "items")
+            ),
+            "output_type": OpenAiConversationItemCreateDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/items/get",
+            "action": "get-conversation-item",
+            "display_name": "Get a Conversation Item",
+            "short_desc": "Retrieve a single item from a conversation",
+            "desc": "Retrieve a single item from a conversation",
+            "action_code": DPAT_API,
+            # conversation_id and item_id are declared inline so that the cascading-dropdown metadata
+            # (has_dependents / depends_on / on_change) is propagated; getActionOptionFromFields() drops it
+            "options": OpenAiConversationItemActionOptions
+                + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiConversationItemGetRequestType::Fields - ("conversation_id", "item_id")
+            ),
+            "output_type": OpenAiConversationItemGetDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/conversations/items/delete",
+            "action": "delete-conversation-item",
+            "display_name": "Delete a Conversation Item",
+            "short_desc": "Delete an item from a conversation",
+            "desc": "Delete an item from a conversation.\n\n"
+                "**Note**: the API returns the updated conversation, not a deletion receipt",
+            "action_code": DPAT_API,
+            "options": OpenAiConversationItemActionOptions,
+            "output_type": OpenAiConversationItemDeleteDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/responses/cancel",
+            "action": "cancel-response",
+            "display_name": "Cancel a Response",
+            "short_desc": "Cancel a background response",
+            "desc": "Cancel a background response.\n\n"
+                "**Note**: only responses created with `background` set to `True` can be cancelled",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelGetResponseRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": OpenAiResponseCancelDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/responses/input-items",
+            "action": "list-response-input-items",
+            "display_name": "List Response Input Items",
+            "short_desc": "List the input items used to generate a response",
+            "desc": "List the input items used to generate a response.\n\n"
+                "This is the Responses API equivalent of listing the steps of an Assistants API run",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiResponseInputItemsRequestType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiResponseInputItemsRequestType::Fields{"limit", "order"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiResponseInputItemsRequestType::Fields - ("id", "limit", "order")
+            ),
+            "output_type": OpenAiResponseInputItemsDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -398,20 +580,16 @@ hash<auto> result = resp.doRequest({
 if (result.tool_calls) {
     hash<auto> call = result.tool_calls[0];
     # ...call your tool with call.name and call.arguments...
-    hash<auto> tool_result = {
-        "type": "tool_result",
-        "tool_call_id": call.call_id,
-        "output": "{\"answer\":5}",
-    };
-    # Tool results can be sent as additional input items (role=tool)
+    # Tool results are returned as "function_call_output" input items on a follow-up request; this replaces
+    # the deprecated Assistants API "submit_tool_outputs" endpoint
     hash<auto> follow_up = resp.doRequest({
         "model": "gpt-4o-mini",
         "previous_response_id": result.id,
         "input": (
             {
-                "input_item": {
-                    "role": "tool",
-                    "content": (tool_result,),
+                "function_call_output": {
+                    "call_id": call.call_id,
+                    "output": "{\"answer\":5}",
                 },
             },
         ),
@@ -514,7 +692,87 @@ stream.doRequest({
     The emitted event hash also includes `event` and `id` when provided by the server. The `responses/stream`
     provider will persist conversation context on `response.completed` when a `conversation_key` is used.
 
+    @subsection openaidataprovider_conversations Server-Side Conversations
+
+    Conversations are the Responses API replacement for the deprecated Assistants API threads.  A conversation
+    stores items (messages, tool calls, and tool call outputs); attaching a response to a conversation with the
+    \c conversation request field prepends the conversation's items to the request input and appends the
+    response's input and output items to the conversation automatically.
+
+    @code{.py}
+%requires OpenAiDataProvider
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+
+AbstractDataProvider conversations = prov.getChildProvider("conversations");
+
+# create a conversation
+hash<auto> conv = conversations.getChildProvider("create").doRequest({
+    "metadata": {"topic": "support"},
+});
+
+# run a response bound to the conversation; no previous_response_id bookkeeping is needed
+AbstractDataProvider create = prov.getChildProvider("responses").getChildProvider("create");
+hash<auto> first = create.doRequest({
+    "model": "gpt-4o-mini",
+    "conversation": conv.id,
+    "input": "What is the capital of France?",
+});
+hash<auto> second = create.doRequest({
+    "model": "gpt-4o-mini",
+    "conversation": conv.id,
+    "input": "And its population?",
+});
+
+# list everything recorded against the conversation
+hash<auto> items = conversations.getChildProvider("items").getChildProvider("list").doRequest({
+    "conversation_id": conv.id,
+    "order": "asc",
+});
+    @endcode
+
+    @section openaidataprovider_assistants_deprecation Assistants API Deprecation
+
+    OpenAI deprecated the Assistants API on 2025-08-26 and will remove it on <b>2026-08-26</b>.  Every
+    \c assistants, \c threads, and \c runs data provider in this module calls that API and will stop working on
+    that date.  They remain available and unchanged until then, and using one logs a deprecation warning once per
+    process.
+
+    Migrate as follows:
+
+    @note Each table row below must stay on a single line; \c qdx does not support backslash line continuation
+    inside a table and silently truncates the table where one appears.
+
+    |!Assistants API|!Replacement
+    |\c assistants|the \c responses data provider, with configuration moved into a reusable prompt
+    |\c threads|the \c conversations data provider
+    |\c threads/{thread_id}/messages|the \c conversations/items/list data provider
+    |\c runs|the \c responses data provider
+    |\c runs/{run_id}/steps|the \c responses/input-items data provider
+    |\c runs/{run_id}/cancel|the \c responses/cancel data provider
+    |\c runs/{run_id}/submit_tool_outputs|the \c responses/create data provider, with \c function_call_output items
+
+    An assistant's model, tools, and instructions are replaced by a reusable prompt referenced with the \c prompt
+    field of a create-response request.  Tool outputs are returned to the model as \c function_call_output input
+    items on a follow-up request that sets \c previous_response_id or reuses the same \c conversation.
+
     @section openaidataprovider_relnotes Release Notes
+
+    @subsection openaidataprovider_v1_6 OpenAiDataProvider v1.6
+    - added the \c conversations data provider tree implementing the OpenAI Conversations API
+      (create, get, update, delete, and item list/create/get/delete), replacing the deprecated Assistants API
+      threads
+    - added the \c responses/cancel and \c responses/input-items data providers, replacing the deprecated
+      Assistants API run cancel and run steps endpoints
+    - added the \c conversation field to create-response requests and responses, binding a response to a
+      server-side conversation
+    - fixed conversation context propagation: the server-side conversation ID is read from the \c conversation
+      object returned by the API instead of a non-existent \c conversation_id response field
+    - added \c function_call_output input items to create-response requests, so function tool results can be
+      returned to the model; this replaces the deprecated Assistants API \c submit_tool_outputs endpoint
+    - deprecated all \c assistants, \c threads, and \c runs data providers ahead of OpenAI's 2026-08-26 removal
+      of the Assistants API
 
     @subsection openaidataprovider_v1_5 OpenAiDataProvider v1.5
     - added OpenAiResponseActionSession for action-based response creation and streaming

@@ -105,7 +105,7 @@ public class OpenAiModelGetResponseRequestDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelGetResponseRequest") {
         addQoreFields(Fields);
     }
 }

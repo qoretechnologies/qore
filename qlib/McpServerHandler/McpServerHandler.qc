@@ -24,6 +24,42 @@
 
 #! the %McpServerHandler namespace holds all public definitions in the %McpServerHandler module
 public namespace McpServerHandler {
+#! Takes the handler's read lock unless the calling thread already holds the write lock
+/** Qore's @ref Qore::RWLock "RWLock" raises \c LOCK-ERROR when a thread that holds the write
+    lock asks for a read lock.  A server that mutates its tool, resource, or prompt catalog
+    under the handler's write lock — the natural pattern, since those maps are guarded by that
+    same lock — would therefore be unable to announce the change from inside the critical
+    section that made it, and would have to drop the lock first (opening a window in which
+    clients see a catalog that has changed but has not been announced) or reach into the
+    handler's internals.
+
+    Holding the write lock is strictly stronger than holding a read lock, so in that case the
+    snapshot is taken with no additional lock at all.
+
+    @note this class is internal to the module.
+*/
+class McpHandlerReadLockHelper {
+    private:internal {
+        #! The lock to release in the destructor, if this helper acquired one
+        *RWLock lck;
+    }
+
+    #! Acquires the read lock unless the current thread already holds the write lock
+    constructor(RWLock rwl) {
+        if (!rwl.writeLockOwner()) {
+            lck = rwl;
+            lck.readLock();
+        }
+    }
+
+    #! Releases the read lock if it was acquired
+    destructor() {
+        if (lck) {
+            lck.readUnlock();
+        }
+    }
+}
+
 #! MCP task status enum
 public enum McpTaskStatus : string {
     #! Task is currently being processed
@@ -146,7 +182,9 @@ public hashdecl McpResourceTemplateInfo {
     *hash<auto> annotations;
 
     #! Code to read the resource content
-    *code reader;
+    /** Called with the request context and the resolved resource URI.
+    */
+    *code<auto(hash<auto>, string)> reader;
 }
 
 #! MCP progress notification information
@@ -227,7 +265,16 @@ public hashdecl McpToolInfo {
     *bool needs_map;
 
     #! The code to call the tool
-    code tool;
+    /** Called with the \c arguments member of the request, or — when the tool declares a
+        \c "data" property — with that property's value, which need not be a hash.
+    */
+    code<auto(auto)> tool;
+
+    #! MCP Apps metadata; see @ref registerUiTool()
+    /** Reported to clients that negotiated the
+        @ref McpClient::MCP_ExtensionUi "MCP Apps extension" as the tool's \c _meta.ui.
+    */
+    *hash<McpUiToolMeta> ui;
 
     #! Extra free-form info to store for the tool
     *hash<auto> extra;
@@ -248,7 +295,14 @@ public hashdecl McpResourceInfo {
     string mimeType;
 
     #! The code to read the resource content
-    *code reader;
+    /** Called with the request context and the resource URI.
+    */
+    *code<auto(hash<auto>, string)> reader;
+
+    #! MCP Apps metadata; see @ref registerUiResource()
+    /** Returned as the \c _meta.ui member of the \c resources/read content entry.
+    */
+    *hash<McpUiResourceMeta> ui;
 }
 
 #! MCP prompt declaration
@@ -263,7 +317,9 @@ public hashdecl McpPromptInfo {
     *list<hash<auto>> arguments;
 
     #! The code to generate the prompt messages
-    *code handler;
+    /** Called with the request context and the prompt arguments.
+    */
+    *code<auto(hash<auto>, *hash<auto>)> handler;
 }
 
 #! MCP tool call context
@@ -538,11 +594,17 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             hash while sending the reply, not from the copy this handler modified, so the
             subscription ID and negotiated notification filter cannot be passed through \c cx.
             They are parked here between @ref handleSubscriptionsListen() and
-            @ref getConnectionImpl(), keyed by the HTTP connection ID that both see, since
+            @ref createConnectionIntern(), keyed by the HTTP connection ID that both see, since
             the reply may be sent from a different thread than the one that handled the
             request.  Access is serialized with the handler's read-write lock.
         */
         hash<string, hash<auto>> pending_subs;
+
+        #! Server identity reported to clients; see @ref setServerInfo()
+        hash<auto> server_info = {
+            "name": McpServerName,
+            "version": McpServerVersion,
+        };
 
         #! Optional natural-language guidance returned by \c server/discover
         *string instructions;
@@ -604,7 +666,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #! Registers a tool
-    registerTool(string name, string desc, *AbstractDataProviderType input, code tool, *bool input_initialized,
+    registerTool(string name, string desc, *AbstractDataProviderType input, code<auto(auto)> tool, *bool input_initialized,
             *hash<auto> extra, *AbstractDataProvider prov) {
         tmap{name} = getTool(name, desc, input, tool, input_initialized, extra, prov);
     }
@@ -637,7 +699,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @param mimeType the MIME type of the resource
         @param reader optional code to read the resource content; if not provided, the resource is not readable
     */
-    registerResource(string uri, string name, string desc, string mimeType, *code reader) {
+    registerResource(string uri, string name, string desc, string mimeType,
+            *code<auto(hash<auto>, string)> reader) {
         rmap{uri} = <McpResourceInfo>{
             "uri": uri,
             "name": name,
@@ -645,6 +708,195 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             "mimeType": mimeType,
             "reader": reader,
         };
+    }
+
+    #! Registers an MCP Apps user interface resource
+    /** Declares an interactive HTML interface that a tool registered with
+        @ref registerUiTool() can reference.  The resource is served through the normal
+        resource machinery, with the URI scheme and MIME type the
+        @ref mcp_apps "MCP Apps extension" requires, and with the interface's Content
+        Security Policy and permission requests attached as \c _meta.ui.
+
+        Registering at least one interface resource is what makes the server advertise the
+        extension in \c server/discover; see @ref getDiscoverCapabilities().
+
+        @par Example:
+        @code{.py}
+handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
+    "Interactive weather dashboard", html, <McpUiResourceMeta>{
+        "csp": <McpUiResourceCsp>{
+            "connectDomains": ("https://api.openweathermap.org",),
+        },
+        "prefersBorder": True,
+    });
+        @endcode
+
+        @param uri the resource URI; must use the \c ui:// scheme
+        @param name a human-readable display name for the interface
+        @param desc a description of what the interface does and when to use it
+        @param html the HTML5 document as a string or binary, or code returning it — the same
+            reader signature @ref registerResource() uses
+        @param ui_meta the interface's Content Security Policy, permission requests, sandbox
+            domain and border preference
+
+        @throw MCP-SERVER-ARG-ERROR the URI does not use the \c ui:// scheme, or \a html is
+            neither a string nor callable
+
+        @see
+        - @ref registerUiTool()
+        - @ref clientSupportsUi()
+    */
+    registerUiResource(string uri, string name, string desc, auto html,
+            *hash<McpUiResourceMeta> ui_meta) {
+        if (uri.substr(0, MCP_UiScheme.length()) != MCP_UiScheme) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("MCP Apps user interface resource URI %y must "
+                "use the %y scheme", uri, MCP_UiScheme);
+        }
+        code<auto(hash<auto>, string)> reader;
+        if (html.callp()) {
+            reader = html;
+        } else if (html.typeCode() == NT_STRING || html.typeCode() == NT_BINARY) {
+            # binary content is served base64-encoded as the extension's "blob" member; the
+            # resource read path already handles both
+            data content = html;
+            reader = auto sub (hash<auto> cx, string res_uri) { return content; };
+        } else {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("MCP Apps user interface resource %y was given "
+                "content of type %y; expecting an HTML document as a string or binary, or code "
+                "returning one", uri, html.fullType());
+        }
+        rmap{uri} = <McpResourceInfo>{
+            "uri": uri,
+            "name": name,
+            "description": desc,
+            "mimeType": MCP_UiMimeType,
+            "reader": reader,
+            "ui": ui_meta,
+        };
+    }
+
+    #! Registers a tool that renders its results in an MCP Apps user interface
+    /** Identical to @ref registerTool() except that the tool declares \c _meta.ui referencing
+        a \c ui:// resource registered with @ref registerUiResource().  A host that negotiated
+        the @ref mcp_apps "MCP Apps extension" fetches that resource and renders the tool's
+        results in a sandboxed iframe; every other client sees an ordinary tool.
+
+        @par Graceful degradation
+        The extension requires a user interface tool to keep working for hosts that cannot
+        render one: it must still return a meaningful \c content array.  The tool's result is
+        checked against that rule on every call — see @ref checkUiToolFallback().
+
+        @param name the name of the tool
+        @param desc the description of the tool
+        @param input the input type of the tool
+        @param tool the code implementing the tool
+        @param ui the MCP Apps metadata; \c resourceUri is required and must name a resource
+            registered with @ref registerUiResource()
+        @param input_initialized if the input type has been fully initialized
+        @param extra extra free-form info to store for the tool
+        @param prov an optional data provider backing the tool
+
+        @throw MCP-SERVER-ARG-ERROR \c resourceUri is missing, does not use the \c ui:// scheme,
+            names a resource that is not registered, or \c visibility contains an unknown value
+
+        @see @ref registerUiResource()
+    */
+    registerUiTool(string name, string desc, *AbstractDataProviderType input, code<auto(auto)> tool,
+            hash<McpUiToolMeta> ui, *bool input_initialized, *hash<auto> extra,
+            *AbstractDataProvider prov) {
+        if (!ui.resourceUri.val()) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("tool %y declares MCP Apps metadata without a "
+                "\"resourceUri\"", name);
+        }
+        if (ui.resourceUri.substr(0, MCP_UiScheme.length()) != MCP_UiScheme) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("tool %y references user interface resource %y, "
+                "which does not use the %y scheme", name, ui.resourceUri, MCP_UiScheme);
+        }
+        # the extension requires the referenced resource to exist on the server; catching it
+        # here turns a silent no-render in the host into an immediate, located error
+        *hash<McpResourceInfo> res = rmap{ui.resourceUri};
+        if (!res) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("tool %y references user interface resource %y, "
+                "which is not registered; call registerUiResource() first (registered user "
+                "interface resources: %y)", name, ui.resourceUri, getUiResourceUris());
+        }
+        if (res.mimeType != MCP_UiMimeType) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("tool %y references resource %y, which has MIME "
+                "type %y; an MCP Apps user interface resource must have MIME type %y", name,
+                ui.resourceUri, res.mimeType, MCP_UiMimeType);
+        }
+        foreach string v in (ui.visibility ?? ()) {
+            if (v != McpUiVisibility::Model && v != McpUiVisibility::App) {
+                throw "MCP-SERVER-ARG-ERROR", sprintf("tool %y declares unknown MCP Apps "
+                    "visibility %y; known values: %y", name, v,
+                    (McpUiVisibility::Model, McpUiVisibility::App));
+            }
+        }
+        hash<McpToolInfo> info = getTool(name, desc, input, tool, input_initialized, extra, prov);
+        info.ui = ui;
+        tmap{name} = info;
+    }
+
+    #! Returns the URIs of every registered MCP Apps user interface resource
+    list<string> getUiResourceUris() {
+        list<string> rv = ();
+        foreach string uri in (sort(keys rmap)) {
+            if (rmap{uri}.mimeType == MCP_UiMimeType) {
+                rv += uri;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns @ref True if this server has at least one MCP Apps user interface resource
+    bool hasUiResources() {
+        foreach hash<McpResourceInfo> info in (rmap.iterator()) {
+            if (info.mimeType == MCP_UiMimeType) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns @ref True if the client negotiated the MCP Apps extension for this request
+    /** A client declares support by listing @ref McpClient::MCP_ExtensionUi "the extension
+        identifier" in its capabilities with a \c mimeTypes member that includes
+        @ref McpClient::MCP_UiMimeType "the user interface MIME type".  A client that declares
+        the extension but no compatible MIME type cannot render anything, so it is treated as
+        not supporting it.
+
+        @param cx the request context
+
+        @return @ref True if the client can render MCP Apps user interfaces
+    */
+    bool clientSupportsUi(hash<auto> cx) {
+        *hash<auto> settings = getClientCapabilities(cx).extensions{MCP_ExtensionUi};
+        if (!exists settings) {
+            return False;
+        }
+        return inlist(MCP_UiMimeType, settings.mimeTypes ?? ());
+    }
+
+    #! Returns the capabilities the client declared, from whichever era it is speaking
+    /** A modern request carries its capabilities in \c _meta on every request; a legacy client
+        declares them once in \c initialize, and they live in its session for the rest of the
+        connection.  An extension negotiated at handshake time — MCP Apps is negotiated exactly
+        that way by a legacy client — is invisible to a per-request capability check unless the
+        session is consulted as well.
+
+        @param cx the request context
+
+        @return the client's capabilities, or an empty hash if it declared none
+    */
+    hash<auto> getClientCapabilities(hash<auto> cx) {
+        if (exists cx.mcp_client_capabilities) {
+            return cx.mcp_client_capabilities;
+        }
+        if (!cx.mcp_session.val()) {
+            return {};
+        }
+        McpHandlerReadLockHelper al(rwl);
+        return smap{cx.mcp_session}.clientCapabilities ?? {};
     }
 
     #! Unregisters a resource
@@ -662,7 +914,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @param handler optional code to generate prompt messages; receives (context, arguments) and should return
             a list of message hashes with "role" and "content" keys
     */
-    registerPrompt(string name, string desc, *list<hash<auto>> arguments, *code handler) {
+    registerPrompt(string name, string desc, *list<hash<auto>> arguments,
+            *code<auto(hash<auto>, *hash<auto>)> handler) {
         pmap{name} = <McpPromptInfo>{
             "name": name,
             "description": desc,
@@ -722,6 +975,52 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     */
     setInstructions(*string instructions) {
         self.instructions = instructions;
+    }
+
+    #! Sets the server identity reported to clients
+    /** Without this, every embedding server identifies itself to clients as
+        \c QoreMcpServer, since the default comes from the
+        @ref McpServerHandler::McpServerName "McpServerName" and
+        @ref McpServerHandler::McpServerVersion "McpServerVersion" module constants.
+        The identity is user-visible: clients show it in server listings and use it in
+        logs and diagnostics.
+
+        The value feeds both the legacy \c initialize result's \c serverInfo member and
+        the modern \c _meta.\c io.modelcontextprotocol/serverInfo member attached to
+        every response.
+
+        @param name the server name
+        @param version the server version
+        @param extra additional members to merge into the identity (e.g. \c title,
+            \c websiteUrl)
+
+        @throw MCP-SERVER-ARG-ERROR the name or version is empty
+
+        @see @ref getServerInfo()
+    */
+    setServerInfo(string name, string version, *hash<auto> extra) {
+        if (!name.val() || !version.val()) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("server name (%y) and version (%y) must both "
+                "be non-empty", name, version);
+        }
+        # NOTE: deliberately unlocked, like setInstructions(): this is a setup-time
+        # configuration call, and getServerInfo() is called while building every modern
+        # response — taking the handler's read-write lock there would make the identity
+        # unreadable from any code path that already holds the write lock
+        server_info = (extra ?? {}) + {
+            "name": name,
+            "version": version,
+        };
+    }
+
+    #! Returns the server identity reported to clients
+    /** Reimplement to compute the identity per server instance instead of setting it once
+        with @ref setServerInfo().
+
+        @return a hash with at least \c name and \c version members
+    */
+    hash<auto> getServerInfo() {
+        return server_info;
     }
 
     #! Returns the protocol versions this server supports, newest first
@@ -1107,7 +1406,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             result.resultType = McpResultType::Complete;
         }
         if (!result._meta{MCP_MetaServerInfo}) {
-            result._meta{MCP_MetaServerInfo} = ServerInfo.serverInfo;
+            result._meta{MCP_MetaServerInfo} = getServerInfo();
         }
         if (*hash<auto> cache = CacheableMethods{cx.mcp_method}) {
             result += cache - keys result;
@@ -1255,12 +1554,22 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         return ++sidmap{session};
     }
 
-    #! Called when a connection is established; the default implementation creates a ServerSentEventConnection object
-    /** A stream opened by a modern \c subscriptions/listen request becomes an
-        @ref McpSubscriptionStream "McpSubscriptionStream"; a legacy \c GET stream becomes an
-        @ref McpServerConnection "McpServerConnection" using the 2024-11-05 protocol version.
+    #! Creates the connection object for a new SSE stream
+    /** A stream opened by a modern \c subscriptions/listen request must be an
+        @ref McpSubscriptionStream "McpSubscriptionStream": the acknowledgment,
+        the \c submap registration, and every notification delivered on the stream
+        depend on it.  It is therefore built here, in the internal seam, and never
+        routed through @ref getConnectionImpl() — a subclass overriding that
+        documented factory to return its own connection type (a perfectly legitimate
+        thing to do, and the reason this seam exists) would otherwise silently break
+        \c subscriptions/listen: no acknowledgment, no notifications, a leaked
+        \c pending_subs entry, and a session minted for a revision that has none.
+
+        Everything else, including the legacy \c GET event stream, goes through
+        @ref getConnectionImpl() as before.
     */
-    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+    private ServerSentEventConnection createConnectionIntern(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
         *hash<auto> sub_info;
         {
             AutoWriteLock al(rwl);
@@ -1270,7 +1579,16 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             return new McpSubscriptionStream(self, sock, cx + {"mcp_subscription": sub_info},
                 hdr, cid);
         }
-        # legacy SSE connections use the 2024-11-05 protocol
+        return ServerSentEventHandler::createConnectionIntern(sock, cx, hdr, cid);
+    }
+
+    #! Called when a connection is established; creates the legacy SSE event stream connection
+    /** Only reached for a legacy \c GET event stream — a modern \c subscriptions/listen
+        stream is created in @ref createConnectionIntern() before this hook runs.
+
+        @note legacy SSE connections use the 2024-11-05 protocol
+    */
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
         return new McpServerConnection(self, sock, cx, hdr, cid, McpVersion::V2024_11_05);
     }
 
@@ -1409,27 +1727,65 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             submap{stream.uniqueHash()} = stream;
             return;
         }
+        # Safety net: a subscription stream is claimed in createConnectionIntern(), so a
+        # still-pending entry here means the connection-creation seam was bypassed and
+        # this stream can never acknowledge or deliver anything.  Fail loudly rather than
+        # leaving the client waiting forever on an acknowledgment that will not come.
+        if (pending_subs{conn.cx.id.toString()}) {
+            remove pending_subs{conn.cx.id.toString()};
+            throw "MCP-SUBSCRIPTION-ERROR", sprintf("connection %y for a subscriptions/listen "
+                "request was created as %y instead of an McpSubscriptionStream; a subclass "
+                "must not intercept McpServerHandler::createConnectionIntern()", cid,
+                conn.className());
+        }
         McpServerConnection mcp_conn = cast<McpServerConnection>(conn);
         smap{mcp_conn.getSession()}.ssemap{mcp_conn.uniqueHash()} = mcp_conn;
     }
 
-    #! Called when an SSE connection terminates
-    deregisterConnectionImpl(ServerSentEventConnection conn) {
-        if (conn instanceof McpSubscriptionStream) {
-            McpSubscriptionStream stream = cast<McpSubscriptionStream>(conn);
-            info("subscription stream %y closed", stream.getSubscriptionId());
-            AutoWriteLock al(rwl);
-            remove submap{stream.uniqueHash()};
+    #! Called while holding the write lock to remove a terminated connection
+    /** Unregisters the connection from the MCP-specific maps that
+        @ref registerNewConnectionIntern() populates — the modern subscription map
+        and the session's SSE map — and then delegates to the base implementation.
+
+        This bookkeeping lives here rather than in
+        @ref ServerSentEventHandler::deregisterConnectionImpl() deliberately.  That
+        method is the documented "called when the connection terminates" hook whose
+        base implementation does nothing, so a subclass is invited to override it —
+        and an override that declares a narrower parameter type becomes a separate
+        Qore variant that is selected at runtime for the subclass's own connection
+        objects, silently bypassing this cleanup.  The maps would then grow without
+        bound and every broadcast would iterate closed streams.  The registration
+        side already uses this pattern; the two are now symmetric.
+
+        @param cid the SSE connection ID
+
+        @return the removed connection, or @ref nothing if it was not registered
+    */
+    private *ServerSentEventConnection removeConnectionLocked(string cid) {
+        *ServerSentEventConnection conn = ServerSentEventHandler::removeConnectionLocked(cid);
+        if (!conn) {
             return;
         }
-        McpServerConnection mcp_conn = cast<McpServerConnection>(conn);
-        string sessionId = mcp_conn.getSession();
-        info("SSE connection closed for session %y", sessionId);
+        if (conn instanceof McpSubscriptionStream) {
+            remove submap{cast<McpSubscriptionStream>(conn).uniqueHash()};
+        } else if (conn instanceof McpServerConnection) {
+            McpServerConnection mcp_conn = cast<McpServerConnection>(conn);
+            remove smap{mcp_conn.getSession()}.ssemap{mcp_conn.uniqueHash()};
+        }
+        return conn;
+    }
 
-        # Remove from session's SSE map
-        {
-            AutoWriteLock al(rwl);
-            remove smap{sessionId}.ssemap{mcp_conn.uniqueHash()};
+    #! Called when an SSE connection terminates; logs the event
+    /** @note the mandatory unregistration is done in @ref removeConnectionLocked(); a
+        subclass may override this method freely without chaining to it.
+    */
+    deregisterConnectionImpl(ServerSentEventConnection conn) {
+        if (conn instanceof McpSubscriptionStream) {
+            info("subscription stream %y closed",
+                cast<McpSubscriptionStream>(conn).getSubscriptionId());
+        } else if (conn instanceof McpServerConnection) {
+            info("SSE connection closed for session %y",
+                cast<McpServerConnection>(conn).getSession());
         }
     }
 
@@ -1473,10 +1829,16 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     private *list<hash<auto>> getToolList(hash<auto> cx) {
         list<hash<auto>> rv = ();
+        bool ui_client = clientSupportsUi(cx);
         # return tools in a deterministic order so that clients can cache the list and so that
         # LLM prompt caches see a stable prefix
         foreach string name in (sort(keys tmap)) {
             hash<McpToolInfo> tool = tmap{name};
+            if (tool.ui && !ui_client && !toolIsVisibleToModel(tool)) {
+                # an app-only tool exists to be called by the user interface; a client that
+                # cannot render one has no way to reach it, so do not offer it at all
+                continue;
+            }
             hash<auto!> info = {
                 "name": tool.name,
                 "description": tool.description,
@@ -1485,9 +1847,37 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             if (tool.extra.execution) {
                 info.execution = tool.extra.execution;
             }
+            # only clients that negotiated the extension get its metadata
+            if (tool.ui && ui_client) {
+                info._meta = (info._meta ?? {}) + {"ui": getToolUiMeta(cx, tool)};
+            }
             push rv, info;
         }
         return rv;
+    }
+
+    #! Returns the MCP Apps metadata advertised for a tool in \c tools/list
+    /** Reimplement in subclasses that compute a tool's user interface per request — for
+        example to point at different interfaces for different tenants.
+
+        @param cx the request context
+        @param info the registered tool
+
+        @return the tool's \c _meta.ui member
+    */
+    hash<auto> getToolUiMeta(hash<auto> cx, hash<McpToolInfo> info) {
+        hash<auto!> rv = {
+            "resourceUri": info.ui.resourceUri,
+        };
+        # visibility defaults to ("model", "app"); send it explicitly so that a host does not
+        # have to know the default to route app-initiated calls
+        rv.visibility = info.ui.visibility ?? McpUiDefaultVisibility;
+        return rv;
+    }
+
+    #! Returns @ref True if the model may see and call the given tool
+    private bool toolIsVisibleToModel(hash<McpToolInfo> info) {
+        return inlist(McpUiVisibility::Model, info.ui.visibility ?? McpUiDefaultVisibility);
     }
 
     private *hash<auto> toolsCall(hash<auto> cx, *hash<auto> params) {
@@ -1573,7 +1963,9 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
         auto content = info.reader(cx, params.uri);
         # handle different content types
-        hash<auto> result;
+        # NOTE: hash<auto!> — the members below are all strings, so a plain hash<auto> would
+        # narrow to hash<string, string> and reject the _meta hash added further down
+        hash<auto!> result;
         if (content.typeCode() == NT_BINARY) {
             result = {
                 "uri": params.uri,
@@ -1587,9 +1979,37 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                 "text": content.typeCode() == NT_STRING ? content : make_json(content),
             };
         }
+        # an MCP Apps user interface resource carries its Content Security Policy and
+        # permission requests on the content entry, not on the resources/list entry, because
+        # the host builds the sandbox from what it is about to render
+        if (info.ui) {
+            result._meta = {"ui": stripUnsetUiMembers(info.ui)};
+        }
         return {
             "contents": (result,),
         };
+    }
+
+    #! Drops unset members from MCP Apps resource metadata before it goes on the wire
+    /** A hashdecl always has every member present, so serializing it directly would send
+        \c null for each option the server did not set.  The extension gives every omitted
+        member a secure default, so an explicit \c null is at best noise and at worst read as
+        an empty allowlist.
+
+        @note only members holding @ref nothing are dropped.  An <i>empty</i> hash is
+        meaningful in this metadata — the extension uses one as the presence marker for each
+        requested browser capability (\c "permissions": \c {"camera": {}}) — so pruning empty
+        hashes would silently drop the permission requests.
+    */
+    private static hash<auto> stripUnsetUiMembers(hash<auto> ui) {
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (ui.pairIterator()) {
+            if (!exists i.value) {
+                continue;
+            }
+            rv{i.key} = i.value.typeCode() == NT_HASH ? stripUnsetUiMembers(i.value) : i.value;
+        }
+        return rv;
     }
 
     private hash<auto> promptsList(hash<auto> cx, *hash<auto> params) {
@@ -1651,7 +2071,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (params.protocolVersion.typeCode() != NT_STRING) {
             throw "MCP-SERVER-ARG-ERROR", "Missing or invalid protocolVersion";
         }
-        hash<auto> rv = ServerInfo;
+        hash<auto> rv = ServerInfo + {"serverInfo": getServerInfo()};
         # only a legacy version can be negotiated here: a client that sends "initialize" is by
         # definition speaking a handshake-based revision.  A client asking for a modern version
         # is answered with the newest legacy version so that it can either continue in legacy
@@ -1712,7 +2132,17 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @return the capability hash
     */
     hash<auto> getDiscoverCapabilities(hash<auto> cx) {
-        return ModernCapabilities;
+        hash<auto> rv = ModernCapabilities;
+        # only advertise MCP Apps when this server actually ships a user interface: a client
+        # that sees the extension will look for ui:// resources that would not be there
+        if (hasUiResources()) {
+            rv.extensions += {
+                MCP_ExtensionUi: {
+                    "mimeTypes": (MCP_UiMimeType,),
+                },
+            };
+        }
+        return rv;
     }
 
     #! Handles a \c subscriptions/listen request by opening a long-lived SSE response stream
@@ -1816,7 +2246,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     private notifySubscribers(string type, *hash<auto> params, *string uri) {
         list<McpSubscriptionStream> streams;
         {
-            AutoReadLock al(rwl);
+            McpHandlerReadLockHelper al(rwl);
             streams = map $1, submap.iterator();
         }
         foreach McpSubscriptionStream stream in (streams) {
@@ -1852,7 +2282,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Returns the number of active modern subscription streams
     int getSubscriptionCount() {
-        AutoReadLock al(rwl);
+        McpHandlerReadLockHelper al(rwl);
         return submap.size();
     }
 
@@ -1984,11 +2414,11 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             auto rv = info.needs_map ? info.tool(params.arguments."data") : info.tool(params.arguments);
             # If the tool returns a list, treat as pre-formatted MCP content parts
             if (rv.typeCode() == NT_LIST) {
-                return {"content": rv};
+                return checkUiToolFallback(info, {"content": rv});
             }
             # If the tool returns a hash with a "content" key, pass through as-is
             if (rv.typeCode() == NT_HASH && rv.hasKey("content")) {
-                return rv;
+                return checkUiToolFallback(info, rv);
             }
             return {
                 "content": ({
@@ -2010,7 +2440,41 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
     }
 
-    private hash<McpToolInfo> getTool(string name, string desc, *AbstractDataProviderType input, code tool,
+    #! Enforces the MCP Apps graceful-degradation rule on a tool result
+    /** The extension requires a user interface tool to return a meaningful \c content array
+        even when a user interface is available, so that a host which cannot render one — or a
+        model reading the transcript rather than the rendered view — still gets the answer.
+
+        A tool that returns only the data its interface renders looks correct against a host
+        that renders it and silently returns nothing useful to every other client, which is
+        exactly the failure this check exists to make visible.  It is reported as an error from
+        the tool rather than a warning, because the alternative is a caller receiving an empty
+        successful response.
+
+        @param info the tool that was called
+        @param result the result the tool produced
+
+        @return \a result unchanged
+
+        @throw MCP-TOOL-ERROR the tool declares MCP Apps metadata but returned no text content
+    */
+    private hash<auto> checkUiToolFallback(hash<McpToolInfo> info, hash<auto> result) {
+        if (!info.ui) {
+            return result;
+        }
+        foreach auto part in (result.content ?? ()) {
+            if (part.typeCode() == NT_HASH && part.type == "text" && part.text.val()) {
+                return result;
+            }
+        }
+        throw "MCP-TOOL-ERROR", sprintf("tool %y renders its results in MCP Apps user interface "
+            "%y but returned no text content; the MCP Apps extension requires a user interface "
+            "tool to return a meaningful content array so that hosts which cannot render the "
+            "interface still get the answer", info.name, info.ui.resourceUri);
+    }
+
+    private hash<McpToolInfo> getTool(string name, string desc, *AbstractDataProviderType input,
+            code<auto(auto)> tool,
             *bool input_initialized, *hash<auto> extra, *AbstractDataProvider prov) {
         if (name.length() > MaxMcpToolNameLength) {
             throw "MCP-SERVER-ARG-ERROR", sprintf("Tool name %y is too long (max %y)", name,
@@ -2750,13 +3214,15 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     /** Delivered to legacy sessions that subscribed with \c resources/subscribe and to modern
         \c subscriptions/listen streams that included the URI in \c resourceSubscriptions.
 
+        Safe to call with the handler's write lock held; see @ref notifyToolsListChanged().
+
         @param uri the URI of the updated resource
     */
     notifyResourceUpdated(string uri) {
         # Collect connections under read lock
         list<McpServerConnection> conns;
         {
-            AutoReadLock al(rwl);
+            McpHandlerReadLockHelper al(rwl);
             foreach string sid in (keys smap) {
                 if (smap{sid}.subscriptions{uri}) {
                     if (*McpServerConnection conn = smap{sid}.ssemap.firstValue()) {
@@ -2774,6 +3240,11 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     #! Notifies clients that the tool list has changed
     /** Sent to legacy sessions with an open event stream and to modern
         \c subscriptions/listen streams that opted in to \c toolsListChanged.
+
+        Safe to call with the handler's write lock held, so a subclass can mutate its
+        catalog and announce the change in the same critical section; see
+        @ref McpHandlerReadLockHelper.  The notifications themselves are always sent
+        outside the lock.
     */
     notifyToolsListChanged() {
         broadcastLegacyNotification(\McpServerConnection::sendToolsChangedNotification());
@@ -2781,24 +3252,28 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #! Notifies clients that the resource list has changed
-    /** @see @ref notifyToolsListChanged() */
+    /** Safe to call with the handler's write lock held.
+
+        @see @ref notifyToolsListChanged() */
     notifyResourcesListChanged() {
         broadcastLegacyNotification(\McpServerConnection::sendResourcesChangedNotification());
         notifySubscribers("resourcesListChanged");
     }
 
     #! Notifies clients that the prompt list has changed
-    /** @see @ref notifyToolsListChanged() */
+    /** Safe to call with the handler's write lock held.
+
+        @see @ref notifyToolsListChanged() */
     notifyPromptsListChanged() {
         broadcastLegacyNotification(\McpServerConnection::sendPromptsChangedNotification());
         notifySubscribers("promptsListChanged");
     }
 
     #! Calls the given connection method on every legacy session event stream
-    private broadcastLegacyNotification(code send) {
+    private broadcastLegacyNotification(code<nothing(McpServerConnection)> send) {
         list<McpServerConnection> conns;
         {
-            AutoReadLock al(rwl);
+            McpHandlerReadLockHelper al(rwl);
             foreach string sid in (keys smap) {
                 if (*McpServerConnection conn = smap{sid}.ssemap.firstValue()) {
                     conns += conn;
@@ -2845,7 +3320,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @param reader optional code to read the resource content
         @param annotations optional annotations
     */
-    registerResourceTemplate(string uriTemplate, string name, *string desc, *string mimeType, *code reader,
+    registerResourceTemplate(string uriTemplate, string name, *string desc, *string mimeType,
+            *code<auto(hash<auto>, string)> reader,
             *hash<auto> annotations) {
         rtmap{uriTemplate} = <McpResourceTemplateInfo>{
             "uriTemplate": uriTemplate,

@@ -1,0 +1,292 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires A2aClient
+
+%exec-class A2aCardSignatureTest
+
+class A2aCardSignatureTest inherits QUnit::Test {
+    public {
+        #! test-only RSA key pair; these must never be used anywhere else
+        const TestPrivateKey =
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC2QZLzDYE3u9fb\n"
+            "mR5HTgx88auMy9YR44dsGsGcZdPHCeaNLlBcro0svKL2bcWq+1/ctEWCPGiRlEyQ\n"
+            "9Cc8tXwl9+RKB7uMjqg/gbi+zXAlBttAhC5dcYOk7jOwmUSfbOUHsaf9+nCvi3G7\n"
+            "J6cYuew7lbEq7ljM0QBSPWrc23DLsyGxOhu9GgoHC66rduwWdSp+B+ndloUWc7eN\n"
+            "gC5Lva7AJhDLqDc2DkAwErOXeGhtdS+W9wdM9fXKUmT9XXX//bUXdw+LamZK6Fdl\n"
+            "mutzQpmmnAlGXq1R0FHcjOQYg+0kI4zKX/7Gmx3dQFtreFHhXnOVjg+JJQ3bjQWA\n"
+            "W+uExo33AgMBAAECggEADFZ3EK4O28uDCtIcOx58+O5ROyhHVxGshrRu+9vm0LgK\n"
+            "W+9RMFz+oJMqgv0eXvtCW4n2lKDrQUOlRUDJ8TGl9FoKIbrRRuwXVqk87OmyWEdV\n"
+            "C1KHYvr+uukHJcLSYup3vKQZp7dO7otFiTJffOyFIel5w1q8Ny1E1Mxkkgvm4Fsk\n"
+            "OhXbcYY0mZfsqhbN2I5UJeLagZoIGLX6M/BWTppSzyu8hhNHAXYXmiAeeEuEdvPy\n"
+            "r/WZseOxD3yZDlvvUFG9shBObLIuX9anmaxTGaQHLYmKovoQdGxGAkZklyZsLRnH\n"
+            "d15J5mq+uPrSsVGnbirsBL0u3tj74Wepp677Xjil3QKBgQDjIORWQpo+FiexIB8L\n"
+            "I6FM8Jf85CnQNi46RqjD9YQMCjNlOam5HWSMm4V75BdmCb9vIFkmyTRJv8aWLMII\n"
+            "SW4+tkIkSesyMavzjNVI+segpB97n6WbIgwkDqLr6wNKit4QEe+ACbd1Zx09mBL7\n"
+            "VZEAQo2+VfCwpRQe/T9wNVVXfQKBgQDNbHe6YKO9EK8BCNl0ciO2/pBrM9jNTKI5\n"
+            "KbpZAB/gTyWrJfw8yp0eWO54gZxXj6CJrfddnZ0037ikB8z8T9EZUNkHAsvbqtkd\n"
+            "hD3Bv2tCUVqkh404eS4u/AZAcs2fBRBAjnIYY7Nhni4247wUkqYdc+FhybPnXEtP\n"
+            "viI4XOo9gwKBgHkBuSVL7qlNXHA90Mw6e2FmfVM6rBxGAXMC2j8suuE/PgqcIhSB\n"
+            "2GQhJ4jOCLlQUDGAZn8Hi1gPWFoCFo4bsSSwLaTvzOK9HANx8OAk2952El/munBg\n"
+            "P1+mfJ58YxB/07d0Fsl8Y8Wk3itGrjZBbDNbQfE6EDXMfV/VRMsfXwxxAoGAVka5\n"
+            "HmEaQ/zu02tpETwi/ed6tlunMcp+061P47Nmr+nt8yzX/JxIUwec2KXvCON81HZp\n"
+            "Tzs0XJGd1d6k3E+VjaFkFUq6Xf8qgvgYi/geT1Ml07ZOvKpAmGEnKwhMjf4tbj+l\n"
+            "cdLl8xjhZhJN2wIgnHwf69cwJPqhctNzQeLcSosCgYEAyJAtyr8d0D0X79WjGyja\n"
+            "knyQMXiCQSKRyBSyJ7zljnpPix9intT1xNY7Kx4k5G/cLCLVQjmCsJF2xqB/rbTb\n"
+            "sInHk5H44enz9EZnvhCLDrUYm8ci39uJBLPULvWC/zCCFwOTmwjz7geU1ksxF/vv\n"
+            "vNHC7sE7ZWIPQEPeqT3AIyc=\n"
+            "-----END PRIVATE KEY-----\n";
+
+        const TestPublicKey =
+            "-----BEGIN PUBLIC KEY-----\n"
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtkGS8w2BN7vX25keR04M\n"
+            "fPGrjMvWEeOHbBrBnGXTxwnmjS5QXK6NLLyi9m3Fqvtf3LRFgjxokZRMkPQnPLV8\n"
+            "JffkSge7jI6oP4G4vs1wJQbbQIQuXXGDpO4zsJlEn2zlB7Gn/fpwr4txuyenGLns\n"
+            "O5WxKu5YzNEAUj1q3Ntwy7MhsTobvRoKBwuuq3bsFnUqfgfp3ZaFFnO3jYAuS72u\n"
+            "wCYQy6g3Ng5AMBKzl3hobXUvlvcHTPX1ylJk/V11//21F3cPi2pmSuhXZZrrc0KZ\n"
+            "ppwJRl6tUdBR3IzkGIPtJCOMyl/+xpsd3UBba3hR4V5zlY4PiSUN240FgFvrhMaN\n"
+            "9wIDAQAB\n"
+            "-----END PUBLIC KEY-----\n";
+
+        const TestCard = {
+            "name": "Test Agent",
+            "description": "an agent used to exercise card signing",
+            "version": "1.0",
+            "capabilities": {
+                "streaming": True,
+                "pushNotifications": False,
+            },
+            "skills": (
+                {"id": "echo", "name": "Echo", "description": "echoes", "tags": ("test",)},
+            ),
+        };
+    }
+
+    constructor() : QUnit::Test("A2aCardSignature test", "1.0") {
+        addTestCase("canonicalization test", \canonicalizationTest());
+        addTestCase("canonical number test", \canonicalNumberTest());
+        addTestCase("signing payload test", \signingPayloadTest());
+        addTestCase("sign and verify test", \signAndVerifyTest());
+        addTestCase("tamper detection test", \tamperDetectionTest());
+        addTestCase("multiple signature test", \multipleSignatureTest());
+        addTestCase("verification negative test", \verificationNegativeTest());
+
+        set_return_value(main());
+    }
+
+    canonicalizationTest() {
+        # RFC 8785: members are ordered by their key's UTF-16 code units, not by insertion order
+        assertEq("{\"a\":2,\"b\":1}", a2aCanonicalizeJson({"b": 1, "a": 2}));
+        assertEq("{\"B\":1,\"a\":2}", a2aCanonicalizeJson({"a": 2, "B": 1}));
+        assertEq("{\"a\":{\"c\":2,\"d\":1}}", a2aCanonicalizeJson({"a": {"d": 1, "c": 2}}));
+        # a key outside the BMP sorts by its surrogate values, ahead of a key starting at U+E000
+        assertEq("{\"\u{10000}\":1,\"\u{e000}\":2}",
+            a2aCanonicalizeJson({"\u{e000}": 2, "\u{10000}": 1}));
+
+        # the JSON literals
+        assertEq("null", a2aCanonicalizeJson(NOTHING));
+        assertEq("null", a2aCanonicalizeJson(NULL));
+        assertEq("true", a2aCanonicalizeJson(True));
+        assertEq("false", a2aCanonicalizeJson(False));
+        assertEq("[]", a2aCanonicalizeJson(()));
+        assertEq("{}", a2aCanonicalizeJson({}));
+        assertEq("[1,\"a\",true]", a2aCanonicalizeJson((1, "a", True)));
+
+        # minimal escaping: only the quote, the backslash, and the C0 controls
+        assertEq("\"a\"", a2aCanonicalizeJson("a"));
+        assertEq("\"\\\"\"", a2aCanonicalizeJson("\""));
+        assertEq("\"\\\\\"", a2aCanonicalizeJson("\\"));
+        assertEq("\"/\"", a2aCanonicalizeJson("/"), "the solidus is not escaped");
+        assertEq("\"\\n\\t\\r\\b\\f\"", a2aCanonicalizeJson("\n\t\r\b\f"));
+        assertEq("\"\\u0001\"", a2aCanonicalizeJson("\x01"));
+        assertEq("\"é\"", a2aCanonicalizeJson("é"), "non-ASCII is emitted literally as UTF-8");
+        assertEq("\"aéb\"", a2aCanonicalizeJson("aéb"), "multi-byte characters must not be truncated");
+
+        # there is no canonical form for a value outside the JSON types
+        assertThrows("JCS-ERROR", \a2aCanonicalizeJson(), (now(),));
+        assertThrows("JCS-ERROR", \a2aCanonicalizeJson(), (<0102>,));
+    }
+
+    canonicalNumberTest() {
+        # integers
+        assertEq("0", a2aCanonicalizeJson(0));
+        assertEq("-42", a2aCanonicalizeJson(-42));
+        assertEq("9007199254740993", a2aCanonicalizeJson(9007199254740993));
+
+        # ECMAScript Number::toString, which is what RFC 8785 mandates for numbers
+        assertEq("0", a2aCanonicalizeJson(0.0));
+        assertEq("0", a2aCanonicalizeJson(-0.0), "ECMAScript prints both zeros as 0");
+        assertEq("1", a2aCanonicalizeJson(1.0), "a trailing .0 is never emitted");
+        assertEq("1.5", a2aCanonicalizeJson(1.5));
+        assertEq("-1.5", a2aCanonicalizeJson(-1.5));
+        assertEq("0.1", a2aCanonicalizeJson(0.1));
+        assertEq("100000000000000000000", a2aCanonicalizeJson(1e20));
+        assertEq("1e+21", a2aCanonicalizeJson(1e21), "positional notation stops at 1e21");
+        assertEq("0.00001", a2aCanonicalizeJson(1e-5));
+        assertEq("0.000001", a2aCanonicalizeJson(1e-6));
+        assertEq("1e-7", a2aCanonicalizeJson(1e-7), "positional notation stops at 1e-7");
+        assertEq("123456789012345680", a2aCanonicalizeJson(123456789012345678.0));
+        assertEq("5e-324", a2aCanonicalizeJson(5e-324), "smallest subnormal");
+        # Qore's float() saturates at the largest finite double instead of overflowing, so a too-short
+        # representation of this value would otherwise appear to round trip
+        assertEq("1.7976931348623157e+308", a2aCanonicalizeJson(1.7976931348623157e308));
+
+        # RFC 8785 has no representation for a non-finite number
+        assertThrows("JCS-ERROR", \a2aCanonicalizeJson(), (@nan@,));
+        assertThrows("JCS-ERROR", \a2aCanonicalizeJson(), (@inf@,));
+        assertThrows("JCS-ERROR", \a2aCanonicalizeJson(), (-@inf@,));
+    }
+
+    signingPayloadTest() {
+        # the signatures member is excluded so that several signatures can cover one card
+        string bare = a2aGetCardSigningPayload(TestCard);
+        hash<auto> with_sig = TestCard + {"signatures": ({"protected": "p", "signature": "s"},)};
+        assertEq(bare, a2aGetCardSigningPayload(with_sig));
+
+        # the payload is canonical, so member order in the source hash is irrelevant
+        hash<auto> reordered = {
+            "skills": TestCard.skills,
+            "capabilities": TestCard.capabilities,
+            "version": TestCard.version,
+            "description": TestCard.description,
+            "name": TestCard.name,
+        };
+        assertEq(bare, a2aGetCardSigningPayload(reordered),
+            "member order must not change the signing payload");
+        assertRegex("^\\{\"capabilities\":", bare, "members are ordered by key");
+    }
+
+    signAndVerifyTest() {
+        hash<auto> signed = a2aSignAgentCard(TestCard, TestPrivateKey, "key-1", {
+            "jku": "https://agent.example.com/.well-known/jwks.json",
+        });
+        assertEq(1, signed.signatures.size());
+
+        # the protected header carries the parameters the specification requires
+        hash<auto> header = parse_json(parse_base64_url_string_to_string(signed.signatures[0].protected));
+        assertEq("RS256", header.alg, "RS256 is the default algorithm");
+        assertEq("JOSE", header.typ);
+        assertEq("key-1", header.kid);
+        assertEq("https://agent.example.com/.well-known/jwks.json", header.jku);
+
+        # verification with the key mapped by ID, and with a single bare key
+        hash<A2aCardVerification> rv = a2aVerifyAgentCard(signed, {"key-1": TestPublicKey});
+        assertTrue(rv.verified);
+        assertEq(1, rv.signature_count);
+        assertEq(("key-1",), rv.verified_key_ids);
+        assertNothing(rv.error);
+        assertTrue(a2aVerifyAgentCard(signed, TestPublicKey).verified);
+        # a private key also verifies, since the public key can be derived from it
+        assertTrue(a2aVerifyAgentCard(signed, TestPrivateKey).verified);
+
+        # the signature is over the canonical payload, so reordering the card must not break it
+        hash<auto> reordered = {"signatures": signed.signatures, "skills": signed.skills,
+            "version": signed.version, "name": signed.name, "description": signed.description,
+            "capabilities": signed.capabilities};
+        assertTrue(a2aVerifyAgentCard(reordered, TestPublicKey).verified,
+            "canonicalization must make verification order-independent");
+
+        # HMAC algorithms work too, though they are not useful for a publicly verifiable card
+        hash<auto> hs = a2aSignAgentCard(TestCard, "shared-secret", "hmac-1", {"algorithm": "HS256"});
+        assertTrue(a2aVerifyAgentCard(hs, "shared-secret").verified);
+        assertFalse(a2aVerifyAgentCard(hs, "wrong-secret").verified);
+
+        # unsupported algorithms are rejected up front rather than producing a bad signature
+        assertThrows("A2A-SIGNATURE-ERROR", "ES256",
+            \a2aSignAgentCard(), (TestCard, TestPrivateKey, "k", {"algorithm": "ES256"}));
+    }
+
+    tamperDetectionTest() {
+        hash<auto> signed = a2aSignAgentCard(TestCard, TestPrivateKey, "key-1");
+
+        # any change to a covered member invalidates the signature
+        assertFalse(a2aVerifyAgentCard(signed + {"name": "Evil Agent"}, TestPublicKey).verified);
+        assertFalse(a2aVerifyAgentCard(signed + {"extra": "added"}, TestPublicKey).verified);
+        assertFalse(a2aVerifyAgentCard(signed - "description", TestPublicKey).verified);
+
+        hash<auto> nested = signed;
+        nested.capabilities.streaming = False;
+        assertFalse(a2aVerifyAgentCard(nested, TestPublicKey).verified,
+            "a change nested inside the card must be detected");
+
+        # a corrupted signature value fails rather than raising
+        hash<auto> bad_sig = signed;
+        bad_sig.signatures[0].signature = make_base64_url_string("garbage");
+        assertFalse(a2aVerifyAgentCard(bad_sig, TestPublicKey).verified);
+    }
+
+    multipleSignatureTest() {
+        # a second signature is appended, and the first still verifies because the signatures member is
+        # excluded from the payload
+        hash<auto> once = a2aSignAgentCard(TestCard, TestPrivateKey, "key-1");
+        hash<auto> twice = a2aSignAgentCard(once, "shared-secret", "key-2", {"algorithm": "HS256"});
+        assertEq(2, twice.signatures.size());
+
+        hash<A2aCardVerification> rv = a2aVerifyAgentCard(twice, {"key-1": TestPublicKey});
+        assertTrue(rv.verified, "the RSA signature still verifies after a second was appended");
+        assertEq(2, rv.signature_count);
+        assertEq(("key-1",), rv.verified_key_ids);
+
+        rv = a2aVerifyAgentCard(twice, {"key-1": TestPublicKey, "key-2": "shared-secret"});
+        assertEq(("key-1", "key-2"), rv.verified_key_ids, "both signatures verify");
+
+        # an unprotected header is stored alongside the signature without affecting the payload
+        hash<auto> with_hdr = a2aSignAgentCard(TestCard, TestPrivateKey, "key-1", {
+            "header": {"note": "unprotected"},
+        });
+        assertEq({"note": "unprotected"}, with_hdr.signatures[0].header);
+        assertTrue(a2aVerifyAgentCard(with_hdr, TestPublicKey).verified);
+    }
+
+    verificationNegativeTest() {
+        hash<auto> signed = a2aSignAgentCard(TestCard, TestPrivateKey, "key-1");
+
+        # an unsigned card never verifies
+        hash<A2aCardVerification> rv = a2aVerifyAgentCard(TestCard, TestPublicKey);
+        assertFalse(rv.verified);
+        assertEq(0, rv.signature_count);
+        assertRegex("no signatures", rv.error);
+
+        # no key for the signature's key ID
+        rv = a2aVerifyAgentCard(signed, {"other-key": TestPublicKey});
+        assertFalse(rv.verified);
+        assertRegex("key-1", rv.error);
+
+        # the wrong key
+        assertFalse(a2aVerifyAgentCard(signed, {"key-1": "not a key"}).verified);
+
+        # a malformed signature entry is reported rather than raising
+        rv = a2aVerifyAgentCard(TestCard + {"signatures": ({"protected": "x"},)}, TestPublicKey);
+        assertFalse(rv.verified);
+        assertRegex("missing", rv.error);
+
+        rv = a2aVerifyAgentCard(TestCard + {"signatures": ({"protected": "!!!", "signature": "a"},)},
+            TestPublicKey);
+        assertFalse(rv.verified);
+
+        # an unsupported algorithm in the protected header is rejected
+        string bad_hdr = make_base64_url_string(make_json({"alg": "none", "kid": "k"}));
+        rv = a2aVerifyAgentCard(TestCard + {"signatures": ({"protected": bad_hdr, "signature": "AA"},)},
+            TestPublicKey);
+        assertFalse(rv.verified);
+        assertRegex("unsupported", rv.error);
+
+        # no key at all
+        rv = a2aVerifyAgentCard(signed, 42);
+        assertFalse(rv.verified);
+        assertRegex("no verification key", rv.error);
+
+        # require_kid rejects a signature with no key ID
+        string no_kid = make_base64_url_string(make_json({"alg": "RS256"}));
+        rv = a2aVerifyAgentCard(TestCard + {"signatures": ({"protected": no_kid, "signature": "AA"},)},
+            {"k": TestPublicKey}, {"require_kid": True});
+        assertFalse(rv.verified);
+        assertRegex("require_kid", rv.error);
+    }
+}

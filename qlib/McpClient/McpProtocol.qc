@@ -57,6 +57,100 @@ public const MCP_MetaProgressToken = "progressToken";
 #! Identifier of the official MCP Tasks extension
 public const MCP_ExtensionTasks = "io.modelcontextprotocol/tasks";
 
+/** @defgroup mcp_apps MCP Apps Extension
+    The MCP Apps extension (SEP-1865, spec revision \c 2026-01-26) lets a server ship an
+    interactive HTML user interface alongside a tool.  A tool opts in by referencing a
+    \c ui:// resource through @ref McpUiToolMeta "_meta.ui"; the host fetches that resource
+    with \c resources/read, renders it in a sandboxed iframe, and bridges \c ui/ -prefixed
+    JSON-RPC to it over \c postMessage.
+
+    Rendering is a host (browser) concern, so
+    @ref McpClient::McpClient "McpClient" negotiates the extension and surfaces the metadata
+    and the fetched resource, but does not render anything.
+*/
+#/@{
+#! Identifier of the official MCP Apps (UI) extension
+public const MCP_ExtensionUi = "io.modelcontextprotocol/ui";
+
+#! The MIME type of an MCP Apps HTML user interface resource
+public const MCP_UiMimeType = "text/html;profile=mcp-app";
+
+#! The URI scheme every MCP Apps user interface resource must use
+public const MCP_UiScheme = "ui://";
+
+#! Who may see and call a tool that declares MCP Apps metadata
+public enum McpUiVisibility : string {
+    #! The tool is visible to, and callable by, the model
+    Model = "model",
+    #! The tool is callable by the app, over the same server connection only
+    App = "app",
+}
+
+#! The default \c visibility of a tool that declares MCP Apps metadata
+public const McpUiDefaultVisibility = (McpUiVisibility::Model, McpUiVisibility::App);
+
+#! MCP Apps metadata attached to a tool as \c _meta.ui
+public hashdecl McpUiToolMeta {
+    #! URI of the \c ui:// resource that renders this tool's results
+    *string resourceUri;
+
+    #! Who may see and call the tool; see @ref McpUiVisibility
+    /** Defaults to @ref McpUiDefaultVisibility when omitted.  A host must not offer a tool to
+        the model unless \c "model" is present, and must reject an app-initiated
+        \c tools/call unless \c "app" is present.
+    */
+    *list<string> visibility;
+}
+
+#! Content Security Policy declaration for an MCP Apps user interface resource
+/** Each member lists the external origins the interface needs; the host builds the CSP header
+    from them.  An omitted or empty member means "no external access" — the secure default.
+    The host may restrict further but must never allow an undeclared origin.
+*/
+public hashdecl McpUiResourceCsp {
+    #! Origins for network requests (\c fetch / \c XHR / WebSocket); maps to \c connect-src
+    *list<string> connectDomains;
+
+    #! Origins for images, scripts, stylesheets, fonts and media
+    /** Maps to the \c img-src, \c script-src, \c style-src, \c font-src and \c media-src
+        directives.  Wildcard subdomains are supported, e.g. \c "https://*.example.com".
+    */
+    *list<string> resourceDomains;
+
+    #! Origins for nested iframes; maps to \c frame-src
+    *list<string> frameDomains;
+
+    #! Allowed base URIs for the document; maps to \c base-uri
+    *list<string> baseUriDomains;
+}
+
+#! MCP Apps metadata attached to a user interface resource as \c _meta.ui
+public hashdecl McpUiResourceMeta {
+    #! The origins the interface is allowed to reach
+    *hash<McpUiResourceCsp> csp;
+
+    #! Browser capabilities the interface requests
+    /** Each requested capability is present as a key with an empty hash value; recognized keys
+        are \c camera, \c microphone, \c geolocation and \c clipboardWrite.  A host may honor
+        these through the iframe \c allow attribute, so an interface must feature-detect rather
+        than assume the capability was granted.
+    */
+    *hash<string, hash<auto>> permissions;
+
+    #! Dedicated sandbox origin for the interface
+    /** Useful when the interface needs a stable origin for OAuth callbacks, CORS policies or
+        API key allowlists.  The accepted format is host-specific; when omitted the host uses
+        its default sandbox origin.
+    */
+    *string domain;
+
+    #! Whether the host should draw a visible border and background around the interface
+    /** Setting this explicitly is recommended, as host defaults vary.
+    */
+    *bool prefersBorder;
+}
+#/@}
+
 #! MCP result type discriminator values
 /** Every result returned by a @ref McpModernVersions "modern" server carries a \c resultType
     member.  Results from servers implementing earlier protocol revisions omit the member and

@@ -150,6 +150,13 @@ DLLLOCAL void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
         const QoreProgramLocation* loc, const char* qore_path, bool method,
         const QoreMethod* resolved_method = nullptr);
 
+//! Record a cross-source class import for a class resolved during AOT source parsing.
+/** Batch compilation can resolve a class before a per-source `.qo` is emitted.
+    Serialized expressions such as constructor defaults still require the class
+    provider when that `.qo` is later preloaded independently. */
+DLLLOCAL void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
+        const QoreProgramLocation* loc, const QoreClass* resolved_class);
+
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */

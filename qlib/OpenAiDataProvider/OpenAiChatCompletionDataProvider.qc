@@ -196,7 +196,7 @@ public class OpenAiChatResponseFormatType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiChatResponse") {
+    constructor() : HashDataType("OpenAiChatResponseFormat") {
         addQoreFields(Fields);
     }
 }
@@ -735,7 +735,7 @@ public class OpenAiChatCompletionResponseType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiChatCompletionRequest") {
+    constructor() : HashDataType("OpenAiChatCompletionResponse") {
         addQoreFields(Fields);
     }
 }

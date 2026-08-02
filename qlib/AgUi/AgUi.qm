@@ -1,0 +1,178 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AgUi.qm AG-UI (Agent User Interaction) protocol module
+
+/*  AgUi.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+
+%modern
+
+%requires json
+%requires Util
+%requires Mime
+%requires(reexport) JsonPatch
+%requires ConnectionProvider
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+module AgUi {
+    version = "1.0";
+    desc = "user module implementing the AG-UI (Agent User Interaction) protocol";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage AgUi Module
+
+    @tableofcontents
+
+    @section aguiintro AgUi Module Introduction
+
+    The %AgUi module implements the
+    <a href="https://docs.ag-ui.com">AG-UI (Agent User Interaction) protocol</a>: a streamed
+    event vocabulary that lets an agent back end drive a front end it did not write.  Generic
+    clients — <tt>\@ag-ui/client</tt>, CopilotKit React components, third-party IDE
+    integrations — speak it, so an agent that emits AG-UI gets an embeddable chat surface
+    without anyone writing a bespoke client for it.
+
+    Two halves are provided, and neither owns a socket:
+    - @ref AgUi::AgUiEmitter "AgUiEmitter" formats events and hands each one to a sink the
+      caller supplies, so it drops into an existing HTTP/SSE response stream, a WebSocket, or a
+      test harness unchanged
+    - @ref AgUi::AgUiClient "AgUiClient" parses an event stream back into typed events and
+      reconstructs the run's state, applying
+      <a href="https://www.rfc-editor.org/rfc/rfc6902">RFC 6902</a> state deltas on top of the
+      last snapshot
+
+    @par Example — server side:
+    @code{.py}
+%requires AgUi
+
+AgUiEmitter emitter(sub (string frame) { sse_conn.queueRawString(frame); });
+emitter.runStarted();
+on_error emitter.runError($1.desc);
+
+emitter.stepStarted("plan");
+string mid = emitter.startTextMessage();
+emitter.textMessageContent(mid, "Analysing the schema…");
+emitter.endTextMessage(mid);
+emitter.stepFinished("plan");
+
+emitter.stateSnapshot({"artifacts": ()});
+# ... work happens ...
+emitter.stateDelta({"artifacts": ("orders-v2",)});   # sends only the JSON Patch
+
+emitter.runFinished();
+    @endcode
+
+    @par Example — client side:
+    @code{.py}
+%requires AgUi
+
+AgUiClient client();
+client.feed(bytes_from_the_stream);
+hash<AgUiRunState> st = client.getRunState();
+printf("state: %y\n", st.state);
+    @endcode
+
+    @section aguiversioning Protocol Versioning
+
+    AG-UI publishes SDK releases, not numbered protocol revisions, so there is no version to
+    negotiate and no way for a peer to say which vocabulary it speaks.  This module is written
+    against the event set current in 2026 and validated against the reference SDK's
+    cross-implementation compatibility fixtures.
+
+    That has one practical consequence for both halves: **unknown events and unknown members
+    within a known event are passed through, never rejected.**  A peer on a newer release will
+    send things this module has never heard of, and dropping them would be worse than
+    forwarding them to a caller that may understand them.
+
+    @note the wire \c type values are \c SCREAMING_SNAKE_CASE (\c RUN_STARTED,
+    \c STATE_DELTA).  The protocol documentation names the event classes in PascalCase, which
+    is not what goes on the wire.
+
+    @section aguievents Event Reference
+
+    See @ref agui_event_types for the full list of event type constants, and the
+    <tt>AgUi*Event</tt> hashdecls for each event's members.  Every event hashdecl inherits
+    @ref AgUi::AgUiEvent "AgUiEvent", which carries \c type, \c timestamp and \c rawEvent.
+
+    @section aguireleasenotes Release Notes
+
+    @subsection agui_1_0 AgUi 1.0
+    - initial release
+*/
+
+#! The %AgUi namespace contains all public definitions in the %AgUi module
+public namespace AgUi {
+#! The media type of an AG-UI event stream
+public const AgUiMediaType = MimeTypeSse;
+
+#! Recursively removes members holding @ref nothing from an event hash
+/** A Qore hashdecl always has every member present, so serializing an event directly would
+    put \c null on the wire for every optional member the caller did not set.  The reference
+    SDK encoder omits them (\c exclude_none), and a receiver distinguishes "absent" from
+    "explicitly null" for at least @ref AgUi::AgUiCustomEvent "CUSTOM" values, so the
+    difference is observable.
+
+    @note @ref Qore::NULL "NULL" is preserved: it is the JSON \c null a caller asked for,
+    unlike @ref nothing, which means the member was never set.
+
+    @param h the event hash
+
+    @return the hash with @ref nothing -valued members removed, recursively
+*/
+public hash<auto> sub agui_strip_nothing(hash<auto> h) {
+    hash<auto!> rv = {};
+    foreach hash<auto> i in (h.pairIterator()) {
+        if (!exists i.value) {
+            continue;
+        }
+        rv{i.key} = agui_strip_nothing_value(i.value);
+    }
+    return rv;
+}
+
+#! Recursively removes members holding @ref nothing from a value
+/** @param v the value
+
+    @return the value with any @ref nothing -valued hash members removed, recursively
+
+    @see @ref agui_strip_nothing()
+*/
+public auto sub agui_strip_nothing_value(auto v) {
+    switch (v.typeCode()) {
+        case NT_HASH:
+            return agui_strip_nothing(v);
+        case NT_LIST: {
+            list<auto> rv = ();
+            foreach auto e in (v) {
+                rv += agui_strip_nothing_value(e);
+            }
+            return rv;
+        }
+    }
+    return v;
+}
+}

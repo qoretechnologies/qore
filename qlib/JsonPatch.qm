@@ -1,0 +1,613 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file JsonPatch.qm JSON Pointer (RFC 6901) and JSON Patch (RFC 6902) support
+
+/*  JsonPatch.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+
+%modern
+
+# RFC 6901 (JSON Pointer) is already implemented in the json module: json_pointer_get(),
+# json_pointer_exists() and json_pointer_escape() come from there and are reexported so that a
+# caller working with patches has the whole vocabulary from one %requires
+%requires(reexport) json
+
+module JsonPatch {
+    version = "1.0";
+    desc = "user module providing JSON Pointer (RFC 6901) and JSON Patch (RFC 6902) support";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage JsonPatch Module
+
+    @tableofcontents
+
+    @section jsonpatchintro JsonPatch Module Introduction
+
+    The %JsonPatch module implements
+    <a href="https://www.rfc-editor.org/rfc/rfc6901">RFC 6901 (JSON Pointer)</a> and
+    <a href="https://www.rfc-editor.org/rfc/rfc6902">RFC 6902 (JSON Patch)</a> over Qore
+    data structures.
+
+    A JSON Patch is a list of operations that transform one document into another.  Protocols
+    that stream state to a client use it to send only what changed instead of the whole
+    document; @ref AgUi "the AG-UI module" is one such user, and the format is common in REST
+    APIs (\c application/json-patch+json) as well.
+
+    Provided here:
+    - @ref JsonPatch::json_patch_diff() "json_patch_diff()" produces the operations that turn
+      one document into another
+    - @ref JsonPatch::json_patch_apply() "json_patch_apply()" applies operations to a document
+    - @ref JsonPatch::json_pointer_split() "json_pointer_split()",
+      @ref JsonPatch::json_pointer_join() "json_pointer_join()" and
+      @ref JsonPatch::json_pointer_unescape() "json_pointer_unescape()" complete the RFC 6901
+      vocabulary
+
+    RFC 6901 lookup itself is not reimplemented: \c json_pointer_get(),
+    \c json_pointer_exists() and \c json_pointer_escape() come from the \c json module and are
+    reexported, so one \c %requires brings in the whole vocabulary.
+
+    @par Example:
+    @code{.py}
+%requires JsonPatch
+
+hash<auto> before = {"user": {"name": "Arno", "tags": ("a", "b")}};
+hash<auto> after = {"user": {"name": "Arno", "tags": ("a", "b", "c"), "active": True}};
+
+list<hash<auto>> ops = json_patch_diff(before, after);
+# ops == ({"op": "add", "path": "/user/tags/2", "value": "c"},
+#         {"op": "add", "path": "/user/active", "value": True})
+
+auto rebuilt = json_patch_apply(before, ops);
+# rebuilt == after
+    @endcode
+
+    @section jsonpatchrepresentation Data Representation
+
+    JSON documents map to Qore values as the \c json module produces them: objects are hashes,
+    arrays are lists, and \c null is @ref Qore::NULL "NULL".  Note that
+    @ref Qore::NULL "NULL" and @ref nothing are distinct in Qore but both serialize to JSON
+    \c null; this module treats a member holding @ref nothing as absent, so a diff never
+    produces an operation that sets a member to @ref nothing.
+
+    @section jsonpatcharrays Arrays and Minimal Diffs
+
+    @ref JsonPatch::json_patch_diff() "json_patch_diff()" compares arrays positionally: it
+    emits \c replace for each differing index, then \c add or \c remove for the length
+    difference.  Removals are emitted from the highest index down so that the indices in
+    earlier operations stay valid as the patch is applied in order — a patch is a sequence,
+    and each operation sees the document as the previous one left it.
+
+    It does not search for moved elements: a one-element insertion at the front of a long
+    array produces a replace per element rather than a single \c add.  A minimal edit script
+    would cost O(n·m) time and memory to find, and the common case in a streamed state delta is
+    appends and in-place edits, where positional comparison is already minimal.
+
+    @section jsonpatchreleasenotes Release Notes
+
+    @subsection jsonpatch_1_0 JsonPatch 1.0
+    - initial release
+*/
+
+#! The %JsonPatch namespace contains all public definitions in the %JsonPatch module
+public namespace JsonPatch {
+#! The media type of an RFC 6902 JSON Patch document
+public const MimeTypeJsonPatch = "application/json-patch+json";
+
+#! The RFC 6902 operations
+public enum JsonPatchOp : string {
+    #! Adds a member to an object, or inserts an element into an array
+    Add = "add",
+    #! Removes a member or element
+    Remove = "remove",
+    #! Replaces the value at the target location
+    Replace = "replace",
+    #! Removes the value at \c from and adds it at \c path
+    Move = "move",
+    #! Copies the value at \c from to \c path
+    Copy = "copy",
+    #! Asserts that the value at the target location equals \c value
+    Test = "test",
+}
+
+#! Unescapes a single RFC 6901 reference token
+/** @param token the escaped reference token
+
+    @return the unescaped token
+*/
+public string sub json_pointer_unescape(string token) {
+    token =~ s/~1/\//g;
+    token =~ s/~0/~/g;
+    return token;
+}
+
+#! Splits an RFC 6901 pointer into its unescaped reference tokens
+/** @param pointer the JSON Pointer; \c "" addresses the whole document
+
+    @return the unescaped reference tokens; an empty list for the whole document
+
+    @throw JSON-POINTER-ERROR the pointer is not empty and does not start with \c "/"
+*/
+public list<string> sub json_pointer_split(string pointer) {
+    if (!pointer.val()) {
+        return ();
+    }
+    if (pointer[0] != "/") {
+        throw "JSON-POINTER-ERROR", sprintf("JSON Pointer %y must be empty or start with %y",
+            pointer, "/");
+    }
+    list<string> rv = ();
+    string token = "";
+    # NOTE: not implemented with split(): "/" must yield one empty token (a member named ""),
+    # and split() on the empty remainder yields no tokens at all
+    for (int i = 1; i < pointer.length(); ++i) {
+        string c = pointer.substr(i, 1);
+        if (c == "/") {
+            rv += token;
+            token = "";
+            continue;
+        }
+        if (c == "~") {
+            string esc = pointer.substr(i + 1, 1);
+            if (esc == "0") {
+                token += "~";
+            } else if (esc == "1") {
+                token += "/";
+            } else {
+                throw "JSON-POINTER-ERROR", sprintf("invalid escape sequence %y in JSON Pointer "
+                    "%y; only \"~0\" and \"~1\" are defined", "~" + esc, pointer);
+            }
+            ++i;
+            continue;
+        }
+        token += c;
+    }
+    rv += token;
+    return rv;
+}
+
+#! Joins unescaped reference tokens into an RFC 6901 pointer
+/** @param tokens the unescaped reference tokens
+
+    @return the JSON Pointer; \c "" for an empty token list
+*/
+public string sub json_pointer_join(list<auto> tokens) {
+    string rv = "";
+    foreach auto token in (tokens) {
+        rv += "/" + json_pointer_escape(token.toString());
+    }
+    return rv;
+}
+
+#! The operation names as plain strings, for building operation hashes
+/** @ref JsonPatchOp is an enum, and an enum value is not \c === a string even though it
+    compares equal and serializes identically.  Operations produced by
+    @ref json_patch_diff() carry these plain strings, so a caller can compare them strictly
+    and round-trip them through JSON without the type changing under it.
+*/
+const JsonPatchOpNames = {
+    JsonPatchOp::Add: "add",
+    JsonPatchOp::Remove: "remove",
+    JsonPatchOp::Replace: "replace",
+    JsonPatchOp::Move: "move",
+    JsonPatchOp::Copy: "copy",
+    JsonPatchOp::Test: "test",
+};
+
+#! Produces the RFC 6902 operations that transform one document into another
+/** Applying the result to \a from with @ref json_patch_apply() yields \a to.
+
+    Only \c add, \c remove and \c replace are emitted; \c move and \c copy would require
+    searching for relocated values, which costs more than it saves for the streamed-delta use
+    case this is written for (see @ref jsonpatcharrays).
+
+    @param from the original document
+    @param to the desired document
+
+    @return the operations, in the order they must be applied; empty when the documents are
+        equal.  Each operation is a hash with a \c string \c "op" member (one of
+        @ref JsonPatchOp), a \c "path" member, and — for \c add, \c replace and \c test — a
+        \c "value" member
+*/
+public list<hash<auto>> sub json_patch_diff(auto from, auto to) {
+    list<hash<auto>> ops = ();
+    jsonPatchDiffIntern(\ops, "", from, to);
+    return ops;
+}
+
+#! Applies RFC 6902 operations to a document
+/** Operations are applied in order; each one sees the document as the previous one left it.
+    The input document is not modified.
+
+    @param doc the document to patch
+    @param ops the operations to apply
+
+    @return the patched document
+
+    @throw JSON-PATCH-ERROR an operation is malformed, addresses a location that does not
+        exist, or is a \c test that failed
+    @throw JSON-POINTER-ERROR a pointer in an operation is malformed
+*/
+public auto sub json_patch_apply(auto doc, list<auto> ops) {
+    auto rv = doc;
+    foreach auto op in (ops) {
+        if (op.typeCode() != NT_HASH) {
+            throw "JSON-PATCH-ERROR", sprintf("patch operation has type %y; expecting a hash",
+                op.fullType());
+        }
+        rv = jsonPatchApplyOp(rv, op);
+    }
+    return rv;
+}
+
+#! Returns @ref True if two documents are equal for JSON Patch purposes
+/** Hashes compare equal when they have the same members with equal values, regardless of
+    member order — JSON objects are unordered, so a reordered hash is the same document and
+    must not produce a patch.
+
+    @param a the first document
+    @param b the second document
+
+    @return @ref True if the documents are equal
+*/
+public bool sub json_patch_equal(auto a, auto b) {
+    if (a.typeCode() != b.typeCode()) {
+        return False;
+    }
+    switch (a.typeCode()) {
+        case NT_HASH: {
+            if (a.size() != b.size()) {
+                return False;
+            }
+            foreach hash<auto> i in (a.pairIterator()) {
+                if (!b.hasKey(i.key) || !json_patch_equal(i.value, b{i.key})) {
+                    return False;
+                }
+            }
+            return True;
+        }
+        case NT_LIST: {
+            if (a.size() != b.size()) {
+                return False;
+            }
+            for (int i = 0; i < a.size(); ++i) {
+                if (!json_patch_equal(a[i], b[i])) {
+                    return False;
+                }
+            }
+            return True;
+        }
+    }
+    return a === b;
+}
+}
+
+#! @cond nodoc
+namespace Priv {
+#! Parses an array reference token, returning NOTHING if it is not a valid index
+/** RFC 6901 allows only \c "0" or a digit string with no leading zero; \c "-" addresses the
+    element after the last one and is handled by the caller where it is legal.
+*/
+*int sub jsonPointerArrayIndex(string token) {
+    if (!token.val() || token !~ /^(0|[1-9][0-9]*)$/) {
+        return;
+    }
+    return token.toInt();
+}
+
+#! Appends the operations that transform \a from into \a to at the given pointer
+nothing sub jsonPatchDiffIntern(reference<list<hash<auto>>> ops, string path, auto from,
+        auto to) {
+    if (JsonPatch::json_patch_equal(from, to)) {
+        return;
+    }
+    if (from.typeCode() != to.typeCode()) {
+        ops += {"op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Replace}, "path": path, "value": to};
+        return;
+    }
+    switch (from.typeCode()) {
+        case NT_HASH: {
+            # removals first: they cannot invalidate the additions that follow, and emitting
+            # them first keeps the patch shorter to read
+            foreach string key in (keys from) {
+                if (!to.hasKey(key)) {
+                    ops += {
+                        "op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Remove},
+                        "path": path + "/" + json_pointer_escape(key),
+                    };
+                }
+            }
+            foreach hash<auto> i in (to.pairIterator()) {
+                string child = path + "/" + json_pointer_escape(i.key);
+                if (!from.hasKey(i.key)) {
+                    ops += {
+                        "op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Add},
+                        "path": child,
+                        "value": i.value,
+                    };
+                    continue;
+                }
+                jsonPatchDiffIntern(\ops, child, from{i.key}, i.value);
+            }
+            return;
+        }
+        case NT_LIST: {
+            int common = from.size() < to.size() ? from.size() : to.size();
+            for (int i = 0; i < common; ++i) {
+                jsonPatchDiffIntern(\ops, path + "/" + i, from[i], to[i]);
+            }
+            # shrink from the tail: removing index i shifts every later element down, so
+            # removing the highest index first keeps the remaining indices valid
+            for (int i = from.size() - 1; i >= common; --i) {
+                ops += {
+                    "op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Remove},
+                    "path": path + "/" + i,
+                };
+            }
+            for (int i = common; i < to.size(); ++i) {
+                ops += {
+                    "op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Add},
+                    "path": path + "/" + i,
+                    "value": to[i],
+                };
+            }
+            return;
+        }
+    }
+    ops += {"op": JsonPatch::JsonPatchOpNames{JsonPatch::JsonPatchOp::Replace}, "path": path, "value": to};
+}
+
+#! Applies one RFC 6902 operation and returns the resulting document
+auto sub jsonPatchApplyOp(auto doc, hash<auto> op) {
+    if (op.op.typeCode() != NT_STRING) {
+        throw "JSON-PATCH-ERROR", sprintf("patch operation %y has no \"op\" member", op);
+    }
+    if (op.path.typeCode() != NT_STRING) {
+        throw "JSON-PATCH-ERROR", sprintf("%y operation has no \"path\" member", op.op);
+    }
+    switch (op.op) {
+        case JsonPatch::JsonPatchOp::Add:
+            jsonPatchRequireValue(op);
+            return jsonPatchSet(doc, op.path, op.value, True);
+
+        case JsonPatch::JsonPatchOp::Replace: {
+            jsonPatchRequireValue(op);
+            # replace requires the location to exist
+            jsonPatchRequireExists(doc, op.path, op.op);
+            return jsonPatchSet(doc, op.path, op.value, False);
+        }
+
+        case JsonPatch::JsonPatchOp::Remove:
+            jsonPatchRequireExists(doc, op.path, op.op);
+            return jsonPatchRemove(doc, op.path);
+
+        case JsonPatch::JsonPatchOp::Move: {
+            jsonPatchRequireFrom(op);
+            if (op.from == op.path) {
+                return doc;
+            }
+            if (jsonPatchIsPrefix(op.from, op.path)) {
+                throw "JSON-PATCH-ERROR", sprintf("\"move\" operation cannot move %y into its "
+                    "own child %y", op.from, op.path);
+            }
+            jsonPatchRequireExists(doc, op.from, op.op);
+            auto v = json_pointer_get(doc, op.from);
+            return jsonPatchSet(jsonPatchRemove(doc, op.from), op.path, v, True);
+        }
+
+        case JsonPatch::JsonPatchOp::Copy: {
+            jsonPatchRequireFrom(op);
+            jsonPatchRequireExists(doc, op.from, op.op);
+            return jsonPatchSet(doc, op.path, json_pointer_get(doc, op.from), True);
+        }
+
+        case JsonPatch::JsonPatchOp::Test: {
+            jsonPatchRequireValue(op);
+            bool found = json_pointer_exists(doc, op.path);
+            auto v = found ? json_pointer_get(doc, op.path) : NOTHING;
+            if (!found || !JsonPatch::json_patch_equal(v, op.value)) {
+                throw "JSON-PATCH-ERROR", sprintf("\"test\" operation failed: %y is %s, "
+                    "expecting %y", op.path, found ? sprintf("%y", v) : "absent", op.value);
+            }
+            return doc;
+        }
+    }
+    throw "JSON-PATCH-ERROR", sprintf("unknown patch operation %y; known operations: %y", op.op,
+        (JsonPatch::JsonPatchOp::Add, JsonPatch::JsonPatchOp::Remove,
+            JsonPatch::JsonPatchOp::Replace, JsonPatch::JsonPatchOp::Move,
+            JsonPatch::JsonPatchOp::Copy, JsonPatch::JsonPatchOp::Test));
+}
+
+#! Throws unless the operation carries a "value" member
+nothing sub jsonPatchRequireValue(hash<auto> op) {
+    if (!op.hasKey("value")) {
+        throw "JSON-PATCH-ERROR", sprintf("%y operation for path %y has no \"value\" member",
+            op.op, op.path);
+    }
+}
+
+#! Throws unless the operation carries a "from" member
+nothing sub jsonPatchRequireFrom(hash<auto> op) {
+    if (op.from.typeCode() != NT_STRING) {
+        throw "JSON-PATCH-ERROR", sprintf("%y operation for path %y has no \"from\" member",
+            op.op, op.path);
+    }
+}
+
+#! Throws unless the pointer addresses an existing location
+nothing sub jsonPatchRequireExists(auto doc, string path, string opname) {
+    if (!json_pointer_exists(doc, path)) {
+        throw "JSON-PATCH-ERROR", sprintf("%y operation targets %y, which does not exist in "
+            "the document", opname, path);
+    }
+}
+
+#! Returns True if \a prefix addresses an ancestor of (or the same location as) \a path
+bool sub jsonPatchIsPrefix(string prefix, string path) {
+    if (!prefix.val()) {
+        return True;
+    }
+    if (path == prefix) {
+        return True;
+    }
+    # compare whole reference tokens: "/ab" must not count as a prefix of "/abc"
+    return path.length() > prefix.length() && path.substr(0, prefix.length()) == prefix
+        && path[prefix.length()] == "/";
+}
+
+#! Returns a copy of \a doc with the value at \a path set
+/** @param doc the document
+    @param path the target location
+    @param value the value to set
+    @param insert if True the location may be created (\c add semantics); if False it must
+        already exist (\c replace semantics, already verified by the caller)
+*/
+auto sub jsonPatchSet(auto doc, string path, auto value, bool insert) {
+    list<string> tokens = JsonPatch::json_pointer_split(path);
+    if (!tokens) {
+        # the whole document is replaced
+        return value;
+    }
+    return jsonPatchSetIntern(doc, tokens, 0, value, insert, path);
+}
+
+#! Recursive worker for jsonPatchSet()
+/** @note the working copies are declared \c hash<auto!> / \c list<auto!>.  A JSON document is
+    heterogeneous by definition, but Qore infers a narrow element type from a literal — a
+    document written as \c {"a": 1, "b": 2} is a \c hash<string, int> at run time — and a
+    plain \c hash<auto> copy keeps that narrow type, so patching an int member with a string
+    would raise \c RUNTIME-TYPE-ERROR.  The \c auto! subtype is exactly the "do not narrow
+    this container" declaration this needs; nothing here is untyped as a result.
+*/
+auto sub jsonPatchSetIntern(auto cur, list<string> tokens, int pos, auto value, bool insert,
+        string path) {
+    string token = tokens[pos];
+    bool last = (pos == tokens.size() - 1);
+    switch (cur.typeCode()) {
+        case NT_HASH: {
+            hash<auto!> rv = cur;
+            if (last) {
+                if (!insert && !cur.hasKey(token)) {
+                    throw "JSON-PATCH-ERROR", sprintf("cannot set %y: member %y does not exist",
+                        path, token);
+                }
+                rv{token} = value;
+                return rv;
+            }
+            if (!cur.hasKey(token)) {
+                throw "JSON-PATCH-ERROR", sprintf("cannot set %y: the parent location does not "
+                    "exist", path);
+            }
+            rv{token} = jsonPatchSetIntern(cur{token}, tokens, pos + 1, value, insert, path);
+            return rv;
+        }
+        case NT_LIST: {
+            list<auto!> rv = cur;
+            if (last) {
+                if (token == "-") {
+                    if (!insert) {
+                        throw "JSON-PATCH-ERROR", sprintf("cannot set %y: %y addresses the "
+                            "element after the last one, which does not exist", path, token);
+                    }
+                    splice rv, rv.size(), 0, (value,);
+                    return rv;
+                }
+                *int idx = jsonPointerArrayIndex(token);
+                if (!exists idx || idx > rv.size() || (!insert && idx >= rv.size())) {
+                    throw "JSON-PATCH-ERROR", sprintf("cannot set %y: %y is not a valid index "
+                        "into an array of %d element%s", path, token, rv.size(),
+                        rv.size() == 1 ? "" : "s");
+                }
+                if (insert) {
+                    splice rv, idx, 0, (value,);
+                } else {
+                    rv[idx] = value;
+                }
+                return rv;
+            }
+            *int idx = jsonPointerArrayIndex(token);
+            if (!exists idx || idx >= rv.size()) {
+                throw "JSON-PATCH-ERROR", sprintf("cannot set %y: %y is not a valid index into "
+                    "an array of %d element%s", path, token, rv.size(),
+                    rv.size() == 1 ? "" : "s");
+            }
+            rv[idx] = jsonPatchSetIntern(rv[idx], tokens, pos + 1, value, insert, path);
+            return rv;
+        }
+    }
+    throw "JSON-PATCH-ERROR", sprintf("cannot set %y: %y addresses a member of a value of type "
+        "%y, which has no members", path, token, cur.fullType());
+}
+
+#! Returns a copy of \a doc with the value at \a path removed
+auto sub jsonPatchRemove(auto doc, string path) {
+    list<string> tokens = JsonPatch::json_pointer_split(path);
+    if (!tokens) {
+        throw "JSON-PATCH-ERROR", "\"remove\" cannot target the whole document";
+    }
+    return jsonPatchRemoveIntern(doc, tokens, 0, path);
+}
+
+#! Recursive worker for jsonPatchRemove()
+/** @note declares its working copies \c auto! for the reason given on jsonPatchSetIntern().
+*/
+auto sub jsonPatchRemoveIntern(auto cur, list<string> tokens, int pos, string path) {
+    string token = tokens[pos];
+    bool last = (pos == tokens.size() - 1);
+    switch (cur.typeCode()) {
+        case NT_HASH: {
+            if (!cur.hasKey(token)) {
+                throw "JSON-PATCH-ERROR", sprintf("cannot remove %y: member %y does not exist",
+                    path, token);
+            }
+            hash<auto!> rv = cur;
+            if (last) {
+                remove rv{token};
+                return rv;
+            }
+            rv{token} = jsonPatchRemoveIntern(cur{token}, tokens, pos + 1, path);
+            return rv;
+        }
+        case NT_LIST: {
+            *int idx = jsonPointerArrayIndex(token);
+            list<auto!> rv = cur;
+            if (!exists idx || idx >= rv.size()) {
+                throw "JSON-PATCH-ERROR", sprintf("cannot remove %y: %y is not a valid index "
+                    "into an array of %d element%s", path, token, rv.size(),
+                    rv.size() == 1 ? "" : "s");
+            }
+            if (last) {
+                splice rv, idx, 1;
+                return rv;
+            }
+            rv[idx] = jsonPatchRemoveIntern(rv[idx], tokens, pos + 1, path);
+            return rv;
+        }
+    }
+    throw "JSON-PATCH-ERROR", sprintf("cannot remove %y: %y addresses a member of a value of "
+        "type %y, which has no members", path, token, cur.fullType());
+}
+}
+#! @endcond

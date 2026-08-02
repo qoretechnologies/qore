@@ -67,6 +67,8 @@ class JwtTest inherits QUnit::Test {
         addTestCase("Invalid base64", \testInvalidBase64());
         addTestCase("Missing key", \testMissingKey());
         addTestCase("Unsupported algorithm", \testUnsupportedAlg());
+        addTestCase("JWS raw sign and verify", \testJwsRawSignVerify());
+        addTestCase("JWS raw negative", \testJwsRawNegative());
         set_return_value(main());
     }
 
@@ -197,5 +199,63 @@ class JwtTest inherits QUnit::Test {
         assertThrows("JWT-ERROR", sub() {
             auto ignored = jwt_encode(claims, "secret", "ES256");
         });
+    }
+
+    testJwsRawSignVerify() {
+        # jws_sign()/jws_verify() operate on a caller-supplied JWS Signing Input, so the payload does not
+        # have to be a JWT claims object; this is what signed A2A agent cards need
+        string input = "eyJhbGciOiJIUzI1NiJ9.eyJhbnkiOiJwYXlsb2FkIn0";
+
+        foreach string alg in (("HS256", "HS384", "HS512")) {
+            binary sig = jws_sign(input, "secret", alg);
+            assertGt(0, sig.size(), alg);
+            assertTrue(jws_verify(input, sig, "secret", alg), alg);
+            assertFalse(jws_verify(input, sig, "wrong", alg), alg + " wrong key");
+            assertFalse(jws_verify(input + "x", sig, "secret", alg), alg + " tampered input");
+        }
+
+        foreach string alg in (("RS256", "RS384", "RS512")) {
+            binary sig = jws_sign(input, rsa_private_key, alg);
+            assertGt(0, sig.size(), alg);
+            # the public key verifies, and so does the private key, since the public key derives from it
+            assertTrue(jws_verify(input, sig, rsa_public_key, alg), alg);
+            assertTrue(jws_verify(input, sig, rsa_private_key, alg), alg + " with private key");
+            assertFalse(jws_verify(input + "x", sig, rsa_public_key, alg), alg + " tampered input");
+        }
+
+        # a different algorithm over the same input yields a different signature
+        assertNeq(jws_sign(input, "secret", "HS256"), jws_sign(input, "secret", "HS512"));
+
+        # an HMAC signature must not verify under an RSA algorithm
+        assertFalse(jws_verify(input, jws_sign(input, "secret", "HS256"), rsa_public_key, "RS256"));
+    }
+
+    testJwsRawNegative() {
+        string input = "aGVhZGVy.cGF5bG9hZA";
+
+        # unsupported algorithms are rejected rather than silently producing a bad signature
+        assertThrows("JWT-ERROR", "ES256", sub() {
+            auto ignored = jws_sign(input, "secret", "ES256");
+        });
+        assertThrows("JWT-ERROR", "nope", sub() {
+            auto ignored = jws_verify(input, <00>, "secret", "nope");
+        });
+
+        # an unreadable RSA key is an error, not a False result
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jws_sign(input, "not a pem key", "RS256");
+        });
+        assertThrows("JWT-ERROR", sub() {
+            auto ignored = jws_verify(input, <00>, "not a pem key", "RS256");
+        });
+
+        # a signature of the wrong length is invalid, not an error
+        assertFalse(jws_verify(input, <00>, rsa_public_key, "RS256"));
+        assertFalse(jws_verify(input, <00>, "secret", "HS256"));
+
+        # an empty signing input is still signable and verifiable
+        binary empty_sig = jws_sign("", "secret", "HS256");
+        assertTrue(jws_verify("", empty_sig, "secret", "HS256"));
+        assertFalse(jws_verify("x", empty_sig, "secret", "HS256"));
     }
 }

@@ -1826,7 +1826,7 @@ public class HttpAsyncSocketIoController {
         # Same interface as the HTTP/2 wrapper — handlers use this uniformly
         # regardless of protocol.  Uses CV-based waitForQuicStreamDrain()
         # for efficient backpressure instead of polling.
-        code send_stream_data = sub (*binary data, bool end_stream = False) {
+        code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
             int retries = 0;
             while (listener.submitQuicStreamData(
                     session_id, stream_id, data, end_stream) == 1) {
@@ -1868,6 +1868,22 @@ public class HttpAsyncSocketIoController {
                 "register_stream_listener": sub (object listener) {
                     h3op.registerStreamListener(session_id, stream_id, listener);
                 },
+                # Wires an SSE response stream to the QUIC stream-teardown
+                # notification.  QUIC multiplexes every session onto the shared
+                # listener socket, so neither a socket close nor a failed write
+                # can report that this one stream (or its session) died; see
+                # HttpServerAsyncIo::SseStreamCloseNotifier.
+                "register_sse_close_notify": sub (object sse_conn) {
+                    HttpServerAsyncIo::SseStreamCloseNotifier notifier(
+                        cast<HttpServerAsyncIo::AbstractSseConnection>(sse_conn),
+                        bool sub () {
+                            return h3op.isStreamPeerClosed(session_id, stream_id);
+                        },
+                        sub () {
+                            h3op.deregisterStreamListener(session_id, stream_id);
+                        });
+                    h3op.registerStreamListener(session_id, stream_id, notifier);
+                },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -1896,7 +1912,7 @@ public class HttpAsyncSocketIoController {
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
-        *code resume_reading;
+        *code<nothing()> resume_reading;
         if (body_streaming) {
             resume_reading = sub () {
                 resumeMultiplexedReading(h3op, uh, HttpConnectionState::Http3);
@@ -3989,6 +4005,22 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "io_wake": sub () { controller.wakeSocket(dispatch_sock); },
+                # Wires an SSE response stream to the HTTP/2 stream-teardown
+                # notification.  HTTP/2 multiplexes streams onto one connection,
+                # so neither a socket close nor a failed write can report that
+                # this one stream died; see
+                # HttpServerAsyncIo::SseStreamCloseNotifier.
+                "register_sse_close_notify": sub (object sse_conn) {
+                    HttpServerAsyncIo::SseStreamCloseNotifier notifier(
+                        cast<HttpServerAsyncIo::AbstractSseConnection>(sse_conn),
+                        bool sub () {
+                            return dispatch_h2op.isStreamPeerClosed(dispatch_stream_id);
+                        },
+                        sub () {
+                            dispatch_h2op.deregisterStreamListener(dispatch_stream_id);
+                        });
+                    dispatch_h2op.registerStreamListener(dispatch_stream_id, notifier);
+                },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -4030,7 +4062,7 @@ public class HttpAsyncSocketIoController {
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection and the request matches the session filter, route the request
         # to the dedicated thread instead of the pool
-        *code resume_reading;
+        *code<nothing()> resume_reading;
         if (body_streaming) {
             resume_reading = sub () {
                 resumeMultiplexedReading(dispatch_h2op, dispatch_uh, HttpConnectionState::Http2);
@@ -4270,7 +4302,7 @@ public class HttpAsyncSocketIoController {
         # Queues data in nghttp2 with transparent backpressure handling,
         # then wakes the I/O controller to flush.  Handlers use this
         # instead of calling sendHttp2StreamData() + io_wake() separately.
-        code send_stream_data = sub (*binary data, bool end_stream = False) {
+        code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
             int retries = 0;
             while (True) {
                 try {

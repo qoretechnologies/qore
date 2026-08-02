@@ -30,33 +30,53 @@ public const A2aVersionV03 = "0.3";
 public const A2aVersionV10 = "1.0";
 public const A2aVersionHeader = "A2A-Version";
 
+#! The A2A media type registered in section 14.1 of the A2A specification
+/** @note This media type is defined for the HTTP+JSON/REST protocol binding and for push-notification webhook
+    bodies.  The JSON-RPC protocol binding that this module implements uses \c application/json for requests and
+    responses; do not send this media type on JSON-RPC calls.
+
+    @since A2aClient 1.0
+*/
+public const MimeTypeA2aJson = "application/a2a+json";
+
 #! Agent card paths for v1.0
 public const AgentCardPathV10 = "/.well-known/a2a-agent-card";
 public const AgentCardExtendedPathV10 = "/.well-known/a2a-agent-card:extended";
 
 #! v0.3 → v1.0 task state mapping
+/** The keys are the canonical A2A v0.3 \c TaskState values.  The legacy Qore-only spellings \c "pending" and
+    \c "active" are also accepted on input so that existing callers keep working, but they are never emitted;
+    no A2A peer accepts them.
+*/
 public const A2aStateMapV03toV10 = {
-    "pending": "TASK_STATE_SUBMITTED",
-    "active": "TASK_STATE_WORKING",
+    "submitted": "TASK_STATE_SUBMITTED",
+    "working": "TASK_STATE_WORKING",
     "input-required": "TASK_STATE_INPUT_REQUIRED",
     "auth-required": "TASK_STATE_AUTH_REQUIRED",
     "completed": "TASK_STATE_COMPLETED",
     "failed": "TASK_STATE_FAILED",
     "canceled": "TASK_STATE_CANCELED",
     "rejected": "TASK_STATE_REJECTED",
+    "unknown": "TASK_STATE_UNSPECIFIED",
+
+    # legacy input-only aliases; see the note above
+    "pending": "TASK_STATE_SUBMITTED",
+    "active": "TASK_STATE_WORKING",
 };
 
 #! v1.0 → v0.3 task state mapping
+/** Only canonical A2A v0.3 \c TaskState values are emitted.
+*/
 public const A2aStateMapV10toV03 = {
-    "TASK_STATE_SUBMITTED": "pending",
-    "TASK_STATE_WORKING": "active",
+    "TASK_STATE_SUBMITTED": "submitted",
+    "TASK_STATE_WORKING": "working",
     "TASK_STATE_INPUT_REQUIRED": "input-required",
     "TASK_STATE_AUTH_REQUIRED": "auth-required",
     "TASK_STATE_COMPLETED": "completed",
     "TASK_STATE_FAILED": "failed",
     "TASK_STATE_CANCELED": "canceled",
     "TASK_STATE_REJECTED": "rejected",
-    "TASK_STATE_UNSPECIFIED": "pending",
+    "TASK_STATE_UNSPECIFIED": "unknown",
 };
 
 #! v0.3 → v1.0 role mapping
@@ -117,7 +137,7 @@ public const A2aSseEventMapV03toV10 = {
 };
 
 #! Translate a task state from v0.3 to v1.0 format
-/** @param state v0.3 task state (e.g., \c "pending")
+/** @param state v0.3 task state (e.g., \c "submitted")
     @return v1.0 task state (e.g., \c "TASK_STATE_SUBMITTED")
 */
 public string sub a2aTranslateTaskStateToV10(string state) {
@@ -127,7 +147,7 @@ public string sub a2aTranslateTaskStateToV10(string state) {
 
 #! Translate a task state from v1.0 to v0.3 format
 /** @param state v1.0 task state (e.g., \c "TASK_STATE_SUBMITTED")
-    @return v0.3 task state (e.g., \c "pending")
+    @return v0.3 task state (e.g., \c "submitted")
 */
 public string sub a2aTranslateTaskStateToV03(string state) {
     *string v03 = A2aStateMapV10toV03{state};
@@ -288,6 +308,9 @@ public hash<auto> sub a2aTranslateMessageToV10(hash<auto> msg) {
 }
 
 #! Translate a message from v1.0 to v0.3 format
+/** @note \c contextId, \c taskId, and \c extensions are defined identically on the v0.3 \c Message object, so
+    they are carried across unchanged; only the role and part encodings differ between versions
+*/
 public hash<auto> sub a2aTranslateMessageToV03(hash<auto> msg) {
     hash<auto> result = msg;
     if (msg.role) {
@@ -296,10 +319,6 @@ public hash<auto> sub a2aTranslateMessageToV03(hash<auto> msg) {
     if (msg.parts) {
         result.parts = a2aTranslatePartsToV03(msg.parts);
     }
-    # Remove v1.0-specific fields that don't exist in v0.3
-    delete result.contextId;
-    delete result.taskId;
-    delete result.extensions;
     return result;
 }
 
@@ -355,13 +374,14 @@ public hash<auto> sub a2aTranslateArtifactToV10(hash<auto> artifact) {
 }
 
 #! Translate an artifact from v1.0 to v0.3 format
+/** @note \c extensions is defined identically on the v0.3 \c Artifact object, so it is carried across
+    unchanged; only the part encoding differs between versions
+*/
 public hash<auto> sub a2aTranslateArtifactToV03(hash<auto> artifact) {
     hash<auto> result = artifact;
     if (artifact.parts) {
         result.parts = a2aTranslatePartsToV03(artifact.parts);
     }
-    # Remove v1.0-specific fields
-    delete result.extensions;
     return result;
 }
 
@@ -495,11 +515,12 @@ public hash<auto> sub a2aTranslateSseEventToV03(hash<auto> event) {
 public hash<auto> sub a2aTranslateSendMessageParamsToV10(hash<auto> params) {
     hash<auto> result = params;
     hash<auto> msg = params.message ?? {};
-    # Move contextId into message
+    # neither version defines a top-level contextId on the send-message params; accept one anyway and fold it
+    # into the message, where both versions define it
     if (params.contextId && !msg.contextId) {
         msg.contextId = params.contextId;
-        delete result.contextId;
     }
+    delete result.contextId;
     # Ensure messageId is set (required in v1.0)
     if (!msg.messageId) {
         msg.messageId = get_random_bytes(16).toHex();
@@ -507,6 +528,54 @@ public hash<auto> sub a2aTranslateSendMessageParamsToV10(hash<auto> params) {
     # Translate message role and parts
     msg = a2aTranslateMessageToV10(msg);
     result.message = msg;
+    if (params.configuration) {
+        result.configuration = a2aTranslateSendConfigurationToV10(params.configuration);
+    }
+    return result;
+}
+
+#! Translate send-message configuration from v0.3 to v1.0 format
+/** The two versions agree on \c acceptedOutputModes and \c historyLength.  The push notification config is
+    renamed, and v0.3's \c blocking flag is the logical inverse of v1.0's \c returnImmediately.
+
+    @param config the v0.3 configuration
+
+    @return the v1.0 configuration
+
+    @since A2aClient 1.0
+*/
+public hash<auto> sub a2aTranslateSendConfigurationToV10(hash<auto> config) {
+    hash<auto> result = config;
+    if (config.hasKey("pushNotificationConfig")) {
+        result.taskPushNotificationConfig = config.pushNotificationConfig;
+        delete result.pushNotificationConfig;
+    }
+    if (config.hasKey("blocking")) {
+        result.returnImmediately = !config.blocking;
+        delete result.blocking;
+    }
+    return result;
+}
+
+#! Translate send-message configuration from v1.0 to v0.3 format
+/** @param config the v1.0 configuration
+
+    @return the v0.3 configuration
+
+    @see a2aTranslateSendConfigurationToV10()
+
+    @since A2aClient 1.0
+*/
+public hash<auto> sub a2aTranslateSendConfigurationToV03(hash<auto> config) {
+    hash<auto> result = config;
+    if (config.hasKey("taskPushNotificationConfig")) {
+        result.pushNotificationConfig = config.taskPushNotificationConfig;
+        delete result.taskPushNotificationConfig;
+    }
+    if (config.hasKey("returnImmediately")) {
+        result.blocking = !config.returnImmediately;
+        delete result.returnImmediately;
+    }
     return result;
 }
 
@@ -514,19 +583,19 @@ public hash<auto> sub a2aTranslateSendMessageParamsToV10(hash<auto> params) {
 /** v1.0: \c {message: {contextId: "...", ...}, configuration: {...}}
     v0.3: \c {message: {...}, contextId: "..."}
 */
+/** @note The v0.3 \c MessageSendParams object defines only \c message, \c configuration, and \c metadata; the
+    context ID belongs on the message in both versions and is left there.  Only \c tenant is v1.0-only.
+*/
 public hash<auto> sub a2aTranslateSendMessageParamsToV03(hash<auto> params) {
     hash<auto> result = params;
     hash<auto> msg = params.message ?? {};
-    # Move contextId from message to top level
-    if (msg.contextId) {
-        result.contextId = msg.contextId;
-        delete msg.contextId;
-    }
     # Translate message
     msg = a2aTranslateMessageToV03(msg);
     result.message = msg;
-    # Remove v1.0-specific fields
-    delete result.configuration;
+    if (params.configuration) {
+        result.configuration = a2aTranslateSendConfigurationToV03(params.configuration);
+    }
+    # Remove v1.0-only fields
     delete result.tenant;
     return result;
 }

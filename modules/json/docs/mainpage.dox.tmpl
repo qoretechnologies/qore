@@ -336,6 +336,10 @@ hash<auto> parsed = parse_toon(toon);
       both are subject to the \c PO_NO_NETWORK and \c PO_NO_FILESYSTEM parse options as documented
     - fixed a crash in @ref Qore::Json::parse_cbor() "parse_cbor()" when a sandbox nesting-depth
       limit aborted the parse
+    - added @ref Qore::Json::jws_sign() "jws_sign()" and @ref Qore::Json::jws_verify() "jws_verify()",
+      which sign and verify a caller-supplied JWS Signing Input; unlike
+      @ref Qore::Json::jwt_encode() "jwt_encode()" they do not require the payload to be a JWT claims
+      object, which is what JWS profiles such as the A2A protocol's signed Agent Cards need
 
     @subsection json_v1_12 json Module Version 1.12
     - added TOON (Token-Oriented Object Notation) serialization support
