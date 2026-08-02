@@ -1,0 +1,106 @@
+#!/usr/bin/env -S qore --exec-mode=ast
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Emit the unique source parse defines exported by sibling AOT indexes.
+
+%modern
+%requires json
+
+sub usage() {
+    stderr.printf("usage: %s TARGET_QO PRELOAD_FILE\n", get_script_name());
+    exit(2);
+}
+
+string sub canonical(string path) {
+    if (!absolute_path(path)) {
+        path = getcwd() + DirSep + path;
+    }
+    if (exists hstat(path)) {
+        return realpath(path);
+    }
+    string parent = dirname(path);
+    return (is_dir(parent) ? realpath(parent) : parent) + DirSep + basename(path);
+}
+
+*list<auto> sub readSourceParseDefines(string index_path) {
+    try {
+        FileInputStream input(index_path);
+        StreamReader reader(input);
+        list<string> fragment;
+        bool array_value;
+        for (int line_no = 0; line_no < 4096; ++line_no) {
+            *string line = reader.readLine();
+            if (!exists line) {
+                break;
+            }
+            string stripped = trim(line);
+            if (!fragment) {
+                if (!stripped.startsWith("\"source_parse_defines\":")) {
+                    if (line_no == 63) {
+                        break;
+                    }
+                    continue;
+                }
+                array_value = stripped.find("[") != -1;
+            }
+            push fragment, stripped;
+
+            if (array_value
+                    && !stripped.endsWith("]") && !stripped.endsWith("],")) {
+                continue;
+            }
+            try {
+                auto header = parse_json("{" + rtrim(join("\n", fragment), ",") + "}");
+                return header{"source_parse_defines"} instanceof list
+                    ? header{"source_parse_defines"} : ();
+            } catch (hash<ExceptionInfo> ex) {
+                # Continue until the complete generated JSON array is available.
+            }
+        }
+
+        # Compatibility fallback for compact and legacy index encodings.
+        auto index = parse_json(ReadOnlyFile::readTextFile(index_path));
+        return index instanceof hash && index{"source_parse_defines"} instanceof list
+            ? index{"source_parse_defines"} : ();
+    } catch (hash<ExceptionInfo> ex) {
+        # Missing, unreadable, and malformed sibling indexes are non-authoritative.
+        return NOTHING;
+    }
+}
+
+if (ARGV.size() != 2) {
+    usage();
+}
+
+string target = canonical(ARGV[0]);
+string preload_file = ARGV[1];
+hash<string, bool> seen_paths = {};
+hash<string, bool> seen_defines = {};
+
+if (!is_file(preload_file)) {
+    exit(0);
+}
+
+foreach string qo in (ReadOnlyFile::readTextFile(preload_file).split("\n")) {
+    if (!qo || exists seen_paths{qo}) {
+        continue;
+    }
+    seen_paths{qo} = True;
+    if (canonical(qo) == target) {
+        continue;
+    }
+
+    string index_path = qo + ".idx.json";
+    if (!is_file(index_path)) {
+        continue;
+    }
+
+    foreach auto value in (readSourceParseDefines(index_path)) {
+        if (value instanceof string && value && !exists seen_defines{value}) {
+            seen_defines{value} = True;
+            printf("%s\n", value);
+        }
+    }
+}

@@ -54,6 +54,7 @@ if [ ! -f "$context_file" ] && [ -f "$qo_dir/.qcc-context" ]; then
     context_file="$qo_dir/.qcc-context"
 fi
 source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
+source_parse_define_tool="${QORE_QCC_SOURCE_PARSE_DEFINE_HELPER:-$script_dir/qore-qo-source-parse-defines}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
 
 cleanup_stage_dir() {
@@ -87,54 +88,11 @@ collect_source_parse_defines() {
     define_file=$1
     preload_file=$2
 
-    : > "$define_file"
-    if ! command -v python3 >/dev/null 2>&1; then
-        return 0
+    if [ ! -x "$source_parse_define_tool" ]; then
+        echo "$0: missing source parse define helper: $source_parse_define_tool" >&2
+        return 1
     fi
-
-    python3 - "$output" "$preload_file" > "$define_file" <<'PY'
-import json
-import os
-import sys
-
-target = os.path.realpath(os.path.abspath(sys.argv[1]))
-preload_file = sys.argv[2]
-paths = []
-seen_paths = set()
-
-
-def add_path(path):
-    if not path or path in seen_paths:
-        return
-    seen_paths.add(path)
-    paths.append(path)
-
-
-if preload_file and os.path.isfile(preload_file):
-    with open(preload_file, "r", encoding="utf-8") as f:
-        for line in f:
-            add_path(line.rstrip("\n"))
-
-seen_defines = set()
-for qo in paths:
-    if os.path.realpath(os.path.abspath(qo)) == target:
-        continue
-    idx = qo + ".idx.json"
-    if not os.path.isfile(idx):
-        continue
-    try:
-        with open(idx, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        continue
-    values = data.get("source_parse_defines")
-    if not isinstance(values, list):
-        continue
-    for value in values:
-        if isinstance(value, str) and value and value not in seen_defines:
-            seen_defines.add(value)
-            print(value)
-PY
+    "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
 }
 
 select_preload_outputs() {

@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SourceParseDefinesTest
+
+class SourceParseDefinesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string helper;
+    }
+
+    constructor() : QUnit::Test("SourceParseDefinesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore_bin != "qore" && !absolute_path(qore_bin)) {
+            qore_bin = getcwd() + DirSep + qore_bin;
+        }
+        helper = realpath(get_script_dir() + "/../../../tools/qore-qo-source-parse-defines");
+
+        addTestCase("source parse define collection", \testCollection());
+        addTestCase("source parse define helper arguments", \testArguments());
+
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private hash<string, auto> run(list<string> args, *string cwd = NOTHING) {
+        string command = join(" ", map shellQuote($1), (qore_bin, "--exec-mode=ast", helper) + args);
+        if (cwd) {
+            command = "cd " + shellQuote(cwd) + " && " + command;
+        }
+        int rc;
+        string output = backquote(command + " 2>&1", \rc);
+        return ("rc": rc, "output": output);
+    }
+
+    testCollection() {
+        TmpDir tmp("qore-source-parse-defines-");
+        mkdir(tmp.path + "/out");
+
+        write(tmp.path + "/out/target.qo.idx.json",
+            "{\"source_parse_defines\":[\"TARGET_MUST_NOT_LEAK\"]}\n");
+        write(tmp.path + "/sibling.qo.idx.json",
+            "{\n"
+            + "  \"format\": 1,\n"
+            + "  \"source_parse_defines\": [\"DEFINE_A\",\"DEFINE_B\",\"DEFINE_A\",0,\"\"],\n"
+            + "  \"large_irrelevant_field\": [1,2,3]\n"
+            + "}\n");
+        write(tmp.path + "/later.qo.idx.json",
+            "{\"source_parse_defines\":[\"DEFINE_B\",\"DEFINE_C\"]}\n");
+        write(tmp.path + "/malformed.qo.idx.json", "{not-json\n");
+        write(tmp.path + "/wrong-shape.qo.idx.json", "{\"source_parse_defines\":true}\n");
+        write(tmp.path + "/preloads",
+            "out/target.qo\n"
+            + tmp.path + "/out/target.qo\n"
+            + "sibling.qo\n"
+            + "sibling.qo\n"
+            + "missing.qo\n"
+            + "malformed.qo\n"
+            + "wrong-shape.qo\n"
+            + "later.qo\n");
+
+        hash<string, auto> result = run(("out/target.qo", "preloads"), tmp.path);
+        assertEq(0, result.rc, "valid preload collection succeeds: " + result.output);
+        assertEq("DEFINE_A\nDEFINE_B\nDEFINE_C\n", result.output,
+            "defines are unique, ordered, string-only, and exclude the target");
+
+        result = run(("out/target.qo", "missing-preloads"), tmp.path);
+        assertEq(0, result.rc, "missing preload manifest is accepted");
+        assertEq("", result.output, "missing preload manifest emits no definitions");
+    }
+
+    testArguments() {
+        hash<string, auto> result = run(());
+        assertEq(2, result.rc, "missing arguments fail with usage status");
+        assertTrue(result.output.find("usage:") != -1,
+            "missing arguments report usage: " + result.output);
+    }
+}
