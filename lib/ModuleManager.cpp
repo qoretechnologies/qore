@@ -843,7 +843,11 @@ void QoreModuleManager::init(bool se) {
 
     // setup module directory list from QORE_MODULE_DIR (if it hasn't already been manually set up)
     if (moduleDirList.empty()) {
-        QoreModuleManager::addStandardModulePaths();
+        if (getenv("QORE_MODULE_DIR_ONLY")) {
+            moduleDirList.addDirList(getenv("QORE_MODULE_DIR"));
+        } else {
+            QoreModuleManager::addStandardModulePaths();
+        }
     }
 }
 

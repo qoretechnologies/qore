@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ModuleDirOnlyTest
+
+class ModuleDirOnlyTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("QORE_MODULE_DIR_ONLY test", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("explicit path remains active", \explicitPathTest());
+        addTestCase("compiled-in paths are omitted", \defaultPathTest());
+        set_return_value(main());
+    }
+
+    explicitPathTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess environment syntax in this test is POSIX-specific");
+            return;
+        }
+
+        TmpDir tmp("qore-module-dir-only-");
+        writeModule(tmp.path);
+        string script = writeScript(tmp.path, "%requires ModuleDirOnlyFixture\nprintf(\"FOUND\\n\");\n");
+
+        string out = backquote(sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s %s 2>&1; echo EXIT=$?",
+            shellQuote(tmp.path), shellQuote(qore_bin), shellQuote(script)));
+        assertEq("FOUND\nEXIT=0\n", out, "QORE_MODULE_DIR remains searchable in isolated mode");
+    }
+
+    defaultPathTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess environment syntax in this test is POSIX-specific");
+            return;
+        }
+
+        TmpDir tmp("qore-module-dir-only-");
+        string eval = shellQuote("printf(\"FOUND\\n\");");
+
+        string normal = backquote(sprintf(
+            "env -u QORE_MODULE_DIR_ONLY QORE_MODULE_DIR=%s %s -l QUnit -e %s 2>&1; echo EXIT=$?",
+            shellQuote(tmp.path), shellQuote(qore_bin), eval));
+        if (normal != "FOUND\nEXIT=0\n") {
+            testSkip("QUnit is not installed in a compiled-in module directory");
+            return;
+        }
+
+        string isolated = backquote(sprintf(
+            "QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -l QUnit -e %s 2>&1; echo EXIT=$?",
+            shellQuote(tmp.path), shellQuote(qore_bin), eval));
+        assertTrue(isolated =~ /LOAD-MODULE-ERROR/, "isolated load reports that QUnit is absent");
+        assertTrue(isolated !~ /EXIT=0/, "isolated load fails before running the expression");
+    }
+
+    private static writeModule(string dir) {
+        File f();
+        f.open2(dir + "/ModuleDirOnlyFixture.qm", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\nmodule ModuleDirOnlyFixture {\n"
+            + "    version = \"1.0\";\n"
+            + "    desc = \"module path isolation test fixture\";\n"
+            + "    author = \"Qore Technologies, s.r.o.\";\n"
+            + "    license = \"MIT\";\n}\n");
+    }
+
+    private static string writeScript(string dir, string source) {
+        string path = dir + "/driver.q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\n" + source);
+        return path;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

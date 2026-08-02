@@ -40,7 +40,7 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return backquote("{ " + cmd + "; } 2>&1");
     }
 
     private write(string path, string body) {

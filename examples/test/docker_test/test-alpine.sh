@@ -194,16 +194,6 @@ cmake \
     -DQORE_BUILD_QMOD_DIR="${QORE_SRC_DIR}/build/qlib-qmod" \
     -P "${QORE_SRC_DIR}/cmake/EnsureSourceQmodSymlinks.cmake"
 
-# qore-test-base also contains optional Qorus user modules compiled by the
-# image's Qore.  Core tests must not depend on those external artifacts having
-# the current native AOT ABI, so load this optional child from installed source.
-# Dedicated module-loader tests continue to verify that stale .qmods are hard
-# errors rather than silently falling back to source.
-find /opt/lib -path \
-    '*/qore-modules/SalesforcePubSubDataProvider/SalesforcePubSubDataProvider.qmod' \
-    -delete 2>/dev/null || true
-
-
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then
     addgroup -g ${QORE_GID} qore
@@ -253,8 +243,22 @@ fi
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
 
-# run the tests
-export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
+# Core tests need native modules from the image (for example yaml and xml), but
+# must not see AOT user modules compiled by the image's older Qore. Native
+# modules carry an API suffix; expose only those through an isolated link farm.
+SYSTEM_BINARY_MODULE_DIR=$(${QORE_SRC_DIR}/build/qore --module-dir)
+CI_NATIVE_MODULE_DIR=/tmp/qore-ci-native-modules
+mkdir -p "${CI_NATIVE_MODULE_DIR}"
+find "${CI_NATIVE_MODULE_DIR}" -mindepth 1 -maxdepth 1 -delete
+for qmod in "${SYSTEM_BINARY_MODULE_DIR}"/*-api-*.qmod; do
+    [ -e "${qmod}" ] || continue
+    ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
+done
+
+# run the tests against job-built modules, source qlib, and compatible native
+# modules only. run_tests.sh prepends the build qmod and binary-module paths.
+export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${CI_NATIVE_MODULE_DIR}
+export QORE_MODULE_DIR_ONLY=1
 cd ${QORE_SRC_DIR}
 
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
@@ -292,6 +296,7 @@ gosu qore:qore env \
     QORE_BINARY="${QORE_BINARY}" \
     QORE_LIBDIR="${QORE_LIBDIR}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
     QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
     QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
