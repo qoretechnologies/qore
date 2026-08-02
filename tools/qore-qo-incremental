@@ -8,15 +8,14 @@
 # standalone against sibling `.qo` metadata via SINGLE_SCRIPT
 # (`qcc -c -L <group-dir> --depfile=OUTPUT.d ...`).  qcc writes OUTPUT,
 # OUTPUT.d, OUTPUT.idx.json, status JSON, and success/content stamps. OUTPUT.d
-# lists the source's build dependencies: its `%include` closure plus any sibling
-# whose compile-time constant/enum it folds.  Cross-unit callable references are
-# resolved by name at link/load time through the `.qo` symbol index.
+# lists the source's build dependencies: its `%include` closure plus sibling
+# body contracts imported by optimized native calls.
 #
-# Clean parallel builds can ask for sources in any order.  This wrapper compiles
-# only the requested OUTPUT; it never recursively builds sibling `.qo` files.
-# Cross-unit callable references, static constants, and static variables must be
-# resolved by `.qo` indexes/linking, and any true build-order requirement must be
-# represented in the build graph rather than hidden behind recipe recursion.
+# Clean parallel builds are seeded by the shared batch bootstrap.  On later
+# single-file builds, this wrapper brings precise transitive body-contract
+# providers current before checking the requested output.  This closes the
+# provider/consumer race on Make generators while output locks deduplicate
+# providers requested concurrently by multiple consumers.
 
 set -eu
 
@@ -44,7 +43,7 @@ output=$(canonical_path "$1")
 source=$(canonical_path "$2")
 single_script=$(canonical_path "$3")
 shift 3
-this_script=$0
+this_script=$(canonical_path "$0")
 qo_dir=$(dirname "$output")
 depfile="$output.d"
 idxfile="$output.idx.json"
@@ -56,14 +55,6 @@ if [ ! -f "$context_file" ] && [ -f "$qo_dir/.qcc-context" ]; then
 fi
 source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
-
-if [ -n "$batch_bootstrap_stamp" ] && [ -x "$source_order_tool" ] \
-        && [ -f "$context_file" ] && command -v python3 >/dev/null 2>&1; then
-    if "$source_order_tool" --batch-artifact-current "$batch_bootstrap_stamp" \
-            "$context_file" "$output"; then
-        exit 0
-    fi
-fi
 
 cleanup_stage_dir() {
     stage_dir=${1:-}
@@ -282,10 +273,51 @@ with_output_lock() {
     fi
 }
 
+build_prerequisites() {
+    if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
+            || [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ] \
+            || ! command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    prerequisite_map=$(mktemp "${TMPDIR:-/tmp}/qore-qo-prerequisites.XXXXXX")
+    if ! "$source_order_tool" --build-map "$context_file" "$output" \
+            > "$prerequisite_map"; then
+        rm -f "$prerequisite_map"
+        return 1
+    fi
+
+    tab=$(printf '\t')
+    while IFS="$tab" read -r prerequisite_source prerequisite_output; do
+        [ -n "$prerequisite_source" ] || continue
+        [ -n "$prerequisite_output" ] || continue
+        if ! QORE_QCC_PREREQUISITES_READY=1 \
+                QORE_QCC_BATCH_BOOTSTRAP_STAMP="$batch_bootstrap_stamp" \
+                "$this_script" "$prerequisite_output" "$prerequisite_source" \
+                    "$single_script"; then
+            rm -f "$prerequisite_map"
+            return 1
+        fi
+    done < "$prerequisite_map"
+    rm -f "$prerequisite_map"
+}
+
 run_main() {
     selected_preload_file=
     manifest_input_file=
     rc=0
+
+    if ! build_prerequisites; then
+        exit 1
+    fi
+
+    if [ -n "$batch_bootstrap_stamp" ] && [ -x "$source_order_tool" ] \
+            && [ -f "$context_file" ] && command -v python3 >/dev/null 2>&1; then
+        if "$source_order_tool" --batch-artifact-current "$batch_bootstrap_stamp" \
+                "$context_file" "$output"; then
+            exit 0
+        fi
+    fi
 
     selected_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-selected.XXXXXX")
     if ! select_preload_outputs "$selected_preload_file" "$@"; then

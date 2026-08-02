@@ -3,10 +3,9 @@
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 #
 # Derive deterministic standalone .qo compile prerequisites for one qcc object
-# group from source-level parse/build dependencies.  Linkable symbol references
-# are intentionally not prerequisites; they are resolved from .qo indexes by the
-# linker.  The CMake source list is used only as a stable tie breaker, not as
-# the source of dependency truth.
+# group from source-level parse/build dependencies and precise native-body
+# imports recorded by previous compiles.  Ordinary linkable symbol references
+# remain unordered; the CMake source list is only a stable tie breaker.
 
 # Defer annotation evaluation (PEP 563) so PEP 604 unions like `set[str] | None` parse on
 # Python 3.9 (e.g. macOS system Python), where they would otherwise raise at def time.
@@ -1170,10 +1169,12 @@ def load_or_build_hard_graph(context: str, inputs: list[str],
     true_parse_defines = parse_context_parse_defines(context)
     cached = load_graph_cache(cache_file, context, inputs, outputs, true_parse_defines)
     if cached:
+        add_depfile_contract_edges(outputs, *cached)
         return cached
     outgoing, incoming, required_edges, summaries = build_hard_graph(inputs, true_parse_defines)
     save_graph_cache(cache_file, inputs, outputs, true_parse_defines,
         outgoing, incoming, required_edges, summaries)
+    add_depfile_contract_edges(outputs, outgoing, incoming, required_edges)
     return outgoing, incoming, required_edges
 
 
@@ -1260,6 +1261,11 @@ def emit_cmake_direct_map(prefix: str, context: str, inputs: list[str], outputs:
         print(f'set({prefix}_{target} "{deps}")')
 
 
+def emit_build_map(context: str, inputs: list[str], outputs: list[str], target: int) -> None:
+    for index in build_prerequisite_order(context, inputs, outputs, target):
+        print(f"{inputs[index]}\t{outputs[index]}")
+
+
 def parse_make_depfile_inputs(path: str) -> list[str]:
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
@@ -1286,6 +1292,31 @@ def parse_make_depfile_inputs(path: str) -> list[str]:
     if token:
         values.append("".join(token))
     return values
+
+
+def add_depfile_contract_edges(outputs: list[str], outgoing: dict[int, set[int]],
+        incoming: dict[int, set[int]], required_edges: set[tuple[int, int]]) -> None:
+    suffix = ".compile-contract.stamp"
+    output_indexes = {
+        os.path.realpath(os.path.abspath(output)): index
+        for index, output in enumerate(outputs)
+    }
+    for consumer, output in enumerate(outputs):
+        try:
+            dependencies = parse_make_depfile_inputs(output + ".d")
+        except OSError:
+            continue
+        for dependency in dependencies:
+            if not dependency.endswith(suffix):
+                continue
+            provider_output = dependency[:-len(suffix)]
+            provider = output_indexes.get(
+                os.path.realpath(os.path.abspath(provider_output)))
+            if provider is None or provider == consumer:
+                continue
+            outgoing[provider].add(consumer)
+            incoming[consumer].add(provider)
+            required_edges.add((provider, consumer))
 
 
 def batch_artifact_current(context: str, inputs: list[str], outputs: list[str],
@@ -1352,6 +1383,11 @@ def main() -> int:
         help="emit CMake set() statements with all direct prerequisite outputs for the context",
     )
     parser.add_argument(
+        "--build-map",
+        action="store_true",
+        help="print source/output pairs for all prerequisites in compile order",
+    )
+    parser.add_argument(
         "--source-symbol-manifest",
         metavar="FILE",
         help="write a qcc source-symbol precedence manifest for all context inputs",
@@ -1394,6 +1430,10 @@ def main() -> int:
     except ValueError:
         print(f"{sys.argv[0]}: target output not present in context: {args.target_output}", file=sys.stderr)
         return 1
+
+    if args.build_map:
+        emit_build_map(args.context, inputs, outputs, target_index)
+        return 0
 
     if args.batch_artifact_current or args.artifact_current:
         return 0 if batch_artifact_current(

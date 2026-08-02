@@ -299,6 +299,10 @@ function(QORE_QCC_HELPER_PATH _out_var _name)
             AND DEFINED QORE_QCC_BATCH_BOOTSTRAP_HELPER
             AND NOT "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}" STREQUAL "")
         set(_qore_qcc_helper "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}")
+    elseif ("${_name}" STREQUAL "qore-qo-prune"
+            AND DEFINED QORE_QCC_PRUNE_HELPER
+            AND NOT "${QORE_QCC_PRUNE_HELPER}" STREQUAL "")
+        set(_qore_qcc_helper "${QORE_QCC_PRUNE_HELPER}")
     elseif (DEFINED QORE_CMAKE_DIR AND EXISTS "${QORE_CMAKE_DIR}/${_name}")
         set(_qore_qcc_helper "${QORE_CMAKE_DIR}/${_name}")
     elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../tools/${_name}")
@@ -309,6 +313,132 @@ function(QORE_QCC_HELPER_PATH _out_var _name)
         message(FATAL_ERROR "cannot find Qore qcc helper ${_name}")
     endif ()
     set(${_out_var} "${_qore_qcc_helper}" PARENT_SCOPE)
+endfunction()
+
+function(_QORE_QCC_REGISTER_MANAGED_DIRS)
+    foreach(_qore_qcc_managed_dir ${ARGN})
+        get_filename_component(_qore_qcc_managed_dir_abs
+            "${_qore_qcc_managed_dir}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+        set_property(GLOBAL APPEND PROPERTY QORE_QCC_MANAGED_DIRS
+            "${_qore_qcc_managed_dir_abs}")
+    endforeach()
+endfunction()
+
+function(_QORE_QCC_REGISTER_MANAGED_FILES)
+    foreach(_qore_qcc_managed_file ${ARGN})
+        get_filename_component(_qore_qcc_managed_file_abs
+            "${_qore_qcc_managed_file}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+        set_property(GLOBAL APPEND PROPERTY QORE_QCC_MANAGED_FILES
+            "${_qore_qcc_managed_file_abs}")
+    endforeach()
+endfunction()
+
+function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
+    set(${_out_var}
+        "${_output}"
+        "${_output}.d"
+        "${_output}.idx.json"
+        "${_output}.status.json"
+        "${_output}.content.stamp"
+        "${_output}.compile-contract.stamp"
+        "${_output}.stamp"
+        "${_output}.source.manifest.json"
+        "${_output}.source-parse-defines"
+        "${_output}.lock"
+        PARENT_SCOPE)
+endfunction()
+
+function(_QORE_QCC_LINK_ARTIFACT_PATHS _out_var _output)
+    set(${_out_var}
+        "${_output}"
+        "${_output}.d"
+        "${_output}.idx.json"
+        "${_output}.status.json"
+        "${_output}.content.stamp"
+        "${_output}.stamp"
+        "${_output}.qolink.json"
+        "${_output}.qolink.manifest.json"
+        "${_output}.qolink-context"
+        PARENT_SCOPE)
+endfunction()
+
+function(_QORE_QCC_SCRIPT_ARTIFACT_PATHS _out_var _output)
+    set(options INDEX_JSON)
+    cmake_parse_arguments(_QORE_QSAP "${options}" "" "" ${ARGN})
+    set(_qore_qcc_script_artifacts
+        "${_output}"
+        "${_output}.status.json"
+        "${_output}.content.stamp"
+        "${_output}.stamp"
+        "${_output}.script-aggregate.manifest.json"
+        "${_output}.script-aggregate-context")
+    if (_QORE_QSAP_INDEX_JSON)
+        list(APPEND _qore_qcc_script_artifacts "${_output}.idx.json")
+    endif ()
+    set(${_out_var} ${_qore_qcc_script_artifacts} PARENT_SCOPE)
+endfunction()
+
+# Reconcile all registered qcc outputs below explicit managed roots. Call this
+# once after declaring every object group, qo-link aggregate, and script
+# aggregate that belongs to the roots.
+function(QORE_QCC_FINALIZE_MANAGED_OUTPUTS)
+    set(options)
+    set(oneValueArgs OUTPUT_ROOT SCRIPT_ROOT PLAN MANIFEST)
+    cmake_parse_arguments(_QORE_QFM "${options}" "${oneValueArgs}" "" ${ARGN})
+
+    if (NOT _QORE_QFM_OUTPUT_ROOT OR NOT _QORE_QFM_SCRIPT_ROOT)
+        message(FATAL_ERROR
+            "QORE_QCC_FINALIZE_MANAGED_OUTPUTS requires OUTPUT_ROOT and SCRIPT_ROOT")
+    endif ()
+    get_filename_component(_qore_qfm_output_root
+        "${_QORE_QFM_OUTPUT_ROOT}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    get_filename_component(_qore_qfm_script_root
+        "${_QORE_QFM_SCRIPT_ROOT}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    get_filename_component(_qore_qfm_binary_root "${CMAKE_BINARY_DIR}" ABSOLUTE)
+    if (_QORE_QFM_PLAN)
+        get_filename_component(_qore_qfm_plan
+            "${_QORE_QFM_PLAN}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    else ()
+        set(_qore_qfm_plan "${CMAKE_CURRENT_BINARY_DIR}/.qore-qcc-managed-outputs.plan")
+    endif ()
+    if (_QORE_QFM_MANIFEST)
+        get_filename_component(_qore_qfm_manifest
+            "${_QORE_QFM_MANIFEST}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    else ()
+        set(_qore_qfm_manifest "${CMAKE_CURRENT_BINARY_DIR}/.qore-qcc-managed-outputs.manifest")
+    endif ()
+
+    get_property(_qore_qfm_dirs GLOBAL PROPERTY QORE_QCC_MANAGED_DIRS)
+    get_property(_qore_qfm_files GLOBAL PROPERTY QORE_QCC_MANAGED_FILES)
+    list(REMOVE_DUPLICATES _qore_qfm_dirs)
+    list(REMOVE_DUPLICATES _qore_qfm_files)
+    list(SORT _qore_qfm_dirs)
+    list(SORT _qore_qfm_files)
+
+    set(_qore_qfm_content
+        "format=1\nbinary_root=${_qore_qfm_binary_root}\noutput_root=${_qore_qfm_output_root}\nscript_root=${_qore_qfm_script_root}\n")
+    foreach(_qore_qfm_dir ${_qore_qfm_dirs})
+        string(APPEND _qore_qfm_content "managed_dir=${_qore_qfm_dir}\n")
+    endforeach()
+    foreach(_qore_qfm_file ${_qore_qfm_files})
+        string(APPEND _qore_qfm_content "expected_file=${_qore_qfm_file}\n")
+    endforeach()
+    QORE_WRITE_IF_CHANGED("${_qore_qfm_plan}" "${_qore_qfm_content}")
+
+    QORE_QCC_HELPER_PATH(_qore_qfm_helper qore-qo-prune)
+    execute_process(
+        COMMAND "${_qore_qfm_helper}" "${_qore_qfm_plan}" "${_qore_qfm_manifest}"
+        RESULT_VARIABLE _qore_qfm_result
+        OUTPUT_VARIABLE _qore_qfm_output
+        ERROR_VARIABLE _qore_qfm_error)
+    if (NOT _qore_qfm_result EQUAL 0)
+        message(FATAL_ERROR
+            "qore-qo-prune failed:\n${_qore_qfm_output}${_qore_qfm_error}")
+    endif ()
+    if (_qore_qfm_output)
+        string(STRIP "${_qore_qfm_output}" _qore_qfm_output)
+        message(STATUS "${_qore_qfm_output}")
+    endif ()
 endfunction()
 
 function(QORE_QCC_APPEND_CONTEXT _out_var _key)
@@ -393,6 +523,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_compile_contract_stamps)
     set(_qore_qcc_order_targets)
     set(_qore_qcc_abs_sources)
+    set(_qore_qcc_managed_files)
     set(_qore_qcc_index 0)
     foreach(_qore_qcc_source ${_QORE_QCO_SOURCES})
         get_filename_component(_qore_qcc_abs_source "${_qore_qcc_source}" ABSOLUTE)
@@ -407,6 +538,9 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         list(APPEND _qore_qcc_compile_contract_stamps
             "${_qore_qcc_output}.compile-contract.stamp")
         list(APPEND _qore_qcc_order_targets "${_qore_qcc_order_target}")
+        _QORE_QCC_OBJECT_ARTIFACT_PATHS(_qore_qcc_object_artifacts
+            "${_qore_qcc_output}")
+        list(APPEND _qore_qcc_managed_files ${_qore_qcc_object_artifacts})
         math(EXPR _qore_qcc_index "${_qore_qcc_index} + 1")
     endforeach()
 
@@ -638,16 +772,16 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
             set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
             set(_qore_qcc_direct_dep_compile_contract_stamps)
-            set(_qore_qcc_direct_dep_order_targets)
+            set(_qore_qcc_direct_dep_sources)
             foreach(_qore_qcc_direct_dep ${_qore_qcc_direct_deps})
                 list(APPEND _qore_qcc_direct_dep_compile_contract_stamps
                     "${_qore_qcc_direct_dep}.compile-contract.stamp")
                 list(FIND _qore_qcc_outputs "${_qore_qcc_direct_dep}" _qore_qcc_direct_dep_idx)
                 if (NOT _qore_qcc_direct_dep_idx EQUAL -1)
-                    list(GET _qore_qcc_order_targets ${_qore_qcc_direct_dep_idx}
-                        _qore_qcc_direct_dep_order_target)
-                    list(APPEND _qore_qcc_direct_dep_order_targets
-                        ${_qore_qcc_direct_dep_order_target})
+                    list(GET _qore_qcc_abs_sources ${_qore_qcc_direct_dep_idx}
+                        _qore_qcc_direct_dep_source)
+                    list(APPEND _qore_qcc_direct_dep_sources
+                        ${_qore_qcc_direct_dep_source})
                 endif ()
             endforeach()
             add_custom_command(OUTPUT ${_qore_qcc_stamp}
@@ -657,7 +791,6 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_output}.idx.json
                     ${_qore_qcc_output}.status.json
                     ${_qore_qcc_output}.content.stamp
-                    ${_qore_qcc_output}.compile-contract.stamp
                     ${_qore_qcc_output}.source.manifest.json
                     ${_qore_qcc_output}.source-parse-defines
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
@@ -672,11 +805,12 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_source_symbols}
                     ${_qore_qcc_single_script}
                     ${_qore_qcc_context_path}
+                    ${_qore_qcc_bootstrap_stamp}
                     ${_QORE_QCO_STUBS}
                     ${_QORE_QCO_DEPENDS}
                     ${_qore_qcc_load_module_target_deps}
                     ${_qore_qcc_deps}
-                    ${_qore_qcc_direct_dep_order_targets}
+                    ${_qore_qcc_direct_dep_sources}
                     ${_qore_qcc_direct_dep_compile_contract_stamps}
                     ${_qore_qcc_incremental_helper}
                     ${_qore_qcc_source_order_helper}
@@ -684,6 +818,16 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 DEPFILE ${_qore_qcc_output}.d
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 COMMENT "qcc -c: compiling ${_QORE_QCO_GROUP} ${_qore_qcc_source} (.qo)"
+                VERBATIM)
+            # qcc writes this content-preserving file with the main success
+            # stamp. Give Make generators a rule without a timestamp
+            # prerequisite. Provider sources trigger the consumer wrapper,
+            # which synchronously updates providers before checking the
+            # contract; tying this rule to the provider stamp would make GNU
+            # Make rebuild callers after a comment-only edit.
+            add_custom_command(
+                OUTPUT ${_qore_qcc_output}.compile-contract.stamp
+                COMMAND ${CMAKE_COMMAND} -E true
                 VERBATIM)
         endforeach()
     endif ()
@@ -693,6 +837,34 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set_source_files_properties(${_qore_qcc_stamps} ${_qore_qcc_content_stamps}
         ${_qore_qcc_compile_contract_stamps}
         PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+
+    list(APPEND _qore_qcc_managed_files
+        "${_qore_qcc_context_path}"
+        "${_qore_qcc_context_path}.source-order-v2.json"
+        "${_qore_qcc_source_symbols}"
+        "${_qore_qcc_direct_deps_cmake}"
+        "${_qore_qcc_single_script}")
+    if (_qore_qcc_batch_script)
+        list(APPEND _qore_qcc_managed_files
+            "${_qore_qcc_batch_script}"
+            "${_qore_qcc_bootstrap_stamp}")
+    endif ()
+    _QORE_QCC_REGISTER_MANAGED_DIRS(
+        "${_QORE_QCO_OUTPUT_DIR}"
+        "${_QORE_QCO_SCRIPT_DIR}")
+    if (_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT)
+        get_filename_component(_qore_qcc_bootstrap_output_dir
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}" DIRECTORY)
+        _QORE_QCC_REGISTER_MANAGED_DIRS("${_qore_qcc_bootstrap_output_dir}")
+        list(APPEND _qore_qcc_managed_files
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}"
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.status.json"
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.stamp"
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.content.stamp"
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}.script-aggregate.manifest.json"
+            "${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT}")
+    endif ()
+    _QORE_QCC_REGISTER_MANAGED_FILES(${_qore_qcc_managed_files})
 
     set(${_out_var} ${_qore_qcc_outputs} PARENT_SCOPE)
     if (_QORE_QCO_STAMPS_VAR)
@@ -812,6 +984,9 @@ function(QORE_QCC_LINK_OBJECTS _out_var)
         PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
     set_source_files_properties(${_qore_qlo_stamp}
         PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+    _QORE_QCC_LINK_ARTIFACT_PATHS(_qore_qlo_managed_files "${_QORE_QLO_OUTPUT}")
+    _QORE_QCC_REGISTER_MANAGED_DIRS("${_qore_qlo_dir}")
+    _QORE_QCC_REGISTER_MANAGED_FILES(${_qore_qlo_managed_files})
     set(${_out_var} "${_QORE_QLO_OUTPUT}" PARENT_SCOPE)
     if (_QORE_QLO_STAMP_VAR)
         set(${_QORE_QLO_STAMP_VAR} "${_qore_qlo_stamp}" PARENT_SCOPE)
@@ -971,6 +1146,15 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
         PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
     set_source_files_properties(${_qore_qsa_stamp}
         PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+    if (_QORE_QSA_INDEX_JSON_VAR)
+        _QORE_QCC_SCRIPT_ARTIFACT_PATHS(_qore_qsa_managed_files
+            "${_QORE_QSA_OUTPUT}" INDEX_JSON)
+    else ()
+        _QORE_QCC_SCRIPT_ARTIFACT_PATHS(_qore_qsa_managed_files
+            "${_QORE_QSA_OUTPUT}")
+    endif ()
+    _QORE_QCC_REGISTER_MANAGED_DIRS("${_qore_qsa_dir}")
+    _QORE_QCC_REGISTER_MANAGED_FILES(${_qore_qsa_managed_files})
     set(${_out_var} "${_QORE_QSA_OUTPUT}" PARENT_SCOPE)
     if (_QORE_QSA_STAMP_VAR)
         set(${_QORE_QSA_STAMP_VAR} "${_qore_qsa_stamp}" PARENT_SCOPE)

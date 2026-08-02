@@ -33,6 +33,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
         addTestCase("generic qcc object helper builds standalone .qo files",
             \testGenericQccObjectHelpers());
+        addTestCase("managed qcc outputs prune stale artifacts safely",
+            \testManagedQccOutputPruning());
 
         set_return_value(main());
     }
@@ -49,6 +51,11 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
 
     private string read(string path) {
         return ReadOnlyFile::readTextFile(path) ?? "";
+    }
+
+    private date mtime(string path) {
+        hash<auto> info = hstat(path);
+        return info.mtime;
     }
 
     testExportedHelpers() {
@@ -100,6 +107,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         assertTrue(vars.find("qcc=") != -1, "qcc command exported: " + vars);
         assertTrue(vars.find("qcc-format.stamp") != -1,
             "qcc deps use semantic format stamp: " + vars);
+        string qcc_format = read(qore_build_dir + "/qcc-format.stamp");
+        assertTrue(qcc_format.find("format=1\n") == 0
+                && qcc_format.find("QoreAOT.cpp") != -1,
+            "qcc format stamp contains a deterministic codegen fingerprint: " + qcc_format);
         assertEq(-1, vars.find("deps=" + qore_build_dir + "/qcc\n"),
             "qcc deps do not mtime-track qcc when format stamp is available: " + vars);
         assertTrue(vars.find("depfile=" + build_dir + "/sample.qo.d") != -1,
@@ -519,6 +530,10 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG_INDEXED
     INDEX_JSON_VAR QO_SCRIPT_AGG_INDEX)
 add_custom_target(qo-script-aggregate-indexed ALL DEPENDS ${QO_SCRIPT_AGG_INDEXED_STAMP})
 
+qore_qcc_finalize_managed_outputs(
+    OUTPUT_ROOT \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_ROOT \"${CMAKE_BINARY_DIR}/qo-scripts\")
+
 add_executable(qo-static-host
     \"${CMAKE_SOURCE_DIR}/host.cpp\"
     ${QO_OBJECTS}
@@ -560,6 +575,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"script_aggregate=${QO_SCRIPT_AGG}\\n\"
     \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\"
     \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\")
+file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
 ");
 
         string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
@@ -614,6 +630,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
         assertFalse(is_file(build_dir + "/script-aggregate.qo.idx.json"),
             "script aggregate helper removes an unrequested legacy index: " + reconfigure);
+        string rebuilt_direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
+        assertTrue(rebuilt_direct.regex(
+                "QORE_QCC_DIRECT_DEPS_cmake_smoke_1.*provider_qc\\.qo"),
+            "native-body depfiles order an unqualified function provider before its consumer: "
+                + rebuilt_direct);
         assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
             "late-defined object module dependency built: " + build1);
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
@@ -662,11 +683,35 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
                 && no_op.find("qcc --script-aggregate:") == -1,
             "no-op rebuild does not rerun qcc helper targets: " + no_op);
 
+        list<string> object_paths = trim(read(build_dir + "/qo-objects.txt")).split(";");
+        string consumer_object = object_paths[1];
+        date batch_consumer_mtime = mtime(consumer_object);
         write(provider, read(provider) + "# compile-contract no-op\n");
+        string batch_to_single = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertNeq(batch_consumer_mtime, mtime(consumer_object),
+            "batch-to-single contract transition revalidates the unqualified caller: "
+                + batch_to_single);
+
+        date consumer_mtime = mtime(consumer_object);
+        write(provider, read(provider) + "# second compile-contract no-op\n");
         string semantic_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertEq(-1, semantic_no_op.find("consumer.qc"),
-            "comment-only provider edit does not recompile consumer: "
+        assertEq(consumer_mtime, mtime(consumer_object),
+            "steady-state comment-only provider edit preserves the consumer object: "
                 + semantic_no_op);
+
+        write(provider, replace(read(provider),
+            "return CMakeQoProvider::label();",
+            "return \"changed-body\";"));
+        string contract_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(contract_change.find("provider.qc") != -1,
+            "provider body change runs the precise incremental path: "
+                + contract_change);
+        string changed_source_out = run(sprintf("cd %s && %s %s",
+            src_dir, source_qore, source_runner));
+        string changed_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertEq(changed_source_out, changed_static_out,
+            "one-pass native-body incremental rebuild remains load-equivalent");
 
         string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
         string provider_body = read(provider);
@@ -674,5 +719,218 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
         string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
             "same-content source mtime rebuild does not relink aggregate: " + same_content);
+    }
+
+    testManagedQccOutputPruning() {
+        TmpDir tmp("qore-cmake-qcc-prune-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        string retained_source = snippets_dir + "/retained.qc";
+        string removed_source = snippets_dir + "/removed.qc";
+        string replacement_source = snippets_dir + "/replacement.qc";
+        string group_b_source = snippets_dir + "/group-b.qc";
+        write(retained_source, "%modern\npublic string sub retainedValue() { return \"retained\"; }\n");
+        write(removed_source, "%modern\npublic string sub removedValue() { return \"removed\"; }\n");
+        write(replacement_source,
+            "%modern\npublic string sub replacementValue() { return \"replacement\"; }\n");
+        write(group_b_source, "%modern\npublic string sub groupBValue() { return \"group-b\"; }\n");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoPruneSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(PRUNE_SOURCE_MODE initial CACHE STRING \"source transition\")
+option(ENABLE_GROUP_B \"build the second object group\" ON)
+option(ENABLE_AGGREGATES \"build link and script aggregates\" ON)
+
+set(A_SOURCES \"${CMAKE_SOURCE_DIR}/srcs/retained.qc\")
+if(PRUNE_SOURCE_MODE STREQUAL \"initial\")
+    list(APPEND A_SOURCES \"${CMAKE_SOURCE_DIR}/srcs/removed.qc\")
+elseif(PRUNE_SOURCE_MODE STREQUAL \"replace\")
+    list(APPEND A_SOURCES \"${CMAKE_SOURCE_DIR}/srcs/replacement.qc\")
+elseif(NOT PRUNE_SOURCE_MODE STREQUAL \"single\")
+    message(FATAL_ERROR \"unknown PRUNE_SOURCE_MODE=${PRUNE_SOURCE_MODE}\")
+endif()
+
+qore_qcc_compile_objects(A_OBJECTS
+    GROUP GROUP_A
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo/GROUP_A\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts/GROUP_A\"
+    SOURCES ${A_SOURCES}
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR A_STAMPS
+    CONTENT_STAMPS_VAR A_CONTENT_STAMPS
+    ORDER_TARGETS_VAR A_ORDER_TARGETS)
+set(ALL_QO_STAMPS ${A_STAMPS})
+
+if(ENABLE_GROUP_B)
+    qore_qcc_compile_objects(B_OBJECTS
+        GROUP GROUP_B
+        OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo/GROUP_B\"
+        SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts/GROUP_B\"
+        SOURCES \"${CMAKE_SOURCE_DIR}/srcs/group-b.qc\"
+        PARSE_OPTIONS PO_MODERN
+        WARNINGS_ARE_ERRORS
+        STAMPS_VAR B_STAMPS)
+    list(APPEND ALL_QO_STAMPS ${B_STAMPS})
+endif()
+
+if(ENABLE_AGGREGATES)
+    qore_qcc_link_objects(A_LINK
+        OUTPUT \"${CMAKE_BINARY_DIR}/qo/GROUP_A_link/A_LINK.qo\"
+        AGGREGATE_SYMBOL QORE_PRUNE_LINK
+        INPUTS ${A_OBJECTS}
+        INPUT_CONTENT_STAMPS ${A_CONTENT_STAMPS}
+        INPUT_ORDER_TARGETS ${A_ORDER_TARGETS}
+        WARNINGS_ARE_ERRORS
+        STAMP_VAR A_LINK_STAMP)
+    qore_qcc_script_aggregate(A_SCRIPT
+        OUTPUT \"${CMAKE_BINARY_DIR}/qo/GROUP_A_script/A_SCRIPT.qo\"
+        AGGREGATE QORE_PRUNE_SCRIPT
+        SOURCES ${A_SOURCES}
+        INPUT_CONTENT_STAMPS ${A_CONTENT_STAMPS}
+        INPUT_ORDER_TARGETS ${A_ORDER_TARGETS}
+        PARSE_OPTIONS PO_MODERN
+        WARNINGS_ARE_ERRORS
+        STAMP_VAR A_SCRIPT_STAMP)
+    list(APPEND ALL_QO_STAMPS ${A_LINK_STAMP} ${A_SCRIPT_STAMP})
+endif()
+
+qore_qcc_finalize_managed_outputs(
+    OUTPUT_ROOT \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_ROOT \"${CMAKE_BINARY_DIR}/qo-scripts\")
+add_custom_target(all-qo ALL DEPENDS ${ALL_QO_STAMPS})
+
+string(REPLACE \";\" \"\\n\" A_OBJECT_LINES \"${A_OBJECTS}\")
+file(WRITE \"${CMAKE_BINARY_DIR}/a-objects.txt\" \"${A_OBJECT_LINES}\\n\")
+if(ENABLE_GROUP_B)
+    string(REPLACE \";\" \"\\n\" B_OBJECT_LINES \"${B_OBJECTS}\")
+    file(WRITE \"${CMAKE_BINARY_DIR}/b-objects.txt\" \"${B_OBJECT_LINES}\\n\")
+endif()
+");
+
+        mkdir(build_dir);
+        mkdir(build_dir + "/qo");
+        mkdir(build_dir + "/qo/LEGACY_GROUP");
+        write(build_dir + "/qo/LEGACY_GROUP/legacy.qo", "legacy\n");
+        mkdir(build_dir + "/qo-scripts");
+        mkdir(build_dir + "/qo-scripts/LEGACY_GROUP");
+        write(build_dir + "/qo-scripts/LEGACY_GROUP/qcc-single.sh", "#!/bin/sh\n");
+
+        string qore_arg = qore_dir ? " -DQore_DIR=" + qore_dir : "";
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir, qore_arg));
+        assertTrue(is_file(build_dir + "/.qore-qcc-managed-outputs.manifest"),
+            "initial configure writes the managed-output manifest: " + configure);
+        assertFalse(is_dir(build_dir + "/qo/LEGACY_GROUP")
+                || is_dir(build_dir + "/qo-scripts/LEGACY_GROUP"),
+            "first managed configure prunes recognized pre-manifest groups");
+        string initial_build = run(sprintf("cmake --build %s -- -j17", build_dir));
+        list<string> initial_a = trim(read(build_dir + "/a-objects.txt")).split("\n");
+        list<string> initial_b = trim(read(build_dir + "/b-objects.txt")).split("\n");
+        assertEq(2, initial_a.size(), "initial group A contains two outputs");
+        assertEq(1, initial_b.size(), "initial group B contains one output");
+        assertTrue(is_file(initial_a[1] + ".source-parse-defines"),
+            "initial build writes the complete object sidecar family: " + initial_build);
+        assertTrue(is_file(build_dir + "/qo/GROUP_A_link/A_LINK.qo.qolink-context"),
+            "initial build registers link aggregate sidecars");
+        assertTrue(is_file(build_dir + "/qo/GROUP_A_script/A_SCRIPT.qo.script-aggregate-context"),
+            "initial build registers script aggregate sidecars");
+
+        date retained_mtime = mtime(initial_a[0]);
+        string replace_configure = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=replace%s",
+            src_dir, build_dir, qore_arg));
+        list<string> replacement_a = trim(read(build_dir + "/a-objects.txt")).split("\n");
+        assertEq(2, replacement_a.size(), "replacement keeps the object count unchanged");
+        assertEq(initial_a[0], replacement_a[0], "replacement retains the first output identity");
+        assertNeq(initial_a[1], replacement_a[1], "replacement changes the second output identity");
+        foreach string suffix in ("", ".d", ".idx.json", ".status.json", ".content.stamp",
+                ".compile-contract.stamp", ".stamp", ".source.manifest.json",
+                ".source-parse-defines", ".lock") {
+            assertFalse(is_file(initial_a[1] + suffix),
+                "source replacement prunes stale artifact " + suffix + ": " + replace_configure);
+        }
+        assertEq(retained_mtime, mtime(initial_a[0]),
+            "source replacement configuration preserves retained object timestamps");
+        string replacement_build = run(sprintf("cmake --build %s -- -j17", build_dir));
+        assertTrue(is_file(replacement_a[1] + ".source.manifest.json"),
+            "parallel build creates the replacement object: " + replacement_build);
+
+        date retained_after_replace = mtime(replacement_a[0]);
+        string single_configure = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single%s",
+            src_dir, build_dir, qore_arg));
+        foreach string suffix in ("", ".d", ".idx.json", ".status.json", ".content.stamp",
+                ".compile-contract.stamp", ".stamp", ".source.manifest.json",
+                ".source-parse-defines", ".lock") {
+            assertFalse(is_file(replacement_a[1] + suffix),
+                "source removal prunes stale artifact " + suffix + ": " + single_configure);
+        }
+        assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/qcc-batch.sh"),
+            "single-source transition prunes the obsolete batch script");
+        assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp"),
+            "single-source transition prunes the obsolete bootstrap stamp");
+        assertEq(retained_after_replace, mtime(replacement_a[0]),
+            "source removal configuration preserves the retained object timestamp");
+        string single_build = run(sprintf("cmake --build %s -- -j17", build_dir));
+        assertTrue(is_file(replacement_a[0] + ".stamp"),
+            "parallel build after source removal succeeds: " + single_build);
+
+        string remove_group = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
+                + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
+        assertFalse(is_dir(build_dir + "/qo/GROUP_B"),
+            "removed object group output directory is pruned: " + remove_group);
+        assertFalse(is_dir(build_dir + "/qo-scripts/GROUP_B"),
+            "removed object group script directory is pruned");
+        assertFalse(is_dir(build_dir + "/qo/GROUP_A_link"),
+            "removed link aggregate directory is pruned");
+        assertFalse(is_dir(build_dir + "/qo/GROUP_A_script"),
+            "removed script aggregate directory is pruned");
+
+        string state_path = build_dir + "/.qore-qcc-managed-outputs.manifest";
+        string state_before_error = read(state_path);
+        string orphan_dir = build_dir + "/qo/ORPHAN";
+        mkdir(orphan_dir);
+        write(orphan_dir + "/stale.qo", "stale\n");
+        write(orphan_dir + "/keep.txt", "unexpected\n");
+        string rejected = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
+                + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
+        assertTrue(rejected.find("refusing to prune unexpected files or directories") != -1,
+            "unexpected files make configuration fail safely: " + rejected);
+        assertTrue(is_file(orphan_dir + "/stale.qo") && is_file(orphan_dir + "/keep.txt"),
+            "validation failure removes no files");
+        assertEq(state_before_error, read(state_path),
+            "validation failure does not advance the managed-output manifest");
+
+        unlink(orphan_dir + "/keep.txt");
+        string orphan_cleanup = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
+                + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
+        assertFalse(is_dir(orphan_dir),
+            "recognized orphan artifacts are pruned after safety validation: " + orphan_cleanup);
+
+        date final_object_mtime = mtime(replacement_a[0]);
+        date state_mtime = mtime(state_path);
+        string state_content = read(state_path);
+        string noop1 = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
+                + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
+        string noop2 = run(sprintf(
+            "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
+                + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
+        assertEq(final_object_mtime, mtime(replacement_a[0]),
+            "idempotent configurations preserve current object timestamps: " + noop1 + noop2);
+        assertEq(state_mtime, mtime(state_path),
+            "idempotent configurations do not rewrite the state manifest");
+        assertEq(state_content, read(state_path),
+            "idempotent configurations preserve the exact state manifest");
     }
 }

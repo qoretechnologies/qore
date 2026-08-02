@@ -1,0 +1,411 @@
+#!/usr/bin/env -S qore --exec-mode=ast
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Reconcile a configure-time manifest of helper-owned AOT outputs with an
+# existing build tree. Validation is completed before any path is removed.
+
+%modern
+
+const FORMAT = "1";
+const QO_SUFFIXES = (
+    "",
+    ".d",
+    ".idx.json",
+    ".status.json",
+    ".content.stamp",
+    ".compile-contract.stamp",
+    ".stamp",
+    ".source.manifest.json",
+    ".source-parse-defines",
+    ".lock",
+    ".single-failed",
+    ".qolink.json",
+    ".qolink.manifest.json",
+    ".qolink-context",
+    ".script-aggregate.manifest.json",
+    ".script-aggregate-context",
+);
+const SCRIPT_FILES = (
+    ".qcc-batch-bootstrap.stamp": True,
+    ".qcc-bootstrap.stamp": True,
+    ".qcc-context": True,
+    ".qcc-context.source-order-v2.json": True,
+    "direct-deps.cmake": True,
+    "qcc-batch.sh": True,
+    "qcc-bootstrap.sh": True,
+    "qcc-single.sh": True,
+    "source-symbols.manifest": True,
+);
+const TRANSIENT_DIR_NAMES = (
+    ".qcc-batch-bootstrap.stamp.lock": True,
+    ".qcc-bootstrap.stamp.lock": True,
+);
+const ALLOWED_KEYS = (
+    "format": True,
+    "binary_root": True,
+    "output_root": True,
+    "script_root": True,
+    "managed_dir": True,
+    "expected_file": True,
+);
+
+sub prune_error(string desc) {
+    throw "QORE-QO-PRUNE-ERROR", desc;
+}
+
+string sub absolute_normalized(string path) {
+    return absolute_path(path) ? path : getcwd() + DirSep + path;
+}
+
+string sub canonical(string path) {
+    string normalized = absolute_normalized(path);
+    if (exists hlstat(normalized)) {
+        return realpath(normalized);
+    }
+    string parent = dirname(normalized);
+    if (!is_dir(parent)) {
+        prune_error(sprintf("cannot canonicalize path with missing parent: %s", path));
+    }
+    return realpath(parent) + DirSep + basename(normalized);
+}
+
+string sub canonical_file(string path, reference<hash<string, string>> parent_cache) {
+    string normalized = absolute_normalized(path);
+    string parent = dirname(normalized);
+    string canonical_parent;
+    if (exists parent_cache{parent}) {
+        canonical_parent = parent_cache{parent};
+    } else {
+        canonical_parent = canonical(parent);
+        parent_cache{parent} = canonical_parent;
+    }
+    return canonical_parent + DirSep + basename(normalized);
+}
+
+bool sub is_within(string path, string root) {
+    return path == root || path.startsWith(root == DirSep ? root : root + DirSep);
+}
+
+hash<string, list<string>> sub parse_manifest(string path, bool required) {
+    hash<string, list<string>> values = {};
+    if (!is_file(path)) {
+        if (required) {
+            prune_error("missing manifest: " + path);
+        }
+        return values;
+    }
+    int line_number = 0;
+    foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
+        ++line_number;
+        if (!line) {
+            continue;
+        }
+        int separator = line.find("=");
+        if (separator <= 0) {
+            prune_error(sprintf("malformed manifest line %s:%d", path, line_number));
+        }
+        string key = line.substr(0, separator);
+        string value = line.substr(separator + 1);
+        if (value.find("\r") >= 0 || value.find("\n") >= 0) {
+            prune_error(sprintf("malformed manifest line %s:%d", path, line_number));
+        }
+        push values{key}, value;
+    }
+    return values;
+}
+
+string sub one(hash<string, list<string>> values, string key, string path) {
+    list<string> entries = values{key} ?? ();
+    if (entries.size() != 1 || !entries[0]) {
+        prune_error(sprintf("manifest %s requires exactly one %s= entry", path, key));
+    }
+    return canonical(entries[0]);
+}
+
+sub validate_keys(hash<string, list<string>> values, string path) {
+    foreach string key in (values.keys()) {
+        if (!exists ALLOWED_KEYS{key}) {
+            prune_error(sprintf("manifest %s has unknown key: %s", path, key));
+        }
+    }
+    if ((values{"format"} ?? ()) != (FORMAT,)) {
+        prune_error("manifest " + path + " has unsupported format");
+    }
+}
+
+bool sub is_owned_file_name(string name) {
+    if (exists SCRIPT_FILES{name}) {
+        return True;
+    }
+    if (name.startsWith(".qcc-context.source-order-v2.json.") && name.endsWith(".tmp")) {
+        return True;
+    }
+    foreach string suffix in (QO_SUFFIXES) {
+        if (name.endsWith(".qo" + suffix)) {
+            return True;
+        }
+    }
+    return False;
+}
+
+bool sub is_transient_dir_name(string name) {
+    return exists TRANSIENT_DIR_NAMES{name} || name.startsWith(".qcc-preload.");
+}
+
+list<string> sub list_names(string path) {
+    Dir dir();
+    if (!dir.chdir(path)) {
+        prune_error("cannot inspect managed directory: " + path);
+    }
+    return dir.listNames();
+}
+
+sub validate_owned_tree(string path, reference<list<string>> unexpected) {
+    foreach string name in (list_names(path)) {
+        string entry_path = path + DirSep + name;
+        *hash<StatInfo> info = hlstat(entry_path);
+        if (!exists info) {
+            prune_error("cannot inspect managed path: " + entry_path);
+        }
+        if (info.type == "SYMBOLIC-LINK") {
+            if (!is_owned_file_name(name)) {
+                push unexpected, entry_path;
+            }
+        } else if (info.type == "DIRECTORY") {
+            if (!is_transient_dir_name(name)) {
+                push unexpected, entry_path;
+            }
+        } else if (info.type != "REGULAR" || !is_owned_file_name(name)) {
+            push unexpected, entry_path;
+        }
+    }
+}
+
+sub remove_tree(string path) {
+    *hash<StatInfo> info = hlstat(path);
+    if (!exists info) {
+        return;
+    }
+    if (info.type != "DIRECTORY") {
+        if (unlink(path) && errno() != ENOENT) {
+            prune_error(sprintf("cannot remove stale artifact %s: %s", path, strerror()));
+        }
+        return;
+    }
+    foreach string name in (list_names(path)) {
+        remove_tree(path + DirSep + name);
+    }
+    if (rmdir(path) && errno() != ENOENT) {
+        prune_error(sprintf("cannot remove stale managed directory %s: %s", path, strerror()));
+    }
+}
+
+sub atomic_write_if_changed(string path, string content) {
+    if (is_file(path) && ReadOnlyFile::readTextFile(path) == content) {
+        return;
+    }
+    mkdir(dirname(path), 0777, True);
+    string temporary = sprintf("%s.%d.%d.tmp", path, getpid(), gettid());
+    on_error {
+        try {
+            unlink(temporary);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    {
+        File file();
+        file.open2(temporary, O_CREAT | O_TRUNC | O_WRONLY, 0666, "UTF-8");
+        file.write(content);
+        if (file.sync()) {
+            prune_error(sprintf("cannot sync manifest %s: %s", temporary, strerror()));
+        }
+    }
+    rename(temporary, path);
+}
+
+string sub render_state(string binary_root, string output_root, string script_root,
+        hash<string, bool> managed_dirs, hash<string, bool> expected_files) {
+    list<string> lines = (
+        "format=" + FORMAT,
+        "binary_root=" + binary_root,
+        "output_root=" + output_root,
+        "script_root=" + script_root,
+    );
+    foreach string path in (sort(managed_dirs.keys())) {
+        push lines, "managed_dir=" + path;
+    }
+    foreach string path in (sort(expected_files.keys())) {
+        push lines, "expected_file=" + path;
+    }
+    return join("\n", lines) + "\n";
+}
+
+hash<string, int> sub reconcile(string plan_path, string state_path) {
+    hash<string, list<string>> plan = parse_manifest(plan_path, True);
+    validate_keys(plan, plan_path);
+    string binary_root = one(plan, "binary_root", plan_path);
+    string output_root = one(plan, "output_root", plan_path);
+    string script_root = one(plan, "script_root", plan_path);
+    state_path = canonical(state_path);
+
+    foreach string path in ((output_root, script_root, state_path)) {
+        if (!is_within(path, binary_root)) {
+            prune_error("managed path is outside the CMake binary tree: " + path);
+        }
+    }
+    if (output_root == binary_root || script_root == binary_root) {
+        prune_error("managed output roots must be below the CMake binary root");
+    }
+    if (is_within(output_root, script_root) || is_within(script_root, output_root)) {
+        prune_error("managed output and script roots must not overlap");
+    }
+
+    mkdir(output_root, 0777, True);
+    mkdir(script_root, 0777, True);
+    list<string> roots = (output_root, script_root);
+    hash<string, bool> registered_dirs = {};
+    foreach string path in (plan{"managed_dir"} ?? ()) {
+        registered_dirs{canonical(path)} = True;
+    }
+    hash<string, string> parent_cache = {};
+    foreach string path in (registered_dirs.keys()) {
+        parent_cache{path} = path;
+    }
+    hash<string, bool> registered_files = {};
+    foreach string path in (plan{"expected_file"} ?? ()) {
+        registered_files{canonical_file(path, \parent_cache)} = True;
+    }
+
+    hash<string, bool> managed_dirs = {};
+    foreach string path in (registered_dirs.keys()) {
+        if (is_within(path, output_root) || is_within(path, script_root)) {
+            managed_dirs{path} = True;
+        }
+    }
+    hash<string, bool> expected_files = {};
+    foreach string path in (registered_files.keys()) {
+        if (is_within(path, output_root) || is_within(path, script_root)) {
+            expected_files{path} = True;
+        }
+    }
+    foreach string path in (expected_files.keys()) {
+        string parent = dirname(path);
+        bool found = False;
+        while (is_within(parent, output_root) || is_within(parent, script_root)) {
+            if (exists managed_dirs{parent}) {
+                found = True;
+                break;
+            }
+            string next_parent = dirname(parent);
+            if (next_parent == parent) {
+                break;
+            }
+            parent = next_parent;
+        }
+        if (!found) {
+            prune_error("expected file is outside registered managed directories: " + path);
+        }
+    }
+
+    hash<string, list<string>> previous = parse_manifest(state_path, False);
+    hash<string, bool> previous_dirs = {};
+    if (previous) {
+        validate_keys(previous, state_path);
+        if (one(previous, "binary_root", state_path) != binary_root
+                || one(previous, "output_root", state_path) != output_root
+                || one(previous, "script_root", state_path) != script_root) {
+            prune_error("managed roots changed for state manifest " + state_path);
+        }
+        foreach string path in (previous{"managed_dir"} ?? ()) {
+            previous_dirs{canonical(path)} = True;
+        }
+    }
+
+    hash<string, bool> expected_dirs = managed_dirs;
+    expected_dirs{output_root} = True;
+    expected_dirs{script_root} = True;
+    hash<string, bool> stale_files = {};
+    hash<string, bool> stale_dirs = {};
+    list<string> unexpected = ();
+
+    code scan_current;
+    scan_current = sub(string path) {
+        foreach string name in (list_names(path)) {
+            string entry_path = path + DirSep + name;
+            *hash<StatInfo> info = hlstat(entry_path);
+            if (!exists info) {
+                prune_error("cannot inspect managed path: " + entry_path);
+            }
+            if (info.type == "SYMBOLIC-LINK") {
+                if (exists expected_files{entry_path}) {
+                    continue;
+                }
+                if (is_owned_file_name(name)) {
+                    stale_files{entry_path} = True;
+                } else {
+                    push unexpected, entry_path;
+                }
+            } else if (info.type == "DIRECTORY") {
+                if (exists expected_dirs{entry_path}) {
+                    scan_current(entry_path);
+                } else if (is_transient_dir_name(name)) {
+                    stale_dirs{entry_path} = True;
+                } else if (inlist(path, roots) || exists previous_dirs{entry_path}) {
+                    validate_owned_tree(entry_path, \unexpected);
+                    stale_dirs{entry_path} = True;
+                } else {
+                    push unexpected, entry_path;
+                }
+            } else if (exists expected_files{entry_path}) {
+                continue;
+            } else if (info.type == "REGULAR" && is_owned_file_name(name)) {
+                stale_files{entry_path} = True;
+            } else {
+                push unexpected, entry_path;
+            }
+        }
+    };
+    scan_current(output_root);
+    scan_current(script_root);
+
+    if (unexpected) {
+        hash<string, bool> unique_unexpected = map {$1: True}, unexpected;
+        unexpected = sort(unique_unexpected.keys());
+        prune_error("refusing to prune unexpected files or directories:\n  " + join("\n  ", unexpected));
+    }
+
+    foreach string path in (sort(stale_files.keys())) {
+        if (unlink(path) && errno() != ENOENT) {
+            prune_error(sprintf("cannot remove stale artifact %s: %s", path, strerror()));
+        }
+    }
+    list<string> sorted_dirs = sort(stale_dirs.keys(), int sub(string left, string right) {
+        int depth_cmp = right.split(DirSep).size() <=> left.split(DirSep).size();
+        return depth_cmp ? depth_cmp : right <=> left;
+    });
+    foreach string path in (sorted_dirs) {
+        remove_tree(path);
+    }
+
+    atomic_write_if_changed(state_path,
+        render_state(binary_root, output_root, script_root, managed_dirs, expected_files));
+    return ("files": stale_files.size(), "directories": stale_dirs.size());
+}
+
+if (ARGV.size() != 2) {
+    stderr.printf("usage: %s PLAN STATE\n", get_script_name());
+    exit(2);
+}
+
+try {
+    hash<string, int> result = reconcile(canonical(ARGV[0]), canonical(ARGV[1]));
+    if (result{"files"} || result{"directories"}) {
+        printf("%s: pruned %d stale files and %d stale directories\n",
+            get_script_name(), result{"files"}, result{"directories"});
+    }
+} catch (hash<ExceptionInfo> ex) {
+    stderr.printf("%s: %s\n", get_script_name(), ex.desc);
+    exit(1);
+}

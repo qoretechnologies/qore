@@ -2714,13 +2714,14 @@ target_compile_definitions(qcc PRIVATE
 set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
-# qcc format-version stamp.  Purpose: decouple qmod rebuilds from
+# qcc format-version fingerprint.  Purpose: decouple qmod rebuilds from
 # libqore.so / qcc binary mtime.  Without this, any libqore source
 # change relinks libqore → relinks qcc → all 238 qmods rebuild even
 # when the change has nothing to do with the AOT binary format
 # (e.g. unrelated runtime-only fixes).
 #
-# The stamp's mtime tracks only files that actually affect qmod output:
+# The fingerprint tracks only files and build settings that actually affect
+# qmod output:
 # the wire-format headers, the writer, the compile pipeline, the IR
 # opcode/lowering headers, signature/local metadata construction, and
 # qcc itself.  QoreAOTRuntime.cpp is included because it owns slot-map
@@ -2772,14 +2773,46 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
 
-# Rebuild qmods when this source set itself changes.  Otherwise an
-# existing build tree can miss a newly-added dependency if the file is
-# older than the current stamp.
+# Build settings can alter generated code without changing any source file.
+# Keep them in a separate input so the fingerprint also changes when a new
+# qcc/libqore build has different code-generation settings.
+set(_qcc_format_config ${CMAKE_BINARY_DIR}/qcc-format-config.txt)
+set(_qcc_format_config_content "format=1\n")
+foreach(_qcc_format_config_var
+        CMAKE_BUILD_TYPE
+        CMAKE_CXX_COMPILER_ID
+        CMAKE_CXX_COMPILER_VERSION
+        CMAKE_CXX_FLAGS
+        CMAKE_CXX_FLAGS_DEBUG
+        CMAKE_CXX_FLAGS_RELEASE
+        CMAKE_CXX_FLAGS_RELWITHDEBINFO
+        CMAKE_CXX_FLAGS_MINSIZEREL
+        CMAKE_SYSTEM_NAME
+        CMAKE_SYSTEM_PROCESSOR
+        CMAKE_SIZEOF_VOID_P
+        LLVM_PACKAGE_VERSION
+        QORE_LLVM_MAJOR_VERSION)
+    string(APPEND _qcc_format_config_content
+        "${_qcc_format_config_var}=${${_qcc_format_config_var}}\n")
+endforeach()
+if (EXISTS "${_qcc_format_config}")
+    file(READ "${_qcc_format_config}" _qcc_format_config_old)
+else()
+    set(_qcc_format_config_old "")
+endif()
+if (NOT _qcc_format_config_old STREQUAL _qcc_format_config_content)
+    file(WRITE "${_qcc_format_config}" "${_qcc_format_config_content}")
+endif()
+
+# Rebuild qmods when this source set itself changes.  Otherwise an existing
+# build tree can miss a newly-added dependency if the file is older than the
+# current fingerprint.
 set(_qcc_format_sources_manifest ${CMAKE_BINARY_DIR}/qcc-format-sources.txt)
 set(_qcc_format_sources_manifest_content "")
 foreach(_qcc_format_source IN LISTS _qcc_format_sources)
     string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_source}\n")
 endforeach()
+string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_config}\n")
 if (EXISTS "${_qcc_format_sources_manifest}")
     file(READ "${_qcc_format_sources_manifest}" _qcc_format_sources_manifest_old)
 else()
@@ -2792,9 +2825,17 @@ endif()
 set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
 add_custom_command(
     OUTPUT ${QCC_FORMAT_STAMP}
-    COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
-    DEPENDS ${_qcc_format_sources} ${_qcc_format_sources_manifest}
-    COMMENT "Updating qcc format-version stamp"
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT_LIST=${_qcc_format_sources_manifest}
+        -DOUTPUT=${QCC_FORMAT_STAMP}
+        -DSUCCESS_STAMP=${QCC_FORMAT_STAMP}
+        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
+    DEPENDS
+        ${_qcc_format_sources}
+        ${_qcc_format_config}
+        ${_qcc_format_sources_manifest}
+        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
+    COMMENT "Updating qcc format-version fingerprint"
     VERBATIM
 )
 add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
@@ -2859,7 +2900,7 @@ install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cma
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
-    tools/qore-qo-batch-bootstrap
+    tools/qore-qo-batch-bootstrap tools/qore-qo-prune
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc
