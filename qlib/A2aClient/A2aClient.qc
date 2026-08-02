@@ -348,6 +348,16 @@ public hashdecl A2aAgentCapabilities {
 
     #! Whether extended agent card is supported
     *bool extendedAgentCard;
+
+    #! Whether the agent exposes task status change history
+    /** @since A2aClient 1.0
+    */
+    *bool stateTransitionHistory;
+
+    #! The protocol extensions the agent supports
+    /** @since A2aClient 1.0
+    */
+    *list<hash<A2aAgentExtension>> extensions;
 }
 
 #! A2A Agent Interface entry (v1.0)
@@ -596,6 +606,12 @@ public class A2aClient {
 
         #! Extra headers for all requests (e.g., auth tokens)
         hash<auto> default_headers;
+
+        #! Extension URIs requested on every call, sent in the \c A2A-Extensions service parameter
+        list<string> requested_extensions();
+
+        #! Extension URIs the agent activated on the last call
+        list<string> activated_extensions();
 
         #! Protocol for the connection manager ("h1", "h2", "h3", or "auto")
         string protocol = "auto";
@@ -881,6 +897,65 @@ public class A2aClient {
         remove callbacks{name};
     }
 
+    #! Requests the given protocol extensions on every subsequent call
+    /** The URIs are sent in the \c A2A-Extensions service parameter; the agent activates the subset it
+        supports and echoes it back, which @ref getActivatedExtensions() reports.
+
+        @param uris the extension URIs to request; pass an empty list to stop requesting extensions
+
+        @note An agent that does not support a requested extension ignores it, so requesting an extension is
+        always safe; use @ref checkRequiredExtensions() to verify that everything the agent marks as
+        \c required has been requested.
+
+        @since A2aClient 1.0
+    */
+    requestExtensions(softlist<string> uris) {
+        lck.lock();
+        on_exit lck.unlock();
+        requested_extensions = (map trim($1), uris, trim($1).val()) ?? ();
+    }
+
+    #! Returns the extension URIs requested on every call
+    /** @since A2aClient 1.0
+    */
+    list<string> getRequestedExtensions() {
+        lck.lock();
+        on_exit lck.unlock();
+        return requested_extensions;
+    }
+
+    #! Returns the extension URIs the agent activated on the last call
+    /** An agent reports the extensions it actually applied by echoing the \c A2A-Extensions service parameter
+        in its response; an agent that activates none, or that does not implement extensions at all, yields an
+        empty list.
+
+        @return the activated extension URIs
+
+        @since A2aClient 1.0
+    */
+    list<string> getActivatedExtensions() {
+        lck.lock();
+        on_exit lck.unlock();
+        return activated_extensions;
+    }
+
+    #! Verifies that every extension the agent marks as required has been requested
+    /** @param card the agent card to check against; the cached agent card is used if not given
+
+        @return the required extension URIs that have not been requested; an empty list if all requirements
+        are met
+
+        @note The agent card must have been fetched, or supplied here, for this check to be meaningful; with
+        no card at all every check trivially passes.
+
+        @since A2aClient 1.0
+    */
+    list<string> checkRequiredExtensions(*hash<auto> card) {
+        list<string> required = a2aGetRequiredCardExtensions(card ?? getCachedAgentCard());
+        hash<string, bool> requested = (map {$1: True}, getRequestedExtensions()) ?? {};
+        return (map $1, required, !requested{$1}) ?? ();
+    }
+
     #! Returns the cached agent card, if any
     *hash<auto> getCachedAgentCard() {
         lck.lock();
@@ -901,6 +976,37 @@ public class A2aClient {
         # Recreate the manager so the client can be reused after close
         mgr = createConnectionManager();
         sse_stop_flag = False;
+    }
+
+    #! Returns the headers carrying the requested extensions, if any
+    /** @return a hash with the \c A2A-Extensions service parameter, or an empty hash if no extensions are
+        requested so that the header is omitted entirely
+
+        @since A2aClient 1.0
+    */
+    private hash<auto> getExtensionRequestHeaders() {
+        *string value = a2aMakeExtensionsHeader(getRequestedExtensions());
+        return value ? {A2aExtensionsHeader: value} : {};
+    }
+
+    #! Records the extensions the agent activated from a response's headers
+    /** @param resp_headers the response headers; header names are matched case-insensitively as required for
+        HTTP
+
+        @since A2aClient 1.0
+    */
+    private setActivatedExtensions(*hash<auto> resp_headers) {
+        *string value;
+        foreach string key in (keys resp_headers) {
+            if (key.lwr() == A2aExtensionsHeader.lwr()) {
+                value = resp_headers{key};
+                break;
+            }
+        }
+        list<string> active = a2aParseExtensionsHeader(value);
+        lck.lock();
+        on_exit lck.unlock();
+        activated_extensions = active;
     }
 
     #! Performs a JSON-RPC call and returns the result
@@ -949,8 +1055,11 @@ public class A2aClient {
             hash<auto> req_headers = {
                 "Content-Type": MimeTypeJson,
                 "Accept": MimeTypeJson,
-            } + default_headers + wire_headers;
+            } + default_headers + wire_headers + getExtensionRequestHeaders();
             hash<auto> resp = mgr.request(url, "POST", url_path, req_headers, body, timeout);
+
+            # record the extensions the agent activated, whether or not the call itself succeeded
+            setActivatedExtensions(resp.headers ?? resp."response-headers" ?? resp);
 
             if (resp.status_code < 200 || resp.status_code >= 300) {
                 throw "A2A-HTTP-ERROR", sprintf("HTTP %d calling %y",

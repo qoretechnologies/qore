@@ -13,6 +13,7 @@ class A2aVersionTranslationTest inherits QUnit::Test {
     constructor() : QUnit::Test("A2aVersionTranslation test", "1.0") {
         addTestCase("task state translation test", \taskStateTranslationTest());
         addTestCase("error code conformance test", \errorCodeConformanceTest());
+        addTestCase("extension helpers test", \extensionHelpersTest());
         addTestCase("role translation test", \roleTranslationTest());
         addTestCase("method name translation test", \methodNameTranslationTest());
         addTestCase("version detection test", \versionDetectionTest());
@@ -135,6 +136,62 @@ class A2aVersionTranslationTest inherits QUnit::Test {
             # they must still fall inside the JSON-RPC implementation-defined server-error range
             assertTrue(code <= -32000 && code >= -32099, sprintf("%d is outside the server error range", code));
         }
+    }
+
+    extensionHelpersTest() {
+        # the specification names this service parameter A2A-Extensions, with no "X-" prefix
+        assertEq("A2A-Extensions", A2aExtensionsHeader);
+
+        # parsing: absent, empty, single, multiple, and tolerant of whitespace and empty entries
+        assertEq((), a2aParseExtensionsHeader());
+        assertEq((), a2aParseExtensionsHeader(""));
+        assertEq((), a2aParseExtensionsHeader(" , , "));
+        assertEq(("https://a/1",), a2aParseExtensionsHeader("https://a/1"));
+        assertEq(("https://a/1", "https://b/2"), a2aParseExtensionsHeader("https://a/1,https://b/2"));
+        assertEq(("https://a/1", "https://b/2"), a2aParseExtensionsHeader(" https://a/1 , https://b/2 ,"));
+
+        # serializing: an empty list yields no header at all rather than an empty one
+        assertNothing(a2aMakeExtensionsHeader());
+        assertNothing(a2aMakeExtensionsHeader(()));
+        assertNothing(a2aMakeExtensionsHeader(("", "  ")));
+        assertEq("https://a/1", a2aMakeExtensionsHeader(("https://a/1",)));
+        assertEq("https://a/1,https://b/2", a2aMakeExtensionsHeader(("https://a/1", " https://b/2 ")));
+
+        # round trip
+        list<string> uris = ("https://a/1", "https://b/2");
+        assertEq(uris, a2aParseExtensionsHeader(a2aMakeExtensionsHeader(uris)));
+
+        # card extraction: v1.0 layout under capabilities
+        hash<auto> v10_card = {
+            "name": "A",
+            "capabilities": {
+                "extensions": (
+                    {"uri": "https://a/1", "description": "opt", "required": False},
+                    {"uri": "https://b/2", "description": "req", "required": True, "params": {"k": "v"}},
+                ),
+            },
+        };
+        hash<string, hash<A2aAgentExtension>> exts = a2aGetCardExtensions(v10_card);
+        assertEq(2, exts.size());
+        assertEq("opt", exts{"https://a/1"}.description);
+        assertFalse(exts{"https://a/1"}.required);
+        assertTrue(exts{"https://b/2"}.required);
+        assertEq({"k": "v"}, exts{"https://b/2"}.params);
+        assertEq(("https://b/2",), a2aGetRequiredCardExtensions(v10_card));
+
+        # a flat "extensions" key is also accepted, as is a bare URI string
+        hash<auto> flat_card = {"extensions": ({"uri": "https://c/3"}, "https://d/4")};
+        hash<string, hash<A2aAgentExtension>> flat = a2aGetCardExtensions(flat_card);
+        assertEq(("https://c/3", "https://d/4"), keys flat);
+        assertEq("https://d/4", flat{"https://d/4"}.uri);
+        assertFalse(flat{"https://d/4"}.required);
+
+        # a card with no extensions, and no card at all
+        assertEq({}, a2aGetCardExtensions({"name": "A"}));
+        assertEq({}, a2aGetCardExtensions());
+        assertEq((), a2aGetRequiredCardExtensions());
+        # malformed entries are skipped rather than raising
+        assertEq({}, a2aGetCardExtensions({"extensions": ({"description": "no uri"}, 42)}));
     }
 
     roleTranslationTest() {
@@ -455,12 +512,60 @@ class A2aVersionTranslationTest inherits QUnit::Test {
         assertFalse(v10_params.hasKey("contextId"), "contextId should not be at top level");
         assertTrue(v10_params.message.messageId.size() > 0, "messageId should be auto-generated");
 
-        # v1.0 → v0.3
+        # v1.0 -> v0.3; the v0.3 MessageSendParams object defines only message, configuration, and metadata,
+        # so the context ID stays on the message, where both versions define it
         hash<auto> v03_back = a2aTranslateSendMessageParamsToV03(v10_params);
         assertEq("user", v03_back.message.role);
-        assertEq("ctx-1", v03_back.contextId, "contextId should be at top level");
-        assertFalse(v03_back.message.hasKey("contextId"), "contextId should not be in message");
+        assertEq("ctx-1", v03_back.message.contextId, "contextId belongs on the message in v0.3 too");
+        assertFalse(v03_back.hasKey("contextId"), "v0.3 params have no top-level contextId");
         assertEq("text", v03_back.message.parts[0].type);
+
+        # taskId and extensions are also defined on the v0.3 Message and must survive the round trip
+        hash<auto> rich = a2aTranslateSendMessageParamsToV03({
+            "message": {
+                "role": "ROLE_USER",
+                "parts": ({"text": "hi"},),
+                "messageId": "m1",
+                "contextId": "c1",
+                "taskId": "t1",
+                "extensions": ("https://example.com/ext/v1",),
+            },
+            "tenant": "acme",
+        });
+        assertEq("c1", rich.message.contextId);
+        assertEq("t1", rich.message.taskId);
+        assertEq(("https://example.com/ext/v1",), rich.message.extensions);
+        # tenant is the only v1.0-only field on the request
+        assertFalse(rich.hasKey("tenant"));
+
+        # configuration is defined in both versions; only the push config key and the blocking flag differ
+        hash<auto> v10_cfg = a2aTranslateSendMessageParamsToV10({
+            "message": {"role": "user", "parts": ({"type": "text", "text": "x"},)},
+            "configuration": {
+                "acceptedOutputModes": ("text/plain",),
+                "historyLength": 3,
+                "blocking": True,
+                "pushNotificationConfig": {"url": "http://example.com/hook"},
+            },
+        });
+        assertEq(("text/plain",), v10_cfg.configuration.acceptedOutputModes);
+        assertEq(3, v10_cfg.configuration.historyLength);
+        # v0.3 "blocking" is the logical inverse of v1.0 "returnImmediately"
+        assertFalse(v10_cfg.configuration.returnImmediately);
+        assertFalse(v10_cfg.configuration.hasKey("blocking"));
+        assertEq("http://example.com/hook", v10_cfg.configuration.taskPushNotificationConfig.url);
+        assertFalse(v10_cfg.configuration.hasKey("pushNotificationConfig"));
+
+        hash<auto> v03_cfg = a2aTranslateSendMessageParamsToV03(v10_cfg);
+        assertTrue(v03_cfg.configuration.blocking);
+        assertFalse(v03_cfg.configuration.hasKey("returnImmediately"));
+        assertEq("http://example.com/hook", v03_cfg.configuration.pushNotificationConfig.url);
+        assertEq(3, v03_cfg.configuration.historyLength);
+
+        # returnImmediately: true round trips to blocking: false
+        hash<auto> nb = a2aTranslateSendConfigurationToV03({"returnImmediately": True});
+        assertFalse(nb.blocking);
+        assertTrue(a2aTranslateSendConfigurationToV10(nb).returnImmediately);
     }
 
     roundTripStateTest() {

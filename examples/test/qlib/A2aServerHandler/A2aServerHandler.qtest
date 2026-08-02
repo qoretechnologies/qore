@@ -96,6 +96,9 @@ class A2aServerHandlerTest inherits QUnit::Test {
         addTestCase("v1.0 send message params test", \v10SendMessageParamsTest());
         addTestCase("v1.0 version detection test", \v10VersionDetectionTest());
         addTestCase("non-root path SSE streaming test", \nonRootPathSseStreamTest());
+        addTestCase("extension negotiation test", \extensionNegotiationTest());
+        addTestCase("required extension test", \requiredExtensionTest());
+        addTestCase("client extension round trip test", \clientExtensionRoundTripTest());
 
         set_return_value(main());
     }
@@ -638,6 +641,171 @@ class A2aServerHandlerTest inherits QUnit::Test {
         });
 
         client.close();
+    }
+
+    #! Sends a JSON-RPC request with the given extra headers and returns the raw response
+    private hash<auto> rpcWithHeaders(hash<auto> request, *hash<auto> extra) {
+        Qore::HTTPClient http_client({"url": base_url});
+        return http_client.send(make_json(request), "POST", "",
+            {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson} + extra);
+    }
+
+    #! Returns the A2A-Extensions response header value, matched case-insensitively
+    /** @note HTTPClient::send() returns the response headers lowercased at the top level of the response hash
+    */
+    private static *string getExtensionsHeader(hash<auto> resp) {
+        hash<auto> hdrs = resp."response-headers" ?? resp;
+        foreach string key in (keys hdrs) {
+            if (key.lwr() == A2aExtensionsHeader.lwr()) {
+                return hdrs{key};
+            }
+        }
+    }
+
+    extensionNegotiationTest() {
+        const string ExtUri = "https://example.com/extensions/test/v1";
+        const string OtherUri = "https://example.com/extensions/other/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "ExtAgent", "description": "ext", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        assertEq({}, h.getSupportedExtensions());
+
+        h.registerExtension(<A2aAgentExtension>{
+            "uri": ExtUri,
+            "description": "a test extension",
+        });
+        assertEq((ExtUri,), keys h.getSupportedExtensions());
+        # registering the same URI twice is an error
+        assertThrows("A2A-EXTENSION-ERROR", \h.registerExtension(),
+            (<A2aAgentExtension>{"uri": ExtUri},));
+
+        # the extension is advertised in the agent card
+        hash<auto> card = h.getAgentCard();
+        hash<string, hash<A2aAgentExtension>> declared = a2aGetCardExtensions(card);
+        assertEq((ExtUri,), keys declared);
+        assertEq("a test extension", declared{ExtUri}.description);
+        assertFalse(declared{ExtUri}.required);
+        assertEq((), a2aGetRequiredCardExtensions(card));
+
+        # a request that opts in has the extension echoed back
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("ext", h);
+        string ext_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        Qore::HTTPClient c({"url": ext_url});
+        hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
+        hash<auto> resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: ExtUri});
+        assertEq(ExtUri, getExtensionsHeader(resp), "the activated extension must be echoed");
+
+        # an unsupported extension is ignored, not rejected, and is not echoed
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: OtherUri});
+        assertNothing(getExtensionsHeader(resp), "an unsupported extension must not be echoed");
+        assertTrue(parse_json(resp.body).hasKey("error"), "the call itself still runs");
+
+        # a mixed request activates only the supported subset, preserving request order
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: OtherUri + "," + ExtUri});
+        assertEq(ExtUri, getExtensionsHeader(resp));
+
+        # no header at all means no extensions are activated
+        resp = c.send(make_json(req), "POST", "", {"Content-Type": MimeTypeJson});
+        assertNothing(getExtensionsHeader(resp));
+    }
+
+    requiredExtensionTest() {
+        const string ReqUri = "https://example.com/extensions/required/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "ReqAgent", "description": "req", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        h.registerExtension(<A2aAgentExtension>{
+            "uri": ReqUri,
+            "description": "must be supported",
+            "required": True,
+        });
+        assertEq((ReqUri,), a2aGetRequiredCardExtensions(h.getAgentCard()));
+
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("req", h);
+        string req_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        Qore::HTTPClient c({"url": req_url});
+        hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
+
+        # a client that does not opt in is rejected with ExtensionSupportRequiredError
+        hash<auto> resp = c.send(make_json(req), "POST", "", {"Content-Type": MimeTypeJson});
+        hash<auto> body = parse_json(resp.body);
+        assertEq(A2A_ERR_EXTENSION_SUPPORT_REQUIRED, body.error.code);
+        assertRegex(ReqUri, body.error.message);
+
+        # opting in lets the request through to normal dispatch
+        resp = c.send(make_json(req), "POST", "",
+            {"Content-Type": MimeTypeJson, A2aExtensionsHeader: ReqUri});
+        body = parse_json(resp.body);
+        assertEq(A2A_ERR_TASK_NOT_FOUND, body.error.code, "the request reached the tasks/get handler");
+        assertEq(ReqUri, getExtensionsHeader(resp));
+    }
+
+    clientExtensionRoundTripTest() {
+        const string SupUri = "https://example.com/extensions/supported/v1";
+        const string ReqUri = "https://example.com/extensions/needed/v1";
+        const string UnkUri = "https://example.com/extensions/unknown/v1";
+
+        A2aServerHandler h(logger, {
+            "name": "RtAgent", "description": "rt", "url": "http://localhost", "version": "1.0",
+            "capabilities": <A2aAgentCapabilities>{"streaming": False, "pushNotifications": False},
+            "defaultInputModes": ("text/plain",), "defaultOutputModes": ("text/plain",),
+            "skills": (<A2aAgentSkill>{"id": "s", "name": "S", "description": "s", "tags": ("t",)},),
+        });
+        h.registerExtension(<A2aAgentExtension>{"uri": SupUri, "description": "supported"});
+        h.registerExtension(<A2aAgentExtension>{"uri": ReqUri, "description": "needed", "required": True});
+
+        HttpServer eh(<HttpServerOptionInfo>{"logger": logger});
+        on_exit eh.stop();
+        eh.setDefaultHandler("rt", h);
+        string rt_url = sprintf("http://localhost:%d",
+            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        A2aClient::A2aClient client(rt_url);
+        assertEq((), client.getRequestedExtensions());
+        assertEq((), client.getActivatedExtensions());
+
+        # the card tells the client what the agent requires
+        hash<auto> card = client.getAgentCard();
+        assertEq((ReqUri,), a2aGetRequiredCardExtensions(card));
+        # with nothing requested, the required extension is reported as missing
+        assertEq((ReqUri,), client.checkRequiredExtensions(card));
+
+        # requesting the supported and unknown extensions still leaves the required one missing, and the
+        # server rejects the call
+        client.requestExtensions((SupUri, UnkUri));
+        assertEq((SupUri, UnkUri), client.getRequestedExtensions());
+        assertEq((ReqUri,), client.checkRequiredExtensions(card));
+        assertThrows("A2A-ERROR", "ExtensionSupportRequired|" + ReqUri, \client.getTask(), ("nope",));
+
+        # opting into everything satisfies the requirement; only the two supported ones are activated
+        client.requestExtensions((SupUri, ReqUri, UnkUri));
+        assertEq((), client.checkRequiredExtensions(card));
+        assertThrows("A2A-ERROR", \client.getTask(), ("nope",));
+        assertEq((SupUri, ReqUri), client.getActivatedExtensions(),
+            "only the extensions the agent implements are activated");
+
+        # clearing the request restores the initial state
+        client.requestExtensions(());
+        assertEq((), client.getRequestedExtensions());
     }
 
     pushNotificationWebhookV03Test() {
@@ -1502,6 +1670,8 @@ class A2aServerHandlerTest inherits QUnit::Test {
             {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
         hash<auto> body = parse_json(resp.body);
         assertTrue(body.hasKey("result"), "Should have result");
+        # the task carries the context ID through from the message; v0.3 and v1.0 both define contextId on
+        # the Message object, so nothing is hoisted to the params level
         assertEq("ctx-v10-1", body.result.contextId, "contextId should be preserved from message");
     }
 

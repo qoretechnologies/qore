@@ -140,6 +140,15 @@ module A2aClient {
       are never emitted
     - the A2A JSON-RPC error codes assigned by the specification are exported as
       @ref a2a_error_codes "A2A error code constants"
+    - protocol extension support: @ref A2aClient::A2aClient::requestExtensions() "requestExtensions()" sends the
+      \c A2A-Extensions service parameter, @ref A2aClient::A2aClient::getActivatedExtensions()
+      "getActivatedExtensions()" reports what the agent activated, and
+      @ref A2aClient::A2aClient::checkRequiredExtensions() "checkRequiredExtensions()" verifies the client opted
+      into everything the agent card marks as required
+    - \c contextId, \c taskId, and \c extensions are preserved when translating messages and artifacts to v0.3;
+      all three are defined identically in both versions and were previously dropped
+    - send-message \c configuration is translated rather than discarded; v0.3's \c blocking flag is the logical
+      inverse of v1.0's \c returnImmediately, and the push notification config key differs between versions
     - automatic protocol version detection from agent card format
     - Agent Card discovery at both v1.0 and v0.3 paths
     - all 11 JSON-RPC methods in both v0.3 and v1.0 naming
