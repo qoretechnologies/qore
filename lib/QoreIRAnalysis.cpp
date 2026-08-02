@@ -6328,16 +6328,21 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         !getenv("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
-    for (const auto& block : cfg.blocks) {
+    using InstructionPosition = std::pair<size_t, size_t>;
+    std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        const QoreIRBasicBlock* block = cfg.blocks[block_id];
         if (qore_ir_analysis_cancelled(check_count,
                 "IR in-place string append definition analysis")) {
             return 0;
         }
-        for (const auto& inst : block->instructions) {
+        for (size_t inst_index = 0; inst_index < block->instructions.size(); ++inst_index) {
+            const auto& inst = block->instructions[inst_index];
             if (qore_ir_analysis_cancelled(check_count,
                     "IR in-place string append definition analysis")) {
                 return 0;
             }
+            positions.emplace(inst.get(), InstructionPosition(block_id, inst_index));
             if (inst->result.isValid()) {
                 definitions[inst->result.id] = inst.get();
             }
@@ -6353,6 +6358,43 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
             }
         }
     }
+
+    auto has_uninterrupted_local_access = [&](const QoreIRInstruction& append,
+            const QoreIRLocalInstruction& store, LocalVar* local) {
+        auto load_def = definitions.find(append.operands[0].id);
+        if (load_def == definitions.end()) {
+            return false;
+        }
+        auto load_pos = positions.find(load_def->second);
+        auto append_pos = positions.find(&append);
+        auto store_pos = positions.find(&store);
+        if (load_pos == positions.end() || append_pos == positions.end()
+                || store_pos == positions.end()
+                || load_pos->second.first != append_pos->second.first
+                || append_pos->second.first != store_pos->second.first
+                || load_pos->second.second >= append_pos->second.second
+                || append_pos->second.second >= store_pos->second.second) {
+            return false;
+        }
+        const QoreIRBasicBlock* block = cfg.blocks[load_pos->second.first];
+        for (size_t i = load_pos->second.second + 1; i < store_pos->second.second; ++i) {
+            const QoreIRInstruction* candidate = block->instructions[i].get();
+            if (candidate == &append) {
+                continue;
+            }
+            if (candidate->opcode == QoreIROpcode::LoadLocal
+                    || candidate->opcode == QoreIROpcode::StoreLocal
+                    || candidate->opcode == QoreIROpcode::InstantiateLocal
+                    || candidate->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local_inst =
+                    static_cast<const QoreIRLocalInstruction*>(candidate);
+                if (local_inst->local == local) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
 
     auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
         auto def_it = definitions.find(value.id);
@@ -6432,9 +6474,32 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 LocalVar* local = get_loaded_local(inst.operands[0]);
                 const QoreIRLocalInstruction* store = local
                     ? get_paired_append_store(inst, local) : nullptr;
+                bool local_cow = store
+                    && has_uninterrupted_local_access(inst, *store, local);
+                if (mark && local_cow && !inst.string_append_local_cow) {
+                    inst.string_append_local_cow = true;
+                    auto* paired_store =
+                        const_cast<QoreIRLocalInstruction*>(store);
+                    paired_store->string_append_local_cow = true;
+                    paired_store->redundant_store = true;
+                    // The runtime CoW guard must see only persistent owners. A
+                    // sole-consumer load can borrow the interpreter's cache
+                    // reference; native code already borrows from its alloca.
+                    auto load_def = definitions.find(inst.operands[0].id);
+                    auto load_uses = uses.find(inst.operands[0].id);
+                    if (enable_borrowed_load
+                            && load_def != definitions.end()
+                            && load_uses != uses.end()
+                            && load_uses->second.size() == 1
+                            && load_uses->second[0].inst == &inst) {
+                        load_def->second->string_append_local_cow = true;
+                        load_def->second->borrowed_local_load = true;
+                    }
+                }
                 const QoreIRValueFacts* facts =
                     func.getValueFacts(inst.operands[0]);
                 if (mark && !inst.string_append_in_place && store
+                        && local_cow
                         && state.count(local) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
                         && facts->never_nothing
@@ -6443,21 +6508,6 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     inst.string_append_in_place = true;
                     const_cast<QoreIRLocalInstruction*>(store)->redundant_store =
                         true;
-                    // when the append is the load's only consumer, the
-                    // interpreter can borrow the local's slot-cache reference
-                    // instead of taking its own, keeping the builder node
-                    // unique at the mutation site; with other consumers the
-                    // load stays owned and the interpreter's runtime
-                    // uniqueness check falls back to the CoW append
-                    auto load_def = definitions.find(inst.operands[0].id);
-                    auto load_uses = uses.find(inst.operands[0].id);
-                    if (enable_borrowed_load
-                            && load_def != definitions.end()
-                            && load_uses != uses.end()
-                            && load_uses->second.size() == 1
-                            && load_uses->second[0].inst == &inst) {
-                        load_def->second->borrowed_local_load = true;
-                    }
                     ++changed;
                 }
             }

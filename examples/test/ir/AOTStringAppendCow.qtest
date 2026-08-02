@@ -55,7 +55,11 @@ string sub makeBuilder() {
     for (int i = 0; i < 256; ++i) {
         value += \"ab\";
     }
-    return value;
+    string chars;
+    for (int i = 0; i < 4096; ++i) {
+        chars += chr(0x61 + (i % 26));
+    }
+    return value + chars;
 }
 string sub aliasBuilder(bool escape) {
     string value = \"\";
@@ -86,10 +90,11 @@ for (int i = 0; i < 4; ++i) {
     escaped_builder += \"x\";
 }
 
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s|%s/%s|%s|%s\\n\",
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s|%s/%s|%s|%s\\n\",
     value, append_result, alias_source, alias, self, unset, removed, optional,
     convert_encoding(latin1, \"UTF-8\"), latin1.encoding(), encoding_exception,
-    referenced + \"/\" + captured, builder.size(), chained, escaped_builder, escaped_alias,
+    referenced + \"/\" + captured, builder.size(), builder.size() - 512,
+    builder.substr(512, 26), chained, escaped_builder, escaped_alias,
     branch_alias, branch_no_alias);
 ";
 
@@ -116,7 +121,8 @@ string sub runAot(string suffix, string env) {
 }
 
 string expected = "ab|ab|left-right|left|xyxy|assigned|new|kept|café déjà|"
-    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|512|AbCabcABCABC|xxxx/|x/|x/\n";
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|4608|4096|"
+    + "abcdefghijklmnopqrstuvwxyz|AbCabcABCABC|xxxx/|x/|x/\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {

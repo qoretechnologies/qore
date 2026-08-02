@@ -981,6 +981,7 @@ public:
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
+    bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)

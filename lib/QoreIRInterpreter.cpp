@@ -8002,9 +8002,10 @@ next_instruction:
                 } else if (local_inst->auto_ref) {
                     // FAST PATH: direct slot cache access (most common case)
                     uint32_t sid = local_inst->slot_id;
+                    bool is_ir_only_local = sid < locals_ir_only.size()
+                        && locals_ir_only[sid];
                     if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                         QoreValue cached_val = locals_slot_cache[sid];
-                        bool is_ir_only_local = sid < locals_ir_only.size() && locals_ir_only[sid];
                         bool cache_has_value = !cached_val.isNothing()
                             || (is_ir_only_local && sid < locals_instantiated.size()
                                 && locals_instantiated[sid]);
@@ -8015,6 +8016,14 @@ next_instruction:
                                 // so the builder node stays unique at the mutation
                                 // site (native code borrows via alloca loads)
                                 out = cached_val;
+                                if (local_inst->string_append_local_cow
+                                        && !is_ir_only_local) {
+                                    // The runtime local remains the persistent
+                                    // owner. Drop only the interpreter cache's
+                                    // duplicate ref before the CoW guard runs.
+                                    locals_slot_cache[sid] = QoreValue();
+                                    cached_val.discard(xsink);
+                                }
                                 result_slot_owned = false;
                                 goto load_local_done;
                             }
@@ -8063,6 +8072,19 @@ next_instruction:
                                     is_weak_ref_local = true;
                                 }
                             }
+                        }
+                        if (local_inst->borrowed_local_load
+                                && local_inst->string_append_local_cow
+                                && !is_ir_only_local && !is_weak_ref_local) {
+                            // eval() returned a temporary +1 ref while the TLS
+                            // local remains the owner. Release that temporary
+                            // and forward borrowed bits to the paired append.
+                            out = val;
+                            if (needs_deref && val.hasNode()) {
+                                val.getInternalNode()->deref(xsink);
+                            }
+                            result_slot_owned = false;
+                            goto load_local_done;
                         }
                         // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
@@ -10122,7 +10144,9 @@ load_local_done:
                 }
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
-                if (local_inst->redundant_store) {
+                if (local_inst->redundant_store
+                        && (!local_inst->string_append_local_cow
+                            || is_ir_only_local)) {
                     // The paired mutation normally updates the local's own node
                     // in place, making this store-back a no-op forward.  When
                     // the interpreter's append fell back to CoW (transient refs
