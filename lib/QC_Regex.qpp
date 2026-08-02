@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_Regex.h"
+#include "qore/intern/QC_RegexMatchIterator.h"
 
 //! The Regex class provides a way to compile a regular expression pattern once and apply it to multiple strings efficiently
 /** The class allows for pre-compilation of regular expression patterns, which is useful when the same pattern
@@ -227,4 +228,33 @@ Regex r("(?<word>\\w+)", RE_Global);
 */
 *list<hash<RegexMatchInfo>> Regex::extractDetailed(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractDetailed(subject, xsink);
+}
+
+//! Returns a lazy iterator over matches in the subject.
+/** Direct methods on the returned @ref Qore::RegexMatchIterator "RegexMatchIterator"
+    expose offsets and captures without materializing per-match hashes. Generic iteration
+    returns @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes.
+
+    @param subject the string to match against
+    @return a lazy @ref Qore::RegexMatchIterator "RegexMatchIterator"
+    @throw ENCODING-CONVERSION-ERROR the subject could not be converted to UTF-8
+
+    @par Example:
+    @code{.py}
+Regex words("(?<word>\\w+)", RE_Global);
+RegexMatchIterator matches = words.matchIterator("hello world");
+while (matches.next()) {
+    printf("%s at byte %d\n", matches.getNamedGroup("word"), matches.getOffset());
+}
+    @endcode
+
+    @since %Qore 3.0
+ */
+auto Regex::matchIterator(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<RegexMatchIterator> iterator(
+        new RegexMatchIterator(subject, r->getRegex(), xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_REGEXMATCHITERATOR, getProgram(), iterator.release());
 }

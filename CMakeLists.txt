@@ -279,6 +279,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_RangeIterator.qpp
     lib/QC_StringSplitIterator.qpp
     lib/QC_StringRegexSplitIterator.qpp
+    lib/QC_RegexMatchIterator.qpp
     lib/QC_StringCharIterator.qpp
     lib/QC_Scanner.qpp
     lib/QC_Datasource.qpp
@@ -2215,6 +2216,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_RangeIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StringSplitIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StringRegexSplitIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_RegexMatchIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StringCharIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Scanner.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadPool.cpp\"

@@ -174,6 +174,7 @@ DLLLOCAL QoreClass* initSingleValueIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initRangeIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringSplitIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringRegexSplitIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initRegexMatchIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringCharIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initScannerClass(QoreNamespace& ns);
@@ -1568,6 +1569,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initRangeIteratorClass(qns));
     qns.addSystemClass(initStringSplitIteratorClass(qns));
     qns.addSystemClass(initStringRegexSplitIteratorClass(qns));
+    qns.addSystemClass(initRegexMatchIteratorClass(qns));
     qns.addSystemClass(initStringCharIteratorClass(qns));
     qns.addSystemClass(initStringIteratorClass(qns));
     qns.addSystemClass(initScannerClass(qns));

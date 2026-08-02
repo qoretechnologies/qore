@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+our int fused_alias_range = -1;
+
+%exec-class RegexMatchIteratorTest
+
+class RegexMatchIteratorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RegexMatchIteratorTest", "1.0", \ARGV) {
+        addTestCase("direct regex match accessors", \testDirectAccessors());
+        addTestCase("generic regex match iteration", \testGenericIteration());
+        addTestCase("non-global, reset, and copy behavior", \testState());
+        addTestCase("zero-width UTF-8 match advancement", \testZeroWidthUtf8());
+        addTestCase("invalid iterator access", \testInvalidAccess());
+
+        set_return_value(main());
+    }
+
+    testDirectAccessors() {
+        Regex pattern("(?<word>[A-Za-z]+)(?:=(\\d+))?()", RE_Global);
+        RegexMatchIterator matches = pattern.matchIterator("alpha=12 beta");
+
+        assertTrue(matches.next(), "first match exists");
+        assertTrue(matches.valid(), "iterator is valid after next");
+        assertEq("alpha=12", matches.getMatch(), "full match view");
+        assertEq(0, matches.getOffset(), "full match offset");
+        assertEq(8, matches.getLength(), "full match length");
+        assertEq(3, matches.getCaptureCount(), "first match capture count");
+        assertEq("alpha", matches.getGroup(0), "indexed group");
+        assertEq(0, matches.getGroupOffset(0), "indexed group offset");
+        assertEq(5, matches.getGroupLength(0), "indexed group length");
+        assertEq("12", matches.getGroup(1), "optional matched group");
+        assertEq("", matches.getGroup(2), "empty matched group");
+        assertEq("alpha", matches.getNamedGroup("word"), "named group");
+        assertNothing(matches.getNamedGroup("missing"), "missing named group");
+        assertEq(("word": "alpha"), matches.getNamedGroups(), "named group hash");
+
+        hash<RegexMatchInfo> value = matches.getValue();
+        assertEq("alpha=12", value.match, "materialized match text");
+        assertEq(0, value.offset, "materialized offset");
+        assertEq(("alpha", "12", ""), value.groups, "materialized groups");
+
+        assertTrue(matches.next(), "second match exists");
+        assertEq("beta", matches.getMatch(), "second full match");
+        assertEq(9, matches.getOffset(), "second match offset");
+        assertEq(4, matches.getLength(), "second match length");
+        assertEq("beta", matches.getGroup(0), "second word group");
+        assertNothing(matches.getGroup(1), "unmatched optional group");
+        assertNothing(matches.getGroupOffset(1), "unmatched optional group offset");
+        assertNothing(matches.getGroupLength(1), "unmatched optional group length");
+        assertEq("", matches.getGroup(2), "second empty group");
+        assertFalse(matches.next(), "iteration ends after second match");
+        assertFalse(matches.valid(), "iterator is invalid at end");
+    }
+
+    testGenericIteration() {
+        Regex pattern("(?<word>[A-Za-z]+)", RE_Global);
+        list<hash<RegexMatchInfo>> actual = ();
+        foreach hash<RegexMatchInfo> match in (pattern.matchIterator("one two")) {
+            push actual, match;
+        }
+        assertEq(pattern.extractDetailed("one two"), actual,
+            "generic iteration matches eager detailed extraction");
+    }
+
+    testState() {
+        Regex single("[A-Za-z]+");
+        RegexMatchIterator matches(single, "one two");
+        assertTrue(matches.next(), "non-global iterator has one match");
+        assertEq("one", matches.getMatch(), "non-global first match");
+        assertFalse(matches.next(), "non-global iterator stops after one match");
+
+        matches.reset();
+        assertFalse(matches.valid(), "reset invalidates the current position");
+        assertTrue(matches.next(), "reset restarts iteration");
+        assertEq("one", matches.getMatch(), "reset returns the first match again");
+
+        RegexMatchIterator copied = matches.copy();
+        assertFalse(copied.valid(), "copy starts before the first match");
+        int offset = -1;
+        int length = -1;
+        assertTrue(copied.nextOffset(\offset, \length), "fused offset advance succeeds");
+        assertEq(0, offset, "fused offset value");
+        assertEq(3, length, "fused length value");
+
+        Regex captures("([A-Za-z]+)(?:=(\\d+))?()", RE_Global);
+        RegexMatchIterator captured = captures.matchIterator("one two=2");
+        *string capture = "stale";
+        assertTrue(captured.nextCapture(\offset, \length, \capture, 1),
+            "fused capture advance succeeds");
+        assertNothing(capture, "fused capture assigns NOTHING for an unmatched group");
+        assertTrue(captured.nextCapture(\offset, \length, \capture, 1),
+            "fused capture advances to the next match");
+        assertEq("2", capture, "fused capture assigns the selected group");
+        assertEq(4, offset, "fused capture assigns the full-match offset");
+        assertEq(5, length, "fused capture assigns the full-match length");
+
+        RegexMatchIterator aliased = captures.matchIterator("a=1");
+        fused_alias_range = -1;
+        assertTrue(aliased.nextOffset(\fused_alias_range, \fused_alias_range),
+            "fused global output references may alias");
+        assertEq(3, fused_alias_range, "later aliased assignment wins");
+
+        Regex none("z+", RE_Global);
+        RegexMatchIterator no_matches = none.matchIterator("abc");
+        assertFalse(no_matches.next(), "no-match iterator ends immediately");
+    }
+
+    testZeroWidthUtf8() {
+        Regex positions("(?=.)", RE_Global);
+        RegexMatchIterator matches = positions.matchIterator("\u00e9a");
+        list<int> offsets = ();
+        while (matches.next()) {
+            push offsets, matches.getOffset();
+            assertEq(0, matches.getLength(), "lookahead match is zero width");
+        }
+        assertEq((0, 2), offsets, "zero-width matching advances by UTF-8 codepoint");
+    }
+
+    testInvalidAccess() {
+        Regex pattern("x", RE_Global);
+        RegexMatchIterator matches = pattern.matchIterator("x");
+        assertThrows("INVALID-ITERATOR", \matches.getMatch());
+        assertTrue(matches.next(), "match exists before end-state check");
+        assertFalse(matches.next(), "iterator reaches end");
+        assertThrows("INVALID-ITERATOR", \matches.getOffset());
+    }
+}

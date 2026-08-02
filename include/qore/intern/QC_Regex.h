@@ -85,6 +85,10 @@ public:
         return regex ? regex->extractDetailed(target, xsink) : nullptr;
     }
 
+    DLLLOCAL const QoreRegex* getRegex() const {
+        return regex;
+    }
+
     DLLLOCAL const QoreString* getPattern() const {
         return &pattern;
     }
