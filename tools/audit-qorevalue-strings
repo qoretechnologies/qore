@@ -1,0 +1,387 @@
+#!/usr/bin/env -S qore --exec-mode=jit
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Audit direct QoreValue string-node extraction sites. Short strings can be
+# stored inline in QoreValue, so logical string type does not imply that
+# QoreValue::get<QoreStringNode>() is safe.
+
+%modern
+
+const SOURCE_SUFFIXES = (
+    ".c": True,
+    ".cc": True,
+    ".cpp": True,
+    ".cxx": True,
+    ".h": True,
+    ".hh": True,
+    ".hpp": True,
+    ".hxx": True,
+    ".ipp": True,
+    ".qpp": True,
+);
+
+const SKIP_DIRS = (
+    ".git": True,
+    ".hg": True,
+    ".svn": True,
+    "build": True,
+    "container-build": True,
+    "debug": True,
+    "release": True,
+    "RelWithDebInfo": True,
+    "CMakeFiles": True,
+    "__pycache__": True,
+);
+
+const HIGH_RISK_HINTS = (
+    "getKeyValue",
+    "retrieveEntry",
+    "li.getValue",
+    "hi.get",
+    "getExceptionErr",
+    "getExceptionDesc",
+    "getExceptionArg",
+    "get_param_value",
+    "get_hard_value_param",
+    "HARD_QORE_VALUE_STRING",
+    "HARD_QORE_VALUE_PARAM",
+    "ValueHolder",
+);
+
+const MUTABLE_HINTS = (
+    "getValue().get<",
+    "lvh.getValue().get<",
+    "val.getValue().get<",
+    "v.getValue().get<",
+);
+
+const Opts = (
+    "sibling_modules": "sibling-modules",
+    "sibling_modules_base": "sibling-modules-base=s",
+    "include": "include=s@",
+    "exclude": "exclude=s@",
+    "summary_only": "summary-only",
+    "risk": "risk=s@",
+    "help": "help,h",
+);
+
+sub usage(int status = 0) {
+    printf(
+"usage: %s [options] [PATH ...]\n\n"
+"Options:\n"
+"  --sibling-modules          also scan sibling module-* repositories\n"
+"  --sibling-modules-base DIR directory containing sibling repositories\n"
+"  --include GLOB             include matching paths; may be repeated\n"
+"  --exclude GLOB             exclude matching paths; may be repeated\n"
+"  --summary-only             only print aggregate counts\n"
+"  --risk CLASS               print one risk class; may be repeated\n"
+"  -h, --help                 show this help\n",
+        get_script_name());
+    exit(status);
+}
+
+string sub expand_path(string path) {
+    if (path == "~") {
+        return ENV.HOME ?? path;
+    }
+    if (path.startsWith("~/")) {
+        return (ENV.HOME ?? "~") + path.substr(1);
+    }
+    return path;
+}
+
+string sub canonical(string path) {
+    path = expand_path(path);
+    if (!absolute_path(path)) {
+        path = getcwd() + DirSep + path;
+    }
+    return realpath(path);
+}
+
+bool sub should_skip_dir(string name) {
+    return exists SKIP_DIRS{name} || name.startsWith("build-");
+}
+
+bool sub source_file(string path) {
+    foreach string suffix in (SOURCE_SUFFIXES.keys()) {
+        if (path.endsWith(suffix)) {
+            return True;
+        }
+    }
+    return False;
+}
+
+string sub glob_regex(string pattern) {
+    string result = "^";
+    int offset = 0;
+    while (offset < pattern.size()) {
+        string ch = pattern.substr(offset++, 1);
+        if (ch == "*") {
+            result += ".*";
+        } else if (ch == "?") {
+            result += ".";
+        } else if (ch == "[") {
+            int close = pattern.find("]", offset);
+            if (close < 0) {
+                result += "\\[";
+                continue;
+            }
+            string chars = pattern.substr(offset, close - offset);
+            offset = close + 1;
+            if (chars.startsWith("!")) {
+                chars = "^" + chars.substr(1);
+            } else if (chars.startsWith("^")) {
+                chars = "\\" + chars;
+            }
+            result += "[" + chars + "]";
+        } else {
+            result += regex_escape(ch);
+        }
+    }
+    return result + "$";
+}
+
+bool sub matches_file(string path, list<Regex> includes, list<Regex> excludes) {
+    if (includes) {
+        bool matched = False;
+        foreach Regex pattern in (includes) {
+            if (pattern.match(path)) {
+                matched = True;
+                break;
+            }
+        }
+        if (!matched) {
+            return False;
+        }
+    }
+    foreach Regex pattern in (excludes) {
+        if (pattern.match(path)) {
+            return False;
+        }
+    }
+    return True;
+}
+
+bool sub contains_any(string line, list<string> hints) {
+    foreach string hint in (hints) {
+        if (line.find(hint) >= 0) {
+            return True;
+        }
+    }
+    return False;
+}
+
+bool sub materialized_string_get(string path, string line, string context_text) {
+    if (basename(path) == "QoreStringNode.cpp" && line.find("n.get<const QoreStringNode>") >= 0) {
+        return True;
+    }
+    if ((line.find(".get<") < 0 && line.find("->get<") < 0)
+            || line.find("QoreStringNode") < 0) {
+        return False;
+    }
+    if (contains_any(context_text, (
+            "ensure_unique(v",
+            "ensure_unique(hi.get()",
+            "lvh.ensureUnique()",
+            "val.ensureUnique()",
+            "v.ensureUnique()",
+        ))) {
+        return True;
+    }
+    list<string> context_lines = context_text.split("\n");
+    int start = context_lines.size() > 20 ? context_lines.size() - 20 : 0;
+    string near_text = join("\n", context_lines[start..]);
+    return near_text.find("isShortString()") >= 0 && near_text.find("getShortString(") >= 0;
+}
+
+string sub classify(string line, string kind) {
+    if (line.find("QoreStringValueHelper") >= 0 || line.find("QoreStringNodeValueHelper") >= 0) {
+        return "skip-helper";
+    }
+    if (kind == "hard-macro" || kind == "temp-encoding") {
+        return "high";
+    }
+    if (contains_any(line, MUTABLE_HINTS)) {
+        return "mutable-review";
+    }
+    if (contains_any(line, HIGH_RISK_HINTS)) {
+        return "high";
+    }
+    if (line.find("getType() == NT_STRING") >= 0 || line.find("getType()!= NT_STRING") >= 0
+            || line.find("getType() != NT_STRING") >= 0 || kind == "direct-get") {
+        return "high";
+    }
+    return "review";
+}
+
+sub scan_file(string repo_name, string path, Regex candidate, list<hash<auto>> patterns,
+        list<Regex> includes, list<Regex> excludes, hash<string, bool> risk_filter,
+        reference<list<hash<auto>>> rows, reference<hash<string, int>> counters,
+        reference<hash<string, int>> repo_counters) {
+    if (!matches_file(path, includes, excludes)) {
+        return;
+    }
+    string text;
+    try {
+        text = ReadOnlyFile::readTextFile(path);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("warn: cannot read %s: %s\n", path, ex.desc);
+        return;
+    }
+    list<string> lines = text.split("\n");
+    for (int index = 0; index < lines.size(); ++index) {
+        int line_number = index + 1;
+        string line = lines[index];
+        if (line.endsWith("\r")) {
+            line = line.substr(0, line.size() - 1);
+        }
+        if (!candidate.match(line)) {
+            continue;
+        }
+        foreach hash<auto> pattern in (patterns) {
+            if (!pattern.regex.match(line)) {
+                continue;
+            }
+            string kind = pattern.kind;
+            int context_start = index > 79 ? index - 79 : 0;
+            if (kind == "direct-get" && materialized_string_get(path, line,
+                    join("\n", lines[context_start..index]))) {
+                continue;
+            }
+            string risk = classify(line, kind);
+            if (risk == "skip-helper") {
+                continue;
+            }
+            ++counters{risk + "\t" + kind};
+            ++repo_counters{repo_name + "\t" + risk};
+            if (!risk_filter || exists risk_filter{risk}) {
+                push rows, (
+                    "repo": repo_name,
+                    "risk": risk,
+                    "kind": kind,
+                    "path": path,
+                    "line_number": line_number,
+                    "line": trim(line),
+                );
+            }
+        }
+    }
+}
+
+sub scan_tree(string repo_name, string path, Regex candidate, list<hash<auto>> patterns,
+        list<Regex> includes, list<Regex> excludes, hash<string, bool> risk_filter,
+        reference<list<hash<auto>>> rows, reference<hash<string, int>> counters,
+        reference<hash<string, int>> repo_counters) {
+    *hash<StatInfo> info = hlstat(path);
+    if (!exists info) {
+        printf("warn: cannot inspect %s\n", path);
+        return;
+    }
+    if (info.type != "DIRECTORY") {
+        if (info.type == "REGULAR" && source_file(path)) {
+            scan_file(repo_name, path, candidate, patterns, includes, excludes, risk_filter,
+                \rows, \counters, \repo_counters);
+        }
+        return;
+    }
+    Dir dir();
+    if (!dir.chdir(path)) {
+        printf("warn: cannot inspect %s\n", path);
+        return;
+    }
+    list<string> directories = ();
+    foreach string name in (dir.listNames()) {
+        string child = path + DirSep + name;
+        *hash<StatInfo> child_info = hlstat(child);
+        if (!exists child_info || child_info.type == "SYMBOLIC-LINK") {
+            continue;
+        }
+        if (child_info.type == "DIRECTORY") {
+            if (!should_skip_dir(name)) {
+                push directories, child;
+            }
+        } else if (child_info.type == "REGULAR" && source_file(child)) {
+            scan_file(repo_name, child, candidate, patterns, includes, excludes, risk_filter,
+                \rows, \counters, \repo_counters);
+        }
+    }
+    foreach string child in (directories) {
+        scan_tree(repo_name, child, candidate, patterns, includes, excludes, risk_filter,
+            \rows, \counters, \repo_counters);
+    }
+}
+
+sub main() {
+    GetOpt parser(Opts);
+    hash<auto> options = parser.parse3(\ARGV);
+    if (options.help) {
+        usage();
+    }
+
+    list<string> risks = options.risk ?? ();
+    hash<string, bool> risk_filter = {};
+    const hash<string, bool> ValidRisks = (
+        "high": True,
+        "mutable-review": True,
+        "review": True,
+        "skip-helper": True,
+    );
+    foreach string risk in (risks) {
+        if (!exists ValidRisks{risk}) {
+            stderr.printf("%s: invalid risk class: %s\n", get_script_name(), risk);
+            exit(2);
+        }
+        risk_filter{risk} = True;
+    }
+
+    list<Regex> includes = map new Regex(glob_regex($1)), options.include ?? ();
+    list<Regex> excludes = map new Regex(glob_regex($1)), options.exclude ?? ();
+    list<string> roots = map canonical($1), ARGV ? ARGV : (".",);
+    if (options.sibling_modules) {
+        string base = canonical(options.sibling_modules_base ?? "~/src/qore/git");
+        Dir dir();
+        if (!dir.chdir(base)) {
+            stderr.printf("%s: cannot inspect sibling module directory: %s\n", get_script_name(), base);
+            exit(1);
+        }
+        foreach string name in (sort(dir.listNames())) {
+            string path = base + DirSep + name;
+            if (name.startsWith("module-") && is_dir(path)) {
+                push roots, realpath(path);
+            }
+        }
+    }
+
+    list<hash<auto>> patterns = (
+        ("kind": "direct-get", "regex": new Regex("(?:\\.|->)get<\\s*(?:const\\s+)?QoreStringNode\\s*\\*?\\s*>\\s*\\(")),
+        ("kind": "hard-macro", "regex": new Regex("\\bHARD_QORE_VALUE_STRING\\b|\\bHARD_QORE_VALUE_PARAM\\b.*QoreStringNode")),
+        ("kind": "temp-encoding", "regex": new Regex("\\bTempEncodingHelper\\s*\\([^;\\n]*(?:QoreStringNode|getKeyValue|retrieveEntry|\\.get<)")),
+    );
+    Regex candidate("QoreStringNode|HARD_QORE_VALUE_|TempEncodingHelper");
+    list<hash<auto>> rows = ();
+    hash<string, int> counters = {};
+    hash<string, int> repo_counters = {};
+    foreach string root in (roots) {
+        scan_tree(basename(root), root, candidate, patterns, includes, excludes, risk_filter,
+            \rows, \counters, \repo_counters);
+    }
+
+    if (!options.summary_only) {
+        foreach hash<auto> row in (rows) {
+            printf("%s\t%s\t%s\t%s:%d\t%s\n", row.repo, row.risk, row.kind,
+                row.path, row.line_number, row.line);
+        }
+    }
+    print("\nsummary by risk/kind:\n");
+    foreach string key in (sort(counters.keys())) {
+        printf("%s\t%d\n", key, counters{key});
+    }
+    print("\nsummary by repo/risk:\n");
+    foreach string key in (sort(repo_counters.keys())) {
+        printf("%s\t%d\n", key, repo_counters{key});
+    }
+}
+
+main();

@@ -1,0 +1,435 @@
+#!/usr/bin/env -S qore --exec-mode=ast
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Catalog every emitExceptionCheck() call site in lib/QoreIRToLLVM.cpp.
+
+%modern
+
+const FAST_PATH_HELPERS = (
+    "emitAnyCmpFastPath": "qore_rt_comparison_op",
+    "emitAnyCmpSpaceshipFastPath": "qore_rt_comparison_op",
+    "emitAnyArithFastPath": "qore_rt_binary_op",
+    "emitAnyBitwiseFastPath": "qore_rt_binary_op",
+    "emitAnyUnaryFastPath": "qore_rt_unary_op",
+    "emitAnyCompoundAssignFastPath": "qore_rt_binary_op",
+);
+
+hash<string, bool> sub value_set(list<string> values) {
+    hash<string, bool> result = {};
+    foreach string value in (values) {
+        result{value} = True;
+    }
+    return result;
+}
+
+list<string> sub sorted_count_keys(hash<string, list<hash<auto>>> groups) {
+    return sort(groups.keys(), int sub(string left, string right) {
+        int count_cmp = groups{right}.size() <=> groups{left}.size();
+        return count_cmp ? count_cmp : left <=> right;
+    });
+}
+
+*string sub first_group(Regex pattern, string line) {
+    *list<*string> groups = pattern.extractGroups(line);
+    return groups ? groups[0] : NOTHING;
+}
+
+*string sub nearest_preceding(list<string> lines, int line_index, Regex pattern) {
+    int lower = max(0, line_index - 200);
+    for (int index = line_index - 1; index > lower; --index) {
+        string line = lines[index];
+        if (line.find("case QoreIROpcode::") < 0) {
+            continue;
+        }
+        *string match = first_group(pattern, line);
+        if (exists match) {
+            return match;
+        }
+    }
+    return NOTHING;
+}
+
+*string sub nearest_preceding_helper(list<string> lines, int line_index,
+        Regex case_pattern, Regex helper_pattern, Regex fast_path_pattern) {
+    list<string> helpers = ();
+    *string fast_path;
+    int lower = max(0, line_index - 200);
+    for (int index = line_index - 1; index > lower; --index) {
+        string line = lines[index];
+        if (line.find("case QoreIROpcode::") >= 0 && case_pattern.match(line)) {
+            break;
+        }
+        if (!exists fast_path && line.find("emitAny") >= 0) {
+            fast_path = first_group(fast_path_pattern, line);
+        }
+        *string helper = line.find("getOrInsertFunction(") >= 0
+            ? first_group(helper_pattern, line) : NOTHING;
+        if (exists helper) {
+            push helpers, helper;
+        }
+    }
+    if (exists fast_path) {
+        return FAST_PATH_HELPERS{fast_path} + " (via " + fast_path + ")";
+    }
+    if (!helpers) {
+        return NOTHING;
+    }
+    if (helpers.size() == 1) {
+        return helpers[0];
+    }
+    return join(" / ", sort(value_set(helpers).keys()));
+}
+
+string sub site_pattern(list<string> lines, int line_index, Regex maybe_invoke,
+        Regex create_call, Regex aot_mode) {
+    bool has_invoke = False;
+    bool has_call = False;
+    bool has_aot_mode = False;
+    int lower = max(0, line_index - 100);
+    for (int index = line_index - 1; index > lower; --index) {
+        string line = lines[index];
+        if (!has_invoke && line.find("emitMaybeInvoke(") >= 0) {
+            has_invoke = True;
+        }
+        if (!has_call && line.find("builder->CreateCall(") >= 0) {
+            has_call = create_call.match(line);
+        }
+        if (!has_aot_mode && line.find("aot_mode") >= 0) {
+            has_aot_mode = aot_mode.match(line);
+        }
+    }
+    if (has_invoke && !has_call) {
+        return "invoke_only";
+    }
+    if (has_invoke && has_call && has_aot_mode) {
+        return "aot_invoke_jit_createcall";
+    }
+    if (has_invoke && has_call) {
+        return "mixed_invoke_createcall";
+    }
+    return has_call ? "createcall_only" : "unclear";
+}
+
+list<hash<auto>> sub phase_categories() {
+    return (
+        (
+            "name": "Local access",
+            "members": value_set((
+                "qore_rt_load_local", "qore_rt_load_local_aot",
+                "qore_rt_assign_local", "qore_rt_assign_local_aot",
+                "qore_rt_clear_local", "qore_rt_clear_local_aot",
+                "qore_rt_instantiate_local", "qore_rt_instantiate_local_aot",
+                "qore_rt_uninstantiate_local",
+                "qore_rt_load_closure_aot", "qore_rt_store_closure_aot",
+                "qore_rt_pop_closure_var_aot",
+                "qore_rt_load_thread_local", "qore_rt_load_thread_local_aot",
+                "qore_rt_store_thread_local", "qore_rt_store_thread_local_aot",
+                "qore_rt_load_global", "qore_rt_load_global_aot",
+                "qore_rt_store_global", "qore_rt_store_global_aot",
+                "qore_rt_load_static_var",
+                "qore_rt_load_constant", "qore_rt_load_constant_value",
+            )),
+        ),
+        (
+            "name": "Expression / value",
+            "members": value_set((
+                "qore_rt_invoke_expr", "qore_rt_invoke_expr_aot",
+                "qore_rt_make_string", "qore_rt_make_list", "qore_rt_make_hash",
+                "qore_rt_make_hash_const_keys", "qore_rt_make_enum",
+                "qore_rt_new_complex_hash", "qore_rt_new_complex_list",
+                "qore_rt_new_hash_decl", "qore_rt_new_hash_decl_from_hash",
+                "qore_rt_new_hash_decl_from_hash_by_path",
+                "qore_rt_hash_key_access", "qore_rt_hash_key_store_cow",
+                "qore_rt_hash_key_store_cow_aot",
+                "qore_rt_hash_key_store_dynamic_cow",
+                "qore_rt_hash_key_store_dynamic_cow_aot",
+                "qore_rt_hash_set_key_value",
+                "qore_rt_list_index_access", "qore_rt_list_push",
+                "qore_rt_list_index_store_cow", "qore_rt_list_index_store_cow_aot",
+                "qore_rt_sprintf", "qore_rt_cast_with_inner",
+                "qore_rt_cast_with_inner_aot", "qore_rt_cast_by_type_path",
+                "qore_rt_coerce_value", "qore_rt_coerce_value_aot",
+                "qore_rt_strip_complex_type",
+                "qore_rt_create_call_ref", "qore_rt_create_closure",
+                "qore_rt_create_method_ref", "qore_rt_create_parse_ref",
+                "qore_rt_vrn_construct",
+                "qore_rt_dot_eval_with_base", "qore_rt_dot_eval_with_base_aot",
+                "qore_rt_dot_eval_pseudo_method_direct",
+                "qore_rt_call_method_direct", "qore_rt_call_method_fast",
+                "qore_rt_call_static_method_direct", "qore_rt_call_self_recursive",
+                "qore_rt_call_fast_with_target", "qore_rt_call_with_args",
+                "qore_rt_call_ref_fast", "qore_rt_instanceof",
+                "qore_rt_instanceof_by_type_path", "qore_rt_background_self_call",
+                "qore_rt_background_self_call_aot", "qore_rt_regex_op_by_pattern",
+                "qore_rt_regex_op_with_operand", "qore_rt_regex_op_with_operand_aot",
+                "qore_rt_get_regex_case_aot", "qore_rt_switch_regex_match",
+                "qore_rt_switch_case_match",
+            )),
+        ),
+        (
+            "name": "Lvalue ops",
+            "members": value_set((
+                "qore_rt_lvalue_unary", "qore_rt_lvalue_unary_aot",
+                "qore_rt_lvalue_binary", "qore_rt_lvalue_binary_aot",
+                "qore_rt_lvalue_ternary", "qore_rt_lvalue_ternary_aot",
+                "qore_rt_lvalue_load", "qore_rt_lvalue_load_aot",
+                "qore_rt_lv_path_ternary", "qore_rt_lv_path_ternary_aot",
+            )),
+        ),
+        (
+            "name": "Iterator",
+            "members": value_set((
+                "qore_rt_iterator_create", "qore_rt_iterator_create_aot",
+                "qore_rt_iterator_create_reverse", "qore_rt_iterator_next",
+                "qore_rt_ref_foreach_init", "qore_rt_ref_foreach_get_entry",
+                "qore_rt_ref_foreach_record", "qore_rt_ref_foreach_finalize",
+                "qore_rt_ref_foreach_cleanup",
+            )),
+        ),
+        (
+            "name": "Fast-path slow-route helpers",
+            "members": value_set((
+                "qore_rt_comparison_op", "qore_rt_binary_op", "qore_rt_unary_op",
+            )),
+        ),
+        (
+            "name": "Other",
+            "members": value_set((
+                "qore_rt_exec_statement", "qore_rt_get_int64", "qore_rt_decref",
+            )),
+        ),
+    );
+}
+
+sub main() {
+    string root = realpath(dirname(get_script_path()) + DirSep + "..");
+    list<string> lines = ReadOnlyFile::readTextFile(root + "/lib/QoreIRToLLVM.cpp").split("\n");
+    list<string> jit_lines = ReadOnlyFile::readTextFile(root + "/lib/JITRuntime.cpp").split("\n");
+
+    Regex throwing_pattern("qore_rt_(\\w+)_throwing\\s*\\(");
+    hash<string, bool> throwing = {};
+    foreach string line in (jit_lines) {
+        *string name = line.find("_throwing") >= 0
+            ? first_group(throwing_pattern, line) : NOTHING;
+        if (exists name) {
+            throwing{"qore_rt_" + name} = True;
+        }
+    }
+
+    list<int> sites = ();
+    int line_number = 0;
+    foreach string line in (lines) {
+        ++line_number;
+        if (line.find("emitExceptionCheck(") >= 0
+                && line.find("void QoreIRToLLVM::emitExceptionCheck") < 0) {
+            push sites, line_number;
+        }
+    }
+
+    Regex case_pattern("\\bcase\\s+QoreIROpcode::(\\w+)\\s*:");
+    Regex helper_pattern("getOrInsertFunction\\(\\s*\"(qore_rt_\\w+)\"");
+    Regex fast_path_pattern("\\b(" + join("|", FAST_PATH_HELPERS.keys()) + ")\\(");
+    Regex maybe_invoke("\\bemitMaybeInvoke\\(");
+    Regex create_call("\\bbuilder->CreateCall\\(\\s*\\w+\\b");
+    Regex aot_mode("\\bif\\s*\\(\\s*aot_mode\\s*\\)");
+
+    list<hash<auto>> rows = ();
+    hash<string, list<hash<auto>>> by_helper = {};
+    hash<string, list<hash<auto>>> by_opcode = {};
+    hash<string, list<hash<auto>>> by_pattern = {};
+    foreach int site in (sites) {
+        string opcode = nearest_preceding(lines, site, case_pattern) ?? "(unknown)";
+        string helper = nearest_preceding_helper(lines, site, case_pattern,
+            helper_pattern, fast_path_pattern) ?? "(none)";
+        list<string> helper_bases = ();
+        if (helper != "(none)") {
+            if (helper.find(" (via ") >= 0) {
+                helper_bases = (helper.split(" ")[0],);
+            } else if (helper.find(" / ") >= 0) {
+                helper_bases = map trim($1), helper.split(" / ");
+            } else {
+                helper_bases = (helper,);
+            }
+        }
+        list<string> twin_hits = ();
+        foreach string base in (helper_bases) {
+            if (exists throwing{base}) {
+                push twin_hits, base + "_throwing";
+            }
+        }
+        string twin = twin_hits[0] ?? "";
+        string pattern = site_pattern(lines, site, maybe_invoke, create_call, aot_mode);
+        hash<auto> row = (
+            "site": site,
+            "opcode": opcode,
+            "helper": helper,
+            "has_twin": twin ? True : False,
+            "twin": twin,
+            "pattern": pattern,
+        );
+        push rows, row;
+        push by_helper{helper}, row;
+        push by_opcode{opcode}, row;
+        push by_pattern{pattern}, row;
+    }
+
+    StringOutputStream output_stream();
+    StreamWriter output(output_stream);
+    output.printf("Total emitExceptionCheck call sites: %d\n", sites.size());
+    output.printf("Distinct helpers referenced: %d\n", by_helper.size());
+    output.printf("Distinct opcodes: %d\n\n", by_opcode.size());
+    output.print("### Pattern breakdown\n");
+    foreach string pattern in (sorted_count_keys(by_pattern)) {
+        output.printf("  - `%s`: %d\n", pattern, by_pattern{pattern}.size());
+    }
+    output.printf("\nExisting _throwing wrappers (%d):\n", throwing.size());
+    foreach string name in (sort(throwing.keys())) {
+        output.printf("  - %s\n", name);
+    }
+    output.print("\n## Migration buckets\n\n");
+
+    list<hash<auto>> bucket1 = ();
+    list<hash<auto>> bucket2 = ();
+    list<hash<auto>> bucket3 = ();
+    list<hash<auto>> bucket_none = ();
+    foreach hash<auto> row in (rows) {
+        if (row.helper == "(none)") {
+            push bucket_none, row;
+        } else if (row.has_twin && inlist(row.pattern,
+                ("invoke_only", "aot_invoke_jit_createcall"))) {
+            push bucket1, row;
+        } else if (row.has_twin) {
+            push bucket2, row;
+        } else {
+            push bucket3, row;
+        }
+    }
+
+    output.printf("### Bucket 1 — DONE (already invoke, throwing twin exists): %d\n", bucket1.size());
+    foreach hash<auto> row in (bucket1) {
+        output.printf("    - line %d (%s) → `%s` [%s]\n",
+            row.site, row.opcode, row.helper, row.pattern);
+    }
+    output.printf("\n### Bucket 2 — EASY (has throwing twin, but some path uses CreateCall): %d\n",
+        bucket2.size());
+    foreach hash<auto> row in (bucket2) {
+        output.printf("    - line %d (%s) → `%s` → twin: `%s` [%s]\n",
+            row.site, row.opcode, row.helper, row.twin, row.pattern);
+    }
+    output.printf("\n### Bucket 3 — NEEDS NEW _throwing WRAPPER: %d\n", bucket3.size());
+    hash<string, list<hash<auto>>> bucket3_by_helper = {};
+    foreach hash<auto> row in (bucket3) {
+        push bucket3_by_helper{row.helper}, row;
+    }
+    foreach string helper in (sorted_count_keys(bucket3_by_helper)) {
+        list<hash<auto>> helper_rows = bucket3_by_helper{helper};
+        output.printf("  - `%s`: %d sites\n", helper, helper_rows.size());
+        foreach hash<auto> row in (helper_rows) {
+            output.printf("      - line %d (%s) [%s]\n", row.site, row.opcode, row.pattern);
+        }
+    }
+    output.printf("\n### Bucket NONE — could not identify preceding helper (inspect manually): %d\n",
+        bucket_none.size());
+    foreach hash<auto> row in (bucket_none) {
+        output.printf("    - line %d (%s) [%s]\n", row.site, row.opcode, row.pattern);
+    }
+
+    output.print("\n## Phase B plan — unique BASE helpers needing _throwing wrappers\n\n");
+    output.print("Note: AOT Step 5 targets AOT-mode compile speed. Wrappers named\n");
+    output.print("`qore_rt_X_aot_throwing` are the critical ones; JIT-mode `qore_rt_X_throwing`\n");
+    output.print("are nice-to-have for consistency but won't affect the HttpServer.qm compile\n");
+    output.print("cliff (that code runs in AOT mode).\n\n");
+
+    hash<string, list<hash<auto>>> needed = {};
+    foreach hash<auto> row in (bucket3) {
+        list<string> bases = row.helper.find(" (via ") >= 0
+            ? (row.helper.split(" ")[0],)
+            : map trim($1), row.helper.split(" / ");
+        foreach string base in (bases) {
+            push needed{base}, row;
+        }
+    }
+
+    hash<string, bool> classified = {};
+    foreach hash<auto> category in (phase_categories()) {
+        output.printf("### %s\n", category.name);
+        list<string> hits = ();
+        foreach string helper in (sort(category.members.keys())) {
+            if (exists needed{helper}) {
+                push hits, helper;
+                classified{helper} = True;
+            }
+        }
+        if (!hits) {
+            output.print("  (no sites in this category)\n");
+        }
+        foreach string helper in (hits) {
+            list<hash<auto>> helper_rows = needed{helper};
+            list<string> site_strings = map sprintf("%d(%s)", $1.site, $1.opcode), helper_rows;
+            string more = "";
+            if (site_strings.size() > 6) {
+                more = sprintf(" +%d more", site_strings.size() - 6);
+                site_strings = site_strings[0..5];
+            }
+            output.printf("  - `%s` (%d sites): %s%s\n", helper, helper_rows.size(),
+                join(", ", site_strings), more);
+        }
+        output.print("\n");
+    }
+
+    list<string> leftover = ();
+    foreach string helper in (needed.keys()) {
+        if (!exists classified{helper}) {
+            push leftover, helper;
+        }
+    }
+    if (leftover) {
+        output.print("### Uncategorized (needs review)\n");
+        foreach string helper in (sort(leftover)) {
+            list<hash<auto>> helper_rows = needed{helper};
+            list<string> site_strings = map sprintf("%d(%s)", $1.site, $1.opcode), helper_rows;
+            output.printf("  - `%s` (%d sites): %s\n", helper, helper_rows.size(),
+                join(", ", site_strings.size() > 6 ? site_strings[0..5] : site_strings));
+        }
+        output.print("\n");
+    }
+
+    output.print("\n## Sites grouped by helper\n\n");
+    foreach string helper in (sorted_count_keys(by_helper)) {
+        list<hash<auto>> helper_rows = by_helper{helper};
+        bool has_twin = False;
+        string twin = "";
+        foreach hash<auto> row in (helper_rows) {
+            if (row.has_twin) {
+                has_twin = True;
+                twin = row.twin;
+                break;
+            }
+        }
+        string tag = has_twin
+            ? " [THROWING TWIN: " + twin + "]"
+            : " [no throwing twin]";
+        if (helper == "(none)") {
+            tag = " [no helper — likely post-call cleanup or non-helper site]";
+        }
+        output.printf("- `%s`: %d sites%s\n", helper, helper_rows.size(), tag);
+        foreach hash<auto> row in (helper_rows) {
+            output.printf("    - line %d (%s) [%s]\n", row.site, row.opcode, row.pattern);
+        }
+    }
+
+    output.print("\n## Sites grouped by opcode\n\n");
+    foreach string opcode in (sorted_count_keys(by_opcode)) {
+        list<hash<auto>> opcode_rows = by_opcode{opcode};
+        output.printf("- `%s`: %d sites\n", opcode, opcode_rows.size());
+        foreach hash<auto> row in (opcode_rows) {
+            output.printf("    - line %d → `%s`%s [%s]\n", row.site, row.helper,
+                row.has_twin ? " ✓twin" : "", row.pattern);
+        }
+    }
+    print(output_stream.getData());
+}
+
+main();
