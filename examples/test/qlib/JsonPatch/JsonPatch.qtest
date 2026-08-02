@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JsonPatch.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires JsonPatch
+
+%exec-class JsonPatchTest
+
+public class JsonPatchTest inherits QUnit::Test {
+    constructor() : Test("JsonPatchTest", "1.0") {
+        addTestCase("JSON Pointer escaping round trips", \testPointerEscape());
+        addTestCase("JSON Pointer splits and joins", \testPointerSplitJoin());
+        addTestCase("JSON Pointer resolves values", \testPointerGet());
+        addTestCase("JSON Pointer reports missing locations", \testPointerMissing());
+        addTestCase("JSON Pointer rejects malformed pointers", \testPointerMalformed());
+        addTestCase("JSON Pointer split matches the json module's lookup", \testPointerSplitAgrees());
+        addTestCase("diff of equal documents is empty", \testDiffEqual());
+        addTestCase("diff ignores hash member order", \testDiffMemberOrder());
+        addTestCase("diff adds and removes object members", \testDiffObjectMembers());
+        addTestCase("diff replaces changed array elements", \testDiffArrayReplace());
+        addTestCase("diff grows and shrinks arrays", \testDiffArrayResize());
+        addTestCase("diff replaces the whole document on a type change", \testDiffWholeDocument());
+        addTestCase("diff round trips nested structures", \testDiffNested());
+        addTestCase("apply handles every operation", \testApplyOperations());
+        addTestCase("apply appends with the '-' index", \testApplyAppend());
+        addTestCase("apply rejects invalid operations", \testApplyNegative());
+        addTestCase("test operation compares structurally", \testTestOperation());
+        addTestCase("move rejects moving into its own child", \testMoveIntoChild());
+        addTestCase("apply does not modify its input", \testApplyImmutable());
+        set_return_value(main());
+    }
+
+    testPointerEscape() {
+        assertEq("a~1b", json_pointer_escape("a/b"));
+        assertEq("a~0b", json_pointer_escape("a~b"));
+        # "~1" must survive a round trip: escaping "~" first is what makes that work
+        assertEq("a~01b", json_pointer_escape("a~1b"));
+        assertEq("a~1b", json_pointer_unescape(json_pointer_escape("a~1b")));
+        assertEq("a/b~c", json_pointer_unescape(json_pointer_escape("a/b~c")));
+        assertEq("", json_pointer_escape(""));
+    }
+
+    testPointerSplitJoin() {
+        assertEq((), json_pointer_split(""));
+        assertEq(("a", "b"), json_pointer_split("/a/b"));
+        # an empty reference token is legal and names a member called ""
+        assertEq(("",), json_pointer_split("/"));
+        assertEq(("a/b", "c~d"), json_pointer_split("/a~1b/c~0d"));
+        assertEq("", json_pointer_join(()));
+        assertEq("/a/b", json_pointer_join(("a", "b")));
+        assertEq("/a~1b", json_pointer_join(("a/b",)));
+        assertEq("/l/0", json_pointer_join(("l", 0)));
+    }
+
+    testPointerGet() {
+        hash<auto> doc = {
+            "a": {"b": (10, 20, {"c": "deep"})},
+            "": "empty-key",
+            "a/b": {"c~d": 42},
+        };
+        assertEq(doc, json_pointer_get(doc, ""));
+        assertEq(20, json_pointer_get(doc, "/a/b/1"));
+        assertEq("deep", json_pointer_get(doc, "/a/b/2/c"));
+        assertEq("empty-key", json_pointer_get(doc, "/"));
+        assertEq(42, json_pointer_get(doc, "/a~1b/c~0d"));
+        assertTrue(json_pointer_exists(doc, "/a/b/0"));
+    }
+
+    testPointerMissing() {
+        hash<auto> doc = {"a": (1, 2)};
+        # json_pointer_exists() comes from the json module; asserted here because the patch
+        # apply path relies on it to reject operations that target a missing location
+        assertFalse(json_pointer_exists(doc, "/b"));
+        assertFalse(json_pointer_exists(doc, "/a/2"));
+        # a scalar has no members
+        assertFalse(json_pointer_exists(doc, "/a/0/x"));
+        assertFalse(json_pointer_exists(doc, "/a/-"));
+        # RFC 6901: an array index must not have a leading zero
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_exists(), (doc, "/a/01"));
+    }
+
+    testPointerMalformed() {
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_split(), ("a/b",));
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_split(), ("/a~2b",));
+        assertThrows("JSON-POINTER-ERROR", \json_pointer_get(), ({}, "no-slash"));
+    }
+
+    #! The split must agree with the json module's lookup, since both walk the same pointer
+    testPointerSplitAgrees() {
+        hash<auto> doc = {"a/b": {"c~d": (7, 8)}, "": {"": "deep"}};
+        foreach string ptr in (("/a~1b/c~0d/1", "//", "")) {
+            list<string> tokens = json_pointer_split(ptr);
+            assertEq(ptr, json_pointer_join(tokens),
+                sprintf("%y round trips through split and join", ptr));
+            assertTrue(json_pointer_exists(doc, ptr), sprintf("%y exists", ptr));
+        }
+        assertEq(8, json_pointer_get(doc, "/a~1b/c~0d/1"));
+        assertEq("deep", json_pointer_get(doc, "//"));
+    }
+
+    testDiffEqual() {
+        assertEq((), json_patch_diff({"a": 1}, {"a": 1}));
+        assertEq((), json_patch_diff((1, 2, 3), (1, 2, 3)));
+        assertEq((), json_patch_diff("x", "x"));
+        assertEq((), json_patch_diff({}, {}));
+    }
+
+    testDiffMemberOrder() {
+        # JSON objects are unordered: a reordered hash is the same document
+        assertEq((), json_patch_diff({"a": 1, "b": 2}, {"b": 2, "a": 1}));
+        assertTrue(json_patch_equal({"a": 1, "b": 2}, {"b": 2, "a": 1}));
+    }
+
+    testDiffObjectMembers() {
+        hash<auto> from = {"keep": 1, "drop": 2, "change": 3};
+        hash<auto> to = {"keep": 1, "change": 4, "new": 5};
+        list<hash<auto>> ops = json_patch_diff(from, to);
+        assertEq(3, ops.size());
+        assertTrue(json_patch_equal(json_patch_apply(from, ops), to));
+
+        # removals are emitted before additions so the patch reads top-down
+        assertEq("remove", ops[0].op);
+        assertEq("/drop", ops[0].path);
+    }
+
+    testDiffArrayReplace() {
+        hash<auto> from = {"l": (1, 2, 3)};
+        hash<auto> to = {"l": (1, 9, 3)};
+        list<hash<auto>> ops = json_patch_diff(from, to);
+        assertEq(({"op": "replace", "path": "/l/1", "value": 9},), ops);
+        assertTrue(json_patch_equal(json_patch_apply(from, ops), to));
+    }
+
+    testDiffArrayResize() {
+        hash<auto> from = {"l": (1, 2, 3, 4)};
+        hash<auto> to = {"l": (1, 9)};
+        list<hash<auto>> shrink = json_patch_diff(from, to);
+        assertTrue(json_patch_equal(json_patch_apply(from, shrink), to));
+        # removals must come highest-index-first, or the second removal targets the wrong
+        # element once the first has shifted everything down
+        assertEq("/l/3", shrink[1].path);
+        assertEq("/l/2", shrink[2].path);
+
+        list<hash<auto>> grow = json_patch_diff({"l": (1,)}, {"l": (1, 2, 3)});
+        assertEq(({"op": "add", "path": "/l/1", "value": 2},
+            {"op": "add", "path": "/l/2", "value": 3}), grow);
+        assertTrue(json_patch_equal(json_patch_apply({"l": (1,)}, grow), {"l": (1, 2, 3)}));
+
+        # emptying an array
+        list<hash<auto>> empty = json_patch_diff({"l": (1, 2)}, {"l": ()});
+        assertTrue(json_patch_equal(json_patch_apply({"l": (1, 2)}, empty), {"l": ()}));
+    }
+
+    testDiffWholeDocument() {
+        list<hash<auto>> ops = json_patch_diff({"a": 1}, (1, 2));
+        assertEq(({"op": "replace", "path": "", "value": (1, 2)},), ops);
+        assertEq((1, 2), json_patch_apply({"a": 1}, ops));
+
+        # a scalar type change
+        assertEq(({"op": "replace", "path": "/a", "value": "1"},),
+            json_patch_diff({"a": 1}, {"a": "1"}));
+    }
+
+    testDiffNested() {
+        hash<auto> from = {
+            "run": {"id": "r1", "steps": ({"name": "a", "done": False},)},
+            "meta": {"tags": ("x",)},
+        };
+        hash<auto> to = {
+            "run": {"id": "r1", "steps": ({"name": "a", "done": True},
+                {"name": "b", "done": False})},
+            "meta": {"tags": (), "owner": "arno"},
+        };
+        list<hash<auto>> ops = json_patch_diff(from, to);
+        assertTrue(ops.size() > 0, "nested diff produces operations");
+        assertTrue(json_patch_equal(json_patch_apply(from, ops), to));
+    }
+
+    testApplyOperations() {
+        hash<auto> doc = {"users": {"old": {"n": 1}}, "t": {"default": 5}};
+
+        assertEq({"users": {"new": {"n": 1}}, "t": {"default": 5}},
+            json_patch_apply(doc, ({"op": "move", "from": "/users/old", "path": "/users/new"},)));
+
+        assertEq({"users": {"old": {"n": 1, "c": 5}}, "t": {"default": 5}},
+            json_patch_apply(doc, ({"op": "copy", "from": "/t/default",
+                "path": "/users/old/c"},)));
+
+        assertEq({"users": {"old": {"n": 1}}, "t": {}},
+            json_patch_apply(doc, ({"op": "remove", "path": "/t/default"},)));
+
+        assertEq({"users": {"old": {"n": 2}}, "t": {"default": 5}},
+            json_patch_apply(doc, ({"op": "replace", "path": "/users/old/n", "value": 2},)));
+
+        assertEq({"users": {"old": {"n": 1}}, "t": {"default": 5}, "x": 9},
+            json_patch_apply(doc, ({"op": "add", "path": "/x", "value": 9},)));
+
+        # operations apply in order, each seeing the previous one's result
+        assertEq({"a": 2},
+            json_patch_apply({}, ({"op": "add", "path": "/a", "value": 1},
+                {"op": "replace", "path": "/a", "value": 2})));
+
+        # an empty patch is a no-op
+        assertEq(doc, json_patch_apply(doc, ()));
+    }
+
+    testApplyAppend() {
+        assertEq({"l": (1, 9)},
+            json_patch_apply({"l": (1,)}, ({"op": "add", "path": "/l/-", "value": 9},)));
+        # inserting in the middle shifts the rest down
+        assertEq({"l": (1, 9, 2)},
+            json_patch_apply({"l": (1, 2)}, ({"op": "add", "path": "/l/1", "value": 9},)));
+        # "-" is not a valid target for replace: it addresses an element that does not exist
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            ({"l": (1,)}, ({"op": "replace", "path": "/l/-", "value": 9},)));
+    }
+
+    testApplyNegative() {
+        hash<auto> doc = {"a": {"b": 1}, "l": (1, 2)};
+
+        # replace requires the location to exist
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "replace", "path": "/missing", "value": 1},)));
+        # so does remove
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "remove", "path": "/missing"},)));
+        # add requires the parent to exist
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "add", "path": "/missing/child", "value": 1},)));
+        # an out-of-range array index
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "add", "path": "/l/9", "value": 1},)));
+        # unknown operation
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "frobnicate", "path": "/a"},)));
+        # missing members
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(), (doc, ({"path": "/a"},)));
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(), (doc, ({"op": "add"},)));
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "add", "path": "/a"},)));
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "move", "path": "/a"},)));
+        # a non-hash operation
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(), (doc, ("add",)));
+        # remove cannot target the whole document
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "remove", "path": ""},)));
+    }
+
+    testTestOperation() {
+        hash<auto> doc = {"a": {"b": (1, 2)}, "s": "x"};
+        assertEq(doc, json_patch_apply(doc, ({"op": "test", "path": "/s", "value": "x"},)));
+        # structural comparison, not identity
+        assertEq(doc, json_patch_apply(doc, ({"op": "test", "path": "/a",
+            "value": {"b": (1, 2)}},)));
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "test", "path": "/s", "value": "y"},)));
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "test", "path": "/missing", "value": "y"},)));
+    }
+
+    testMoveIntoChild() {
+        hash<auto> doc = {"a": {"b": {"c": 1}}};
+        assertThrows("JSON-PATCH-ERROR", \json_patch_apply(),
+            (doc, ({"op": "move", "from": "/a", "path": "/a/b/x"},)));
+        # moving to itself is a no-op, not an error
+        assertEq(doc, json_patch_apply(doc, ({"op": "move", "from": "/a", "path": "/a"},)));
+        # a shared name prefix is not an ancestor: "/ab" is not inside "/a"
+        hash<auto> doc2 = {"a": 1, "ab": {"x": 2}};
+        assertEq({"ab": {"x": 2}, "moved": 1},
+            json_patch_apply(doc2, ({"op": "move", "from": "/a", "path": "/moved"},)));
+    }
+
+    testApplyImmutable() {
+        hash<auto> doc = {"a": {"b": 1}, "l": (1, 2)};
+        hash<auto> orig = doc;
+        json_patch_apply(doc, ({"op": "replace", "path": "/a/b", "value": 99},
+            {"op": "add", "path": "/l/-", "value": 3}));
+        assertEq(orig, doc, "applying a patch does not modify the input document");
+    }
+}

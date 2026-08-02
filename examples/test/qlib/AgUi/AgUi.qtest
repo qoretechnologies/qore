@@ -1,0 +1,577 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AgUi.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires ConnectionProvider
+%requires AgUi
+
+%exec-class AgUiTest
+
+public class AgUiTest inherits QUnit::Test {
+    private {
+        #! Frames the emitter produced, in order
+        list<string> frames;
+
+        #! The emitter under test
+        AgUiEmitter emitter;
+    }
+
+    constructor() : Test("AgUiTest", "1.0") {
+        addTestCase("event type constants match the wire format", \testEventTypeConstants());
+        addTestCase("emitter frames SSE per the reference encoder", \testSseFraming());
+        addTestCase("emitter omits unset members", \testStripNothing());
+        addTestCase("run lifecycle is enforced", \testRunLifecycle());
+        addTestCase("runError ends the run once", \testRunErrorIdempotent());
+        addTestCase("text messages stream and reassemble", \testTextMessages());
+        addTestCase("tool calls stream and reassemble", \testToolCalls());
+        addTestCase("state deltas carry only the change", \testStateDelta());
+        addTestCase("first state delta sends a snapshot", \testFirstStateDeltaIsSnapshot());
+        addTestCase("state delta is skipped when nothing changed", \testStateDeltaNoop());
+        addTestCase("steps nest correctly", \testSteps());
+        addTestCase("reasoning events round trip", \testReasoning());
+        addTestCase("raw and custom events round trip", \testRawAndCustom());
+        addTestCase("client accepts split and merged frames", \testClientFraming());
+        addTestCase("client tolerates comments and CRLF", \testClientCommentsAndCrlf());
+        addTestCase("client preserves unknown events and members", \testForwardCompatibility());
+        addTestCase("client rejects malformed frames", \testClientNegative());
+        addTestCase("client tolerates a truncated stream", \testTruncatedStream());
+        addTestCase("run input renames ctx to context", \testRunAgentInputWire());
+        addTestCase("reference SDK fixtures round trip", \testReferenceFixtures());
+        addTestCase("connection provider integration", \testConnection());
+        set_return_value(main());
+    }
+
+    setUp() {
+        frames = ();
+        emitter = new AgUiEmitter(sub (string f) { frames += f; });
+    }
+
+    #! Parses every frame produced so far back into events
+    private list<hash<auto>> parseFrames() {
+        AgUiClient client(NOTHING, True);
+        foreach string f in (frames) {
+            client.feed(f);
+        }
+        return client.getEvents();
+    }
+
+    #! Feeds every frame produced so far to a fresh client and returns it
+    private AgUiClient replay() {
+        AgUiClient client(NOTHING, True);
+        foreach string f in (frames) {
+            client.feed(f);
+        }
+        return client;
+    }
+
+    testEventTypeConstants() {
+        # the wire values are SCREAMING_SNAKE_CASE; the protocol docs name the event classes in
+        # PascalCase, which is NOT what a peer accepts
+        assertEq("RUN_STARTED", AGUI_RunStarted);
+        assertEq("STATE_DELTA", AGUI_StateDelta);
+        assertEq("TEXT_MESSAGE_CONTENT", AGUI_TextMessageContent);
+        assertEq("TOOL_CALL_RESULT", AGUI_ToolCallResult);
+        assertEq("ACTIVITY_SNAPSHOT", AGUI_ActivitySnapshot);
+        assertEq("REASONING_MESSAGE_CONTENT", AGUI_ReasoningMessageContent);
+        assertEq("CUSTOM", AGUI_Custom);
+        assertEq("RAW", AGUI_Raw);
+        # every declared type must be in the list, and every listed type must be upper-case
+        assertEq(24, AgUiEventTypes.size());
+        foreach string t in (AgUiEventTypes) {
+            assertEq(t.upr(), t, sprintf("%y is upper-case", t));
+        }
+    }
+
+    testSseFraming() {
+        emitter.runStarted("t1", "r1");
+        assertEq(1, frames.size());
+        # the reference encoder emits a bare "data: <json>" line and a blank line; no event: or
+        # id: field, because a client dispatches on the JSON "type" member
+        assertTrue(frames[0] =~ /^data: \{/, "frame starts with a bare data: line");
+        assertTrue(frames[0] =~ /\n\n$/, "frame is terminated by a blank line");
+        # the JSON must not contain a newline: an embedded newline would start a second SSE
+        # data: line and change what the receiver reassembles
+        string payload = frames[0].substr(6, frames[0].length() - 8);
+        assertEq(-1, payload.find("\n"), "the JSON payload is on a single line");
+
+        hash<auto> event = parse_json(payload);
+        assertEq(AGUI_RunStarted, event.type);
+        assertEq("t1", event.threadId);
+        assertEq("r1", event.runId);
+        assertEq(NT_INT, event.timestamp.typeCode(), "timestamp is epoch milliseconds");
+        assertTrue(event.timestamp > 1700000000000, "timestamp is a plausible epoch ms value");
+
+        # the alternative encoder frames one event per line with no SSE wrapper
+        list<string> lines = ();
+        AgUiEmitter nd(sub (string f) { lines += f; }, \AgUiEmitter::encodeJsonLine());
+        nd.runStarted("t2", "r2");
+        assertEq(1, lines.size());
+        assertFalse(lines[0] =~ /^data: /, "NDJSON frames carry no SSE field");
+        assertEq(AGUI_RunStarted, parse_json(lines[0]).type);
+    }
+
+    testStripNothing() {
+        emitter.runStarted("t1", "r1");
+        # RUN_STARTED has no optional members set, so rawEvent must be absent rather than null
+        assertFalse(frames[0] =~ /rawEvent/, "unset members are omitted, not sent as null");
+        assertFalse(frames[0] =~ /null/, "no null appears on the wire");
+
+        emitter.custom("evt");
+        hash<auto> custom = parse_json(frames[1].substr(6));
+        assertFalse(custom.hasKey("value"), "an unset CUSTOM value is omitted");
+
+        # an explicit NULL is a value the caller asked for and must survive
+        emitter.custom("evt2", NULL);
+        assertTrue(frames[2] =~ /"value":null/, "an explicit NULL is preserved");
+
+        # nesting
+        assertEq({"a": {"b": 1}}, agui_strip_nothing({"a": {"b": 1, "c": NOTHING}, "d": NOTHING}));
+        assertEq({"l": ({"a": 1},)}, agui_strip_nothing({"l": ({"a": 1, "b": NOTHING},)}));
+    }
+
+    testRunLifecycle() {
+        assertFalse(emitter.isRunning());
+        string rid = emitter.runStarted("t1");
+        assertTrue(emitter.isRunning());
+        assertEq("t1", emitter.getThreadId());
+        assertEq(rid, emitter.getRunId());
+        # IDs are generated when not supplied
+        assertTrue(rid.val(), "a run ID is generated");
+
+        # a second run cannot start while the first is in progress
+        assertThrows("AGUI-STATE-ERROR", \emitter.runStarted(), ("t1", "r2"));
+
+        emitter.runFinished();
+        assertFalse(emitter.isRunning());
+        # a finished run may be followed by a new one
+        emitter.runStarted("t1", "r3");
+        assertEq("r3", emitter.getRunId());
+        emitter.runError("boom");
+
+        list<hash<auto>> events = parseFrames();
+        assertEq(AGUI_RunStarted, events[0].type);
+        assertEq(AGUI_RunFinished, events[1].type);
+        assertEq(AGUI_RunStarted, events[2].type);
+        assertEq(AGUI_RunError, events[3].type);
+        assertEq("boom", events[3].message);
+
+        # emitting outside a run is an error, not a silent no-op
+        AgUiEmitter fresh(sub (string f) {});
+        assertThrows("AGUI-STATE-ERROR", \fresh.runFinished());
+        assertThrows("AGUI-STATE-ERROR", \fresh.runError(), ("x",));
+    }
+
+    testRunErrorIdempotent() {
+        emitter.runStarted("t1", "r1");
+        emitter.runFinished();
+        # this is what makes "on_error emitter.runError(...)" next to a normal runFinished()
+        # safe: whichever ran first wins and the run emits exactly one terminal event
+        emitter.runError("late");
+        assertEq(2, frames.size(), "the second terminal event is suppressed");
+
+        emitter.runStarted("t1", "r2");
+        emitter.runError("first");
+        emitter.runFinished();
+        assertEq(4, frames.size());
+        assertEq(AGUI_RunError, parseFrames()[3].type);
+    }
+
+    testTextMessages() {
+        emitter.runStarted("t1", "r1");
+        string mid = emitter.startTextMessage();
+        emitter.textMessageContent(mid, "Hello, ");
+        emitter.textMessageContent(mid, "world");
+        emitter.endTextMessage(mid);
+        string mid2 = emitter.textMessage("one shot", AgUiRole::User);
+        emitter.runFinished();
+
+        AgUiClient client = replay();
+        assertEq("Hello, world", client.getMessageText(mid));
+        assertEq("one shot", client.getMessageText(mid2));
+
+        hash<AgUiRunState> st = client.getRunState();
+        assertEq((mid, mid2), st.messageOrder);
+        assertEq(AgUiRole::Assistant, st.messages{mid}.role);
+        assertEq(AgUiRole::User, st.messages{mid2}.role);
+        assertTrue(st.messages{mid}.complete);
+        assertTrue(st.finished);
+    }
+
+    testToolCalls() {
+        emitter.runStarted("t1", "r1");
+        string tid = emitter.startToolCall("deploy");
+        # arguments stream as text, so a front end can render them as they arrive
+        emitter.toolCallArgs(tid, "{\"env\":");
+        emitter.toolCallArgs(tid, "\"prod\"}");
+        emitter.endToolCall(tid);
+        emitter.toolCallResult(tid, "ok");
+
+        string tid2 = emitter.startToolCall("rollback", NOTHING, "msg-1");
+        emitter.toolCallArgsComplete(tid2, {"to": 3});
+        emitter.endToolCall(tid2);
+        emitter.runFinished();
+
+        hash<AgUiRunState> st = replay().getRunState();
+        assertEq((tid, tid2), st.toolCallOrder);
+        assertEq("deploy", st.toolCalls{tid}.name);
+        assertEq("{\"env\":\"prod\"}", st.toolCalls{tid}.args);
+        assertEq({"env": "prod"}, parse_json(st.toolCalls{tid}.args));
+        assertTrue(st.toolCalls{tid}.complete);
+        assertEq("ok", st.toolCalls{tid}.result);
+        assertEq("msg-1", st.toolCalls{tid2}.parentMessageId);
+        assertEq({"to": 3}, parse_json(st.toolCalls{tid2}.args));
+    }
+
+    testStateDelta() {
+        emitter.runStarted("t1", "r1");
+        emitter.stateSnapshot({"progress": 0, "items": (), "name": "x"});
+        assertTrue(emitter.stateDelta({"progress": 100, "items": ("a",), "name": "x"}));
+
+        list<hash<auto>> events = parseFrames();
+        assertEq(AGUI_StateSnapshot, events[1].type);
+        assertEq(AGUI_StateDelta, events[2].type);
+        # only what changed is on the wire
+        assertEq(2, events[2].delta.size());
+        assertFalse(frames[2] =~ /"name"/, "an unchanged member is not in the delta");
+
+        # the client rebuilds exactly what the server holds
+        AgUiClient client = replay();
+        assertEq({"progress": 100, "items": ("a",), "name": "x"}, client.getState());
+        assertEq(client.getState(), emitter.getState());
+    }
+
+    testFirstStateDeltaIsSnapshot() {
+        emitter.runStarted("t1", "r1");
+        # a client cannot apply a patch to a document it does not have
+        assertTrue(emitter.stateDelta({"a": 1}));
+        assertEq(AGUI_StateSnapshot, parseFrames()[1].type);
+        assertEq({"a": 1}, replay().getState());
+
+        # a new run resets the baseline, so the next delta is a snapshot again
+        emitter.runFinished();
+        emitter.runStarted("t1", "r2");
+        assertTrue(emitter.stateDelta({"a": 2}));
+        assertEq(AGUI_StateSnapshot, parseFrames()[4].type);
+    }
+
+    testStateDeltaNoop() {
+        emitter.runStarted("t1", "r1");
+        emitter.stateSnapshot({"a": 1});
+        assertFalse(emitter.stateDelta({"a": 1}), "an unchanged state emits nothing");
+        assertEq(2, frames.size());
+        # member order is not a change: JSON objects are unordered
+        emitter.stateSnapshot({"a": 1, "b": 2});
+        assertFalse(emitter.stateDelta({"b": 2, "a": 1}));
+        assertEq(3, frames.size());
+    }
+
+    testSteps() {
+        emitter.runStarted("t1", "r1");
+        emitter.stepStarted("outer");
+        emitter.stepStarted("inner");
+        emitter.stepFinished("inner");
+        AgUiClient mid = replay();
+        assertEq(("outer",), mid.getRunState().activeSteps);
+        emitter.stepFinished("outer");
+        emitter.runFinished();
+        assertEq((), replay().getRunState().activeSteps);
+
+        # a repeated step name unwinds one level at a time
+        AgUiEmitter e2(sub (string f) { frames += f; });
+        frames = ();
+        e2.runStarted("t1", "r1");
+        e2.stepStarted("same");
+        e2.stepStarted("same");
+        e2.stepFinished("same");
+        assertEq(("same",), replay().getRunState().activeSteps);
+    }
+
+    testReasoning() {
+        emitter.runStarted("t1", "r1");
+        string rid = emitter.reasoningStart();
+        emitter.reasoningMessageStart(rid);
+        emitter.reasoningMessageContent(rid, "thinking");
+        emitter.reasoningMessageEnd(rid);
+        emitter.reasoningEnd(rid);
+        emitter.runFinished();
+
+        list<hash<auto>> events = parseFrames();
+        assertEq(AGUI_ReasoningStart, events[1].type);
+        assertEq(AGUI_ReasoningMessageStart, events[2].type);
+        assertEq("reasoning", events[2].role);
+        assertEq("thinking", events[3].delta);
+        assertEq(AGUI_ReasoningMessageEnd, events[4].type);
+        assertEq(AGUI_ReasoningEnd, events[5].type);
+    }
+
+    testRawAndCustom() {
+        emitter.runStarted("t1", "r1");
+        emitter.raw({"provider": "x", "n": 1}, "backend");
+        emitter.custom("ui_component", {"id": "panel", "data": (1, 2)});
+        emitter.activitySnapshot("m1", "PLAN", {"tasks": ("search",)}, True);
+        emitter.activityDelta("m1", "PLAN",
+            ({"op": "replace", "path": "/tasks/0", "value": "done"},));
+        emitter.messagesSnapshot(({"role": "user", "content": "hi"},));
+        emitter.runFinished();
+
+        list<hash<auto>> events = parseFrames();
+        assertEq(AGUI_Raw, events[1].type);
+        assertEq({"provider": "x", "n": 1}, events[1].event);
+        assertEq("backend", events[1].source);
+        assertEq(AGUI_Custom, events[2].type);
+        assertEq("ui_component", events[2].name);
+        assertEq({"id": "panel", "data": (1, 2)}, events[2].value);
+        assertEq(AGUI_ActivitySnapshot, events[3].type);
+        assertTrue(events[3].replace);
+        assertEq(AGUI_ActivityDelta, events[4].type);
+        assertEq("PLAN", events[4].activityType);
+        assertEq(AGUI_MessagesSnapshot, events[5].type);
+        assertEq(1, events[5].messages.size());
+    }
+
+    testClientFraming() {
+        emitter.runStarted("t1", "r1");
+        string mid = emitter.startTextMessage();
+        emitter.textMessageContent(mid, "abc");
+        emitter.endTextMessage(mid);
+        emitter.runFinished();
+
+        # all frames at once
+        AgUiClient whole(NOTHING, True);
+        whole.feed(frames.join(""));
+        assertEq(5, whole.getEvents().size());
+        assertEq("abc", whole.getMessageText(mid));
+
+        # one byte at a time: a frame may be split anywhere, including mid-JSON
+        AgUiClient bytewise(NOTHING, True);
+        string all = frames.join("");
+        for (int i = 0; i < all.length(); ++i) {
+            bytewise.feed(all.substr(i, 1));
+        }
+        assertEq(5, bytewise.getEvents().size());
+        assertEq("abc", bytewise.getMessageText(mid));
+        assertTrue(bytewise.isFinished());
+
+        # a partial frame yields nothing until it is terminated
+        AgUiClient partial(NOTHING, True);
+        assertEq((), partial.feed("data: {\"type\":\"RUN_STARTED\",\"threadId\":\"t\","));
+        assertEq(0, partial.getEvents().size());
+        assertEq(1, partial.feed("\"runId\":\"r\"}\n\n").size());
+    }
+
+    testClientCommentsAndCrlf() {
+        AgUiClient client(NOTHING, True);
+        # SSE keep-alive comments carry no data and must be ignored, not fail
+        assertEq((), client.feed(":hb\n\n"));
+        assertEq(0, client.getEvents().size());
+        # CRLF line endings
+        assertEq(1, client.feed("data: {\"type\":\"CUSTOM\",\"name\":\"x\"}\r\n\r\n").size());
+        # a frame with unrelated SSE fields
+        assertEq(1, client.feed("id: 7\nevent: message\n"
+            "data: {\"type\":\"CUSTOM\",\"name\":\"y\"}\n\n").size());
+        assertEq("y", client.getEvents()[1].name);
+        # multi-line data is joined with newlines
+        assertEq(1, client.feed("data: {\"type\":\"CUSTOM\",\"name\":\n"
+            "data: \"z\"}\n\n").size());
+        assertEq("z", client.getEvents()[2].name);
+    }
+
+    testForwardCompatibility() {
+        # AG-UI ships SDK releases, not numbered protocol revisions: a peer on a newer release
+        # sends events and members this module has never seen, and dropping them is worse than
+        # handing them to a caller that may understand them
+        AgUiClient client(NOTHING, True);
+        client.feed("data: {\"type\":\"RUN_STARTED\",\"threadId\":\"t\",\"runId\":\"r\","
+            "\"futureField\":\"keep me\"}\n\n");
+        client.feed("data: {\"type\":\"SOMETHING_NEW\",\"payload\":{\"deep\":true}}\n\n");
+        client.feed("data: {\"type\":\"RUN_FINISHED\",\"threadId\":\"t\",\"runId\":\"r\"}\n\n");
+
+        list<hash<auto>> events = client.getEvents();
+        assertEq(3, events.size());
+        assertEq("keep me", events[0].futureField, "unknown members are preserved");
+        assertEq("SOMETHING_NEW", events[1].type, "unknown event types are preserved");
+        assertEq({"deep": True}, events[1].payload);
+        # the known events still drive the state machine
+        assertTrue(client.isFinished());
+        assertEq("t", client.getRunState().threadId);
+    }
+
+    testClientNegative() {
+        AgUiClient client();
+        assertThrows("AGUI-PARSE-ERROR", \client.feed(), ("data: {not json}\n\n",));
+        assertThrows("AGUI-PARSE-ERROR", \client.feed(), ("data: [1,2]\n\n",));
+        # an event with no type has nothing to dispatch on
+        assertThrows("AGUI-PARSE-ERROR", \client.feed(), ("data: {\"a\":1}\n\n",));
+        assertThrows("AGUI-PARSE-ERROR", \client.feed(), ("data: {\"type\":7}\n\n",));
+        # a STATE_DELTA whose delta is not a list of operations
+        assertThrows("AGUI-PARSE-ERROR", \client.feed(),
+            ("data: {\"type\":\"STATE_DELTA\",\"delta\":\"nope\"}\n\n",));
+        # a delta that does not apply to the state the client holds
+        AgUiClient c2();
+        c2.feed("data: {\"type\":\"STATE_SNAPSHOT\",\"snapshot\":{\"a\":1}}\n\n");
+        assertThrows("JSON-PATCH-ERROR", \c2.feed(),
+            ("data: {\"type\":\"STATE_DELTA\",\"delta\":"
+                "[{\"op\":\"remove\",\"path\":\"/missing\"}]}\n\n",));
+        # a delta before any snapshot: the client has no document to patch, and guessing would
+        # leave it silently out of sync with the server
+        AgUiClient c3();
+        assertThrows("AGUI-STATE-ERROR", \c3.feed(),
+            ("data: {\"type\":\"STATE_DELTA\",\"delta\":"
+                "[{\"op\":\"add\",\"path\":\"/a\",\"value\":1}]}\n\n",));
+        # an empty snapshot is still a snapshot: deltas apply after it
+        AgUiClient c4();
+        c4.feed("data: {\"type\":\"STATE_SNAPSHOT\",\"snapshot\":{}}\n\n");
+        c4.feed("data: {\"type\":\"STATE_DELTA\",\"delta\":"
+            "[{\"op\":\"add\",\"path\":\"/a\",\"value\":1}]}\n\n");
+        assertEq({"a": 1}, c4.getState());
+    }
+
+    testTruncatedStream() {
+        emitter.runStarted("t1", "r1");
+        string mid = emitter.startTextMessage();
+        emitter.textMessageContent(mid, "partial");
+        # the stream stops here: no TEXT_MESSAGE_END, no terminal run event
+
+        AgUiClient client = replay();
+        assertFalse(client.isFinished(), "a truncated stream leaves the run unfinished");
+        assertEq("partial", client.getMessageText(mid), "content received so far is kept");
+        assertFalse(client.getRunState().messages{mid}.complete);
+
+        # a content event for a message the client never saw start (a resumed connection)
+        AgUiClient resumed(NOTHING, True);
+        resumed.feed("data: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"m9\","
+            "\"delta\":\"mid-stream\"}\n\n");
+        assertEq("mid-stream", resumed.getMessageText("m9"));
+    }
+
+    testRunAgentInputWire() {
+        hash<auto> wire = agui_run_agent_input_to_wire(<AgUiRunAgentInput>{
+            "threadId": "t1",
+            "runId": "r1",
+            "ctx": ({"description": "env", "value": "prod"},),
+        });
+        # ctx is named that way only because "context" is a reserved word in Qore; the wire
+        # member must still be the protocol's "context"
+        assertFalse(wire.hasKey("ctx"));
+        assertEq(({"description": "env", "value": "prod"},), wire."context");
+        assertEq("t1", wire.threadId);
+        # unset members are omitted rather than sent as null
+        assertFalse(wire.hasKey("tools"));
+        assertFalse(wire.hasKey("messages"));
+
+        hash<auto> minimal = agui_run_agent_input_to_wire(<AgUiRunAgentInput>{
+            "threadId": "t", "runId": "r",
+        });
+        assertEq(("threadId", "runId"), keys minimal);
+    }
+
+    #! Round-trips the reference SDK's cross-implementation compatibility fixtures
+    /** These are verbatim from the AG-UI reference SDK's compatibility test data, which is
+        what other implementations are validated against.  They are the ground truth for the
+        wire format — including that \c type is SCREAMING_SNAKE_CASE and that \c timestamp is
+        an integer.
+    */
+    testReferenceFixtures() {
+        list<hash<auto>> fixtures = (
+            {"type": "RUN_STARTED", "timestamp": 1234567890, "threadId": "thread-1234",
+                "runId": "run-5678"},
+            {"type": "RUN_ERROR", "message": "API request failed", "code": "API_ERROR"},
+            {"type": "STEP_STARTED", "stepName": "process_payment"},
+            {"type": "TEXT_MESSAGE_START", "messageId": "msg-1", "role": "assistant"},
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "msg-1",
+                "delta": "Special chars: \x{1F680} \x{f1} \x{20ac} \n\t\"'\\"},
+            {"type": "TOOL_CALL_START", "toolCallId": "tool-1", "toolCallName": "search_database",
+                "parentMessageId": "msg-123"},
+            {"type": "TOOL_CALL_ARGS", "toolCallId": "tool-1",
+                "delta": "{\"location\":\"San Francisco\"}"},
+            {"type": "STATE_SNAPSHOT", "snapshot": {"nullValue": NULL, "emptyString": "",
+                "zero": 0, "negativeNumber": -123, "floatNumber": 3.14159, "emptyArray": (),
+                "emptyObject": {}, "boolValues": {"true": True, "false": False}}},
+            {"type": "STATE_DELTA", "delta": ({"op": "add", "path": "/users/123",
+                "value": {"name": "John", "age": 30}}, {"op": "remove", "path": "/users/456"},
+                {"op": "move", "from": "/users/old", "path": "/users/new"})},
+            {"type": "STATE_DELTA", "delta": ()},
+            {"type": "ACTIVITY_SNAPSHOT", "messageId": "msg_activity", "activityType": "PLAN",
+                "content": {"tasks": ("search",)}, "replace": True},
+            {"type": "CUSTOM", "name": "heartbeat"},
+            {"type": "RAW", "event": {"type": "user_action", "action": "button_click"},
+                "source": "frontend"},
+        );
+
+        # the fixtures come from separate files in the reference SDK and are independent wire
+        # samples, not one coherent run, so this asserts frame fidelity only; state application
+        # is covered by testStateDelta()
+        foreach hash<auto> fixture in (fixtures) {
+            string json = make_json(fixture);
+            *hash<auto> parsed = AgUiClient::parseSseFrame("data: " + json);
+            # compare against the JSON decoder's own output, not the Qore literal: JSON null
+            # decodes to NOTHING rather than NULL, so the literal is not what a peer's bytes
+            # produce.  What must hold is that the client changes nothing.
+            assertEq(parse_json(json), parsed,
+                sprintf("%s survives a wire round trip unchanged", fixture.type));
+            assertEq(json, make_json(parsed),
+                sprintf("%s re-serializes to the same JSON", fixture.type));
+        }
+
+        # the events that do drive the state machine are accepted in a coherent order
+        AgUiClient client(NOTHING, True);
+        client.feed("data: " + make_json(fixtures[0]) + "\n\n");
+        client.feed("data: " + make_json(fixtures[2]) + "\n\n");
+        client.feed("data: " + make_json(fixtures[7]) + "\n\n");
+        assertEq(3, client.getEvents().size());
+        assertEq("thread-1234", client.getRunState().threadId);
+        assertEq(0, client.getState().zero);
+    }
+
+    testConnection() {
+        AgUiConnection c("agent", "a test agent", "aguis://agent.example.com/api/agent");
+        assertEq("agui", c.getType());
+        assertEq("aguis://agent.example.com/api/agent", c.getUrl());
+        # the agui/aguis schemes map onto http/https for the actual request
+        AgUiHttpAgent agent = c.get(False);
+        assertEq("https://agent.example.com/api/agent", agent.getUrl());
+
+        AgUiConnection plain("agent", "a test agent", "agui://agent.example.com/api/agent");
+        assertEq("http://agent.example.com/api/agent", plain.get(False).getUrl());
+
+        hash<ConnectionSchemeInfo> scheme = AgUiConnection::ConnectionScheme;
+        assertTrue(scheme.schemes.agui);
+        assertTrue(scheme.schemes.aguis);
+        assertEq("agui", scheme.base_scheme_map.http);
+        assertEq("aguis", scheme.base_scheme_map.https);
+
+        # a connection carries options the HTTP connection manager does not declare; passing
+        # them through wholesale would throw, so they are filtered
+        AgUiHttpAgent opted("http://x/api", {"protocol": "h2", "monitor": True,
+            "tags": {"env": "test"}});
+        assertEq("http://x/api", opted.getUrl());
+
+        # a URL with no path still posts somewhere valid
+        assertEq("http://x", (new AgUiHttpAgent("http://x")).getUrl());
+    }
+}

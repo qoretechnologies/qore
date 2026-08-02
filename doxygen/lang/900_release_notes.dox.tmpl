@@ -2002,6 +2002,18 @@ foreach string module_name in (registry.getProcessModules()) {
         alignment, and sliding-window overflow for long documents
 
     @subsection qore_3_0_0_new_user_modules New User Modules
+    - @ref aguiintro "AgUi" module
+      - new module implementing the <a href="https://docs.ag-ui.com">AG-UI</a> (Agent User Interaction) protocol:
+        an emitter that formats agent events into a caller-supplied stream, and a client that parses such a stream
+        back into typed events and reconstructs the run's state.  Neither owns a socket, so both drop into an
+        existing HTTP/SSE or WebSocket transport unchanged
+
+    - @ref jsonpatchintro "JsonPatch" module
+      - new module implementing <a href="https://www.rfc-editor.org/rfc/rfc6902">RFC 6902</a> JSON Patch
+        generation and application over %Qore data, plus the
+        <a href="https://www.rfc-editor.org/rfc/rfc6901">RFC 6901</a> JSON Pointer operations the
+        @ref jsonintro "json" module does not provide (splitting, joining and unescaping)
+
     - @ref a2aclientintro "A2aClient" module
       - new module providing a client API for connecting to
         <a href="https://a2a-protocol.org">A2A</a> (Agent-to-Agent) agents
