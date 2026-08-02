@@ -216,7 +216,7 @@ public class OpenAiTextDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiImageFile") {
+    constructor() : HashDataType("OpenAiText") {
         addQoreFields(Fields);
     }
 }
@@ -257,7 +257,7 @@ public class OpenAiMessageContentDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiTMessageContent") {
+    constructor() : HashDataType("OpenAiMessageContent") {
         addQoreFields(Fields);
     }
 }

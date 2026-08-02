@@ -359,7 +359,7 @@ public class OpenAiAssistantDataType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiAssistantCreateRequest") {
+    constructor() : HashDataType("OpenAiAssistant") {
         addQoreFields(Fields);
     }
 }

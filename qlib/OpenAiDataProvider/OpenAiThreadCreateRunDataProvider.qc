@@ -132,7 +132,7 @@ public class OpenAiThreadCreateRunRequestType inherits HashDataType {
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiThreadCreateRequest") {
+    constructor() : HashDataType("OpenAiThreadCreateRunRequest") {
         addQoreFields(Fields);
     }
 }

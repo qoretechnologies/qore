@@ -435,11 +435,13 @@ Current usages to migrate:
 - New modules must have tests under:
   - `examples/test/qlib/<ModuleName>/`
 - Use `%try-module` patterns in tests to allow skipping when optional modules are not available.
-- Modules delivered with Qore itself (e.g., `HttpServer`, `Mime`, `Logger`, `HttpServerUtil`,
-  `DataProvider`, `ConnectionProvider`, `QUnit`) are always available and should use hard
-  `%requires` — they do not need the `%try-module` pattern. Only use `%try-module` for modules
-  from other external repos (e.g., `json` from module-json, `xml` from module-xml) that may not
-  be installed.
+- Modules delivered with Qore itself are always available and should use hard `%requires` — they
+  do not need the `%try-module` pattern. That covers the user modules under `qlib/`
+  (`HttpServer`, `Mime`, `Logger`, `HttpServerUtil`, `DataProvider`, `ConnectionProvider`,
+  `QUnit`, …) **and** the binary modules built from this repo under `modules/` — notably
+  `json`, which is built here and hard-required by ~100 in-tree modules and their tests.
+- Only use `%try-module` for binary modules from other repos (e.g., `xml` from module-xml,
+  `yaml` from module-yaml, `sqlite3`, `uuid`) that may not be installed.
 
 ## Checklist
 

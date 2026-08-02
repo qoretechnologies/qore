@@ -68,7 +68,7 @@ public class OpenAiResponseStreamEventDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiResponseStreamEvent") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }

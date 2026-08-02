@@ -529,7 +529,7 @@ public class OpenAiModelInputItemContentDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelInputItemContent") {
         addQoreFields(Fields);
     }
 }
@@ -587,7 +587,7 @@ public class OpenAiModelInputItemDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelInputItem") {
         addQoreFields(Fields);
     }
 }
@@ -730,7 +730,7 @@ public class OpenAiModelInputDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelInput") {
         addQoreFields(Fields);
     }
 }
@@ -757,7 +757,7 @@ public class OpenAiConversationContextDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiConversationContext") {
         addQoreFields(Fields);
     }
 }
@@ -884,7 +884,7 @@ public class OpenAiModelRepsonseTextFormatDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelResponseTextFormat") {
         addQoreFields(Fields);
     }
 }
@@ -904,7 +904,7 @@ public class OpenAiModelResponseTextDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelResponseText") {
         addQoreFields(Fields);
     }
 }
@@ -963,7 +963,7 @@ public class OpenAiModelFileSearchToolComparisonFilterDataType inherits HashData
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFileSearchToolComparisonFilter") {
         addQoreFields(Fields);
     }
 }
@@ -1002,7 +1002,7 @@ public class OpenAiModelFileSearchToolCompoundFilterDataType inherits HashDataTy
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFileSearchToolCompoundFilter") {
         addQoreFields(Fields);
     }
 }
@@ -1031,7 +1031,7 @@ public class OpenAiModelFileSearchToolFilterDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFileSearchToolFilter") {
         addQoreFields(Fields);
     }
 }
@@ -1060,7 +1060,7 @@ public class OpenAiModelFileSearchToolRankingOptionsDataType inherits HashDataTy
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFileSearchToolRankingOptions") {
         addQoreFields(Fields);
     }
 }
@@ -1114,7 +1114,7 @@ public class OpenAiModelFileSearchToolDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFileSearchTool") {
         addQoreFields(Fields);
     }
 }
@@ -1168,7 +1168,7 @@ public class OpenAiModelFunctionToolDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelFunctionTool") {
         addQoreFields(Fields);
     }
 }
@@ -1222,7 +1222,7 @@ public class OpenAiModelUserLocationDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelUserLocation") {
         addQoreFields(Fields);
     }
 }
@@ -1281,7 +1281,7 @@ public class OpenAiModelWebSearchToolDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelWebSearchTool") {
         addQoreFields(Fields);
     }
 }
@@ -1326,7 +1326,7 @@ public class OpenAiModelComputerUseToolDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelComputerUseTool") {
         addQoreFields(Fields);
     }
 }
@@ -1405,27 +1405,35 @@ public class OpenAiModelToolDataType inherits HashDataType {
                             "allowed_values": (
                                 <AllowedValueInfo>{
                                     "value": "connector_dropbox",
+                                    "display_name": "Dropbox",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_gmail",
+                                    "display_name": "Gmail",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_googlecalendar",
+                                    "display_name": "Google Calendar",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_googledrive",
+                                    "display_name": "Google Drive",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_microsoftteams",
+                                    "display_name": "Microsoft Teams",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_outlookcalendar",
+                                    "display_name": "Outlook Calendar",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_outlookemail",
+                                    "display_name": "Outlook Email",
                                 },
                                 <AllowedValueInfo>{
                                     "value": "connector_sharepoint",
+                                    "display_name": "SharePoint",
                                 },
                             ),
                             # allow for future connector ID values
@@ -1986,7 +1994,7 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelCreateResponseRequest") {
         addQoreFields(Fields);
     }
 }
@@ -2012,7 +2020,7 @@ public class OpenAiModelCreateErrorDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelCreateError") {
         addQoreFields(Fields);
     }
 }
@@ -2033,7 +2041,7 @@ public class OpenAiModelCreateIncompleteDetailsDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelCreateIncompleteDetails") {
         addQoreFields(Fields);
     }
 }
@@ -2055,7 +2063,7 @@ public class OpenAiModelUsageInputTokensDetailsDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelUsageInputTokensDetails") {
         addQoreFields(Fields);
     }
 }
@@ -2075,7 +2083,7 @@ public class OpenAiModelUsageOutputTokensDetailsDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelUsageOutputTokensDetails") {
         addQoreFields(Fields);
     }
 }
@@ -2119,7 +2127,7 @@ public class OpenAiModelUsageDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelUsage") {
         addQoreFields(Fields);
     }
 }
@@ -2190,7 +2198,7 @@ public class OpenAiResponseOutputContentDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiResponseOutputContent") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
@@ -2298,7 +2306,7 @@ public class OpenAiResponseOutputItemDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiResponseOutputItem") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
@@ -2465,7 +2473,7 @@ public class OpenAiModelCreateResponseResponseDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelCreateResponseResponse") {
         addQoreFields(Fields);
     }
 }

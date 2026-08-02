@@ -159,7 +159,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiAssistantCreateRequestType.getFields() - ("model",)
             ),
-            "output_type": OpenAiFileUploadFromLocationDataProvider::ResponseType,
+            "output_type": OpenAiAssistantCreateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -177,10 +177,15 @@ module OpenAiDataProvider {
                     "example_value": "asst_pOVJLN6z0hTsW1UKpALakcLA",
                 },
             },
+            # every field is optional on an update, so nothing is preselected automatically;
+            # without an explicit set the action opens with an empty form
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                OpenAiAssistantUpdateRequestType.getFields()
+                OpenAiAssistantUpdateRequestType::Fields{"name", "model", "instructions",},
+                {"preselected": True})
+                + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiAssistantUpdateRequestType::Fields - ("name", "model", "instructions")
             ),
-            "output_type": OpenAiDeleteResponseType,
+            "output_type": OpenAiAssistantUpdateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -216,7 +221,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiThreadCreateRequestType.getFields() - ("messages",)
             ),
-            "output_type": OpenAiFileUploadFromLocationDataProvider::ResponseType,
+            "output_type": OpenAiThreadCreateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
@@ -234,7 +239,7 @@ module OpenAiDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OpenAiThreadUpdateRequestType.getFields() - "thread_id"
             ),
-            "output_type": OpenAiDeleteResponseType,
+            "output_type": OpenAiThreadUpdateDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,

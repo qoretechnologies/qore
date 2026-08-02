@@ -105,7 +105,7 @@ public class OpenAiModelDeleteResponseRequestDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("OpenAiModelDeleteResponseRequest") {
         addQoreFields(Fields);
     }
 }

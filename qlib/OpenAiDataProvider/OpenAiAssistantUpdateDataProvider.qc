@@ -100,9 +100,16 @@ public class OpenAiAssistantUpdateDataProvider inherits OpenAiDataProviderCommon
 #! The assistant tool data type
 public class OpenAiAssistantUpdateRequestType inherits HashDataType {
     public {
+        #! Server-assigned fields that describe an assistant but cannot be updated
+        /** They are part of @ref OpenAiAssistantDataType "the assistant type" because the API
+            returns them; offering them as request fields would put read-only values in the
+            action form and send members the API does not accept.
+        */
+        const ReadOnlyFields = ("id", "object", "created_at");
+
         #! fields
         const Fields = map {$1.key: $1.value + {"type": $1.value.type.getOrNothingType()}},
-            OpenAiAssistantDataType::Fields.pairIterator(), $1.key != "id";
+            OpenAiAssistantDataType::Fields.pairIterator(), !inlist($1.key, ReadOnlyFields);
     }
 
     #! Creates the type
