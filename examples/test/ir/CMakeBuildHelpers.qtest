@@ -47,6 +47,7 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(body);
+        f.close();
     }
 
     private string read(string path) {
@@ -606,9 +607,29 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_17.*consthashdeclprovider_qc\\.qo"),
             "typed-hash constructors in constant initializers become source-scanned build prerequisites: " + direct);
 
-        string build1 = run(sprintf("cmake --build %s -- -j33", build_dir));
+        string initial_provider = read(provider);
+        write(provider, replace(initial_provider,
+            "return StaticConst + \":\" + StaticText;",
+            "return \"transient-bootstrap\";"));
+        string bootstrap_replacement = src_dir + "/bootstrap-provider-replacement.qc";
+        string bootstrap_validation_marker = build_dir
+            + "/qcc-bootstrap-input-validation.marker";
+        write(bootstrap_replacement, initial_provider);
+        string build1 = run(sprintf(
+            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
+            "[ -f %s ] && cp %s %s) & watcher=$!; "
+            "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
+            "cmake --build %s -- -j33; rc=$?; wait $watcher || rc=$?; exit $rc",
+            bootstrap_validation_marker, bootstrap_validation_marker,
+            bootstrap_replacement, provider, bootstrap_validation_marker,
+            provider, build_dir));
         assertTrue(build1.find("batch bootstrapping cmake-smoke (21 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
+        assertTrue(build1.find(
+                "qcc batch input changed during compilation; retrying (2/3)") != -1,
+            "source edit during batch publication retries the shared parse: " + build1);
         assertTrue(build1.find("script aggregate .qo") != -1,
             "clean object-group build emits its script aggregate during bootstrap: " + build1);
         assertEq(-1, build1.find("qcc --script-aggregate: QORE_CMAKE_SCRIPT_SMOKE"),
@@ -699,12 +720,29 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "steady-state comment-only provider edit preserves the consumer object: "
                 + semantic_no_op);
 
-        write(provider, replace(read(provider),
+        string transient_provider = replace(read(provider),
             "return CMakeQoProvider::label();",
-            "return \"changed-body\";"));
-        string contract_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+            "return \"transient-body\";");
+        string final_provider = replace(transient_provider,
+            "return \"transient-body\";", "return \"changed-body\";");
+        write(provider, transient_provider);
+        string replacement = src_dir + "/provider-replacement.qc";
+        string validation_marker = build_dir + "/qcc-input-validation.marker";
+        write(replacement, final_provider);
+        string contract_change = run(sprintf(
+            "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
+            "[ -f %s ] && cp %s %s) & watcher=$!; "
+            "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
+            "QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS=500 "
+            "cmake --build %s -- -j33; rc=$?; wait $watcher || rc=$?; exit $rc",
+            validation_marker, validation_marker, replacement, provider,
+            validation_marker, provider, build_dir));
         assertTrue(contract_change.find("provider.qc") != -1,
             "provider body change runs the precise incremental path: "
+                + contract_change);
+        assertTrue(contract_change.find("qcc input changed during compilation; retrying (2/3)") != -1,
+            "provider edit during qcc publication is retried in the same build: "
                 + contract_change);
         string changed_source_out = run(sprintf("cd %s && %s %s",
             src_dir, source_qore, source_runner));

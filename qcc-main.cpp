@@ -6103,6 +6103,12 @@ static bool write_json_file_bool_field(FILE* f, const char* key, bool value,
     return true;
 }
 
+struct QCCFileFingerprint {
+    bool exists = false;
+    uint64_t size = 0;
+    uint64_t hash = 0;
+};
+
 static bool write_json_file_record(FILE* f, const char* key, const std::string& path,
         unsigned indent, std::string& error, const char* comma = ",") {
     std::string contents;
@@ -6123,7 +6129,8 @@ static bool write_json_file_record(FILE* f, const char* key, const std::string& 
 
 static bool write_json_file_record_array(FILE* f, const char* key,
         const std::vector<std::string>& paths, unsigned indent, std::string& error,
-        const char* comma = ",") {
+        const char* comma = ",",
+        const std::map<std::string, QCCFileFingerprint>* input_snapshots = nullptr) {
     fprintf(f, "%*s", static_cast<int>(indent), "");
     json_file_string(f, key ? key : "");
     fputs(": [", f);
@@ -6150,19 +6157,32 @@ static bool write_json_file_record_array(FILE* f, const char* key,
             error = "operation cancelled during qcc manifest canonical input write";
             return false;
         }
-        std::string contents;
-        if (!read_file_required(canonical_paths[i], contents, error)) {
-            return false;
+        QCCFileFingerprint fp;
+        bool have_snapshot = false;
+        if (input_snapshots) {
+            auto snapshot = input_snapshots->find(canonical_paths[i]);
+            if (snapshot != input_snapshots->end()) {
+                fp = snapshot->second;
+                have_snapshot = true;
+            }
         }
-        uint64_t hash = XXH64(contents.data(), contents.size(), 0);
+        if (!have_snapshot) {
+            std::string contents;
+            if (!read_file_required(canonical_paths[i], contents, error)) {
+                return false;
+            }
+            fp.exists = true;
+            fp.size = contents.size();
+            fp.hash = XXH64(contents.data(), contents.size(), 0);
+        }
         if (written++) {
             fputc(',', f);
         }
         fprintf(f, "\n%*s{\"path\": ", static_cast<int>(indent + 2), "");
         json_file_string(f, canonical_paths[i]);
         fprintf(f, ", \"size\": %llu, \"hash\": ",
-            static_cast<unsigned long long>(contents.size()));
-        json_file_string(f, "xxh64:" + hex64_string(hash));
+            static_cast<unsigned long long>(fp.size));
+        json_file_string(f, "xxh64:" + hex64_string(fp.hash));
         fputc('}', f);
     }
     if (written) {
@@ -6762,13 +6782,8 @@ struct QCCBuildManifest {
     std::string aggregate_symbol;
     std::vector<std::string> inputs;
     std::vector<std::string> extra_inputs;
+    std::shared_ptr<const std::map<std::string, QCCFileFingerprint>> input_snapshots;
     bool include_command_manifest_inputs = true;
-};
-
-struct QCCFileFingerprint {
-    bool exists = false;
-    uint64_t size = 0;
-    uint64_t hash = 0;
 };
 
 static QCCFileFingerprint qcc_file_fingerprint(const std::string& path) {
@@ -6788,9 +6803,171 @@ static QCCFileFingerprint qcc_file_fingerprint(const std::string& path) {
     return rv;
 }
 
+static QCCFileFingerprint qcc_content_fingerprint(const std::string& contents) {
+    QCCFileFingerprint rv;
+    rv.exists = true;
+    rv.size = contents.size();
+    rv.hash = XXH64(contents.data(), contents.size(), 0);
+    return rv;
+}
+
+static QCCFileFingerprint qcc_input_fingerprint(const std::string& path) {
+    if (!is_directory(path.c_str())) {
+        return qcc_file_fingerprint(path);
+    }
+
+    std::vector<std::string> sources;
+    add_module_source_dir(path, sources);
+    std::string names;
+    for (const std::string& source : sources) {
+        names.append(canonical_existing_path(source));
+        names.push_back('\0');
+    }
+    QCCFileFingerprint rv = qcc_content_fingerprint(names);
+    rv.size = sources.size();
+    return rv;
+}
+
 static bool qcc_file_fingerprint_equal(const QCCFileFingerprint& a,
         const QCCFileFingerprint& b) {
     return a.exists == b.exists && a.size == b.size && a.hash == b.hash;
+}
+
+static void add_qcc_snapshot_paths(const std::vector<std::string>& inputs,
+        std::vector<std::string>& paths) {
+    for (const std::string& input : inputs) {
+        if (input.empty()) {
+            continue;
+        }
+        if (is_directory(input.c_str())) {
+            paths.push_back(input);
+            add_module_source_dir(input, paths);
+        } else if (is_file(input)) {
+            paths.push_back(input);
+        }
+    }
+}
+
+static void capture_qcc_input_snapshots(QCCBuildManifest& manifest,
+        const std::string* exact_path = nullptr,
+        const QCCFileFingerprint* exact_fingerprint = nullptr) {
+    std::vector<std::string> paths;
+    add_qcc_snapshot_paths(manifest.inputs, paths);
+    add_qcc_snapshot_paths(stub_files, paths);
+    add_qcc_snapshot_paths(manifest.extra_inputs, paths);
+    if (manifest.include_command_manifest_inputs) {
+        add_qcc_snapshot_paths(manifest_inputs, paths);
+    }
+
+    std::map<std::string, QCCFileFingerprint> snapshots;
+    for (const std::string& path : paths) {
+        std::string canonical = canonical_existing_path(path);
+        if (snapshots.find(canonical) == snapshots.end()) {
+            snapshots.emplace(canonical, qcc_input_fingerprint(canonical));
+        }
+    }
+    if (exact_path && exact_fingerprint) {
+        snapshots[canonical_existing_path(*exact_path)] = *exact_fingerprint;
+    }
+    manifest.input_snapshots = std::make_shared<const std::map<std::string, QCCFileFingerprint>>(
+        std::move(snapshots));
+}
+
+static bool qcc_test_wait_before_input_validation(
+        const QCCBuildManifest& manifest, std::string& error) {
+    const char* marker = getenv("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
+    if (!marker || !*marker || is_file(marker)) {
+        return true;
+    }
+    if (const char* source = getenv("QORE_QCC_TEST_INPUT_VALIDATION_SOURCE")) {
+        std::string canonical_source = canonical_existing_path(source);
+        bool found = false;
+        if (!manifest.input_snapshots) {
+            return true;
+        }
+        for (const auto& snapshot : *manifest.input_snapshots) {
+            if (snapshot.first == canonical_source) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return true;
+        }
+    }
+
+    FILE* f = fopen(marker, "wb");
+    if (!f) {
+        error = "cannot create qcc input-validation test marker '"
+            + std::string(marker) + "': " + strerror(errno);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close qcc input-validation test marker '"
+            + std::string(marker) + "': " + strerror(errno);
+        return false;
+    }
+
+    long delay_ms = 1000;
+    if (const char* delay = getenv("QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS")) {
+        char* end = nullptr;
+        long parsed = strtol(delay, &end, 10);
+        if (end && !*end && parsed >= 0 && parsed <= 10000) {
+            delay_ms = parsed;
+        }
+    }
+    while (delay_ms > 0) {
+        long sleep_ms = std::min(delay_ms, 10L);
+        usleep(static_cast<useconds_t>(sleep_ms * 1000));
+        delay_ms -= sleep_ms;
+        if (qcc_check_cancel("qcc input-validation test delay")) {
+            error = "operation cancelled during qcc input-validation test delay";
+            return false;
+        }
+    }
+    return true;
+}
+
+enum class QCCFinishResult {
+    Success,
+    Error,
+    InputsChanged,
+};
+
+static bool remove_qcc_file_if_exists(const std::string& path,
+        std::string& error) {
+    if (!unlink(path.c_str()) || errno == ENOENT) {
+        return true;
+    }
+    error = "cannot remove stale qcc success stamp '" + path + "': "
+        + strerror(errno);
+    return false;
+}
+
+static QCCFinishResult validate_qcc_input_snapshots(
+        const QCCBuildManifest& manifest, std::string& error) {
+    if (!qcc_test_wait_before_input_validation(manifest, error)) {
+        return QCCFinishResult::Error;
+    }
+    if (!manifest.input_snapshots) {
+        return QCCFinishResult::Success;
+    }
+    size_t i = 0;
+    for (const auto& snapshot : *manifest.input_snapshots) {
+        if (i && !(i % 100)
+                && qcc_check_cancel("qcc build input snapshot validation")) {
+            error = "operation cancelled during qcc build input snapshot validation";
+            return QCCFinishResult::Error;
+        }
+        QCCFileFingerprint current = qcc_input_fingerprint(snapshot.first);
+        if (!qcc_file_fingerprint_equal(snapshot.second, current)) {
+            error = "qcc input changed while building '" + manifest.output
+                + "'; retry required: '" + snapshot.first + "'";
+            return QCCFinishResult::InputsChanged;
+        }
+        ++i;
+    }
+    return QCCFinishResult::Success;
 }
 
 static std::string qcc_fingerprint_hash_string(const QCCFileFingerprint& fp) {
@@ -6871,7 +7048,8 @@ static bool write_qcc_status_json_file(const QCCBuildManifest& manifest,
 }
 
 static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
-        const char* argv0, std::string& content, std::string& error) {
+        const char* argv0, std::string& content, std::string& error,
+        bool use_input_snapshots = false) {
     if (manifest.output.empty() || !is_file(manifest.output)) {
         return false;
     }
@@ -6963,7 +7141,9 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
     if (!manifest.index_json.empty() && is_file(manifest.index_json)) {
         all_inputs.push_back(manifest.index_json);
     }
-    if (!write_json_file_record_array(f, "inputs", all_inputs, 2, error)) {
+    if (!write_json_file_record_array(f, "inputs", all_inputs, 2, error, ",",
+            use_input_snapshots && manifest.input_snapshots
+                ? manifest.input_snapshots.get() : nullptr)) {
         fclose(f);
         free(buf);
         return false;
@@ -7011,7 +7191,7 @@ static bool qcc_manifest_current(const QCCBuildManifest& manifest, const char* a
     }
     std::string expected;
     std::string error;
-    if (!build_qcc_manifest_content(manifest, argv0, expected, error)) {
+    if (!build_qcc_manifest_content(manifest, argv0, expected, error, true)) {
         return false;
     }
     std::string old;
@@ -7024,7 +7204,7 @@ static bool write_qcc_manifest_file(const QCCBuildManifest& manifest,
         return true;
     }
     std::string content;
-    if (!build_qcc_manifest_content(manifest, argv0, content, error)) {
+    if (!build_qcc_manifest_content(manifest, argv0, content, error, true)) {
         if (error.empty()) {
             error = "cannot build qcc manifest for '" + manifest.output + "'";
         }
@@ -7049,38 +7229,62 @@ static bool write_requested_sidecars(const QCCBuildManifest& manifest,
     return write_qcc_manifest_file(manifest, argv0, error);
 }
 
-static bool finish_qcc_build(const QCCBuildManifest& manifest, const char* argv0,
+static QCCFinishResult finish_qcc_build(const QCCBuildManifest& manifest, const char* argv0,
         const QCCFileFingerprint& before, bool built, bool skipped,
-        bool allow_empty_index, std::string& error) {
+        bool allow_empty_index, std::string& error, bool validate_inputs = true) {
+    QCCFinishResult input_result = QCCFinishResult::Success;
+    if (validate_inputs) {
+        input_result = validate_qcc_input_snapshots(manifest, error);
+        if (input_result != QCCFinishResult::Success) {
+            return input_result;
+        }
+    }
     if (built && !write_requested_sidecars(manifest, argv0, allow_empty_index, error)) {
-        return false;
+        return QCCFinishResult::Error;
     }
     if (skipped && compile_contract_stamp_path
             && !is_file(compile_contract_stamp_path)
             && !write_aot_compile_contract_stamp_file(
                 compile_contract_stamp_path, manifest.output.c_str(), error)) {
-        return false;
+        return QCCFinishResult::Error;
     }
-
     QCCFileFingerprint after = qcc_file_fingerprint(manifest.output);
     if (!after.exists) {
         error = "generated output missing after successful qcc command: '" + manifest.output + "'";
-        return false;
+        return QCCFinishResult::Error;
     }
 
     bool output_changed = built && !qcc_file_fingerprint_equal(before, after);
     if (!write_qcc_status_json_file(manifest, built, skipped, output_changed, after, error)) {
-        return false;
+        return QCCFinishResult::Error;
     }
     bool content_stamp_missing = content_stamp_path && !is_file(content_stamp_path);
     if (content_stamp_path && (output_changed || ((built || skipped) && content_stamp_missing))
             && !touch_qcc_file(content_stamp_path, error)) {
-        return false;
+        return QCCFinishResult::Error;
     }
     if (success_stamp_path && !touch_qcc_file(success_stamp_path, error)) {
-        return false;
+        return QCCFinishResult::Error;
     }
-    return true;
+    if (validate_inputs) {
+        input_result = validate_qcc_input_snapshots(manifest, error);
+        if (input_result != QCCFinishResult::Success) {
+            if (success_stamp_path) {
+                std::string cleanup_error;
+                if (!remove_qcc_file_if_exists(success_stamp_path,
+                        cleanup_error)) {
+                    error += "; additionally, " + cleanup_error;
+                    return QCCFinishResult::Error;
+                }
+            }
+            return input_result;
+        }
+    }
+    return QCCFinishResult::Success;
+}
+
+static int qcc_finish_error_exit(QCCFinishResult result) {
+    return result == QCCFinishResult::InputsChanged ? 75 : 1;
 }
 
 static bool qcc_single_output_sidecars_requested() {
@@ -7748,15 +7952,18 @@ int main(int argc, char** argv) {
         manifest.link_map = map_path;
         manifest.aggregate_symbol = link_aggregate_symbol;
         add_existing_qo_inputs_from_args(manifest.inputs, optind, argc, argv);
+        capture_qcc_input_snapshots(manifest);
         QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
         if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
             if (qcc_output_verbose()) {
                 printf("qcc: manifest current, skipped qo link aggregate: %s\n", output_path);
             }
             std::string error;
-            if (!finish_qcc_build(manifest, argv[0], output_before, false, true, true, error)) {
+            QCCFinishResult finish = finish_qcc_build(
+                manifest, argv[0], output_before, false, true, true, error);
+            if (finish != QCCFinishResult::Success) {
                 fprintf(stderr, "error: %s\n", error.c_str());
-                return 1;
+                return qcc_finish_error_exit(finish);
             }
             return 0;
         }
@@ -7801,21 +8008,23 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        if ((!allow_unresolved_qo_imports && !plan.unresolved_imports.empty())
-                || !plan.ambiguous_imports.empty() || !plan.hash_mismatches.empty()) {
-            print_qo_link_issues("unresolved import", plan.unresolved_imports);
-            print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
-            print_qo_link_issues("hash mismatch", plan.hash_mismatches);
-            qore_cleanup();
-            return 1;
-        }
-        if (strict_call_relocations
-                && (!plan.unresolved_call_relocations.empty()
-                    || !plan.ambiguous_call_relocations.empty()
-                    || !plan.call_relocation_hash_mismatches.empty())) {
-            print_qo_link_call_relocation_issues("unresolved", plan.unresolved_call_relocations);
-            print_qo_link_call_relocation_issues("ambiguous", plan.ambiguous_call_relocations);
-            print_qo_link_call_relocation_issues("hash mismatch", plan.call_relocation_hash_mismatches);
+        bool import_errors = (!allow_unresolved_qo_imports && !plan.unresolved_imports.empty())
+            || !plan.ambiguous_imports.empty() || !plan.hash_mismatches.empty();
+        bool call_relocation_errors = strict_call_relocations
+            && (!plan.unresolved_call_relocations.empty()
+                || !plan.ambiguous_call_relocations.empty()
+                || !plan.call_relocation_hash_mismatches.empty());
+        if (import_errors || call_relocation_errors) {
+            if (import_errors) {
+                print_qo_link_issues("unresolved import", plan.unresolved_imports);
+                print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
+                print_qo_link_issues("hash mismatch", plan.hash_mismatches);
+            }
+            if (call_relocation_errors) {
+                print_qo_link_call_relocation_issues("unresolved", plan.unresolved_call_relocations);
+                print_qo_link_call_relocation_issues("ambiguous", plan.ambiguous_call_relocations);
+                print_qo_link_call_relocation_issues("hash mismatch", plan.call_relocation_hash_mismatches);
+            }
             qore_cleanup();
             return 1;
         }
@@ -7850,10 +8059,12 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, true, error)) {
+        QCCFinishResult finish = finish_qcc_build(
+            manifest, argv[0], output_before, true, false, true, error);
+        if (finish != QCCFinishResult::Success) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
-            return 1;
+            return qcc_finish_error_exit(finish);
         }
 
         if (qcc_output_verbose()) {
@@ -8290,15 +8501,18 @@ int main(int argc, char** argv) {
         manifest.depfile = depfile_path ? depfile_path : "";
         manifest.aggregate_symbol = script_aggregate_symbol;
         manifest.inputs = target_files;
+        capture_qcc_input_snapshots(manifest);
         QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
         if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
             if (qcc_output_verbose()) {
                 printf("qcc: manifest current, skipped script aggregate .qo: %s\n", output_path);
             }
             std::string error;
-            if (!finish_qcc_build(manifest, argv[0], output_before, false, true, false, error)) {
+            QCCFinishResult finish = finish_qcc_build(
+                manifest, argv[0], output_before, false, true, false, error);
+            if (finish != QCCFinishResult::Success) {
                 fprintf(stderr, "error: %s\n", error.c_str());
-                return 1;
+                return qcc_finish_error_exit(finish);
             }
             return 0;
         }
@@ -8326,10 +8540,12 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, false, error)) {
+        QCCFinishResult finish = finish_qcc_build(
+            manifest, argv[0], output_before, true, false, false, error);
+        if (finish != QCCFinishResult::Success) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
-            return 1;
+            return qcc_finish_error_exit(finish);
         }
         qore_cleanup();
         return 0;
@@ -8384,6 +8600,12 @@ int main(int argc, char** argv) {
         for (int i = optind; i < argc; ++i) {
             batch_sources.emplace_back(argv[i]);
         }
+        QCCBuildManifest batch_input_manifest;
+        batch_input_manifest.output = batch_script_aggregate_output
+            ? batch_script_aggregate_output : batch_output_dir;
+        batch_input_manifest.inputs = batch_sources;
+        batch_input_manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
+        capture_qcc_input_snapshots(batch_input_manifest);
         if (verbose) {
             printf("Batch script-context .qo mode: %zu sources → %s\n",
                 batch_sources.size(), batch_output_dir);
@@ -8399,6 +8621,7 @@ int main(int argc, char** argv) {
         }
         std::vector<std::string> batch_objects;
         std::vector<QCCFileFingerprint> batch_output_before;
+        std::vector<std::string> published_success_stamps;
         QCCFileFingerprint aggregate_output_before;
         if (batch_script_aggregate_output) {
             aggregate_output_before = qcc_file_fingerprint(
@@ -8444,6 +8667,13 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
+        }
+        QCCFinishResult input_result = validate_qcc_input_snapshots(
+            batch_input_manifest, error);
+        if (input_result != QCCFinishResult::Success) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return qcc_finish_error_exit(input_result);
         }
         if (batch_build_sidecars) {
             const char* aggregate_index_path = write_index_json_path;
@@ -8520,18 +8750,22 @@ int main(int argc, char** argv) {
                 manifest.index_json = index;
                 manifest.depfile = depfile;
                 manifest.inputs.push_back(batch_sources[i]);
+                manifest.input_snapshots = batch_input_manifest.input_snapshots;
                 if (!add_aot_compile_contract_depfile_inputs(depfile,
                         manifest.extra_inputs, error)) {
                     fprintf(stderr, "error: %s\n", error.c_str());
                     qore_cleanup();
                     return 1;
                 }
-                if (!finish_qcc_build(manifest, argv[0], batch_output_before[i],
-                        true, false, false, error)) {
+                QCCFinishResult finish = finish_qcc_build(
+                    manifest, argv[0], batch_output_before[i],
+                    true, false, false, error, false);
+                if (finish != QCCFinishResult::Success) {
                     fprintf(stderr, "error: %s\n", error.c_str());
                     qore_cleanup();
-                    return 1;
+                    return qcc_finish_error_exit(finish);
                 }
+                published_success_stamps.push_back(stamp);
             }
             write_index_json_path = aggregate_index_path;
             write_manifest_path = aggregate_manifest_path;
@@ -8550,11 +8784,17 @@ int main(int argc, char** argv) {
             manifest.inputs = batch_sources;
             manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
             manifest.include_command_manifest_inputs = false;
-            if (!finish_qcc_build(manifest, argv[0], aggregate_output_before,
-                    true, false, false, error)) {
+            manifest.input_snapshots = batch_input_manifest.input_snapshots;
+            QCCFinishResult finish = finish_qcc_build(
+                manifest, argv[0], aggregate_output_before,
+                true, false, false, error, false);
+            if (finish != QCCFinishResult::Success) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 qore_cleanup();
-                return 1;
+                return qcc_finish_error_exit(finish);
+            }
+            if (success_stamp_path) {
+                published_success_stamps.emplace_back(success_stamp_path);
             }
             if (qcc_output_verbose()) {
                 printf("qcc: compiled fused script aggregate .qo (-O%d, %d variants%s): %s\n",
@@ -8562,6 +8802,24 @@ int main(int argc, char** argv) {
                     source_mode_suffix(include_source),
                     batch_script_aggregate_output);
             }
+        }
+        input_result = validate_qcc_input_snapshots(batch_input_manifest, error);
+        if (input_result != QCCFinishResult::Success) {
+            std::string cleanup_error;
+            for (const std::string& stamp : published_success_stamps) {
+                std::string stamp_error;
+                if (!remove_qcc_file_if_exists(stamp, stamp_error)
+                        && cleanup_error.empty()) {
+                    cleanup_error = std::move(stamp_error);
+                }
+            }
+            if (!cleanup_error.empty()) {
+                error += "; additionally, " + cleanup_error;
+                input_result = QCCFinishResult::Error;
+            }
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return qcc_finish_error_exit(input_result);
         }
         qore_cleanup();
         return 0;
@@ -8814,6 +9072,13 @@ int main(int argc, char** argv) {
         fprintf(stderr, "error: %s\n", error.c_str());
         return 1;
     }
+    if (is_split_module) {
+        capture_qcc_input_snapshots(manifest);
+    } else {
+        QCCFileFingerprint source_fingerprint = qcc_content_fingerprint(source_text);
+        std::string source_path = source_file;
+        capture_qcc_input_snapshots(manifest, &source_path, &source_fingerprint);
+    }
     QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
     if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
         if (qcc_output_verbose()) {
@@ -8821,9 +9086,11 @@ int main(int argc, char** argv) {
                 manifest.kind.c_str(), output.c_str());
         }
         std::string error;
-        if (!finish_qcc_build(manifest, argv[0], output_before, false, true, false, error)) {
+        QCCFinishResult finish = finish_qcc_build(
+            manifest, argv[0], output_before, false, true, false, error);
+        if (finish != QCCFinishResult::Success) {
             fprintf(stderr, "error: %s\n", error.c_str());
-            return 1;
+            return qcc_finish_error_exit(finish);
         }
         return 0;
     }
@@ -9044,9 +9311,11 @@ int main(int argc, char** argv) {
     }
 
     if (!rc) {
-        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, false, error)) {
+        QCCFinishResult finish = finish_qcc_build(
+            manifest, argv[0], output_before, true, false, false, error);
+        if (finish != QCCFinishResult::Success) {
             fprintf(stderr, "error: %s\n", error.c_str());
-            rc = 1;
+            rc = qcc_finish_error_exit(finish);
         }
     }
 

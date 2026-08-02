@@ -528,6 +528,11 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_QCC_HELPER_PATH(_qore_qcc_incremental_helper qore-qo-incremental)
     QORE_QCC_HELPER_PATH(_qore_qcc_source_order_helper qore-qo-source-order)
     QORE_QCC_HELPER_PATH(_qore_qcc_batch_bootstrap_helper qore-qo-batch-bootstrap)
+    set(_qore_qcc_source_order_command ${_qore_qcc_source_order_helper})
+    if (DEFINED QORE_EXECUTABLE AND EXISTS "${QORE_EXECUTABLE}")
+        set(_qore_qcc_source_order_command
+            ${QORE_EXECUTABLE} ${_qore_qcc_source_order_helper})
+    endif ()
 
     set(_qore_qcc_outputs)
     set(_qore_qcc_stamps)
@@ -595,7 +600,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_direct_deps_prefix "QORE_QCC_DIRECT_DEPS_${_qore_qcc_group_id}")
     set(_qore_qcc_direct_deps_cmake "${_QORE_QCO_SCRIPT_DIR}/direct-deps.cmake")
     execute_process(
-        COMMAND ${_qore_qcc_source_order_helper}
+        COMMAND ${_qore_qcc_source_order_command}
             --direct-map-cmake
             ${_qore_qcc_direct_deps_prefix}
             ${_qore_qcc_context_path}
@@ -611,7 +616,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     include("${_qore_qcc_direct_deps_cmake}")
 
     execute_process(
-        COMMAND ${_qore_qcc_source_order_helper}
+        COMMAND ${_qore_qcc_source_order_command}
             --source-symbol-manifest
             ${_qore_qcc_source_symbols}
             ${_qore_qcc_context_path}
@@ -741,11 +746,13 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 ${_qore_qcc_bootstrap_aggregate_dir}
-            COMMAND ${_qore_qcc_batch_bootstrap_helper}
-                ${_qore_qcc_context_path}
-                ${_qore_qcc_bootstrap_stamp}
-                ${_qore_qcc_batch_script}
-                ${_qore_qcc_source_order_helper}
+            COMMAND ${CMAKE_COMMAND} -E env
+                "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+                ${_qore_qcc_batch_bootstrap_helper}
+                    ${_qore_qcc_context_path}
+                    ${_qore_qcc_bootstrap_stamp}
+                    ${_qore_qcc_batch_script}
+                    ${_qore_qcc_source_order_helper}
             DEPENDS
                 ${_qore_qcc_batch_script}
                 ${_qore_qcc_context_path}
@@ -808,6 +815,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
                 COMMAND ${CMAKE_COMMAND} -E env
                     "QORE_QCC_BATCH_BOOTSTRAP_STAMP=${_qore_qcc_bootstrap_stamp}"
+                    "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
                     ${_qore_qcc_incremental_helper}
                         ${_qore_qcc_output}
                         ${_qore_qcc_source}

@@ -1,703 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 #
-# Derive deterministic standalone .qo compile prerequisites for one qcc object
-# group from source-level parse/build dependencies and precise native-body
-# imports recorded by previous compiles.  Ordinary linkable symbol references
-# remain unordered; the CMake source list is only a stable tie breaker.
+# Computes precise source and artifact dependencies for incremental AOT builds.
 
-# Defer annotation evaluation (PEP 563) so PEP 604 unions like `set[str] | None` parse on
-# Python 3.9 (e.g. macOS system Python), where they would otherwise raise at def time.
-from __future__ import annotations
+%modern
+%requires json
 
-import argparse
-import hashlib
-import heapq
-import json
-import os
-import re
-import sys
-from bisect import bisect_left
-from collections import defaultdict
-
-
-IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
-QUAL_IDENT = rf"{IDENT}(?:::{IDENT})*"
-TYPE_TOKEN = r"[A-Za-z_][A-Za-z0-9_:]*"
-TYPE_EXPR = r"[A-Za-z_][A-Za-z0-9_:]*(?:[ \t]*<[A-Za-z0-9_:<>,* \t]+>)?"
-
-
-CLASS_RE = re.compile(rf"\b(?:public\s+|private\s+|abstract\s+|final\s+)*class\s+({IDENT})\b")
-CLASS_INHERITS_RE = re.compile(
-    rf"\b(?:public\s+|private\s+|abstract\s+|final\s+)*class\s+{IDENT}\b[^\{{;]*\binherits\s+([^\{{;]+)"
-)
-ENUM_RE = re.compile(rf"\b(?:public\s+|private\s+)*enum\s+({IDENT})\b")
-HASHDECL_RE = re.compile(rf"\bhashdecl\s+({IDENT})\b")
-SUB_RE = re.compile(rf"\b(?:[\w:*<>]+\s+)*sub\s+({IDENT})\s*\(")
-CONST_RE = re.compile(rf"\bconst\s+({IDENT})\b")
-CONST_INIT_RE = re.compile(rf"\bconst\s+{IDENT}\s*=\s*(.*?);", re.S)
-GLOBAL_TYPE_FRAGMENT = rf"\*?{TYPE_EXPR}"
-GLOBAL_KEYWORD = r"(?<![-A-Za-z0-9_])(?:our|thread_local)\b"
-GLOBAL_SCALAR_RE = re.compile(rf"{GLOBAL_KEYWORD}\s+(?!\()(?:(?:{GLOBAL_TYPE_FRAGMENT})\s+)+\*?({IDENT})\b")
-GLOBAL_GROUP_RE = re.compile(rf"{GLOBAL_KEYWORD}\s*\(")
-NAMESPACE_EVENT_RE = re.compile(rf"\b(?:public\s+|private\s+|internal\s+)*namespace\s+({QUAL_IDENT})\s*\{{|[{{}}]")
-INCLUDE_RE = re.compile(r"^[ \t]*%include[ \t]+([^ \t\r\n#]+)", re.M)
-PARSE_DEFINE_RE = re.compile(rf"^[ \t]*%define[ \t]+({IDENT})\b", re.M)
-PARSE_DEFINE_CONSUMER_RE = re.compile(rf"^[ \t]*%ifn?def[ \t]+({IDENT})\b", re.M)
-CALL_REF_RE = re.compile(rf"\\[ \t]*({QUAL_IDENT})[ \t]*\(")
-STATIC_CALL_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})[ \t]*\(")
-STATIC_REF_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})\b(?![ \t]*\()")
-NEW_OBJECT_RE = re.compile(rf"\bnew[ \t]+({QUAL_IDENT})[ \t]*\(")
-NEW_HASH_RE = re.compile(r"\bnew[ \t]+hash\b")
-CREATE_OBJECT_RE = re.compile(rf"\bcreate_object[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
-CLASS_FOR_NAME_RE = re.compile(rf"\b(?:Reflection::)?Class::forName[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
-QUAL_RE = re.compile(rf"\b({QUAL_IDENT})\b")
-TOKEN_RE = re.compile(rf"\b({IDENT})\b")
-CASE_RE = re.compile(r"\bcase\b")
-DECL_TYPE_RE = re.compile(rf"^[ \t]*(?:public|private|internal|static|our|thread_local)?[ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
-CONSTRUCTED_DECL_TYPE_RE = re.compile(
-    rf"^(?:(?:public|private|internal)[ \t]*\{{[ \t]*)?"
-    rf"(?:(?:public|private|internal|static|our|thread_local)[ \t]+)*\*?[ \t]*"
-    rf"({TYPE_EXPR})[ \t]+{IDENT}[ \t]*\([ \t]*\)[ \t]*(?:;|=)"
-)
-PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
-QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
-PAREN_RE = re.compile(r"[()]")
-DECL_LINE_CHARS = frozenset("(;=")
-CALLABLE_MODIFIERS = {
-    "public", "private", "internal", "static", "abstract", "final", "synchronized", "deprecated",
-}
-NON_CALLABLE_NAMES = {"if", "for", "while", "switch", "catch", "foreach", "map", "foldl", "foldr"}
-NON_TYPE_PREFIXES = {"return", "throw", "new", "case"}
-CACHE_VERSION = 37
-KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
-
-
-def parse_context(path: str) -> tuple[list[str], list[str]]:
-    inputs: list[str] = []
-    outputs: list[str] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if line.startswith("input="):
-                inputs.append(line[len("input="):])
-            elif line.startswith("output="):
-                outputs.append(line[len("output="):])
-    if len(inputs) != len(outputs):
-        raise ValueError(f"context has {len(inputs)} inputs but {len(outputs)} outputs: {path}")
-    return inputs, outputs
-
-
-def parse_define_name(value: str) -> str:
-    return value.split("=", 1)[0]
-
-
-def parse_context_parse_defines(path: str) -> set[str]:
-    defines: set[str] = set()
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if line.startswith("parse_define="):
-                name = parse_define_name(line[len("parse_define="):])
-                if name:
-                    defines.add(name)
-    return defines
-
-
-def mask_qore_source(text: str, preserve_strings: bool = False) -> str:
-    out: list[str] = []
-    i = 0
-    n = len(text)
-    state = "code"
-    quote = ""
-    while i < n:
-        c = text[i]
-        nxt = text[i + 1] if i + 1 < n else ""
-
-        if state == "code":
-            if c == "#" and (i == 0 or text[i - 1] != "$"):
-                state = "line"
-                out.append(" ")
-            elif c == "/" and nxt == "/" and (i == 0 or text[i - 1] != "\\"):
-                state = "line"
-                out.extend("  ")
-                i += 1
-            elif c == "/" and nxt == "*":
-                state = "block"
-                out.extend("  ")
-                i += 1
-            elif c in ("'", '"'):
-                state = "string"
-                quote = c
-                out.append(c if preserve_strings else " ")
-            else:
-                out.append(c)
-        elif state == "line":
-            if c == "\n":
-                state = "code"
-                out.append("\n")
-            else:
-                out.append(" ")
-        elif state == "block":
-            if c == "*" and nxt == "/":
-                state = "code"
-                out.extend("  ")
-                i += 1
-            else:
-                out.append("\n" if c == "\n" else " ")
-        elif state == "string":
-            if c == "\\" and i + 1 < n:
-                if preserve_strings:
-                    out.append(c)
-                    out.append(text[i + 1])
-                else:
-                    out.extend("  ")
-                i += 1
-            elif c == quote:
-                state = "code"
-                out.append(c if preserve_strings else " ")
-            else:
-                out.append(c if preserve_strings else ("\n" if c == "\n" else " "))
-        i += 1
-    return "".join(out)
-
-
-def read_masked(path: str, true_parse_defines: set[str] | None = None) -> str:
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
-        return apply_known_parse_conditionals(mask_qore_source(f.read()), true_parse_defines)
-
-
-def read_literal_masked(path: str, true_parse_defines: set[str] | None = None) -> str:
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
-        return apply_known_parse_conditionals(mask_qore_source(f.read(), preserve_strings=True), true_parse_defines)
-
-
-def inactive_line(line: str) -> str:
-    return "\n" if line.endswith("\n") else ""
-
-
-def apply_known_parse_conditionals(code: str, true_parse_defines: set[str] | None = None) -> str:
-    known_true_parse_defines = set(KNOWN_TRUE_PARSE_DEFINES)
-    if true_parse_defines:
-        known_true_parse_defines.update(true_parse_defines)
-
-    out: list[str] = []
-    stack: list[dict[str, bool]] = []
-
-    def current_active() -> bool:
-        return all(frame["active"] for frame in stack)
-
-    for line in code.splitlines(keepends=True):
-        m = re.match(r"^[ \t]*%(ifn?def)[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b", line)
-        if m:
-            parent_active = current_active()
-            directive = m.group(1)
-            symbol = m.group(2)
-            known = symbol in known_true_parse_defines
-            if known:
-                condition = symbol in known_true_parse_defines
-                if directive == "ifndef":
-                    condition = not condition
-                stack.append({
-                    "known": True,
-                    "parent_active": parent_active,
-                    "condition": condition,
-                    "active": parent_active and condition,
-                })
-                out.append(inactive_line(line))
-            else:
-                stack.append({
-                    "known": False,
-                    "parent_active": parent_active,
-                    "condition": True,
-                    "active": parent_active,
-                })
-                out.append(line if parent_active else inactive_line(line))
-            continue
-
-        m = re.match(r"^[ \t]*%else\b", line)
-        if m and stack:
-            frame = stack[-1]
-            if frame["known"]:
-                frame["active"] = frame["parent_active"] and not frame["condition"]
-                out.append(inactive_line(line))
-            else:
-                frame["active"] = frame["parent_active"]
-                out.append(line if frame["parent_active"] else inactive_line(line))
-            continue
-
-        m = re.match(r"^[ \t]*%endif\b", line)
-        if m and stack:
-            frame = stack.pop()
-            out.append(line if not frame["known"] and current_active() else inactive_line(line))
-            continue
-
-        out.append(line if current_active() else inactive_line(line))
-
-    return "".join(out)
-
-
-def simple_name(path: str) -> str:
-    return path.rsplit("::", 1)[-1]
-
-
-def split_top_level(text: str, sep: str = ",") -> list[str]:
-    parts: list[str] = []
-    start = 0
-    angle = 0
-    paren = 0
-    bracket = 0
-    brace = 0
-    for pos, ch in enumerate(text):
-        if ch == "<":
-            angle += 1
-        elif ch == ">" and angle:
-            angle -= 1
-        elif ch == "(":
-            paren += 1
-        elif ch == ")" and paren:
-            paren -= 1
-        elif ch == "[":
-            bracket += 1
-        elif ch == "]" and bracket:
-            bracket -= 1
-        elif ch == "{":
-            brace += 1
-        elif ch == "}" and brace:
-            brace -= 1
-        elif ch == sep and not angle and not paren and not bracket and not brace:
-            parts.append(text[start:pos])
-            start = pos + 1
-    parts.append(text[start:])
-    return parts
-
-
-def find_balanced_close(code: str, open_pos: int, open_ch: str = "(", close_ch: str = ")") -> int:
-    depth = 0
-    pos = open_pos
-    while pos < len(code):
-        ch = code[pos]
-        if ch == open_ch:
-            depth += 1
-        elif ch == close_ch:
-            depth -= 1
-            if depth == 0:
-                return pos
-        pos += 1
-    return -1
-
-
-def iter_global_names(code: str):
-    consumed_ranges: list[tuple[int, int]] = []
-    for m in GLOBAL_GROUP_RE.finditer(code):
-        open_pos = code.find("(", m.start(), m.end())
-        if open_pos < 0:
-            continue
-        close_pos = find_balanced_close(code, open_pos)
-        if close_pos < 0:
-            continue
-        consumed_ranges.append((m.start(), close_pos + 1))
-        body = code[open_pos + 1:close_pos]
-        for entry in split_top_level(body):
-            candidate = entry.strip()
-            if not candidate:
-                continue
-            candidate = candidate.split("=", 1)[0].strip()
-            m_name = re.search(rf"\*?({IDENT})\s*$", candidate)
-            if m_name:
-                yield m_name.group(1)
-
-    def in_consumed_range(pos: int) -> bool:
-        return any(start <= pos < end for start, end in consumed_ranges)
-
-    for m in GLOBAL_SCALAR_RE.finditer(code):
-        if not in_consumed_range(m.start()):
-            yield m.group(1)
-
-
-def qualify_symbol(namespace: str, name: str) -> str:
-    return f"{namespace}::{name}" if namespace else name
-
-
-def namespace_child_path(parent: str, child: str) -> str:
-    child = child[2:] if child.startswith("::") else child
-    if not parent or "::" in child:
-        return child
-    return f"{parent}::{child}"
-
-
-def iter_namespace_segments(code: str):
-    frames: list[tuple[int, str]] = []
-    brace_depth = 0
-    last = 0
-
-    def current_namespace() -> str:
-        return frames[-1][1] if frames else ""
-
-    for m in NAMESPACE_EVENT_RE.finditer(code):
-        if m.start() > last:
-            yield code[last:m.start()], current_namespace()
-
-        namespace_name = m.group(1)
-        if namespace_name:
-            brace_depth += 1
-            frames.append((brace_depth, namespace_child_path(current_namespace(), namespace_name)))
-        elif m.group(0) == "{":
-            brace_depth += 1
-        elif brace_depth:
-            brace_depth -= 1
-            while frames and frames[-1][0] > brace_depth:
-                frames.pop()
-
-        last = m.end()
-
-    if last < len(code):
-        yield code[last:], current_namespace()
-
-
-def collect_provides(code: str) -> set[str]:
-    provides: set[str] = set()
-    for regex in (CLASS_RE, ENUM_RE, HASHDECL_RE, SUB_RE, CONST_RE):
-        provides.update(m.group(1) for m in regex.finditer(code))
-    provides.update(iter_global_names(code))
-    return provides
-
-
-def collect_source_symbol_providers(inputs: list[str],
-        true_parse_defines: set[str] | None = None
-        ) -> dict[str, dict[str, set[str]]]:
-    providers: dict[str, dict[str, set[str]]] = {
-        "class": defaultdict(set),
-        "hashdecl": defaultdict(set),
-        "function": defaultdict(set),
-        "global": defaultdict(set),
-    }
-    for source in inputs:
-        source_path = os.path.realpath(os.path.abspath(source))
-        code = read_masked(source, true_parse_defines)
-        for segment, namespace in iter_namespace_segments(code):
-            for m in CLASS_RE.finditer(segment):
-                providers["class"][qualify_symbol(namespace, m.group(1))].add(source_path)
-            for m in HASHDECL_RE.finditer(segment):
-                providers["hashdecl"][qualify_symbol(namespace, m.group(1))].add(source_path)
-            for m in SUB_RE.finditer(segment):
-                providers["function"][qualify_symbol(namespace, m.group(1))].add(source_path)
-            for name in iter_global_names(segment):
-                providers["global"][qualify_symbol(namespace, name)].add(source_path)
-    return providers
-
-
-def build_source_symbol_manifest(context: str, inputs: list[str]) -> str:
-    true_parse_defines = parse_context_parse_defines(context)
-    providers = collect_source_symbol_providers(inputs, true_parse_defines)
-    lines = ["format=1"]
-    for kind in ("class", "hashdecl", "function", "global"):
-        for symbol in sorted(providers[kind]):
-            sources = sorted(providers[kind][symbol])
-            # Ambiguous simple names are not safe to use as precedence hints.
-            if len(sources) != 1:
-                continue
-            lines.append(f"{kind}\t{symbol}\t{sources[0]}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def write_if_changed(path: str, content: str) -> None:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            if f.read() == content:
-                return
-    except OSError:
-        pass
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(content)
-    os.replace(tmp, path)
-
-
-def collect_parse_defines(code: str) -> set[str]:
-    return {m.group(1) for m in PARSE_DEFINE_RE.finditer(code)}
-
-
-def collect_includes(code: str) -> set[str]:
-    includes: set[str] = set()
-    for m in INCLUDE_RE.finditer(code):
-        name = m.group(1).strip("\"'<>")
-        if name:
-            includes.add(name)
-    return includes
-
-
-def collect_mentions(code: str) -> set[str]:
-    mentions = {m.group(1) for m in TOKEN_RE.finditer(code)}
-    for m in QUAL_RE.finditer(code):
-        mentions.add(simple_name(m.group(1)))
-    return mentions
-
-
-def collect_unqualified_mentions(code: str) -> set[str]:
-    code = QUALIFIED_REF_RE.sub(lambda m: " " * len(m.group(0)), code)
-    return {m.group(1) for m in TOKEN_RE.finditer(code)}
-
-
-def iter_angle_args(code: str, name: str):
-    regex = re.compile(rf"\b{name}\b")
-    for m in regex.finditer(code):
-        pos = m.end()
-        while pos < len(code) and code[pos].isspace():
-            pos += 1
-        if pos >= len(code) or code[pos] != "<":
-            continue
-        pos += 1
-        start = pos
-        depth = 1
-        while pos < len(code):
-            c = code[pos]
-            if c == "<":
-                depth += 1
-            elif c == ">":
-                depth -= 1
-                if depth == 0:
-                    yield code[start:pos]
-                    break
-            pos += 1
-
-
-def collect_hash_type_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for args in iter_angle_args(code, "hash"):
-        mentions.update(collect_mentions(args))
-    return mentions
-
-
-def collect_new_hash_type_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for m in NEW_HASH_RE.finditer(code):
-        pos = m.end()
-        while pos < len(code) and code[pos].isspace():
-            pos += 1
-        if pos >= len(code) or code[pos] != "<":
-            continue
-        pos += 1
-        start = pos
-        depth = 1
-        while pos < len(code):
-            c = code[pos]
-            if c == "<":
-                depth += 1
-            elif c == ">":
-                depth -= 1
-                if depth == 0:
-                    mentions.update(collect_mentions(code[start:pos]))
-                    break
-            pos += 1
-    return mentions
-
-
-def collect_enum_type_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for args in iter_angle_args(code, "enum"):
-        mentions.update(collect_mentions(args))
-    return mentions
-
-
-def collect_decl_type_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for line in code.splitlines():
-        if any(c in line for c in DECL_LINE_CHARS):
-            m = DECL_TYPE_RE.match(line)
-            if m:
-                mentions.add(simple_name(m.group(1)))
-        if "(" in line or "," in line:
-            for m in PARAM_TYPE_RE.finditer(line):
-                mentions.add(simple_name(m.group(1)))
-    return mentions
-
-
-def collect_constructed_decl_type_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for line in code.splitlines():
-        if "(" not in line or ")" not in line:
-            continue
-        m = CONSTRUCTED_DECL_TYPE_RE.match(line.strip())
-        if m:
-            mentions.update(collect_mentions(m.group(1)))
-    return mentions
-
-
-def collect_call_ref_mentions(code: str) -> tuple[set[str], set[str]]:
-    class_mentions: set[str] = set()
-    function_mentions: set[str] = set()
-    for m in CALL_REF_RE.finditer(code):
-        path = m.group(1)
-        parts = path.split("::")
-        if len(parts) == 1:
-            function_mentions.add(parts[0])
-        else:
-            class_mentions.update(parts[:-1])
-            function_mentions.add(parts[-1])
-    return class_mentions, function_mentions
-
-
-def collect_static_call_mentions(code: str) -> set[str]:
-    return {simple_name(m.group(1)) for m in STATIC_CALL_RE.finditer(code)}
-
-
-def is_callable_declaration(code: str, open_pos: int, close_pos: int) -> bool:
-    tail = close_pos + 1
-    while tail < len(code) and code[tail].isspace():
-        tail += 1
-    if tail >= len(code) or code[tail] not in "{:;":
-        return False
-
-    search_start = max(0, open_pos - 4096)
-    header_start = max(code.rfind(ch, search_start, open_pos) for ch in ";{}") + 1
-    header_start = max(header_start, search_start)
-    name_end = open_pos
-    while name_end > header_start and code[name_end - 1].isspace():
-        name_end -= 1
-    name_start = name_end
-    while name_start > header_start and (code[name_start - 1].isalnum() or code[name_start - 1] == "_"):
-        name_start -= 1
-    if name_start == name_end or not (code[name_start].isalpha() or code[name_start] == "_"):
-        return False
-    name = code[name_start:name_end]
-    prefix = code[header_start:name_start].strip()
-
-    if name == "constructor":
-        return not prefix or all(word in CALLABLE_MODIFIERS for word in prefix.split())
-    if name in NON_CALLABLE_NAMES:
-        return False
-    if re.search(r"\bsub\s*$", prefix):
-        return True
-    if not prefix:
-        # A bare identifier followed by ';' is an ordinary call, while an
-        # untyped method declaration must introduce a body or base-init list.
-        return code[tail] in "{:"
-    if prefix.endswith("::") or any(ch in prefix for ch in "=.?!+/-%&|[]()@\\"):
-        return False
-    first_word = prefix.split(None, 1)[0]
-    return first_word not in NON_TYPE_PREFIXES
-
-
-def iter_parenthesized_ranges(code: str):
-    stack: list[int] = []
-    for match in PAREN_RE.finditer(code):
-        pos = match.start()
-        ch = match.group(0)
-        if ch == "(":
-            stack.append(pos)
-        elif ch == ")" and stack:
-            yield stack.pop(), pos
-
-
-def collect_param_default_static_call_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    static_positions = [match.start() for match in STATIC_CALL_RE.finditer(code)]
-    if not static_positions:
-        return mentions
-    for open_pos, close_pos in iter_parenthesized_ranges(code):
-        match_index = bisect_left(static_positions, open_pos)
-        if match_index >= len(static_positions) or static_positions[match_index] >= close_pos:
-            continue
-        if not is_callable_declaration(code, open_pos, close_pos):
-            continue
-        for parameter in split_top_level(code[open_pos + 1:close_pos]):
-            default_parts = split_top_level(parameter, "=")
-            if len(default_parts) < 2:
-                continue
-            default_expr = "=".join(default_parts[1:])
-            mentions.update(collect_static_call_mentions(default_expr))
-    return mentions
-
-
-def collect_static_ref_mentions(code: str) -> set[str]:
-    return {simple_name(m.group(1)) for m in STATIC_REF_RE.finditer(code)}
-
-
-def collect_const_init_static_call_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for m in CONST_INIT_RE.finditer(code):
-        mentions.update(collect_static_call_mentions(m.group(1)))
-    return mentions
-
-
-def collect_new_object_mentions(code: str) -> set[str]:
-    return {simple_name(m.group(1)) for m in NEW_OBJECT_RE.finditer(code)}
-
-
-def collect_create_object_mentions(code: str) -> set[str]:
-    return {simple_name(m.group(1)) for m in CREATE_OBJECT_RE.finditer(code)}
-
-
-def collect_class_for_name_mentions(code: str) -> set[str]:
-    return {simple_name(m.group(1)) for m in CLASS_FOR_NAME_RE.finditer(code)}
-
-
-def iter_case_expressions(code: str):
-    for m in CASE_RE.finditer(code):
-        pos = m.end()
-        while pos < len(code) and code[pos].isspace():
-            pos += 1
-
-        start = pos
-        paren_depth = 0
-        bracket_depth = 0
-        brace_depth = 0
-        while pos < len(code):
-            c = code[pos]
-            nxt = code[pos + 1] if pos + 1 < len(code) else ""
-            if c == "(":
-                paren_depth += 1
-            elif c == ")" and paren_depth:
-                paren_depth -= 1
-            elif c == "[":
-                bracket_depth += 1
-            elif c == "]" and bracket_depth:
-                bracket_depth -= 1
-            elif c == "{":
-                brace_depth += 1
-            elif c == "}" and brace_depth:
-                brace_depth -= 1
-            elif (
-                c == ":"
-                and nxt != ":"
-                and not (pos > 0 and code[pos - 1] == ":")
-                and paren_depth == 0
-                and bracket_depth == 0
-                and brace_depth == 0
-            ):
-                yield code[start:pos]
-                break
-            elif c in ";\n" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
-                break
-            pos += 1
-
-
-def collect_inheritance_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for m in CLASS_INHERITS_RE.finditer(code):
-        for base in QUAL_RE.finditer(m.group(1)):
-            mentions.add(simple_name(base.group(1)))
-    return mentions
-
-
-def collect_hard_mentions(code: str) -> set[str]:
-    mentions: set[str] = set()
-    for m in CONST_INIT_RE.finditer(code):
-        mentions.update(collect_unqualified_mentions(m.group(1)))
-
-    for expr in iter_case_expressions(code):
-        mentions.update(collect_mentions(expr))
-
-    return mentions
-
-
-SOURCE_SUMMARY_KEYS = (
+const CACHE_VERSION = 37;
+const SOURCE_SUMMARY_KEYS = (
     "provides",
     "classes",
     "enums",
@@ -721,733 +33,2099 @@ SOURCE_SUMMARY_KEYS = (
     "static_ref_mentions",
     "includes",
     "parse_define_consumers",
-)
+);
 
+hashdecl SourceOrderContext {
+    list<string> inputs;
+    list<string> outputs;
+    hash<string, bool> parse_defines;
+}
 
-def scan_source_summary(source: str,
-        true_parse_defines: set[str] | None = None) -> dict[str, list[str]]:
-    with open(source, "r", encoding="utf-8", errors="replace") as f:
-        text = f.read()
-    code = apply_known_parse_conditionals(mask_qore_source(text), true_parse_defines)
-    literal_code = apply_known_parse_conditionals(
-        mask_qore_source(text, preserve_strings=True), true_parse_defines)
-    call_ref_classes, call_ref_functions = collect_call_ref_mentions(code)
-    return {
-        "provides": sorted(collect_provides(code)),
-        "classes": sorted(m.group(1) for m in CLASS_RE.finditer(code)),
-        "enums": sorted(m.group(1) for m in ENUM_RE.finditer(code)),
-        "hashdecls": sorted(m.group(1) for m in HASHDECL_RE.finditer(code)),
-        "functions": sorted(m.group(1) for m in SUB_RE.finditer(code)),
-        "parse_defines": sorted(collect_parse_defines(code)),
-        "inheritance_mentions": sorted(collect_inheritance_mentions(code)),
-        "hard_mentions": sorted(collect_hard_mentions(code)),
-        "decl_type_mentions": sorted(collect_decl_type_mentions(code)),
-        "hash_type_mentions": sorted(collect_hash_type_mentions(code)),
-        "enum_type_mentions": sorted(collect_enum_type_mentions(code)),
-        "call_ref_classes": sorted(call_ref_classes),
-        "call_ref_functions": sorted(call_ref_functions),
-        "constructed_decl_type_mentions": sorted(collect_constructed_decl_type_mentions(code)),
-        "new_hash_type_mentions": sorted(collect_new_hash_type_mentions(code)),
-        "new_object_mentions": sorted(collect_new_object_mentions(code)),
-        "class_for_name_mentions": sorted(collect_class_for_name_mentions(literal_code)),
-        "create_object_mentions": sorted(collect_create_object_mentions(literal_code)),
-        "static_call_mentions": sorted(collect_static_call_mentions(code)),
-        "param_default_static_call_mentions": sorted(
-            collect_param_default_static_call_mentions(code)),
-        "static_ref_mentions": sorted(collect_static_ref_mentions(code)),
-        "includes": sorted(collect_includes(code)),
-        "parse_define_consumers": sorted(PARSE_DEFINE_CONSUMER_RE.findall(code)),
+hashdecl SourceOrderGraph {
+    list<hash<string, bool>> outgoing;
+    list<hash<string, bool>> incoming;
+    list<hash<string, bool>> required;
+    list<hash<string, list<string>>> summaries;
+}
+
+class SourceSymbolManifestGenerator {
+    private {
+        Regex class_re = new Regex("\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex class_inherits_re = new Regex(
+            "\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+"
+            "[A-Za-z_][A-Za-z0-9_]*\\b[^\\{;]*\\binherits\\s+([^\\{;]+)", RE_Global);
+        Regex enum_re = new Regex(
+            "\\b(?:public\\s+|private\\s+)*enum\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex hashdecl_re = new Regex("\\bhashdecl\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex sub_re = new Regex("\\b(?:[\\w:*<>]+\\s+)*sub\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(", RE_Global);
+        Regex const_re = new Regex("\\bconst\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex const_init_re = new Regex(
+            "\\bconst\\s+[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*(.*?);", RE_Global | RE_DotAll);
+        Regex global_group_re = new Regex("(?<![-A-Za-z0-9_])(?:our|thread_local)\\b\\s*\\(", RE_Global);
+        Regex global_scalar_re = new Regex(
+            "(?<![-A-Za-z0-9_])(?:our|thread_local)\\b\\s+(?!\\()"
+            "(?:(?:\\*?[A-Za-z_][A-Za-z0-9_:]*(?:[ \\t]*<[A-Za-z0-9_:<>,* \\t]+>)?)\\s+)+"
+            "\\*?([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex global_name_re = new Regex("\\*?([A-Za-z_][A-Za-z0-9_]*)\\s*$");
+        Regex namespace_event_re = new Regex(
+            "\\b(?:public\\s+|private\\s+|internal\\s+)*namespace\\s+"
+            "([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\\s*\\{|[{}]", RE_Global);
+        Regex conditional_re = new Regex("^%(ifn?def)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b");
+        Regex conditional_scan_re = new Regex(
+            "^[ \\t]*%(ifn?def)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global | RE_MultiLine);
+        Regex include_re = new Regex("^[ \\t]*%include[ \\t]+([^ \\t\\r\\n#]+)", RE_Global | RE_MultiLine);
+        Regex parse_define_re = new Regex(
+            "^[ \\t]*%define[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global | RE_MultiLine);
+        Regex parse_define_consumer_re = new Regex(
+            "^[ \\t]*%ifn?def[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global | RE_MultiLine);
+        Regex call_ref_re = new Regex(
+            "\\\\[ \\t]*([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)[ \\t]*\\(", RE_Global);
+        Regex static_call_re = new Regex(
+            "\\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::"
+            "([A-Za-z_][A-Za-z0-9_]*)[ \\t]*\\(", RE_Global);
+        Regex static_ref_re = new Regex(
+            "\\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::"
+            "([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*\\()", RE_Global);
+        Regex new_object_re = new Regex(
+            "\\bnew[ \\t]+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)[ \\t]*\\(", RE_Global);
+        Regex new_hash_re = new Regex("\\bnew[ \\t]+hash\\b", RE_Global);
+        Regex create_object_re = new Regex(
+            "\\bcreate_object[ \\t]*\\([ \\t]*[\"']"
+            "([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)[\"']", RE_Global);
+        Regex class_for_name_re = new Regex(
+            "\\b(?:Reflection::)?Class::forName[ \\t]*\\([ \\t]*[\"']"
+            "([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)[\"']", RE_Global);
+        Regex qual_re = new Regex(
+            "\\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\\b", RE_Global);
+        Regex token_re = new Regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex decl_type_re = new Regex(
+            "^[ \\t]*(?:public|private|internal|static|our|thread_local)?[ \\t]*\\*?[ \\t]*"
+            "([A-Za-z_][A-Za-z0-9_:]*)[ \\t]+[A-Za-z_][A-Za-z0-9_]*\\b");
+        Regex constructed_decl_type_re = new Regex(
+            "^(?:(?:public|private|internal)[ \\t]*\\{[ \\t]*)?"
+            "(?:(?:public|private|internal|static|our|thread_local)[ \\t]+)*\\*?[ \\t]*"
+            "([A-Za-z_][A-Za-z0-9_:]*(?:[ \\t]*<[A-Za-z0-9_:<>,* \\t]+>)?)[ \\t]+"
+            "[A-Za-z_][A-Za-z0-9_]*[ \\t]*\\([ \\t]*\\)[ \\t]*(?:;|=)");
+        Regex param_type_re = new Regex(
+            "[(,][ \\t]*\\*?[ \\t]*([A-Za-z_][A-Za-z0-9_:]*)[ \\t]+"
+            "[A-Za-z_][A-Za-z0-9_]*\\b", RE_Global);
+        Regex qualified_ref_re = new Regex(
+            "\\b[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+\\b", RE_Global);
+        Regex paren_re = new Regex("[()]", RE_Global);
+        Regex case_re = new Regex("\\bcase\\b", RE_Global);
+        Regex hash_token_re = new Regex("\\bhash\\b", RE_Global);
+        Regex enum_token_re = new Regex("\\benum\\b", RE_Global);
+        hash<string, bool> callable_modifiers = (
+            "public": True, "private": True, "internal": True, "static": True,
+            "abstract": True, "final": True, "synchronized": True, "deprecated": True,
+        );
+        hash<string, bool> non_callable_names = (
+            "if": True, "for": True, "while": True, "switch": True, "catch": True,
+            "foreach": True, "map": True, "foldl": True, "foldr": True,
+        );
+        hash<string, bool> non_type_prefixes = (
+            "return": True, "throw": True, "new": True, "case": True,
+        );
+        string mask_pattern = "(?:\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"|'(?:\\\\[\\s\\S]|[^'\\\\])*'|"
+            "(?<!\\\\)//[^\\n]*|(?<!\\$)#[^\\n]*|/\\*[\\s\\S]*?\\*/)";
     }
 
-
-def source_summary_valid(summary: object) -> bool:
-    if not isinstance(summary, dict):
-        return False
-    return all(
-        isinstance(summary.get(key), list)
-        and all(isinstance(value, str) for value in summary[key])
-        for key in SOURCE_SUMMARY_KEYS
-    )
-
-
-def summary_set(summary: dict[str, list[str]], key: str) -> set[str]:
-    return set(summary[key])
-
-
-def build_hard_graph_from_summaries(inputs: list[str],
-        summaries: list[dict[str, list[str]]]
-        ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]]:
-    provides_by_source = [summary_set(summary, "provides") for summary in summaries]
-    provider_sources: dict[str, set[int]] = defaultdict(set)
-    class_provider_sources: dict[str, set[int]] = defaultdict(set)
-    enum_provider_sources: dict[str, set[int]] = defaultdict(set)
-    hashdecl_provider_sources: dict[str, set[int]] = defaultdict(set)
-    function_provider_sources: dict[str, set[int]] = defaultdict(set)
-    parse_define_provider_sources: dict[str, set[int]] = defaultdict(set)
-
-    for i, summary in enumerate(summaries):
-        for symbol in provides_by_source[i]:
-            provider_sources[symbol].add(i)
-        for symbol in summary["classes"]:
-            class_provider_sources[symbol].add(i)
-        for symbol in summary["enums"]:
-            enum_provider_sources[symbol].add(i)
-        for symbol in summary["hashdecls"]:
-            hashdecl_provider_sources[symbol].add(i)
-        for symbol in summary["functions"]:
-            function_provider_sources[symbol].add(i)
-        for symbol in summary["parse_defines"]:
-            parse_define_provider_sources[symbol].add(i)
-
-    unique_provider = {
-        symbol: next(iter(sources))
-        for symbol, sources in provider_sources.items()
-        if len(sources) == 1
-    }
-    provider_symbols = set(unique_provider)
-    unique_class_symbols = {
-        symbol for symbol, sources in class_provider_sources.items()
-        if len(sources) == 1 and symbol in unique_provider
-    }
-    unique_enum_symbols = {
-        symbol for symbol, sources in enum_provider_sources.items()
-        if len(sources) == 1 and symbol in unique_provider
-    }
-    unique_hashdecl_symbols = {
-        symbol for symbol, sources in hashdecl_provider_sources.items()
-        if len(sources) == 1 and symbol in unique_provider
-    }
-    unique_function_symbols = {
-        symbol for symbol, sources in function_provider_sources.items()
-        if len(sources) == 1 and symbol in unique_provider
-    }
-    unique_parse_define = {
-        symbol: next(iter(sources))
-        for symbol, sources in parse_define_provider_sources.items()
-        if len(sources) == 1
-    }
-    input_basename_sources: dict[str, list[int]] = defaultdict(list)
-    for index, path in enumerate(inputs):
-        input_basename_sources[os.path.basename(path)].append(index)
-    unique_input_basename = {
-        name: sources[0]
-        for name, sources in input_basename_sources.items()
-        if len(sources) == 1
+    private string maskSource(string text, bool preserve_strings = False) {
+        return regex_subst(text, mask_pattern, string sub(hash<RegexMatchInfo> match) {
+            if (preserve_strings && match.match
+                    && (match.match.getByte(0) == 0x22 || match.match.getByte(0) == 0x27)) {
+                return match.match;
+            }
+            return regex_subst(match.match, "[^\\n]", " ", RE_Global);
+        }, RE_Global);
     }
 
-    outgoing: dict[int, set[int]] = defaultdict(set)
-    incoming: dict[int, set[int]] = defaultdict(set)
-    required_edges: set[tuple[int, int]] = set()
-
-    def add_edge(provider: int, consumer: int, required: bool = False) -> None:
-        if provider == consumer:
-            return
-        if consumer not in outgoing[provider]:
-            outgoing[provider].add(consumer)
-            incoming[consumer].add(provider)
-        if required:
-            required_edges.add((provider, consumer))
-
-    for consumer, summary in enumerate(summaries):
-        for symbol in summary_set(summary, "inheritance_mentions") & provider_symbols:
-            provider = unique_provider[symbol]
-            if symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer, required=True)
-
-        for symbol in summary_set(summary, "hard_mentions") & provider_symbols:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer, required=True)
-
-        mentions = set()
-        mentions.update(summary_set(summary, "decl_type_mentions")
-            & (unique_class_symbols | unique_hashdecl_symbols))
-        mentions.update(summary_set(summary, "hash_type_mentions") & unique_hashdecl_symbols)
-        for symbol in summary_set(summary, "enum_type_mentions") & unique_enum_symbols:
-            provider = unique_provider[symbol]
-            if symbol in provides_by_source[consumer]:
-                continue
-            # Enum type annotations (`enum<Foo>`) must resolve while parsing
-            # the consumer; unlike class/hashdecl type imports, unresolved enum
-            # types are not link-deferred today.
-            add_edge(provider, consumer, required=True)
-        for symbol in summary_set(summary, "call_ref_functions") & unique_function_symbols:
-            provider = unique_provider[symbol]
-            if symbol in provides_by_source[consumer]:
-                continue
-            # Function call references require the target function during
-            # parse/commit today; direct calls can be deferred to the linker.
-            add_edge(provider, consumer, required=True)
-        for symbol in summary_set(summary, "call_ref_classes") & unique_class_symbols:
-            provider = unique_provider[symbol]
-            if symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer)
-        mentions.update(summary_set(summary, "constructed_decl_type_mentions")
-            & (unique_class_symbols | unique_hashdecl_symbols))
-        mentions.update(summary_set(summary, "new_hash_type_mentions") & unique_hashdecl_symbols)
-        for symbol in summary_set(summary, "new_object_mentions") & unique_class_symbols:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer)
-        for symbol in summary_set(summary, "class_for_name_mentions") & unique_class_symbols:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer)
-        mentions.update(summary_set(summary, "create_object_mentions") & unique_class_symbols)
-        mentions.update(summary_set(summary, "static_call_mentions") & unique_class_symbols)
-        for symbol in summary_set(summary, "param_default_static_call_mentions") & unique_class_symbols:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            # Static method calls in parameter defaults are restored during
-            # sibling finalization and therefore require the provider method
-            # map to exist when the consumer artifact is generated.
-            add_edge(provider, consumer, required=True)
-        static_refs = summary_set(summary, "static_ref_mentions")
-        mentions.update(static_refs & unique_class_symbols)
-        for symbol in static_refs & unique_enum_symbols:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            # Enum members (`Foo::Bar`) are compile-time constants and require
-            # the enum declaration during parse/commit so switch/case and enum
-            # value checks see the real enum.
-            add_edge(provider, consumer, required=True)
-        for symbol in mentions:
-            provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
-                continue
-            add_edge(provider, consumer)
-
-        for included in summary["includes"]:
-            provider = unique_input_basename.get(os.path.basename(included))
-            if provider is None or provider == consumer:
-                continue
-            add_edge(provider, consumer, required=True)
-
-        for symbol in summary["parse_define_consumers"]:
-            provider = unique_parse_define.get(symbol)
-            if provider is None or provider == consumer:
-                continue
-            add_edge(provider, consumer, required=True)
-
-    return outgoing, incoming, required_edges
-
-
-def build_hard_graph(inputs: list[str],
-        true_parse_defines: set[str] | None = None
-        ) -> tuple[
-            dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]],
-            list[dict[str, list[str]]]
-        ]:
-    summaries = [scan_source_summary(source, true_parse_defines) for source in inputs]
-    outgoing, incoming, required_edges = build_hard_graph_from_summaries(inputs, summaries)
-    return outgoing, incoming, required_edges, summaries
-
-
-def graph_to_lists(graph: dict[int, set[int]], count: int) -> list[list[int]]:
-    return [sorted(graph.get(i, ())) for i in range(count)]
-
-
-def lists_to_graph(values: list[list[int]]) -> dict[int, set[int]]:
-    graph: dict[int, set[int]] = defaultdict(set)
-    for i, items in enumerate(values):
-        if items:
-            graph[i] = set(items)
-    return graph
-
-
-def compute_scc_ids(outgoing: dict[int, set[int]], count: int) -> list[int]:
-    indices: list[int] = [-1] * count
-    lowlinks: list[int] = [0] * count
-    on_stack: list[bool] = [False] * count
-    stack: list[int] = []
-    scc_ids: list[int] = [-1] * count
-    next_index = 0
-    next_scc = 0
-
-    def strongconnect(node: int) -> None:
-        nonlocal next_index, next_scc
-        indices[node] = next_index
-        lowlinks[node] = next_index
-        next_index += 1
-        stack.append(node)
-        on_stack[node] = True
-
-        for consumer in sorted(outgoing.get(node, ())):
-            if indices[consumer] == -1:
-                strongconnect(consumer)
-                lowlinks[node] = min(lowlinks[node], lowlinks[consumer])
-            elif on_stack[consumer]:
-                lowlinks[node] = min(lowlinks[node], indices[consumer])
-
-        if lowlinks[node] != indices[node]:
-            return
-
-        while True:
-            member = stack.pop()
-            on_stack[member] = False
-            scc_ids[member] = next_scc
-            if member == node:
-                break
-        next_scc += 1
-
-    for node in range(count):
-        if indices[node] == -1:
-            strongconnect(node)
-
-    return scc_ids
-
-
-def edge_pairs_to_lists(required_edges: set[tuple[int, int]], count: int) -> list[list[int]]:
-    values: list[list[int]] = [[] for _ in range(count)]
-    for provider, consumer in sorted(required_edges):
-        values[provider].append(consumer)
-    return values
-
-
-def edge_lists_to_pairs(values: list[list[int]]) -> set[tuple[int, int]]:
-    pairs: set[tuple[int, int]] = set()
-    for provider, consumers in enumerate(values):
-        for consumer in consumers:
-            pairs.add((provider, consumer))
-    return pairs
-
-
-def sha256_file(path: str) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def file_record(path: str) -> dict[str, object]:
-    return {
-        "path": os.path.abspath(path),
-        "size": os.path.getsize(path),
-        "sha256": sha256_file(path),
+    private bool active(list<hash<auto>> stack) {
+        foreach hash<auto> frame in (stack) {
+            if (!frame.active) {
+                return False;
+            }
+        }
+        return True;
     }
 
+    private int directiveOffset(string line) {
+        for (int offset = 0; offset < line.size(); ++offset) {
+            int byte = line.getByte(offset);
+            if (byte != 0x20 && byte != 0x09) {
+                return byte == 0x25 ? offset : -1;
+            }
+        }
+        return -1;
+    }
 
-def file_records(paths: list[str]) -> list[dict[str, object]]:
-    return [file_record(path) for path in paths]
+    private string applyConditionals(string code, hash<string, bool> true_defines) {
+        if (code.find("%ifdef") < 0 && code.find("%ifndef") < 0) {
+            return code;
+        }
+        hash<string, bool> known_true = (
+            "QoreStandaloneQo": True,
+            "QorusStandaloneQo": True,
+        );
+        foreach string define in (true_defines.keys()) {
+            known_true{define} = True;
+        }
+        bool has_known_conditional = False;
+        list<*string> conditional_groups = conditional_scan_re.extractGroups(code) ?? ();
+        for (int index = 1; index < conditional_groups.size(); index += 2) {
+            if (exists conditional_groups[index] && exists known_true{conditional_groups[index]}) {
+                has_known_conditional = True;
+                break;
+            }
+        }
+        if (!has_known_conditional) {
+            return code;
+        }
+        list<string> input_lines = code.split("\n");
+        list<string> output_lines = ();
+        list<hash<auto>> stack = ();
+        int last = input_lines.size() - 1;
+        for (int index = 0; index < input_lines.size(); ++index) {
+            if (index == last && !input_lines[index] && code.endsWith("\n")) {
+                break;
+            }
+            string line = input_lines[index] + (index < last ? "\n" : "");
+            int directive_offset = directiveOffset(line);
+            if (directive_offset < 0) {
+                push output_lines, active(stack) ? line : (line.endsWith("\n") ? "\n" : "");
+                continue;
+            }
+            string directive_line = line.substr(directive_offset);
+            *list<*string> conditional = conditional_re.extractGroups(directive_line);
+            if (conditional) {
+                bool parent_active = active(stack);
+                string directive = conditional[0];
+                string symbol = conditional[1];
+                bool known = exists known_true{symbol};
+                if (known) {
+                    bool condition = directive == "ifndef" ? False : True;
+                    push stack, (
+                        "known": True,
+                        "parent_active": parent_active,
+                        "condition": condition,
+                        "active": parent_active && condition,
+                    );
+                    push output_lines, line.endsWith("\n") ? "\n" : "";
+                } else {
+                    push stack, (
+                        "known": False,
+                        "parent_active": parent_active,
+                        "condition": True,
+                        "active": parent_active,
+                    );
+                    push output_lines, parent_active ? line : (line.endsWith("\n") ? "\n" : "");
+                }
+                continue;
+            }
+            if (directive_line =~ /^%else\b/ && stack) {
+                hash<auto> frame = pop stack;
+                if (frame.known) {
+                    frame.active = frame.parent_active && !frame.condition;
+                    push output_lines, line.endsWith("\n") ? "\n" : "";
+                } else {
+                    frame.active = frame.parent_active;
+                    push output_lines, frame.parent_active ? line : (line.endsWith("\n") ? "\n" : "");
+                }
+                push stack, frame;
+                continue;
+            }
+            if (directive_line =~ /^%endif\b/ && stack) {
+                hash<auto> frame = pop stack;
+                push output_lines, !frame.known && active(stack)
+                    ? line : (line.endsWith("\n") ? "\n" : "");
+                continue;
+            }
+            push output_lines, active(stack) ? line : (line.endsWith("\n") ? "\n" : "");
+        }
+        return join("", output_lines);
+    }
 
+    private list<string> splitTopLevel(string text, int separator = 0x2c) {
+        list<string> parts = ();
+        int start = 0;
+        int angle = 0;
+        int paren = 0;
+        int bracket = 0;
+        int brace = 0;
+        for (int offset = 0; offset < text.size(); ++offset) {
+            int byte = text.getByte(offset);
+            switch (byte) {
+                case 0x3c: ++angle; break;
+                case 0x3e: if (angle) --angle; break;
+                case 0x28: ++paren; break;
+                case 0x29: if (paren) --paren; break;
+                case 0x5b: ++bracket; break;
+                case 0x5d: if (bracket) --bracket; break;
+                case 0x7b: ++brace; break;
+                case 0x7d: if (brace) --brace; break;
+                default:
+                    if (byte == separator && !angle && !paren && !bracket && !brace) {
+                        push parts, text.substr(start, offset - start);
+                        start = offset + 1;
+                    }
+            }
+        }
+        push parts, text.substr(start);
+        return parts;
+    }
 
-def order_edge_usable(provider: int, consumer: int, scc_ids: list[int],
-        required_edges: set[tuple[int, int]]) -> bool:
-    # The build graph may only include true compile prerequisites.  Other
-    # source-level references are linkable .qo imports and must not serialize
-    # clean or delta builds by forcing provider metadata to be present.
-    return (provider, consumer) in required_edges
+    private int findBalancedClose(string code, int open_pos) {
+        int depth = 0;
+        for (int offset = open_pos; offset < code.size(); ++offset) {
+            int byte = code.getByte(offset);
+            if (byte == 0x28) {
+                ++depth;
+            } else if (byte == 0x29 && !--depth) {
+                return offset;
+            }
+        }
+        return -1;
+    }
 
+    private list<hash<auto>> globalNames(string code) {
+        list<hash<auto>> consumed = ();
+        list<hash<auto>> names = ();
+        foreach hash<RegexMatchInfo> match in (global_group_re.extractDetailed(code) ?? ()) {
+            int match_offset = match.offset;
+            int match_length = match.length;
+            int relative_open = code.substr(match_offset, match_length).find("(");
+            if (relative_open < 0) {
+                continue;
+            }
+            int open_pos = match_offset + relative_open;
+            int close_pos = findBalancedClose(code, open_pos);
+            if (close_pos < 0) {
+                continue;
+            }
+            push consumed, ("start": match_offset, "end": close_pos + 1);
+            string body = code.substr(open_pos + 1, close_pos - open_pos - 1);
+            foreach string entry in (splitTopLevel(body)) {
+                string candidate = trim(entry);
+                if (!candidate) {
+                    continue;
+                }
+                int equals = candidate.find("=");
+                if (equals >= 0) {
+                    candidate = trim(candidate.substr(0, equals));
+                }
+                *list<hash<RegexMatchInfo>> name_matches = global_name_re.extractDetailed(candidate);
+                if (name_matches && name_matches[0].groups && exists name_matches[0].groups[0]) {
+                    push names, ("name": name_matches[0].groups[0], "offset": match_offset);
+                }
+            }
+        }
+        foreach hash<RegexMatchInfo> match in (global_scalar_re.extractDetailed(code) ?? ()) {
+            *string capture = match.groups ? match.groups[0] : NOTHING;
+            if (!exists capture) {
+                continue;
+            }
+            bool in_consumed = False;
+            foreach hash<auto> range in (consumed) {
+                if (match.offset >= range.start && match.offset < range.end) {
+                    in_consumed = True;
+                    break;
+                }
+            }
+            if (!in_consumed) {
+                push names, ("name": capture, "offset": match.offset);
+            }
+        }
+        return names;
+    }
 
-def load_graph_cache(cache_file: str, context: str, inputs: list[str], outputs: list[str],
-        true_parse_defines: set[str]
-        ) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]] | None:
-    try:
-        cache_mtime_ns = os.stat(cache_file).st_mtime_ns
-        with open(cache_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
-    if data.get("version") != CACHE_VERSION:
-        return None
-    if data.get("inputs") != inputs or data.get("outputs") != outputs:
-        return None
-    if data.get("parse_defines") != sorted(true_parse_defines):
-        return None
-    outgoing_data = data.get("outgoing")
-    incoming_data = data.get("incoming")
-    required_data = data.get("required")
-    if not isinstance(outgoing_data, list) or not isinstance(incoming_data, list):
-        return None
-    if not isinstance(required_data, list):
-        return None
-    if len(outgoing_data) != len(inputs) or len(incoming_data) != len(inputs):
-        return None
-    if len(required_data) != len(inputs):
-        return None
-    old_records = data.get("input_records")
-    summaries = data.get("source_summaries")
-    if not isinstance(old_records, list) or len(old_records) != len(inputs):
-        return None
-    if not isinstance(summaries, list) or len(summaries) != len(inputs):
-        return None
-    if not all(source_summary_valid(summary) for summary in summaries):
-        return None
+    private string childNamespace(string parent, string child) {
+        if (child.startsWith("::")) {
+            child = child.substr(2);
+        }
+        return !parent || child.find("::") >= 0 ? child : parent + "::" + child;
+    }
 
-    try:
-        if os.stat(context).st_mtime_ns > cache_mtime_ns:
-            return None
-        if os.stat(__file__).st_mtime_ns > cache_mtime_ns:
-            return None
-    except OSError:
-        return None
+    private list<hash<auto>> namespaceRanges(string code) {
+        list<hash<auto>> ranges = ();
+        list<hash<auto>> frames = ();
+        int brace_depth = 0;
+        int last = 0;
+        foreach hash<RegexMatchInfo> match in (namespace_event_re.extractDetailed(code) ?? ()) {
+            int match_offset = match.offset;
+            int match_length = match.length;
+            *string namespace_name = match.groups ? match.groups[0] : NOTHING;
+            string current_namespace = frames ? frames[-1].namespace : "";
+            if (match_offset > last) {
+                push ranges, (
+                    "start": last,
+                    "end": match_offset,
+                    "namespace": current_namespace,
+                );
+            }
+            if (exists namespace_name) {
+                ++brace_depth;
+                push frames, (
+                    "depth": brace_depth,
+                    "namespace": childNamespace(current_namespace, namespace_name),
+                );
+            } else if (code.getByte(match_offset) == 0x7b) {
+                ++brace_depth;
+            } else if (brace_depth) {
+                --brace_depth;
+                while (frames && frames[-1].depth > brace_depth) {
+                    pop frames;
+                }
+            }
+            last = match_offset + match_length;
+        }
+        if (last < code.size()) {
+            push ranges, (
+                "start": last,
+                "end": code.size(),
+                "namespace": frames ? frames[-1].namespace : "",
+            );
+        }
+        return ranges;
+    }
 
-    inspect: list[int] = []
-    for i, (path, old_record) in enumerate(zip(inputs, old_records)):
-        if not isinstance(old_record, dict):
-            return None
-        try:
-            stat = os.stat(path)
-        except OSError:
-            return None
-        if old_record.get("path") != os.path.abspath(path):
-            return None
-        if old_record.get("size") != stat.st_size or stat.st_mtime_ns > cache_mtime_ns:
-            inspect.append(i)
+    private string namespaceAt(list<hash<auto>> ranges, int offset) {
+        int low = 0;
+        int high = ranges.size() - 1;
+        while (low <= high) {
+            int middle = (low + high) / 2;
+            hash<auto> range = ranges[middle];
+            if (offset < range.start) {
+                high = middle - 1;
+            } else if (offset >= range.end) {
+                low = middle + 1;
+            } else {
+                return range.namespace;
+            }
+        }
+        return "";
+    }
 
-    outgoing = lists_to_graph(outgoing_data)
-    incoming = lists_to_graph(incoming_data)
-    required_edges = edge_lists_to_pairs(required_data)
-    if not inspect:
-        return outgoing, incoming, required_edges
+    private list<string> qualifiedCaptures(Regex pattern, string code, list<hash<auto>> ranges) {
+        list<string> values = ();
+        foreach hash<RegexMatchInfo> match in (pattern.extractDetailed(code) ?? ()) {
+            *string capture = match.groups ? match.groups[0] : NOTHING;
+            if (exists capture) {
+                push values, qualify(namespaceAt(ranges, match.offset), capture);
+            }
+        }
+        return values;
+    }
 
-    records = list(old_records)
-    graph_changed = False
-    for i in inspect:
-        try:
-            record = file_record(inputs[i])
-        except OSError:
-            return None
-        if (record.get("size") != old_records[i].get("size")
-                or record.get("sha256") != old_records[i].get("sha256")):
-            try:
-                summaries[i] = scan_source_summary(inputs[i], true_parse_defines)
-            except OSError:
-                return None
-            graph_changed = True
-        records[i] = record
+    private string qualify(string namespace_name, string name) {
+        return namespace_name ? namespace_name + "::" + name : name;
+    }
 
-    if graph_changed:
-        outgoing, incoming, required_edges = build_hard_graph_from_summaries(inputs, summaries)
-    save_graph_cache(cache_file, inputs, outputs, true_parse_defines,
-        outgoing, incoming, required_edges, summaries, records)
-    return outgoing, incoming, required_edges
+    private string simpleName(string name) {
+        int separator = name.rfind("::");
+        return separator < 0 ? name : name.substr(separator + 2);
+    }
 
+    private hash<string, bool> captureSet(Regex pattern, string code, bool simple = False) {
+        hash<string, bool> values = {};
+        foreach *string value in (pattern.extractGroups(code) ?? ()) {
+            if (exists value) {
+                values{simple ? simpleName(value) : value} = True;
+            }
+        }
+        return values;
+    }
 
-def save_graph_cache(cache_file: str, inputs: list[str], outputs: list[str], true_parse_defines: set[str],
-        outgoing: dict[int, set[int]], incoming: dict[int, set[int]],
-        required_edges: set[tuple[int, int]],
-        summaries: list[dict[str, list[str]]],
-        input_records: list[dict[str, object]] | None = None) -> None:
-    data = {
-        "version": CACHE_VERSION,
+    private addSet(reference<hash<string, bool>> target, hash<string, bool> source) {
+        foreach string value in (source.keys()) {
+            target{value} = True;
+        }
+    }
+
+    private hash<string, bool> collectProvides(string code) {
+        hash<string, bool> values = {};
+        foreach Regex pattern in ((class_re, enum_re, hashdecl_re, sub_re, const_re)) {
+            addSet(\values, captureSet(pattern, code));
+        }
+        foreach hash<auto> info in (globalNames(code)) {
+            values{info.name} = True;
+        }
+        return values;
+    }
+
+    private string stripIncludeDelimiters(string value) {
+        int start = 0;
+        int end = value.size();
+        while (start < end && (value.getByte(start) == 0x22 || value.getByte(start) == 0x27
+                || value.getByte(start) == 0x3c || value.getByte(start) == 0x3e)) {
+            ++start;
+        }
+        while (end > start && (value.getByte(end - 1) == 0x22 || value.getByte(end - 1) == 0x27
+                || value.getByte(end - 1) == 0x3c || value.getByte(end - 1) == 0x3e)) {
+            --end;
+        }
+        return value.substr(start, end - start);
+    }
+
+    private hash<string, bool> collectIncludes(string code) {
+        hash<string, bool> values = {};
+        foreach *string value in (include_re.extractGroups(code) ?? ()) {
+            if (exists value) {
+                string name = stripIncludeDelimiters(value);
+                if (name) {
+                    values{name} = True;
+                }
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectMentions(string code) {
+        hash<string, bool> values = {};
+        for (int offset = 0; offset < code.size();) {
+            int byte = code.getByte(offset);
+            if (!alphaByte(byte)) {
+                ++offset;
+                continue;
+            }
+            int start = offset++;
+            while (offset < code.size() && identByte(code.getByte(offset))) {
+                ++offset;
+            }
+            values{code.substr(start, offset - start)} = True;
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectUnqualifiedMentions(string code) {
+        string unqualified = regex_subst(code,
+            "\\b[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+\\b",
+            string sub (hash<RegexMatchInfo> match) {
+                return strmul(" ", match.length);
+            }, RE_Global);
+        hash<string, bool> result = captureSet(token_re, unqualified);
+        return result;
+    }
+
+    private list<string> angleArgs(string code, Regex token_pattern) {
+        list<string> values = ();
+        foreach hash<RegexMatchInfo> match in (token_pattern.extractDetailed(code) ?? ()) {
+            int pos = match.offset + match.length;
+            while (pos < code.size() && (code.getByte(pos) == 0x20 || code.getByte(pos) == 0x09
+                    || code.getByte(pos) == 0x0a || code.getByte(pos) == 0x0d)) {
+                ++pos;
+            }
+            if (pos >= code.size() || code.getByte(pos) != 0x3c) {
+                continue;
+            }
+            int start = ++pos;
+            int depth = 1;
+            while (pos < code.size()) {
+                int byte = code.getByte(pos);
+                if (byte == 0x3c) {
+                    ++depth;
+                } else if (byte == 0x3e && !--depth) {
+                    push values, code.substr(start, pos - start);
+                    ++pos;
+                    break;
+                }
+                ++pos;
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectAngleMentions(string code, Regex token_pattern) {
+        hash<string, bool> values = {};
+        foreach string args in (angleArgs(code, token_pattern)) {
+            addSet(\values, collectMentions(args));
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectNewHashTypeMentions(string code) {
+        hash<string, bool> values = {};
+        foreach hash<RegexMatchInfo> match in (new_hash_re.extractDetailed(code) ?? ()) {
+            int pos = match.offset + match.length;
+            while (pos < code.size() && (code.getByte(pos) == 0x20 || code.getByte(pos) == 0x09)) {
+                ++pos;
+            }
+            if (pos >= code.size() || code.getByte(pos) != 0x3c) {
+                continue;
+            }
+            int start = ++pos;
+            int depth = 1;
+            while (pos < code.size()) {
+                int byte = code.getByte(pos);
+                if (byte == 0x3c) {
+                    ++depth;
+                } else if (byte == 0x3e && !--depth) {
+                    addSet(\values, collectMentions(code.substr(start, pos - start)));
+                    break;
+                }
+                ++pos;
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectDeclTypeMentions(string code) {
+        hash<string, bool> values = {};
+        foreach string line in (code.split("\n")) {
+            if (line.find("(") >= 0 || line.find(";") >= 0 || line.find("=") >= 0) {
+                *list<*string> declaration = decl_type_re.extractGroups(line);
+                if (declaration && exists declaration[0]) {
+                    values{simpleName(declaration[0])} = True;
+                }
+            }
+            if (line.find("(") >= 0 || line.find(",") >= 0) {
+                foreach *string value in (param_type_re.extractGroups(line) ?? ()) {
+                    if (exists value) {
+                        values{simpleName(value)} = True;
+                    }
+                }
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectConstructedDeclTypeMentions(string code) {
+        hash<string, bool> values = {};
+        foreach string line in (code.split("\n")) {
+            if (line.find("(") < 0 || line.find(")") < 0) {
+                continue;
+            }
+            *list<*string> declaration = constructed_decl_type_re.extractGroups(trim(line));
+            if (declaration && exists declaration[0]) {
+                addSet(\values, collectMentions(declaration[0]));
+            }
+        }
+        return values;
+    }
+
+    private hash<auto> collectCallRefMentions(string code) {
+        hash<string, bool> class_mentions = {};
+        hash<string, bool> function_mentions = {};
+        foreach *string path in (call_ref_re.extractGroups(code) ?? ()) {
+            if (!exists path) {
+                continue;
+            }
+            list<string> parts = path.split("::");
+            if (parts.size() == 1) {
+                function_mentions{parts[0]} = True;
+            } else {
+                for (int index = 0; index < parts.size() - 1; ++index) {
+                    class_mentions{parts[index]} = True;
+                }
+                function_mentions{parts[-1]} = True;
+            }
+        }
+        return ("classes": class_mentions, "functions": function_mentions);
+    }
+
+    private hash<string, bool> collectStaticCallMentions(string code) {
+        hash<string, bool> values = {};
+        foreach hash<RegexMatchInfo> match in (static_call_re.extractDetailed(code) ?? ()) {
+            *string capture = match.groups ? match.groups[0] : NOTHING;
+            if (exists capture) {
+                values{simpleName(capture)} = True;
+            }
+        }
+        return values;
+    }
+
+    private bool asciiSpace(int byte) {
+        return byte == 0x20 || byte == 0x09 || byte == 0x0a || byte == 0x0d
+            || byte == 0x0b || byte == 0x0c;
+    }
+
+    private bool identByte(int byte) {
+        return (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5a)
+            || (byte >= 0x61 && byte <= 0x7a) || byte == 0x5f;
+    }
+
+    private bool alphaByte(int byte) {
+        return (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) || byte == 0x5f;
+    }
+
+    private bool callableDeclaration(string code, int open_pos, int close_pos) {
+        int tail = close_pos + 1;
+        while (tail < code.size() && asciiSpace(code.getByte(tail))) {
+            ++tail;
+        }
+        if (tail >= code.size() || (code.getByte(tail) != 0x7b && code.getByte(tail) != 0x3a
+                && code.getByte(tail) != 0x3b)) {
+            return False;
+        }
+
+        int search_start = max(0, open_pos - 4096);
+        string header = code.substr(search_start, open_pos - search_start);
+        int header_start = -1;
+        foreach string delimiter in ((";", "{", "}")) {
+            header_start = max(header_start, header.rfind(delimiter));
+        }
+        header_start += search_start + 1;
+        int name_end = open_pos;
+        while (name_end > header_start && asciiSpace(code.getByte(name_end - 1))) {
+            --name_end;
+        }
+        int name_start = name_end;
+        while (name_start > header_start && identByte(code.getByte(name_start - 1))) {
+            --name_start;
+        }
+        if (name_start == name_end || !alphaByte(code.getByte(name_start))) {
+            return False;
+        }
+        string name = code.substr(name_start, name_end - name_start);
+        string prefix = trim(code.substr(header_start, name_start - header_start));
+        if (name == "constructor") {
+            if (!prefix) {
+                return True;
+            }
+            foreach string word in (prefix.splitRegex("\\s+")) {
+                if (!exists callable_modifiers{word}) {
+                    return False;
+                }
+            }
+            return True;
+        }
+        if (exists non_callable_names{name}) {
+            return False;
+        }
+        if (prefix =~ /\\bsub\\s*$/) {
+            return True;
+        }
+        if (!prefix) {
+            return code.getByte(tail) == 0x7b || code.getByte(tail) == 0x3a;
+        }
+        if (prefix.endsWith("::")) {
+            return False;
+        }
+        foreach string invalid in (("=", ".", "?", "!", "+", "/", "-", "%", "&", "|",
+                "[", "]", "(", ")", "@", "\\")) {
+            if (prefix.find(invalid) >= 0) {
+                return False;
+            }
+        }
+        string first_word = prefix.splitRegex("\\s+")[0];
+        return !exists non_type_prefixes{first_word};
+    }
+
+    private int lowerBound(list<int> values, int target) {
+        int low = 0;
+        int high = values.size();
+        while (low < high) {
+            int middle = (low + high) / 2;
+            if (values[middle] < target) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low;
+    }
+
+    private hash<string, bool> collectParamDefaultStaticCallMentions(string code) {
+        hash<string, bool> values = {};
+        list<int> static_positions = ();
+        foreach hash<RegexMatchInfo> match in (static_call_re.extractDetailed(code) ?? ()) {
+            push static_positions, match.offset;
+        }
+        if (!static_positions) {
+            return values;
+        }
+        list<int> stack = ();
+        foreach hash<RegexMatchInfo> match in (paren_re.extractDetailed(code) ?? ()) {
+            if (code.getByte(match.offset) == 0x28) {
+                push stack, match.offset;
+                continue;
+            }
+            if (!stack) {
+                continue;
+            }
+            int open_pos = pop stack;
+            int match_index = lowerBound(static_positions, open_pos);
+            if (match_index >= static_positions.size() || static_positions[match_index] >= match.offset
+                    || !callableDeclaration(code, open_pos, match.offset)) {
+                continue;
+            }
+            foreach string parameter in (splitTopLevel(code.substr(open_pos + 1,
+                    match.offset - open_pos - 1))) {
+                list<string> parts = splitTopLevel(parameter, 0x3d);
+                if (parts.size() < 2) {
+                    continue;
+                }
+                addSet(\values, collectStaticCallMentions(join("=", parts[1..])));
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectStaticRefMentions(string code) {
+        hash<string, bool> values = {};
+        foreach hash<RegexMatchInfo> match in (static_ref_re.extractDetailed(code) ?? ()) {
+            *string capture = match.groups ? match.groups[0] : NOTHING;
+            if (exists capture) {
+                values{simpleName(capture)} = True;
+            }
+        }
+        return values;
+    }
+
+    private list<string> caseExpressions(string code) {
+        list<string> expressions = ();
+        foreach hash<RegexMatchInfo> match in (case_re.extractDetailed(code) ?? ()) {
+            int pos = match.offset + match.length;
+            while (pos < code.size() && asciiSpace(code.getByte(pos))) {
+                ++pos;
+            }
+            int start = pos;
+            int paren = 0;
+            int bracket = 0;
+            int brace = 0;
+            while (pos < code.size()) {
+                int byte = code.getByte(pos);
+                int next = pos + 1 < code.size() ? code.getByte(pos + 1) : -1;
+                if (byte == 0x28) ++paren;
+                else if (byte == 0x29 && paren) --paren;
+                else if (byte == 0x5b) ++bracket;
+                else if (byte == 0x5d && bracket) --bracket;
+                else if (byte == 0x7b) ++brace;
+                else if (byte == 0x7d && brace) --brace;
+                else if (byte == 0x3a && next != 0x3a
+                        && !(pos && code.getByte(pos - 1) == 0x3a)
+                        && !paren && !bracket && !brace) {
+                    push expressions, code.substr(start, pos - start);
+                    break;
+                } else if ((byte == 0x3b || byte == 0x0a) && !paren && !bracket && !brace) {
+                    break;
+                }
+                ++pos;
+            }
+        }
+        return expressions;
+    }
+
+    private hash<string, bool> collectInheritanceMentions(string code) {
+        hash<string, bool> values = {};
+        foreach *string bases in (class_inherits_re.extractGroups(code) ?? ()) {
+            if (!exists bases) {
+                continue;
+            }
+            foreach string name in (captureSet(qual_re, bases).keys()) {
+                values{simpleName(name)} = True;
+            }
+        }
+        return values;
+    }
+
+    private hash<string, bool> collectHardMentions(string code) {
+        hash<string, bool> values = {};
+        foreach hash<RegexMatchInfo> match in (const_init_re.extractDetailed(code) ?? ()) {
+            *string expression = match.groups ? match.groups[0] : NOTHING;
+            if (exists expression) {
+                addSet(\values, collectUnqualifiedMentions(expression));
+            }
+        }
+        foreach string expression in (caseExpressions(code)) {
+            addSet(\values, collectMentions(expression));
+        }
+        return values;
+    }
+
+    hash<string, list<string>> scanDependencySummary(string source,
+            hash<string, bool> true_defines = {}) {
+        int started = clock_getmicros_monotonic();
+        string text = ReadOnlyFile::readTextFile(source);
+        string code = applyConditionals(maskSource(text), true_defines);
+        string literal_code = applyConditionals(maskSource(text, True), true_defines);
+        int masking_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary mask=%d us\n", masking_done - started);
+        hash<auto> call_refs = collectCallRefMentions(code);
+        int call_refs_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary refs=%d us\n", call_refs_done - masking_done);
+        hash<string, bool> provides = collectProvides(code);
+        hash<string, bool> inheritance = collectInheritanceMentions(code);
+        hash<string, bool> hard = collectHardMentions(code);
+        int hard_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary hard=%d us\n", hard_done - call_refs_done);
+        hash<string, bool> declarations = collectDeclTypeMentions(code);
+        hash<string, bool> constructed = collectConstructedDeclTypeMentions(code);
+        int declarations_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary declarations=%d us\n", declarations_done - hard_done);
+        hash<string, bool> hash_types = collectAngleMentions(code, hash_token_re);
+        hash<string, bool> enum_types = collectAngleMentions(code, enum_token_re);
+        hash<string, bool> new_hash_types = collectNewHashTypeMentions(code);
+        int angle_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary angles=%d us\n", angle_done - declarations_done);
+        hash<string, bool> param_defaults = collectParamDefaultStaticCallMentions(code);
+        int params_done = clock_getmicros_monotonic();
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) stderr.printf("summary params=%d us\n", params_done - angle_done);
+        hash<string, list<string>> summary = (
+            "provides": sort(provides.keys()),
+            "classes": sort(captureSet(class_re, code).keys()),
+            "enums": sort(captureSet(enum_re, code).keys()),
+            "hashdecls": sort(captureSet(hashdecl_re, code).keys()),
+            "functions": sort(captureSet(sub_re, code).keys()),
+            "parse_defines": sort(captureSet(parse_define_re, code).keys()),
+            "inheritance_mentions": sort(inheritance.keys()),
+            "hard_mentions": sort(hard.keys()),
+            "decl_type_mentions": sort(declarations.keys()),
+            "hash_type_mentions": sort(hash_types.keys()),
+            "enum_type_mentions": sort(enum_types.keys()),
+            "call_ref_classes": sort(call_refs.classes.keys()),
+            "call_ref_functions": sort(call_refs.functions.keys()),
+            "constructed_decl_type_mentions": sort(constructed.keys()),
+            "new_hash_type_mentions": sort(new_hash_types.keys()),
+            "new_object_mentions": sort(captureSet(new_object_re, code, True).keys()),
+            "class_for_name_mentions": sort(captureSet(class_for_name_re, literal_code, True).keys()),
+            "create_object_mentions": sort(captureSet(create_object_re, literal_code, True).keys()),
+            "static_call_mentions": sort(collectStaticCallMentions(code).keys()),
+            "param_default_static_call_mentions": sort(param_defaults.keys()),
+            "static_ref_mentions": sort(collectStaticRefMentions(code).keys()),
+            "includes": sort(collectIncludes(code).keys()),
+            "parse_define_consumers": sort(captureSet(parse_define_consumer_re, code).keys()),
+        );
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            int completed = clock_getmicros_monotonic();
+            stderr.printf("summary timing us: mask=%d refs=%d hard=%d declarations=%d angles=%d params=%d rest=%d\n",
+                masking_done - started, call_refs_done - masking_done, hard_done - call_refs_done,
+                declarations_done - hard_done, angle_done - declarations_done, params_done - angle_done,
+                completed - params_done);
+        }
+        return summary;
+    }
+
+    hash<string, list<string>> scanDependencySummaryForContext(string source, string context_path) {
+        return scanDependencySummary(source, contextDefines(context_path));
+    }
+
+    private hash<string, bool> contextDefines(string path) {
+        hash<string, bool> defines = {};
+        foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
+            if (!line.startsWith("parse_define=")) {
+                continue;
+            }
+            string value = line.substr(13);
+            int equals = value.find("=");
+            string name = equals >= 0 ? value.substr(0, equals) : value;
+            if (name) {
+                defines{name} = True;
+            }
+        }
+        return defines;
+    }
+
+    private addProvider(reference<hash<string, hash<string, bool>>> providers,
+            string symbol, string source) {
+        providers{symbol}{source} = True;
+    }
+
+    private hash<auto> scanSourceSymbols(string input, hash<string, bool> true_defines) {
+        int started = clock_getmicros_monotonic();
+        string source = realpath(input);
+        string text = ReadOnlyFile::readTextFile(input);
+        int read_done = clock_getmicros_monotonic();
+        string code = maskSource(text);
+        int mask_done = clock_getmicros_monotonic();
+        code = applyConditionals(code, true_defines);
+        int condition_done = clock_getmicros_monotonic();
+        list<string> classes = ();
+        list<string> hashdecls = ();
+        list<string> functions = ();
+        list<string> globals = ();
+        list<hash<auto>> ranges = namespaceRanges(code);
+        classes = qualifiedCaptures(class_re, code, ranges);
+        hashdecls = qualifiedCaptures(hashdecl_re, code, ranges);
+        functions = qualifiedCaptures(sub_re, code, ranges);
+        foreach hash<auto> info in (globalNames(code)) {
+            push globals, qualify(namespaceAt(ranges, info.offset), info.name);
+        }
+        return (
+            "source": source,
+            "classes": classes,
+            "hashdecls": hashdecls,
+            "functions": functions,
+            "globals": globals,
+            "timing": (
+                "read": read_done - started,
+                "mask": mask_done - read_done,
+                "condition": condition_done - mask_done,
+                "extract": clock_getmicros_monotonic() - condition_done,
+            ),
+        );
+    }
+
+    private runScanWorker(Queue work, Queue results, hash<string, bool> true_defines) {
+        SourceSymbolManifestGenerator scanner();
+        while (True) {
+            hash<string, *string> task = work.get();
+            if (!exists task.input) {
+                return;
+            }
+            try {
+                results.push(("result": scanner.scanSourceSymbols(task.input, true_defines)));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(("error": ex));
+            }
+        }
+    }
+
+    private submitScanWorker(ThreadPool pool, Queue work, Queue results,
+            hash<string, bool> true_defines) {
+        pool.submit(sub() {
+            runScanWorker(work, results, true_defines);
+        });
+    }
+
+    string generate(string context_path, list<string> inputs) {
+        hash<string, bool> true_defines = contextDefines(context_path);
+        hash<string, hash<string, bool>> classes = {};
+        hash<string, hash<string, bool>> hashdecls = {};
+        hash<string, hash<string, bool>> functions = {};
+        hash<string, hash<string, bool>> globals = {};
+        hash<string, int> timing = ("read": 0, "mask": 0, "condition": 0, "extract": 0);
+        int thread_count = ENV.QORE_QO_SOURCE_ORDER_THREADS
+            ? ENV.QORE_QO_SOURCE_ORDER_THREADS.toInt()
+            : 4;
+        thread_count = max(1, min(thread_count, inputs.size()));
+        ThreadPool pool(max_threads: thread_count);
+        Queue work();
+        Queue results();
+        foreach string input in (inputs) {
+            work.push(("input": input));
+        }
+        for (int index = 0; index < thread_count; ++index) {
+            work.push(("input": NOTHING));
+            submitScanWorker(pool, work, results, true_defines);
+        }
+        pool.stopWait();
+        for (int index = 0; index < inputs.size(); ++index) {
+            hash<auto> envelope = results.get();
+            if (envelope.error) {
+                throw envelope.error.err, envelope.error.desc, envelope.error.arg;
+            }
+            hash<auto> result = envelope.result;
+            foreach string stage in (timing.keys()) {
+                timing{stage} += result.timing{stage};
+            }
+            foreach string name in (result.classes) {
+                addProvider(\classes, name, result.source);
+            }
+            foreach string name in (result.hashdecls) {
+                addProvider(\hashdecls, name, result.source);
+            }
+            foreach string name in (result.functions) {
+                addProvider(\functions, name, result.source);
+            }
+            foreach string name in (result.globals) {
+                addProvider(\globals, name, result.source);
+            }
+        }
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            stderr.printf("scan timing us: read=%d mask=%d condition=%d extract=%d\n",
+                timing{"read"}, timing{"mask"}, timing{"condition"}, timing{"extract"});
+        }
+        list<string> lines = ("format=1",);
+        foreach hash<auto> kind in (("name": "class", "providers": classes),
+                ("name": "hashdecl", "providers": hashdecls),
+                ("name": "function", "providers": functions),
+                ("name": "global", "providers": globals)) {
+            foreach string symbol in (sort(kind.providers.keys())) {
+                list<string> sources = sort(kind.providers{symbol}.keys());
+                if (sources.size() == 1) {
+                    push lines, sprintf("%s\t%s\t%s", kind.name, symbol, sources[0]);
+                }
+            }
+        }
+        return join("\n", lines) + "\n";
+    }
+}
+
+string sub absoluteNormalized(string path) {
+    return absolute_path(path) ? path : getcwd() + DirSep + path;
+}
+
+string sub canonical(string path) {
+    path = absoluteNormalized(path);
+    if (exists hstat(path)) {
+        return realpath(path);
+    }
+    string parent = dirname(path);
+    return (is_dir(parent) ? realpath(parent) : parent) + DirSep + basename(path);
+}
+
+hash<SourceOrderContext> sub parseContext(string path) {
+    list<string> inputs = ();
+    list<string> outputs = ();
+    hash<string, bool> parse_defines = {};
+    foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
+        if (line.startsWith("input=")) {
+            push inputs, line.substr(6);
+        } else if (line.startsWith("output=")) {
+            push outputs, line.substr(7);
+        } else if (line.startsWith("parse_define=")) {
+            string value = line.substr(13);
+            int equals = value.find("=");
+            string name = equals >= 0 ? value.substr(0, equals) : value;
+            if (name) {
+                parse_defines{name} = True;
+            }
+        }
+    }
+    if (inputs.size() != outputs.size()) {
+        throw "SOURCE-ORDER-CONTEXT-ERROR", sprintf(
+            "context has %d inputs but %d outputs: %s", inputs.size(), outputs.size(), path);
+    }
+    return new hash<SourceOrderContext>((
         "inputs": inputs,
         "outputs": outputs,
-        "parse_defines": sorted(true_parse_defines),
-        "input_records": input_records if input_records is not None else file_records(inputs),
-        "source_summaries": summaries,
-        "outgoing": graph_to_lists(outgoing, len(inputs)),
-        "incoming": graph_to_lists(incoming, len(inputs)),
-        "required": edge_pairs_to_lists(required_edges, len(inputs)),
+        "parse_defines": parse_defines,
+    ));
+}
+
+class SourceOrderEngine {
+    private {
+        Regex compile_contract_re = new Regex(
+            "((?:\\\\[\\s\\S]|[^\\s])+\\.compile-contract\\.stamp)", RE_Global);
     }
-    tmp = f"{cache_file}.{os.getpid()}.tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, separators=(",", ":"))
-        os.replace(tmp, cache_file)
-    except OSError:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
 
-
-def load_or_build_hard_graph(context: str, inputs: list[str],
-        outputs: list[str]) -> tuple[dict[int, set[int]], dict[int, set[int]], set[tuple[int, int]]]:
-    cache_file = context + ".source-order-v2.json"
-    true_parse_defines = parse_context_parse_defines(context)
-    cached = load_graph_cache(cache_file, context, inputs, outputs, true_parse_defines)
-    if cached:
-        add_depfile_contract_edges(outputs, *cached)
-        return cached
-    outgoing, incoming, required_edges, summaries = build_hard_graph(inputs, true_parse_defines)
-    save_graph_cache(cache_file, inputs, outputs, true_parse_defines,
-        outgoing, incoming, required_edges, summaries)
-    add_depfile_contract_edges(outputs, outgoing, incoming, required_edges)
-    return outgoing, incoming, required_edges
-
-
-def collect_prerequisites(target: int, incoming: dict[int, set[int]], scc_ids: list[int],
-        required_edges: set[tuple[int, int]]) -> set[int]:
-    prerequisites: set[int] = set()
-    stack = [(target, provider) for provider in incoming.get(target, ())]
-    while stack:
-        consumer, provider = stack.pop()
-        if not order_edge_usable(provider, consumer, scc_ids, required_edges):
-            continue
-        if provider in prerequisites:
-            continue
-        prerequisites.add(provider)
-        stack.extend((provider, next_provider) for next_provider in incoming.get(provider, ()))
-    return prerequisites
-
-
-def topo_subset(nodes: set[int], outgoing: dict[int, set[int]], target: int, scc_ids: list[int],
-        required_edges: set[tuple[int, int]]) -> list[int]:
-    incoming_count = {node: 0 for node in nodes}
-    for provider in nodes:
-        for consumer in outgoing.get(provider, ()):
-            if consumer in nodes and order_edge_usable(provider, consumer, scc_ids, required_edges):
-                incoming_count[consumer] += 1
-
-    ready = [node for node, count in incoming_count.items() if count == 0]
-    heapq.heapify(ready)
-    remaining = set(nodes)
-    order: list[int] = []
-
-    while remaining:
-        if ready:
-            node = heapq.heappop(ready)
-            if node not in remaining:
-                continue
-        else:
-            # Hard dependency cycle.  Keep the requested target last so that any
-            # usable provider metadata is still available before compiling it.
-            cycle_choices = remaining - {target}
-            node = min(cycle_choices or remaining)
-        remaining.remove(node)
-        order.append(node)
-        for consumer in sorted(outgoing.get(node, ())):
-            if consumer not in remaining or not order_edge_usable(node, consumer, scc_ids, required_edges):
-                continue
-            incoming_count[consumer] -= 1
-            if incoming_count[consumer] == 0:
-                heapq.heappush(ready, consumer)
-
-    return order
-
-
-def build_direct_prerequisite_order(context: str, inputs: list[str], outputs: list[str], target: int) -> list[int]:
-    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
-    scc_ids = compute_scc_ids(outgoing, len(inputs))
-    return sorted(
-        provider for provider in incoming.get(target, ())
-        if order_edge_usable(provider, target, scc_ids, required_edges)
-    )
-
-
-def build_all_direct_prerequisite_orders(context: str, inputs: list[str], outputs: list[str]) -> list[list[int]]:
-    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
-    scc_ids = compute_scc_ids(outgoing, len(inputs))
-    return [
-        sorted(
-            provider for provider in incoming.get(target, ())
-            if order_edge_usable(provider, target, scc_ids, required_edges)
-        )
-        for target in range(len(inputs))
-    ]
-
-
-def cmake_quote(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def emit_cmake_direct_map(prefix: str, context: str, inputs: list[str], outputs: list[str]) -> None:
-    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", prefix):
-        raise ValueError(f"invalid CMake variable prefix: {prefix!r}")
-    for target, order in enumerate(build_all_direct_prerequisite_orders(context, inputs, outputs)):
-        deps = ";".join(cmake_quote(outputs[index]) for index in order)
-        print(f'set({prefix}_{target} "{deps}")')
-
-
-def emit_build_map(context: str, inputs: list[str], outputs: list[str], target: int) -> None:
-    for index in build_prerequisite_order(context, inputs, outputs, target):
-        print(f"{inputs[index]}\t{outputs[index]}")
-
-
-def parse_make_depfile_inputs(path: str) -> list[str]:
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
-    text = text.replace("\\\n", "")
-    colon = text.find(":")
-    if colon < 0:
-        return []
-
-    values: list[str] = []
-    token: list[str] = []
-    escaped = False
-    for ch in text[colon + 1:]:
-        if escaped:
-            token.append(ch)
-            escaped = False
-        elif ch == "\\":
-            escaped = True
-        elif ch.isspace():
-            if token:
-                values.append("".join(token))
-                token = []
-        else:
-            token.append(ch)
-    if token:
-        values.append("".join(token))
-    return values
-
-
-def add_depfile_contract_edges(outputs: list[str], outgoing: dict[int, set[int]],
-        incoming: dict[int, set[int]], required_edges: set[tuple[int, int]]) -> None:
-    suffix = ".compile-contract.stamp"
-    output_indexes = {
-        os.path.realpath(os.path.abspath(output)): index
-        for index, output in enumerate(outputs)
+    private list<hash<string, bool>> emptyGraph(int count) {
+        list<hash<string, bool>> graph = ();
+        for (int index = 0; index < count; ++index) {
+            push graph, {};
+        }
+        return graph;
     }
-    for consumer, output in enumerate(outputs):
-        try:
-            dependencies = parse_make_depfile_inputs(output + ".d")
-        except OSError:
-            continue
-        for dependency in dependencies:
-            if not dependency.endswith(suffix):
-                continue
-            provider_output = dependency[:-len(suffix)]
-            provider = output_indexes.get(
-                os.path.realpath(os.path.abspath(provider_output)))
-            if provider is None or provider == consumer:
-                continue
-            outgoing[provider].add(consumer)
-            incoming[consumer].add(provider)
-            required_edges.add((provider, consumer))
 
+    private addEdge(reference<list<hash<string, bool>>> outgoing,
+            reference<list<hash<string, bool>>> incoming,
+            reference<list<hash<string, bool>>> required, int provider, int consumer,
+            bool is_required = False) {
+        if (provider == consumer) {
+            return;
+        }
+        string consumer_key = string(consumer);
+        string provider_key = string(provider);
+        if (!exists outgoing[provider]{consumer_key}) {
+            outgoing[provider]{consumer_key} = True;
+            incoming[consumer]{provider_key} = True;
+        }
+        if (is_required) {
+            required[provider]{consumer_key} = True;
+        }
+    }
 
-def batch_artifact_current(context: str, inputs: list[str], outputs: list[str],
-        target: int, bootstrap_stamp: str | None) -> bool:
-    output = outputs[target]
-    required = [
-        output,
-        output + ".d",
-        output + ".idx.json",
-        output + ".status.json",
-        output + ".content.stamp",
-        output + ".compile-contract.stamp",
-        output + ".stamp",
-        output + ".source.manifest.json",
-        output + ".source-parse-defines",
-    ]
-    if bootstrap_stamp:
-        required.append(bootstrap_stamp)
-    try:
-        for path in required:
-            if not os.path.isfile(path):
-                return False
-        stamp_time = os.stat(output + ".stamp").st_mtime_ns
-        if bootstrap_stamp and os.stat(bootstrap_stamp).st_mtime_ns > stamp_time:
-            return False
-        if os.stat(inputs[target]).st_mtime_ns > stamp_time:
-            return False
+    private addProvider(reference<hash<string, list<int>>> providers, string symbol,
+            int source) {
+        if (!exists providers{symbol}) {
+            providers{symbol} = ();
+        } else {
+            foreach int existing in (providers{symbol}) {
+                if (existing == source) {
+                    return;
+                }
+            }
+        }
+        push providers{symbol}, source;
+    }
 
-        direct = build_direct_prerequisite_order(context, inputs, outputs, target)
-        for provider in direct:
-            contract_stamp = outputs[provider] + ".compile-contract.stamp"
-            if not os.path.isfile(contract_stamp):
-                contract_stamp = outputs[provider] + ".content.stamp"
-            if os.stat(contract_stamp).st_mtime_ns > stamp_time:
-                return False
-        for dep in parse_make_depfile_inputs(output + ".d"):
-            if os.path.exists(dep) and os.stat(dep).st_mtime_ns > stamp_time:
-                return False
-    except OSError:
-        return False
-    return True
+    private hash<string, bool> stringSet(list<string> values) {
+        hash<string, bool> result = {};
+        foreach string value in (values) {
+            result{value} = True;
+        }
+        return result;
+    }
 
+    private hash<string, bool> uniqueSymbols(hash<string, list<int>> providers,
+            hash<string, int> unique_provider) {
+        hash<string, bool> result = {};
+        foreach string symbol in (providers.keys()) {
+            if (providers{symbol}.size() == 1 && exists unique_provider{symbol}) {
+                result{symbol} = True;
+            }
+        }
+        return result;
+    }
 
-def build_prerequisite_order(context: str, inputs: list[str], outputs: list[str], target: int) -> list[int]:
-    outgoing, incoming, required_edges = load_or_build_hard_graph(context, inputs, outputs)
-    scc_ids = compute_scc_ids(outgoing, len(inputs))
-    prerequisites = collect_prerequisites(target, incoming, scc_ids, required_edges)
-    if not prerequisites:
-        return []
-    nodes = prerequisites | {target}
-    return [node for node in topo_subset(nodes, outgoing, target, scc_ids, required_edges) if node != target]
+    private addMentionProviders(reference<hash<string, bool>> mentions,
+            list<string> values, hash<string, bool> allowed) {
+        foreach string symbol in (values) {
+            if (exists allowed{symbol}) {
+                mentions{symbol} = True;
+            }
+        }
+    }
 
+    private hash<SourceOrderGraph> buildGraphFromSummaries(list<string> inputs,
+            list<hash<string, list<string>>> summaries) {
+        int count = inputs.size();
+        list<hash<string, bool>> provides_by_source = ();
+        hash<string, list<int>> provider_sources = {};
+        hash<string, list<int>> class_provider_sources = {};
+        hash<string, list<int>> enum_provider_sources = {};
+        hash<string, list<int>> hashdecl_provider_sources = {};
+        hash<string, list<int>> function_provider_sources = {};
+        hash<string, list<int>> parse_define_provider_sources = {};
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Print source-scanned .qo prerequisites before a target output")
-    parser.add_argument(
-        "--direct",
-        action="store_true",
-        help="print only direct prerequisite outputs for build-graph dependencies",
-    )
-    parser.add_argument(
-        "--direct-map-cmake",
-        metavar="PREFIX",
-        help="emit CMake set() statements with all direct prerequisite outputs for the context",
-    )
-    parser.add_argument(
-        "--build-map",
-        action="store_true",
-        help="print source/output pairs for all prerequisites in compile order",
-    )
-    parser.add_argument(
-        "--source-symbol-manifest",
-        metavar="FILE",
-        help="write a qcc source-symbol precedence manifest for all context inputs",
-    )
-    parser.add_argument(
-        "--batch-artifact-current",
-        metavar="BOOTSTRAP_STAMP",
-        help="check whether a batch-seeded output and all precise dependencies are current",
-    )
-    parser.add_argument(
-        "--artifact-current",
-        action="store_true",
-        help="check output freshness without requiring a batch-bootstrap marker",
-    )
-    parser.add_argument("context")
-    parser.add_argument("target_output", nargs="?")
-    args = parser.parse_args()
+        for (int index = 0; index < count; ++index) {
+            hash<string, list<string>> summary = summaries[index];
+            hash<string, bool> provides = stringSet(summary.provides);
+            push provides_by_source, provides;
+            foreach string symbol in (summary.provides) {
+                addProvider(\provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.classes) {
+                addProvider(\class_provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.enums) {
+                addProvider(\enum_provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.hashdecls) {
+                addProvider(\hashdecl_provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.functions) {
+                addProvider(\function_provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.parse_defines) {
+                addProvider(\parse_define_provider_sources, symbol, index);
+            }
+        }
 
-    inputs, outputs = parse_context(args.context)
-    if args.source_symbol_manifest:
-        write_if_changed(args.source_symbol_manifest, build_source_symbol_manifest(args.context, inputs))
-        return 0
+        hash<string, int> unique_provider = {};
+        foreach string symbol in (provider_sources.keys()) {
+            if (provider_sources{symbol}.size() == 1) {
+                unique_provider{symbol} = provider_sources{symbol}[0];
+            }
+        }
+        hash<string, bool> provider_symbols = stringSet(unique_provider.keys());
+        hash<string, bool> unique_classes = uniqueSymbols(class_provider_sources, unique_provider);
+        hash<string, bool> unique_enums = uniqueSymbols(enum_provider_sources, unique_provider);
+        hash<string, bool> unique_hashdecls = uniqueSymbols(hashdecl_provider_sources, unique_provider);
+        hash<string, bool> unique_functions = uniqueSymbols(function_provider_sources, unique_provider);
+        hash<string, int> unique_parse_defines = {};
+        foreach string symbol in (parse_define_provider_sources.keys()) {
+            if (parse_define_provider_sources{symbol}.size() == 1) {
+                unique_parse_defines{symbol} = parse_define_provider_sources{symbol}[0];
+            }
+        }
 
-    if args.direct_map_cmake:
-        try:
-            emit_cmake_direct_map(args.direct_map_cmake, args.context, inputs, outputs)
-        except ValueError as exc:
-            print(f"{sys.argv[0]}: {exc}", file=sys.stderr)
-            return 2
-        return 0
+        hash<string, list<int>> basename_sources = {};
+        for (int index = 0; index < count; ++index) {
+            addProvider(\basename_sources, basename(inputs[index]), index);
+        }
+        hash<string, int> unique_basenames = {};
+        foreach string name in (basename_sources.keys()) {
+            if (basename_sources{name}.size() == 1) {
+                unique_basenames{name} = basename_sources{name}[0];
+            }
+        }
 
-    if not args.target_output:
-        print(f"{sys.argv[0]}: target output is required unless --direct-map-cmake is used", file=sys.stderr)
-        return 2
+        list<hash<string, bool>> outgoing = emptyGraph(count);
+        list<hash<string, bool>> incoming = emptyGraph(count);
+        list<hash<string, bool>> required = emptyGraph(count);
+        for (int consumer = 0; consumer < count; ++consumer) {
+            hash<string, list<string>> summary = summaries[consumer];
+            hash<string, bool> local_provides = provides_by_source[consumer];
 
-    normalized_outputs = [os.path.realpath(os.path.abspath(path)) for path in outputs]
-    target = os.path.realpath(os.path.abspath(args.target_output))
-    try:
-        target_index = normalized_outputs.index(target)
-    except ValueError:
-        print(f"{sys.argv[0]}: target output not present in context: {args.target_output}", file=sys.stderr)
-        return 1
+            foreach string symbol in (summary.inheritance_mentions) {
+                if (!exists provider_symbols{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
+            foreach string symbol in (summary.hard_mentions) {
+                if (!exists provider_symbols{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
 
-    if args.build_map:
-        emit_build_map(args.context, inputs, outputs, target_index)
-        return 0
+            hash<string, bool> mentions = {};
+            hash<string, bool> class_or_hashdecl = unique_classes;
+            foreach string symbol in (unique_hashdecls.keys()) {
+                class_or_hashdecl{symbol} = True;
+            }
+            addMentionProviders(\mentions, summary.decl_type_mentions, class_or_hashdecl);
+            addMentionProviders(\mentions, summary.hash_type_mentions, unique_hashdecls);
+            foreach string symbol in (summary.enum_type_mentions) {
+                if (!exists unique_enums{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
+            foreach string symbol in (summary.call_ref_functions) {
+                if (!exists unique_functions{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
+            foreach string symbol in (summary.call_ref_classes) {
+                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_provider{symbol}, consumer);
+                }
+            }
+            addMentionProviders(\mentions, summary.constructed_decl_type_mentions,
+                class_or_hashdecl);
+            addMentionProviders(\mentions, summary.new_hash_type_mentions, unique_hashdecls);
+            foreach string symbol in (summary.new_object_mentions) {
+                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_provider{symbol}, consumer);
+                }
+            }
+            foreach string symbol in (summary.class_for_name_mentions) {
+                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_provider{symbol}, consumer);
+                }
+            }
+            addMentionProviders(\mentions, summary.create_object_mentions, unique_classes);
+            addMentionProviders(\mentions, summary.static_call_mentions, unique_classes);
+            foreach string symbol in (summary.param_default_static_call_mentions) {
+                if (!exists unique_classes{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
+            addMentionProviders(\mentions, summary.static_ref_mentions, unique_classes);
+            foreach string symbol in (summary.static_ref_mentions) {
+                if (!exists unique_enums{symbol} || exists local_provides{symbol}) {
+                    continue;
+                }
+                addEdge(\outgoing, \incoming, \required,
+                    unique_provider{symbol}, consumer, True);
+            }
+            foreach string symbol in (mentions.keys()) {
+                if (!exists local_provides{symbol}) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_provider{symbol}, consumer);
+                }
+            }
 
-    if args.batch_artifact_current or args.artifact_current:
-        return 0 if batch_artifact_current(
-            args.context, inputs, outputs, target_index,
-            args.batch_artifact_current if not args.artifact_current else None) else 1
+            foreach string included in (summary.includes) {
+                string name = basename(included);
+                if (exists unique_basenames{name} && unique_basenames{name} != consumer) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_basenames{name}, consumer, True);
+                }
+            }
+            foreach string symbol in (summary.parse_define_consumers) {
+                if (exists unique_parse_defines{symbol}
+                        && unique_parse_defines{symbol} != consumer) {
+                    addEdge(\outgoing, \incoming, \required,
+                        unique_parse_defines{symbol}, consumer, True);
+                }
+            }
+        }
+        return new hash<SourceOrderGraph>((
+            "outgoing": outgoing,
+            "incoming": incoming,
+            "required": required,
+            "summaries": summaries,
+        ));
+    }
 
-    if args.direct:
-        order = build_direct_prerequisite_order(args.context, inputs, outputs, target_index)
-    else:
-        order = build_prerequisite_order(args.context, inputs, outputs, target_index)
-    for index in order:
-        print(outputs[index])
-    return 0
+    private runSummaryWorker(Queue work, Queue results,
+            hash<string, bool> true_defines) {
+        SourceSymbolManifestGenerator scanner();
+        while (True) {
+            hash<auto> task = work.get();
+            if (!exists task.source) {
+                return;
+            }
+            try {
+                results.push((
+                    "index": task.index,
+                    "summary": scanner.scanDependencySummary(task.source, true_defines),
+                ));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(("error": ex));
+            }
+        }
+    }
 
+    private submitSummaryWorker(ThreadPool pool, Queue work, Queue results,
+            hash<string, bool> true_defines) {
+        pool.submit(sub() {
+            runSummaryWorker(work, results, true_defines);
+        });
+    }
 
-if __name__ == "__main__":
-    sys.exit(main())
+    private list<hash<string, list<string>>> scanSummaries(list<string> inputs,
+            hash<string, bool> true_defines) {
+        list<hash<string, list<string>>> summaries = ();
+        for (int index = 0; index < inputs.size(); ++index) {
+            push summaries, {};
+        }
+        if (!inputs) {
+            return summaries;
+        }
+        int thread_count = ENV.QORE_QO_SOURCE_ORDER_THREADS
+            ? ENV.QORE_QO_SOURCE_ORDER_THREADS.toInt()
+            : 4;
+        thread_count = max(1, min(thread_count, inputs.size()));
+        ThreadPool pool(max_threads: thread_count);
+        Queue work();
+        Queue results();
+        for (int index = 0; index < inputs.size(); ++index) {
+            work.push(("index": index, "source": inputs[index]));
+        }
+        for (int index = 0; index < thread_count; ++index) {
+            work.push(("source": NOTHING));
+            submitSummaryWorker(pool, work, results, true_defines);
+        }
+        pool.stopWait();
+        for (int index = 0; index < inputs.size(); ++index) {
+            hash<auto> envelope = results.get();
+            if (exists envelope.error) {
+                throw envelope.error.err, envelope.error.desc, envelope.error.arg;
+            }
+            summaries[envelope.index] = envelope.summary;
+        }
+        return summaries;
+    }
+
+    private bool sourceSummaryValid(auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return False;
+        }
+        hash<auto> summary = value;
+        foreach string key in (SOURCE_SUMMARY_KEYS) {
+            if (!exists summary{key} || summary{key}.typeCode() != NT_LIST) {
+                return False;
+            }
+            foreach auto item in (summary{key}) {
+                if (item.typeCode() != NT_STRING) {
+                    return False;
+                }
+            }
+        }
+        return True;
+    }
+
+    private hash<string, list<string>> typedSummary(hash<auto> summary) {
+        hash<string, list<string>> result = {};
+        foreach string key in (SOURCE_SUMMARY_KEYS) {
+            result{key} = summary{key};
+        }
+        return result;
+    }
+
+    private list<list<int>> graphToLists(list<hash<string, bool>> graph) {
+        list<list<int>> result = ();
+        foreach hash<string, bool> edges in (graph) {
+            list<int> values = ();
+            foreach string value in (edges.keys()) {
+                push values, value.toInt();
+            }
+            push result, sort(values);
+        }
+        return result;
+    }
+
+    private list<hash<string, bool>> listsToGraph(list<auto> values, int count) {
+        list<hash<string, bool>> graph = emptyGraph(count);
+        for (int provider = 0; provider < count; ++provider) {
+            foreach int consumer in (values[provider]) {
+                graph[provider]{string(consumer)} = True;
+            }
+        }
+        return graph;
+    }
+
+    private string fileDigest(string path) {
+        return digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
+    }
+
+    private hash<auto> fileRecord(string path) {
+        hash<StatInfo> info = hstat(path);
+        return (
+            "path": absoluteNormalized(path),
+            "size": info.size,
+            "sha256": fileDigest(path),
+        );
+    }
+
+    private list<hash<auto>> fileRecords(list<string> paths) {
+        list<hash<auto>> records = ();
+        foreach string path in (paths) {
+            push records, fileRecord(path);
+        }
+        return records;
+    }
+
+    private saveGraphCache(string cache_file, list<string> inputs, list<string> outputs,
+            hash<string, bool> true_defines, hash<SourceOrderGraph> graph,
+            *list<hash<auto>> input_records = NOTHING) {
+        hash<auto> data = (
+            "version": CACHE_VERSION,
+            "inputs": inputs,
+            "outputs": outputs,
+            "parse_defines": sort(true_defines.keys()),
+            "input_records": input_records ?? fileRecords(inputs),
+            "source_summaries": graph.summaries,
+            "outgoing": graphToLists(graph.outgoing),
+            "incoming": graphToLists(graph.incoming),
+            "required": graphToLists(graph.required),
+        );
+        string temporary = sprintf("%s.%d.tmp", cache_file, getpid());
+        try {
+            {
+                File file();
+                file.open2(temporary, O_CREAT | O_TRUNC | O_WRONLY, 0666, "UTF-8");
+                file.write(make_json(data));
+            }
+            rename(temporary, cache_file);
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                if (exists hlstat(temporary)) {
+                    unlink(temporary);
+                }
+            } catch (hash<ExceptionInfo> ignored) {
+            }
+        }
+    }
+
+    private *hash<SourceOrderGraph> loadGraphCache(string cache_file, string context_path,
+            list<string> inputs, list<string> outputs,
+            hash<string, bool> true_defines) {
+        try {
+            int started = clock_getmicros_monotonic();
+            *hash<StatInfo> cache_info = hstat(cache_file);
+            if (!exists cache_info) {
+                return NOTHING;
+            }
+            string cache_text = ReadOnlyFile::readTextFile(cache_file);
+            int read_done = clock_getmicros_monotonic();
+            auto raw_data = parse_json(cache_text);
+            int parse_done = clock_getmicros_monotonic();
+            if (raw_data.typeCode() != NT_HASH) {
+                return NOTHING;
+            }
+            hash<auto> data = raw_data;
+            if (data.version != CACHE_VERSION || data.inputs != inputs
+                    || data.outputs != outputs
+                    || data.parse_defines != sort(true_defines.keys())) {
+                return NOTHING;
+            }
+            foreach string key in (("outgoing", "incoming", "required",
+                    "input_records", "source_summaries")) {
+                if (!exists data{key} || data{key}.typeCode() != NT_LIST
+                        || data{key}.size() != inputs.size()) {
+                    return NOTHING;
+                }
+            }
+            *hash<StatInfo> context_info = hstat(context_path);
+            *hash<StatInfo> script_info = hstat(get_script_path());
+            if (!exists context_info || !exists script_info
+                    || context_info.mtime >= cache_info.mtime
+                    || script_info.mtime >= cache_info.mtime) {
+                return NOTHING;
+            }
+
+            list<int> inspect = ();
+            for (int index = 0; index < inputs.size(); ++index) {
+                auto raw_record = data.input_records[index];
+                if (raw_record.typeCode() != NT_HASH) {
+                    return NOTHING;
+                }
+                hash<auto> old_record = raw_record;
+                *hash<StatInfo> info = hstat(inputs[index]);
+                if (!exists info || old_record.path != absoluteNormalized(inputs[index])) {
+                    return NOTHING;
+                }
+                if (old_record.size != info.size || info.mtime >= cache_info.mtime) {
+                    push inspect, index;
+                }
+            }
+            int stat_done = clock_getmicros_monotonic();
+
+            hash<SourceOrderGraph> graph = new hash<SourceOrderGraph>((
+                "outgoing": listsToGraph(data.outgoing, inputs.size()),
+                "incoming": listsToGraph(data.incoming, inputs.size()),
+                "required": listsToGraph(data.required, inputs.size()),
+                "summaries": (),
+            ));
+            if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+                int graph_done = clock_getmicros_monotonic();
+                stderr.printf("cache read=%d us parse=%d us validate+stat=%d us graph=%d us\n",
+                    read_done - started, parse_done - read_done, stat_done - parse_done,
+                    graph_done - stat_done);
+            }
+            if (!inspect) {
+                return graph;
+            }
+
+            list<hash<string, list<string>>> summaries = ();
+            foreach auto raw_summary in (data.source_summaries) {
+                if (!sourceSummaryValid(raw_summary)) {
+                    return NOTHING;
+                }
+                hash<auto> summary = raw_summary;
+                push summaries, typedSummary(summary);
+            }
+            graph.summaries = summaries;
+            list<hash<auto>> records = ();
+            foreach hash<auto> record in (data.input_records) {
+                push records, record;
+            }
+            bool graph_changed = False;
+            SourceSymbolManifestGenerator scanner();
+            foreach int index in (inspect) {
+                hash<auto> record = fileRecord(inputs[index]);
+                hash<auto> old_record = data.input_records[index];
+                if (record.size != old_record.size || record.sha256 != old_record.sha256) {
+                    summaries[index] = scanner.scanDependencySummary(inputs[index], true_defines);
+                    graph_changed = True;
+                }
+                records[index] = record;
+            }
+            if (graph_changed) {
+                graph = buildGraphFromSummaries(inputs, summaries);
+            }
+            saveGraphCache(cache_file, inputs, outputs, true_defines, graph, records);
+            return graph;
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+    }
+
+    private list<string> parseMakeDepfileInputs(string path) {
+        string text = ReadOnlyFile::readTextFile(path);
+        int colon = text.find(":");
+        if (colon < 0) {
+            return ();
+        }
+        list<string> values = ();
+        list<string> token_parts = ();
+        int token_start = -1;
+        for (int offset = colon + 1; offset < text.size(); ++offset) {
+            int byte = text.getByte(offset);
+            if (byte == 0x5c) {
+                if (token_start >= 0 && offset > token_start) {
+                    push token_parts, text.substr(token_start, offset - token_start);
+                }
+                if (++offset < text.size() && text.getByte(offset) != 0x0a) {
+                    push token_parts, text.substr(offset, 1);
+                }
+                token_start = offset + 1;
+            } else if (byte == 0x20 || byte == 0x09 || byte == 0x0a
+                    || byte == 0x0d || byte == 0x0b || byte == 0x0c) {
+                if (token_start >= 0 && offset > token_start) {
+                    push token_parts, text.substr(token_start, offset - token_start);
+                }
+                if (token_parts) {
+                    push values, join("", token_parts);
+                    token_parts = ();
+                }
+                token_start = -1;
+            } else {
+                if (token_start < 0) {
+                    token_start = offset;
+                }
+            }
+        }
+        if (token_start >= 0 && token_start < text.size()) {
+            push token_parts, text.substr(token_start);
+        }
+        if (token_parts) {
+            push values, join("", token_parts);
+        }
+        return values;
+    }
+
+    private list<string> parseMakeDepfileContractInputs(string path) {
+        list<string> values = ();
+        string text = ReadOnlyFile::readTextFile(path);
+        foreach *string value in (compile_contract_re.extractGroups(text) ?? ()) {
+            if (!exists value) {
+                continue;
+            }
+            if (value.find("\\") >= 0) {
+                value = regex_subst(value, "\\\\([\\s\\S])",
+                    string sub (hash<RegexMatchInfo> match) {
+                        return match.groups[0] == "\n" ? "" : match.groups[0];
+                    }, RE_Global);
+            }
+            push values, value;
+        }
+        return values;
+    }
+
+    private addDepfileContractEdges(list<string> outputs,
+            reference<hash<SourceOrderGraph>> graph) {
+        const string Suffix = ".compile-contract.stamp";
+        hash<string, int> output_indexes = {};
+        for (int index = 0; index < outputs.size(); ++index) {
+            output_indexes{outputs[index]} = index;
+            output_indexes{absoluteNormalized(outputs[index])} = index;
+        }
+        *hash<string, int> canonical_output_indexes;
+        for (int consumer = 0; consumer < outputs.size(); ++consumer) {
+            string depfile = outputs[consumer] + ".d";
+            if (!is_file(depfile)) {
+                continue;
+            }
+            foreach string dependency in (parseMakeDepfileContractInputs(depfile)) {
+                string provider_output = dependency.substr(0,
+                    dependency.size() - Suffix.size());
+                *int provider = output_indexes{provider_output};
+                if (!exists provider) {
+                    provider = output_indexes{absoluteNormalized(provider_output)};
+                }
+                if (!exists provider) {
+                    if (!exists canonical_output_indexes) {
+                        canonical_output_indexes = {};
+                        for (int index = 0; index < outputs.size(); ++index) {
+                            canonical_output_indexes{canonical(outputs[index])} = index;
+                        }
+                    }
+                    provider = canonical_output_indexes{canonical(provider_output)};
+                }
+                if (!exists provider) {
+                    continue;
+                }
+                if (provider != consumer) {
+                    addEdge(\graph.outgoing, \graph.incoming, \graph.required,
+                        provider, consumer, True);
+                }
+            }
+        }
+    }
+
+    private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
+            hash<SourceOrderContext> context_info) {
+        string cache_file = context_path + ".source-order-v2.json";
+        *hash<SourceOrderGraph> cached = loadGraphCache(cache_file, context_path,
+            context_info.inputs, context_info.outputs, context_info.parse_defines);
+        hash<SourceOrderGraph> graph;
+        if (exists cached) {
+            graph = cached;
+        } else {
+            list<hash<string, list<string>>> summaries = scanSummaries(
+                context_info.inputs, context_info.parse_defines);
+            graph = buildGraphFromSummaries(context_info.inputs, summaries);
+            saveGraphCache(cache_file, context_info.inputs, context_info.outputs,
+                context_info.parse_defines, graph);
+        }
+        int depfile_started = clock_getmicros_monotonic();
+        addDepfileContractEdges(context_info.outputs, \graph);
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            stderr.printf("depfile contract edges=%d us\n",
+                clock_getmicros_monotonic() - depfile_started);
+        }
+        return graph;
+    }
+
+    private bool requiredEdge(hash<SourceOrderGraph> graph, int provider,
+            int consumer) {
+        return exists graph.required[provider]{string(consumer)};
+    }
+
+    private hash<string, bool> collectPrerequisites(int target,
+            hash<SourceOrderGraph> graph) {
+        hash<string, bool> prerequisites = {};
+        list<list<int>> stack = ();
+        foreach string provider_key in (graph.incoming[target].keys()) {
+            push stack, (target, provider_key.toInt());
+        }
+        while (stack) {
+            list<int> edge = pop stack;
+            int consumer = edge[0];
+            int provider = edge[1];
+            string provider_key = string(provider);
+            if (!requiredEdge(graph, provider, consumer)
+                    || exists prerequisites{provider_key}) {
+                continue;
+            }
+            prerequisites{provider_key} = True;
+            foreach string next_provider in (graph.incoming[provider].keys()) {
+                push stack, (provider, next_provider.toInt());
+            }
+        }
+        return prerequisites;
+    }
+
+    private int minimumNode(hash<string, bool> nodes, *int excluded = NOTHING) {
+        int result = -1;
+        foreach string node_key in (nodes.keys()) {
+            int node = node_key.toInt();
+            if ((exists excluded && node == excluded)
+                    || (result >= 0 && node >= result)) {
+                continue;
+            }
+            result = node;
+        }
+        return result;
+    }
+
+    private list<int> topoSubset(hash<string, bool> nodes,
+            hash<SourceOrderGraph> graph, int target) {
+        list<int> incoming_count = ();
+        for (int index = 0; index < graph.outgoing.size(); ++index) {
+            push incoming_count, 0;
+        }
+        foreach string provider_key in (nodes.keys()) {
+            int provider = provider_key.toInt();
+            foreach string consumer_key in (graph.outgoing[provider].keys()) {
+                int consumer = consumer_key.toInt();
+                if (exists nodes{consumer_key} && requiredEdge(graph, provider, consumer)) {
+                    ++incoming_count[consumer];
+                }
+            }
+        }
+        hash<string, bool> ready = {};
+        foreach string node_key in (nodes.keys()) {
+            if (!incoming_count[node_key.toInt()]) {
+                ready{node_key} = True;
+            }
+        }
+        hash<string, bool> remaining = nodes;
+        list<int> order = ();
+        while (remaining) {
+            int node = minimumNode(ready);
+            if (node >= 0) {
+                remove ready{string(node)};
+                if (!exists remaining{string(node)}) {
+                    continue;
+                }
+            } else {
+                node = minimumNode(remaining, target);
+                if (node < 0) {
+                    node = minimumNode(remaining);
+                }
+            }
+            string node_key = string(node);
+            remove remaining{node_key};
+            push order, node;
+            list<int> consumers = ();
+            foreach string consumer_key in (graph.outgoing[node].keys()) {
+                push consumers, consumer_key.toInt();
+            }
+            foreach int consumer in (sort(consumers)) {
+                string consumer_key = string(consumer);
+                if (!exists remaining{consumer_key}
+                        || !requiredEdge(graph, node, consumer)) {
+                    continue;
+                }
+                --incoming_count[consumer];
+                if (!incoming_count[consumer]) {
+                    ready{consumer_key} = True;
+                }
+            }
+        }
+        return order;
+    }
+
+    list<int> directOrder(string context_path, hash<SourceOrderContext> context_info,
+            int target) {
+        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        list<int> order = ();
+        foreach string provider_key in (graph.incoming[target].keys()) {
+            int provider = provider_key.toInt();
+            if (requiredEdge(graph, provider, target)) {
+                push order, provider;
+            }
+        }
+        return sort(order);
+    }
+
+    list<list<int>> allDirectOrders(string context_path,
+            hash<SourceOrderContext> context_info) {
+        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        list<list<int>> result = ();
+        for (int target = 0; target < context_info.inputs.size(); ++target) {
+            list<int> order = ();
+            foreach string provider_key in (graph.incoming[target].keys()) {
+                int provider = provider_key.toInt();
+                if (requiredEdge(graph, provider, target)) {
+                    push order, provider;
+                }
+            }
+            push result, sort(order);
+        }
+        return result;
+    }
+
+    list<int> prerequisiteOrder(string context_path,
+            hash<SourceOrderContext> context_info, int target) {
+        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        hash<string, bool> prerequisites = collectPrerequisites(target, graph);
+        if (!prerequisites) {
+            return ();
+        }
+        hash<string, bool> nodes = prerequisites;
+        nodes{string(target)} = True;
+        list<int> result = ();
+        foreach int node in (topoSubset(nodes, graph, target)) {
+            if (node != target) {
+                push result, node;
+            }
+        }
+        return result;
+    }
+
+    private bool artifactCurrentImpl(string context_path,
+            hash<SourceOrderContext> context_info, int target,
+            *string bootstrap_stamp) {
+        string output = context_info.outputs[target];
+        list<string> required_files = (
+            output,
+            output + ".d",
+            output + ".idx.json",
+            output + ".status.json",
+            output + ".content.stamp",
+            output + ".compile-contract.stamp",
+            output + ".stamp",
+            output + ".source.manifest.json",
+            output + ".source-parse-defines",
+        );
+        if (exists bootstrap_stamp) {
+            push required_files, bootstrap_stamp;
+        }
+        foreach string path in (required_files) {
+            if (!is_file(path)) {
+                return False;
+            }
+        }
+        try {
+            date stamp_time = hstat(output + ".stamp").mtime;
+            if ((exists bootstrap_stamp && hstat(bootstrap_stamp).mtime > stamp_time)
+                    || hstat(context_info.inputs[target]).mtime >= stamp_time) {
+                return False;
+            }
+            foreach int provider in (directOrder(context_path, context_info, target)) {
+                string contract_stamp = context_info.outputs[provider]
+                    + ".compile-contract.stamp";
+                if (!is_file(contract_stamp)) {
+                    contract_stamp = context_info.outputs[provider] + ".content.stamp";
+                }
+                if (hstat(contract_stamp).mtime > stamp_time) {
+                    return False;
+                }
+            }
+            foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
+                *hash<StatInfo> info = hstat(dependency);
+                if (exists info && info.mtime >= stamp_time) {
+                    return False;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        return True;
+    }
+
+    bool artifactCurrent(string context_path, hash<SourceOrderContext> context_info,
+            int target) {
+        return artifactCurrentImpl(context_path, context_info, target, NOTHING);
+    }
+
+    bool batchArtifactCurrent(string context_path,
+            hash<SourceOrderContext> context_info, int target,
+            string bootstrap_stamp) {
+        return artifactCurrentImpl(context_path, context_info, target, bootstrap_stamp);
+    }
+}
+
+sub atomicWriteIfChanged(string path, string content) {
+    if (is_file(path) && ReadOnlyFile::readTextFile(path) == content) {
+        return;
+    }
+    mkdir(dirname(path), 0777, True);
+    string temporary = sprintf("%s.%d.tmp", path, getpid());
+    on_error try { unlink(temporary); } catch (hash<ExceptionInfo> ex) {}
+    {
+        File file();
+        file.open2(temporary, O_CREAT | O_TRUNC | O_WRONLY, 0666, "UTF-8");
+        file.write(content);
+    }
+    rename(temporary, path);
+}
+
+string sub cmakeQuote(string value) {
+    string result;
+    for (int offset = 0; offset < value.size(); ++offset) {
+        int byte = value.getByte(offset);
+        if (byte == 0x5c || byte == 0x22) {
+            result += "\\";
+        }
+        result += chr(byte);
+    }
+    return result;
+}
+
+sub usage(*string error = NOTHING, bool success = False) {
+    if (exists error) {
+        stderr.printf("%s: %s\n", get_script_name(), error);
+    }
+    string text = sprintf(
+        "usage: %s [--direct|--build-map|--artifact-current] CONTEXT TARGET_OUTPUT\n"
+        "       %s --batch-artifact-current STAMP CONTEXT TARGET_OUTPUT\n"
+        "       %s --direct-map-cmake PREFIX CONTEXT\n"
+        "       %s --source-symbol-manifest FILE CONTEXT\n",
+        get_script_name(), get_script_name(), get_script_name(), get_script_name());
+    if (success) {
+        printf("%s", text);
+    } else {
+        stderr.printf("%s", text);
+    }
+    exit(success ? 0 : 2);
+}
+
+int sub findTarget(list<string> outputs, string target_output) {
+    string target = canonical(target_output);
+    for (int index = 0; index < outputs.size(); ++index) {
+        if (canonical(outputs[index]) == target) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+int sub main() {
+    int started = clock_getmicros_monotonic();
+    if (ARGV.size() == 3 && ARGV[0] == "--source-summary") {
+        SourceSymbolManifestGenerator scanner();
+        printf("%s\n", make_json(scanner.scanDependencySummaryForContext(ARGV[1], ARGV[2])));
+        return 0;
+    }
+
+    bool direct = False;
+    bool build_map = False;
+    bool artifact_current = False;
+    *string direct_map_prefix;
+    *string source_symbol_manifest;
+    *string batch_bootstrap_stamp;
+    list<string> positional = ();
+    for (int index = 0; index < ARGV.size(); ++index) {
+        string arg = ARGV[index];
+        if (arg == "-h" || arg == "--help") {
+            usage(NOTHING, True);
+        } else if (arg == "--direct") {
+            direct = True;
+        } else if (arg == "--build-map") {
+            build_map = True;
+        } else if (arg == "--artifact-current") {
+            artifact_current = True;
+        } else if (arg == "--direct-map-cmake"
+                || arg == "--source-symbol-manifest"
+                || arg == "--batch-artifact-current") {
+            if (++index >= ARGV.size()) {
+                usage(sprintf("argument expected after %s", arg));
+            }
+            if (arg == "--direct-map-cmake") {
+                direct_map_prefix = ARGV[index];
+            } else if (arg == "--source-symbol-manifest") {
+                source_symbol_manifest = ARGV[index];
+            } else {
+                batch_bootstrap_stamp = ARGV[index];
+            }
+        } else if (arg.startsWith("--direct-map-cmake=")) {
+            direct_map_prefix = arg.substr(19);
+        } else if (arg.startsWith("--source-symbol-manifest=")) {
+            source_symbol_manifest = arg.substr(25);
+        } else if (arg.startsWith("--batch-artifact-current=")) {
+            batch_bootstrap_stamp = arg.substr(25);
+        } else if (arg.startsWith("-")) {
+            usage("unrecognized argument: " + arg);
+        } else {
+            push positional, arg;
+        }
+    }
+    if (!positional) {
+        usage("context is required");
+    }
+    string context_path = positional[0];
+    hash<SourceOrderContext> context_info = parseContext(context_path);
+    if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+        stderr.printf("main argument+context=%d us\n", clock_getmicros_monotonic() - started);
+    }
+
+    if (exists source_symbol_manifest) {
+        if (positional.size() != 1) {
+            usage("--source-symbol-manifest accepts only a context argument");
+        }
+        SourceSymbolManifestGenerator generator();
+        list<string> inputs = ENV.QORE_QO_SOURCE_ORDER_INPUT
+            ? (ENV.QORE_QO_SOURCE_ORDER_INPUT,)
+            : context_info.inputs;
+        atomicWriteIfChanged(source_symbol_manifest,
+            generator.generate(context_path, inputs));
+        return 0;
+    }
+
+    SourceOrderEngine engine();
+    if (exists direct_map_prefix) {
+        if (positional.size() != 1) {
+            usage("--direct-map-cmake accepts only a context argument");
+        }
+        if (direct_map_prefix !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            usage(sprintf("invalid CMake variable prefix: %y", direct_map_prefix));
+        }
+        int order_started = clock_getmicros_monotonic();
+        list<list<int>> orders = engine.allDirectOrders(context_path, context_info);
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            stderr.printf("main direct orders=%d us\n",
+                clock_getmicros_monotonic() - order_started);
+        }
+        int output_started = clock_getmicros_monotonic();
+        for (int target = 0; target < orders.size(); ++target) {
+            list<string> dependencies = ();
+            foreach int provider in (orders[target]) {
+                push dependencies, cmakeQuote(context_info.outputs[provider]);
+            }
+            printf("set(%s_%d \"%s\")\n", direct_map_prefix, target,
+                join(";", dependencies));
+        }
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            stderr.printf("main direct output=%d us\n",
+                clock_getmicros_monotonic() - output_started);
+        }
+        return 0;
+    }
+
+    if (positional.size() != 2) {
+        usage("target output is required unless --direct-map-cmake is used");
+    }
+    int target = findTarget(context_info.outputs, positional[1]);
+    if (target < 0) {
+        stderr.printf("%s: target output not present in context: %s\n",
+            get_script_name(), positional[1]);
+        return 1;
+    }
+    if (build_map) {
+        foreach int index in (engine.prerequisiteOrder(context_path, context_info, target)) {
+            printf("%s\t%s\n", context_info.inputs[index], context_info.outputs[index]);
+        }
+        return 0;
+    }
+    if (exists batch_bootstrap_stamp) {
+        return engine.batchArtifactCurrent(context_path, context_info, target,
+            batch_bootstrap_stamp) ? 0 : 1;
+    }
+    if (artifact_current) {
+        return engine.artifactCurrent(context_path, context_info, target) ? 0 : 1;
+    }
+    list<int> order = direct
+        ? engine.directOrder(context_path, context_info, target)
+        : engine.prerequisiteOrder(context_path, context_info, target);
+    foreach int index in (order) {
+        printf("%s\n", context_info.outputs[index]);
+    }
+    return 0;
+}
+
+try {
+    return main();
+} catch (hash<ExceptionInfo> ex) {
+    stderr.printf("%s: %s: %s\n", get_script_name(), ex.err, ex.desc);
+    return 1;
+}

@@ -19,6 +19,15 @@ lock_dir="${bootstrap_stamp}.lock"
 lock_owned=false
 outputs_file=
 
+run_source_order() {
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        "$QORE_QCC_QORE_EXECUTABLE" "$source_order_tool" "$@"
+    else
+        "$source_order_tool" "$@"
+    fi
+}
+
 cleanup() {
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
@@ -108,7 +117,7 @@ if [ "$waited" = true ] && [ "$complete" = true ] \
         && [ -f "$bootstrap_stamp" ]; then
     while IFS= read -r output; do
         [ -n "$output" ] || continue
-        if ! "$source_order_tool" --batch-artifact-current \
+        if ! run_source_order --batch-artifact-current \
                 "$bootstrap_stamp" "$context" "$output"; then
             complete=false
             break
@@ -127,7 +136,7 @@ fi
 if [ "$had_bootstrap" = false ] && [ "$complete" = true ]; then
     while IFS= read -r output; do
         [ -n "$output" ] || continue
-        if ! "$source_order_tool" --artifact-current "$context" "$output"; then
+        if ! run_source_order --artifact-current "$context" "$output"; then
             complete=false
             break
         fi
@@ -137,7 +146,22 @@ fi
 touch "$bootstrap_stamp"
 
 if [ "$had_bootstrap" = true ] || [ "$complete" = false ]; then
-    if ! sh "$batch_script"; then
+    batch_attempt=1
+    batch_succeeded=false
+    while :; do
+        if sh "$batch_script"; then
+            batch_succeeded=true
+            break
+        else
+            rc=$?
+        fi
+        if [ "$rc" -ne 75 ] || [ "$batch_attempt" -ge 3 ]; then
+            break
+        fi
+        batch_attempt=$((batch_attempt + 1))
+        echo "$0: qcc batch input changed during compilation; retrying ($batch_attempt/3)"
+    done
+    if [ "$batch_succeeded" = false ]; then
         echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
         # Keep the new marker but do not advance any object stamps.  Every
         # per-source command therefore observes an older or missing stamp and

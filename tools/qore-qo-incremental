@@ -57,6 +57,15 @@ source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-or
 source_parse_define_tool="${QORE_QCC_SOURCE_PARSE_DEFINE_HELPER:-$script_dir/qore-qo-source-parse-defines}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
 
+run_source_order() {
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        "$QORE_QCC_QORE_EXECUTABLE" "$source_order_tool" "$@"
+    else
+        "$source_order_tool" "$@"
+    fi
+}
+
 cleanup_stage_dir() {
     stage_dir=${1:-}
     if [ -n "$stage_dir" ] && [ -d "$stage_dir" ]; then
@@ -101,9 +110,8 @@ select_preload_outputs() {
     requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-requested.XXXXXX")
     : > "$resolved_file"
 
-    if [ -x "$source_order_tool" ] && [ -f "$context_file" ] \
-            && command -v python3 >/dev/null 2>&1; then
-        if ! "$source_order_tool" "$context_file" "$output" > "$requested_file"; then
+    if [ -x "$source_order_tool" ] && [ -f "$context_file" ]; then
+        if ! run_source_order "$context_file" "$output" > "$requested_file"; then
             rm -f "$requested_file"
             return 1
         fi
@@ -128,9 +136,8 @@ select_manifest_inputs() {
     requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-direct.XXXXXX")
     : > "$resolved_file"
 
-    if [ -x "$source_order_tool" ] && [ -f "$context_file" ] \
-            && command -v python3 >/dev/null 2>&1; then
-        if ! "$source_order_tool" --direct "$context_file" "$output" > "$requested_file"; then
+    if [ -x "$source_order_tool" ] && [ -f "$context_file" ]; then
+        if ! run_source_order --direct "$context_file" "$output" > "$requested_file"; then
             rm -f "$requested_file"
             return 1
         fi
@@ -186,16 +193,28 @@ compile_current_source() {
         return 1
     fi
 
-    if ! QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
-            QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
-            QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
-            QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
-            sh "$single_script" "$source" "$output" "$single_preload" > "$single_log" 2>&1; then
-        cat "$single_log" >&2
-        rm -f "$single_log"
-        cleanup_stage_dir "$single_preload"
-        return 1
-    fi
+    attempt=1
+    while :; do
+        if QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+                QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+                QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+                QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+                sh "$single_script" "$source" "$output" "$single_preload" \
+                    >> "$single_log" 2>&1; then
+            break
+        else
+            rc=$?
+        fi
+        if [ "$rc" -ne 75 ] || [ "$attempt" -ge 3 ]; then
+            cat "$single_log" >&2
+            rm -f "$single_log"
+            cleanup_stage_dir "$single_preload"
+            return "$rc"
+        fi
+        attempt=$((attempt + 1))
+        echo "$0: qcc input changed during compilation; retrying ($attempt/3)" \
+            >> "$single_log"
+    done
 
     cat "$single_log"
     rm -f "$single_log"
@@ -233,13 +252,12 @@ with_output_lock() {
 
 build_prerequisites() {
     if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
-            || [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ] \
-            || ! command -v python3 >/dev/null 2>&1; then
+            || [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ]; then
         return 0
     fi
 
     prerequisite_map=$(mktemp "${TMPDIR:-/tmp}/qore-qo-prerequisites.XXXXXX")
-    if ! "$source_order_tool" --build-map "$context_file" "$output" \
+    if ! run_source_order --build-map "$context_file" "$output" \
             > "$prerequisite_map"; then
         rm -f "$prerequisite_map"
         return 1
@@ -270,8 +288,8 @@ run_main() {
     fi
 
     if [ -n "$batch_bootstrap_stamp" ] && [ -x "$source_order_tool" ] \
-            && [ -f "$context_file" ] && command -v python3 >/dev/null 2>&1; then
-        if "$source_order_tool" --batch-artifact-current "$batch_bootstrap_stamp" \
+            && [ -f "$context_file" ]; then
+        if run_source_order --batch-artifact-current "$batch_bootstrap_stamp" \
                 "$context_file" "$output"; then
             exit 0
         fi
