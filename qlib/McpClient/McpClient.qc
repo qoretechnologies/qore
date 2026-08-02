@@ -223,6 +223,22 @@ public hashdecl McpClientOptions {
         completion transparently.  Set to @ref False to require synchronous results.
     */
     *bool enable_tasks;
+
+    #! Declare the @ref mcp_apps "MCP Apps extension" (default: False)
+    /** Declaring the extension makes a server attach @ref McpUiToolMeta "_meta.ui" to its
+        user interface tools and offer app-only tools, and it is what
+        @ref McpClient::McpClient::getUiResource() needs to fetch an interface.
+
+        Rendering an MCP App means running untrusted HTML in a sandboxed iframe and bridging
+        \c ui/ JSON-RPC over \c postMessage — a browser's job.  This client therefore
+        negotiates the extension and surfaces the metadata and the fetched interface to its
+        caller, and does not render anything; do not declare the extension unless something
+        downstream can act on what it returns.
+
+        @note off by default precisely because declaring a capability the caller cannot use
+        changes what the server sends
+    */
+    *bool enable_ui;
 }
 
 #! Tool information from server
@@ -595,6 +611,14 @@ public class McpClient {
         if (opts.enable_tasks !== False && !client_capabilities.extensions.hasKey(MCP_ExtensionTasks)) {
             client_capabilities.extensions{MCP_ExtensionTasks} = {};
         }
+        # MCP Apps is opt-in: a server that sees the capability starts attaching user
+        # interface metadata and offering app-only tools, which is only useful if something
+        # downstream can render an iframe.  The mimeTypes member is required by the extension.
+        if (opts.enable_ui === True && !client_capabilities.extensions.hasKey(MCP_ExtensionUi)) {
+            client_capabilities.extensions{MCP_ExtensionUi} = {
+                "mimeTypes": (MCP_UiMimeType,),
+            };
+        }
         if (opts.protocol_version.typeCode() == NT_STRING) {
             if (!AllMcpVersions{opts.protocol_version}) {
                 throw "MCP-CLIENT-ERROR", sprintf("unknown MCP protocol version %y; known "
@@ -916,6 +940,102 @@ public class McpClient {
     */
     *hash<auto> getServerCapabilities() {
         return server_capabilities;
+    }
+
+    #! Returns @ref True if the server advertises the @ref mcp_apps "MCP Apps extension"
+    /** Only meaningful after @ref initialize().
+
+        @return @ref True if the server declared the extension with a MIME type this client
+            understands
+    */
+    bool serverSupportsUi() {
+        *hash<auto> settings = server_capabilities.extensions{MCP_ExtensionUi};
+        if (!exists settings) {
+            return False;
+        }
+        return inlist(MCP_UiMimeType, settings.mimeTypes ?? ());
+    }
+
+    #! Returns the @ref mcp_apps "MCP Apps" metadata a tool declared, if any
+    /** Reads the tool's \c _meta.ui, falling back to the deprecated flat
+        \c _meta."ui/resourceUri" form that the extension still accepts before its GA release.
+
+        @param tool a tool descriptor as returned by @ref listTools()
+
+        @return the tool's user interface metadata, or @ref nothing if it declared none
+    */
+    static *hash<McpUiToolMeta> getToolUiMeta(hash<auto> tool) {
+        *hash<auto> ui = tool._meta.ui;
+        if (ui.resourceUri.typeCode() == NT_STRING) {
+            return <McpUiToolMeta>{
+                "resourceUri": ui.resourceUri,
+                "visibility": ui.visibility.typeCode() == NT_LIST
+                    ? (map $1.toString(), ui.visibility) : NOTHING,
+            };
+        }
+        # deprecated pre-GA form, still emitted by some servers
+        if (tool._meta."ui/resourceUri".typeCode() == NT_STRING) {
+            return <McpUiToolMeta>{
+                "resourceUri": tool._meta."ui/resourceUri",
+            };
+        }
+        return;
+    }
+
+    #! Fetches an @ref mcp_apps "MCP Apps" user interface resource
+    /** Reads a \c ui:// resource with \c resources/read and returns the HTML document along
+        with the sandbox metadata (Content Security Policy, permission requests, dedicated
+        domain, border preference) the host needs to render it safely.
+
+        @note this client does not render anything: rendering means running the returned HTML
+        in a sandboxed iframe and bridging \c ui/ -prefixed JSON-RPC to it over
+        \c postMessage, which is a browser's job.  The caller receives the document and the
+        policy that must be applied to it, and is responsible for both.
+
+        @param uri the \c ui:// URI, typically taken from a tool's
+            @ref getToolUiMeta() "_meta.ui.resourceUri"
+
+        @return a hash with the following members:
+        - \c uri: the resource URI
+        - \c mimeType: the content type, always @ref MCP_UiMimeType
+        - \c html: the HTML5 document
+        - \c ui: the @ref McpUiResourceMeta "sandbox metadata", or @ref nothing if the server
+          declared none — in which case the host must apply the extension's restrictive
+          default policy, never a permissive one
+
+        @throw MCP-UI-ERROR the URI does not use the \c ui:// scheme, the server returned no
+            content, or the content is not an MCP Apps user interface
+        @throw MCP-ERROR the \c resources/read request failed
+    */
+    hash<auto> getUiResource(string uri) {
+        if (uri.substr(0, MCP_UiScheme.length()) != MCP_UiScheme) {
+            throw "MCP-UI-ERROR", sprintf("user interface resource URI %y must use the %y "
+                "scheme", uri, MCP_UiScheme);
+        }
+        hash<auto> result = readResource(uri);
+        *hash<auto> content = result.contents[0];
+        if (!content) {
+            throw "MCP-UI-ERROR", sprintf("the server returned no content for user interface "
+                "resource %y", uri);
+        }
+        if (content.mimeType != MCP_UiMimeType) {
+            throw "MCP-UI-ERROR", sprintf("user interface resource %y has MIME type %y; "
+                "expecting %y", uri, content.mimeType, MCP_UiMimeType);
+        }
+        *string html = content.text;
+        if (!exists html && content.blob.typeCode() == NT_STRING) {
+            html = parse_base64_string_to_string(content.blob);
+        }
+        if (!html.val()) {
+            throw "MCP-UI-ERROR", sprintf("user interface resource %y carries neither \"text\" "
+                "nor \"blob\" content", uri);
+        }
+        return {
+            "uri": uri,
+            "mimeType": content.mimeType,
+            "html": html,
+            "ui": content._meta.ui,
+        };
     }
 
     #! Sends a ping request to check server health

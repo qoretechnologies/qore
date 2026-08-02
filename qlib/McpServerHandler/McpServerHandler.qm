@@ -29,6 +29,10 @@
 %requires Util
 %requires HttpServerUtil
 %requires ServerSentEventHandler
+# McpSubscriptionStream closes its stream through HttpServerAsyncIo::AbstractSseConnection;
+# ServerSentEventHandler does not reexport the module, so it must be required here for the
+# type to resolve when this module is loaded from source
+%requires HttpServerAsyncIo
 %requires JsonRpcHandler
 %requires Logger
 %requires DataProvider
@@ -190,6 +194,21 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_0 McpServerHandler v1.0
+    - added support for the @ref mcp_apps "MCP Apps extension" (\c io.modelcontextprotocol/ui): a server can
+      register a \c ui:// user interface resource with
+      @ref McpServerHandler::McpServerHandler::registerUiResource() "registerUiResource()" and attach it to a tool
+      with @ref McpServerHandler::McpServerHandler::registerUiTool() "registerUiTool()"; the extension is
+      advertised only when the server actually ships an interface, and the extension's graceful-degradation
+      requirement is enforced on every call
+    - added @ref McpServerHandler::McpServerHandler::setServerInfo() "setServerInfo()" and
+      @ref McpServerHandler::McpServerHandler::getServerInfo() "getServerInfo()": without them every embedding
+      server identified itself to clients as \c QoreMcpServer
+    - the mandatory connection bookkeeping moved out of
+      @ref McpServerHandler::McpServerHandler::deregisterConnectionImpl() "deregisterConnectionImpl()" and
+      \c getConnectionImpl(), which are documented customization points; a subclass using either as documented
+      used to break the handler with no error reported anywhere
+    - the \c notify*() methods are now safe to call with the handler's write lock held, so a server can mutate
+      its catalog and announce the change in the same critical section
     - initial release
     - MCP 2026-07-28 protocol support, served from the same endpoint as every earlier
       revision (see @ref McpServerHandler_eras):

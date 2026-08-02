@@ -55,14 +55,52 @@ class TestHandler inherits McpServerHandler {
 
         registerResource("file:///a.txt", "a", "resource a", "text/plain", \readA());
         registerResource("file:///b.txt", "b", "resource b", "text/plain", \readA());
+
+        # MCP Apps extension: a user interface resource and the tools that render into it
+        registerUiResource("ui://test/dashboard", "test_dashboard",
+            "Interactive test dashboard", UiHtml, <McpUiResourceMeta>{
+                "csp": <McpUiResourceCsp>{
+                    "connectDomains": ("https://api.example.com",),
+                },
+                "prefersBorder": True,
+            });
+        registerUiTool("dashboard", "renders a dashboard", NOTHING, \dashboardTool(),
+            <McpUiToolMeta>{"resourceUri": "ui://test/dashboard"});
+        registerUiTool("refresh", "refreshes the dashboard", NOTHING, \dashboardTool(),
+            <McpUiToolMeta>{
+                "resourceUri": "ui://test/dashboard",
+                "visibility": (McpUiVisibility::App,),
+            });
+        registerUiTool("nofallback", "returns no text content", NOTHING, \noFallbackTool(),
+            <McpUiToolMeta>{"resourceUri": "ui://test/dashboard"});
         registerPrompt("greet", "a greeting", NOTHING);
         setInstructions("modern protocol test server");
         # keep task polling fast in tests
         setModernPollInterval(50);
     }
 
+    public {
+        #! The user interface document served for "ui://test/dashboard"
+        const UiHtml = "<!DOCTYPE html><html><body><div id=\"root\"></div></body></html>";
+    }
+
     hash<auto> echo(*hash<auto> params) {
         return params ?? {};
+    }
+
+    #! A user interface tool: renders in the app AND returns meaningful text for everyone else
+    hash<auto> dashboardTool(*hash<auto> args) {
+        return {
+            "content": (
+                {"type": "text", "text": "Deploys: 3 succeeded, 1 failed"},
+            ),
+            "structuredContent": {"succeeded": 3, "failed": 1},
+        };
+    }
+
+    #! A user interface tool that violates the extension's graceful-degradation requirement
+    hash<auto> noFallbackTool(*hash<auto> args) {
+        return {"content": ({"type": "resource", "resource": {"uri": "ui://test/dashboard"}},)};
     }
 
     string readA(hash<auto> cx, string uri) {
@@ -180,6 +218,13 @@ public class McpModernProtocolTest inherits QUnit::Test {
         addTestCase("tasks extension test", \tasksExtensionTest());
         addTestCase("tasks input required test", \tasksInputRequiredTest());
         addTestCase("modern-only server test", \modernOnlyServerTest());
+        addTestCase("MCP Apps capability test", \uiCapabilityTest());
+        addTestCase("MCP Apps tool metadata test", \uiToolMetadataTest());
+        addTestCase("MCP Apps resource test", \uiResourceTest());
+        addTestCase("MCP Apps graceful degradation test", \uiGracefulDegradationTest());
+        addTestCase("MCP Apps registration test", \uiRegistrationTest());
+        addTestCase("subclass hook contract test", \subclassHookContractTest());
+        addTestCase("notify under write lock test", \notifyUnderWriteLockTest());
         set_return_value(main());
     }
 
@@ -887,5 +932,388 @@ public class McpModernProtocolTest inherits QUnit::Test {
         }
         throw "TEST-ERROR", sprintf("task %y did not reach %y in time", taskId,
             until ?? "a terminal state");
+    }
+
+    #! Client capabilities declaring the MCP Apps extension
+    private hash<auto> uiMeta() {
+        return {
+            McpClient::MCP_MetaClientCapabilities: {
+                "extensions": {
+                    McpClient::MCP_ExtensionUi: {
+                        "mimeTypes": (McpClient::MCP_UiMimeType,),
+                    },
+                },
+            },
+        };
+    }
+
+    uiCapabilityTest() {
+        # the extension is advertised because the server registered a ui:// resource
+        hash<auto> r = post("server/discover");
+        assertEq(200, r.status);
+        hash<auto> ext = r.body.result.capabilities.extensions;
+        assertTrue(ext.hasKey(McpClient::MCP_ExtensionUi),
+            "the MCP Apps extension is advertised");
+        assertEq((McpClient::MCP_UiMimeType,), ext{McpClient::MCP_ExtensionUi}.mimeTypes);
+        # the tasks extension is still there: adding one must not displace the other
+        assertTrue(ext.hasKey(McpClient::MCP_ExtensionTasks));
+
+        # a server with no user interface resources must not advertise it: a client that sees
+        # the extension will go looking for ui:// resources that are not there
+        Logger l("no-ui", LoggerLevel::getLevelError());
+        McpServerHandler bare(l, new PermissiveAuthenticator());
+        assertFalse(bare.hasUiResources());
+        assertFalse(bare.getDiscoverCapabilities({}).extensions.hasKey(
+            McpClient::MCP_ExtensionUi), "a server with no interfaces does not advertise");
+
+        assertEq(("ui://test/dashboard",), mcp_server.getUiResourceUris());
+        assertTrue(mcp_server.hasUiResources());
+        assertTrue(mcp_server.clientSupportsUi({"mcp_client_capabilities":
+            uiMeta(){McpClient::MCP_MetaClientCapabilities}}));
+        # declaring the extension without a MIME type this server can serve is not support
+        assertFalse(mcp_server.clientSupportsUi({"mcp_client_capabilities": {"extensions":
+            {McpClient::MCP_ExtensionUi: {"mimeTypes": ("text/plain",)}}}}));
+        assertFalse(mcp_server.clientSupportsUi({"mcp_client_capabilities": {}}));
+    }
+
+    uiToolMetadataTest() {
+        # a client that negotiated the extension gets _meta.ui on the tool
+        hash<auto> r = post("tools/list", NOTHING, {"meta": uiMeta()});
+        assertEq(200, r.status);
+        hash<string, hash<auto>> tools = map {$1.name: $1}, r.body.result.tools;
+
+        assertTrue(tools.hasKey("dashboard"));
+        assertEq("ui://test/dashboard", tools.dashboard._meta.ui.resourceUri);
+        # visibility is sent explicitly so a host does not have to know the default
+        assertEq(("model", "app"), tools.dashboard._meta.ui.visibility);
+        assertEq(("app",), tools.refresh._meta.ui.visibility);
+        # a tool that declares no interface carries no ui metadata
+        assertFalse(tools.alpha.hasKey("_meta"));
+
+        # a client that did NOT negotiate the extension sees plain tools, and never sees the
+        # app-only tool at all: it has no way to call it
+        hash<auto> plain = post("tools/list");
+        hash<string, hash<auto>> ptools = map {$1.name: $1}, plain.body.result.tools;
+        assertTrue(ptools.hasKey("dashboard"), "a model-visible interface tool is still listed");
+        assertFalse(ptools.dashboard.hasKey("_meta"),
+            "no interface metadata for a client that cannot render one");
+        assertFalse(ptools.hasKey("refresh"), "an app-only tool is not offered");
+    }
+
+    uiResourceTest() {
+        hash<auto> r = post("resources/read", {"uri": "ui://test/dashboard"},
+            {"meta": uiMeta()});
+        assertEq(200, r.status, sprintf("resources/read succeeded: %y", r.body));
+        assertEq(1, r.body.result.contents.size(), sprintf("one content entry: %y", r.body));
+        hash<auto> content = r.body.result.contents[0];
+        assertEq("ui://test/dashboard", content.uri);
+        # the MIME type is what makes the host treat this as an MCP App
+        assertEq(McpClient::MCP_UiMimeType, content.mimeType);
+        assertEq(TestHandler::UiHtml, content.text);
+        # the sandbox policy rides on the content entry, since that is what the host renders
+        assertEq(("https://api.example.com",), content._meta.ui.csp.connectDomains);
+        assertTrue(content._meta.ui.prefersBorder);
+        # unset policy members are absent, not null: an explicit null reads as an empty
+        # allowlist, and the extension gives every omitted member a secure default
+        assertFalse(content._meta.ui.csp.hasKey("frameDomains"));
+        assertFalse(content._meta.ui.hasKey("permissions"));
+        assertFalse(content._meta.ui.hasKey("domain"));
+
+        # the interface is also listed as an ordinary resource
+        hash<auto> lst = post("resources/list", NOTHING, {"meta": uiMeta()});
+        hash<string, hash<auto>> res = map {$1.uri: $1}, lst.body.result.resources;
+        assertEq(McpClient::MCP_UiMimeType, res."ui://test/dashboard".mimeType);
+    }
+
+    uiGracefulDegradationTest() {
+        # the extension requires an interface tool to return a meaningful content array so
+        # that a host which cannot render the interface still gets the answer
+        hash<auto> r = post("tools/call", {"name": "dashboard", "arguments": {}},
+            {"meta": uiMeta()});
+        assertEq(200, r.status);
+        assertEq("text", r.body.result.content[0].type);
+        assertEq("Deploys: 3 succeeded, 1 failed", r.body.result.content[0].text);
+
+        # the same text comes back for a client that never negotiated the extension
+        hash<auto> plain = post("tools/call", {"name": "dashboard", "arguments": {}});
+        assertEq(200, plain.status);
+        assertEq("Deploys: 3 succeeded, 1 failed", plain.body.result.content[0].text);
+
+        # a tool that returns only what its interface renders is a server bug; it is reported
+        # rather than silently answering with nothing useful
+        hash<auto> bad = post("tools/call", {"name": "nofallback", "arguments": {}},
+            {"meta": uiMeta()});
+        assertEq(200, bad.status);
+        assertTrue(bad.body.result.isError, "a missing text fallback is reported as an error");
+        assertTrue(bad.body.result.content[0].text =~ /MCP Apps/,
+            sprintf("the error names the extension requirement: %y",
+                bad.body.result.content[0].text));
+
+        # a tool with no interface is not subject to the check
+        hash<auto> ok = post("tools/call", {"name": "alpha", "arguments": {}});
+        assertEq(200, ok.status);
+        assertFalse(ok.body.result.isError ?? False);
+    }
+
+    uiRegistrationTest() {
+        Logger l("ui-reg", LoggerLevel::getLevelError());
+        McpServerHandler h(l, new PermissiveAuthenticator());
+
+        # the URI scheme is what distinguishes a user interface resource from any other
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiResource(),
+            ("file:///x.html", "x", "d", "<html/>"));
+        # the content must be an HTML document or code returning one
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiResource(),
+            ("ui://x", "x", "d", 42));
+        h.registerUiResource("ui://x/panel", "panel", "d", "<!DOCTYPE html><html></html>");
+        assertEq(("ui://x/panel",), h.getUiResourceUris());
+        assertTrue(h.hasUiResources());
+
+        # binary content is accepted and served as the extension's base64 "blob" member
+        h.registerUiResource("ui://x/bin", "bin", "d", binary("<!DOCTYPE html><html></html>"));
+        assertEq(("ui://x/bin", "ui://x/panel"), h.getUiResourceUris());
+
+        code tool = auto sub (*hash<auto> args) { return "text"; };
+        # the extension requires the referenced resource to exist on the server; catching it
+        # at registration turns a silent no-render in the host into a located error
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiTool(),
+            ("t", "d", NOTHING, tool, <McpUiToolMeta>{"resourceUri": "ui://x/missing"}));
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiTool(),
+            ("t", "d", NOTHING, tool, <McpUiToolMeta>{"resourceUri": "https://x/panel"}));
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiTool(),
+            ("t", "d", NOTHING, tool, <McpUiToolMeta>{}));
+        # a resource that is not an interface cannot back an interface tool
+        h.registerResource("ui://x/plain", "plain", "d", "text/plain",
+            auto sub (hash<auto> cx, string uri) { return "x"; });
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiTool(),
+            ("t", "d", NOTHING, tool, <McpUiToolMeta>{"resourceUri": "ui://x/plain"}));
+        # an unknown visibility value
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.registerUiTool(),
+            ("t", "d", NOTHING, tool, <McpUiToolMeta>{"resourceUri": "ui://x/panel",
+                "visibility": ("host",)}));
+
+        h.registerUiTool("t", "d", NOTHING, tool,
+            <McpUiToolMeta>{"resourceUri": "ui://x/panel"});
+        assertTrue(h.hasTools("t"));
+    }
+
+    #! A subclass must not be able to break the handler by using its documented hooks
+    /** Both hooks below are advertised as customization points, and a subclass that uses them
+        exactly as documented used to break core behavior with no error anywhere:
+
+        - overriding \c deregisterConnectionImpl() with a narrower parameter type creates a
+          separate Qore variant, so the base cleanup never ran for the subclass's own
+          connections and the session and subscription maps grew forever
+        - overriding \c getConnectionImpl() to return a custom connection type displaced the
+          \c McpSubscriptionStream that \c subscriptions/listen depends on, so the stream
+          never acknowledged and never delivered a notification
+
+        The mandatory bookkeeping now lives in internal seams, so both overrides are harmless.
+    */
+    subclassHookContractTest() {
+        Logger l("subclass", LoggerLevel::getLevelError());
+        HookSubclassHandler h(l);
+        HttpServer http(<HttpServerOptionInfo>{"logger": l});
+        http.setHandler("mcp", "", MimeTypeJson, h);
+        http.setDefaultHandler("mcp", h);
+        string u = sprintf("http://localhost:%d",
+            http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        on_exit {
+            http.stop();
+            delete http;
+        }
+
+        McpClient::McpClient mcp(u, {"connect_timeout": 5000, "timeout": 20000});
+        on_exit mcp.close();
+        mcp.initialize(<McpClientInfo>{"name": "t", "version": "1.0"});
+
+        # subscriptions/listen still works: the subclass factory did not displace the stream
+        assertTrue(mcp.listen({"toolsListChanged": True}), "subscriptions/listen opens");
+        assertTrue(h.waitForSubscription(20s), "the server registered the subscription stream");
+        assertEq(1, h.getSubscriptionCount());
+        # the acknowledgment is what a spec-conforming client waits for
+        assertTrue(waitForAck(mcp, 20s), "the client received the acknowledgment");
+
+        # the subscription stream never went through the subclass factory: that is exactly what
+        # keeps a custom connection type from displacing the McpSubscriptionStream
+        assertFalse(h.factory_called,
+            "a subscription stream is not routed through the connection factory hook");
+
+        mcp.close();
+        # the stream is deregistered even though the subclass overrode the notification hook
+        # with a narrower parameter type and did not chain to the base
+        assertTrue(h.waitForNoSubscriptions(20s),
+            sprintf("the subscription is deregistered; count=%d", h.getSubscriptionCount()));
+        assertEq(0, h.getSubscriptionCount());
+        # the subclass's narrower variant does NOT match a subscription stream, so the base
+        # notification hook ran instead — which is precisely why the mandatory cleanup cannot
+        # live in that method
+        assertFalse(h.dereg_called,
+            "the narrower subclass variant does not match a subscription stream");
+
+        # the factory hook is still used for what it is for: the legacy GET event stream
+        McpClient::McpClient legacy(u, {"connect_timeout": 5000, "timeout": 20000,
+            "protocol_version": McpClient::McpVersion::V2025_11_25});
+        on_exit legacy.close();
+        legacy.initialize(<McpClientInfo>{"name": "t", "version": "1.0"});
+        legacy.startSseListener();
+        assertTrue(h.waitForFactory(20s),
+            "the documented connection factory hook is still called for a legacy event stream");
+        legacy.close();
+        # and the base cleanup still runs for the subclass's own connection type, even though
+        # the subclass's narrower deregisterConnectionImpl() variant does not chain to it
+        assertTrue(h.waitForNoSessionConnections(20s),
+            sprintf("the legacy stream is deregistered; sessions=%y", h.getSessionInfo()));
+        # for its own connection type the subclass variant is selected, and the base cleanup
+        # still ran (asserted above) even though this override never chains to it
+        assertTrue(h.dereg_called, "the subclass notification hook ran for its own type");
+    }
+
+    #! Waits until the client has received the subscription acknowledgment
+    private bool waitForAck(McpClient::McpClient mcp, timeout t) {
+        # NOTE: clock_getmicros_monotonic() returns int microseconds, and a "timeout" argument
+        # is milliseconds; a wall-clock date would drift under a clock adjustment
+        int start = clock_getmicros_monotonic();
+        while ((clock_getmicros_monotonic() - start) / 1000 < t) {
+            if (exists mcp.getAcknowledgedFilter()) {
+                return True;
+            }
+            usleep(25ms);
+        }
+        return exists mcp.getAcknowledgedFilter();
+    }
+
+    #! The notify*() APIs must be callable from the critical section that made the change
+    /** A server mutates its tool catalog under the handler's write lock, because that is the
+        lock guarding the catalog.  Qore's RWLock rejects a read lock taken by a thread that
+        already holds the write lock, so announcing the change from inside that critical
+        section used to raise LOCK-ERROR and force the server to drop the lock first — opening
+        a window where clients see a catalog that changed but was not announced.
+    */
+    notifyUnderWriteLockTest() {
+        Logger l("notify-lock", LoggerLevel::getLevelError());
+        LockingHandler h(l);
+        # each of these mutates the catalog and announces the change in one critical section
+        h.addToolAndAnnounce("added1");
+        h.addToolAndAnnounce("added2");
+        assertTrue(h.hasTools("added1"));
+        assertTrue(h.hasTools("added2"));
+        assertEq(0, h.getSubscriptionCount(), "counting subscribers also works under the lock");
+
+        # the notify APIs still work normally outside the lock
+        h.notifyToolsListChanged();
+        h.notifyResourcesListChanged();
+        h.notifyPromptsListChanged();
+        h.notifyResourceUpdated("file:///nope.txt");
+    }
+}
+
+#! A subclass that uses both documented hooks in the ways that used to break the handler
+class HookSubclassHandler inherits McpServerHandler {
+    public {
+        #! Set when the documented connection factory hook runs
+        bool factory_called = False;
+
+        #! Set when the subclass's narrower deregistration hook runs
+        bool dereg_called = False;
+    }
+
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("echo", "echoes", NOTHING, \echo());
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    #! Returns a custom connection type, as the hook documentation invites
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid) {
+        factory_called = True;
+        return new CustomServerConnection(self, sock, cx, hdr, cid);
+    }
+
+    #! Declares a NARROWER parameter type, which in Qore is a separate variant
+    /** This is the shape that silently skipped the base implementation entirely.
+    */
+    deregisterConnectionImpl(CustomServerConnection conn) {
+        dereg_called = True;
+    }
+
+    bool waitForSubscription(timeout t) {
+        return waitForCount(t, True);
+    }
+
+    bool waitForNoSubscriptions(timeout t) {
+        return waitForCount(t, False);
+    }
+
+    bool waitForFactory(timeout t) {
+        int start = clock_getmicros_monotonic();
+        while ((clock_getmicros_monotonic() - start) / 1000 < t) {
+            if (factory_called) {
+                return True;
+            }
+            usleep(25ms);
+        }
+        return factory_called;
+    }
+
+    #! Waits until no session holds a registered event stream
+    bool waitForNoSessionConnections(timeout t) {
+        int start = clock_getmicros_monotonic();
+        while ((clock_getmicros_monotonic() - start) / 1000 < t) {
+            if (!countSessionConnections()) {
+                return True;
+            }
+            usleep(25ms);
+        }
+        return !countSessionConnections();
+    }
+
+    private int countSessionConnections() {
+        int rv = 0;
+        foreach hash<auto> si in (getSessionInfo()) {
+            rv += si.connection_count ?? 0;
+        }
+        return rv;
+    }
+
+    private bool waitForCount(timeout t, bool want_any) {
+        int start = clock_getmicros_monotonic();
+        while ((clock_getmicros_monotonic() - start) / 1000 < t) {
+            if ((getSubscriptionCount() > 0) == want_any) {
+                return True;
+            }
+            usleep(25ms);
+        }
+        return (getSubscriptionCount() > 0) == want_any;
+    }
+}
+
+#! The custom connection type a subclass factory returns
+class CustomServerConnection inherits McpServerConnection {
+    constructor(McpServerHandler handler, Socket sock, hash<auto> cx, hash<auto> hdr, string cid)
+        : McpServerConnection(handler, sock, cx, hdr, cid, McpVersion::V2024_11_05) {
+    }
+}
+
+#! A server that mutates its catalog and announces the change in one critical section
+class LockingHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("echo", "echoes", NOTHING, \echo());
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    #! Registers a tool and announces it without leaving the critical section
+    addToolAndAnnounce(string name) {
+        AutoWriteLock al(rwl);
+        registerTool(name, "added under the write lock", NOTHING, \echo());
+        notifyToolsListChanged();
+        # the subscription count is read on the same path
+        getSubscriptionCount();
     }
 }

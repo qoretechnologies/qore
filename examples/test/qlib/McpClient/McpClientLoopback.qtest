@@ -17,6 +17,9 @@
 
 class LoopbackHandler inherits McpServerHandler {
     public {
+        #! The user interface document served for "ui://loopback/panel"
+        const UiHtml = "<!DOCTYPE html><html><body>panel</body></html>";
+
         #! reaches zero once the blocking tool has started executing
         Qore::Thread::Counter blocking_started(1);
         #! the blocking tool returns once this reaches zero
@@ -32,6 +35,14 @@ class LoopbackHandler inherits McpServerHandler {
         registerTool("blocking", "runs as a task until released", NOTHING, \blockingTool(),
             NOTHING, {"execution": {"taskSupport": "required"}}, NOTHING);
         registerResource("file:///a.txt", "a", "resource a", "text/plain", \readA());
+        registerUiResource("ui://loopback/panel", "panel", "a test panel", UiHtml,
+            <McpUiResourceMeta>{
+                "csp": <McpUiResourceCsp>{"resourceDomains": ("https://cdn.example.com",)},
+                "permissions": {"clipboardWrite": {}},
+                "prefersBorder": False,
+            });
+        registerUiTool("panel", "renders a panel", NOTHING, \panelTool(),
+            <McpUiToolMeta>{"resourceUri": "ui://loopback/panel"});
         registerPrompt("greet", "a greeting", (
             {"name": "name", "description": "who to greet", "required": True},
         ), \greetHandler());
@@ -41,6 +52,14 @@ class LoopbackHandler inherits McpServerHandler {
 
     hash<auto> echo(*hash<auto> params) {
         return params ?? {};
+    }
+
+    #! Returns meaningful text as well as the data its user interface renders
+    hash<auto> panelTool(*hash<auto> params) {
+        return {
+            "content": ({"type": "text", "text": "panel data: 42"},),
+            "structuredContent": {"value": 42},
+        };
     }
 
     string readA(hash<auto> cx, string uri) {
@@ -104,6 +123,8 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         addTestCase("subscription client test", \subscriptionClientTest());
         addTestCase("result cache test", \resultCacheTest());
         addTestCase("invalid tool annotation test", \invalidToolAnnotationTest());
+        addTestCase("MCP Apps client test", \uiClientTest());
+        addTestCase("server info override test", \serverInfoOverrideTest());
         set_return_value(main());
     }
 
@@ -628,6 +649,107 @@ public class McpClientLoopbackTest inherits QUnit::Test {
             "a tool whose x-mcp-header annotation is invalid is excluded from the listing");
         assertEq("{}", c.callTool("good").content[0].text,
             "the conforming tool still works");
+    }
+
+    #! Client-side MCP Apps: negotiate the extension, surface the metadata, fetch the interface
+    /** The client is deliberately not a rendering host — that means an iframe sandbox and a
+        postMessage bridge, i.e. a browser.  What it must do is negotiate the extension, hand
+        the caller the tool metadata and the interface document with the policy that applies to
+        it, and stop there.
+    */
+    uiClientTest() {
+        # off by default: declaring a capability the caller cannot act on changes what the
+        # server sends
+        McpClient::McpClient plain = getClient(dual_url);
+        on_exit plain.close();
+        assertTrue(plain.serverSupportsUi(), "the server advertises the extension");
+        hash<string, hash<auto>> ptools = map {$1.name: $1}, plain.listTools();
+        assertEq(NOTHING, McpClient::McpClient::getToolUiMeta(ptools.panel),
+            "no interface metadata without opting in");
+
+        McpClient::McpClient mcp = getClient(dual_url, {"enable_ui": True});
+        on_exit mcp.close();
+
+        hash<string, hash<auto>> tools = map {$1.name: $1}, mcp.listTools();
+        *hash<McpUiToolMeta> ui = McpClient::McpClient::getToolUiMeta(tools.panel);
+        assertTrue(exists ui, "the interface tool carries _meta.ui");
+        assertEq("ui://loopback/panel", ui.resourceUri);
+        assertEq(("model", "app"), ui.visibility);
+        assertEq(NOTHING, McpClient::McpClient::getToolUiMeta(tools.alpha),
+            "a plain tool carries no interface metadata");
+
+        # the deprecated flat form is still accepted until the extension reaches GA
+        assertEq("ui://x", McpClient::McpClient::getToolUiMeta({"_meta": {"ui/resourceUri": "ui://x"}})
+            .resourceUri);
+
+        hash<auto> res = mcp.getUiResource(ui.resourceUri);
+        assertEq("ui://loopback/panel", res.uri);
+        assertEq(McpClient::MCP_UiMimeType, res.mimeType);
+        assertEq(LoopbackHandler::UiHtml, res.html);
+        # the sandbox policy comes back with the document: a host that renders one without the
+        # other has no way to know what the interface is allowed to reach
+        assertEq(("https://cdn.example.com",), res.ui.csp.resourceDomains);
+        assertTrue(res.ui.permissions.hasKey("clipboardWrite"));
+        assertEq(False, res.ui.prefersBorder);
+
+        # the tool still answers in text, which is what a caller that cannot render gets
+        hash<auto> result = mcp.callTool("panel");
+        assertEq("panel data: 42", result.content[0].text);
+
+        # a legacy client declares the extension once, in initialize, and the declaration must
+        # still be honored on every later request — it lives in the session, not in _meta
+        McpClient::McpClient legacy = getClient(dual_url, {"enable_ui": True,
+            "protocol_version": McpClient::McpVersion::V2025_11_25});
+        on_exit legacy.close();
+        assertFalse(legacy.isModern(), "the legacy client speaks a handshake-based revision");
+        hash<string, hash<auto>> ltools = map {$1.name: $1}, legacy.listTools();
+        assertEq("ui://loopback/panel",
+            McpClient::McpClient::getToolUiMeta(ltools.panel).resourceUri,
+            "a legacy client that negotiated the extension gets the interface metadata");
+        assertEq(LoopbackHandler::UiHtml, legacy.getUiResource("ui://loopback/panel").html);
+
+        # a URI that is not a user interface resource is rejected before the round trip
+        assertThrows("MCP-UI-ERROR", \mcp.getUiResource(), ("file:///a.txt",));
+        # a ui:// URI the server does not serve fails as an ordinary resources/read error
+        assertThrows("MCP-ERROR", \mcp.getUiResource(), ("ui://loopback/missing",));
+    }
+
+    #! A server must be able to identify itself as something other than the module default
+    serverInfoOverrideTest() {
+        Logger l("srvinfo", LoggerLevel::getLevelError());
+        LoopbackHandler h(l);
+        # the default comes from the module constants
+        assertEq(McpServerName, h.getServerInfo().name);
+        assertEq(McpServerVersion, h.getServerInfo().version);
+
+        h.setServerInfo("QorusMcpServer", "7.1", {"title": "Qorus"});
+        assertEq("QorusMcpServer", h.getServerInfo().name);
+        assertEq("7.1", h.getServerInfo().version);
+        assertEq("Qorus", h.getServerInfo().title);
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.setServerInfo(), ("", "1.0"));
+        assertThrows("MCP-SERVER-ARG-ERROR", \h.setServerInfo(), ("x", ""));
+
+        HttpServer http(<HttpServerOptionInfo>{"logger": l});
+        http.setHandler("mcp", "", MimeTypeJson, h);
+        http.setDefaultHandler("mcp", h);
+        string u = sprintf("http://localhost:%d",
+            http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        on_exit {
+            http.stop();
+            delete http;
+        }
+
+        # the identity reaches the client on both eras: modern results carry it in _meta, and
+        # the legacy initialize result carries it in serverInfo
+        McpClient::McpClient modern = getClient(u);
+        on_exit modern.close();
+        assertEq("QorusMcpServer", modern.getServerInfo().name);
+        assertEq("7.1", modern.getServerInfo().version);
+
+        McpClient::McpClient legacy = getClient(u,
+            {"protocol_version": McpClient::McpVersion::V2025_11_25});
+        on_exit legacy.close();
+        assertEq("QorusMcpServer", legacy.getServerInfo().name);
     }
 }
 
