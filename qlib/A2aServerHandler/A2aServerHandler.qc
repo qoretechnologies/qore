@@ -124,7 +124,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         /** The token_callback is called for each partial message chunk during streaming.
             The handler runs in a background thread.
         */
-        *code stream_message_handler;
+        *code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> stream_message_handler;
 
         #! Context history: contextId -> accumulated message list for multi-turn conversations
         hash<string, list<hash<auto>>> context_history;
@@ -198,7 +198,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         token/chunk and return when done. The task will be transitioned to \c Completed automatically
         when the handler returns, or to \c Failed if an exception is thrown.
     */
-    setStreamMessageHandler(*code handler) {
+    setStreamMessageHandler(*code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler) {
         stream_message_handler = handler;
     }
 
@@ -712,7 +712,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
 
         # Capture variables for background thread
-        code handler = stream_message_handler;
+        code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler = stream_message_handler;
         *string context_id = params.contextId;
         hash<auto> user_message = params.message;
 
@@ -728,7 +728,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         list<hash<auto>> assembled_parts = ();
 
         # Token callback that the handler calls for each chunk
-        code token_callback = sub (hash<auto> partial) {
+        code<nothing(hash<auto>)> token_callback = sub (hash<auto> partial) {
             # Track parts for assembly
             if (partial.parts) {
                 assembled_parts += partial.parts;
@@ -1022,11 +1022,11 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Background thread for send_callback-based SSE streaming
     private streamMessageCallbackBackground(string task_id, hash<A2aTaskInfo> task,
-            hash<auto> handler_message, code handler, *string context_id,
+            hash<auto> handler_message, code<nothing(hash<auto>, hash<auto>, code<nothing(hash<auto>)>)> handler, *string context_id,
             hash<auto> user_message, Queue queue, string version) {
         list<hash<auto>> assembled_parts = ();
 
-        code token_callback = sub (hash<auto> partial) {
+        code<nothing(hash<auto>)> token_callback = sub (hash<auto> partial) {
             if (partial.parts) {
                 assembled_parts += partial.parts;
             }

@@ -745,7 +745,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! @cond nodoc
     private {
         # for masking HTTP request log msgs
-        *code maskfunc;
+        *code<string(string)> maskfunc;
 
         # quit server flag
         bool exit = False;
@@ -950,7 +950,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @deprecated use constructor(hash<HttpServerOptionInfo>) instead
     */
-    deprecated constructor(*code logfunc, *code errlogfunc, bool dbg = False,
+    deprecated constructor(*code<nothing(string)> logfunc, *code<nothing(string)> errlogfunc,
+            bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
         logger = new Logger(name);
@@ -1051,7 +1052,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! To call a listener's stop callback
-    callListenerStopCallback(code stopc, string name, hash<auto> socket_info) {
+    callListenerStopCallback(code<nothing(string)> stopc, string name, hash<auto> socket_info) {
         try {
             call_function(stopc, name);
         } catch (hash<ExceptionInfo> ex) {
@@ -2377,7 +2378,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         @since %HttpServer 0.3.12
     */
-    setMaskCode(code maskfunc) {
+    setMaskCode(code<string(string)> maskfunc) {
         self.maskfunc = maskfunc;
     }
 
@@ -2453,7 +2454,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return AsyncSocketIo::getGlobalAsyncIoController().waitForProcessing(timeout);
     }
 
-    startConnection(code c) {
+    startConnection(code<nothing()> c) {
         threadPool.submit(c);
     }
 
@@ -4431,7 +4432,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         *LoggerInterface logger;
 
         # stop notification closure
-        *code stopc;
+        *code<nothing(string)> stopc;
 
         string name;
 
@@ -6089,7 +6090,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             return;
         }
 
-        *code resume_reading = entry{"resume_reading"};
+        *code<nothing()> resume_reading = entry{"resume_reading"};
         if (!resume_reading) {
             return;
         }
@@ -6927,10 +6928,10 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
 
 class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
     private {
-        code logfunc;
+        code<nothing(string)> logfunc;
     }
 
-    constructor(code logfunc) : LoggerAppenderWithLayout("HttpServer", new LoggerLayoutPattern("%d T%t [%p]: %m")) {
+    constructor(code<nothing(string)> logfunc) : LoggerAppenderWithLayout("HttpServer", new LoggerLayoutPattern("%d T%t [%p]: %m")) {
         self.logfunc = logfunc;
         open();
     }
@@ -7150,7 +7151,7 @@ hashdecl HttpAsyncResponseInfo {
 
         @see send_timeout
     */
-    *code send_callback;
+    *code<auto()> send_callback;
 
     #! timeout for send_callback responses
     /** @since HttpServer 1.6

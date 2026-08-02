@@ -79,6 +79,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         addTestCase("json-rpc error codes test", \jsonRpcErrorCodesTest());
         addTestCase("session management test", \sessionManagementTest());
         addTestCase("concurrent tasks test", \concurrentTasksTest());
+        addTestCase("registered stream callback test", \registeredStreamCallbackTest());
         addTestCase("message handler error test", \messageHandlerErrorTest());
         addTestCase("http method handling test", \httpMethodHandlingTest());
         addTestCase("task with context and metadata test", \taskWithContextAndMetadataTest());
@@ -1798,5 +1799,65 @@ class A2aServerHandlerTest inherits QUnit::Test {
         hash<auto> task2 = client.getTask(task_id);
         assertEq(A2aTaskState::Completed, task2.status.state,
             "Second getTask should also work");
+    }
+
+    #! Callbacks registered with setCallback() must actually fire on a streaming call
+    /** They used to be stored and never invoked: setCallback() wrote into a hash that nothing
+        read, so a caller registering "onTaskStatusUpdate" silently received nothing.
+    */
+    registeredStreamCallbackTest() {
+        handler.setStreamMessageHandler(
+            sub (hash<auto> task_info, hash<auto> msg, code token_callback) {
+                token_callback({"parts": ({"type": "text", "text": "chunk"},)});
+            });
+        on_exit handler.setStreamMessageHandler(NOTHING);
+
+        A2aClient::A2aClient client(base_url);
+        on_exit client.close();
+
+        list<hash<auto>> per_call = ();
+        list<hash<auto>> every = ();
+        list<hash<auto>> status_only = ();
+        list<hash<auto>> legacy_alias = ();
+        int threw = 0;
+
+        client.setCallback(A2aClient::A2aAnyEventCallback,
+            sub (string kind, hash<auto> data) { every += {"k": kind}; });
+        client.setCallback("TaskStatusUpdateEvent",
+            sub (string kind, hash<auto> data) { status_only += {"k": kind}; });
+        client.setCallback("onTaskStatusUpdate",
+            sub (string kind, hash<auto> data) { legacy_alias += {"k": kind}; });
+        # a handler that throws must not abort the stream for the others
+        client.setCallback("TaskMessageUpdateEvent", sub (string kind, hash<auto> data) {
+            ++threw;
+            throw "TEST-CALLBACK-ERROR", "deliberate";
+        });
+
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "cb test"},)},
+            sub (string event_type, hash<auto> event_data) {
+                per_call += {"k": event_type};
+            },
+        );
+
+        assertTrue(per_call.size() >= 2, "the per-call handler still receives every event");
+        assertEq(per_call.size(), every.size(),
+            sprintf("the catch-all callback sees exactly what the per-call handler sees; "
+                "per_call=%y every=%y", (map $1.k, per_call), (map $1.k, every)));
+        assertTrue(status_only.size() > 0,
+            sprintf("a kind-specific callback fires; kinds seen=%y", (map $1.k, every)));
+        assertEq(status_only.size(), legacy_alias.size(),
+            "the legacy alias selects the same events as the wire kind");
+        assertTrue(threw > 0, "the throwing callback ran");
+
+        # removing a callback stops delivery
+        client.removeCallback(A2aClient::A2aAnyEventCallback);
+        int before = every.size();
+        client.sendMessageStream(
+            {"role": "user", "parts": ({"type": "text", "text": "cb test 2"},)},
+            sub (string event_type, hash<auto> event_data) {},
+        );
+        assertEq(before, every.size(), "a removed callback receives nothing further");
+        assertTrue(status_only.size() > 0, "callbacks that were not removed still fire");
     }
 }

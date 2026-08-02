@@ -1826,7 +1826,7 @@ public class HttpAsyncSocketIoController {
         # Same interface as the HTTP/2 wrapper — handlers use this uniformly
         # regardless of protocol.  Uses CV-based waitForQuicStreamDrain()
         # for efficient backpressure instead of polling.
-        code send_stream_data = sub (*binary data, bool end_stream = False) {
+        code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
             int retries = 0;
             while (listener.submitQuicStreamData(
                     session_id, stream_id, data, end_stream) == 1) {
@@ -1912,7 +1912,7 @@ public class HttpAsyncSocketIoController {
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
-        *code resume_reading;
+        *code<nothing()> resume_reading;
         if (body_streaming) {
             resume_reading = sub () {
                 resumeMultiplexedReading(h3op, uh, HttpConnectionState::Http3);
@@ -4062,7 +4062,7 @@ public class HttpAsyncSocketIoController {
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection and the request matches the session filter, route the request
         # to the dedicated thread instead of the pool
-        *code resume_reading;
+        *code<nothing()> resume_reading;
         if (body_streaming) {
             resume_reading = sub () {
                 resumeMultiplexedReading(dispatch_h2op, dispatch_uh, HttpConnectionState::Http2);
@@ -4302,7 +4302,7 @@ public class HttpAsyncSocketIoController {
         # Queues data in nghttp2 with transparent backpressure handling,
         # then wakes the I/O controller to flush.  Handlers use this
         # instead of calling sendHttp2StreamData() + io_wake() separately.
-        code send_stream_data = sub (*binary data, bool end_stream = False) {
+        code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
             int retries = 0;
             while (True) {
                 try {

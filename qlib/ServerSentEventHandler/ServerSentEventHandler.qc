@@ -86,7 +86,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         string serialization;
 
         #! Value serialization code
-        code serializer;
+        code<string(auto)> serializer;
 
         #! connection hash
         hash<string, ServerSentEventConnection> ch;
@@ -639,7 +639,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                     break;
                 }
                 case "data": {
-                    *code c = DataSerializationSupport{h.value};
+                    *code<string(auto)> c = DataSerializationSupport{h.value};
                     if (!c) {
                         throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting "
                             "\"LoggerInterface\"", h.key, h.value.fullType());

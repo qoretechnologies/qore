@@ -549,6 +549,23 @@ public hashdecl A2aDataPart {
 
     @since json 1.11
 */
+#! Callback name that receives every streaming event regardless of kind
+/** @see @ref A2aClient::A2aClient::setCallback()
+*/
+public const A2aAnyEventCallback = "*";
+
+#! Convenience callback names accepted by @ref A2aClient::A2aClient::setCallback()
+/** Maps each convenience name to the event type it selects.  The event types themselves are
+    the v0.3 names; a v1.0 stream is normalized to them by
+    @ref A2aClient::a2aTranslateSseEventToV03() before any callback runs, so a caller
+    registers once and does not care which protocol version the peer speaks.
+*/
+public const A2aLegacyCallbackNames = {
+    "onTaskStatusUpdate": "TaskStatusUpdateEvent",
+    "onTaskArtifactUpdate": "TaskArtifactUpdateEvent",
+    "onTaskMessageUpdate": "TaskMessageUpdateEvent",
+};
+
 public class A2aClient {
     public {
         #! Default connect timeout (30 seconds)
@@ -599,7 +616,7 @@ public class A2aClient {
         Counter sse_cnt();
 
         #! Callbacks for events
-        hash<string, code> callbacks;
+        hash<string, code<nothing(string, hash<auto>)>> callbacks;
 
         #! Detected/configured A2A protocol version
         string protocol_version = A2aVersionV03;
@@ -878,11 +895,36 @@ public class A2aClient {
         });
     }
 
-    #! Sets a callback for the given event
-    /** @param name the callback name (e.g., \c "onTaskStatusUpdate", \c "onTaskArtifactUpdate")
-        @param cb the callback code
+    #! Sets a callback fired for each event received on a streaming call
+    /** Registered callbacks are dispatched by @ref sendMessageStream() and
+        @ref resubscribeTask() alongside the per-call \c on_event handler, so a caller can
+        register a handler once instead of passing one to every streaming call.
+
+        The callback name is the event type: \c "TaskStatusUpdateEvent",
+        \c "TaskArtifactUpdateEvent" or \c "TaskMessageUpdateEvent", or one of the
+        @ref A2aLegacyCallbackNames "convenience aliases" (\c "onTaskStatusUpdate", …).
+        Register under @ref A2aAnyEventCallback to receive every event.
+
+        A v1.0 stream is normalized to the v0.3 event names before dispatch, so the same
+        registration works against a peer speaking either protocol version.
+
+        @param name the event type, a convenience alias, or @ref A2aAnyEventCallback
+        @param cb called with the event kind and the event data
+
+        @note a callback that throws is logged and does not abort the stream: one bad handler
+        must not tear down a subscription the caller is relying on
+
+        @par Example:
+        @code{.py}
+client.setCallback("onTaskStatusUpdate", sub (string kind, hash<auto> data) {
+    printf("task %y is now %y\n", data.params.id, data.params.status.state);
+});
+client.sendMessageStream(msg, sub (string kind, hash<auto> data) {});
+        @endcode
+
+        @see @ref removeCallback()
     */
-    setCallback(string name, code cb) {
+    setCallback(string name, code<nothing(string, hash<auto>)> cb) {
         lck.lock();
         on_exit lck.unlock();
         callbacks{name} = cb;
@@ -1188,6 +1230,7 @@ public class A2aClient {
                     }
 
                     on_event(event_type, data);
+                    dispatchCallbacks(event_type, data);
                 } catch (hash<ExceptionInfo> ex) {
                     logDebug("Error parsing SSE event: %s: %s", ex.err, ex.desc);
                 }
@@ -1198,6 +1241,39 @@ public class A2aClient {
                 rethrow;
             }
             throw "A2A-ERROR", sprintf("Stream request failed for %y: %s: %s", method, ex.err, ex.desc);
+        }
+    }
+
+    #! Dispatches a streaming event to every callback registered for it
+    /** Called for each event on a streaming call, after the per-call handler.  A snapshot is
+        taken under the lock and the callbacks run outside it, so a handler may register or
+        remove callbacks without deadlocking.
+
+        @param event_type the event kind as it appears on the wire
+        @param data the event data
+    */
+    private dispatchCallbacks(string event_type, hash<auto> data) {
+        list<code<nothing(string, hash<auto>)>> cbs;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            if (!callbacks) {
+                return;
+            }
+            foreach string name in (keys callbacks) {
+                if (name == event_type || name == A2aAnyEventCallback
+                        || A2aLegacyCallbackNames{name} == event_type) {
+                    cbs += callbacks{name};
+                }
+            }
+        }
+        foreach code<nothing(string, hash<auto>)> cb in (cbs) {
+            try {
+                cb(event_type, data);
+            } catch (hash<ExceptionInfo> ex) {
+                # one bad handler must not tear down a subscription the caller relies on
+                logDebug("A2A event callback for %y threw: %s: %s", event_type, ex.err, ex.desc);
+            }
         }
     }
 

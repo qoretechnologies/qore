@@ -182,7 +182,9 @@ public hashdecl McpResourceTemplateInfo {
     *hash<auto> annotations;
 
     #! Code to read the resource content
-    *code reader;
+    /** Called with the request context and the resolved resource URI.
+    */
+    *code<auto(hash<auto>, string)> reader;
 }
 
 #! MCP progress notification information
@@ -263,7 +265,10 @@ public hashdecl McpToolInfo {
     *bool needs_map;
 
     #! The code to call the tool
-    code tool;
+    /** Called with the \c arguments member of the request, or — when the tool declares a
+        \c "data" property — with that property's value, which need not be a hash.
+    */
+    code<auto(auto)> tool;
 
     #! MCP Apps metadata; see @ref registerUiTool()
     /** Reported to clients that negotiated the
@@ -290,7 +295,9 @@ public hashdecl McpResourceInfo {
     string mimeType;
 
     #! The code to read the resource content
-    *code reader;
+    /** Called with the request context and the resource URI.
+    */
+    *code<auto(hash<auto>, string)> reader;
 
     #! MCP Apps metadata; see @ref registerUiResource()
     /** Returned as the \c _meta.ui member of the \c resources/read content entry.
@@ -310,7 +317,9 @@ public hashdecl McpPromptInfo {
     *list<hash<auto>> arguments;
 
     #! The code to generate the prompt messages
-    *code handler;
+    /** Called with the request context and the prompt arguments.
+    */
+    *code<auto(hash<auto>, *hash<auto>)> handler;
 }
 
 #! MCP tool call context
@@ -657,7 +666,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #! Registers a tool
-    registerTool(string name, string desc, *AbstractDataProviderType input, code tool, *bool input_initialized,
+    registerTool(string name, string desc, *AbstractDataProviderType input, code<auto(auto)> tool, *bool input_initialized,
             *hash<auto> extra, *AbstractDataProvider prov) {
         tmap{name} = getTool(name, desc, input, tool, input_initialized, extra, prov);
     }
@@ -690,7 +699,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @param mimeType the MIME type of the resource
         @param reader optional code to read the resource content; if not provided, the resource is not readable
     */
-    registerResource(string uri, string name, string desc, string mimeType, *code reader) {
+    registerResource(string uri, string name, string desc, string mimeType,
+            *code<auto(hash<auto>, string)> reader) {
         rmap{uri} = <McpResourceInfo>{
             "uri": uri,
             "name": name,
@@ -742,7 +752,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             throw "MCP-SERVER-ARG-ERROR", sprintf("MCP Apps user interface resource URI %y must "
                 "use the %y scheme", uri, MCP_UiScheme);
         }
-        code reader;
+        code<auto(hash<auto>, string)> reader;
         if (html.callp()) {
             reader = html;
         } else if (html.typeCode() == NT_STRING || html.typeCode() == NT_BINARY) {
@@ -791,7 +801,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
         @see @ref registerUiResource()
     */
-    registerUiTool(string name, string desc, *AbstractDataProviderType input, code tool,
+    registerUiTool(string name, string desc, *AbstractDataProviderType input, code<auto(auto)> tool,
             hash<McpUiToolMeta> ui, *bool input_initialized, *hash<auto> extra,
             *AbstractDataProvider prov) {
         if (!ui.resourceUri.val()) {
@@ -904,7 +914,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param handler optional code to generate prompt messages; receives (context, arguments) and should return
             a list of message hashes with "role" and "content" keys
     */
-    registerPrompt(string name, string desc, *list<hash<auto>> arguments, *code handler) {
+    registerPrompt(string name, string desc, *list<hash<auto>> arguments,
+            *code<auto(hash<auto>, *hash<auto>)> handler) {
         pmap{name} = <McpPromptInfo>{
             "name": name,
             "description": desc,
@@ -2462,7 +2473,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             "interface still get the answer", info.name, info.ui.resourceUri);
     }
 
-    private hash<McpToolInfo> getTool(string name, string desc, *AbstractDataProviderType input, code tool,
+    private hash<McpToolInfo> getTool(string name, string desc, *AbstractDataProviderType input,
+            code<auto(auto)> tool,
             *bool input_initialized, *hash<auto> extra, *AbstractDataProvider prov) {
         if (name.length() > MaxMcpToolNameLength) {
             throw "MCP-SERVER-ARG-ERROR", sprintf("Tool name %y is too long (max %y)", name,
@@ -3258,7 +3270,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     }
 
     #! Calls the given connection method on every legacy session event stream
-    private broadcastLegacyNotification(code send) {
+    private broadcastLegacyNotification(code<nothing(McpServerConnection)> send) {
         list<McpServerConnection> conns;
         {
             McpHandlerReadLockHelper al(rwl);
@@ -3308,7 +3320,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param reader optional code to read the resource content
         @param annotations optional annotations
     */
-    registerResourceTemplate(string uriTemplate, string name, *string desc, *string mimeType, *code reader,
+    registerResourceTemplate(string uriTemplate, string name, *string desc, *string mimeType,
+            *code<auto(hash<auto>, string)> reader,
             *hash<auto> annotations) {
         rtmap{uriTemplate} = <McpResourceTemplateInfo>{
             "uriTemplate": uriTemplate,

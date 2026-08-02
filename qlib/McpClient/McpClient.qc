@@ -1582,6 +1582,12 @@ public class McpClient {
         - onError: called when an error occurs (receives: string error_message)
         - onConnected: called when SSE connection is established
         - onDisconnected: called when SSE connection is closed
+
+        @note the parameter is intentionally untyped \c code rather than a
+        \c code<...> signature: each event has a different one — \c onLogMessage takes three
+        arguments, \c onError one, \c onConnected none, and the server-request handlers take a
+        parameter hash and return a result — so no single signature describes them all.  The
+        signature for each event is given in the list above.
     */
     setCallback(string event, code callback) {
         lck.lock();
@@ -2280,6 +2286,7 @@ public class McpClient {
                 throw "MCP-INPUT-REQUIRED-ERROR", sprintf("server requested input using "
                     "unsupported method %y", method);
             }
+            # untyped: the registry holds callbacks with per-event signatures, see setCallback()
             *code cb;
             {
                 lck.lock();

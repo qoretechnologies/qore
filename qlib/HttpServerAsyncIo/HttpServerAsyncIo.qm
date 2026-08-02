@@ -207,7 +207,7 @@ public namespace HttpServerAsyncIo {
 
             @see send_timeout
         */
-        *code send_callback;
+        *code<auto()> send_callback;
 
         #! timeout for send_callback responses
         /**

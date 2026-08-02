@@ -260,7 +260,7 @@ if (css_stream > 0) {
         @par Example:
         @code{.py}
 # In HttpServer handler context
-code push = h2op.getPushResourceCallback();
+code<int(string, *hash<auto>)> push = h2op.getPushResourceCallback();
 if (push) {
     int stream_id = push("/style.css", {"content-type": "text/css"});
     if (stream_id > 0) {
@@ -270,7 +270,7 @@ if (push) {
 }
         @endcode
     */
-    *code getPushResourceCallback() {
+    *code<int(string, *hash<auto>)> getPushResourceCallback() {
         string state = getH2State();
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             return NOTHING;
