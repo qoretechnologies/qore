@@ -1552,4 +1552,117 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
     result->setKeyValue("signature_valid", signature_valid, xsink);
     return result.release();
 }
+
+//! Signs a JWS signing input with the given algorithm and returns the raw signature
+/** Unlike @ref jwt_encode(), which builds the header and payload itself from JWT claims, this function signs a
+    caller-supplied JWS Signing Input.  Use it for JWS profiles whose payload is not a JWT claims object, such as
+    the signed Agent Cards defined by the A2A protocol, where the payload is a canonicalized document rather
+    than a set of claims.
+
+    The JWS Signing Input is <tt>BASE64URL(UTF8(protected header)) || '.' || BASE64URL(payload)</tt> as defined
+    by <a href="https://tools.ietf.org/html/rfc7515">RFC 7515</a>; this function does not construct it.
+
+    @param signing_input the JWS Signing Input to sign
+    @param key the signing key: the shared secret for \c HS* algorithms, or an RSA private key in PEM format
+    for \c RS* algorithms
+    @param algorithm the JWS algorithm; one of \c "HS256", \c "HS384", \c "HS512", \c "RS256", \c "RS384", or
+    \c "RS512"
+
+    @return the raw signature bytes; base64url-encode these to produce the JWS \c signature value
+
+    @par Example:
+    @code{.py}
+%modern
+
+string protected_b64 = make_base64_url_string(make_json({"alg": "RS256", "typ": "JOSE", "kid": "k1"}));
+string payload_b64 = make_base64_url_string(canonical_payload);
+binary sig = jws_sign(protected_b64 + "." + payload_b64, private_key_pem, "RS256");
+string signature = make_base64_url_string(sig);
+    @endcode
+
+    @throw JWT-ERROR if the algorithm is unsupported, the key cannot be read, or signing fails
+
+    @note \c ES* (ECDSA) algorithms are not supported; JWS requires the raw <tt>R||S</tt> signature encoding for
+    those, which differs from the DER encoding OpenSSL produces
+
+    @see
+    - @ref jws_verify()
+    - @ref jwt_encode()
+
+    @since json 1.11
+*/
+binary jws_sign(string signing_input, string key, string algorithm) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    bool is_hmac = false;
+    bool is_rsa = false;
+    const EVP_MD* md = jwt_get_md(algorithm->c_str(), is_hmac, is_rsa, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreString key_str(key->c_str(), QCS_UTF8);
+    QoreString input_str(signing_input->c_str(), QCS_UTF8);
+    ReferenceHolder<BinaryNode> signature(xsink);
+    if (is_hmac) {
+        signature = jwt_sign_hmac(md, key_str, input_str, xsink);
+    } else if (is_rsa) {
+        signature = jwt_sign_rsa(md, key_str, input_str, xsink);
+    }
+    if (*xsink || !signature) {
+        return QoreValue();
+    }
+    return signature.release();
+}
+
+//! Verifies a raw JWS signature over the given signing input
+/** The counterpart to @ref jws_sign(); see that function for a description of the JWS Signing Input.
+
+    @param signing_input the JWS Signing Input that was signed
+    @param signature the raw signature bytes, as produced by base64url-decoding the JWS \c signature value
+    @param key the verification key: the shared secret for \c HS* algorithms, or an RSA public key (or a
+    private key, from which the public key is derived) in PEM format for \c RS* algorithms
+    @param algorithm the JWS algorithm; one of \c "HS256", \c "HS384", \c "HS512", \c "RS256", \c "RS384", or
+    \c "RS512"
+
+    @return @ref True if the signature is valid, @ref False if it is not
+
+    @par Example:
+    @code{.py}
+%modern
+
+bool ok = jws_verify(protected_b64 + "." + payload_b64, parse_base64_url_string(signature), public_key_pem,
+    "RS256");
+    @endcode
+
+    @throw JWT-ERROR if the algorithm is unsupported or the key cannot be read
+
+    @note An invalid signature returns @ref False rather than raising an exception; an exception means the
+    verification could not be attempted at all
+
+    @see
+    - @ref jws_sign()
+    - @ref jwt_decode()
+
+    @since json 1.11
+*/
+bool jws_verify(string signing_input, binary signature, string key, string algorithm) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    bool is_hmac = false;
+    bool is_rsa = false;
+    const EVP_MD* md = jwt_get_md(algorithm->c_str(), is_hmac, is_rsa, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreString key_str(key->c_str(), QCS_UTF8);
+    QoreString input_str(signing_input->c_str(), QCS_UTF8);
+    bool rv = false;
+    if (is_hmac) {
+        rv = jwt_verify_hmac(md, key_str, input_str, signature, xsink);
+    } else if (is_rsa) {
+        rv = jwt_verify_rsa(md, key_str, input_str, signature, xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv;
+}
 ///@}
