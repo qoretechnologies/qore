@@ -23675,7 +23675,10 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
         url_gv,
         license_gv,
         builder.getInt32(QORE_MODULE_API_MAJOR),
-        builder.getInt32(QORE_MODULE_API_MINOR),
+        builder.getInt32(QORE_AOT_MODULE_ABI_API_MINOR_MARKER
+            | ((getenv("QORE_AOT_TEST_LEGACY_MODULE_ABI")
+                ? 0U : QORE_AOT_MODULE_ABI_VERSION) << 8)
+            | QORE_MODULE_API_MINOR),
         builder.getInt32(getLicenseEnum(mod_info.license)),
         init_adapter_fn,
         ns_init_adapter_fn,

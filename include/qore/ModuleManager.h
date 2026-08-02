@@ -48,6 +48,12 @@
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
 
+//! Native ABI revision for code generated into AOT Qore modules.
+/** This is separate from the binary module API: ordinary C/C++ modules do not
+    use it. Increment it whenever generated AOT code can no longer execute
+    safely against an older libqore runtime contract. */
+#define QORE_AOT_MODULE_ABI_VERSION 1
+
 //! element of qore_mod_api_list;
 struct qore_mod_api_compat_s {
    unsigned char major;
@@ -142,6 +148,9 @@ struct QoreModuleInfo {
 
     //! true if this is an AOT-compiled Qore module loaded as a binary module
     bool is_aot = false;
+
+    //! native generated-code ABI revision for an AOT-compiled Qore module
+    unsigned aot_abi_version = 0;
 };
 
 //! Module description function

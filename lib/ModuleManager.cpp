@@ -2818,6 +2818,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     const char* name = mod_info.name.c_str();
 
+    if (mod_info.is_aot
+            && mod_info.aot_abi_version != QORE_AOT_MODULE_ABI_VERSION) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
+            "AOT module '%s': feature '%s': native ABI version %u is incompatible with runtime version %u; "
+            "rebuild the module with the current qcc",
+            path, name, mod_info.aot_abi_version,
+            static_cast<unsigned>(QORE_AOT_MODULE_ABI_VERSION));
+        return nullptr;
+    }
+
     // ensure provided feature matches with expected feature
     if (feature && mod_info.name != feature) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': provides feature "

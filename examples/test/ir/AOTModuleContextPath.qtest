@@ -20,6 +20,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("AOT module init uses runtime qmod path", \moduleInitUsesRuntimeQmodPath());
+        addTestCase("AOT module rejects incompatible native ABI",
+            \moduleRejectsIncompatibleNativeAbi());
         addTestCase("AOT module init can inspect module hash", \moduleInitCanInspectModuleHash());
         addTestCase("AOT module init can load another module", \moduleInitCanLoadAnotherModule());
         addTestCase("AOT module binds dependency public our globals",
@@ -47,6 +49,64 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             "else echo 'GNU timeout command not found'; rc=127; fi; echo EXIT=$rc; } 2>&1",
             libqore_dir, libqore_dir, module_dir, qore_bin, script_path,
             libqore_dir, libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    moduleRejectsIncompatibleNativeAbi() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string source_dir = tmp_dir + "/src";
+        string module_dir = tmp_dir + "/modules";
+        mkdir(source_dir);
+        mkdir(module_dir);
+        string qm_path = source_dir + "/AOTIncompatibleNativeAbi.qm";
+        string qmod_path = module_dir + "/AOTIncompatibleNativeAbi.qmod";
+        string script_path = tmp_dir + "/run.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTIncompatibleNativeAbi {
+    version = \"1.0\";
+    desc = \"incompatible native ABI test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTIncompatibleNativeAbi {
+    public int sub value() {
+        return 42;
+    }
+}
+");
+        f.close();
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTIncompatibleNativeAbi
+
+printf(\"%d\\n\", AOTIncompatibleNativeAbi::value());
+");
+        f.close();
+
+        string compile_out = backquote(sprintf(
+            "QORE_AOT_TEST_LEGACY_MODULE_ABI=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s "
+                + "%s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled legacy-ABI AOT module: " + compile_out);
+
+        string incompatible_out = runQoreScriptWithTimeout(module_dir, script_path);
+        assertTrue(incompatible_out.find("native ABI version 0 is incompatible with runtime version") != -1
+                && incompatible_out.find("rebuild the module with the current qcc") != -1
+                && incompatible_out.find("EXIT=2") != -1,
+            "incompatible native AOT module must fail before execution: " + incompatible_out);
+
+        compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled current-ABI AOT module: " + compile_out);
+        assertEq("42\nEXIT=0\n", runQoreScriptWithTimeout(module_dir, script_path),
+            "current native AOT module ABI must load normally");
     }
 
     moduleInitUsesRuntimeQmodPath() {

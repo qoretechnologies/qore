@@ -636,6 +636,14 @@ extern "C" void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
         void* init_fn, void* ns_init_fn, void* del_fn,
         const char** deps, int num_deps);
 
+//! Marker and masks encoding the AOT ABI in the existing descriptor API-minor argument.
+/** Older runtimes see the tagged value as an unsupported module API and reject
+    the module without needing to resolve any new runtime helper symbol. */
+constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER = 0x51410000U;
+constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER_MASK = 0xffff0000U;
+constexpr unsigned QORE_AOT_MODULE_ABI_VERSION_MASK = 0x0000ff00U;
+constexpr unsigned QORE_AOT_MODULE_API_MINOR_MASK = 0x000000ffU;
+
 //! C ABI helper to convert a QoreStringNode* init error to an exception
 /** Called by the init adapter when the AOT init implementation returns a non-null error.
     @param xsink exception sink to raise the error in

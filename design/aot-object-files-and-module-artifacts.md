@@ -185,6 +185,18 @@ Every AOT metadata blob carries:
 
 Loaders must reject metadata requiring unsupported features or newer opcodes.
 
+Native `.qmod` code has an additional ABI contract independent of the metadata
+format and the C/C++ binary-module API. Generated module descriptors encode the
+exact `QORE_AOT_MODULE_ABI_VERSION` in a tagged form of the existing module
+API-minor argument; this preserves the descriptor helper's C ABI and makes an
+older runtime reject a newer AOT module as an unsupported module API. A current
+loader decodes and validates the AOT revision before loading dependencies or
+running generated initialization code. A descriptor produced before this
+contract reports version zero and is rejected with a rebuild diagnostic.
+Increment the native ABI revision whenever generated code can no longer execute
+safely against the previous runtime-helper or ownership contract. Metadata-only
+backward readers remain governed by their format and feature versions.
+
 ## Symbol Index
 
 Newly generated metadata may also carry an optional `SYMBOL_INDEX` section. The

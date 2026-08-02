@@ -14521,7 +14521,15 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
         mod_info->url = url;
     }
     mod_info->api_major = api_major;
-    mod_info->api_minor = api_minor;
+    unsigned encoded_api_minor = static_cast<unsigned>(api_minor);
+    if ((encoded_api_minor & QORE_AOT_MODULE_ABI_API_MINOR_MARKER_MASK)
+            == QORE_AOT_MODULE_ABI_API_MINOR_MARKER) {
+        mod_info->aot_abi_version =
+            (encoded_api_minor & QORE_AOT_MODULE_ABI_VERSION_MASK) >> 8;
+        mod_info->api_minor = encoded_api_minor & QORE_AOT_MODULE_API_MINOR_MASK;
+    } else {
+        mod_info->api_minor = api_minor;
+    }
     mod_info->license = static_cast<qore_license_t>(license);
     if (license_str) {
         mod_info->license_str = license_str;
