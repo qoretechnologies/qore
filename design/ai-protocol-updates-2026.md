@@ -2,8 +2,10 @@
 
 Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
-> **STATUS: proposal.** Nothing here is implemented. Move each phase into `design/` only
-> once it has landed and is tested.
+> **STATUS: implemented.** Every Qore-side phase has landed and is tested; see
+> "What was actually built" at the end of each phase for where the implementation differs
+> from what was planned here. The Qorus-side bindings (Phase 3's gateway `_meta.ui`, Phase 4's
+> `/api/v9/qonsole/agui`) live in a separate repo and remain to be done.
 
 Covers four workstreams, ordered by deadline pressure:
 
@@ -300,6 +302,30 @@ descriptors and add `getUiResource(string uri)`.
 `tools/list`, `ui://` resource fetch, text fallback returned to a non-UI client, registration
 rejected when a UI tool has no text fallback. Client side in `McpClient.qtest`.
 
+### What was actually built
+
+Landed in `51220ed97`. The plan was wrong about the metadata shape, which checking against the
+published spec (`modelcontextprotocol/ext-apps`, revision 2026-01-26) rather than the plan
+caught: the tool's `_meta.ui` carries only `resourceUri` and `visibility`, while `csp`,
+`permissions`, `domain` and `prefersBorder` ride on the **resource's** content entry — which is
+what the host actually renders, so that is where the sandbox policy belongs. `csp` is
+structured (`connectDomains` / `resourceDomains` / `frameDomains` / `baseUriDomains`), not a
+list of origins.
+
+Server (`McpServerHandler`): `registerUiResource()`, `registerUiTool()`, `clientSupportsUi()`,
+`getUiResourceUris()`, `hasUiResources()`, `getToolUiMeta()`. The extension is advertised only
+when the server ships an interface. Graceful degradation is enforced per call rather than at
+registration — a closure cannot be statically proven to return text — and an app-only tool is
+omitted from `tools/list` for a client that cannot reach it.
+
+Client (`McpClient`): the `enable_ui` option, `serverSupportsUi()`, `getToolUiMeta()` (accepting
+the deprecated flat `_meta."ui/resourceUri"` form) and `getUiResource()`.
+
+Two things the plan did not anticipate: an empty hash is the extension's presence marker for a
+requested browser capability, so unset-member pruning must not drop empty hashes; and client
+capabilities were only ever read from per-request `_meta`, which made a legacy client's
+`initialize`-time extension declaration — the way the spec's own example negotiates — invisible.
+
 ### The Qorus payoff
 
 Qorus already has a `ui_component` ContentPart type (`design/rich-content-schema.md`) with a
@@ -418,13 +444,34 @@ it lands.
 
 ### Tests
 
-- `examples/test/qlib/AgUi/AgUiEvents.qtest` — construction and serialisation of every event type
-- `examples/test/qlib/AgUi/AgUiEmitter.qtest` — SSE framing, ordering, `StateDelta` correctness
-  including the empty-diff and whole-replacement corner cases
-- `examples/test/qlib/AgUi/AgUiClient.qtest` — loopback emitter → client, patch application,
-  malformed-event and truncated-stream negative cases
+- `examples/test/qlib/AgUi/AgUi.qtest` — the three planned suites merged into one, since they
+  share the emitter/client round-trip fixture: event construction and serialisation, SSE
+  framing, ordering, `StateDelta` correctness including the empty-diff and no-prior-snapshot
+  corner cases, loopback emitter → client, patch application, malformed-event and
+  truncated-stream negative cases, and a round trip of the reference SDK's fixtures
+- `examples/test/qlib/JsonPatch/JsonPatch.qtest` — RFC 6902 generation and application
 - Qorus side: a Qonsole test asserting the same command produces equivalent content over both
   bindings
+
+### What was actually built
+
+Landed in `20034f748`: `qlib/AgUi/` (`AgUi.qm`, `AgUiEvents.qc`, `AgUiEmitter.qc`,
+`AgUiClient.qc`, `AgUiConnection.qc`) plus a new general-purpose `qlib/JsonPatch.qm`, which is
+where the RFC 6902 generator belongs — `qlib/` had none, and the plan asked for it not to be
+buried in `AgUi`. RFC 6901 lookup was *not* written: `json_pointer_get()`,
+`json_pointer_exists()` and `json_pointer_escape()` already exist in the `json` module (1.10+)
+and are reexported; only splitting, joining and unescaping were missing.
+
+The event vocabulary was taken from the reference SDK's cross-implementation compatibility
+fixtures rather than the prose documentation. That matters: the wire `type` values are
+`SCREAMING_SNAKE_CASE` (`RUN_STARTED`, `STATE_DELTA`), while the documentation names the event
+*classes* in PascalCase — a peer sent `"RunStarted"` rejects it as unknown. The SSE framing is a
+bare `data: <json>` line with unset members omitted, matching the reference encoder.
+
+`AgUiConnection` returns an `AgUiHttpAgent` that posts a run input and consumes the response
+stream. The protocol's `context` member is spelled `ctx` in `AgUiRunAgentInput` and renamed on
+the way out by `agui_run_agent_input_to_wire()`, because `context` is a reserved word in Qore
+and cannot name a hashdecl member.
 
 ---
 
