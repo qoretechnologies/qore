@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Regression test for cancellation of queued JIT tier promotions at shutdown.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class BgCompileShutdownTest
+
+class BgCompileShutdownTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script_path;
+    }
+
+    constructor() : QUnit::Test("BgCompileShutdownTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script_path = "/tmp/qore-bg-compile-shutdown-" + string(getpid()) + ".qr";
+        addTestCase("queued tier promotions are cancelled at shutdown", \testShutdown());
+        set_return_value(main());
+    }
+
+    destructor() {
+        try {
+            unlink(script_path);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private testShutdown() {
+        const int FunctionCount = 256;
+        list<string> source = ("%modern\n%requires json\nclass ShutdownWork {\n",);
+        for (int index = 0; index < FunctionCount; ++index) {
+            push source, sprintf("    int shutdownWork%d(int value) { return value + %d; }\n",
+                index, index);
+        }
+        push source, "}\nShutdownWork worker();\nint total = 0;\n";
+        push source, sprintf("for (int i = 0; i < %d; ++i) {\n", FunctionCount);
+        push source, "    total += call_object_method(worker, \"shutdownWork\" + string(i), i);\n";
+        push source, "}\nprintf(\"total=%d json=%s\\n\", total, make_json((\"ok\": True)));\nexit(0);\n";
+
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write(join("", source));
+        script.close();
+
+        string output = backquote(sprintf(
+            "QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=jit %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(script_path)));
+        assertTrue(output =~ /total=65280 json=\{"ok":true\}\n/,
+            "all calls completed before shutdown: " + output);
+        assertTrue(output =~ /\[BG-JIT\] cancelled [1-9][0-9]* pending compilations? at shutdown/,
+            "shutdown cancelled queued tier promotions: " + output);
+    }
+}

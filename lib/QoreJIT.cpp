@@ -1589,11 +1589,17 @@ void QoreJIT::setJITThreshold(uint64_t t) {
     jit_threshold = t;
 }
 
-void QoreJIT::startBackgroundThread() {
-    // Start the background compilation thread if not already running
+bool QoreJIT::startBackgroundThread() {
+    // Serialize worker creation with shutdown's accept-work transition and join
+    // decision so a late enqueue cannot restart the worker after shutdown.
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    if (!bg_accept_work.load(std::memory_order_acquire)) {
+        return false;
+    }
     if (!bg_thread_running.exchange(true, std::memory_order_acq_rel)) {
         bg_compile_thread = std::thread(&QoreJIT::bgCompileThreadLoop, this);
     }
+    return true;
 }
 
 void QoreJIT::releaseBgCompileWorkRefs(BgCompileWork& work) {
@@ -1765,6 +1771,17 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
     // so we do NOT re-check here — the state is already 1 when we're called.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
 
+    // qore_cleanup() has no future execution to optimize.  Reject late work before
+    // it can restart the background thread after shutdown has begun.
+    if (!bg_accept_work.load(std::memory_order_acquire)
+            || qore_shutdown.load(std::memory_order_acquire)
+            || qore_exiting.load(std::memory_order_acquire)) {
+        if (uvb) {
+            const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
+        }
+        return;
+    }
+
     // Skip if LLVM is not initialized.  This is expected in tiered/jit mode at
     // parse-commit time: LLVM is not brought up until the first synchronous
     // compile (e.g. the top-level block via executeWithFallback).  The caller
@@ -1780,10 +1797,14 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         return;
     }
 
-    // Ensure background thread is running
-    startBackgroundThread();
-
     if (!uvb) {
+        return;
+    }
+
+    // Ensure background thread is running.  Shutdown may have started after the
+    // global exit checks above, so this is also an acceptance check.
+    if (!startBackgroundThread()) {
+        const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
         return;
     }
 
@@ -1810,9 +1831,22 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         work.has_callees = false;
     }
 
+    bool accepted = false;
     {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
-        bg_compile_queue.push(std::move(work));
+        if (bg_accept_work.load(std::memory_order_relaxed)) {
+            bg_compile_queue.push(std::move(work));
+            accepted = true;
+        }
+    }
+    if (!accepted) {
+        const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
+        releaseBgCompileWorkRefs(work);
+        int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (remaining == 0) {
+            bg_queue_empty_cv.notify_all();
+        }
+        return;
     }
     bg_queue_cv.notify_one();
 
@@ -1898,12 +1932,15 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
 
 void QoreJIT::shutdown() {
     // Ensure background thread is stopped BEFORE any other shutdown
-    bool was_running = bg_thread_running.exchange(false, std::memory_order_acq_rel);
+    bool was_running;
+    {
+        // Serialize the shutdown transition with worker startup and queue insertion.
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        bg_accept_work.store(false, std::memory_order_release);
+        was_running = bg_thread_running.exchange(false, std::memory_order_acq_rel);
+    }
     if (was_running) {
         // Signal the thread to wake up and exit
-        {
-            std::lock_guard<std::mutex> lock(bg_queue_mutex);
-        }  // Release lock before notify
         bg_queue_cv.notify_one();
         // Join the background thread (it should exit quickly since bg_thread_running is false)
         if (bg_compile_thread.joinable()) {
@@ -1911,8 +1948,12 @@ void QoreJIT::shutdown() {
         }
     }
 
-    // Process any remaining work items synchronously before shutting down LLVM
-    // This ensures all pending compilations complete before context destruction
+    // Pending tier promotions have no value once global shutdown begins.  Do not
+    // move LLVM compilation from the dedicated worker to this thread: doing so can
+    // race process-wide LLVM teardown and has caused instruction-selection failures
+    // during direct process exit.  Cancel queued work and release its owning
+    // references instead.
+    size_t cancelled_count = 0;
     while (true) {
         BgCompileWork work;
         {
@@ -1924,32 +1965,15 @@ void QoreJIT::shutdown() {
             bg_compile_queue.pop();
         }
 
-        // Pre-copy name before compilation — LLVM 21 corrupts adjacent heap on Linux
-        const std::string saved_func_name = work.ir_func->name;
-
-        // Compile any remaining work synchronously
-        std::string error;
-        bool success;
-        if (work.has_callees) {
-            success = compileFunctionBatchInternal(*work.ir_func, error,
-                work.deopt_ptr, work.callees, work.owned_ir_func.get());
-        } else {
-            success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
-        }
-
-        if (success) {
-            JitFunctionPtr fn = lookupFunction(saved_func_name);
-            if (fn && work.uvb) {
-                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
-                mutable_uvb->cached_jit_fn.store(fn, std::memory_order_release);
-                mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
-                mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
-            }
-        } else if (work.uvb) {
-            UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
-            mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+        if (work.uvb) {
+            const_cast<UserVariantBase*>(work.uvb)->jit_compile_state.store(0, std::memory_order_release);
         }
         finishBgCompileWork(work);
+        ++cancelled_count;
+    }
+    if (cancelled_count && getenv("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] cancelled %zu pending compilation%s at shutdown\n",
+            cancelled_count, cancelled_count == 1 ? "" : "s");
     }
 
     // Then shut down LLVM (acquire compile_mutex to serialize with any ongoing compilation)

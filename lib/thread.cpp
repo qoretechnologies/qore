@@ -42,6 +42,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
@@ -2981,6 +2982,11 @@ void qore_exit_process(int rc) {
         && q_gettid() > 0
 #endif
     ) {
+        // The native JIT compiler uses a dedicated C++ thread that is not part of
+        // thread_list.  Stop it while LLVM's process-wide state is still intact;
+        // otherwise exit() can run LLVM static destructors concurrently with an
+        // in-progress ORC materialization.
+        QoreJIT::instance().shutdown();
         exit(rc);
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
