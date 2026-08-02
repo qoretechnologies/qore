@@ -36,6 +36,23 @@ public class McpToolResultDataType inherits HashDataType {
                 "desc": "Whether the tool call resulted in an error",
                 "default_value": False,
             },
+            "resultType": {
+                "type": StringOrNothingType,
+                "display_name": "Result Type",
+                "short_desc": "Result discriminator",
+                "desc": "The kind of result returned: \"complete\" for a final result, "
+                    "\"input_required\" when the server needs more information, or \"task\" "
+                    "when the call was accepted as a task.  Servers implementing protocol "
+                    "revisions before 2026-07-28 omit it, which must be read as \"complete\"",
+                "example_value": "complete",
+            },
+            "structuredContent": {
+                "type": AutoType,
+                "display_name": "Structured Content",
+                "short_desc": "Structured tool output",
+                "desc": "The tool's structured output, validated against its output schema; "
+                    "may be any JSON value",
+            },
         };
 
         #! Content field description

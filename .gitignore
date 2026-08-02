@@ -204,3 +204,6 @@ fontconfig/
 
 # compile_all_modules.sh output
 /qlib-bin/
+
+# python virtual environments created by the MCP integration test runner
+.venvs/

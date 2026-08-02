@@ -168,6 +168,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
         addTestCase("SSE read test", \serverSentEventReadTest());
+        addTestCase("SSE parse line terminator test", \sseParseLineTerminatorTest());
         addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
@@ -744,6 +745,45 @@ class SocketTest inherits QUnit::Test {
         tos.write(binary(msg));
         tos.close();
         return bos.getData();
+    }
+
+    #! An event stream is split into lines on CRLF, CR, or LF, and the terminator is never
+    #! part of the field name or value
+    sseParseLineTerminatorTest() {
+        # every terminator must yield exactly the same event
+        hash<auto> expected = {"event": "endpoint", "data": "/messages/?session_id=abc"};
+        hash<string, string> streams = {
+            "LF": "event: endpoint\ndata: /messages/?session_id=abc\n\n",
+            "CRLF": "event: endpoint\r\ndata: /messages/?session_id=abc\r\n\r\n",
+            "CR": "event: endpoint\rdata: /messages/?session_id=abc\r\r",
+            "mixed": "event: endpoint\r\ndata: /messages/?session_id=abc\n\n",
+        };
+        foreach hash<auto> i in (streams.pairIterator()) {
+            hash<SseMessageInfo> evt = Socket::parseServerSentEvent(i.value);
+            assertEq(expected.event, evt.event,
+                sprintf("%s-terminated stream yields the event name with no terminator", i.key));
+            assertEq(expected.data, evt.data,
+                sprintf("%s-terminated stream yields the data with no terminator", i.key));
+            assertEq(expected.event.size(), evt.event.size(),
+                sprintf("%s-terminated event name carries no trailing byte", i.key));
+        }
+
+        # multi-line data is joined with newlines regardless of the terminator used
+        foreach string term in (("\n", "\r\n", "\r")) {
+            hash<SseMessageInfo> evt = Socket::parseServerSentEvent(
+                sprintf("data: one%sdata: two%s%s", term, term, term));
+            assertEq("one\ntwo", evt.data,
+                sprintf("multi-line data is joined for terminator %y", term));
+        }
+
+        # numeric fields must not pick up the terminator either
+        hash<SseMessageInfo> evt = Socket::parseServerSentEvent(
+            "event: message\r\nid: 42\r\nretry: 1500\r\ndata: x\r\n\r\n");
+        assertEq("42", evt.id, "the id field carries no trailing byte");
+        assertEq(1500, evt.retry, "a numeric retry survives CRLF termination");
+
+        # an empty buffer is not a parse error
+        assertNothing(Socket::parseServerSentEvent("").event, "an empty event has no name");
     }
 
     serverSentEventReadTest() {

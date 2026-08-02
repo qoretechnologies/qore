@@ -82,12 +82,31 @@ public class McpServerConnection inherits ServerSentEventHandler::ServerSentEven
         });
     }
 
+    #! Sends a server-initiated JSON-RPC request on the event stream
+    /** @param method the method to call on the client
+        @param info the request parameters
+
+        @return the JSON-RPC ID the request was sent with
+    */
     int sendRequest(string method, hash<auto> info) {
         int id = cast<McpServerHandler>(handler).getNextIdForSession(session);
+        sendRequestWithId(id, method, info);
+        return id;
+    }
+
+    #! Sends a server-initiated JSON-RPC request using a caller-supplied ID
+    /** Callers that must register a waiter for the response have to know the ID <i>before</i>
+        the request goes out, otherwise the client's answer can arrive before the waiter
+        exists — and a waiter registered under a different ID is never signalled at all.
+
+        @param id the JSON-RPC ID to send the request with
+        @param method the method to call on the client
+        @param info the request parameters
+    */
+    sendRequestWithId(auto id, string method, hash<auto> info) {
         send(<SseMessageInfo>{
             "data": make_jsonrpc_request(method, "2.0", id, info),
         });
-        return id;
     }
 
     registered() {

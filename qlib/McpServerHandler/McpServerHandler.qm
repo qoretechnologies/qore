@@ -57,7 +57,65 @@ module McpServerHandler {
     using the HttpServer module. It exposes tools, resources, prompts, and
     notifications via JSON-RPC over HTTP and Server-Sent Events (SSE).
 
-    This module implements the full MCP 2025-11-25 protocol specification.
+    This module implements MCP <b>2026-07-28</b> and every earlier protocol revision back to
+    2024-11-05, serving both from the same endpoint.
+
+    @section McpServerHandler_eras Protocol Eras
+
+    MCP changed shape fundamentally in revision
+    \c 2026-07-28, which made the protocol stateless.
+    This handler serves both shapes and selects between them per request, never per connection:
+
+    |!Aspect|!Modern (2026-07-28)|!Legacy (2025-11-25 and earlier)|
+    |handshake|none; every request carries its protocol version, client identity, and \
+        capabilities in \c _meta|\c initialize + \c notifications/initialized|
+    |sessions|none; the \c Mcp-Session-Id header is ignored and never minted|server-minted \
+        session ID, torn down with HTTP \c DELETE|
+    |discovery|\c server/discover|the \c initialize result|
+    |change notifications|\c subscriptions/listen, whose response is a long-lived SSE stream|\
+        a standalone \c GET SSE stream|
+    |resource subscriptions|the \c resourceSubscriptions filter of \c subscriptions/listen|\
+        \c resources/subscribe / \c resources/unsubscribe|
+    |server-to-client requests|Multi Round-Trip Requests: the server returns an \
+        \c InputRequiredResult and the client retries|the server sends a JSON-RPC request on \
+        the event stream|
+    |tasks|the \c io.modelcontextprotocol/tasks extension: server-decided handles, \
+        \c tasks/get polling, \c tasks/update|core \c tasks/get, \c tasks/result, \
+        \c tasks/cancel, \c tasks/list|
+    |removed methods|\c ping, \c logging/setLevel, \c tasks/result, \c tasks/list|—|
+
+    A request that carries
+    \c io.modelcontextprotocol/protocolVersion in its
+    \c _meta member is served statelessly; an \c initialize request selects legacy semantics.
+    Either era can be turned off with
+    @ref McpServerHandler::McpServerHandler::setModernEnabled() "setModernEnabled()" and
+    @ref McpServerHandler::McpServerHandler::setLegacyEnabled() "setLegacyEnabled()".
+
+    @subsection McpServer_intro_mrtr Requesting input from the client
+
+    Ask the client for an elicitation, an LLM completion, or its root list with
+    @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()".  The calling code
+    is identical in both eras — with a modern client the call suspends the request and resumes
+    when the client retries it with the answers attached:
+
+    @code{.py}
+    handler.registerTool("deploy", "Deploy a build", input, sub (hash<auto> args) {
+        hash<auto> answers = McpServerHandler::getToolCallContext().handler.requestInput({
+            "confirm": {
+                "method": "elicitation/create",
+                "params": {
+                    "mode": "form",
+                    "message": sprintf("Really deploy %y?", args.build),
+                    "requestedSchema": ConfirmSchema,
+                },
+            },
+        });
+        if (answers.confirm.action != "accept") {
+            return {"content": ({"type": "text", "text": "cancelled"},)};
+        }
+        return deploy(args.build);
+    });
+    @endcode
 
     The following classes are provided by this module:
     - @ref McpServerHandler::McpServerHandler "McpServerHandler"
@@ -133,6 +191,35 @@ module McpServerHandler {
 
     @subsection McpServerHandler_1_0 McpServerHandler v1.0
     - initial release
+    - MCP 2026-07-28 protocol support, served from the same endpoint as every earlier
+      revision (see @ref McpServerHandler_eras):
+      - stateless request handling: the protocol version, client identity, and client
+        capabilities are read from each request's \c _meta field, and no session is minted,
+        echoed, or required
+      - mandatory \c server/discover reporting supported versions, capabilities, and identity
+      - \c subscriptions/listen: a POST whose response is a long-lived SSE stream carrying only
+        the notification types the client opted in to, each tagged with its subscription ID,
+        and closed gracefully with the request's own JSON-RPC response
+      - Multi Round-Trip Requests via
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()", with opaque
+        \c requestState integrity-protected by @ref McpServerHandler::McpRequestState
+        "McpRequestState" and bound to the principal, the originating request, and a TTL
+      - the \c io.modelcontextprotocol/tasks extension: server-decided task handles,
+        \c tasks/get polling, \c tasks/update for mid-flight input, and \c notifications/tasks
+      - required \c resultType, \c _meta.serverInfo, and \c ttlMs / \c cacheScope members on
+        results, and deterministic \c tools/list ordering
+      - \c MCP-Protocol-Version / \c Mcp-Method / \c Mcp-Name / \c Mcp-Param-* header
+        validation against the request body, with \c -32020, \c -32021, and \c -32022 errors
+        and their required HTTP status codes
+      - methods removed in 2026-07-28 (\c ping, \c logging/setLevel, \c resources/subscribe,
+        \c resources/unsubscribe, \c tasks/result, \c tasks/list) remain available to clients
+        using earlier protocol revisions and return \c -32601 to modern clients
+    - fixed two defects that prevented a server-to-client request (sampling, elicitation,
+      roots) from ever completing on handshake-based protocol revisions:
+      - the client's JSON-RPC response, posted back to the MCP endpoint, was dispatched as if
+        it were a method call instead of being routed to the waiting request
+      - the waiter was registered under a different ID than the request was sent with, so an
+        answer could never be matched to it
     - full MCP 2025-11-25 protocol support:
       - Tasks API (\c tasks/get, \c tasks/result, \c tasks/cancel, \c tasks/list)
       - task-augmented tool calls using the standard \c params.task shape; the

@@ -106,9 +106,16 @@ class McpClientDataProviderTest inherits QUnit::Test {
         server.setDefaultHandler("mcp", mcpServer);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
-        # Create MCP client and initialize
+        # Create MCP client and initialize.
+        # This suite covers the data providers that wrap handshake-based protocol features —
+        # the ping provider and the event-stream notification provider — both of which were
+        # removed in @ref McpClient::McpVersion::V2026_07_28 "2026-07-28"; pin the client to
+        # the newest protocol version that still has them.  Modern-era provider behaviour is
+        # covered separately.
         string url = sprintf("http://localhost:%d/mcp", port);
-        client = new McpClient(url);
+        client = new McpClient(url, {
+            "protocol_version": McpClient::MCP_Version_Latest_Legacy,
+        });
         client.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
 
         # Create data provider

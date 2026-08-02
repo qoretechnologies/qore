@@ -74,7 +74,25 @@ public hashdecl McpTaskInfo {
     *hash<auto> error;
 
     #! Session that owns this task
+    /** Empty for tasks created for a \c modern client, which
+        has no protocol session: such tasks are addressed by their \c taskId alone.
+    */
     string sessionId;
+
+    #! Whether this task belongs to a modern client (tasks extension)
+    bool modern = False;
+
+    #! Server-to-client input requests this task is waiting on
+    /** Set while @ref McpTaskStatus::InputRequired "status" is \c input_required; the client
+        fulfills them with \c tasks/update.
+    */
+    *hash<auto> inputRequests;
+
+    #! Client responses to @ref inputRequests, accumulated across \c tasks/update calls
+    *hash<auto> inputResponses;
+
+    #! Opaque server state carried across a task's input round trips
+    auto requestState;
 
     #! The request ID that created this task (for cancellation tracking)
     *auto requestId;
@@ -260,6 +278,9 @@ public hashdecl McpToolCallContext {
     *hash<auto> arguments;
 
     #! MCP session ID
+    /** @note not set for requests using a
+        \c modern protocol version, which has no sessions
+    */
     *string sid;
 
     #! Network context
@@ -267,6 +288,21 @@ public hashdecl McpToolCallContext {
 
     #! The MCP server handler (for cancellation checks)
     *McpServerHandler handler;
+
+    #! Client responses to a previous \c InputRequiredResult, keyed by request identifier
+    /** Set when the client retries a request that previously returned an
+        \c InputRequiredResult; see
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()"
+    */
+    *hash<auto> inputResponses;
+
+    #! The server state carried through a Multi Round-Trip Request
+    /** The value the server passed to
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()" when it
+        suspended the original request, recovered from the verified \c requestState the client
+        echoed back
+    */
+    auto requestState;
 }
 
 # NOTE: MCP protocol constants (McpVersion, McpLogLevel, McpCompletionRefType enums,
@@ -286,8 +322,19 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         const McpSessionHeaderLwr = McpSessionHeader.lwr();
 
+        #! Lower-case names of the standard modern request-metadata headers
+        const McpProtocolVersionHeaderLwr = McpProtocolVersionHeader.lwr();
+        const McpMethodHeaderLwr = McpMethodHeader.lwr();
+        const McpNameHeaderLwr = McpNameHeader.lwr();
+        const McpParamHeaderPrefixLwr = McpParamHeaderPrefix.lwr();
+
+        #! The response to a legacy \c initialize request
+        /** @note the advertised \c protocolVersion is the newest <i>handshake-based</i>
+            revision; a client that sends \c initialize is by definition a legacy client, and
+            \c 2026-07-28 has no \c initialize method
+        */
         const ServerInfo = {
-            "protocolVersion": MCP_Version_Latest,
+            "protocolVersion": MCP_Version_Latest_Legacy,
             "capabilities": {
                 "logging": {},
                 "prompts": {
@@ -315,6 +362,88 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                 "name": McpServerName,
                 "version": McpServerVersion,
             }
+        };
+
+        #! Capabilities advertised to modern clients in the \c server/discover result
+        /** Sampling, roots, and logging are deprecated in
+            \c 2026-07-28 and are not advertised here;
+            resource subscriptions are expressed through
+            \c subscriptions/listen rather than a
+            \c resources.subscribe capability, and tasks moved out of the core protocol into
+            the \c tasks extension.
+        */
+        const ModernCapabilities = {
+            "prompts": {
+                "listChanged": True,
+            },
+            "resources": {
+                "listChanged": True,
+            },
+            "tools": {
+                "listChanged": True,
+            },
+            "completions": {},
+            "extensions": {
+                MCP_ExtensionTasks: {},
+            },
+        };
+
+        #! Methods that were removed in \c 2026-07-28
+        /** These remain fully functional for \c legacy
+            clients, but a modern request for one is answered with \c -32601 (method not
+            found) so that a client cannot silently depend on a removed feature.
+        */
+        const LegacyOnlyMethods = {
+            "initialize": True,
+            "notifications/initialized": True,
+            "ping": True,
+            "logging/setLevel": True,
+            "resources/subscribe": True,
+            "resources/unsubscribe": True,
+            "tasks/result": True,
+            "tasks/list": True,
+        };
+
+        #! Methods that only exist in \c 2026-07-28
+        const ModernOnlyMethods = {
+            "subscriptions/listen": True,
+            "tasks/update": True,
+        };
+
+        #! Methods whose results carry cache hints, and the hints to report
+        /** \c ttlMs is a freshness hint allowing clients to cache responses and reduce
+            polling; \c cacheScope controls whether shared intermediaries may cache the
+            response.  Both complement the \c listChanged notifications.
+        */
+        const CacheableMethods = {
+            "server/discover": {"ttlMs": 3600000, "cacheScope": "public"},
+            "tools/list": {"ttlMs": 60000, "cacheScope": "public"},
+            "prompts/list": {"ttlMs": 60000, "cacheScope": "public"},
+            "resources/list": {"ttlMs": 60000, "cacheScope": "public"},
+            "resources/templates/list": {"ttlMs": 60000, "cacheScope": "public"},
+            "resources/read": {"ttlMs": 0, "cacheScope": "private"},
+        };
+
+        #! Methods that may return an \c InputRequiredResult under the MRTR pattern
+        const MrtrMethods = {
+            "tools/call": True,
+            "prompts/get": True,
+            "resources/read": True,
+        };
+
+        #! Internal exception used to suspend a request pending client input
+        /** Raised by
+            @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()" and caught
+            by the @ref MrtrMethods "MRTR-capable methods", which convert it into an
+            \c InputRequiredResult.  Tool implementations must not catch it.
+        */
+        const InputRequiredException = "MCP-INPUT-REQUIRED";
+
+        #! Client capability required to send each kind of server-to-client input request
+        const InputRequestCapabilities = {
+            "elicitation/create": "elicitation",
+            "sampling/createMessage": "sampling",
+            "roots/list": "roots",
         };
 
         #! The input description for tools that do not require any input
@@ -375,6 +504,14 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         #! Default poll interval in milliseconds (5 seconds)
         int defaultPollInterval = 5000;
 
+        #! Default poll interval suggested to modern clients, in milliseconds
+        /** Polling is the primary completion mechanism in the
+            \c tasks extension, so the suggested interval must
+            suit short tasks; the session-scoped API that earlier protocol versions use has a
+            blocking \c tasks/result and can afford a much longer interval.
+        */
+        int modernPollInterval = 250;
+
         #! Maximum tasks per session
         int maxTasksPerSession = 100;
 
@@ -383,6 +520,64 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Elicitation request timeout in milliseconds (5 minutes)
         int elicitationTimeout = 300000;
+
+        #! Whether requests using a modern (stateless) protocol version are served
+        bool modern_enabled = True;
+
+        #! Whether requests using a legacy (\c initialize handshake) protocol version are served
+        bool legacy_enabled = True;
+
+        #! Codec for the opaque MRTR \c requestState
+        McpRequestState request_state();
+
+        #! Active modern subscription streams; stream key -> stream
+        hash<string, McpSubscriptionStream> submap;
+
+        #! Subscription info for streams being established; HTTP connection ID -> info
+        /** The SSE connection object is created by the HTTP server from <i>its</i> context
+            hash while sending the reply, not from the copy this handler modified, so the
+            subscription ID and negotiated notification filter cannot be passed through \c cx.
+            They are parked here between @ref handleSubscriptionsListen() and
+            @ref getConnectionImpl(), keyed by the HTTP connection ID that both see, since
+            the reply may be sent from a different thread than the one that handled the
+            request.  Access is serialized with the handler's read-write lock.
+        */
+        hash<string, hash<auto>> pending_subs;
+
+        #! Optional natural-language guidance returned by \c server/discover
+        *string instructions;
+
+        #! Tasks created for modern clients; task ID -> task info
+        /** The \c tasks extension is session-free: a task ID
+            is a durable handle that survives disconnects and can be polled from any
+            connection, so modern tasks cannot live in the per-session map.
+        */
+        hash<string, hash<McpTaskInfo>> mtasks;
+
+        #! Caller idempotency keys for modern tasks; clientOperationId -> taskId
+        hash<string, string> mtask_operation_ids;
+
+        #! Text names of every method registered with this handler
+        /** JsonRpcHandler keeps its method table \c private:internal, so it is tracked here as
+            well; a modern request for a method that is not registered must be answered with
+            HTTP 404 and \c -32601 before dispatch, which requires knowing the method set up
+            front.
+        */
+        hash<string, bool> method_names = {};
+    }
+
+    #! Registers a list of JSON-RPC methods with this handler
+    /** Reimplemented to track the registered method names; see @ref method_names.
+
+        @param methods the method definitions; see \c JsonRpcHandler::addMethods()
+    */
+    addMethods(list<auto> methods) {
+        JsonRpcHandler::addMethods(methods);
+        foreach hash<auto> m in (methods) {
+            if (m.text.typeCode() == NT_STRING) {
+                method_names{m.text} = True;
+            }
+        }
     }
 
     #! Creates the handler
@@ -490,7 +685,454 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         return "s" + rid++;
     }
 
+    #! Enables or disables support for modern (stateless) protocol versions
+    /** @param enabled if @ref False, requests carrying per-request protocol metadata are
+            rejected with an \c UnsupportedProtocolVersionError naming the legacy versions this server supports
+
+        @note disabling both eras leaves the server unable to serve any client
+    */
+    setModernEnabled(bool enabled) {
+        modern_enabled = enabled;
+    }
+
+    #! Returns @ref True if modern (stateless) protocol versions are served
+    bool getModernEnabled() {
+        return modern_enabled;
+    }
+
+    #! Enables or disables support for legacy (\c initialize handshake) protocol versions
+    /** Disabling legacy support makes this a modern-only server: \c initialize is rejected
+        with an error naming the versions this server does support (legacy clients have no
+        fall-forward mechanism, so this message may be the only diagnostic a user sees), and
+        HTTP \c GET and \c DELETE on the MCP endpoint are answered with \c 405.
+
+        @param enabled if @ref False, legacy requests are rejected
+    */
+    setLegacyEnabled(bool enabled) {
+        legacy_enabled = enabled;
+    }
+
+    #! Returns @ref True if legacy (\c initialize handshake) protocol versions are served
+    bool getLegacyEnabled() {
+        return legacy_enabled;
+    }
+
+    #! Sets the natural-language guidance returned to modern clients by \c server/discover
+    /** @param instructions guidance for LLMs on how to use this server effectively
+    */
+    setInstructions(*string instructions) {
+        self.instructions = instructions;
+    }
+
+    #! Returns the protocol versions this server supports, newest first
+    /** @return the versions reported in \c server/discover results and in
+        \c UnsupportedProtocolVersionError
+        \c data.supported members
+    */
+    list<string> getSupportedVersions() {
+        list<string> rv = ();
+        foreach string v in (McpSupportedVersions) {
+            if (mcp_is_modern_version(v) ? modern_enabled : legacy_enabled) {
+                rv += v;
+            }
+        }
+        return rv;
+    }
+
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        # discard any error data left parked by a request that did not complete normally, so
+        # that it cannot leak into this request on a reused thread
+        McpCallContextHelper::takeErrorData();
+
+        # The protocol era is a property of the request, not of the connection: modern MCP is
+        # stateless, so a request that carries per-request protocol metadata is served
+        # statelessly regardless of anything that came before it on the same connection.
+        if (*hash<auto> req = getModernRequest(cx, b)) {
+            return handleModernRequest(cx, hdr, b, req);
+        }
+        if (!legacy_enabled) {
+            return rejectLegacyRequest(cx, hdr, b);
+        }
+        return handleLegacyRequest(cx, hdr, b);
+    }
+
+    #! Returns the parsed request if it declares a protocol version in its \c _meta member
+    /** A request that carries \c protocolVersion in its
+        parameters' \c _meta member is a modern request.  Bodies that are not a single JSON-RPC
+        object, and bodies that cannot be parsed, are left to the legacy path so that the
+        existing JSON-RPC error handling reports them.
+
+        @param cx the HTTP context
+        @param b the request body
+
+        @return the parsed JSON-RPC request, or @ref nothing if this is not a modern request
+    */
+    private *hash<auto> getModernRequest(hash<auto> cx, *data b) {
+        if (cx.hdr.method != "POST" || !b.val()) {
+            return;
+        }
+        auto req;
+        try {
+            req = parse_json(b);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (req.typeCode() != NT_HASH || req.method.typeCode() != NT_STRING) {
+            return;
+        }
+        return mcp_request_protocol_version(req.params).val() ? req : NOTHING;
+    }
+
+    #! Returns the parsed body if it is a JSON-RPC response rather than a request
+    /** Protocol revisions up to 2025-11-25 let a server send requests to the client on the
+        event stream; the client posts its answers back to the MCP endpoint as ordinary
+        JSON-RPC responses.
+
+        @param b the request body
+
+        @return the parsed response, or @ref nothing if the body is not a JSON-RPC response
+    */
+    private *hash<auto> getClientResponse(*data b) {
+        if (!b.val()) {
+            return;
+        }
+        auto msg;
+        try {
+            msg = parse_json(b);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (msg.typeCode() != NT_HASH || !exists msg.id || msg.hasKey("method")) {
+            return;
+        }
+        return msg.hasKey("result") || msg.hasKey("error") ? msg : NOTHING;
+    }
+
+    #! Serves a request that declares a modern protocol version
+    private hash<HttpResponseInfo> handleModernRequest(hash<auto> cx, hash<auto> hdr, *data b,
+            hash<auto> req) {
+        string method = req.method;
+        auto id = req.id;
+        *hash<auto> params = req.params;
+        string version = mcp_request_protocol_version(params);
+
+        if (!modern_enabled || !mcp_is_modern_version(version)) {
+            return makeMcpErrorResponse(400, id, MCP_Err_UnsupportedProtocolVersion,
+                sprintf("this server does not implement MCP protocol version %y", version), {
+                    "supported": getSupportedVersions(),
+                    "requested": version,
+                });
+        }
+
+        # Make the per-request protocol metadata visible before anything else runs, so that
+        # validation hooks a subclass may override see the same context the method
+        # implementations will; cx is copied into the method call by
+        # JsonRpcHandler::callMethod().
+        cx += {
+            "mcp_modern": True,
+            "mcp_version": version,
+            "mcp_method": method,
+            "mcp_client_capabilities": params._meta{MCP_MetaClientCapabilities} ?? {},
+            "mcp_client_info": params._meta{MCP_MetaClientInfo},
+            "mcp_log_level": params._meta{MCP_MetaLogLevel},
+            "mcp_principal": getRequestPrincipal(cx, hdr),
+        };
+
+        # a JSON-RPC notification carries no id; this revision defines no header requirements
+        # for notification POSTs, so header validation applies to requests only
+        if (exists id) {
+            if (*hash<auto> err = validateModernHeaders(cx, hdr, method, params, version)) {
+                return makeMcpErrorResponse(400, id, MCP_Err_HeaderMismatch, err.message);
+            }
+            if (params._meta{MCP_MetaClientCapabilities}.typeCode() != NT_HASH) {
+                return makeMcpErrorResponse(400, id, JRE_InvalidParams,
+                    sprintf("request is missing the required %y member of its \"_meta\" field",
+                        MCP_MetaClientCapabilities));
+            }
+        }
+
+        if (LegacyOnlyMethods{method} || !isKnownMethod(method)) {
+            return makeMcpErrorResponse(404, id, JRE_MethodNotFound,
+                sprintf("this server does not implement method %y in MCP protocol version %y",
+                    method, version));
+        }
+
+        # subscriptions/listen is answered with a long-lived SSE stream rather than a body, so
+        # it cannot go through the JSON-RPC response path
+        if (method == "subscriptions/listen") {
+            return handleSubscriptionsListen(cx, hdr, b, req);
+        }
+
+        return decorateModernResponse(cx, JsonRpcHandler::handleRequest(cx, hdr, b));
+    }
+
+    #! Rejects a legacy request on a server configured to serve modern versions only
+    /** Legacy clients have no fall-forward mechanism, so the error names the versions this
+        server does support; that message may be the only diagnostic surfaced to the user.
+    */
+    private hash<HttpResponseInfo> rejectLegacyRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        if (cx.hdr.method == "GET" || cx.hdr.method == "DELETE") {
+            return AbstractHttpRequestHandler::makeResponse(405,
+                sprintf("this MCP endpoint only supports POST; MCP protocol sessions and the "
+                    "GET event stream were removed in %s", MCP_Version_Latest));
+        }
+        auto id;
+        if (b.val()) {
+            try {
+                id = parse_json(b).id;
+            } catch (hash<ExceptionInfo> ex) {
+                # leave the id unset
+            }
+        }
+        return makeMcpErrorResponse(400, id, MCP_Err_UnsupportedProtocolVersion,
+            sprintf("this server does not implement handshake-based MCP protocol versions; "
+                "supported versions: %y", getSupportedVersions()), {
+                "supported": getSupportedVersions(),
+            });
+    }
+
+    #! Returns the authenticated principal for a request, if any
+    /** Used to bind MRTR @ref McpRequestState "request state" to the principal it was issued
+        for, so that state minted for one user cannot be presented by another.  The default
+        implementation returns the authenticated user from the HTTP context; reimplement in
+        subclasses that authenticate differently.
+
+        @param cx the HTTP context
+        @param hdr the request headers
+
+        @return the authenticated principal, or @ref nothing if the request is unauthenticated
+    */
+    *string getRequestPrincipal(hash<auto> cx, hash<auto> hdr) {
+        return cx.user;
+    }
+
+    #! Returns @ref True if the given method is registered with this handler
+    private bool isKnownMethod(string method) {
+        return method_names{method} ?? False;
+    }
+
+    #! Builds an HTTP response carrying a JSON-RPC error
+    /** @param code the HTTP status code
+        @param id the JSON-RPC request ID, if any
+        @param error_code the JSON-RPC error code
+        @param message the error message
+        @param data optional structured error data
+
+        @return the HTTP response
+    */
+    private hash<HttpResponseInfo> makeMcpErrorResponse(int code, auto id, int error_code,
+            string message, *hash<auto> data) {
+        hash<auto!> err = {
+            "code": error_code,
+            "message": message,
+        };
+        if (data) {
+            err.data = data;
+        }
+        return <HttpResponseInfo>{
+            "code": code,
+            "errlog": message,
+            "hdr": {
+                "Content-Type": MimeTypeJsonRpc,
+            },
+            "body": make_jsonrpc_error("2.0", id, err),
+        };
+    }
+
+    #! Validates the standard modern request-metadata headers against the request body
+    /** Servers must reject requests whose header values do not match the corresponding body
+        values: different components in the network otherwise rely on different sources of
+        truth (a load balancer routing on the header while the server executes on the body).
+
+        @return @ref nothing if the headers are valid, otherwise a hash with a \c message key
+            describing the first mismatch found
+    */
+    private *hash<auto> validateModernHeaders(hash<auto> cx, hash<auto> hdr, string method,
+            *hash<auto> params, string version) {
+        *string hdr_version = hdr{McpProtocolVersionHeaderLwr};
+        if (!hdr_version.val()) {
+            return {"message": sprintf("required header %y is missing", McpProtocolVersionHeader)};
+        }
+        if (hdr_version != version) {
+            return {"message": sprintf("%s header value %y does not match the %y value %y in "
+                "the request body", McpProtocolVersionHeader, hdr_version,
+                MCP_MetaProtocolVersion, version)};
+        }
+
+        *string hdr_method = hdr{McpMethodHeaderLwr};
+        if (!hdr_method.val()) {
+            return {"message": sprintf("required header %y is missing", McpMethodHeader)};
+        }
+        if (hdr_method != method) {
+            return {"message": sprintf("%s header value %y does not match the request body "
+                "method %y", McpMethodHeader, hdr_method, method)};
+        }
+
+        *string name = mcp_name_header_value(method, params);
+        *string hdr_name = hdr{McpNameHeaderLwr};
+        if (exists name) {
+            if (!exists hdr_name) {
+                return {"message": sprintf("required header %y is missing for method %y",
+                    McpNameHeader, method)};
+            }
+            string decoded;
+            try {
+                decoded = mcp_decode_header_value(hdr_name);
+            } catch (hash<ExceptionInfo> ex) {
+                return {"message": sprintf("%s header is malformed: %s", McpNameHeader, ex.desc)};
+            }
+            if (decoded != name) {
+                return {"message": sprintf("%s header value %y does not match the request body "
+                    "value %y", McpNameHeader, decoded, name)};
+            }
+        }
+
+        return validateModernParamHeaders(cx, hdr, method, params);
+    }
+
+    #! Validates \c Mcp-Param-* headers against the tool's input schema and call arguments
+    private *hash<auto> validateModernParamHeaders(hash<auto> cx, hash<auto> hdr, string method,
+            *hash<auto> params) {
+        # gather the Mcp-Param-* headers actually present on the request
+        hash<string, string> present = {};
+        foreach hash<auto> i in (hdr.pairIterator()) {
+            if (i.key.typeCode() == NT_STRING && i.value.typeCode() == NT_STRING
+                && i.key.equalPartial(McpParamHeaderPrefixLwr)
+                && i.key.size() > McpParamHeaderPrefixLwr.size()) {
+                present{i.key} = i.value;
+            }
+        }
+
+        hash<string, string> expected = {};
+        if (method == "tools/call") {
+            *hash<McpToolInfo> info = tmap{params.name};
+            if (info) {
+                try {
+                    # validate against the schema the client was actually given
+                    expected = mcp_extract_header_params(getToolInputSchema(cx, info),
+                        params.arguments);
+                } catch (hash<ExceptionInfo> ex) {
+                    # an invalid annotation is a server-side defect, not a client error: do not
+                    # reject the call over headers the client could not have known to send
+                    error("tool %y has invalid %s annotations, not validating %s* headers: %s",
+                        params.name, McpHeaderAnnotation, McpParamHeaderPrefix, ex.desc);
+                    return;
+                }
+            }
+        }
+
+        hash<string, bool> expected_lwr = {};
+        foreach hash<auto> i in (expected.pairIterator()) {
+            string key = i.key.lwr();
+            expected_lwr{key} = True;
+            if (!present.hasKey(key)) {
+                return {"message": sprintf("required header %y is missing", i.key)};
+            }
+            if (!modernParamHeaderMatches(present{key}, i.value)) {
+                return {"message": sprintf("%s header value %y does not match the corresponding "
+                    "request body value", i.key, present{key})};
+            }
+        }
+        foreach string key in (keys present) {
+            if (!expected_lwr{key}) {
+                return {"message": sprintf("header %y does not correspond to any parameter of "
+                    "method %y annotated with %y", key, method, McpHeaderAnnotation)};
+            }
+        }
+        return;
+    }
+
+    #! Compares a received \c Mcp-Param-* header value with the expected encoded value
+    /** Integer values are compared numerically rather than as strings, so that \c "42.0" and
+        \c "42" are considered equal.
+    */
+    private bool modernParamHeaderMatches(string received, string expected) {
+        string a;
+        string e;
+        try {
+            a = mcp_decode_header_value(received);
+            e = mcp_decode_header_value(expected);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        if (a == e) {
+            return True;
+        }
+        # numeric comparison for integer parameters
+        if (regex(a, "^-?[0-9]+(\\.0+)?$") && regex(e, "^-?[0-9]+(\\.0+)?$")) {
+            return a.toNumber() == e.toNumber();
+        }
+        return False;
+    }
+
+    #! Adds the required per-result protocol members to a modern JSON-RPC response
+    /** Every modern result must carry a \c resultType discriminator; servers should identify
+        themselves in each result's \c _meta, and results of cacheable operations must carry
+        \c ttlMs and \c cacheScope.  Error responses have their HTTP status corrected to match
+        the JSON-RPC error they carry.
+
+        Applying this centrally, rather than at each method's return statement, guarantees that
+        no method can omit a required member.
+    */
+    private hash<HttpResponseInfo> decorateModernResponse(hash<auto> cx,
+            hash<HttpResponseInfo> rv) {
+        if (!rv.body.val()) {
+            return rv;
+        }
+        auto msg;
+        try {
+            msg = parse_json(rv.body);
+        } catch (hash<ExceptionInfo> ex) {
+            return rv;
+        }
+        if (msg.typeCode() != NT_HASH) {
+            return rv;
+        }
+
+        if (msg.hasKey("error")) {
+            if (*hash<auto> data = McpCallContextHelper::takeErrorData()) {
+                msg.error.data = data;
+                rv.body = make_json(msg);
+            }
+            rv."code" = getModernErrorStatus(msg.error.code);
+            return rv;
+        }
+        McpCallContextHelper::takeErrorData();
+        if (!msg.hasKey("result") || msg.result.typeCode() != NT_HASH) {
+            return rv;
+        }
+
+        hash<auto> result = msg.result;
+        if (!result.resultType.val()) {
+            result.resultType = McpResultType::Complete;
+        }
+        if (!result._meta{MCP_MetaServerInfo}) {
+            result._meta{MCP_MetaServerInfo} = ServerInfo.serverInfo;
+        }
+        if (*hash<auto> cache = CacheableMethods{cx.mcp_method}) {
+            result += cache - keys result;
+        }
+        msg.result = result;
+        rv.body = make_json(msg);
+        return rv;
+    }
+
+    #! Returns the HTTP status code that must accompany the given JSON-RPC error code
+    private static int getModernErrorStatus(auto code) {
+        switch (code) {
+            case JRE_MethodNotFound:
+                return 404;
+            case MCP_Err_HeaderMismatch:
+            case MCP_Err_MissingRequiredClientCapability:
+            case MCP_Err_UnsupportedProtocolVersion:
+            case JRE_InvalidParams:
+                return 400;
+        }
+        return 200;
+    }
+
+    #! Serves a request using a legacy (\c initialize handshake) protocol version
+    private hash<HttpResponseInfo> handleLegacyRequest(hash<auto> cx, hash<auto> hdr, *data b) {
         *string session;
         # Track whether this is an SSE client (session from query param) vs streamable (session from header)
         bool sse_session = False;
@@ -545,6 +1187,16 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             }
             return AbstractHttpRequestHandler::makeResponse(405, "Client does not accept SSE responses");
         }
+
+        # A body carrying an ID and a result or error, but no method, is the client's answer to
+        # a request this server sent on the event stream (sampling, elicitation, or roots).  It
+        # is not a JSON-RPC call, so it must be routed to the waiting request rather than
+        # dispatched as a method — without this the server would block until its timeout.
+        if (*hash<auto> response = getClientResponse(b)) {
+            handleClientResponse(cx, response);
+            return <HttpResponseInfo>{"code": 202};
+        }
+
         last_init_session = NOTHING;
         hash<HttpResponseInfo> rv = JsonRpcHandler::handleRequest(cx, hdr, b);
         # Pick up session created by initialize() for streamable HTTP clients
@@ -604,10 +1256,21 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #! Called when a connection is established; the default implementation creates a ServerSentEventConnection object
-    /** SSE connections use the 2024-11-05 protocol version.
+    /** A stream opened by a modern \c subscriptions/listen request becomes an
+        @ref McpSubscriptionStream "McpSubscriptionStream"; a legacy \c GET stream becomes an
+        @ref McpServerConnection "McpServerConnection" using the 2024-11-05 protocol version.
     */
     ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
-        # SSE connections use the 2024-11-05 protocol
+        *hash<auto> sub_info;
+        {
+            AutoWriteLock al(rwl);
+            sub_info = remove pending_subs{cx.id.toString()};
+        }
+        if (sub_info) {
+            return new McpSubscriptionStream(self, sock, cx + {"mcp_subscription": sub_info},
+                hdr, cid);
+        }
+        # legacy SSE connections use the 2024-11-05 protocol
         return new McpServerConnection(self, sock, cx, hdr, cid, McpVersion::V2024_11_05);
     }
 
@@ -644,6 +1307,23 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     #! Returns the session timeout in seconds
     int getSessionTimeout() {
         return session_timeout_secs;
+    }
+
+    #! Sets the poll interval suggested to modern clients for tasks, in milliseconds
+    /** @param interval_ms the interval reported as \c pollIntervalMs in task handles
+
+        @throw MCP-SERVER-ARG-ERROR the interval is not positive
+    */
+    setModernPollInterval(int interval_ms) {
+        if (interval_ms <= 0) {
+            throw "MCP-SERVER-ARG-ERROR", "the task poll interval must be positive";
+        }
+        modernPollInterval = interval_ms;
+    }
+
+    #! Returns the poll interval suggested to modern clients for tasks, in milliseconds
+    int getModernPollInterval() {
+        return modernPollInterval;
     }
 
     #! Cleans up expired sessions
@@ -724,12 +1404,24 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     #! Called while holding the write lock to register the new connection
     private registerNewConnectionIntern(string cid, ServerSentEventConnection conn) {
         ServerSentEventHandler::registerNewConnectionIntern(cid, conn);
+        if (conn instanceof McpSubscriptionStream) {
+            McpSubscriptionStream stream = cast<McpSubscriptionStream>(conn);
+            submap{stream.uniqueHash()} = stream;
+            return;
+        }
         McpServerConnection mcp_conn = cast<McpServerConnection>(conn);
         smap{mcp_conn.getSession()}.ssemap{mcp_conn.uniqueHash()} = mcp_conn;
     }
 
     #! Called when an SSE connection terminates
     deregisterConnectionImpl(ServerSentEventConnection conn) {
+        if (conn instanceof McpSubscriptionStream) {
+            McpSubscriptionStream stream = cast<McpSubscriptionStream>(conn);
+            info("subscription stream %y closed", stream.getSubscriptionId());
+            AutoWriteLock al(rwl);
+            remove submap{stream.uniqueHash()};
+            return;
+        }
         McpServerConnection mcp_conn = cast<McpServerConnection>(conn);
         string sessionId = mcp_conn.getSession();
         info("SSE connection closed for session %y", sessionId);
@@ -764,13 +1456,31 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         };
     }
 
+    #! Returns the input schema advertised for a tool
+    /** Both \c tools/list and the \c Mcp-Param-* header validation go through this method, so
+        that the server validates against exactly the schema the client was given.
+        Reimplement in subclasses that decorate or compute a tool's schema — for example to add
+        \c x-mcp-header annotations.
+
+        @param cx the request context
+        @param info the registered tool
+
+        @return the tool's \c inputSchema
+    */
+    *hash<auto> getToolInputSchema(hash<auto> cx, hash<McpToolInfo> info) {
+        return info.input;
+    }
+
     private *list<hash<auto>> getToolList(hash<auto> cx) {
         list<hash<auto>> rv = ();
-        foreach hash<McpToolInfo> tool in (tmap.iterator()) {
+        # return tools in a deterministic order so that clients can cache the list and so that
+        # LLM prompt caches see a stable prefix
+        foreach string name in (sort(keys tmap)) {
+            hash<McpToolInfo> tool = tmap{name};
             hash<auto!> info = {
                 "name": tool.name,
                 "description": tool.description,
-                "inputSchema": tool.input,
+                "inputSchema": getToolInputSchema(cx, tool),
             };
             if (tool.extra.execution) {
                 info.execution = tool.extra.execution;
@@ -784,6 +1494,14 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         try {
             return toolsCallIntern(cx, params);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == InputRequiredException) {
+                return makeInputRequiredResult(cx, "tools/call", params, ex.arg);
+            }
+            # a missing client capability is a protocol error, not a tool error: it must reach
+            # the client as a JSON-RPC error so that it can declare the capability and retry
+            if (ex.err == "MCP-CAPABILITY-ERROR" || ex.err == "MCP-REQUEST-STATE-ERROR") {
+                rethrow;
+            }
             error("Error executing tool with params %y: %s", params, get_exception_string(ex));
             return {
                 "content": ({
@@ -811,14 +1529,44 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     private *hash<auto> resourcesRead(hash<auto> cx, *hash<auto> params) {
-        return resourcesReadIntern(cx, params);
+        try {
+            McpCallContextHelper mcch(makeRequestCallContext(cx, "resources/read", params));
+            return resourcesReadIntern(cx, params);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == InputRequiredException) {
+                return makeInputRequiredResult(cx, "resources/read", params, ex.arg);
+            }
+            rethrow;
+        }
+    }
+
+    #! Builds the call context for a non-tool request that may use MRTR
+    /** Tool calls build a richer context in \c toolsCallIntern(); prompt and resource handlers
+        get this one so that they can call
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()" too.
+    */
+    private hash<McpToolCallContext> makeRequestCallContext(hash<auto> cx, string method,
+            *hash<auto> params) {
+        hash<auto> mrtr = cx.mcp_modern ? getMrtrRetryContext(cx, method, params) : {};
+        return <McpToolCallContext>{
+            "name": method,
+            "description": method,
+            "sid": cx.mcp_session,
+            "arguments": params,
+            "cx": cx,
+            "handler": self,
+            "inputResponses": mrtr.inputResponses,
+            "requestState": mrtr.requestState,
+        };
     }
 
     private *hash<auto> resourcesReadIntern(hash<auto> cx, *hash<auto> params) {
         *hash<McpResourceInfo> info = rmap{params.uri};
         if (!info) {
+            # modern servers report an unknown resource with the JSON-RPC standard "invalid
+            # params" code; earlier revisions used -32002, which is now reserved
             throw "MCP-SERVER-ARG-ERROR", sprintf("Resource %y is unknown; known resources: %y", params.uri,
-                keys rmap);
+                keys rmap), cx.mcp_modern ? JRE_InvalidParams : MCP_Err_LegacyResourceNotFound;
         }
         if (!info.reader) {
             throw "MCP-SERVER-ARG-ERROR", sprintf("Resource %y does not have a reader defined", params.uri);
@@ -860,8 +1608,15 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     private *hash<auto> promptsGet(hash<auto> cx, *hash<auto> params) {
         try {
+            McpCallContextHelper mcch(makeRequestCallContext(cx, "prompts/get", params));
             return promptsGetIntern(cx, params);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == InputRequiredException) {
+                return makeInputRequiredResult(cx, "prompts/get", params, ex.arg);
+            }
+            if (ex.err == "MCP-CAPABILITY-ERROR" || ex.err == "MCP-REQUEST-STATE-ERROR") {
+                rethrow;
+            }
             error("Error getting prompt with params %y: %s", params, get_exception_string(ex));
             throw "MCP-PROMPT-ERROR", sprintf("%s: %s", ex.err, ex.desc);
         }
@@ -897,7 +1652,11 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             throw "MCP-SERVER-ARG-ERROR", "Missing or invalid protocolVersion";
         }
         hash<auto> rv = ServerInfo;
-        if (AllMcpVersions{params.protocolVersion}) {
+        # only a legacy version can be negotiated here: a client that sends "initialize" is by
+        # definition speaking a handshake-based revision.  A client asking for a modern version
+        # is answered with the newest legacy version so that it can either continue in legacy
+        # mode or switch to per-request metadata.
+        if (McpLegacyVersions{params.protocolVersion}) {
             rv.protocolVersion = params.protocolVersion;
         }
         # Create a session for streamable HTTP clients that don't have one yet;
@@ -918,6 +1677,183 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     *hash<auto> initialized(hash<auto> cx, *hash<auto> params) {
+    }
+
+    #! Handles \c server/discover requests
+    /** Reports the protocol versions this server supports, its capabilities, and its identity
+        in a single request, so that a client can select a version up front instead of
+        discovering it from an
+        \c UnsupportedProtocolVersionError.
+
+        Servers must implement this method; it is also the backward-compatibility probe a
+        dual-era client uses on transports that have no per-request status code.
+
+        @param cx the context hash
+        @param params the request parameters (none beyond the standard \c _meta)
+
+        @return the \c DiscoverResult hash
+    */
+    private hash<auto> serverDiscover(hash<auto> cx, *hash<auto> params) {
+        hash<auto!> rv = {
+            "supportedVersions": getSupportedVersions(),
+            "capabilities": getDiscoverCapabilities(cx),
+        };
+        if (instructions.val()) {
+            rv.instructions = instructions;
+        }
+        return rv;
+    }
+
+    #! Returns the capabilities reported by \c server/discover
+    /** Reimplement in subclasses to advertise additional capabilities or extensions.
+
+        @param cx the context hash
+
+        @return the capability hash
+    */
+    hash<auto> getDiscoverCapabilities(hash<auto> cx) {
+        return ModernCapabilities;
+    }
+
+    #! Handles a \c subscriptions/listen request by opening a long-lived SSE response stream
+    /** The response to \c subscriptions/listen is itself an SSE stream that stays open and
+        delivers the change notifications the client opted in to.  Returning a response with
+        \c Content-Type: \c text/event-stream hands the connection to the async I/O
+        controller, which then calls @ref getConnectionImpl() to create the stream object.
+    */
+    private hash<HttpResponseInfo> handleSubscriptionsListen(hash<auto> cx, hash<auto> hdr,
+            *data b, hash<auto> req) {
+        if (!exists req.id) {
+            return makeMcpErrorResponse(400, NOTHING, JRE_InvalidRequest,
+                "subscriptions/listen must be sent as a request, not as a notification");
+        }
+        if (!clientAcceptsSse(hdr)) {
+            return makeMcpErrorResponse(400, req.id, JRE_InvalidRequest,
+                sprintf("subscriptions/listen requires a client that accepts %y responses",
+                    MimeTypeSse));
+        }
+        # the subscription ID is the JSON-RPC ID of the request that opened the stream
+        {
+            AutoWriteLock al(rwl);
+            pending_subs{cx.id.toString()} = {
+                "id": req.id,
+                "notifications": negotiateSubscriptionFilter(req.params.notifications),
+            };
+        }
+        hash<HttpResponseInfo> rv = ServerSentEventHandler::handleRequest(cx, hdr, b);
+        if (rv.hdr."Content-Type" != MimeTypeSse) {
+            # the stream will not be established, so getConnectionImpl() will never claim it
+            AutoWriteLock al(rwl);
+            remove pending_subs{cx.id.toString()};
+        }
+        return rv;
+    }
+
+    #! JSON-RPC entry point for the @ref ModernOnlyMethods "modern-only" methods
+    /** Modern requests for \c subscriptions/listen are intercepted in @ref handleRequest() and
+        answered with an SSE response stream, so dispatch only reaches this method for a legacy
+        request — for which the method genuinely does not exist.
+    */
+    private hash<auto> subscriptionsListen(hash<auto> cx, *hash<auto> params) {
+        checkModernOnlyMethod(cx, "subscriptions/listen");
+        throw "MCP-SUBSCRIPTION-ERROR", "subscriptions/listen requires a response stream, "
+            "which could not be established for this request", JRE_InvalidRequest;
+    }
+
+    #! Throws method-not-found if a @ref ModernOnlyMethods "modern-only" method is called by a
+    #! client using a handshake-based protocol version
+    private checkModernOnlyMethod(hash<auto> cx, string method) {
+        if (cx.mcp_modern || !ModernOnlyMethods{method}) {
+            return;
+        }
+        throw "MCP-SERVER-ARG-ERROR", sprintf("method %y was introduced in MCP protocol "
+            "version %s and is not available to clients using handshake-based protocol "
+            "versions", method, MCP_Version_Latest), JRE_MethodNotFound;
+    }
+
+    #! Returns the subset of a requested notification filter that this server will honor
+    /** The acknowledgment sent to the client reflects this subset; notification types the
+        server does not support are omitted, and the client is expected to handle their
+        absence gracefully.
+
+        @param requested the \c notifications member of the \c subscriptions/listen request
+
+        @return the negotiated filter
+    */
+    private hash<auto> negotiateSubscriptionFilter(auto requested) {
+        hash<auto!> rv = {};
+        if (requested.typeCode() != NT_HASH) {
+            return rv;
+        }
+        foreach string key in (("toolsListChanged", "promptsListChanged",
+                "resourcesListChanged", "tasksStatus")) {
+            if (requested{key} === True) {
+                rv{key} = True;
+            }
+        }
+        if (requested.resourceSubscriptions.typeCode() == NT_LIST) {
+            # only honor subscriptions for resources this server actually serves
+            list<string> uris = ();
+            foreach auto uri in (requested.resourceSubscriptions) {
+                if (uri.typeCode() == NT_STRING && rmap{uri}) {
+                    uris += uri;
+                }
+            }
+            if (uris) {
+                rv.resourceSubscriptions = uris;
+            }
+        }
+        return rv;
+    }
+
+    #! Delivers a notification to every modern subscription stream that opted in to it
+    /** @param type the notification filter key (e.g. \c "toolsListChanged"); the JSON-RPC
+            method is derived from it by
+            @ref McpSubscriptionStream::NotificationMethodMap "NotificationMethodMap"
+        @param params the notification parameters
+        @param uri for resource updates, the URI that changed
+    */
+    private notifySubscribers(string type, *hash<auto> params, *string uri) {
+        list<McpSubscriptionStream> streams;
+        {
+            AutoReadLock al(rwl);
+            streams = map $1, submap.iterator();
+        }
+        foreach McpSubscriptionStream stream in (streams) {
+            try {
+                stream.notify(type, params, uri);
+            } catch (hash<ExceptionInfo> ex) {
+                error("error delivering %y to subscription %y: %s", type,
+                    stream.getSubscriptionId(), get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Closes every modern subscription stream gracefully
+    /** Sends the empty \c subscriptions/listen response on each stream before closing it, so
+        that clients can distinguish an orderly shutdown from an abrupt transport drop.
+    */
+    closeSubscriptions() {
+        list<McpSubscriptionStream> streams;
+        {
+            AutoWriteLock al(rwl);
+            streams = map $1, submap.iterator();
+            submap = {};
+        }
+        foreach McpSubscriptionStream stream in (streams) {
+            try {
+                stream.closeGracefully();
+            } catch (hash<ExceptionInfo> ex) {
+                error("error closing subscription %y: %s", stream.getSubscriptionId(),
+                    get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Returns the number of active modern subscription streams
+    int getSubscriptionCount() {
+        AutoReadLock al(rwl);
+        return submap.size();
     }
 
     hash<auto> ping(hash<auto> cx, *hash<auto> params) {
@@ -1535,6 +2471,9 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Handle tasks/get request - get task status by ID
     private *hash<auto> tasksGet(hash<auto> cx, *hash<auto> params) {
+        if (cx.mcp_modern) {
+            return modernTasksGet(cx, params);
+        }
         string sessionId = cx.mcp_session;
         if (!sessionId.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
@@ -1549,6 +2488,21 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
 
         return getTaskResponse(task);
+    }
+
+    #! Handle tasks/update request - provide requested input to a task awaiting it
+    /** Part of the \c tasks extension: when a task moves to
+        @ref McpTaskStatus::InputRequired "input_required", its \c tasks/get response carries an
+        \c inputRequests map; the client fulfills those requests and submits the answers here.
+
+        @param cx the context hash
+        @param params must contain \c taskId, and should contain \c inputResponses
+
+        @return an empty acknowledgment
+    */
+    private *hash<auto> tasksUpdate(hash<auto> cx, *hash<auto> params) {
+        checkModernOnlyMethod(cx, "tasks/update");
+        return modernTasksUpdate(cx, params);
     }
 
     #! Handle tasks/result request - block until task completes and return result
@@ -1635,6 +2589,9 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Handle tasks/cancel request - cancel a running task
     private *hash<auto> tasksCancel(hash<auto> cx, *hash<auto> params) {
+        if (cx.mcp_modern) {
+            return modernTasksCancel(cx, params);
+        }
         string sessionId = cx.mcp_session;
         if (!sessionId.val()) {
             throw "MCP-SESSION-ERROR", "No session ID in request";
@@ -1790,7 +2747,10 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #! Notifies all subscribers of a resource update
-    /** @param uri the URI of the updated resource
+    /** Delivered to legacy sessions that subscribed with \c resources/subscribe and to modern
+        \c subscriptions/listen streams that included the URI in \c resourceSubscriptions.
+
+        @param uri the URI of the updated resource
     */
     notifyResourceUpdated(string uri) {
         # Collect connections under read lock
@@ -1807,6 +2767,50 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
         foreach McpServerConnection conn in (conns) {
             conn.sendNotification("notifications/resources/updated", {"uri": uri});
+        }
+        notifySubscribers("resourceSubscriptions", {"uri": uri}, uri);
+    }
+
+    #! Notifies clients that the tool list has changed
+    /** Sent to legacy sessions with an open event stream and to modern
+        \c subscriptions/listen streams that opted in to \c toolsListChanged.
+    */
+    notifyToolsListChanged() {
+        broadcastLegacyNotification(\McpServerConnection::sendToolsChangedNotification());
+        notifySubscribers("toolsListChanged");
+    }
+
+    #! Notifies clients that the resource list has changed
+    /** @see @ref notifyToolsListChanged() */
+    notifyResourcesListChanged() {
+        broadcastLegacyNotification(\McpServerConnection::sendResourcesChangedNotification());
+        notifySubscribers("resourcesListChanged");
+    }
+
+    #! Notifies clients that the prompt list has changed
+    /** @see @ref notifyToolsListChanged() */
+    notifyPromptsListChanged() {
+        broadcastLegacyNotification(\McpServerConnection::sendPromptsChangedNotification());
+        notifySubscribers("promptsListChanged");
+    }
+
+    #! Calls the given connection method on every legacy session event stream
+    private broadcastLegacyNotification(code send) {
+        list<McpServerConnection> conns;
+        {
+            AutoReadLock al(rwl);
+            foreach string sid in (keys smap) {
+                if (*McpServerConnection conn = smap{sid}.ssemap.firstValue()) {
+                    conns += conn;
+                }
+            }
+        }
+        foreach McpServerConnection conn in (conns) {
+            try {
+                send(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                # best effort: a closed stream must not break the caller
+            }
         }
     }
 
@@ -2227,7 +3231,11 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     */
     private hash<auto> sendClientRequestAndWait(string sessionId, McpServerConnection conn, string method,
             hash<auto> params, int timeout_ms) {
-        string requestId = getNextRequestId();
+        # The waiter must be registered under the ID the request is actually sent with, and
+        # before it goes out: the client's answer is matched by JSON-RPC ID, and it can arrive
+        # before this thread gets back to the map.
+        int id = getNextIdForSession(sessionId);
+        string requestId = id.toString();
 
         hash<McpPendingRequest> pending = <McpPendingRequest>{
             "requestId": requestId,
@@ -2252,7 +3260,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         }
 
         # Send the request
-        conn.sendRequest(method, params);
+        conn.sendRequestWithId(id, method, params);
 
         # Wait for response
         pending.lck.lock();
@@ -2287,10 +3295,12 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             return;
         }
 
-        auto requestId = response.id;
-        if (!exists requestId) {
+        if (!exists response.id) {
             return;
         }
+        # responses are matched by JSON-RPC ID; normalize it to the map's key type so that an
+        # ID the client echoed back as a string still matches one that was sent as a number
+        string requestId = response.id.toString();
 
         hash<McpPendingRequest> pending;
         {
@@ -2315,6 +3325,222 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     }
 
     #
+    # Multi Round-Trip Request (MRTR) Methods
+    #
+
+    #! Obtains additional input from the client while handling a request
+    /** This is the era-independent way for a tool, prompt, or resource handler to ask the
+        client for elicitation input, an LLM completion, or the client's root list.  The
+        calling code is identical in both protocol eras; only the wire mechanics differ:
+
+        - With a \c modern client the server cannot send
+          requests of its own.  Instead this method raises an internal exception that the
+          calling MCP method converts into an \c InputRequiredResult carrying the requests and
+          an opaque, integrity-protected \c requestState.  The client gathers the input and
+          <i>retries the original request</i> with the responses attached, at which point this
+          method returns them.  The call therefore behaves like a coroutine suspension point:
+          the handler runs from the beginning again on the retry.
+        - With a \c legacy client the requests are sent on the
+          session's event stream and this method blocks until the client answers.
+
+        @param input_requests a hash of server-assigned identifier to request object; each
+            value must be a hash with \c method and \c params members, where \c method is one
+            of \c "elicitation/create", \c "sampling/createMessage", or \c "roots/list"
+        @param state optional server state to carry across the round trip; recovered from
+            @ref McpToolCallContext::requestState "the call context" when the handler runs
+            again, and integrity-protected so that a client cannot tamper with it
+        @param timeout_ms optional timeout for the legacy blocking round trip
+
+        @return a hash of the same identifiers to the client's responses
+
+        @throw MCP-CAPABILITY-ERROR the client did not declare support for one of the
+            requested interaction types
+        @throw MCP-SERVER-ARG-ERROR \a input_requests is empty or malformed
+        @throw MCP-CONTEXT-ERROR called outside the handling of an MCP request
+
+        @par Example:
+        @code
+        handler.registerTool("deploy", "Deploy a build", input, sub (hash<auto> args) {
+            hash<auto> answers = McpServerHandler::getToolCallContext().handler.requestInput({
+                "confirm": {
+                    "method": "elicitation/create",
+                    "params": {
+                        "mode": "form",
+                        "message": sprintf("Really deploy %y to production?", args.build),
+                        "requestedSchema": ConfirmSchema,
+                    },
+                },
+            });
+            if (answers.confirm.action != "accept") {
+                return {"content": ({"type": "text", "text": "cancelled"},)};
+            }
+            return deploy(args.build);
+        });
+        @endcode
+    */
+    hash<auto> requestInput(hash<auto> input_requests, auto state, *int timeout_ms) {
+        if (!input_requests) {
+            throw "MCP-SERVER-ARG-ERROR", "requestInput() requires at least one input request";
+        }
+        *hash<McpToolCallContext> call_ctx = McpCallContextHelper::get();
+        if (!call_ctx) {
+            throw "MCP-CONTEXT-ERROR", "requestInput() may only be called while handling an "
+                "MCP request";
+        }
+
+        hash<auto> client_caps = call_ctx.cx.mcp_modern
+            ? (call_ctx.cx.mcp_client_capabilities ?? {})
+            : (getSessionClientCapabilities(call_ctx.sid) ?? {});
+        checkInputRequestCapabilities(input_requests, client_caps);
+
+        if (!call_ctx.cx.mcp_modern) {
+            return requestInputLegacy(call_ctx, input_requests, timeout_ms);
+        }
+
+        # if the client already answered these requests on a retry, hand the answers back
+        *hash<auto> responses = call_ctx.inputResponses;
+        if (responses) {
+            bool complete = True;
+            foreach string key in (keys input_requests) {
+                if (!responses.hasKey(key)) {
+                    complete = False;
+                    break;
+                }
+            }
+            if (complete) {
+                # return only the responses to the requests asked for here: a retry may carry
+                # answers to requests raised at other suspension points too
+                return responses{keys input_requests};
+            }
+        }
+
+        # suspend the request: the caller converts this into an InputRequiredResult
+        throw InputRequiredException, "additional client input is required to complete this "
+            "request", {
+                "inputRequests": input_requests,
+                "state": state,
+            };
+    }
+
+    #! Verifies that the client declared support for every requested interaction type
+    /** A server must not send an input request for a capability the client did not declare in
+        the request's \c _meta.
+    */
+    private checkInputRequestCapabilities(hash<auto> input_requests, hash<auto> client_caps) {
+        list<string> missing = ();
+        foreach hash<auto> i in (input_requests.pairIterator()) {
+            *string method = i.value.method;
+            if (!method.val()) {
+                throw "MCP-SERVER-ARG-ERROR", sprintf("input request %y has no \"method\" member",
+                    i.key);
+            }
+            *string cap = InputRequestCapabilities{method};
+            if (!cap.val()) {
+                throw "MCP-SERVER-ARG-ERROR", sprintf("input request %y uses unsupported method "
+                    "%y; supported methods: %y", i.key, method, keys InputRequestCapabilities);
+            }
+            # a capability is declared by the presence of its key; the value is a settings
+            # object that is very often empty, and an empty hash is false in a boolean context
+            if (!client_caps.hasKey(cap) && !missing.contains(cap)) {
+                missing += cap;
+            }
+        }
+        if (missing) {
+            McpCallContextHelper::setErrorData({"requiredCapabilities": missing});
+            throw "MCP-CAPABILITY-ERROR", sprintf("this request requires client capabilities "
+                "that the client did not declare: %y", missing),
+                MCP_Err_MissingRequiredClientCapability;
+        }
+    }
+
+    #! Performs the legacy blocking server-to-client round trip for @ref requestInput()
+    private hash<auto> requestInputLegacy(hash<McpToolCallContext> call_ctx,
+            hash<auto> input_requests, *int timeout_ms) {
+        *string sessionId = call_ctx.sid;
+        if (!sessionId.val()) {
+            throw "MCP-SESSION-ERROR", "no MCP session for a server-to-client request";
+        }
+        *McpServerConnection conn;
+        {
+            AutoReadLock al(rwl);
+            if (!smap{sessionId}) {
+                throw "MCP-SESSION-ERROR", sprintf("Session %y not found", sessionId);
+            }
+            conn = smap{sessionId}.ssemap.firstValue();
+        }
+        if (!conn) {
+            throw "MCP-CONNECTION-ERROR", "No active connection for session";
+        }
+
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (input_requests.pairIterator()) {
+            int default_timeout = i.value.method == "sampling/createMessage"
+                ? samplingTimeout
+                : elicitationTimeout;
+            rv{i.key} = sendClientRequestAndWait(sessionId, conn, i.value.method,
+                i.value.params ?? {}, timeout_ms ?? default_timeout);
+        }
+        return rv;
+    }
+
+    #! Returns the capabilities a legacy client declared during \c initialize
+    private *hash<auto> getSessionClientCapabilities(*string sessionId) {
+        if (!sessionId.val()) {
+            return;
+        }
+        AutoReadLock al(rwl);
+        return smap{sessionId}.clientCapabilities;
+    }
+
+    #! Builds an \c InputRequiredResult from a suspended request
+    /** @param cx the request context
+        @param method the method being suspended
+        @param params the request parameters
+        @param info the \c inputRequests and server \c state from the suspension
+
+        @return the \c InputRequiredResult hash
+    */
+    private hash<auto> makeInputRequiredResult(hash<auto> cx, string method, *hash<auto> params,
+            *hash<auto> info) {
+        hash<auto!> rv = {
+            "resultType": McpResultType::InputRequired,
+            "requestState": request_state.encode(method, params, info.state, cx.mcp_principal),
+        };
+        if (info.inputRequests) {
+            rv.inputRequests = info.inputRequests;
+        }
+        return rv;
+    }
+
+    #! Recovers the MRTR state a client echoed back on a retry
+    /** @param cx the request context
+        @param method the retried method
+        @param params the retried request parameters
+
+        @return a hash with \c inputResponses and \c requestState members to place in the call
+            context
+
+        @throw MCP-REQUEST-STATE-ERROR the echoed state failed verification
+    */
+    private hash<auto> getMrtrRetryContext(hash<auto> cx, string method, *hash<auto> params) {
+        hash<auto!> rv = {};
+        if (params.inputResponses.typeCode() == NT_HASH) {
+            rv.inputResponses = params.inputResponses;
+        }
+        if (params.requestState.typeCode() == NT_STRING) {
+            try {
+                rv.requestState = request_state.decode(params.requestState, method, params,
+                    cx.mcp_principal);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client supplied the value, so this is an invalid-parameter error, not an
+                # internal one; the description never echoes the offending value back
+                rethrow ex.err, ex.desc, JRE_InvalidParams;
+            }
+        }
+        return rv;
+    }
+
+    #
     # Sampling Methods
     #
 
@@ -2326,6 +3552,16 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @throw MCP-CAPABILITY-ERROR if client does not support sampling
     */
     hash<auto> requestSampling(string sessionId, hash<auto> request, *int timeout_ms) {
+        # with a modern client the server cannot initiate a request; route through MRTR instead
+        if (McpCallContextHelper::get().cx.mcp_modern) {
+            return requestInput({
+                "sampling": {
+                    "method": "sampling/createMessage",
+                    "params": request,
+                },
+            }, NOTHING, timeout_ms).sampling;
+        }
+
         # Check client capabilities
         *hash<auto> clientCaps;
         *McpServerConnection conn;
@@ -2338,7 +3574,9 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             conn = smap{sessionId}.ssemap.firstValue();
         }
 
-        if (!clientCaps.sampling) {
+        # a capability is declared by the presence of its key; its value is a settings object
+        # that is very often empty, and an empty hash is false in a boolean context
+        if (!clientCaps.hasKey("sampling")) {
             throw "MCP-CAPABILITY-ERROR", "Client does not support sampling";
         }
         if (!conn) {
@@ -2362,6 +3600,20 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         @throw MCP-CAPABILITY-ERROR if client does not support elicitation
     */
     hash<auto> requestElicitationForm(string sessionId, string message, hash<auto> schema, *int timeout_ms) {
+        # with a modern client the server cannot initiate a request; route through MRTR instead
+        if (McpCallContextHelper::get().cx.mcp_modern) {
+            return requestInput({
+                "elicitation": {
+                    "method": "elicitation/create",
+                    "params": {
+                        "mode": "form",
+                        "message": message,
+                        "requestedSchema": schema,
+                    },
+                },
+            }, NOTHING, timeout_ms).elicitation;
+        }
+
         # Check client capabilities
         *hash<auto> clientCaps;
         *McpServerConnection conn;
@@ -2374,7 +3626,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             conn = smap{sessionId}.ssemap.firstValue();
         }
 
-        if (!clientCaps.elicitation) {
+        # see the note on capability presence in requestSampling()
+        if (!clientCaps.hasKey("elicitation")) {
             throw "MCP-CAPABILITY-ERROR", "Client does not support elicitation";
         }
         if (!conn) {
@@ -2390,8 +3643,350 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             timeout_ms ?? elicitationTimeout);
     }
 
+    #
+    # Tasks extension (io.modelcontextprotocol/tasks)
+    #
+
+    #! Returns @ref True if the client declared support for the MCP tasks extension
+    /** A server must never return a task handle to a client that did not declare the
+        extension in its per-request capabilities.
+
+        @param cx the request context
+
+        @return @ref True if the client opted in
+    */
+    bool clientSupportsTasks(hash<auto> cx) {
+        return cx.mcp_client_capabilities.extensions.hasKey(MCP_ExtensionTasks);
+    }
+
+    #! Decides whether a modern request should be executed as a task
+    /** Under the \c tasks extension the decision is the
+        server's, not the client's: there is no per-request opt-in flag.  The default policy
+        creates a task when the client declared the extension and the tool declares
+        \c execution.taskSupport as \c "required"; reimplement in subclasses to apply a
+        different policy (for example, to also use tasks for \c "optional" tools, or to decide
+        from the arguments how long the call will take).
+
+        @param cx the request context
+        @param info the tool being called
+        @param params the \c tools/call parameters
+
+        @return @ref True to create a task instead of running the call synchronously
+    */
+    bool shouldCreateTask(hash<auto> cx, hash<McpToolInfo> info, *hash<auto> params) {
+        return clientSupportsTasks(cx) && info.extra.execution.taskSupport == "required";
+    }
+
+    #! Creates a task for a modern request and starts executing it in the background
+    private hash<auto> toolsCallAsModernTask(hash<auto> cx, hash<McpToolInfo> info,
+            *hash<auto> params) {
+        # A modern task ID is a durable handle with no session to expire alongside it, so the
+        # store is pruned as it is written to; otherwise terminal tasks would accumulate for
+        # the lifetime of the process.
+        cleanupExpiredModernTasks();
+
+        *string operation_id = getClientOperationId(params);
+        if (operation_id.val()) {
+            if (*hash<McpTaskInfo> existing = getModernTaskByOperationId(operation_id)) {
+                return makeCreateTaskResult(existing);
+            }
+        }
+
+        string taskId = generateTaskId();
+        date now = now_us();
+        hash<McpTaskInfo> task = <McpTaskInfo>{
+            "taskId": taskId,
+            "status": McpTaskStatus::Working,
+            "createdAt": now,
+            "lastUpdatedAt": now,
+            "ttl": getTaskTtl(params.task) ?? defaultTaskTtl,
+            "pollInterval": modernPollInterval,
+            "method": "tools/call",
+            "params": params,
+            "sessionId": "",
+            "modern": True,
+            "requestId": cx.id,
+            "progressToken": params._meta{MCP_MetaProgressToken},
+            "clientOperationId": operation_id,
+            "cond": new Qore::Thread::Condition(),
+            "lck": new Qore::Thread::Mutex(),
+        };
+        {
+            AutoWriteLock al(rwl);
+            if (mtasks.size() >= maxTasksPerSession) {
+                throw "MCP-TASK-ERROR", sprintf("Maximum concurrent tasks (%d) exceeded",
+                    maxTasksPerSession);
+            }
+            mtasks{taskId} = task;
+            if (operation_id.val()) {
+                mtask_operation_ids{operation_id} = taskId;
+            }
+        }
+
+        background self.executeModernTask(taskId, info, cx);
+        return makeCreateTaskResult(task);
+    }
+
+    #! Runs a modern task's tool call, honoring input requests and cancellation
+    private executeModernTask(string taskId, hash<McpToolInfo> info, hash<auto> cx) {
+        *hash<McpTaskInfo> task = getModernTask(taskId);
+        if (!task || task.cancelled) {
+            return;
+        }
+        try {
+            hash<McpToolCallContext> call_info = <McpToolCallContext>{
+                "name": info.name,
+                "description": info.description,
+                "arguments": task.params.arguments,
+                "cx": cx,
+                "handler": self,
+                "inputResponses": task.inputResponses,
+                "requestState": task.requestState,
+            };
+            McpCallContextHelper mcch(call_info);
+            hash<auto> result = makeToolCall(info, task.params, call_info);
+            setModernTaskResult(taskId, McpTaskStatus::Completed, result);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == InputRequiredException) {
+                # the tool needs client input: park the requests and wait for tasks/update
+                setModernTaskInputRequired(taskId, ex.arg);
+                return;
+            }
+            setModernTaskResult(taskId, McpTaskStatus::Failed, NOTHING, {
+                "code": JRE_InternalError,
+                "message": sprintf("%s: %s", ex.err, ex.desc),
+            });
+        }
+    }
+
+    #! Returns a modern task by ID
+    private *hash<McpTaskInfo> getModernTask(string taskId) {
+        AutoReadLock al(rwl);
+        return mtasks{taskId};
+    }
+
+    #! Returns a modern task by caller idempotency key
+    private *hash<McpTaskInfo> getModernTaskByOperationId(string operation_id) {
+        AutoReadLock al(rwl);
+        *string taskId = mtask_operation_ids{operation_id};
+        return taskId.val() ? mtasks{taskId} : NOTHING;
+    }
+
+    #! Records a modern task's terminal state
+    private setModernTaskResult(string taskId, string status, *hash<auto> result,
+            *hash<auto> error_info) {
+        {
+            AutoWriteLock al(rwl);
+            if (!mtasks{taskId}) {
+                return;
+            }
+            # a cancelled task keeps its terminal cancelled state even if the tool returns
+            if (mtasks{taskId}.status == McpTaskStatus::Cancelled) {
+                return;
+            }
+            mtasks{taskId}.status = status;
+            mtasks{taskId}.result = result;
+            mtasks{taskId}.error = error_info;
+            mtasks{taskId}.lastUpdatedAt = now_us();
+            remove mtasks{taskId}.inputRequests;
+        }
+        notifyTaskStatus(taskId);
+    }
+
+    #! Moves a modern task to \c input_required and records what it is waiting for
+    private setModernTaskInputRequired(string taskId, *hash<auto> info) {
+        {
+            AutoWriteLock al(rwl);
+            if (!mtasks{taskId} || mtasks{taskId}.status == McpTaskStatus::Cancelled) {
+                return;
+            }
+            mtasks{taskId}.status = McpTaskStatus::InputRequired;
+            mtasks{taskId}.inputRequests = info.inputRequests;
+            mtasks{taskId}.requestState = info.state;
+            mtasks{taskId}.lastUpdatedAt = now_us();
+        }
+        notifyTaskStatus(taskId);
+    }
+
+    #! Delivers a task status notification to every subscribed modern stream
+    private notifyTaskStatus(string taskId) {
+        *hash<McpTaskInfo> task = getModernTask(taskId);
+        if (!task) {
+            return;
+        }
+        notifySubscribers("tasksStatus", getModernTaskResponse(task));
+    }
+
+    #! Returns the \c CreateTaskResult for a modern task
+    private hash<auto> makeCreateTaskResult(hash<McpTaskInfo> task) {
+        return {
+            "resultType": McpResultType::Task,
+            "task": getModernTaskResponse(task),
+        };
+    }
+
+    #! Returns the wire representation of a modern task
+    /** The tasks extension names the lifetime and polling fields \c ttlMs and
+        \c pollIntervalMs; the session-scoped API used by earlier protocol versions called them
+        \c ttl and \c pollInterval.
+    */
+    private hash<auto> getModernTaskResponse(hash<McpTaskInfo> task) {
+        hash<auto!> rv = {
+            "taskId": task.taskId,
+            "status": task.status,
+            "createdAt": task.createdAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "lastUpdatedAt": task.lastUpdatedAt.format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "ttlMs": task.ttl,
+            "pollIntervalMs": task.pollInterval,
+        };
+        if (task.statusMessage.val()) {
+            rv.statusMessage = task.statusMessage;
+        }
+        if (task.clientOperationId.val()) {
+            rv.clientOperationId = task.clientOperationId;
+        }
+        if (task.inputRequests) {
+            rv.inputRequests = task.inputRequests;
+        }
+        switch (task.status) {
+            case McpTaskStatus::Completed:
+                rv.result = task.result;
+                break;
+            case McpTaskStatus::Failed:
+                rv.error = task.error;
+                break;
+        }
+        return rv;
+    }
+
+    #! Handle a modern \c tasks/get request
+    private hash<auto> modernTasksGet(hash<auto> cx, *hash<auto> params) {
+        *hash<McpTaskInfo> task = requireModernTask(params.taskId);
+        return getModernTaskResponse(task);
+    }
+
+    #! Handle a modern \c tasks/update request
+    /** Accepts \c inputResponses keyed to the task's outstanding \c inputRequests and resumes
+        execution.  Responses for unknown or already-satisfied keys are ignored.
+    */
+    private hash<auto> modernTasksUpdate(hash<auto> cx, *hash<auto> params) {
+        *hash<McpTaskInfo> task = requireModernTask(params.taskId);
+        if (params.inputResponses.typeCode() != NT_HASH) {
+            return {};
+        }
+        if (task.status != McpTaskStatus::InputRequired) {
+            # nothing is outstanding: ignore the responses rather than failing the request
+            return {};
+        }
+
+        *hash<McpToolInfo> info = tmap{task.params.name};
+        if (!info) {
+            throw "MCP-TASK-ERROR", sprintf("tool %y is no longer registered",
+                task.params.name), JRE_InvalidParams;
+        }
+        {
+            AutoWriteLock al(rwl);
+            if (!mtasks{params.taskId} || mtasks{params.taskId}.status != McpTaskStatus::InputRequired) {
+                return {};
+            }
+            mtasks{params.taskId}.inputResponses =
+                (mtasks{params.taskId}.inputResponses ?? {}) + params.inputResponses;
+            mtasks{params.taskId}.status = McpTaskStatus::Working;
+            mtasks{params.taskId}.lastUpdatedAt = now_us();
+            remove mtasks{params.taskId}.inputRequests;
+        }
+        background self.executeModernTask(params.taskId, info, cx);
+        return {};
+    }
+
+    #! Handle a modern \c tasks/cancel request
+    private hash<auto> modernTasksCancel(hash<auto> cx, *hash<auto> params) {
+        *hash<McpTaskInfo> task = requireModernTask(params.taskId);
+        {
+            AutoWriteLock al(rwl);
+            if (!mtasks{params.taskId}) {
+                return {};
+            }
+            mtasks{params.taskId}.cancelled = True;
+            switch (mtasks{params.taskId}.status) {
+                case McpTaskStatus::Completed:
+                case McpTaskStatus::Failed:
+                    # terminal already: cancellation is a no-op
+                    break;
+                default:
+                    mtasks{params.taskId}.status = McpTaskStatus::Cancelled;
+                    mtasks{params.taskId}.statusMessage = params.reason;
+                    mtasks{params.taskId}.lastUpdatedAt = now_us();
+                    remove mtasks{params.taskId}.inputRequests;
+                    break;
+            }
+        }
+        notifyTaskStatus(params.taskId);
+        return {};
+    }
+
+    #! Returns a modern task by ID or raises an invalid-parameter error
+    private hash<McpTaskInfo> requireModernTask(auto taskId) {
+        if (taskId.typeCode() != NT_STRING || !taskId.val()) {
+            throw "MCP-TASK-ERROR", "Missing required parameter: taskId", JRE_InvalidParams;
+        }
+        *hash<McpTaskInfo> task = getModernTask(taskId);
+        if (!task) {
+            throw "MCP-TASK-ERROR", sprintf("Task %y not found", taskId), JRE_InvalidParams;
+        }
+        return task;
+    }
+
+    #! Removes modern tasks whose terminal state has outlived their TTL
+    /** @return the number of tasks removed
+    */
+    int cleanupExpiredModernTasks() {
+        date now = now_us();
+        list<string> expired = ();
+        AutoWriteLock al(rwl);
+        foreach string tid in (keys mtasks) {
+            hash<McpTaskInfo> task = mtasks{tid};
+            switch (task.status) {
+                case McpTaskStatus::Completed:
+                case McpTaskStatus::Failed:
+                case McpTaskStatus::Cancelled:
+                    if ((now - task.lastUpdatedAt).durationMilliseconds() > task.ttl) {
+                        expired += tid;
+                    }
+                    break;
+            }
+        }
+        foreach string tid in (expired) {
+            if (mtasks{tid}.clientOperationId.val()) {
+                remove mtask_operation_ids{mtasks{tid}.clientOperationId};
+            }
+            remove mtasks{tid};
+        }
+        return expired.size();
+    }
+
+    #! Returns the number of tracked modern tasks
+    int getModernTaskCount() {
+        AutoReadLock al(rwl);
+        return mtasks.size();
+    }
+
     #! Modified toolsCallIntern to support task-based execution
     private *hash<auto> toolsCallIntern(hash<auto> cx, *hash<auto> params) {
+        # With a modern client the decision to run the call as a task is the server's; there is
+        # no per-request opt-in flag.  The tasks extension is session-free, so this path does
+        # not use the session-scoped task store at all.
+        if (cx.mcp_modern) {
+            *hash<McpToolInfo> tinfo = findToolForCall(cx, params.name);
+            if (!tinfo) {
+                throw "MCP-SERVER-ARG-ERROR", sprintf("Tool %y is unknown; known tools: %y",
+                    params.name, getKnownToolNames(cx)), JRE_InvalidParams;
+            }
+            if (shouldCreateTask(cx, tinfo, params)) {
+                return toolsCallAsModernTask(cx, tinfo, params);
+            }
+        }
+
         # Check if this should be a task-based call.  The standard MCP
         # 2025-11-25 shape is params.task; params._meta.task is accepted only
         # for backwards compatibility.
@@ -2406,6 +4001,7 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             throw "MCP-SERVER-ARG-ERROR", sprintf("Tool %y is unknown; known tools: %y", params.name,
                 getKnownToolNames(cx));
         }
+        hash<auto> mrtr = cx.mcp_modern ? getMrtrRetryContext(cx, "tools/call", params) : {};
         hash<McpToolCallContext> call_info = <McpToolCallContext>{
             "name": info.name,
             "description": info.description,
@@ -2413,6 +4009,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             "arguments": params.arguments,
             "cx": cx,
             "handler": self,
+            "inputResponses": mrtr.inputResponses,
+            "requestState": mrtr.requestState,
         };
         McpCallContextHelper mcch(call_info);
 
@@ -2515,6 +4113,27 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     private setupMethods() {
         addMethods((
+            {
+                "name": "^server/discover$",
+                "text": "server/discover",
+                "function": \serverDiscover(),
+                "help": "MCP server capability, identity, and protocol version discovery",
+                "include_context": True,
+            },
+            {
+                "name": "^subscriptions/listen$",
+                "text": "subscriptions/listen",
+                "function": \subscriptionsListen(),
+                "help": "Open a long-lived server-to-client notification stream",
+                "include_context": True,
+            },
+            {
+                "name": "^tasks/update$",
+                "text": "tasks/update",
+                "function": \tasksUpdate(),
+                "help": "Provide requested input to a task awaiting it",
+                "include_context": True,
+            },
             {
                 "name": "^initialize$",
                 "text": "initialize",
@@ -2693,6 +4312,14 @@ hashdecl McpSessionInfo {
 
 thread_local *hash<McpToolCallContext> _mcp_call_context;
 
+#! Structured \c data for the JSON-RPC error currently being raised
+/** JsonRpcHandler can only carry a code and a message out of an exception, but some MCP errors
+    (notably \c MissingRequiredClientCapabilityError) must also carry a \c data member.  The throwing code
+    parks the data here and McpServerHandler::decorateModernResponse() picks it up while
+    building the response; both run on the request's thread.
+*/
+thread_local *hash<auto> _mcp_error_data;
+
 #! Memoizes type descriptions for the duration of a single tool input-schema traversal
 /** Keyed by type object identity and name; without this, a type object shared by multiple parents in a type DAG has
     its description rebuilt once per path, which is exponential in the depth of the graph
@@ -2717,6 +4344,19 @@ class McpCallContextHelper {
 
     static *hash<McpToolCallContext> get() {
         return _mcp_call_context;
+    }
+
+    #! Parks structured \c data for the JSON-RPC error currently being raised
+    static setErrorData(*hash<auto> data) {
+        _mcp_error_data = data;
+    }
+
+
+    #! Returns and clears the parked JSON-RPC error \c data
+    static *hash<auto> takeErrorData() {
+        *hash<auto> rv = _mcp_error_data;
+        remove _mcp_error_data;
+        return rv;
     }
 }
 }

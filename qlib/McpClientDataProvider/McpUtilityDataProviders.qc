@@ -152,4 +152,58 @@ public class McpPingDataProvider inherits McpClientDataProviderBase {
         return ProviderInfo;
     }
 }
+
+#! MCP server discovery data provider
+/** Reports the server's supported protocol versions, capabilities, and identity in a single
+    request.
+
+    @note introduced in MCP 2026-07-28; with a handshake-based server the same information
+        comes from the \c initialize handshake and this provider is not advertised
+*/
+public class McpDiscoverDataProvider inherits McpClientDataProviderBase {
+    public {
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "discover",
+            "desc": "Reports the MCP server's protocol versions, capabilities, and identity",
+            "type": "McpDiscoverDataProvider",
+            "supports_request": True,
+        };
+    }
+
+    #! Creates the object with the given MCP client
+    constructor(McpClient mcp) : McpClientDataProviderBase(mcp) {
+    }
+
+    #! Returns the data provider name
+    string getName() {
+        return "discover";
+    }
+
+    #! Returns the data provider description
+    *string getDesc() {
+        return ProviderInfo.desc;
+    }
+
+    #! Returns the request type
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return NOTHING;
+    }
+
+    #! Returns the response type
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return NOTHING;
+    }
+
+    #! Performs the request
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @debug("Discovering MCP server capabilities");
+        return mcp.discover();
+    }
+
+    #! Returns data provider static info
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
 }

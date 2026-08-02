@@ -62,21 +62,81 @@ module McpClient {
     - 2025-03-26 (March 2025)
     - 2025-06-18 (June 2025 - Enterprise readiness)
     - 2025-11-25 (November 2025 - Tasks, Extensions)
+    - 2026-07-28 (July 2026 - stateless core, MRTR, subscriptions)
+
+    @section McpClient_eras Protocol Eras
+
+    MCP became a <b>stateless</b> protocol in revision
+    @ref McpClient::McpVersion::V2026_07_28 "2026-07-28": there is no \c initialize handshake
+    and no session, every request carries its own protocol version, client identity, and
+    capabilities, and a server can no longer send requests of its own.
+
+    This client speaks both shapes and works out which one the server uses on its own.
+    @ref McpClient::McpClient::initialize() "initialize()" remains the single entry point: it
+    attempts a stateless request first and falls back to the handshake if the server turns out
+    to implement an earlier revision, caching the outcome for the life of the object.  Pin a
+    protocol version with the \c protocol_version option to skip the probe.  Everything below
+    the API — per-request metadata, header mirroring, version renegotiation, input round
+    trips, and task polling — is handled transparently, so the calling code does not change
+    with the protocol version in use.  Check which era is in force with
+    @ref McpClient::McpClient::isModern() "isModern()".
+
+    Methods that no longer exist in 2026-07-28 —
+    @ref McpClient::McpClient::ping() "ping()" and
+    @ref McpClient::McpClient::setLogLevel() "setLogLevel()" — throw \c MCP-DEPRECATED-METHOD
+    against a modern server and name what to use instead; they continue to work against an
+    earlier-revision server.
+
+    @subsection McpClient_server_requests Answering the server
+
+    A server may need an LLM completion, user input, or the client's root list before it can
+    finish a request.  Register a callback for each kind of interaction you can service and
+    the client answers on its own, whichever protocol revision is in force:
+
+    @code{.py}
+    client.setCallback("onElicitation", auto sub (hash<auto> params) {
+        return {"action": "accept", "content": collectFromUser(params.requestedSchema)};
+    });
+    client.setCallback("onSampling", auto sub (hash<auto> params) {
+        return askTheModel(params);
+    });
+    client.setCallback("onListRoots", auto sub (hash<auto> params) {
+        return {"roots": ({"uri": "file:///workspace", "name": "workspace"},)};
+    });
+    @endcode
+
+    Registering one of these callbacks also declares the matching client capability, so the
+    server is never told this client supports something it cannot answer, and never asks for
+    something it was not told about.  On 2026-07-28 the answers are attached to an automatic
+    retry of the original request; on earlier revisions they are posted back as JSON-RPC
+    responses to requests that arrive on the event stream, which must be open
+    (@ref McpClient::McpClient::startSseListener() "startSseListener()").
 
     @subsection McpClient_features Features
 
-    - Full MCP protocol support with automatic version negotiation
+    - Full MCP protocol support with automatic era detection and version negotiation
     - Async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
       protocol negotiation (HTTP/3 → HTTP/2 → HTTP/1.1) and connection pooling
-    - Streamable HTTP transport with legacy HTTP fallback
-    - SSE notification listener for server push events
-    - Tools: list and call server tools
+    - All three transports, selected automatically: Streamable HTTP, and the deprecated
+      HTTP+SSE transport of protocol 2024-11-05, where the client opens an event stream with
+      \c GET and is told by an \c endpoint event where to post
+    - Server-to-client requests answered from callbacks in both eras: as Multi Round-Trip
+      Request input on 2026-07-28, and as JSON-RPC requests on the event stream on earlier
+      revisions
+    - Notification streams: \c subscriptions/listen with a modern server, the standalone SSE
+      event stream with an earlier-revision server
+    - Tools: list and call server tools, with \c x-mcp-header parameter mirroring and
+      validation
     - Resources: list and read server resources
     - Prompts: list and get server prompts with arguments
     - Completion: autocompletion for prompts and resources
+    - Multi Round-Trip Requests: elicitation, sampling, and root-list requests are answered
+      from callbacks and the original request is retried automatically
+    - Tasks: a server-returned task handle is polled to completion transparently
+    - Client-side caching of list results honoring their \c ttlMs and \c cacheScope hints
     - Logging: receive server log messages
     - Event callbacks for server notifications
-    - Session management with Mcp-Session-Id header
+    - Session management with Mcp-Session-Id header (earlier protocol revisions only)
 
     @subsection McpClient_usage Basic Usage
 
@@ -138,6 +198,36 @@ module McpClient {
     - SSE notification listener via @ref HttpClientStreamingIo::SseStreamReader
     - tools, resources, prompts, completion support
     - event callbacks for notifications
+    - MCP 2026-07-28 support with transparent era detection (see @ref McpClient_eras):
+      - per-request protocol metadata and \c MCP-Protocol-Version / \c Mcp-Method /
+        \c Mcp-Name / \c Mcp-Param-* header mirroring, including the Base64 sentinel encoding
+        for values that are not header-safe
+      - @ref McpClient::McpClient::discover() "discover()" for \c server/discover, and
+        automatic renegotiation on
+        @ref McpClient::MCP_Err_UnsupportedProtocolVersion "UnsupportedProtocolVersionError"
+      - Multi Round-Trip Requests: \c onElicitation, \c onSampling, and \c onListRoots
+        callbacks answer the server's input requests and the original request is retried
+        automatically with the server's opaque state echoed back unmodified
+      - @ref McpClient::McpClient::listen() "listen()" opens a \c subscriptions/listen stream
+        and demultiplexes notifications by subscription ID
+      - the \c io.modelcontextprotocol/tasks extension: a task handle returned by the server
+        is polled to completion by
+        @ref McpClient::McpClient::callTool() "callTool()", including mid-flight
+        \c tasks/update input
+      - tools whose \c x-mcp-header annotations violate the specification are excluded from
+        @ref McpClient::McpClient::listTools() "listTools()" with a logged warning, rather
+        than failing the whole listing
+      - list results are cached according to their \c ttlMs and \c cacheScope hints
+    - server-to-client requests (sampling, elicitation, roots) are answered from callbacks on
+      handshake-based protocol revisions too; previously such requests were received on the
+      event stream and silently discarded, so a server that asked for input waited until it
+      timed out
+    - the deprecated HTTP+SSE transport of protocol 2024-11-05 is supported: when a server
+      rejects a Streamable HTTP POST, the client opens the event stream, takes the endpoint
+      from the \c endpoint event, and correlates each response that arrives on the stream with
+      the request that is waiting for it
+    - registering an \c onElicitation, \c onSampling, or \c onListRoots callback declares the
+      corresponding client capability, and removing it withdraws the capability
 */
 
 #! the %McpClient namespace holds all public definitions in the %McpClient module

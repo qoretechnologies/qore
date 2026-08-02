@@ -1,0 +1,891 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%exec-class McpModernProtocolTest
+
+#! A tool input schema carrying an x-mcp-header annotation
+class RoutedInput inherits HashDataType {
+    constructor() {
+        addQoreFields({
+            "region": {
+                "display_name": "Region",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The region to run in",
+            },
+            "query": {
+                "display_name": "Query",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The query to run",
+            },
+        });
+    }
+}
+
+const RoutedInputType = new RoutedInput();
+
+class TestHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("zebra", "sorts last", NOTHING, \echo());
+        registerTool("alpha", "sorts first", NOTHING, \echo());
+        registerTool("routed", "mirrors a parameter into a header", RoutedInputType, \echo(),
+            NOTHING, {
+                # the annotation lives in the raw schema the server advertises
+                "header_param": "Region",
+            }, NOTHING);
+        registerTool("confirm", "asks for confirmation", NOTHING, \confirmTool());
+        registerTool("twostep", "asks twice", NOTHING, \twoStepTool());
+        registerTool("sampler", "asks for an LLM completion", NOTHING, \samplerTool());
+        registerTool("slow", "runs as a task", NOTHING, \slowTool(), NOTHING,
+            {"execution": {"taskSupport": "required"}}, NOTHING);
+        registerTool("approve", "task that needs input", NOTHING, \approveTool(), NOTHING,
+            {"execution": {"taskSupport": "required"}}, NOTHING);
+        registerTool("boom", "task that fails", NOTHING, \boomTool(), NOTHING,
+            {"execution": {"taskSupport": "required"}}, NOTHING);
+
+        registerResource("file:///a.txt", "a", "resource a", "text/plain", \readA());
+        registerResource("file:///b.txt", "b", "resource b", "text/plain", \readA());
+        registerPrompt("greet", "a greeting", NOTHING);
+        setInstructions("modern protocol test server");
+        # keep task polling fast in tests
+        setModernPollInterval(50);
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    string readA(hash<auto> cx, string uri) {
+        return "content of " + uri;
+    }
+
+    hash<auto> confirmTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "confirm": {
+                "method": "elicitation/create",
+                "params": {"mode": "form", "message": sprintf("Deploy %s?", args.build)},
+            },
+        }, {"build": args.build});
+        return {
+            "content": ({
+                "type": "text",
+                "text": sprintf("%s:%s", answers.confirm.action,
+                    McpServerHandler::getToolCallContext().requestState.build),
+            },),
+        };
+    }
+
+    hash<auto> twoStepTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        auto state = ctx.requestState;
+        if (!state) {
+            ctx.handler.requestInput({
+                "first": {"method": "elicitation/create", "params": {"message": "first"}},
+            }, {"step": 1});
+        }
+        if (state.step == 1) {
+            ctx.handler.requestInput({
+                "second": {"method": "elicitation/create", "params": {"message": "second"}},
+            }, {"step": 2});
+        }
+        return {"content": ({"type": "text", "text": sprintf("done after %d", state.step)},)};
+    }
+
+    hash<auto> samplerTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "llm": {
+                "method": "sampling/createMessage",
+                "params": {"maxTokens": 10, "messages": ()},
+            },
+        }, {"asked": True});
+        return {"content": ({"type": "text", "text": answers.llm.content.text},)};
+    }
+
+    hash<auto> slowTool(*hash<auto> args) {
+        usleep(100ms);
+        return {"content": ({"type": "text", "text": "slow done"},)};
+    }
+
+    hash<auto> approveTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "ok": {"method": "elicitation/create", "params": {"message": "Approve?"}},
+        }, {"asked": True});
+        return {"content": ({"type": "text", "text": "approved=" + answers.ok.action},)};
+    }
+
+    nothing boomTool(*hash<auto> args) {
+        throw "BOOM", "the tool exploded";
+    }
+
+    #! Adds the x-mcp-header annotation to the "routed" tool's advertised schema
+    /** The server validates Mcp-Param-* headers against the same schema it advertises, so
+        decorating it here covers both tools/list and header validation.
+    */
+    *hash<auto> getToolInputSchema(hash<auto> cx, hash<McpToolInfo> info) {
+        *hash<auto> schema = McpServerHandler::getToolInputSchema(cx, info);
+        if (info.name == "routed" && schema.properties.region) {
+            schema.properties.region{McpClient::McpHeaderAnnotation} = "Region";
+        }
+        return schema;
+    }
+}
+
+public class McpModernProtocolTest inherits QUnit::Test {
+    public {
+        const Version = McpClient::McpVersion::V2026_07_28;
+
+        const BaseMeta = {
+            McpClient::MCP_MetaProtocolVersion: Version,
+            McpClient::MCP_MetaClientInfo: {"name": "ModernTestClient", "version": "1.0"},
+            McpClient::MCP_MetaClientCapabilities: {},
+        };
+    }
+
+    private {
+        Logger logger;
+        TestHandler mcp_server;
+        HttpServer http;
+        int port;
+        string url;
+    }
+
+    constructor() : Test("McpModernProtocolTest", "1.0") {
+        addTestCase("server/discover test", \discoverTest());
+        addTestCase("statelessness test", \statelessnessTest());
+        addTestCase("result envelope test", \resultEnvelopeTest());
+        addTestCase("cacheable result test", \cacheableResultTest());
+        addTestCase("header mirroring test", \headerMirroringTest());
+        addTestCase("negative protocol test", \negativeProtocolTest());
+        addTestCase("removed method test", \removedMethodTest());
+        addTestCase("error code test", \errorCodeTest());
+        addTestCase("MRTR elicitation test", \mrtrElicitationTest());
+        addTestCase("MRTR sampling test", \mrtrSamplingTest());
+        addTestCase("MRTR multi-round test", \mrtrMultiRoundTest());
+        addTestCase("MRTR capability test", \mrtrCapabilityTest());
+        addTestCase("MRTR request state test", \mrtrRequestStateTest());
+        addTestCase("subscriptions/listen test", \subscriptionsTest());
+        addTestCase("tasks extension test", \tasksExtensionTest());
+        addTestCase("tasks input required test", \tasksInputRequiredTest());
+        addTestCase("modern-only server test", \modernOnlyServerTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("modern-test", LoggerLevel::getLevelError());
+        mcp_server = new TestHandler(logger);
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        http.setHandler("mcp", "", MimeTypeJson, mcp_server);
+        http.setDefaultHandler("mcp", mcp_server);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        url = sprintf("http://localhost:%d", port);
+    }
+
+    globalTearDown() {
+        if (http) {
+            http.stop();
+            delete http;
+        }
+    }
+
+    #! Sends a modern MCP request and returns {"status": <http status>, "body": <parsed>}
+    private hash<auto> post(string method, *hash<auto> params, *hash<auto> opts) {
+        HTTPClient hc({"url": opts.url ?? url});
+        on_exit hc.disconnect();
+
+        hash<auto> p = (params ?? {}) + {"_meta": BaseMeta + (opts.meta ?? {})};
+        if (opts.remove_meta) {
+            p."_meta" -= opts.remove_meta;
+        }
+        hash<auto> req = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": p,
+        };
+        if (!opts.notification) {
+            req.id = opts.id ?? 1;
+        }
+
+        hash<auto> hdr = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            McpClient::McpProtocolVersionHeader:
+                p."_meta"{McpClient::MCP_MetaProtocolVersion} ?? Version,
+            McpClient::McpMethodHeader: method,
+        };
+        if (*string name = McpClient::mcp_name_header_value(method, p)) {
+            hdr{McpClient::McpNameHeader} = McpClient::mcp_encode_header_value(name);
+        }
+        hdr += opts.headers ?? {};
+        foreach string key in (opts.remove_headers ?? ()) {
+            hdr -= key;
+        }
+
+        try {
+            return unpackResponse(hc.send(make_json(req), "POST", "/", hdr, False));
+        } catch (hash<ExceptionInfo> ex) {
+            return unpackResponse(ex.arg);
+        }
+    }
+
+    #! Normalizes an HTTPClient response (or error argument) to {"status", "body"}
+    private hash<auto> unpackResponse(auto resp) {
+        auto body = resp.typeCode() == NT_HASH ? resp.body : resp;
+        return {
+            "status": resp.status_code,
+            "body": body.typeCode() == NT_STRING && body.val() ? parse_json(body) : body,
+        };
+    }
+
+    discoverTest() {
+        hash<auto> r = post("server/discover");
+        assertEq(200, r.status, "server/discover succeeds");
+
+        hash<auto> result = r.body.result;
+        assertTrue(result.supportedVersions.contains(Version),
+            "the current protocol version is advertised");
+        assertEq(Version, result.supportedVersions[0],
+            "supported versions are reported newest first");
+        assertTrue(result.supportedVersions.contains(McpClient::MCP_Version_Latest_Legacy),
+            "a dual-era server also advertises its handshake-based versions");
+        assertEq("modern protocol test server", result.instructions,
+            "server instructions are reported");
+        assertEq("QoreMcpServer", result._meta{McpClient::MCP_MetaServerInfo}.name,
+            "the server identifies itself in the result _meta");
+        assertTrue(result.capabilities.hasKey("tools"), "tool capability advertised");
+        assertTrue(result.capabilities.extensions.hasKey(McpClient::MCP_ExtensionTasks),
+            "the tasks extension is advertised");
+        assertFalse(result.capabilities.hasKey("logging"),
+            "logging is deprecated and not advertised to modern clients");
+    }
+
+    statelessnessTest() {
+        # no handshake of any kind precedes these calls, and each uses its own connection
+        assertEq(200, post("tools/list").status, "tools/list works with no prior request");
+        assertEq(200, post("prompts/list").status, "prompts/list works on a fresh connection");
+
+        # unrelated requests interleave on one connection without any session context
+        HTTPClient hc({"url": url});
+        on_exit hc.disconnect();
+        foreach string method in (("tools/list", "resources/list", "prompts/list", "tools/list")) {
+            hash<auto> req = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": method,
+                "params": {"_meta": BaseMeta},
+            };
+            hash<auto> r = unpackResponse(hc.send(make_json(req), "POST", "/", {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                McpClient::McpProtocolVersionHeader: Version,
+                McpClient::McpMethodHeader: method,
+            }, False));
+            assertEq(200, r.status, sprintf("%s served on a shared connection", method));
+            assertTrue(exists r.body.result, sprintf("%s returned a result", method));
+        }
+
+        # no session is ever minted or echoed
+        hash<auto> r = post("tools/list");
+        assertNothing(r.body.result.sessionId, "no session appears in modern results");
+    }
+
+    resultEnvelopeTest() {
+        # every result must carry a resultType discriminator and identify the server
+        foreach string method in (("server/discover", "tools/list", "resources/list",
+                "prompts/list")) {
+            hash<auto> r = post(method);
+            assertEq(McpClient::McpResultType::Complete, r.body.result.resultType,
+                sprintf("%s result is discriminated as complete", method));
+            assertEq("QoreMcpServer", r.body.result._meta{McpClient::MCP_MetaServerInfo}.name,
+                sprintf("%s result identifies the server", method));
+        }
+
+        hash<auto> call = post("tools/call", {"name": "alpha", "arguments": {"x": 1}});
+        assertEq(McpClient::McpResultType::Complete, call.body.result.resultType,
+            "tools/call result is discriminated");
+
+        # tools must be returned in a deterministic order so clients can cache the list
+        list<auto> names = map $1.name, post("tools/list").body.result.tools;
+        assertEq(sort(names), names, "tools/list is deterministically ordered");
+        assertEq(names, map $1.name, post("tools/list").body.result.tools,
+            "tools/list ordering is stable across calls");
+    }
+
+    cacheableResultTest() {
+        hash<auto> tools = post("tools/list").body.result;
+        assertGt(0, tools.ttlMs, "tools/list carries a freshness hint");
+        assertEq("public", tools.cacheScope, "tools/list declares its cache scope");
+
+        foreach string method in (("prompts/list", "resources/list", "server/discover")) {
+            hash<auto> result = post(method).body.result;
+            assertTrue(exists result.ttlMs, sprintf("%s carries ttlMs", method));
+            assertTrue(exists result.cacheScope, sprintf("%s carries cacheScope", method));
+        }
+
+        hash<auto> read = post("resources/read", {"uri": "file:///a.txt"}).body.result;
+        assertEq("private", read.cacheScope,
+            "resource contents are not cacheable by shared intermediaries");
+
+        # tools/call is not a cacheable operation
+        assertNothing(post("tools/call", {"name": "alpha"}).body.result.ttlMs,
+            "tools/call results carry no freshness hint");
+    }
+
+    headerMirroringTest() {
+        *hash<auto> routed;
+        foreach hash<auto> tool in (post("tools/list").body.result.tools) {
+            if (tool.name == "routed") {
+                routed = tool;
+                break;
+            }
+        }
+        assertTrue(exists routed, "the routed tool is advertised");
+        assertEq("Region", routed.inputSchema.properties.region{McpClient::McpHeaderAnnotation},
+            "the tool advertises its header annotation");
+
+        hash<auto> args = {"region": "us-west1", "query": "SELECT 1"};
+        hash<auto> ok = post("tools/call", {"name": "routed", "arguments": args}, {
+            "headers": {"Mcp-Param-Region": "us-west1"},
+        });
+        assertEq(200, ok.status, "a correctly mirrored parameter is accepted");
+
+        # the header must match the body: a mismatch is a protocol error, not a tool error
+        hash<auto> bad = post("tools/call", {"name": "routed", "arguments": args}, {
+            "headers": {"Mcp-Param-Region": "eu-central1"},
+        });
+        assertEq(400, bad.status, "a mismatched Mcp-Param-* header is rejected");
+        assertEq(McpClient::MCP_Err_HeaderMismatch, bad.body.error.code,
+            "a mismatched Mcp-Param-* header reports HeaderMismatch");
+
+        hash<auto> missing = post("tools/call", {"name": "routed", "arguments": args});
+        assertEq(400, missing.status, "a missing required Mcp-Param-* header is rejected");
+        assertEq(McpClient::MCP_Err_HeaderMismatch, missing.body.error.code,
+            "a missing Mcp-Param-* header reports HeaderMismatch");
+
+        # a header for a parameter that is not annotated must be rejected
+        hash<auto> extra = post("tools/call", {"name": "alpha", "arguments": {}}, {
+            "headers": {"Mcp-Param-Bogus": "x"},
+        });
+        assertEq(400, extra.status, "an unexpected Mcp-Param-* header is rejected");
+
+        # a value that is not header-safe travels Base64-encoded and still matches
+        hash<auto> uni_args = {"region": "eu-züri", "query": "SELECT 1"};
+        hash<auto> uni = post("tools/call", {"name": "routed", "arguments": uni_args}, {
+            "headers": {
+                "Mcp-Param-Region": McpClient::mcp_encode_header_value("eu-züri"),
+            },
+        });
+        assertEq(200, uni.status, "a Base64-encoded parameter value is accepted");
+
+        # an omitted parameter means an omitted header
+        hash<auto> omitted = post("tools/call",
+            {"name": "routed", "arguments": {"query": "SELECT 1"}});
+        assertEq(200, omitted.status, "an absent parameter requires no header");
+    }
+
+    negativeProtocolTest() {
+        # unsupported version
+        hash<auto> old = post("tools/list", NOTHING, {
+            "meta": {McpClient::MCP_MetaProtocolVersion: "1900-01-01"},
+            "headers": {McpClient::McpProtocolVersionHeader: "1900-01-01"},
+        });
+        assertEq(400, old.status, "an unsupported protocol version is rejected with 400");
+        assertEq(McpClient::MCP_Err_UnsupportedProtocolVersion, old.body.error.code,
+            "an unsupported version reports UnsupportedProtocolVersion");
+        assertEq("1900-01-01", old.body.error.data.requested,
+            "the error echoes the requested version");
+        assertTrue(old.body.error.data.supported.contains(Version),
+            "the error lists a version the client can retry with");
+
+        # header/body version skew
+        hash<auto> skew = post("tools/list", NOTHING, {
+            "headers": {McpClient::McpProtocolVersionHeader: "2025-11-25"},
+        });
+        assertEq(400, skew.status, "a header/body version mismatch is rejected");
+        assertEq(McpClient::MCP_Err_HeaderMismatch, skew.body.error.code,
+            "a version mismatch reports HeaderMismatch");
+
+        # missing required headers
+        foreach string header in ((McpClient::McpProtocolVersionHeader,
+                McpClient::McpMethodHeader)) {
+            hash<auto> r = post("tools/list", NOTHING, {"remove_headers": (header,)});
+            assertEq(400, r.status, sprintf("a request without %s is rejected", header));
+            assertEq(McpClient::MCP_Err_HeaderMismatch, r.body.error.code,
+                sprintf("a missing %s reports HeaderMismatch", header));
+        }
+
+        # Mcp-Name is required for the methods that name a target
+        hash<auto> noname = post("tools/call", {"name": "alpha"}, {
+            "remove_headers": (McpClient::McpNameHeader,),
+        });
+        assertEq(400, noname.status, "tools/call without Mcp-Name is rejected");
+
+        hash<auto> wrongname = post("tools/call", {"name": "alpha"}, {
+            "headers": {McpClient::McpNameHeader: "zebra"},
+        });
+        assertEq(400, wrongname.status, "a mismatched Mcp-Name is rejected");
+        assertEq(McpClient::MCP_Err_HeaderMismatch, wrongname.body.error.code,
+            "a mismatched Mcp-Name reports HeaderMismatch");
+
+        hash<auto> wrongmethod = post("tools/list", NOTHING, {
+            "headers": {McpClient::McpMethodHeader: "prompts/list"},
+        });
+        assertEq(400, wrongmethod.status, "a mismatched Mcp-Method is rejected");
+
+        # required _meta members
+        hash<auto> nocaps = post("tools/list", NOTHING, {
+            "remove_meta": (McpClient::MCP_MetaClientCapabilities,),
+        });
+        assertEq(400, nocaps.status, "a request without client capabilities is rejected");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, nocaps.body.error.code,
+            "a missing required _meta member is an invalid-params error");
+    }
+
+    removedMethodTest() {
+        # methods removed in this revision must report method-not-found with HTTP 404
+        foreach string method in (("ping", "logging/setLevel", "resources/subscribe",
+                "resources/unsubscribe", "tasks/result", "tasks/list", "initialize",
+                "notifications/initialized")) {
+            hash<auto> r = post(method, {"level": "info", "uri": "file:///a.txt",
+                "taskId": "x"});
+            assertEq(404, r.status, sprintf("%s is not available to modern clients", method));
+            assertEq(JsonRpcHandler::JRE_MethodNotFound, r.body.error.code,
+                sprintf("%s reports method-not-found", method));
+        }
+
+        hash<auto> unknown = post("no/such/method");
+        assertEq(404, unknown.status, "an unknown method reports 404");
+        assertEq(JsonRpcHandler::JRE_MethodNotFound, unknown.body.error.code,
+            "an unknown method reports method-not-found");
+    }
+
+    errorCodeTest() {
+        # resource-not-found moved from the reserved -32002 to the JSON-RPC standard -32602
+        hash<auto> r = post("resources/read", {"uri": "file:///missing"});
+        assertEq(400, r.status, "an unknown resource is a client error");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, r.body.error.code,
+            "an unknown resource reports invalid params, not the retired -32002");
+        assertNeq(McpClient::MCP_Err_LegacyResourceNotFound, r.body.error.code,
+            "the retired resource-not-found code is not emitted");
+
+        # every MCP-defined code lives in the range the specification reserves for itself
+        foreach int code in ((McpClient::MCP_Err_HeaderMismatch,
+                McpClient::MCP_Err_MissingRequiredClientCapability,
+                McpClient::MCP_Err_UnsupportedProtocolVersion)) {
+            assertTrue(code <= -32020 && code >= -32099,
+                sprintf("%d is inside the range reserved for the MCP specification", code));
+        }
+    }
+
+    mrtrElicitationTest() {
+        hash<auto> first = post("tools/call", {"name": "confirm", "arguments": {"build": "v9"}}, {
+            "meta": {McpClient::MCP_MetaClientCapabilities: {"elicitation": {}}},
+        });
+        assertEq(200, first.status, "a suspended request is not an error");
+        assertEq(McpClient::McpResultType::InputRequired, first.body.result.resultType,
+            "the server reports that it needs input");
+        assertEq("elicitation/create", first.body.result.inputRequests.confirm.method,
+            "the input request names the interaction it needs");
+        assertEq("Deploy v9?", first.body.result.inputRequests.confirm.params.message,
+            "the input request carries its parameters");
+        assertTrue(first.body.result.requestState.val(),
+            "the server carries its state through the client");
+
+        # the retry is an independent request with a new ID
+        hash<auto> second = post("tools/call", {
+            "name": "confirm",
+            "arguments": {"build": "v9"},
+            "inputResponses": {"confirm": {"action": "accept", "content": {}}},
+            "requestState": first.body.result.requestState,
+        }, {
+            "id": 2,
+            "meta": {McpClient::MCP_MetaClientCapabilities: {"elicitation": {}}},
+        });
+        assertEq(McpClient::McpResultType::Complete, second.body.result.resultType,
+            "the retry completes the request");
+        assertEq("accept:v9", second.body.result.content[0].text,
+            "the tool sees both the client's answer and its own recovered state");
+    }
+
+    mrtrSamplingTest() {
+        hash<auto> first = post("tools/call", {"name": "sampler"}, {
+            "meta": {McpClient::MCP_MetaClientCapabilities: {"sampling": {}}},
+        });
+        assertEq(McpClient::McpResultType::InputRequired, first.body.result.resultType,
+            "a sampling request suspends the call");
+        assertEq("sampling/createMessage", first.body.result.inputRequests.llm.method,
+            "the server asks for an LLM completion");
+
+        hash<auto> second = post("tools/call", {
+            "name": "sampler",
+            "inputResponses": {"llm": {"role": "assistant",
+                "content": {"type": "text", "text": "Paris"}}},
+            "requestState": first.body.result.requestState,
+        }, {
+            "id": 2,
+            "meta": {McpClient::MCP_MetaClientCapabilities: {"sampling": {}}},
+        });
+        assertEq("Paris", second.body.result.content[0].text,
+            "the completion reaches the tool");
+    }
+
+    mrtrMultiRoundTest() {
+        hash<auto> caps = {McpClient::MCP_MetaClientCapabilities: {"elicitation": {}}};
+
+        hash<auto> r1 = post("tools/call", {"name": "twostep"}, {"meta": caps});
+        assertEq(McpClient::McpResultType::InputRequired, r1.body.result.resultType,
+            "the first suspension point is reported");
+        assertEq(("first",), keys r1.body.result.inputRequests,
+            "only the first request is asked for");
+
+        hash<auto> r2 = post("tools/call", {
+            "name": "twostep",
+            "inputResponses": {"first": {"action": "accept"}},
+            "requestState": r1.body.result.requestState,
+        }, {"id": 2, "meta": caps});
+        assertEq(McpClient::McpResultType::InputRequired, r2.body.result.resultType,
+            "the second suspension point is reported");
+        assertEq(("second",), keys r2.body.result.inputRequests,
+            "the second round asks for the next input");
+
+        hash<auto> r3 = post("tools/call", {
+            "name": "twostep",
+            "inputResponses": {"first": {"action": "accept"}, "second": {"action": "accept"}},
+            "requestState": r2.body.result.requestState,
+        }, {"id": 3, "meta": caps});
+        assertEq(McpClient::McpResultType::Complete, r3.body.result.resultType,
+            "the third round completes");
+        assertEq("done after 2", r3.body.result.content[0].text,
+            "the tool ran through both suspension points");
+    }
+
+    mrtrCapabilityTest() {
+        # the server must not ask for an interaction the client did not declare
+        hash<auto> r = post("tools/call", {"name": "confirm", "arguments": {"build": "v1"}});
+        assertEq(400, r.status, "a missing client capability is a client error");
+        assertEq(McpClient::MCP_Err_MissingRequiredClientCapability, r.body.error.code,
+            "the server reports the missing capability");
+        assertEq(("elicitation",), r.body.error.data.requiredCapabilities,
+            "the error names the capability the client must declare");
+
+        hash<auto> s = post("tools/call", {"name": "sampler"}, {
+            "meta": {McpClient::MCP_MetaClientCapabilities: {"elicitation": {}}},
+        });
+        assertEq(McpClient::MCP_Err_MissingRequiredClientCapability, s.body.error.code,
+            "declaring a different capability does not satisfy the requirement");
+        assertEq(("sampling",), s.body.error.data.requiredCapabilities,
+            "the error names the specific missing capability");
+    }
+
+    mrtrRequestStateTest() {
+        hash<auto> caps = {McpClient::MCP_MetaClientCapabilities: {"elicitation": {}}};
+        hash<auto> first = post("tools/call", {"name": "confirm", "arguments": {"build": "v9"}},
+            {"meta": caps});
+        string state = first.body.result.requestState;
+
+        # request state passes through the client and must be treated as hostile input
+        hash<auto> tampered = post("tools/call", {
+            "name": "confirm",
+            "arguments": {"build": "v9"},
+            "inputResponses": {"confirm": {"action": "accept"}},
+            "requestState": state + "x",
+        }, {"id": 2, "meta": caps});
+        assertEq(400, tampered.status, "tampered state is rejected");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, tampered.body.error.code,
+            "tampered state is an invalid-parameter error");
+
+        # state minted for one request must not be usable on another
+        hash<auto> replayed = post("tools/call", {
+            "name": "confirm",
+            "arguments": {"build": "DIFFERENT"},
+            "inputResponses": {"confirm": {"action": "accept"}},
+            "requestState": state,
+        }, {"id": 3, "meta": caps});
+        assertEq(400, replayed.status, "state replayed on a different request is rejected");
+
+        hash<auto> other_method = post("prompts/get", {
+            "name": "greet",
+            "requestState": state,
+        }, {"id": 4, "meta": caps});
+        assertEq(400, other_method.status, "state replayed on a different method is rejected");
+
+        # the retry must reuse the state verbatim; the tool never sees a forged value
+        hash<auto> good = post("tools/call", {
+            "name": "confirm",
+            "arguments": {"build": "v9"},
+            "inputResponses": {"confirm": {"action": "decline"}},
+            "requestState": state,
+        }, {"id": 5, "meta": caps});
+        assertEq("decline:v9", good.body.result.content[0].text,
+            "the unmodified state is accepted and recovered");
+    }
+
+    subscriptionsTest() {
+        Socket s();
+        s.connect("localhost:" + port, 10s);
+        on_exit s.close();
+
+        hash<auto> body = {
+            "jsonrpc": "2.0",
+            "id": 77,
+            "method": "subscriptions/listen",
+            "params": {
+                "_meta": BaseMeta,
+                "notifications": {
+                    "toolsListChanged": True,
+                    "resourceSubscriptions": ("file:///a.txt", "file:///not-a-resource"),
+                },
+            },
+        };
+        string bstr = make_json(body);
+        s.send(sprintf("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"
+            "Accept: text/event-stream\r\n%s: %s\r\n%s: subscriptions/listen\r\n"
+            "Content-Length: %d\r\n\r\n%s", McpClient::McpProtocolVersionHeader, Version,
+            McpClient::McpMethodHeader, bstr.size(), bstr));
+
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code, "subscriptions/listen opens a stream");
+        assertEq(MimeTypeSse, resp."content-type",
+            "the response to subscriptions/listen is itself an event stream");
+
+        string buf = "";
+        code next_message = hash<auto> sub () {
+            while (True) {
+                int nl = buf.find("\n\n");
+                if (nl == -1) {
+                    buf += s.recv(0, 10000).toString();
+                    continue;
+                }
+                string block = buf.substr(0, nl);
+                buf = buf.substr(nl + 2);
+                *hash<SseMessageInfo> evt = Socket::parseServerSentEvent(block + "\n\n");
+                if (evt.data.val()) {
+                    return parse_json(evt.data);
+                }
+            }
+        };
+
+        hash<auto> ack = next_message();
+        assertEq("notifications/subscriptions/acknowledged", ack.method,
+            "the acknowledgment is the first message on the stream");
+        assertEq(77, ack.params."_meta"{McpClient::MCP_MetaSubscriptionId},
+            "the acknowledgment carries the subscription ID");
+        assertTrue(ack.params.notifications.toolsListChanged,
+            "the acknowledged filter reflects what the server will honor");
+        assertEq(("file:///a.txt",), ack.params.notifications.resourceSubscriptions,
+            "the server drops a subscription for a resource it does not serve");
+        assertNothing(ack.params.notifications.promptsListChanged,
+            "types the client did not request are not acknowledged");
+
+        # the server must not send notification types the client did not opt in to
+        mcp_server.notifyPromptsListChanged();
+        mcp_server.notifyResourceUpdated("file:///b.txt");
+        mcp_server.notifyToolsListChanged();
+        mcp_server.notifyResourceUpdated("file:///a.txt");
+
+        hash<auto> n1 = next_message();
+        assertEq("notifications/tools/list_changed", n1.method,
+            "an opted-in notification is delivered, and the two suppressed ones are not");
+        assertEq(77, n1.params."_meta"{McpClient::MCP_MetaSubscriptionId},
+            "every notification carries the subscription ID");
+
+        hash<auto> n2 = next_message();
+        assertEq("notifications/resources/updated", n2.method,
+            "a subscribed resource update is delivered");
+        assertEq("file:///a.txt", n2.params.uri, "the update names the resource that changed");
+
+        assertEq(1, mcp_server.getSubscriptionCount(), "the server tracks the open stream");
+
+        # a graceful server-side close answers the original request before closing
+        mcp_server.closeSubscriptions();
+        hash<auto> closing = next_message();
+        assertEq(77, closing.id, "the stream ends with the response to the listen request");
+        assertEq(McpClient::McpResultType::Complete, closing.result.resultType,
+            "the closing response is a complete result");
+        assertEq(0, mcp_server.getSubscriptionCount(), "the stream is deregistered");
+    }
+
+    tasksExtensionTest() {
+        hash<auto> tasks_caps = {
+            McpClient::MCP_MetaClientCapabilities: {
+                "extensions": {McpClient::MCP_ExtensionTasks: {}},
+            },
+        };
+
+        # without the extension declared, the server must not return a task handle
+        hash<auto> sync = post("tools/call", {"name": "slow"});
+        assertEq(McpClient::McpResultType::Complete, sync.body.result.resultType,
+            "a client that did not declare the extension gets a synchronous result");
+
+        # with the extension declared, the server decides to run it as a task
+        hash<auto> created = post("tools/call", {"name": "slow"}, {"meta": tasks_caps});
+        assertEq(McpClient::McpResultType::Task, created.body.result.resultType,
+            "the server answers with a task handle");
+        hash<auto> task = created.body.result.task;
+        assertTrue(task.taskId.val(), "the handle carries a task ID");
+        assertEq("working", task.status, "the task starts in the working state");
+        assertGt(0, task.ttlMs, "the handle reports its lifetime as ttlMs");
+        assertGt(0, task.pollIntervalMs, "the handle suggests a poll interval");
+
+        hash<auto> done = pollTask(task.taskId, tasks_caps);
+        assertEq("completed", done.status, "the task reaches a terminal state");
+        assertEq("slow done", done.result.content[0].text,
+            "the completed task carries what the call would have returned");
+
+        # a failing tool produces a failed task rather than a transport error
+        hash<auto> boom = post("tools/call", {"name": "boom"}, {"meta": tasks_caps});
+        hash<auto> failed = pollTask(boom.body.result.task.taskId, tasks_caps);
+        assertEq("failed", failed.status, "a tool exception fails the task");
+        assertTrue(failed.error.message =~ /BOOM/, "the failure carries the error");
+
+        # cancellation
+        hash<auto> c = post("tools/call", {"name": "slow"}, {"meta": tasks_caps});
+        string cancel_id = c.body.result.task.taskId;
+        hash<auto> cancelled = post("tasks/cancel",
+            {"taskId": cancel_id, "reason": "user cancelled"}, {"meta": tasks_caps});
+        assertEq(200, cancelled.status, "tasks/cancel is acknowledged");
+        hash<auto> after = post("tasks/get", {"taskId": cancel_id}, {"meta": tasks_caps});
+        assertEq("cancelled", after.body.result.status, "the task reports it was cancelled");
+
+        # unknown task IDs are a client error
+        hash<auto> unknown = post("tasks/get", {"taskId": "no-such-task"}, {"meta": tasks_caps});
+        assertEq(400, unknown.status, "an unknown task ID is rejected");
+        assertEq(JsonRpcHandler::JRE_InvalidParams, unknown.body.error.code,
+            "an unknown task ID is an invalid-parameter error");
+    }
+
+    tasksInputRequiredTest() {
+        hash<auto> caps = {
+            McpClient::MCP_MetaClientCapabilities: {
+                "elicitation": {},
+                "extensions": {McpClient::MCP_ExtensionTasks: {}},
+            },
+        };
+
+        hash<auto> created = post("tools/call", {"name": "approve"}, {"meta": caps});
+        assertEq(McpClient::McpResultType::Task, created.body.result.resultType,
+            "the approval tool runs as a task");
+        string taskId = created.body.result.task.taskId;
+
+        hash<auto> waiting = pollTask(taskId, caps, "input_required");
+        assertEq("input_required", waiting.status, "the task reports that it needs input");
+        assertEq("elicitation/create", waiting.inputRequests.ok.method,
+            "the task surfaces the request it is waiting on");
+
+        hash<auto> ack = post("tasks/update", {
+            "taskId": taskId,
+            "inputResponses": {"ok": {"action": "accept"}},
+        }, {"meta": caps});
+        assertEq(200, ack.status, "tasks/update is acknowledged");
+
+        hash<auto> done = pollTask(taskId, caps);
+        assertEq("completed", done.status, "the task completes once its input arrives");
+        assertEq("approved=accept", done.result.content[0].text,
+            "the tool saw the client's answer");
+
+        # responses for a task that is not waiting are ignored, not an error
+        hash<auto> again = post("tasks/update", {
+            "taskId": taskId,
+            "inputResponses": {"ok": {"action": "decline"}},
+        }, {"meta": caps});
+        assertEq(200, again.status, "a redundant tasks/update is ignored rather than failing");
+        assertEq("completed", post("tasks/get", {"taskId": taskId}, {"meta": caps})
+            .body.result.status, "a completed task keeps its terminal state");
+    }
+
+    modernOnlyServerTest() {
+        # a server configured for modern versions only must still fail informatively
+        Logger l("modern-only", LoggerLevel::getLevelError());
+        TestHandler handler(l);
+        handler.setLegacyEnabled(False);
+        HttpServer server(<HttpServerOptionInfo>{"logger": l});
+        server.setHandler("mcp", "", MimeTypeJson, handler);
+        server.setDefaultHandler("mcp", handler);
+        int p = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit server.stop();
+        string surl = sprintf("http://localhost:%d", p);
+
+        assertEq(200, post("tools/list", NOTHING, {"url": surl}).status,
+            "modern requests are served");
+        assertFalse(post("server/discover", NOTHING, {"url": surl})
+            .body.result.supportedVersions.contains(McpClient::MCP_Version_Latest_Legacy),
+            "handshake-based versions are not advertised when they are disabled");
+
+        # a legacy client has no fall-forward mechanism, so the error must name the versions
+        HTTPClient hc({"url": surl});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        auto body;
+        try {
+            body = hc.send(make_json({
+                "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                    "clientInfo": {"name": "legacy", "version": "1.0"}},
+            }), "POST", "/", {"Content-Type": "application/json",
+                "Accept": "application/json"}, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            body = ex.arg.body;
+            info."status-code" = ex.arg.status_code;
+        }
+        assertEq(400, info."status-code", "initialize is rejected");
+        hash<auto> err = parse_json(body.typeCode() == NT_STRING ? body : body.body);
+        assertEq(McpClient::MCP_Err_UnsupportedProtocolVersion, err.error.code,
+            "the rejection reports an unsupported protocol version");
+        assertTrue(err.error.data.supported.contains(Version),
+            "the rejection names the versions the server does support");
+
+        # the GET event stream and DELETE teardown no longer exist
+        foreach string method in (("GET", "DELETE")) {
+            HTTPClient c2({"url": surl});
+            on_exit c2.disconnect();
+            hash<auto> i2;
+            try {
+                c2.send(NOTHING, method, "/", {"Accept": "text/event-stream"}, False, \i2);
+                fail(sprintf("%s should not be accepted", method));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq(405, ex.arg.status_code,
+                    sprintf("HTTP %s is not allowed on a modern-only endpoint", method));
+            }
+        }
+    }
+
+    #! Polls a task until it reaches the given status (or any terminal status)
+    /** @note deliberately makes no assertions per iteration: the number of polls depends on
+        timing, and an assertion inside the loop would make the suite's assertion count
+        nondeterministic
+    */
+    private hash<auto> pollTask(string taskId, hash<auto> meta, *string until) {
+        date deadline = now_us() + 20s;
+        while (now_us() < deadline) {
+            hash<auto> r = post("tasks/get", {"taskId": taskId}, {"meta": meta});
+            if (r.status != 200) {
+                throw "TEST-ERROR", sprintf("tasks/get for %y failed with HTTP %d: %y", taskId,
+                    r.status, r.body);
+            }
+            hash<auto> task = r.body.result;
+            if (until.val()) {
+                if (task.status == until) {
+                    return task;
+                }
+            } else if (task.status == "completed" || task.status == "failed"
+                || task.status == "cancelled") {
+                return task;
+            }
+            usleep(25ms);
+        }
+        throw "TEST-ERROR", sprintf("task %y did not reach %y in time", taskId,
+            until ?? "a terminal state");
+    }
+}

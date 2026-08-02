@@ -1,0 +1,8 @@
+# Python dependencies for the legacy-era (2025-11-25 and earlier) MCP integration tests
+# Install into a dedicated venv with: pip install -r requirements-legacy.txt
+#
+# NOTE: pinned below 2.0 on purpose — mcp 2.x implements the stateless 2026-07-28 protocol
+# and no longer exercises the initialize handshake these tests cover.
+
+mcp>=1.25,<2
+httpx>=0.25.0

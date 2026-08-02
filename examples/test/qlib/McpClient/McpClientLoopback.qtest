@@ -1,0 +1,657 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%requires McpClient
+%exec-class McpClientLoopbackTest
+
+class LoopbackHandler inherits McpServerHandler {
+    public {
+        #! reaches zero once the blocking tool has started executing
+        Qore::Thread::Counter blocking_started(1);
+        #! the blocking tool returns once this reaches zero
+        Qore::Thread::Counter blocking_gate(1);
+    }
+
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("zebra", "sorts last", NOTHING, \echo());
+        registerTool("alpha", "sorts first", NOTHING, \echo());
+        registerTool("confirm", "asks for confirmation", NOTHING, \confirmTool());
+        registerTool("slow", "runs as a task", NOTHING, \slowTool(), NOTHING,
+            {"execution": {"taskSupport": "required"}}, NOTHING);
+        registerTool("blocking", "runs as a task until released", NOTHING, \blockingTool(),
+            NOTHING, {"execution": {"taskSupport": "required"}}, NOTHING);
+        registerResource("file:///a.txt", "a", "resource a", "text/plain", \readA());
+        registerPrompt("greet", "a greeting", (
+            {"name": "name", "description": "who to greet", "required": True},
+        ), \greetHandler());
+        setInstructions("loopback server");
+        setModernPollInterval(50);
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    string readA(hash<auto> cx, string uri) {
+        return "content of " + uri;
+    }
+
+    list<hash<auto>> greetHandler(hash<auto> cx, *hash<auto> arguments) {
+        return ({
+            "role": "user",
+            "content": {"type": "text", "text": sprintf("Hello, %s!", arguments.name ?? "world")},
+        },);
+    }
+
+    hash<auto> confirmTool(*hash<auto> args) {
+        hash<auto> ctx = McpServerHandler::getToolCallContext();
+        hash<auto> answers = ctx.handler.requestInput({
+            "confirm": {
+                "method": "elicitation/create",
+                "params": {"mode": "form", "message": sprintf("Deploy %s?", args.build)},
+            },
+        }, {"build": args.build});
+        return {"content": ({"type": "text",
+            "text": sprintf("%s:%s", answers.confirm.action, args.build)},)};
+    }
+
+    hash<auto> slowTool(*hash<auto> args) {
+        usleep(50ms);
+        return {"content": ({"type": "text", "text": "slow done"},)};
+    }
+
+    #! Blocks until the test releases it, so that a cancellation cannot lose a race with
+    #! the tool finishing
+    hash<auto> blockingTool(*hash<auto> args) {
+        blocking_started.dec();
+        blocking_gate.waitForZero(30s);
+        return {"content": ({"type": "text", "text": "released"},)};
+    }
+}
+
+public class McpClientLoopbackTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        LoopbackHandler dual_handler;
+        LoopbackHandler legacy_handler;
+        HttpServer dual_http;
+        HttpServer legacy_http;
+        string dual_url;
+        string legacy_url;
+    }
+
+    constructor() : Test("McpClientLoopbackTest", "1.0") {
+        addTestCase("protocol helper test", \protocolHelperTest());
+        addTestCase("header annotation test", \headerAnnotationTest());
+        addTestCase("request state test", \requestStateTest());
+        addTestCase("modern loopback test", \modernLoopbackTest());
+        addTestCase("legacy loopback test", \legacyLoopbackTest());
+        addTestCase("era detection test", \eraDetectionTest());
+        addTestCase("version pinning test", \versionPinningTest());
+        addTestCase("MRTR client test", \mrtrClientTest());
+        addTestCase("tasks client test", \tasksClientTest());
+        addTestCase("subscription client test", \subscriptionClientTest());
+        addTestCase("result cache test", \resultCacheTest());
+        addTestCase("invalid tool annotation test", \invalidToolAnnotationTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("loopback", LoggerLevel::getLevelError());
+
+        dual_handler = new LoopbackHandler(logger);
+        dual_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        dual_http.setHandler("mcp", "", MimeTypeJson, dual_handler);
+        dual_http.setDefaultHandler("mcp", dual_handler);
+        dual_url = sprintf("http://localhost:%d",
+            dual_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+
+        legacy_handler = new LoopbackHandler(logger);
+        legacy_handler.setModernEnabled(False);
+        legacy_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        legacy_http.setHandler("mcp", "", MimeTypeJson, legacy_handler);
+        legacy_http.setDefaultHandler("mcp", legacy_handler);
+        legacy_url = sprintf("http://localhost:%d",
+            legacy_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+    }
+
+    globalTearDown() {
+        if (dual_http) {
+            dual_http.stop();
+            delete dual_http;
+        }
+        if (legacy_http) {
+            legacy_http.stop();
+            delete legacy_http;
+        }
+    }
+
+    private McpClient::McpClient getClient(string url, *hash<auto> opts) {
+        McpClient::McpClient c(url, opts);
+        c.initialize(<McpClientInfo>{"name": "LoopbackClient", "version": "1.0"});
+        return c;
+    }
+
+    protocolHelperTest() {
+        # header values that are already safe travel verbatim
+        foreach string v in (("us-west1", "a-b_c.d", "42", "")) {
+            assertEq(v, McpClient::mcp_encode_header_value(v),
+                sprintf("%y is header-safe", v));
+        }
+
+        # anything else uses the Base64 sentinel, and round-trips exactly
+        hash<string, string> expected = {
+            "Hello, 世界": "=?base64?SGVsbG8sIOS4lueVjA==?=",
+            " padded ": "=?base64?IHBhZGRlZCA=?=",
+            "line1\nline2": "=?base64?bGluZTEKbGluZTI=?=",
+            # a plain value that looks like the sentinel must be encoded too, or decoding
+            # it would be ambiguous
+            "=?base64?literal?=": "=?base64?PT9iYXNlNjQ/bGl0ZXJhbD89?=",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, McpClient::mcp_encode_header_value(i.key),
+                sprintf("%y encodes as specified", i.key));
+            assertEq(i.key, McpClient::mcp_decode_header_value(i.value),
+                sprintf("%y round-trips", i.key));
+        }
+        assertFalse(McpClient::mcp_header_value_is_safe("=?base64?literal?="),
+            "a value matching the sentinel is never sent verbatim");
+        assertThrows("MCP-HEADER-ERROR", sub () {
+            McpClient::mcp_decode_header_value("=?base64?!!!not-base64!!!?=");
+        }, NOTHING, "a malformed sentinel value is rejected");
+
+        # Mcp-Name is sourced from params.name or params.uri, and only for some methods
+        assertEq("t", McpClient::mcp_name_header_value("tools/call", {"name": "t"}),
+            "tools/call names the tool");
+        assertEq("p", McpClient::mcp_name_header_value("prompts/get", {"name": "p"}),
+            "prompts/get names the prompt");
+        assertEq("file:///a", McpClient::mcp_name_header_value("resources/read",
+            {"uri": "file:///a"}), "resources/read names the resource URI");
+        assertNothing(McpClient::mcp_name_header_value("tools/list", {}),
+            "tools/list needs no name header");
+
+        # era classification
+        assertTrue(McpClient::mcp_is_modern_version("2026-07-28"), "2026-07-28 is modern");
+        assertFalse(McpClient::mcp_is_modern_version("2025-11-25"), "2025-11-25 is legacy");
+        assertFalse(McpClient::mcp_is_modern_version("not-a-version"),
+            "an unknown version is not modern");
+
+        # request metadata is read defensively: params may be absent or positional
+        assertNothing(McpClient::mcp_request_protocol_version(NOTHING),
+            "absent params declare no version");
+        assertNothing(McpClient::mcp_request_protocol_version(("positional",)),
+            "positional params declare no version");
+        assertEq("2026-07-28", McpClient::mcp_request_protocol_version({
+            "_meta": {McpClient::MCP_MetaProtocolVersion: "2026-07-28"},
+        }), "the declared version is read from _meta");
+    }
+
+    headerAnnotationTest() {
+        hash<auto> valid = {
+            "type": "object",
+            "properties": {
+                "region": {"type": "string", McpClient::McpHeaderAnnotation: "Region"},
+                "query": {"type": "string"},
+            },
+        };
+        assertNothing(McpClient::mcp_validate_tool_header_annotations(valid),
+            "a conforming annotation is accepted");
+        assertEq({"Mcp-Param-Region": "us-west1"},
+            McpClient::mcp_extract_header_params(valid, {"region": "us-west1", "query": "x"}),
+            "the annotated parameter is mirrored");
+        assertEq({}, McpClient::mcp_extract_header_params(valid, {"query": "x"}),
+            "an absent parameter produces no header");
+        assertEq({}, McpClient::mcp_extract_header_params(valid, {"region": NOTHING}),
+            "a null parameter produces no header");
+
+        # nested properties are reachable as long as every step is a "properties" key
+        hash<auto> nested = {
+            "type": "object",
+            "properties": {
+                "cfg": {
+                    "type": "object",
+                    "properties": {
+                        "tenant": {"type": "integer", McpClient::McpHeaderAnnotation: "Tenant"},
+                    },
+                },
+            },
+        };
+        assertNothing(McpClient::mcp_validate_tool_header_annotations(nested),
+            "a nested annotation is reachable");
+        assertEq({"Mcp-Param-Tenant": "42"},
+            McpClient::mcp_extract_header_params(nested, {"cfg": {"tenant": 42}}),
+            "a nested parameter is mirrored using its canonical string form");
+
+        # values are converted canonically, and encoded when they are not header-safe
+        hash<auto> types = {
+            "type": "object",
+            "properties": {
+                "flag": {"type": "boolean", McpClient::McpHeaderAnnotation: "Flag"},
+                "num": {"type": "integer", McpClient::McpHeaderAnnotation: "Num"},
+                "text": {"type": "string", McpClient::McpHeaderAnnotation: "Text"},
+            },
+        };
+        assertEq({
+            "Mcp-Param-Flag": "false",
+            "Mcp-Param-Num": "-7",
+            "Mcp-Param-Text": "=?base64?SGVsbG8sIOS4lueVjA==?=",
+        }, McpClient::mcp_extract_header_params(types,
+            {"flag": False, "num": -7, "text": "Hello, 世界"}),
+            "each primitive type is converted and encoded as specified");
+
+        # an annotation must be statically reachable: a value's position in the instance has
+        # to be determined by the schema alone
+        hash<auto> via_items = {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "r": {"type": "string", McpClient::McpHeaderAnnotation: "R"},
+                        },
+                    },
+                },
+            },
+        };
+        assertTrue(McpClient::mcp_validate_tool_header_annotations(via_items).val(),
+            "an annotation under \"items\" is rejected");
+
+        foreach string keyword in (("oneOf", "anyOf", "allOf")) {
+            hash<auto> schema = {
+                "type": "object",
+                keyword: ({
+                    "properties": {
+                        "r": {"type": "string", McpClient::McpHeaderAnnotation: "R"},
+                    },
+                },),
+            };
+            assertTrue(McpClient::mcp_validate_tool_header_annotations(schema).val(),
+                sprintf("an annotation under %y is rejected", keyword));
+        }
+
+        # constraint violations
+        hash<auto> bad_type = {"type": "object", "properties": {
+            "n": {"type": "number", McpClient::McpHeaderAnnotation: "N"}}};
+        assertTrue(McpClient::mcp_validate_tool_header_annotations(bad_type).val(),
+            "a \"number\" parameter cannot be mirrored");
+
+        hash<auto> dup = {"type": "object", "properties": {
+            "a": {"type": "string", McpClient::McpHeaderAnnotation: "Reg"},
+            "b": {"type": "string", McpClient::McpHeaderAnnotation: "reg"}}};
+        assertTrue(McpClient::mcp_validate_tool_header_annotations(dup).val(),
+            "annotation names must be unique case-insensitively");
+
+        hash<auto> crlf = {"type": "object", "properties": {
+            "a": {"type": "string", McpClient::McpHeaderAnnotation: "bad\nname"}}};
+        assertTrue(McpClient::mcp_validate_tool_header_annotations(crlf).val(),
+            "an annotation name with a line feed is rejected");
+
+        hash<auto> empty = {"type": "object", "properties": {
+            "a": {"type": "string", McpClient::McpHeaderAnnotation: ""}}};
+        assertTrue(McpClient::mcp_validate_tool_header_annotations(empty).val(),
+            "an empty annotation name is rejected");
+
+        # a property that happens to be *named* x-mcp-header is not an annotation
+        hash<auto> propname = {"type": "object", "properties": {
+            McpClient::McpHeaderAnnotation: {"type": "string"}}};
+        assertNothing(McpClient::mcp_validate_tool_header_annotations(propname),
+            "a property named x-mcp-header is not treated as an annotation");
+
+        assertThrows("MCP-HEADER-ERROR", sub () {
+            McpClient::mcp_extract_header_params(bad_type, {"n": 1});
+        }, NOTHING, "extracting from an invalid schema is refused");
+    }
+
+    requestStateTest() {
+        McpRequestState codec();
+        hash<auto> params = {"name": "deploy", "arguments": {"env": "prod", "n": 3}};
+        string state = codec.encode("tools/call", params, {"step": 1}, "alice");
+
+        assertEq({"step": 1}, codec.decode(state, "tools/call", params, "alice"),
+            "state round-trips");
+        assertEq({"step": 1}, codec.decode(state,
+            "tools/call", {"arguments": {"n": 3, "env": "prod"}, "name": "deploy"}, "alice"),
+            "the binding does not depend on the client's key order");
+        assertEq({"step": 1}, codec.decode(state, "tools/call", params + {
+            "_meta": {"x": 1},
+            "inputResponses": {"confirm": {"action": "accept"}},
+            "requestState": state,
+        }, "alice"), "the fields a retry adds do not break the binding");
+
+        # a client could present state that was never issued to it, was issued for a different
+        # operation, or has expired
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode(state, "tools/call", params, "mallory");
+        }, NOTHING, "state issued for another principal is rejected");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode(state, "tools/call", params);
+        }, NOTHING, "state issued for a principal is rejected when unauthenticated");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode(state, "prompts/get", params, "alice");
+        }, NOTHING, "state presented on a different method is rejected");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode(state, "tools/call", {"name": "other"}, "alice");
+        }, NOTHING, "state presented on a different request is rejected");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode(state + "x", "tools/call", params, "alice");
+        }, NOTHING, "tampered state fails its integrity check");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            codec.decode("no-separator", "tools/call", params, "alice");
+        }, NOTHING, "malformed state is rejected");
+
+        McpRequestState other();
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            other.decode(state, "tools/call", params, "alice");
+        }, NOTHING, "state minted with a different key is rejected");
+
+        McpRequestState expiring(1);
+        string short_state = expiring.encode("tools/call", params, "x", "alice");
+        usleep(10ms);
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            expiring.decode(short_state, "tools/call", params, "alice");
+        }, NOTHING, "expired state is rejected");
+
+        # a shared key lets a pool of server instances redeem each other's state
+        binary key = get_random_bytes(32);
+        McpRequestState a(key);
+        McpRequestState b(key);
+        assertEq("shared", b.decode(a.encode("tools/call", params, "shared", "alice"),
+            "tools/call", params, "alice"), "a shared key spans server instances");
+        assertThrows("MCP-REQUEST-STATE-ERROR", sub () {
+            McpRequestState bad(binary());
+        }, NOTHING, "an empty key is refused");
+    }
+
+    modernLoopbackTest() {
+        McpClient::McpClient c = getClient(dual_url);
+        on_exit c.close();
+
+        assertTrue(c.isModern(), "the client selects the stateless protocol version");
+        assertEq(McpClient::MCP_Version_Latest, c.getProtocolVersion(),
+            "the newest protocol version is negotiated");
+        assertEq("QoreMcpServer", c.getServerInfo().name,
+            "the server identity comes from the result metadata");
+        assertEq("loopback server", c.getDiscovery().instructions,
+            "server instructions are available");
+
+        list<auto> tools = c.listTools();
+        list<auto> names = map $1.name, tools;
+        assertEq(sort(names), names, "tools arrive in a deterministic order");
+        assertTrue(names.contains("alpha"), "tools are listed");
+
+        assertEq("{\"x\":1}", c.callTool("alpha", {"x": 1}).content[0].text,
+            "a tool call round-trips");
+        assertEq("content of file:///a.txt",
+            c.readResource("file:///a.txt").contents[0].text, "a resource is read");
+        assertEq(("greet",), map $1.name, c.listPrompts(), "prompts are listed");
+        assertEq("Hello, Alice!",
+            c.getPrompt("greet", {"name": "Alice"}).messages[0].content.text,
+            "a prompt is rendered");
+        assertTrue(c.complete({"type": "ref/prompt", "name": "greet"},
+            {"name": "name", "value": ""}).completion.hasKey("values"),
+            "completion works");
+    }
+
+    legacyLoopbackTest() {
+        McpClient::McpClient c = getClient(legacy_url);
+        on_exit c.close();
+
+        assertFalse(c.isModern(), "the client falls back to the handshake protocol");
+        assertEq(McpClient::MCP_Version_Latest_Legacy, c.getProtocolVersion(),
+            "the newest handshake-based version is negotiated");
+
+        # the same API produces the same results on the other side of the protocol change
+        assertTrue((map $1.name, c.listTools()).contains("alpha"), "tools are listed");
+        assertEq("{\"x\":1}", c.callTool("alpha", {"x": 1}).content[0].text,
+            "a tool call round-trips");
+        assertEq("content of file:///a.txt",
+            c.readResource("file:///a.txt").contents[0].text, "a resource is read");
+        assertEq("Hello, Bob!", c.getPrompt("greet", {"name": "Bob"}).messages[0].content.text,
+            "a prompt is rendered");
+        assertTrue(c.ping(), "ping still works with a handshake-based server");
+        c.setLogLevel("info");
+        assertTrue(c.getSessionId().val(), "a session is established");
+    }
+
+    eraDetectionTest() {
+        # a modern-capable client against a handshake-only server must fall back, not fail
+        McpClient::McpClient legacy = getClient(legacy_url);
+        on_exit legacy.close();
+        assertFalse(legacy.isModern(), "the client detects a handshake-based server");
+
+        McpClient::McpClient modern = getClient(dual_url);
+        on_exit modern.close();
+        assertTrue(modern.isModern(), "the client detects a stateless server");
+
+        # methods removed in the modern revision must fail with a message naming the successor
+        assertThrows("MCP-DEPRECATED-METHOD", sub () { modern.ping(); },
+            NOTHING, "ping is refused against a stateless server");
+        assertThrows("MCP-DEPRECATED-METHOD", sub () { modern.setLogLevel("info"); },
+            NOTHING, "logging/setLevel is refused against a stateless server");
+        assertThrows("MCP-DEPRECATED-METHOD", sub () { legacy.discover(); },
+            NOTHING, "server/discover is refused against a handshake-based server");
+        assertThrows("MCP-DEPRECATED-METHOD", sub () { legacy.listen({}); },
+            NOTHING, "subscriptions/listen is refused against a handshake-based server");
+
+        # the modern client sets a per-request log level instead
+        modern.setRequestLogLevel("debug");
+        assertTrue((map $1.name, modern.listTools()).contains("alpha"),
+            "requests still work with a per-request log level set");
+        modern.setRequestLogLevel(NOTHING);
+    }
+
+    versionPinningTest() {
+        # pinning a handshake-based version skips the stateless attempt entirely
+        McpClient::McpClient pinned = getClient(dual_url, {
+            "protocol_version": McpClient::MCP_Version_Latest_Legacy,
+        });
+        on_exit pinned.close();
+        assertFalse(pinned.isModern(), "a pinned legacy version is honored");
+        assertEq(McpClient::MCP_Version_Latest_Legacy, pinned.getProtocolVersion(),
+            "the pinned version is negotiated");
+
+        McpClient::McpClient no_modern = getClient(dual_url, {"prefer_modern": False});
+        on_exit no_modern.close();
+        assertFalse(no_modern.isModern(), "prefer_modern=False disables the stateless attempt");
+
+        assertThrows("MCP-CLIENT-ERROR", sub () {
+            new McpClient::McpClient(dual_url, {"protocol_version": "1999-01-01"});
+        }, NOTHING, "an unknown protocol version is refused up front");
+    }
+
+    mrtrClientTest() {
+        McpClient::McpClient c = getClient(dual_url, {
+            "client_capabilities": {"elicitation": {}},
+        });
+        on_exit c.close();
+
+        int asked = 0;
+        c.setCallback("onElicitation", auto sub (hash<auto> params) {
+            ++asked;
+            assertEq("Deploy v9?", params.message, "the elicitation reaches the callback");
+            return {"action": "accept", "content": {}};
+        });
+
+        # the round trip is invisible to the caller: one call, one result
+        assertEq("accept:v9", c.callTool("confirm", {"build": "v9"}).content[0].text,
+            "the server's input request is fulfilled and the call completes");
+        assertEq(1, asked, "the callback was invoked exactly once");
+
+        # without a callback the client cannot answer, and says so
+        McpClient::McpClient silent = getClient(dual_url, {
+            "client_capabilities": {"elicitation": {}},
+        });
+        on_exit silent.close();
+        assertThrows("MCP-INPUT-REQUIRED-ERROR", sub () {
+            silent.callTool("confirm", {"build": "v1"});
+        }, NOTHING, "a server request with no registered callback is reported, not silently dropped");
+
+        # a client that declares no capability is told what it must declare
+        McpClient::McpClient plain = getClient(dual_url, {"client_capabilities": {}});
+        on_exit plain.close();
+        assertThrows("MCP-ERROR", sub () { plain.callTool("confirm", {"build": "v1"}); },
+            NOTHING, "a call needing an undeclared capability fails");
+    }
+
+    tasksClientTest() {
+        McpClient::McpClient c = getClient(dual_url);
+        on_exit c.close();
+
+        # the server decides to run this one as a task; the client polls it transparently
+        assertEq("slow done", c.callTool("slow").content[0].text,
+            "a server-side task is polled to completion by callTool()");
+
+        # the handle is also available for callers that want to drive it themselves
+        hash<auto> created = c.callToolAsTask("slow");
+        assertTrue(created.task.taskId.val(), "a task handle is returned");
+        assertGt(0, created.task.ttlMs, "the handle reports ttlMs");
+        assertGt(0, created.task.pollIntervalMs, "the handle suggests a poll interval");
+        assertEq("slow done", c.awaitTask(created.task.taskId, created.task).content[0].text,
+            "awaitTask() returns what the call would have returned");
+
+        # getTaskResult() keeps working across the protocol change, by polling
+        hash<auto> second = c.callToolAsTask("slow");
+        assertEq("slow done", c.getTaskResult(second.task.taskId).content[0].text,
+            "getTaskResult() is era-independent");
+
+        # cancel a task that is demonstrably still running: the tool blocks until released,
+        # so the outcome does not depend on which of the two requests wins a race
+        hash<auto> to_cancel = c.callToolAsTask("blocking");
+        dual_handler.blocking_started.waitForZero(30s);
+        c.cancelTask(to_cancel.task.taskId, "no longer needed");
+        assertEq("cancelled", c.getTask(to_cancel.task.taskId).status,
+            "a task can be cancelled through the client");
+        assertThrows("MCP-TASK-ERROR", sub () {
+            c.awaitTask(to_cancel.task.taskId);
+        }, NOTHING, "awaiting a cancelled task reports the cancellation");
+        dual_handler.blocking_gate.dec();
+        # a task that reached a terminal state keeps it even though the tool returned later
+        assertEq("cancelled", c.getTask(to_cancel.task.taskId).status,
+            "a cancelled task keeps its terminal state when the tool returns afterwards");
+
+        # a client that does not declare the extension must never be handed a task
+        McpClient::McpClient sync = getClient(dual_url, {"enable_tasks": False});
+        on_exit sync.close();
+        assertEq("slow done", sync.callTool("slow").content[0].text,
+            "a client without the tasks extension gets a synchronous result");
+    }
+
+    subscriptionClientTest() {
+        McpClient::McpClient c = getClient(dual_url);
+        on_exit c.close();
+
+        Counter acked(1);
+        Counter tools_changed(1);
+        Counter resource_updated(1);
+        bool prompts_seen = False;
+
+        c.setCallback("onSubscribed", sub (hash<auto> f) { acked.dec(); });
+        c.setCallback("onToolsChanged", sub () { tools_changed.dec(); });
+        c.setCallback("onResourceUpdated", sub (*string uri) {
+            assertEq("file:///a.txt", uri, "the update names the changed resource");
+            resource_updated.dec();
+        });
+        c.setCallback("onPromptsChanged", sub () { prompts_seen = True; });
+
+        assertTrue(c.listen({
+            "toolsListChanged": True,
+            "resourceSubscriptions": ("file:///a.txt",),
+        }), "the subscription stream opens");
+
+        acked.waitForZero(10s);
+        hash<auto> filter = c.getAcknowledgedFilter();
+        assertTrue(filter.toolsListChanged, "the acknowledged filter reflects the request");
+        assertNothing(filter.promptsListChanged,
+            "types that were not requested are not acknowledged");
+
+        dual_handler.notifyPromptsListChanged();
+        dual_handler.notifyToolsListChanged();
+        dual_handler.notifyResourceUpdated("file:///a.txt");
+
+        tools_changed.waitForZero(10s);
+        resource_updated.waitForZero(10s);
+        assertFalse(prompts_seen,
+            "a notification type the client did not opt in to is never delivered");
+
+        assertEq(1, dual_handler.getSubscriptionCount(), "the server tracks the stream");
+        c.stopSseListener();
+        assertNothing(c.getAcknowledgedFilter(),
+            "the acknowledged filter is cleared when the stream stops");
+    }
+
+    resultCacheTest() {
+        McpClient::McpClient c = getClient(dual_url);
+        on_exit c.close();
+
+        list<auto> first = c.listTools();
+        list<auto> second = c.listTools();
+        assertEq(first, second, "a cached list result matches the original");
+
+        # a cache is only useful if it can be dropped when a listChanged notification arrives
+        c.clearResultCache();
+        assertEq(first, c.listTools(), "the list is refetched correctly after a cache clear");
+
+        McpClient::McpClient uncached = getClient(dual_url, {"cache_list_results": False});
+        on_exit uncached.close();
+        assertEq(first, uncached.listTools(), "caching can be disabled");
+    }
+
+    invalidToolAnnotationTest() {
+        # a single malformed tool definition must not prevent the other tools from being used
+        Logger l("bad-tools", LoggerLevel::getLevelError());
+        BadAnnotationHandler handler(l);
+        HttpServer server(<HttpServerOptionInfo>{"logger": l});
+        server.setHandler("mcp", "", MimeTypeJson, handler);
+        server.setDefaultHandler("mcp", handler);
+        int p = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit server.stop();
+
+        McpClient::McpClient c = getClient(sprintf("http://localhost:%d", p));
+        on_exit c.close();
+
+        list<string> names = map $1.name, c.listTools();
+        assertTrue(names.contains("good"), "a conforming tool is usable");
+        assertFalse(names.contains("bad"),
+            "a tool whose x-mcp-header annotation is invalid is excluded from the listing");
+        assertEq("{}", c.callTool("good").content[0].text,
+            "the conforming tool still works");
+    }
+}
+
+#! A server that advertises one tool with an invalid x-mcp-header annotation
+class BadAnnotationHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        registerTool("good", "a conforming tool", NOTHING, \echo());
+        registerTool("bad", "an invalid annotation", NOTHING, \echo());
+    }
+
+    hash<auto> echo(*hash<auto> params) {
+        return params ?? {};
+    }
+
+    *hash<auto> getToolInputSchema(hash<auto> cx, hash<McpToolInfo> info) {
+        if (info.name != "bad") {
+            return McpServerHandler::getToolInputSchema(cx, info);
+        }
+        # "number" parameters have no unambiguous string form and may not be mirrored
+        return {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "number", McpClient::McpHeaderAnnotation: "Amount"},
+            },
+        };
+    }
+}

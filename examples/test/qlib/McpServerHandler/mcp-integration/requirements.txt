@@ -1,5 +1,12 @@
 # Python dependencies for MCP integration tests
-# Install with: pip install -r requirements.txt
+#
+# The MCP protocol changed shape in revision 2026-07-28, and the two SDK majors that
+# implement the two shapes cannot be installed side by side.  Use the era-specific files
+# with separate virtual environments instead:
+#
+#   requirements-modern.txt   mcp 2.x   - protocol 2026-07-28 (stateless)
+#   requirements-legacy.txt   mcp 1.x   - protocol 2025-11-25 and earlier (handshake)
+#
+# run_integration_test.sh creates and manages both automatically.
 
-mcp>=1.0.0
-httpx>=0.25.0
+-r requirements-legacy.txt
