@@ -1150,6 +1150,55 @@ static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
     return true;
 }
 
+//! Records why the most recent expression-slot resolution failed.
+/** Slot resolution reports failure as a bare 0, which surfaces to the user as an
+    "unsupported AOT slot metadata" error naming only the enclosing function -- with no hint that the
+    real cause is a symbol that could not be resolved.  This carries the detail from the resolution
+    site to the error that is finally reported.
+
+    Thread-local because several Programs can register AOT slots concurrently. */
+static thread_local std::string aot_slot_resolve_error;
+
+//! Describes an unresolvable AOT symbol, naming the modules that could have provided it
+/** An AOT artifact only references symbols that resolved when it was compiled, so a symbol that
+    cannot be resolved now means a module providing it is missing, or is older than the one compiled
+    against.  Listing the modules actually loaded in this Program turns an opaque failure into a
+    version/staleness comparison the caller can act on.
+
+    @param what the kind of symbol, e.g. \c "function"
+    @param sym the symbol name as recorded in the slot map
+    @param pgm the Program the symbol was looked up in
+
+    @return a description naming the symbol and the loaded modules */
+static std::string describeUnresolvedAOTSymbol(const char* what, const char* sym, QoreProgram* pgm) {
+    std::string msg = what;
+    msg += " '";
+    msg += sym ? sym : "(unnamed)";
+    msg += "' could not be resolved; the AOT artifact was compiled against a build where it existed, so a "
+        "module providing it is missing or older than the one compiled against";
+    if (pgm) {
+        ReferenceHolder<QoreListNode> features(qore_program_private::get(*pgm)->getFeatureList(), nullptr);
+        if (features && !features->empty()) {
+            msg += " (modules loaded here: ";
+            ConstListIterator li(*features);
+            bool first = true;
+            while (li.next()) {
+                const QoreStringNode* f = li.getValue().get<const QoreStringNode>();
+                if (!f) {
+                    continue;
+                }
+                if (!first) {
+                    msg += ", ";
+                }
+                first = false;
+                msg += f->c_str();
+            }
+            msg += ")";
+        }
+    }
+    return msg;
+}
+
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
     if (!pgm) {
@@ -1166,6 +1215,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
             if (!fe) {
                 printd(0, "AOT v2: cannot resolve function '%s' for expr slot\n", ref1);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("function", ref1, pgm);
                 return 0;
             }
             // Create a FunctionCallNode with no args (args handled by native code).
@@ -1282,6 +1332,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for static method '%s'\n",
                     class_desc.c_str(), ref2);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("class", class_desc.c_str(), pgm);
                 return 0;
             }
             const QoreMethod* m = findAOTStaticMethod(qc, method_name);
@@ -1434,6 +1485,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for new object\n",
                     class_desc.c_str());
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("class", class_desc.c_str(), pgm);
                 return 0;
             }
             const QoreMethod* cons = qc->getConstructor();
@@ -6920,7 +6972,16 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (trace_slot_reg) {
             fprintf(stderr, "[aot-slot-reg] SKIP '%s': unsupported expr slots\n", name);
         }
-        setBuildError("unsupported AOT slot metadata; source fallback is disabled");
+        // name the symbol that failed to resolve when one was recorded; without it the caller sees only
+        // "unsupported AOT slot metadata" and has no way to tell a stale module from a real metadata problem
+        std::string msg = "unsupported AOT slot metadata";
+        if (!aot_slot_resolve_error.empty()) {
+            msg += ": ";
+            msg += aot_slot_resolve_error;
+            aot_slot_resolve_error.clear();
+        }
+        msg += "; source fallback is disabled";
+        setBuildError(msg);
         delete ctx;
         return nullptr;
     }
