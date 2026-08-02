@@ -185,6 +185,8 @@ elif [ -n "$LIBQORE" ]; then
         QORE_BUILD_DIR="$_libqore_dir/.."
     fi
 fi
+QORE_SOURCE_DIR=`pwd -P`
+QORE_BUILD_DIR=`cd "$QORE_BUILD_DIR" && pwd -P`
 BUILD_MODULE_DIRS=""
 BUILD_QMOD_DIR=""
 if [ -d "$QORE_BUILD_DIR/modules" ]; then
@@ -209,6 +211,9 @@ elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_DIR/qlib-qmod" ]; the
 elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_BUILD_DIR/qlib-qmod" ]; then
     BUILD_QMOD_DIR="$QORE_BUILD_DIR/qlib-qmod"
 fi
+if [ -n "$BUILD_QMOD_DIR" ]; then
+    BUILD_QMOD_DIR=`cd "$BUILD_QMOD_DIR" && pwd -P`
+fi
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
 TEST_MODULE_DIRS=""
@@ -223,9 +228,9 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
     fi
 fi
 if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 else
-    export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.

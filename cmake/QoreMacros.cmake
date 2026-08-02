@@ -464,8 +464,13 @@ function(QORE_QCC_FINALIZE_MANAGED_OUTPUTS)
     QORE_WRITE_IF_CHANGED("${_qore_qfm_plan}" "${_qore_qfm_content}")
 
     QORE_QCC_HELPER_PATH(_qore_qfm_helper qore-qo-prune)
+    set(_qore_qfm_command "${_qore_qfm_helper}")
+    if (DEFINED QORE_EXECUTABLE AND EXISTS "${QORE_EXECUTABLE}")
+        set(_qore_qfm_command
+            "${QORE_EXECUTABLE}" --exec-mode=ast "${_qore_qfm_helper}")
+    endif ()
     execute_process(
-        COMMAND "${_qore_qfm_helper}" "${_qore_qfm_plan}" "${_qore_qfm_manifest}"
+        COMMAND ${_qore_qfm_command} "${_qore_qfm_plan}" "${_qore_qfm_manifest}"
         RESULT_VARIABLE _qore_qfm_result
         OUTPUT_VARIABLE _qore_qfm_output
         ERROR_VARIABLE _qore_qfm_error)

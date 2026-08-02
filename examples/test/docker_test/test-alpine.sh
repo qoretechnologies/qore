@@ -194,6 +194,15 @@ cmake \
     -DQORE_BUILD_QMOD_DIR="${QORE_SRC_DIR}/build/qlib-qmod" \
     -P "${QORE_SRC_DIR}/cmake/EnsureSourceQmodSymlinks.cmake"
 
+# qore-test-base also contains optional Qorus user modules compiled by the
+# image's Qore.  Core tests must not depend on those external artifacts having
+# the current native AOT ABI, so load this optional child from installed source.
+# Dedicated module-loader tests continue to verify that stale .qmods are hard
+# errors rather than silently falling back to source.
+find /opt/lib -path \
+    '*/qore-modules/SalesforcePubSubDataProvider/SalesforcePubSubDataProvider.qmod' \
+    -delete 2>/dev/null || true
+
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then

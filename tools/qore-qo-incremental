@@ -101,7 +101,13 @@ collect_source_parse_defines() {
         echo "$0: missing source parse define helper: $source_parse_define_tool" >&2
         return 1
     fi
-    "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        "$QORE_QCC_QORE_EXECUTABLE" --exec-mode=ast \
+            "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
+    else
+        "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
+    fi
 }
 
 select_preload_outputs() {

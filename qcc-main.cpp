@@ -6783,6 +6783,7 @@ struct QCCBuildManifest {
     std::vector<std::string> inputs;
     std::vector<std::string> extra_inputs;
     std::shared_ptr<const std::map<std::string, QCCFileFingerprint>> input_snapshots;
+    std::shared_ptr<const std::map<std::string, QCCFileFingerprint>> observed_source_snapshots;
     bool include_command_manifest_inputs = true;
 };
 
@@ -6873,6 +6874,63 @@ static void capture_qcc_input_snapshots(QCCBuildManifest& manifest,
         std::move(snapshots));
 }
 
+static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
+        const std::vector<QoreAOTSourceFingerprint>& fingerprints,
+        std::string& error) {
+    std::map<std::string, QCCFileFingerprint> snapshots;
+    size_t i = 0;
+    for (const QoreAOTSourceFingerprint& fingerprint : fingerprints) {
+        if (i && !(i % 100)
+                && qcc_check_cancel("qcc observed source snapshot collection")) {
+            error = "operation cancelled during qcc observed source snapshot collection";
+            return false;
+        }
+        snapshots[canonical_existing_path(fingerprint.path)] = {
+            true, fingerprint.size, fingerprint.hash};
+        ++i;
+    }
+    manifest.observed_source_snapshots =
+        std::make_shared<const std::map<std::string, QCCFileFingerprint>>(
+            std::move(snapshots));
+    return true;
+}
+
+static bool qcc_test_wait_after_input_snapshot(std::string& error) {
+    const char* marker = getenv("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
+    if (!marker || !*marker || is_file(marker)) {
+        return true;
+    }
+    FILE* f = fopen(marker, "wb");
+    if (!f) {
+        error = "cannot create qcc post-snapshot test marker '"
+            + std::string(marker) + "': " + strerror(errno);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close qcc post-snapshot test marker '"
+            + std::string(marker) + "': " + strerror(errno);
+        return false;
+    }
+    long delay_ms = 1000;
+    if (const char* delay = getenv("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS")) {
+        char* end = nullptr;
+        long parsed = strtol(delay, &end, 10);
+        if (end && !*end && parsed >= 0 && parsed <= 10000) {
+            delay_ms = parsed;
+        }
+    }
+    while (delay_ms > 0) {
+        long sleep_ms = std::min(delay_ms, 10L);
+        usleep(static_cast<useconds_t>(sleep_ms * 1000));
+        delay_ms -= sleep_ms;
+        if (qcc_check_cancel("qcc post-snapshot test delay")) {
+            error = "operation cancelled during qcc post-snapshot test delay";
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool qcc_test_wait_before_input_validation(
         const QCCBuildManifest& manifest, std::string& error) {
     const char* marker = getenv("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
@@ -6951,6 +7009,24 @@ static QCCFinishResult validate_qcc_input_snapshots(
     }
     if (!manifest.input_snapshots) {
         return QCCFinishResult::Success;
+    }
+    if (manifest.observed_source_snapshots) {
+        size_t i = 0;
+        for (const auto& observed : *manifest.observed_source_snapshots) {
+            if (i && !(i % 100)
+                    && qcc_check_cancel("qcc observed source snapshot validation")) {
+                error = "operation cancelled during qcc observed source snapshot validation";
+                return QCCFinishResult::Error;
+            }
+            auto initial = manifest.input_snapshots->find(observed.first);
+            if (initial == manifest.input_snapshots->end()
+                    || !qcc_file_fingerprint_equal(initial->second, observed.second)) {
+                error = "qcc parsed input changed after its initial snapshot while building '"
+                    + manifest.output + "'; retry required: '" + observed.first + "'";
+                return QCCFinishResult::InputsChanged;
+            }
+            ++i;
+        }
     }
     size_t i = 0;
     for (const auto& snapshot : *manifest.input_snapshots) {
@@ -8606,13 +8682,17 @@ int main(int argc, char** argv) {
         batch_input_manifest.inputs = batch_sources;
         batch_input_manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
         capture_qcc_input_snapshots(batch_input_manifest);
+        std::string error;
+        if (!qcc_test_wait_after_input_snapshot(error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            return 1;
+        }
         if (verbose) {
             printf("Batch script-context .qo mode: %zu sources → %s\n",
                 batch_sources.size(), batch_output_dir);
         }
 
         qore_init(QL_GPL, "UTF-8", true);
-        std::string error;
         std::string depfile_dir_arg;
         const std::string* depfile_dir_ptr = nullptr;
         if (depfile_dir) {
@@ -8653,6 +8733,7 @@ int main(int argc, char** argv) {
             ? batch_script_aggregate_output : "";
         std::string aggregate_symbol_arg = batch_script_aggregate_symbol
             ? batch_script_aggregate_symbol : "";
+        std::vector<QoreAOTSourceFingerprint> observed_source_fingerprints;
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
@@ -8662,8 +8743,15 @@ int main(int argc, char** argv) {
             batch_script_aggregate_output ? &aggregate_output_arg : nullptr,
             batch_script_aggregate_symbol ? &aggregate_symbol_arg : nullptr,
             script_aggregate_native_registers,
-            batch_script_aggregate_output ? &aggregate_compiled_count : nullptr);
+            batch_script_aggregate_output ? &aggregate_compiled_count : nullptr,
+            &observed_source_fingerprints);
         if (!ok) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        if (!capture_qcc_observed_source_snapshots(batch_input_manifest,
+                observed_source_fingerprints, error)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
@@ -8751,6 +8839,8 @@ int main(int argc, char** argv) {
                 manifest.depfile = depfile;
                 manifest.inputs.push_back(batch_sources[i]);
                 manifest.input_snapshots = batch_input_manifest.input_snapshots;
+                manifest.observed_source_snapshots =
+                    batch_input_manifest.observed_source_snapshots;
                 if (!add_aot_compile_contract_depfile_inputs(depfile,
                         manifest.extra_inputs, error)) {
                     fprintf(stderr, "error: %s\n", error.c_str());
@@ -9094,6 +9184,10 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    if (!qcc_test_wait_after_input_snapshot(error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        return 1;
+    }
 
     // Initialize Qore library
     qore_init(QL_GPL, "UTF-8", true);
@@ -9112,6 +9206,7 @@ int main(int argc, char** argv) {
         std::vector<std::string> parsed_files;
         QoreAOTSourceSymbolManifest source_symbols;
         const QoreAOTSourceSymbolManifest* source_symbol_arg = nullptr;
+        std::vector<QoreAOTSourceFingerprint> observed_source_fingerprints;
         if (source_symbol_manifest_path) {
             if (!read_source_symbol_manifest(source_symbol_manifest_path, source_symbols, error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
@@ -9135,11 +9230,16 @@ int main(int argc, char** argv) {
                 stub_files,
                 parse_defines,
                 depfile_path ? &parsed_files : nullptr,
-                source_symbol_arg)) {
+                source_symbol_arg,
+                &observed_source_fingerprints)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            if (qcc_output_verbose()) {
+            if (!capture_qcc_observed_source_snapshots(manifest,
+                    observed_source_fingerprints, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                rc = 1;
+            } else if (qcc_output_verbose()) {
                 printf("qcc: compiled script-context .qo (-O%d, %zu -L path%s%s): %s\n",
                     opt_level, script_lib_dirs.size(),
                     script_lib_dirs.size() == 1 ? "" : "s",
@@ -9149,16 +9249,16 @@ int main(int argc, char** argv) {
             // reported by compileScriptFile (the same set it used to filter
             // the `-L` preload).  This lets the build rebuild the `.qo` when
             // any `%include`d file changes — not just the target itself.
-            if (depfile_path && !write_depfile_list(depfile_path,
+            if (!rc && depfile_path && !write_depfile_list(depfile_path,
                     qcc_depfile_target(output), parsed_files)) {
                 rc = 1;
-            } else if (depfile_path
+            } else if (!rc && depfile_path
                     && !rewrite_aot_compile_contract_depfile(output,
                         script_lib_dirs, depfile_path,
                         qcc_depfile_target(output), error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
-            } else if (depfile_path
+            } else if (!rc && depfile_path
                     && !add_aot_compile_contract_depfile_inputs(depfile_path,
                         manifest.extra_inputs, error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());

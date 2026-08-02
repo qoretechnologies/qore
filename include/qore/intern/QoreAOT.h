@@ -78,6 +78,13 @@ struct QoreAOTLazyClosureIR;
 class StatementBlock;
 class TypedHashDecl;
 class UserVariantBase;
+
+//! Content fingerprint for a source file read by an AOT compile operation.
+struct QoreAOTSourceFingerprint {
+    std::string path;
+    uint64_t size = 0;
+    uint64_t hash = 0;
+};
 class Var;
 class qore_class_private;
 
@@ -898,6 +905,9 @@ public:
                 calls from the optional aggregate
         @param script_aggregate_compiled_count_out optional aggregate variant
                 count output
+        @param source_fingerprints optional output containing the canonical
+                path, size, and hash of each target source buffer parsed by
+                this operation
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -919,7 +929,8 @@ public:
             const std::string* script_aggregate_output = nullptr,
             const std::string* script_aggregate_symbol = nullptr,
             bool script_aggregate_native_registers = false,
-            int* script_aggregate_compiled_count_out = nullptr);
+            int* script_aggregate_compiled_count_out = nullptr,
+            std::vector<QoreAOTSourceFingerprint>* source_fingerprints = nullptr);
 
     //! Compile aggregate script metadata for a list of already-compiled
     //! script-context `.qo` objects.
@@ -1058,6 +1069,9 @@ public:
         @param parse_defines parse-time defines to apply to the target
         @param source_symbols build-group source symbols that should be
                         deferred instead of binding same-name loaded symbols
+        @param source_fingerprints optional output containing the canonical
+                        path, size, and hash of the target source buffer parsed
+                        by this operation
         @return true on success, false on failure
     */
     static bool compileScriptFile(const char* target_file,
@@ -1072,7 +1086,8 @@ public:
                                   const std::vector<std::string>& stub_files = {},
                                   const std::vector<std::string>& parse_defines = {},
                                   std::vector<std::string>* parsed_files = nullptr,
-                                  const QoreAOTSourceSymbolManifest* source_symbols = nullptr);
+                                  const QoreAOTSourceSymbolManifest* source_symbols = nullptr,
+                                  std::vector<QoreAOTSourceFingerprint>* source_fingerprints = nullptr);
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

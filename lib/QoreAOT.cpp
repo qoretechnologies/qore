@@ -26578,7 +26578,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::string* script_aggregate_output,
         const std::string* script_aggregate_symbol,
         bool script_aggregate_native_registers,
-        int* script_aggregate_compiled_count_out) {
+        int* script_aggregate_compiled_count_out,
+        std::vector<QoreAOTSourceFingerprint>* source_fingerprints) {
     const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
@@ -26592,6 +26593,10 @@ bool QoreAOT::compileScriptFilesBatch(
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
+    }
+    if (source_fingerprints) {
+        source_fingerprints->clear();
+        source_fingerprints->reserve(target_files.size());
     }
     if ((script_aggregate_output == nullptr) != (script_aggregate_symbol == nullptr)) {
         error = "compileScriptFilesBatch: aggregate output and symbol must be provided together";
@@ -26662,6 +26667,10 @@ bool QoreAOT::compileScriptFilesBatch(
         if (e.source.empty()) {
             error = "target source file is empty or unreadable: " + e.canon;
             return false;
+        }
+        if (source_fingerprints) {
+            source_fingerprints->push_back({e.canon, e.source.size(),
+                XXH64(e.source.data(), e.source.size(), 0)});
         }
         e.source = stripIncludeDirectives(e.source);
         e.out_path = out_dir + "/" + scriptBatchSourceId(e.canon) + ".qo";
@@ -27627,10 +27636,14 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 const std::vector<std::string>& stub_files,
                                 const std::vector<std::string>& parse_defines,
                                 std::vector<std::string>* parsed_files,
-                                const QoreAOTSourceSymbolManifest* source_symbols) {
+                                const QoreAOTSourceSymbolManifest* source_symbols,
+                                std::vector<QoreAOTSourceFingerprint>* source_fingerprints) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
+    }
+    if (source_fingerprints) {
+        source_fingerprints->clear();
     }
 
     // Canonicalize target_file so the per-file filter in
@@ -27651,6 +27664,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     if (source_text.empty()) {
         error = "target source file is empty or unreadable: " + target_canon;
         return false;
+    }
+    if (source_fingerprints) {
+        source_fingerprints->push_back({target_canon, source_text.size(),
+            XXH64(source_text.data(), source_text.size(), 0)});
     }
 
     std::string output_canon;
