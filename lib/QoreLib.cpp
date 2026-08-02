@@ -2305,6 +2305,23 @@ static void stat_get_blocks(const struct stat& sbuf, int64& blksize, int64& bloc
 #endif
 }
 
+static void stat_get_microseconds(const struct stat& sbuf, int& atime_us,
+        int& mtime_us, int& ctime_us) {
+#ifdef HAVE_STRUCT_STAT_ST_TIM
+    atime_us = static_cast<int>(sbuf.st_atim.tv_nsec / 1000);
+    mtime_us = static_cast<int>(sbuf.st_mtim.tv_nsec / 1000);
+    ctime_us = static_cast<int>(sbuf.st_ctim.tv_nsec / 1000);
+#elif defined(HAVE_STRUCT_STAT_ST_TIMESPEC)
+    atime_us = static_cast<int>(sbuf.st_atimespec.tv_nsec / 1000);
+    mtime_us = static_cast<int>(sbuf.st_mtimespec.tv_nsec / 1000);
+    ctime_us = static_cast<int>(sbuf.st_ctimespec.tv_nsec / 1000);
+#else
+    atime_us = 0;
+    mtime_us = 0;
+    ctime_us = 0;
+#endif
+}
+
 QoreListNode* stat_to_list(const struct stat& sbuf) {
     QoreListNode* l = new QoreListNode(autoTypeInfo);
 
@@ -2319,9 +2336,11 @@ QoreListNode* stat_to_list(const struct stat& sbuf) {
     l->push((int64)sbuf.st_rdev, nullptr);
     l->push(sbuf.st_size, nullptr);
 
-    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_atime), nullptr);
-    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_mtime), nullptr);
-    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_ctime), nullptr);
+    int atime_us, mtime_us, ctime_us;
+    stat_get_microseconds(sbuf, atime_us, mtime_us, ctime_us);
+    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_atime, atime_us), nullptr);
+    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_mtime, mtime_us), nullptr);
+    l->push(DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_ctime, ctime_us), nullptr);
 
     int64 blksize, blocks;
     stat_get_blocks(sbuf, blksize, blocks);
@@ -2352,9 +2371,14 @@ QoreHashNode* stat_to_hash(const struct stat& sbuf, const TypedHashDecl* hd) {
     ph->setKeyValueIntern("rdev",    (int64)sbuf.st_rdev);
     ph->setKeyValueIntern("size",    (int64)sbuf.st_size);
 
-    ph->setKeyValueIntern("atime",   DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_atime));
-    ph->setKeyValueIntern("mtime",   DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_mtime));
-    ph->setKeyValueIntern("ctime",   DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_ctime));
+    int atime_us, mtime_us, ctime_us;
+    stat_get_microseconds(sbuf, atime_us, mtime_us, ctime_us);
+    ph->setKeyValueIntern("atime",
+        DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_atime, atime_us));
+    ph->setKeyValueIntern("mtime",
+        DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_mtime, mtime_us));
+    ph->setKeyValueIntern("ctime",
+        DateTimeNode::makeAbsolute(currentTZ(), (int64)sbuf.st_ctime, ctime_us));
 
     int64 blksize, blocks;
     stat_get_blocks(sbuf, blksize, blocks);

@@ -196,11 +196,11 @@ hashdecl StatInfo {
     int rdev;
     //! file size in bytes
     int size;
-    //! last access time of the file
+    //! last access time of the file, including subsecond precision when provided by the platform
     date atime;
-    //! last modified time of the file
+    //! last modified time of the file, including subsecond precision when provided by the platform
     date mtime;
-    //! last change time of the file's inode
+    //! last change time of the file's inode, including subsecond precision when provided by the platform
     date ctime;
     //! block size; may be zero if the platform's internal %stat() (2) function does not provide this info
     int blksize;

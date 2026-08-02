@@ -1424,6 +1424,20 @@ qore_check_headers_cxx(arpa/inet.h cxxabi.h dlfcn.h fcntl.h getopt.h glob.h grp.
     unistd.h vfork.h winsock2.h ws2tcpip.h openssl/engine.h
 )
 
+check_cxx_source_compiles("#include <sys/stat.h>
+int main() {
+    struct stat value {};
+    return value.st_atim.tv_nsec + value.st_mtim.tv_nsec + value.st_ctim.tv_nsec;
+}"
+HAVE_STRUCT_STAT_ST_TIM)
+check_cxx_source_compiles("#include <sys/stat.h>
+int main() {
+    struct stat value {};
+    return value.st_atimespec.tv_nsec + value.st_mtimespec.tv_nsec
+        + value.st_ctimespec.tv_nsec;
+}"
+HAVE_STRUCT_STAT_ST_TIMESPEC)
+
 # net/if_dl.h is not self-contained
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)

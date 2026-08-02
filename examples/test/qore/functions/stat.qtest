@@ -11,6 +11,8 @@
 public class StatTest inherits QUnit::Test {
     constructor() : Test("StatTest", "1.0") {
         addTestCase("Basic use of stat()", \statTestMethod(), NOTHING);
+        addTestCase("stat timestamps preserve subsecond precision",
+            \statTimestampPrecisionTest(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -24,5 +26,41 @@ public class StatTest inherits QUnit::Test {
         hash h = testAssertion("hstat()", \hstat(), (get_script_path(),), new TestResultPartialHashMatch(("type": "REGULAR")));
 
         testAssertion("stat()", \stat(), (get_script_path(),), new TestResultValue((h.dev, h.inode, h.mode, h.nlink, h.uid, h.gid, h.rdev, h.size, h.atime, h.mtime, h.ctime, h.blksize, h.blocks)));
+    }
+
+    statTimestampPrecisionTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("Windows");
+        }
+
+        string path = sprintf("%s/qore-stat-precision-%d", tmp_location(), getpid());
+        on_exit try { unlink(path); } catch (hash<ExceptionInfo> ex) {}
+        bool compared_same_second = False;
+        for (int i = 0; i < 20; ++i) {
+            {
+                File file();
+                file.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+                file.write(string(i));
+                file.close();
+            }
+            date first = hstat(path).mtime;
+            usleep(10ms);
+            {
+                File file();
+                file.open2(path, O_WRONLY | O_TRUNC);
+                file.write(string(i + 1));
+                file.close();
+            }
+            date second = hstat(path).mtime;
+            if (first.getEpochMicroseconds() / 1000000
+                    == second.getEpochMicroseconds() / 1000000) {
+                assertTrue(second > first,
+                    "same-second file updates have ordered stat timestamps");
+                compared_same_second = True;
+                break;
+            }
+        }
+        assertTrue(compared_same_second,
+            "test observed two file updates in one wall-clock second");
     }
 }
