@@ -1185,6 +1185,9 @@ class RegexTest inherits QUnit::Test {
         # regex_subst function form — also goes through QoreRegexSubst::exec
         assertEq(bad, regex_subst(bad, "password", "<masked>"),
             "invalid UTF-8: regex_subst returns input unchanged, does not crash");
+        assertEq(bad, regex_subst(bad, "password", string sub (hash<RegexMatchInfo> match) {
+            return "<masked>";
+        }, RE_Global), "invalid UTF-8: callback regex_subst returns input unchanged, does not crash");
 
         # Valid prefix followed by invalid bytes: subst still completes without
         # crashing; behavior is best-effort per pcre2 semantics.
@@ -1297,6 +1300,20 @@ class RegexTest inherits QUnit::Test {
         string utf8 = strmul("é中", (ReqCuCliffSize / 4) + 100000) + "https://u:pw@h/";
         assertGt(ReqCuCliffSize, utf8.size(), "UTF-8 subject exceeds the PCRE2 threshold in bytes");
         assertEq(("pw",), utf8.regexExtract(UriUserinfoPattern), "UTF-8 subject past the cliff");
+
+        # Callback substitution must validate UTF-8 once, then advance through global matches in
+        # linear time. Revalidating the complete subject for every callback made this quadratic.
+        string callback_subject = strmul("éx ", 65536);
+        int callback_count = 0;
+        int t0 = clock_getmicros_monotonic();
+        string callback_result = regex_subst(callback_subject, "x", string sub (hash<RegexMatchInfo> match) {
+            ++callback_count;
+            return "y";
+        }, RE_Global);
+        assertEq(65536, callback_count, "callback runs once per global UTF-8 match");
+        assertEq(strmul("éy ", 65536), callback_result, "callback substitution preserves UTF-8 offsets");
+        assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0,
+            "global callback substitution with many matches is bounded");
 
         # case-insensitive matching past the cliff
         assertTrue(makeSubject(ReqCuCliffSize + 100000, "NEEDLE").regex("needle", RE_Caseless),

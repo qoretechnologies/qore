@@ -385,6 +385,10 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
 
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
+    // The first successful match validates the complete UTF-8 subject. Without this flag on
+    // subsequent global matches, PCRE2 rescans from byte zero for every callback invocation,
+    // making substitutions with many matches quadratic in the subject size.
+    uint32_t match_options = 0;
 
     while (true) {
         // a global substitution over a large subject can iterate many times; stay cancellable
@@ -396,7 +400,8 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         if (offset >= t->size()) {
             break;
         }
-        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md);
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md);
         if (rc < 1) {
             if (qore_pcre2_check_match_error(rc, xsink)) {
                 assert(*xsink);
@@ -481,6 +486,7 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         tstr->concat(replacement->c_str());
 
         ptr = t->c_str() + ovector[1];
+        match_options = PCRE2_NO_UTF_CHECK;
 
         if (!global) {
             break;
