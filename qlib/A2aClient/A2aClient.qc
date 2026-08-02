@@ -26,26 +26,73 @@
 public namespace A2aClient {
 
 #! A2A task state enum
-/** @since json 1.11
+/** The values are the A2A v0.3 wire representation; use
+    @ref A2aClient::a2aTranslateTaskStateToV10() "a2aTranslateTaskStateToV10()" to convert them to the v1.0
+    \c TASK_STATE_* form.
+
+    @since json 1.11
 */
 public enum A2aTaskState : string {
-    #! Task is waiting to be processed
-    Pending = "pending",
+    #! Task has been submitted and acknowledged but is not yet being processed
+    Submitted = "submitted",
     #! Task is currently being processed
-    Active = "active",
+    Working = "working",
     #! Task requires additional user input
     InputRequired = "input-required",
     #! Task requires authentication
     AuthRequired = "auth-required",
     #! Task completed successfully
+    /** This is a terminal state
+    */
     Completed = "completed",
     #! Task failed with an error
+    /** This is a terminal state
+    */
     Failed = "failed",
     #! Task was canceled
+    /** This is a terminal state
+    */
     Canceled = "canceled",
     #! Task was rejected by the agent
+    /** This is a terminal state
+    */
     Rejected = "rejected",
+    #! Task is in an unknown or indeterminate state
+    Unknown = "unknown",
+
+    #! Task has been submitted and acknowledged but is not yet being processed
+    /** @deprecated Use @ref A2aTaskState::Submitted instead; this alias previously had the non-conformant wire
+        value \c "pending", which no A2A peer accepts
+    */
+    Pending = "submitted",
+    #! Task is currently being processed
+    /** @deprecated Use @ref A2aTaskState::Working instead; this alias previously had the non-conformant wire
+        value \c "active", which no A2A peer accepts
+    */
+    Active = "working",
 }
+
+#! The A2A v0.3 task states that are terminal
+/** A task in one of these states accepts no further messages and any stream for it must be closed.
+
+    @since A2aClient 1.0
+*/
+public const A2aTerminalTaskStatesV03 = {
+    A2aTaskState::Completed: True,
+    A2aTaskState::Failed: True,
+    A2aTaskState::Canceled: True,
+    A2aTaskState::Rejected: True,
+};
+
+#! The A2A v1.0 task states that are terminal
+/** @since A2aClient 1.0
+*/
+public const A2aTerminalTaskStatesV10 = {
+    "TASK_STATE_COMPLETED": True,
+    "TASK_STATE_FAILED": True,
+    "TASK_STATE_CANCELED": True,
+    "TASK_STATE_REJECTED": True,
+};
 
 #! A2A message role enum
 /** @since json 1.11
@@ -85,23 +132,115 @@ public enum A2aSecuritySchemeType : string {
     MutualTls = "mutualTLS",
 }
 
-#! A2A error codes per specification
+/** @defgroup a2a_error_codes A2A JSON-RPC Error Codes
+    The error codes assigned by the A2A specification.  These values are identical in v0.3 and v1.0, except that
+    \c -32008 and \c -32009 were added in v1.0.
+
+    A2A-specific errors occupy the JSON-RPC implementation-defined server-error range (\c -32000 to \c -32099);
+    protocol-level failures use the standard JSON-RPC codes instead (ex: \c -32602 for invalid parameters).
+
+    @since A2aClient 1.0
+*/
+#/@{
+#! The specified task ID does not correspond to an existing or accessible task
+public const A2A_ERR_TASK_NOT_FOUND = -32001;
+
+#! An attempt was made to cancel a task that is not in a cancelable state
+public const A2A_ERR_TASK_NOT_CANCELABLE = -32002;
+
+#! The client attempted to use push notifications but the agent does not support them
+public const A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED = -32003;
+
+#! The requested operation, or a specific aspect of it, is not supported by this agent
+public const A2A_ERR_UNSUPPORTED_OPERATION = -32004;
+
+#! A media type in the request is not supported by the agent or the invoked skill
+public const A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED = -32005;
+
+#! The agent returned a response that does not conform to the specification for the method
+public const A2A_ERR_INVALID_AGENT_RESPONSE = -32006;
+
+#! The agent does not have an extended agent card configured
+public const A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED = -32007;
+
+#! The client did not declare support for an extension the agent marks as required
+/** @note added in A2A v1.0
+*/
+public const A2A_ERR_EXTENSION_SUPPORT_REQUIRED = -32008;
+
+#! The A2A protocol version requested via the \c A2A-Version service parameter is not supported
+/** @note added in A2A v1.0
+*/
+public const A2A_ERR_VERSION_NOT_SUPPORTED = -32009;
+
+#! Maps each A2A error code to its specification error name
+public const A2aErrorNameMap = {
+    A2A_ERR_TASK_NOT_FOUND: "TaskNotFoundError",
+    A2A_ERR_TASK_NOT_CANCELABLE: "TaskNotCancelableError",
+    A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED: "PushNotificationNotSupportedError",
+    A2A_ERR_UNSUPPORTED_OPERATION: "UnsupportedOperationError",
+    A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED: "ContentTypeNotSupportedError",
+    A2A_ERR_INVALID_AGENT_RESPONSE: "InvalidAgentResponseError",
+    A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED: "ExtendedAgentCardNotConfiguredError",
+    A2A_ERR_EXTENSION_SUPPORT_REQUIRED: "ExtensionSupportRequiredError",
+    A2A_ERR_VERSION_NOT_SUPPORTED: "VersionNotSupportedError",
+};
+#/@}
+
+#! The specified task ID does not correspond to an existing or accessible task
+/** @note Before the initial release this constant had the value \c -32002, which the A2A specification assigns to
+    \c TaskNotCancelableError; it now carries the conformant \c TaskNotFoundError code
+*/
+public const A2A_ERR_NOT_FOUND = A2A_ERR_TASK_NOT_FOUND;
+
+#! An operation was attempted that conflicts with the task's current state
+/** @note Before the initial release this constant had the value \c -32003, which the A2A specification assigns to
+    \c PushNotificationNotSupportedError; it now carries the conformant \c TaskNotCancelableError code
+*/
+public const A2A_ERR_CONFLICT = A2A_ERR_TASK_NOT_CANCELABLE;
+
+#! The parameters provided for the method are invalid
+/** The A2A specification does not assign a code for invalid parameters; the standard JSON-RPC
+    \c "Invalid params" code is used.
+
+    @note Before the initial release this constant had the value \c -32004, which the A2A specification assigns to
+    \c UnsupportedOperationError
+*/
+public const A2A_ERR_INVALID_ARGUMENT = -32602;
+
+#! Authorization failed
+/** @deprecated This is not an A2A protocol error; authorization failures are signaled with HTTP status codes
+    (\c 401 and \c 403) as described in section 7 of the A2A specification.  The value was moved out of the
+    range the specification assigns so that it can no longer be mistaken for an A2A error.
+*/
 public const A2A_ERR_UNAUTHORIZED = -32000;
-public const A2A_ERR_FORBIDDEN = -32001;
-public const A2A_ERR_NOT_FOUND = -32002;
-public const A2A_ERR_CONFLICT = -32003;
-public const A2A_ERR_INVALID_ARGUMENT = -32004;
-public const A2A_ERR_SERVICE_UNAVAILABLE = -32005;
-public const A2A_ERR_REQUEST_TIMEOUT = -32006;
+
+#! Access to the resource is forbidden
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32001, which the A2A specification assigns to \c TaskNotFoundError.
+*/
+public const A2A_ERR_FORBIDDEN = -32010;
+
+#! The service is unavailable
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32005, which the A2A specification assigns to \c ContentTypeNotSupportedError.
+*/
+public const A2A_ERR_SERVICE_UNAVAILABLE = -32011;
+
+#! The request timed out
+/** @deprecated This is not an A2A protocol error; see @ref A2A_ERR_UNAUTHORIZED.  Before the initial release this
+    constant had the value \c -32006, which the A2A specification assigns to \c InvalidAgentResponseError.
+*/
+public const A2A_ERR_REQUEST_TIMEOUT = -32012;
 
 #! Valid task state transitions
 public const A2aValidTransitions = {
-    A2aTaskState::Pending: {
-        A2aTaskState::Active: True,
+    A2aTaskState::Submitted: {
+        A2aTaskState::Working: True,
         A2aTaskState::Canceled: True,
         A2aTaskState::Rejected: True,
     },
-    A2aTaskState::Active: {
+    A2aTaskState::Working: {
         A2aTaskState::InputRequired: True,
         A2aTaskState::AuthRequired: True,
         A2aTaskState::Completed: True,
@@ -109,13 +248,13 @@ public const A2aValidTransitions = {
         A2aTaskState::Canceled: True,
     },
     A2aTaskState::InputRequired: {
-        A2aTaskState::Active: True,
+        A2aTaskState::Working: True,
         A2aTaskState::Completed: True,
         A2aTaskState::Failed: True,
         A2aTaskState::Canceled: True,
     },
     A2aTaskState::AuthRequired: {
-        A2aTaskState::Active: True,
+        A2aTaskState::Working: True,
         A2aTaskState::Completed: True,
         A2aTaskState::Failed: True,
         A2aTaskState::Canceled: True,

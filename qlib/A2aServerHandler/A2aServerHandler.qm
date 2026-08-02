@@ -107,6 +107,11 @@ module A2aServerHandler {
 
     @subsection A2aServerHandler_1_0 A2aServerHandler v1.0
     - initial release with A2A v0.3 and v1.0 dual-version protocol support
+    - conformant with A2A v1.0.1
+    - push notifications are delivered in the body shape the specification defines for the version the client
+      registered the config with: the bare Task object with \c application/json for v0.3, and a
+      \c StreamResponse object with \c application/a2a+json for v1.0; neither is wrapped in a JSON-RPC envelope
+    - push notification deliveries send the client's opaque token in the \c X-A2A-Notification-Token header
     - Agent Card serving at both v1.0 and v0.3 paths
     - all 11 JSON-RPC methods registered in both v0.3 and v1.0 naming
     - automatic version detection from A2A-Version header or method name

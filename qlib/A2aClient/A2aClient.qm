@@ -133,6 +133,13 @@ module A2aClient {
 
     @subsection A2aClient_1_0 A2aClient v1.0
     - initial release with A2A v0.3 and v1.0 dual-version protocol support
+    - conformant with A2A v1.0.1; task states, roles, and error codes were verified against the canonical
+      \c a2a.proto and the v0.3 JSON schema
+    - @ref A2aClient::A2aTaskState "A2aTaskState" uses the canonical v0.3 wire values \c "submitted" and
+      \c "working"; the former Qore-only spellings \c "pending" and \c "active" are still accepted on input but
+      are never emitted
+    - the A2A JSON-RPC error codes assigned by the specification are exported as
+      @ref a2a_error_codes "A2A error code constants"
     - automatic protocol version detection from agent card format
     - Agent Card discovery at both v1.0 and v0.3 paths
     - all 11 JSON-RPC methods in both v0.3 and v1.0 naming

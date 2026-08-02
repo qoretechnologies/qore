@@ -30,33 +30,53 @@ public const A2aVersionV03 = "0.3";
 public const A2aVersionV10 = "1.0";
 public const A2aVersionHeader = "A2A-Version";
 
+#! The A2A media type registered in section 14.1 of the A2A specification
+/** @note This media type is defined for the HTTP+JSON/REST protocol binding and for push-notification webhook
+    bodies.  The JSON-RPC protocol binding that this module implements uses \c application/json for requests and
+    responses; do not send this media type on JSON-RPC calls.
+
+    @since A2aClient 1.0
+*/
+public const MimeTypeA2aJson = "application/a2a+json";
+
 #! Agent card paths for v1.0
 public const AgentCardPathV10 = "/.well-known/a2a-agent-card";
 public const AgentCardExtendedPathV10 = "/.well-known/a2a-agent-card:extended";
 
 #! v0.3 → v1.0 task state mapping
+/** The keys are the canonical A2A v0.3 \c TaskState values.  The legacy Qore-only spellings \c "pending" and
+    \c "active" are also accepted on input so that existing callers keep working, but they are never emitted;
+    no A2A peer accepts them.
+*/
 public const A2aStateMapV03toV10 = {
-    "pending": "TASK_STATE_SUBMITTED",
-    "active": "TASK_STATE_WORKING",
+    "submitted": "TASK_STATE_SUBMITTED",
+    "working": "TASK_STATE_WORKING",
     "input-required": "TASK_STATE_INPUT_REQUIRED",
     "auth-required": "TASK_STATE_AUTH_REQUIRED",
     "completed": "TASK_STATE_COMPLETED",
     "failed": "TASK_STATE_FAILED",
     "canceled": "TASK_STATE_CANCELED",
     "rejected": "TASK_STATE_REJECTED",
+    "unknown": "TASK_STATE_UNSPECIFIED",
+
+    # legacy input-only aliases; see the note above
+    "pending": "TASK_STATE_SUBMITTED",
+    "active": "TASK_STATE_WORKING",
 };
 
 #! v1.0 → v0.3 task state mapping
+/** Only canonical A2A v0.3 \c TaskState values are emitted.
+*/
 public const A2aStateMapV10toV03 = {
-    "TASK_STATE_SUBMITTED": "pending",
-    "TASK_STATE_WORKING": "active",
+    "TASK_STATE_SUBMITTED": "submitted",
+    "TASK_STATE_WORKING": "working",
     "TASK_STATE_INPUT_REQUIRED": "input-required",
     "TASK_STATE_AUTH_REQUIRED": "auth-required",
     "TASK_STATE_COMPLETED": "completed",
     "TASK_STATE_FAILED": "failed",
     "TASK_STATE_CANCELED": "canceled",
     "TASK_STATE_REJECTED": "rejected",
-    "TASK_STATE_UNSPECIFIED": "pending",
+    "TASK_STATE_UNSPECIFIED": "unknown",
 };
 
 #! v0.3 → v1.0 role mapping
@@ -117,7 +137,7 @@ public const A2aSseEventMapV03toV10 = {
 };
 
 #! Translate a task state from v0.3 to v1.0 format
-/** @param state v0.3 task state (e.g., \c "pending")
+/** @param state v0.3 task state (e.g., \c "submitted")
     @return v1.0 task state (e.g., \c "TASK_STATE_SUBMITTED")
 */
 public string sub a2aTranslateTaskStateToV10(string state) {
@@ -127,7 +147,7 @@ public string sub a2aTranslateTaskStateToV10(string state) {
 
 #! Translate a task state from v1.0 to v0.3 format
 /** @param state v1.0 task state (e.g., \c "TASK_STATE_SUBMITTED")
-    @return v0.3 task state (e.g., \c "pending")
+    @return v0.3 task state (e.g., \c "submitted")
 */
 public string sub a2aTranslateTaskStateToV03(string state) {
     *string v03 = A2aStateMapV10toV03{state};

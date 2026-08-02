@@ -12,6 +12,7 @@
 class A2aVersionTranslationTest inherits QUnit::Test {
     constructor() : QUnit::Test("A2aVersionTranslation test", "1.0") {
         addTestCase("task state translation test", \taskStateTranslationTest());
+        addTestCase("error code conformance test", \errorCodeConformanceTest());
         addTestCase("role translation test", \roleTranslationTest());
         addTestCase("method name translation test", \methodNameTranslationTest());
         addTestCase("version detection test", \versionDetectionTest());
@@ -35,28 +36,105 @@ class A2aVersionTranslationTest inherits QUnit::Test {
     }
 
     taskStateTranslationTest() {
-        # v0.3 → v1.0
-        assertEq("TASK_STATE_SUBMITTED", a2aTranslateTaskStateToV10("pending"));
-        assertEq("TASK_STATE_WORKING", a2aTranslateTaskStateToV10("active"));
+        # v0.3 -> v1.0; the keys are the canonical A2A v0.3 TaskState values
+        assertEq("TASK_STATE_SUBMITTED", a2aTranslateTaskStateToV10("submitted"));
+        assertEq("TASK_STATE_WORKING", a2aTranslateTaskStateToV10("working"));
         assertEq("TASK_STATE_INPUT_REQUIRED", a2aTranslateTaskStateToV10("input-required"));
         assertEq("TASK_STATE_AUTH_REQUIRED", a2aTranslateTaskStateToV10("auth-required"));
         assertEq("TASK_STATE_COMPLETED", a2aTranslateTaskStateToV10("completed"));
         assertEq("TASK_STATE_FAILED", a2aTranslateTaskStateToV10("failed"));
         assertEq("TASK_STATE_CANCELED", a2aTranslateTaskStateToV10("canceled"));
         assertEq("TASK_STATE_REJECTED", a2aTranslateTaskStateToV10("rejected"));
+        assertEq("TASK_STATE_UNSPECIFIED", a2aTranslateTaskStateToV10("unknown"));
 
-        # v1.0 → v0.3
-        assertEq("pending", a2aTranslateTaskStateToV03("TASK_STATE_SUBMITTED"));
-        assertEq("active", a2aTranslateTaskStateToV03("TASK_STATE_WORKING"));
+        # v1.0 -> v0.3; only canonical v0.3 values are ever emitted
+        assertEq("submitted", a2aTranslateTaskStateToV03("TASK_STATE_SUBMITTED"));
+        assertEq("working", a2aTranslateTaskStateToV03("TASK_STATE_WORKING"));
         assertEq("input-required", a2aTranslateTaskStateToV03("TASK_STATE_INPUT_REQUIRED"));
         assertEq("auth-required", a2aTranslateTaskStateToV03("TASK_STATE_AUTH_REQUIRED"));
         assertEq("completed", a2aTranslateTaskStateToV03("TASK_STATE_COMPLETED"));
         assertEq("failed", a2aTranslateTaskStateToV03("TASK_STATE_FAILED"));
         assertEq("canceled", a2aTranslateTaskStateToV03("TASK_STATE_CANCELED"));
         assertEq("rejected", a2aTranslateTaskStateToV03("TASK_STATE_REJECTED"));
+        assertEq("unknown", a2aTranslateTaskStateToV03("TASK_STATE_UNSPECIFIED"));
 
-        # UNSPECIFIED maps to pending
-        assertEq("pending", a2aTranslateTaskStateToV03("TASK_STATE_UNSPECIFIED"));
+        # every emitted v0.3 value must be a member of the canonical v0.3 TaskState enum
+        hash<string, bool> canonical_v03 = map {$1: True}, (
+            "submitted", "working", "input-required", "completed", "canceled", "failed", "rejected",
+            "auth-required", "unknown",
+        );
+        foreach string v10_state in (keys A2aClient::A2aStateMapV10toV03) {
+            string v03 = a2aTranslateTaskStateToV03(v10_state);
+            assertTrue(canonical_v03{v03}, sprintf("%y emits non-canonical v0.3 state %y", v10_state, v03));
+        }
+
+        # every emitted v1.0 value must be a member of the canonical v1.0 TaskState enum
+        hash<string, bool> canonical_v10 = map {$1: True}, (
+            "TASK_STATE_UNSPECIFIED", "TASK_STATE_SUBMITTED", "TASK_STATE_WORKING", "TASK_STATE_COMPLETED",
+            "TASK_STATE_FAILED", "TASK_STATE_CANCELED", "TASK_STATE_INPUT_REQUIRED", "TASK_STATE_REJECTED",
+            "TASK_STATE_AUTH_REQUIRED",
+        );
+        foreach string v03_state in (keys A2aClient::A2aStateMapV03toV10) {
+            string v10 = a2aTranslateTaskStateToV10(v03_state);
+            assertTrue(canonical_v10{v10}, sprintf("%y emits non-canonical v1.0 state %y", v03_state, v10));
+        }
+
+        # the legacy Qore-only spellings are still accepted on input, but are never emitted
+        assertEq("TASK_STATE_SUBMITTED", a2aTranslateTaskStateToV10("pending"));
+        assertEq("TASK_STATE_WORKING", a2aTranslateTaskStateToV10("active"));
+        list<auto> emitted_v03 = map A2aClient::A2aStateMapV10toV03{$1}, keys A2aClient::A2aStateMapV10toV03;
+        assertFalse(emitted_v03.contains("pending"));
+        assertFalse(emitted_v03.contains("active"));
+
+        # the deprecated enum aliases now carry the conformant wire values
+        assertEq("submitted", A2aTaskState::Submitted);
+        assertEq("working", A2aTaskState::Working);
+        assertEq("submitted", A2aTaskState::Pending);
+        assertEq("working", A2aTaskState::Active);
+        assertEq("unknown", A2aTaskState::Unknown);
+
+        # all four terminal states are listed, in both versions
+        assertEq(4, A2aClient::A2aTerminalTaskStatesV03.size());
+        assertEq(4, A2aClient::A2aTerminalTaskStatesV10.size());
+        foreach string v03 in (keys A2aClient::A2aTerminalTaskStatesV03) {
+            assertTrue(A2aClient::A2aTerminalTaskStatesV10{a2aTranslateTaskStateToV10(v03)},
+                sprintf("terminal state %y does not map to a terminal v1.0 state", v03));
+        }
+    }
+
+    errorCodeConformanceTest() {
+        # the A2A specification assigns these codes; they are identical in v0.3 and v1.0 except that -32008
+        # and -32009 were added in v1.0
+        assertEq(-32001, A2A_ERR_TASK_NOT_FOUND);
+        assertEq(-32002, A2A_ERR_TASK_NOT_CANCELABLE);
+        assertEq(-32003, A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED);
+        assertEq(-32004, A2A_ERR_UNSUPPORTED_OPERATION);
+        assertEq(-32005, A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED);
+        assertEq(-32006, A2A_ERR_INVALID_AGENT_RESPONSE);
+        assertEq(-32007, A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED);
+        assertEq(-32008, A2A_ERR_EXTENSION_SUPPORT_REQUIRED);
+        assertEq(-32009, A2A_ERR_VERSION_NOT_SUPPORTED);
+
+        # every assigned code maps to its specification error name
+        assertEq("TaskNotFoundError", A2aClient::A2aErrorNameMap{A2A_ERR_TASK_NOT_FOUND});
+        assertEq("TaskNotCancelableError", A2aClient::A2aErrorNameMap{A2A_ERR_TASK_NOT_CANCELABLE});
+        assertEq("VersionNotSupportedError", A2aClient::A2aErrorNameMap{A2A_ERR_VERSION_NOT_SUPPORTED});
+        assertEq(9, A2aClient::A2aErrorNameMap.size());
+
+        # the semantic aliases the server handler uses now carry conformant codes
+        assertEq(A2A_ERR_TASK_NOT_FOUND, A2A_ERR_NOT_FOUND);
+        assertEq(A2A_ERR_TASK_NOT_CANCELABLE, A2A_ERR_CONFLICT);
+        # the specification assigns no code for invalid parameters, so the standard JSON-RPC code is used
+        assertEq(-32602, A2A_ERR_INVALID_ARGUMENT);
+
+        # the deprecated transport-level constants must not collide with any code the specification assigns
+        foreach int code in ((A2A_ERR_UNAUTHORIZED, A2A_ERR_FORBIDDEN, A2A_ERR_SERVICE_UNAVAILABLE,
+                A2A_ERR_REQUEST_TIMEOUT)) {
+            assertNothing(A2aClient::A2aErrorNameMap{code},
+                sprintf("deprecated code %d collides with an assigned A2A error", code));
+            # they must still fall inside the JSON-RPC implementation-defined server-error range
+            assertTrue(code <= -32000 && code >= -32099, sprintf("%d is outside the server error range", code));
+        }
     }
 
     roleTranslationTest() {
@@ -357,7 +435,7 @@ class A2aVersionTranslationTest inherits QUnit::Test {
         hash<auto> v03_result = a2aTranslateSseEventToV03(v10_status);
         assertEq("TaskStatusUpdateEvent", v03_result.event_type);
         assertEq("task-1", v03_result.data.id);
-        assertEq("active", v03_result.data.state);
+        assertEq("working", v03_result.data.state);
     }
 
     sendMessageParamsTranslationTest() {
@@ -386,12 +464,20 @@ class A2aVersionTranslationTest inherits QUnit::Test {
     }
 
     roundTripStateTest() {
-        # Every v0.3 state → v1.0 → v0.3 round trip
+        # every canonical v0.3 state round trips through v1.0 unchanged; the legacy input-only aliases
+        # deliberately do not, since they normalize to their canonical spelling
+        hash<string, bool> legacy_aliases = {"pending": True, "active": True};
         foreach string v03_state in (keys A2aClient::A2aStateMapV03toV10) {
             string v10 = a2aTranslateTaskStateToV10(v03_state);
             string back = a2aTranslateTaskStateToV03(v10);
+            if (legacy_aliases{v03_state}) {
+                assertNeq(v03_state, back, sprintf("legacy alias %y must normalize", v03_state));
+                continue;
+            }
             assertEq(v03_state, back, sprintf("Round trip failed for state: %y", v03_state));
         }
+        assertEq("submitted", a2aTranslateTaskStateToV03(a2aTranslateTaskStateToV10("pending")));
+        assertEq("working", a2aTranslateTaskStateToV03(a2aTranslateTaskStateToV10("active")));
     }
 
     roundTripRoleTest() {
@@ -458,11 +544,11 @@ class A2aVersionTranslationTest inherits QUnit::Test {
         # Task with no history or artifacts
         hash<auto> minimal_task = {
             "id": "task-x",
-            "status": {"state": "pending"},
+            "status": {"state": "submitted"},
         };
         hash<auto> v10 = a2aTranslateTaskToV10(minimal_task);
         assertEq("TASK_STATE_SUBMITTED", v10.status.state);
         hash<auto> v03 = a2aTranslateTaskToV03(v10);
-        assertEq("pending", v03.status.state);
+        assertEq("submitted", v03.status.state);
     }
 }

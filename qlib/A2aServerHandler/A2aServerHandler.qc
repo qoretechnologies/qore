@@ -77,6 +77,25 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Default session timeout in seconds (1 hour)
         const DefaultSessionTimeoutSecs = 3600;
+
+        #! Timeout in milliseconds for delivering a push notification to a webhook
+        /** @since A2aServerHandler 1.0
+        */
+        const PushNotificationTimeoutMs = 10000;
+
+        #! Header carrying the client's opaque notification token on webhook deliveries
+        /** @since A2aServerHandler 1.0
+        */
+        const A2aNotificationTokenHeader = "X-A2A-Notification-Token";
+    }
+
+    private {
+        #! Internal key recording the protocol version negotiated when a push config was registered
+        /** Stripped from every push config returned to a client.
+
+            @since A2aServerHandler 1.0
+        */
+        const PushConfigVersionKey = "_a2a_version";
     }
 
     private {
@@ -817,8 +836,11 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (!push_configs{params.id}) {
             push_configs{params.id} = ();
         }
+        # record the negotiated version so that webhook deliveries use the body shape and media type that the
+        # registering client understands
         hash<auto> config = params.pushNotificationConfig + {
             "id": sprintf("%d", ++push_config_id_counter),
+            PushConfigVersionKey: cx.a2a_version ?? a2aDetectVersionFromMethod(cx.method),
         };
         push_configs{params.id} += config;
 
@@ -837,7 +859,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         return {
             "id": params.id,
-            "pushNotificationConfig": push_configs{params.id}[0] ?? {},
+            "pushNotificationConfig": (push_configs{params.id}[0] ?? {}) - PushConfigVersionKey,
         };
     }
 
@@ -853,7 +875,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         return {
             "id": params.id,
-            "pushNotificationConfigs": push_configs{params.id} ?? (),
+            "pushNotificationConfigs": (map $1 - PushConfigVersionKey, push_configs{params.id} ?? ()),
         };
     }
 
@@ -1174,22 +1196,66 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             return;
         }
 
+        # the body depends only on the protocol version, so build it at most once per version rather than
+        # once per config; the v0.3 body requires a read lock to render the current task
+        hash<string, string> body_cache;
+
         foreach hash<auto> config in (configs) {
             try {
+                string version = config{PushConfigVersionKey} ?? A2aVersionV03;
+                if (!exists body_cache{version}) {
+                    body_cache{version} =
+                        make_json(makePushNotificationPayload(task_id, event_type, event_data, version));
+                }
                 # Deliver push notification via HTTP POST
-                Qore::HTTPClient push_client({"url": config.url, "timeout": 10000});
-                hash<auto> payload = {
-                    "jsonrpc": "2.0",
-                    "method": event_type,
-                    "params": event_data + {"id": task_id},
+                Qore::HTTPClient push_client({"url": config.url, "timeout": PushNotificationTimeoutMs});
+                hash<auto> hdr = {
+                    "Content-Type": version == A2aVersionV10 ? MimeTypeA2aJson : MimeTypeJson,
                 };
-                push_client.send(make_json(payload), "POST", NOTHING,
-                    {"Content-Type": MimeTypeJson});
+                # the client's opaque notification token is echoed back in a dedicated header
+                if (config.token.val()) {
+                    hdr{A2aNotificationTokenHeader} = config.token;
+                }
+                push_client.send(body_cache{version}, "POST", NOTHING, hdr);
             } catch (hash<ExceptionInfo> ex) {
                 error("Push notification delivery failed for task %y to %y: %s: %s",
                     task_id, config.url, ex.err, ex.desc);
             }
         }
+    }
+
+    #! Builds the webhook body for a push notification
+    /** The A2A specification defines the webhook body independently of the JSON-RPC binding:
+        - v0.3 posts the bare @ref A2aClient::A2aTaskInfo "Task" object
+        - v1.0 posts a \c StreamResponse object, a single-key hash discriminated by \c task, \c message,
+          \c statusUpdate, or \c artifactUpdate
+
+        Neither version wraps the body in a JSON-RPC envelope.
+
+        @param task_id the task the event belongs to
+        @param event_type the v0.3 event type name (ex: \c "TaskStatusUpdateEvent")
+        @param event_data the event payload in v0.3 form
+        @param version the A2A protocol version negotiated when the push config was registered
+
+        @return the webhook body to serialize
+
+        @since A2aServerHandler 1.0
+    */
+    private hash<auto> makePushNotificationPayload(string task_id, string event_type, hash<auto> event_data,
+            string version) {
+        if (version == A2aVersionV10) {
+            # a2aTranslateSseEventToV10() already returns the single-key StreamResponse hash and renames
+            # "id" to "taskId"
+            return a2aTranslateSseEventToV10(event_type, event_data + {"id": task_id});
+        }
+        # v0.3: post the current Task object
+        AutoReadLock al(rwl);
+        *hash<A2aTaskInfo> task = task_map{task_id};
+        if (task) {
+            return getTaskResponse(task, NOTHING, A2aVersionV03) + {"kind": "task"};
+        }
+        # the task disappeared between the event and delivery; fall back to the event payload
+        return event_data + {"id": task_id};
     }
 
     #! Sends an event to SSE connections belonging to the task's session
