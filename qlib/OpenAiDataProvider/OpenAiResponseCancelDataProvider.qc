@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataAssistantsProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiResponseCancelDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,33 +24,37 @@
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
-#! The OpenAi data provider class
-/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `responses` data provider; assistant configuration is replaced by reusable prompts referenced with the `prompt` field of a create-response request instead
+#! Cancels a background response
+/** Only responses created with `background` set to `True` can be cancelled.
+
+    This is the Responses API equivalent of cancelling an Assistants API run.
+
+    @since OpenAiDataProvider 1.6
 */
-public class OpenAiAssistantsDataProvider inherits OpenAiDataProviderCommon {
+public class OpenAiResponseCancelDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "assistants",
-            "type": "OpenAiAssistantsDataProvider",
-            "supports_children": True,
+            "name": "cancel",
+            "type": "OpenAiResponseCancelDataProvider",
             "constructor_options": ConstructorOptions,
-            "children_can_support_apis": True,
+            "supports_request": True,
         };
 
         #! Provider summary info
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
+
+        #! Request type
+        const RequestType = OpenAiModelGetResponseRequestDataType;
+
+        #! Response type
+        const ResponseType = OpenAiModelCreateResponseResponseDataType;
     }
 
     #! Creates the object from the arguments
     constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
-    }
-
-    #! Creates the object from constructor options
-    constructor(hash<auto> options) : OpenAiDataProviderCommon(options) {
     }
 
     #! Returns the data provider name
@@ -58,36 +62,28 @@ public class OpenAiAssistantsDataProvider inherits OpenAiDataProviderCommon {
         return ProviderInfo.name;
     }
 
-    #! Return data provider summary info
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map <DataProviderSummaryInfo>{
-            "name": $1.id,
-        } + OpenAiAssistantDataProvider::ProviderSummaryInfo, getAssistants();
-    }
+    #! Makes a request and returns the response
+    /** @param req the request to serialize and make according to the request type
+        @param request_options the request options; will be processed by validateRequestOptions()
 
-    #! Returns a list of child data provider names, if any
-    /** @return a list of child data provider names, if any
+        @return the response to the request
     */
-    private *list<string> getChildProviderNamesImpl() {
-        return map $1.id, getAssistants();
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return doRestCommand("POST", OpenAiDataProviderCommon::responsePath(req.id) + "/cancel").body;
     }
 
-    #! Returns the given child provider or @ref nothing if the given child is unknown
-    /** @return the given child provider or @ref nothing if the given child is unknown
-
-        @see getChildProviderEx()
+    #! Returns the description of a successful request message, if any
+    /** @return the request type for this provider
     */
-    private *AbstractDataProvider getChildProviderImpl(string name) {
-        foreach hash<auto> m in (getAssistants()) {
-            if (m.id == name) {
-                return new OpenAiAssistantDataProvider(rest, m);
-            }
-        }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return RequestType;
     }
 
-    #! Returns supported assistants
-    *list<hash<auto>> getAssistants() {
-        return doRestCommand("GET", "assistants", NOTHING, AssistantApiHdr).body."data";
+    #! Returns the description of a response message, if this object represents a response message
+    /** @return the response type for this response message
+    */
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return ResponseType;
     }
 
     #! Returns data provider static info

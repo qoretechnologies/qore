@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataAssistantProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiConversationUpdateDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,19 +24,17 @@
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
-#! The OpenAi data provider class
-/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `responses` data provider; assistant configuration is replaced by reusable prompts referenced with the `prompt` field of a create-response request instead
+#! Updates a conversation
+/** @since OpenAiDataProvider 1.6
 */
-public class OpenAiAssistantDataProvider inherits OpenAiDataProviderCommon {
+public class OpenAiConversationUpdateDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "OpenAiAssistantDataProvider",
+            "name": "update",
+            "type": "OpenAiConversationUpdateDataProvider",
             "constructor_options": ConstructorOptions,
             "supports_request": True,
-            "supports_children": True,
-            "children_can_support_apis": True,
         };
 
         #! Provider summary info
@@ -45,33 +43,19 @@ public class OpenAiAssistantDataProvider inherits OpenAiDataProviderCommon {
         });
 
         #! Request type
-        const RequestType = AbstractDataProviderTypeMap."nothing";
+        const RequestType = OpenAiConversationUpdateRequestType;
 
         #! Response type
-        const ResponseType = OpenAiAssistantDataType;
-    }
-
-    private {
-        #! The assistant info
-        hash<auto> assistant;
-
-        #! Child data providers
-        const ChildMap = {
-            "create-run-thread": Class::forName("OpenAiDataProvider::OpenAiThreadCreateRunDataProvider"),
-            "delete": Class::forName("OpenAiDataProvider::OpenAiAssistantDeleteDataProvider"),
-            "update": Class::forName("OpenAiDataProvider::OpenAiAssistantUpdateDataProvider"),
-        };
+        const ResponseType = OpenAiConversationDataType;
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClientIo::RestClientIo rest, hash<auto> assistant) : OpenAiDataProviderCommon(rest) {
-        self.assistant = assistant;
-        assistant.created_at = localtime(assistant.created_at);
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
     }
 
     #! Returns the data provider name
     string getName() {
-        return assistant.id;
+        return ProviderInfo.name;
     }
 
     #! Makes a request and returns the response
@@ -81,7 +65,10 @@ public class OpenAiAssistantDataProvider inherits OpenAiDataProviderCommon {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return assistant;
+        hash<auto> body = req - "conversation_id";
+        return OpenAiDataProviderCommon::fixConversationTimestamps(
+            doRestCommand("POST", OpenAiDataProviderCommon::conversationPath(req.conversation_id), body).body
+        );
     }
 
     #! Returns the description of a successful request message, if any
@@ -98,36 +85,36 @@ public class OpenAiAssistantDataProvider inherits OpenAiDataProviderCommon {
         return ResponseType;
     }
 
-    #! Return data provider summary info
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
-    }
-
-    #! Returns a list of child data provider names, if any
-    /** @return a list of child data provider names, if any
-    */
-    private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
-    }
-
-    #! Returns the given child provider or @ref nothing if the given child is unknown
-    /** @return the given child provider or @ref nothing if the given child is unknown
-
-        @see getChildProviderEx()
-    */
-    private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
-        if (!cls) {
-            return;
-        }
-        return cls.newObject(rest, assistant);
-    }
-
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
-        return cast<hash<DataProviderInfo>>({
-            "name": assistant.id,
-        }) + ProviderInfo;
+        return ProviderInfo;
     }
 }
+
+#! Conversation update request type
+/** @since OpenAiDataProvider 1.6
+*/
+public class OpenAiConversationUpdateRequestType inherits HashDataType {
+    public {
+        #! fields
+        /** @note \c metadata is declared with a non-optional type here because the API requires it on update;
+            an update call with no metadata is rejected server-side
+        */
+        const Fields = OpenAiConversationIdRequestType::Fields + {
+            "metadata": OpenAiConversationMetadataField + {
+                "type": AbstractDataProviderTypeMap."hash",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("OpenAiConversationUpdateRequest") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Conversation update request type constant
+/** @since OpenAiDataProvider 1.6
+*/
+public const OpenAiConversationUpdateRequestType = new OpenAiConversationUpdateRequestType();
 }

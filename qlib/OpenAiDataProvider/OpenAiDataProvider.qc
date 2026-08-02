@@ -44,6 +44,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
         #! Child data providers
         const DefaultChildMap = {
             "assistants": Class::forName("OpenAiDataProvider::OpenAiAssistantsDataProvider"),
+            "conversations": Class::forName("OpenAiDataProvider::OpenAiConversationsDataProvider"),
             "create-assistant": Class::forName("OpenAiDataProvider::OpenAiAssistantCreateDataProvider"),
             "create-image": Class::forName("OpenAiDataProvider::OpenAiImageCreateDataProvider"),
             "files": Class::forName("OpenAiDataProvider::OpenAiFilesDataProvider"),

@@ -25,6 +25,9 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
+/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
+    use the `conversations/get` data provider instead
+*/
 public class OpenAiThreadGetDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info

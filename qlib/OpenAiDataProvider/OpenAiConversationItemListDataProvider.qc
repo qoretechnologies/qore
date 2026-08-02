@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiThreadUpdateDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiConversationItemListDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,16 +24,15 @@
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
-#! The OpenAi data provider class
-/** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `conversations/update` data provider instead
+#! Lists items in a conversation
+/** @since OpenAiDataProvider 1.6
 */
-public class OpenAiThreadUpdateDataProvider inherits OpenAiDataProviderCommon {
+public class OpenAiConversationItemListDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "update",
-            "type": "OpenAiThreadUpdateDataProvider",
+            "name": "list",
+            "type": "OpenAiConversationItemListDataProvider",
             "constructor_options": ConstructorOptions,
             "supports_request": True,
         };
@@ -44,10 +43,10 @@ public class OpenAiThreadUpdateDataProvider inherits OpenAiDataProviderCommon {
         });
 
         #! Request type
-        const RequestType = OpenAiThreadUpdateRequestType;
+        const RequestType = OpenAiConversationItemListRequestType;
 
         #! Response type
-        const ResponseType = OpenAiThreadDataType;
+        const ResponseType = OpenAiConversationItemListDataType;
     }
 
     #! Creates the object from the arguments
@@ -66,9 +65,9 @@ public class OpenAiThreadUpdateDataProvider inherits OpenAiDataProviderCommon {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> rv = doRestCommand("PUT", "threads/" + req.thread_id, req - "id", AssistantApiHdr).body;
-        rv.created_at = localtime(rv.created_at);
-        return rv;
+        string path = OpenAiDataProviderCommon::conversationPath(req.conversation_id) + "/items"
+            + OpenAiDataProviderCommon::makeQueryString(req{"after", "include", "limit", "order"});
+        return doRestCommand("GET", path).body;
     }
 
     #! Returns the description of a successful request message, if any
@@ -91,21 +90,61 @@ public class OpenAiThreadUpdateDataProvider inherits OpenAiDataProviderCommon {
     }
 }
 
-#! The thread update data type
-public class OpenAiThreadUpdateRequestType inherits HashDataType {
+#! Conversation item list request type
+/** @since OpenAiDataProvider 1.6
+*/
+public class OpenAiConversationItemListRequestType inherits HashDataType {
     public {
+        #! The default page size used by the API when \c limit is not given
+        const DefaultLimit = 20;
+
         #! fields
-        const Fields = OpenAiThreadIdRequestType::Fields{"thread_id",} + (map {$1.key: $1.value + {
-            "type": $1.value.type.getOrNothingType(),
-        }}, OpenAiThreadDataType::Fields.pairIterator(), $1.key != "id");
+        const Fields = OpenAiConversationIdRequestType::Fields + {
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "The number of items to return",
+                "desc": sprintf("The number of items to return; defaults to `%d` server-side", DefaultLimit),
+                "type": AbstractDataProviderTypeMap."*int",
+                "example_value": DefaultLimit,
+            },
+            "order": {
+                "display_name": "Order",
+                "short_desc": "The sort order of the returned items by creation timestamp",
+                "desc": "The sort order of the returned items by creation timestamp",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Ascending",
+                        "short_desc": "Oldest items first",
+                        "desc": "Return items in ascending order by creation timestamp (oldest first)",
+                        "value": "asc",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Descending",
+                        "short_desc": "Newest items first",
+                        "desc": "Return items in descending order by creation timestamp (newest first)",
+                        "value": "desc",
+                    },
+                ),
+            },
+            "after": {
+                "display_name": "After",
+                "short_desc": "An item ID to list items after, used in pagination",
+                "desc": "An item ID to list items after, used in pagination",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "include": OpenAiConversationItemIncludeField,
+        };
     }
 
     #! Creates the type
-    constructor() : HashDataType("OpenAiThreadUpdateRequest") {
+    constructor() : HashDataType("OpenAiConversationItemListRequest") {
         addQoreFields(Fields);
     }
 }
 
-#! Constant for the thread update data type
-public const OpenAiThreadUpdateRequestType = new OpenAiThreadUpdateRequestType();
+#! Conversation item list request type constant
+/** @since OpenAiDataProvider 1.6
+*/
+public const OpenAiConversationItemListRequestType = new OpenAiConversationItemListRequestType();
 }
