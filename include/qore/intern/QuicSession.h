@@ -1175,6 +1175,30 @@ private:
                                    int64_t stream_id, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
 
+    //! The peer sent RESET_STREAM: it abandoned its send side of the stream
+    /** Forwards the abort to the HTTP/3 layer (RFC 9114 §4.1.2 requires the
+        HTTP/3 stream to be abandoned when its QUIC stream is reset) and records
+        the reset so the owner of the stream can be told.  Without this callback
+        registered, ngtcp2 has nowhere to report a peer reset and the stream's
+        death is invisible until the whole QUIC session closes.
+    */
+    DLLLOCAL static int streamResetCallback(ngtcp2_conn* conn, int64_t stream_id,
+                                   uint64_t final_size, uint64_t app_error_code,
+                                   void* user_data, void* stream_user_data);
+
+    //! Records a peer-initiated stream abort and marks the stream closed
+    /** Shared by the QUIC-transport (@ref streamResetCallback(),
+        @ref streamCloseCallback()) and HTTP/3-layer (@ref h3StopSendingCallback(),
+        @ref h3ResetStreamCallback()) report paths.  RESET_STREAM and STOP_SENDING
+        routinely arrive together for the same stream, and nghttp3 then asks us to
+        mirror them, so the one-shot report in @ref pending_peer_reset_reports_ is
+        emitted only the first time.
+
+        @param stream_id the QUIC stream ID
+        @param app_error_code the application error code the peer sent
+    */
+    DLLLOCAL void recordPeerStreamReset(int64_t stream_id, uint64_t app_error_code);
+
     //! Handshake completed
     DLLLOCAL static int handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data);
 

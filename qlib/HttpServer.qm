@@ -4002,11 +4002,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
                     }
                     string cid = sprintf("%d:%d", cx.id, stream_id);
+                    # the setup methods are resolved by name, so a handler that is not a
+                    # ServerSentEventHandler may implement them and return nothing; that costs
+                    # it the peer-close notification below but must not break its stream
+                    *HttpServerAsyncIo::AbstractSseConnection sse_conn;
                     if (sse_is_http3) {
                         int session_id = cx."header-info".session_id;
                         s.submitQuicResponseStreaming(session_id, stream_id,
                             rv."code" ?? 200, resp_hdr);
-                        call_object_method(handler, "setupAsyncSseConnectionHttp3",
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
                             s, cx, hdr, cid, session_id, stream_id, wake_cb);
                     } else {
                         s.submitHttp2StreamingResponseHeaders(stream_id,
@@ -4014,8 +4018,31 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         if (wake_cb) {
                             wake_cb();
                         }
-                        call_object_method(handler, "setupAsyncSseConnectionHttp2",
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
                             s, cx, hdr, cid, stream_id, wake_cb);
+                    }
+                    # Deregister the connection when the peer goes away.  On
+                    # HTTP/1.x the socket is the stream, so the SSE poll
+                    # operation's close callback covers this (see the branch
+                    # below); HTTP/2 and HTTP/3 multiplex, so the transport has
+                    # to report the teardown of this one stream explicitly, and
+                    # the controller supplies the hook that wires it up.
+                    *code<nothing(object)> register_sse_close_notify =
+                        cx."header-info"."register_sse_close_notify";
+                    if (sse_conn && register_sse_close_notify) {
+                        AbstractHttpSocketHandlerInterface mux_sse_handler =
+                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
+                        sse_conn.setPeerCloseCallback(sub () {
+                            mux_sse_handler.deregisterConnection(cid);
+                        });
+                        register_sse_close_notify(sse_conn);
+                    } else {
+                        listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close "
+                            "notification (%s); the connection will stay registered after the peer "
+                            "disconnects", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
+                            cx.handler_name, sse_conn
+                                ? "the async I/O controller supplied no hook"
+                                : "the handler returned no SSE connection object");
                     }
                     # Tell the controller this stream is owned by the handler
                     request_helper.setDedicated();

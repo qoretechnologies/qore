@@ -640,6 +640,20 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
     if (resets.empty()) {
         return;
     }
+    // Record the reset before any early return: a stream owner that holds no
+    // inbound Queue (an SSE response stream) has no other way to learn that the
+    // peer abandoned its stream while the connection stays up.  Queueing the
+    // stream ID in data_ready_streams makes the controller dispatch
+    // onStreamData() for it on a worker, where the Qore-side listener consults
+    // isStreamPeerClosed() and tears the stream down.  Without this the reset
+    // would be dropped whenever no persistent-session Queue is bound.
+    for (int32_t stream_id : resets) {
+        peer_closed_streams.insert(stream_id);
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
+                == data_ready_streams.end()) {
+            data_ready_streams.push_back(stream_id);
+        }
+    }
     if (!persistent_session_queue) {
         return;
     }
@@ -972,6 +986,25 @@ nothing Http2PollOperationBase::abort() {
 */
 bool Http2PollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
     return priv->isClosed();
+}
+
+//! Returns True if the given stream can no longer carry data to the peer
+/** True when the peer reset the stream with \c RST_STREAM, or when the whole
+    HTTP/2 connection is closed.
+
+    Long-lived response streams (Server-Sent Events) register no inbound Queue,
+    so they never see the \c NOTHING sentinel that tells a CONNECT tunnel its
+    stream is gone.  They are notified through \c onStreamData() instead and use
+    this predicate to distinguish a transport teardown from a data wakeup.
+
+    @param stream_id the HTTP/2 stream ID
+
+    @return True if the stream was reset by the peer or the connection is closed
+
+    @since %Qore 3.0
+*/
+bool Http2PollOperationBase::isStreamPeerClosed(int stream_id) [flags=RET_VALUE_ONLY] {
+    return priv->isStreamPeerClosed((int32_t)stream_id);
 }
 
 //! Returns True if an error occurred

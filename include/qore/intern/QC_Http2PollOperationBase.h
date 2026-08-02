@@ -38,6 +38,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Forward declarations for stream queue support
@@ -143,6 +144,21 @@ public:
     //! Returns true if the connection is closed
     DLLLOCAL bool isClosed() const {
         return h2_state == H2ServerState::CLOSED;
+    }
+
+    //! Returns true if the given stream can no longer carry data to the peer
+    /** True when the peer reset the stream (RST_STREAM) or the whole connection
+        is closed.  Used by long-lived stream owners (SSE response streams) that
+        hold no inbound Queue and therefore learn about a dead stream only from
+        the @c onStreamData() notification queued by
+        @ref deliverPersistentSessionClose().
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL bool isStreamPeerClosed(int32_t stream_id) const {
+        AutoLocker al(op_lock);
+        return h2_state == H2ServerState::CLOSED
+            || peer_closed_streams.find(stream_id) != peer_closed_streams.end();
     }
 
     //! Returns true if an error occurred
@@ -321,6 +337,19 @@ private:
 
     //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
+
+    //! Stream IDs the peer reset (RST_STREAM) on a still-open connection
+    /** Written by @ref deliverPersistentSessionClose() on the I/O thread and
+        read by @ref isStreamPeerClosed() from handler / worker threads, so
+        access is serialized with @c op_lock (which continuePoll() already
+        holds when the write happens).
+
+        Only streams the peer abandoned individually are recorded here; a
+        connection-wide close is reported through the @c h2_state check in
+        @ref isStreamPeerClosed(), so this set stays bounded by the number of
+        resets seen on the connection.
+    */
+    std::unordered_set<int32_t> peer_closed_streams;
 
     //! Persistent-session close-delivery Queue for this connection, or nullptr.
     /** One persistent session per H2 connection.  continuePoll() pushes

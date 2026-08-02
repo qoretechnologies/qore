@@ -745,6 +745,25 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     std::vector<int64_t> closed;
     read_op->takeSessionLifecycleEvents(resets, closed);
 
+    // Report each peer-reset stream to its Qore-side owner before anything else.
+    // A listener-only stream (an SSE response stream, which registers no inbound
+    // Queue) has no sentinel path, so without this wakeup a client that resets
+    // just its SSE stream — while keeping the QUIC session up for other requests
+    // — would leave the stream registered on the server forever.
+    for (auto& p : resets) {
+        std::string skey = std::to_string(p.first) + ":" + std::to_string(p.second);
+        if (close_notify_streams.find(skey) == close_notify_streams.end()
+                || stream_queues.find(skey) != stream_queues.end()) {
+            // unknown to us, or queue-backed: the NOTHING sentinel already
+            // reports the teardown on the Queue the owner is reading
+            continue;
+        }
+        peer_closed_streams.insert(skey);
+        ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
+            "peer reset skey='%s'\n", skey.c_str());
+        data_ready_streams.push_back(skey);
+    }
+
     // A peer stream reset abandons the persistent exchange on its session; a
     // session close ends it outright.  Either releases the session's persistent
     // handler.  De-duplicate by session so we push at most one close per session.
@@ -821,7 +840,26 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
         ASYNC_IO_TRACE("Http3ServerPollOperationPriv::closeSessionStreams "
             "closing stream skey='%s'\n", it->first.c_str());
         data_ready_streams.push_back(it->first);
+        close_notify_streams.erase(it->first);
         it = stream_queues.erase(it);
+    }
+
+    // Listener-only streams on this session have no Queue and therefore no
+    // sentinel, so the loop above cannot see them.  An SSE response stream is
+    // exactly this shape: the request completed, nothing further arrives from
+    // the peer, and the only thing that can tell its owner the session died is
+    // this notification.  Mark them closed (so isStreamPeerClosed() reports the
+    // teardown) and queue the same worker wakeup.
+    for (auto it = close_notify_streams.begin(); it != close_notify_streams.end();) {
+        if (it->compare(0, prefix.size(), prefix) != 0) {
+            ++it;
+            continue;
+        }
+        ASYNC_IO_TRACE("Http3ServerPollOperationPriv::closeSessionStreams "
+            "closing listener-only stream skey='%s'\n", it->c_str());
+        peer_closed_streams.insert(*it);
+        data_ready_streams.push_back(*it);
+        it = close_notify_streams.erase(it);
     }
 }
 
@@ -1239,11 +1277,74 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
             listeners, xsink);
     }
 
+    // Mirror the registration in the priv so the I/O thread can queue a close
+    // wakeup for this stream when its QUIC session dies (the QoreObject member
+    // hash above is not reachable from closeSessionStreams()).
+    priv->registerStreamCloseNotify(skey);
+
     if (!*xsink && listener_obj && priv->consumePendingOrQueueReady(skey)) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",
             skey.c_str(), (void*)listener_obj);
         ValueHolder rv(listener_obj->evalMethod("notifyIo", nullptr, xsink), xsink);
     }
+}
+
+//! Removes a stream data listener registered with registerStreamListener()
+/** Drops the listener object reference and the close-notification registration
+    for the given stream, so a long-lived listener-scoped HTTP/3 poll operation
+    does not accumulate one entry per completed stream.
+
+    Idempotent: no-op if no listener is registered for the stream.
+
+    @param session_id the QUIC session ID
+    @param stream_id the QUIC stream ID
+
+    @since %Qore 3.0
+*/
+nothing Http3ServerPollOperation::deregisterStreamListener(int session_id, int stream_id) {
+    std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+
+    priv->deregisterStreamCloseNotify(skey);
+
+    AutoLocker ml(priv->stream_member_lock);
+    ValueHolder existing(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+    if (*xsink || existing->getType() != NT_HASH) {
+        return QoreValue();
+    }
+    const QoreHashNode* current = existing->get<const QoreHashNode>();
+    if (!current->existsKey(skey.c_str())) {
+        return QoreValue();
+    }
+    // copy() ensures unique ownership (refcount == 1) before mutation
+    ReferenceHolder<QoreHashNode> listeners(current->copy(), xsink);
+    listeners->removeKey(skey.c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    self->setMemberValue("stream_listeners", QC_HTTP3SERVERPOLLOPERATION,
+        listeners.release(), xsink);
+}
+
+//! Returns True if the given stream can no longer carry data to the peer
+/** True when the peer reset the stream, when its QUIC session closed, or when
+    the whole listener poll operation is closed.
+
+    Long-lived response streams (Server-Sent Events) register no inbound Queue,
+    so they never see the \c NOTHING sentinel that tells a CONNECT tunnel its
+    stream is gone.  They are notified through \c onStreamData() instead and use
+    this predicate to distinguish a transport teardown from a data wakeup.
+
+    @param session_id the QUIC session ID
+    @param stream_id the QUIC stream ID
+
+    @return True if the stream was reset, its session closed, or the operation
+        is closed
+
+    @since %Qore 3.0
+*/
+bool Http3ServerPollOperation::isStreamPeerClosed(int session_id, int stream_id) [flags=RET_VALUE_ONLY] {
+    std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+    return priv->isStreamPeerClosed(skey);
 }
 
 //! Called by the I/O controller on a worker thread when stream data is available

@@ -786,6 +786,17 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.recv_stream_data = recvStreamDataCallback;
     callbacks.acked_stream_data_offset = ackedStreamDataOffsetCallback;
     callbacks.stream_close = streamCloseCallback;
+    // Peer-initiated stream abort: without this the transport has nowhere to
+    // report a RESET_STREAM, so a stream the peer abandoned looks alive to the
+    // application until the whole session closes.
+    //
+    // NOTE: ngtcp2's stream_stop_sending callback is deliberately NOT registered.
+    // Despite the name it reports a *local* decision ("this endpoint stopped
+    // reading"), not a peer STOP_SENDING — a server that finishes reading a
+    // request body while still streaming its response would be misread as
+    // abandoned.  A peer STOP_SENDING reaches us as stream_close carrying the
+    // peer's application error code; see streamCloseCallback().
+    callbacks.stream_reset = streamResetCallback;
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_local_streams_bidi = extendMaxLocalStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -930,6 +941,17 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.recv_stream_data = recvStreamDataCallback;
     callbacks.acked_stream_data_offset = ackedStreamDataOffsetCallback;
     callbacks.stream_close = streamCloseCallback;
+    // Peer-initiated stream abort: without this the transport has nowhere to
+    // report a RESET_STREAM, so a stream the peer abandoned looks alive to the
+    // application until the whole session closes.
+    //
+    // NOTE: ngtcp2's stream_stop_sending callback is deliberately NOT registered.
+    // Despite the name it reports a *local* decision ("this endpoint stopped
+    // reading"), not a peer STOP_SENDING — a server that finishes reading a
+    // request body while still streaming its response would be misread as
+    // abandoned.  A peer STOP_SENDING reaches us as stream_close carrying the
+    // peer's application error code; see streamCloseCallback().
+    callbacks.stream_reset = streamResetCallback;
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_remote_streams_bidi = extendMaxRemoteStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -3477,6 +3499,14 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                     (unsigned long long)app_error_code);
                 sit->second->error_message = buf;
             }
+            // This is the only place a peer STOP_SENDING becomes visible: ngtcp2
+            // absorbs the frame, resets our send side itself, and reports the
+            // outcome here with the peer's application error code.  A client that
+            // abandons a long-lived response stream (Server-Sent Events) while
+            // keeping the connection for other requests looks exactly like this,
+            // so without the report the stream's owner is never told and the
+            // server keeps writing into a stream nobody reads.
+            session->recordPeerStreamReset(stream_id, app_error_code);
         }
 
         // Record that this stream is fully closed (all data ACKed by peer).
@@ -4502,6 +4532,51 @@ int QuicSession::h3DeferredConsumeCallback(nghttp3_conn* conn, int64_t stream_id
     return 0;
 }
 
+void QuicSession::recordPeerStreamReset(int64_t stream_id, uint64_t app_error_code) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    // Mark the stream so subsequent sendStreamData() raises a typed
+    // QUIC-STREAM-RESET exception instead of silently appending to a buffer
+    // that nghttp3 will discard.  Without this, a tight producer loop on
+    // top of DataStream-v1 keeps pushing rows after the server has closed
+    // the stream and never observes the failure.
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        it->second->peer_stop_sending = true;
+        it->second->peer_close_error_code = app_error_code;
+        it->second->state = QuicStreamState::Closed;
+    }
+    // Report the abort exactly once: RESET_STREAM and STOP_SENDING routinely
+    // arrive together for the same stream, and nghttp3 then asks us to mirror
+    // them, so up to four callbacks can fire for one abandoned stream.
+    if (peer_reset_streams_.find(stream_id) == peer_reset_streams_.end()) {
+        pending_peer_reset_reports_.push_back(stream_id);
+    }
+    // Also record the reset in a standalone map so sendStreamData() can still
+    // raise QUIC-STREAM-RESET after streamCloseCallback() has erased the stream
+    // from streams_.
+    peer_reset_streams_[stream_id] = app_error_code;
+}
+
+int QuicSession::streamResetCallback(ngtcp2_conn* /* conn */, int64_t stream_id,
+                                      uint64_t /* final_size */, uint64_t app_error_code,
+                                      void* user_data, void* /* stream_user_data */) {
+    auto* session = static_cast<QuicSession*>(user_data);
+    ASYNC_IO_TRACE("QuicSession::streamResetCallback session=%lld stream_id=%lld app_error=%llu\n",
+        (long long)session->getSessionId(), (long long)stream_id,
+        (unsigned long long)app_error_code);
+    // RFC 9114 §4.1.2: a reset QUIC stream abandons the HTTP/3 message on it.
+    // Tell nghttp3 so it releases its stream state instead of waiting for data
+    // that will never arrive.
+    if (session->h3_conn_) {
+        int rv = nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
+        if (rv != 0 && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
+            return NGTCP2_ERR_CALLBACK_FAILURE;
+        }
+    }
+    session->recordPeerStreamReset(stream_id, app_error_code);
+    return 0;
+}
+
 int QuicSession::h3StopSendingCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                         uint64_t app_error_code,
                                         void* conn_user_data,
@@ -4510,27 +4585,7 @@ int QuicSession::h3StopSendingCallback(nghttp3_conn* /* conn */, int64_t stream_
     ASYNC_IO_TRACE("QuicSession::h3StopSendingCallback session=%lld stream_id=%lld app_error=%llu\n",
         (long long)session->getSessionId(), (long long)stream_id,
         (unsigned long long)app_error_code);
-    // Mark the stream so subsequent sendStreamData() raises a typed
-    // QUIC-STREAM-RESET exception instead of silently appending to a buffer
-    // that nghttp3 will discard.  Without this, a tight producer loop on
-    // top of DataStream-v1 keeps pushing rows after the server has closed
-    // the stream and never observes the failure.
-    {
-        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
-        auto it = session->streams_.find(stream_id);
-        if (it != session->streams_.end()) {
-            it->second->peer_stop_sending = true;
-            it->second->peer_close_error_code = app_error_code;
-            it->second->state = QuicStreamState::Closed;
-        }
-        // Also record the reset in a standalone map so sendStreamData() can
-        // still raise QUIC-STREAM-RESET after streamCloseCallback() has erased
-        // the stream from streams_.
-        session->peer_reset_streams_[stream_id] = app_error_code;
-        // One-shot report so the H3 server poll operation can tear down a
-        // persistent dedicated handler thread bound to this (now abandoned) stream.
-        session->pending_peer_reset_reports_.push_back(stream_id);
-    }
+    session->recordPeerStreamReset(stream_id, app_error_code);
     int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
     if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
@@ -4544,24 +4599,14 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
                                         void* conn_user_data,
                                         void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
+    ASYNC_IO_TRACE("QuicSession::h3ResetStreamCallback session=%lld stream_id=%lld app_error=%llu\n",
+        (long long)session->getSessionId(), (long long)stream_id,
+        (unsigned long long)app_error_code);
     // RESET_STREAM is the peer's send-side close.  A peer that resets its
     // own send side after replying with an error response also expects us
     // to stop sending (the request stream is symmetrical from the peer's
-    // perspective).  Mark the stream closed so sendStreamData() raises a
-    // typed exception — see h3StopSendingCallback() for context.
-    {
-        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
-        auto it = session->streams_.find(stream_id);
-        if (it != session->streams_.end()) {
-            it->second->peer_stop_sending = true;
-            it->second->peer_close_error_code = app_error_code;
-            it->second->state = QuicStreamState::Closed;
-        }
-        // Also record the reset for sendStreamData() — see h3StopSendingCallback()
-        session->peer_reset_streams_[stream_id] = app_error_code;
-        // One-shot report for persistent-session teardown — see h3StopSendingCallback()
-        session->pending_peer_reset_reports_.push_back(stream_id);
-    }
+    // perspective).
+    session->recordPeerStreamReset(stream_id, app_error_code);
     int rv = ngtcp2_conn_shutdown_stream_write(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
     if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {

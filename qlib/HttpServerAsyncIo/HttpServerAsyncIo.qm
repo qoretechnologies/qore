@@ -79,6 +79,14 @@ module HttpServerAsyncIo {
     @section httpserverasyncio_relnotes Release Notes
 
     @subsection httpserverasyncio_v1_0 Version 1.0
+    - added @ref HttpServerAsyncIo::SseStreamCloseNotifier "SseStreamCloseNotifier" and
+      @ref HttpServerAsyncIo::AbstractSseConnection::setPeerCloseCallback() "AbstractSseConnection::setPeerCloseCallback()"
+      so that an SSE response stream on a multiplexed transport (HTTP/2, HTTP/3) is torn down when the peer resets
+      the stream or its connection dies; under HTTP/1.x the socket is the stream, so nothing was needed there
+    - added @ref HttpServerAsyncIo::Http2PollOperation::deregisterStreamListener() "Http2PollOperation::deregisterStreamListener()"
+      so that a long-lived multiplexed connection does not accumulate one listener entry per completed stream, and
+      moved listener dispatch outside the registration lock so a listener may deregister itself from its own
+      callback
     - Initial release of HttpServer async I/O, HTTP/2, and HTTP/3 support
     - Provides callback-based I/O controller delegating all polling to
       @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController"

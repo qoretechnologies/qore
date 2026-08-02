@@ -299,7 +299,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         poll_op.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
         # Create and register the connection
-        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
         conn.setAsyncPollOp(poll_op);
 
         registerAndInvokeHooks(conn, cid, hdr);
@@ -337,7 +337,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id, wake_callback, True);
         sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
-        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);
 
         registerAndInvokeHooks(conn, cid, hdr);
@@ -376,7 +376,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback, True);
         sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
-        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);
 
         registerAndInvokeHooks(conn, cid, hdr);
@@ -442,6 +442,27 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         str =~ s/\n/\\n/g;
         str =~ s/\r/\\r/g;
         return str;
+    }
+
+    #! Creates the connection object for a new SSE stream
+    /** Internal seam called by all three \c setupAsyncSseConnection*() variants; the
+        default implementation simply delegates to @ref getConnectionImpl().
+
+        A handler that must produce a specific connection type for certain requests —
+        one whose behavior the handler itself depends on, rather than one a subclass is
+        free to replace — overrides this method instead of @ref getConnectionImpl(), so
+        that a subclass customizing the documented factory hook cannot displace it.
+
+        @param sock the socket for the SSE connection
+        @param cx call context hash
+        @param hdr incoming request headers
+        @param cid connection ID
+
+        @return the connection object to register
+    */
+    private ServerSentEventConnection createConnectionIntern(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        return getConnectionImpl(sock, cx, hdr, cid);
     }
 
     #! Called when a connection is established; the default implementation creates a ServerSentEventConnection object

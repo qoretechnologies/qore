@@ -1868,6 +1868,22 @@ public class HttpAsyncSocketIoController {
                 "register_stream_listener": sub (object listener) {
                     h3op.registerStreamListener(session_id, stream_id, listener);
                 },
+                # Wires an SSE response stream to the QUIC stream-teardown
+                # notification.  QUIC multiplexes every session onto the shared
+                # listener socket, so neither a socket close nor a failed write
+                # can report that this one stream (or its session) died; see
+                # HttpServerAsyncIo::SseStreamCloseNotifier.
+                "register_sse_close_notify": sub (object sse_conn) {
+                    HttpServerAsyncIo::SseStreamCloseNotifier notifier(
+                        cast<HttpServerAsyncIo::AbstractSseConnection>(sse_conn),
+                        bool sub () {
+                            return h3op.isStreamPeerClosed(session_id, stream_id);
+                        },
+                        sub () {
+                            h3op.deregisterStreamListener(session_id, stream_id);
+                        });
+                    h3op.registerStreamListener(session_id, stream_id, notifier);
+                },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -3989,6 +4005,22 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "io_wake": sub () { controller.wakeSocket(dispatch_sock); },
+                # Wires an SSE response stream to the HTTP/2 stream-teardown
+                # notification.  HTTP/2 multiplexes streams onto one connection,
+                # so neither a socket close nor a failed write can report that
+                # this one stream died; see
+                # HttpServerAsyncIo::SseStreamCloseNotifier.
+                "register_sse_close_notify": sub (object sse_conn) {
+                    HttpServerAsyncIo::SseStreamCloseNotifier notifier(
+                        cast<HttpServerAsyncIo::AbstractSseConnection>(sse_conn),
+                        bool sub () {
+                            return dispatch_h2op.isStreamPeerClosed(dispatch_stream_id);
+                        },
+                        sub () {
+                            dispatch_h2op.deregisterStreamListener(dispatch_stream_id);
+                        });
+                    dispatch_h2op.registerStreamListener(dispatch_stream_id, notifier);
+                },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
