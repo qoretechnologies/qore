@@ -10927,7 +10927,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_name,
     QoreProgram* shadow_pgm,
     const char* mod_path,
-    bool write_shadow);
+    bool write_shadow,
+    ExceptionSink* failure_sink);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11314,7 +11315,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
                     }
                 }
             }
@@ -11417,7 +11418,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_name,
     QoreProgram* shadow_pgm,
     const char* mod_path,
-    bool write_shadow);
+    bool write_shadow,
+    ExceptionSink* failure_sink);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -11993,7 +11995,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             init_descriptors, mod_name.c_str(),
             init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
             mod_path.empty() ? nullptr : mod_path.c_str(),
-            write_shadow);
+            write_shadow, &xsink);
         return finish(failed == 0);
     }
 
@@ -12506,7 +12508,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
                     }
                 }
             }
@@ -13128,6 +13130,35 @@ DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
     return it->second.pgm;
 }
 
+DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) {
+    if (!name) {
+        return 0;
+    }
+
+    QoreProgram* pgm = nullptr;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        auto it = aot_module_map.find(name);
+        if (it == aot_module_map.end() || !it->second.pgm) {
+            return 0;
+        }
+        pgm = it->second.pgm;
+        qore_program_private::get(*pgm)->merged_aot_modules.insert(name);
+    }
+
+    AOTModuleInitRunResult result = runAOTModuleInitForProgram(name, pgm, xsink);
+    if (xsink) {
+        return -1;
+    }
+    if (result.hard_error) {
+        xsink.raiseException("MODULE-LOAD-ERROR", "AOT module '%s' initialization failed: %s", name,
+            result.error.c_str());
+        return -1;
+    }
+    retryPendingAOTModuleInitsForProgram(pgm, xsink);
+    return xsink ? -1 : 0;
+}
+
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     std::vector<QoreProgram*> programs;
     {
@@ -13483,7 +13514,8 @@ static int executeInitFunctions(
         const char* mod_name,
         QoreProgram* shadow_pgm,
         const char* mod_path,
-        bool write_shadow) {
+        bool write_shadow,
+        ExceptionSink* failure_sink) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -13648,6 +13680,14 @@ static int executeInitFunctions(
         if (is_module_init != run_module_init) {
             continue;
         }
+        // A source module's init closure runs once when the module is registered globally, not once for every
+        // Program that imports it.  The first AOT initialization pass owns the shared shadow population and is
+        // therefore the equivalent global execution.  Later imports still initialize program-local constants and
+        // variables in pass 0, but must not repeat module-registration or other external side effects in pass 1.
+        if (is_module_init && !write_shadow) {
+            desc_done[di] = true;
+            continue;
+        }
         if (aotInitTraceEnabled()) {
             fprintf(stderr, "[aot-init] descriptor module=%s pass=%d round=%d name=%s target=%d ns=%s item=%s\n",
                 mod_name ? mod_name : "<none>", pass, round, desc.name.c_str(),
@@ -13783,6 +13823,9 @@ static int executeInitFunctions(
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(), err_cstr, desc_cstr,
                 is_pending ? " (will retry)" : "");
+            if (failure_sink && !*failure_sink && run_module_init) {
+                failure_sink->raiseException(err_cstr, "%s", desc_cstr);
+            }
             xsink.clear();
             if (!run_module_init) {
                 // Leave pass-0 init descriptors retryable until the fixpoint
@@ -14144,9 +14187,17 @@ static int executeInitFunctions(
                 printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
                     descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
                     last_error_pending[di] ? " (pending)" : "");
+                if (failure_sink && !*failure_sink) {
+                    failure_sink->raiseException(last_error[di].c_str(), "%s", last_desc[di].c_str());
+                }
             } else {
                 printd(0, "AOT init: '%s' remained pending after %d rounds\n",
                     descriptors[di].name.c_str(), 32);
+                if (failure_sink && !*failure_sink) {
+                    failure_sink->raiseException("AOT-INIT-ERROR",
+                        "AOT initializer '%s' remained pending after %d rounds",
+                        descriptors[di].name.c_str(), 32);
+                }
             }
             ++failed;
         }
@@ -14790,7 +14841,7 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true);
+                    /*write_shadow=*/true, /*failure_sink=*/nullptr);
             }
         }
     }
@@ -14994,7 +15045,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             label ? label : "<script>",
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
-                            /*write_shadow=*/true);
+                            /*write_shadow=*/true,
+                            /*failure_sink=*/nullptr);
                     }
                 }
             } else {
@@ -15343,7 +15395,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
-                    /*write_shadow=*/true);
+                    /*write_shadow=*/true,
+                    /*failure_sink=*/nullptr);
                 if (time_on) {
                     us_init += now_us() - t1;
                 }

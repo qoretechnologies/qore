@@ -669,6 +669,12 @@ DLLLOCAL bool qore_is_aot_user_module(const char* name);
 */
 DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name);
 
+//! Runs deferred initialization for an AOT user module in its private module Program without exporting its namespace.
+/** This provides source-module-equivalent initialization for optional child modules loaded with no target Program.
+    Returns 0 on success and -1 on error.
+ */
+DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink);
+
 //! Encodes a class reference for AOT metadata.
 /** Module-originated classes include the owning module name so runtime
     resolution can fall back to the module-private program when the class was

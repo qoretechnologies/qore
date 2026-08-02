@@ -253,17 +253,21 @@ module AotTcmBase {
 public class AotTcmBase {
     public {
         static hash<string, code> children;
+        static list<string> registrations;
     }
 
     static registerChild(string name, code generator) {
         children{name} = generator;
+        push registrations, name;
     }
 }
 ");
         f.close();
 
-        # the child module is a source module
-        f.open2(tmp.path + "/AotTcmExt.qm", O_WRONLY | O_CREAT | O_TRUNC);
+        # the child module is also AOT-compiled; its initializer extends state owned by the parent module.
+        # This is the deployment shape used by provider extensions such as SalesforcePubSubDataProvider.
+        string child_src = tmp.path + "/AotTcmExt.qm";
+        f.open2(child_src, O_WRONLY | O_CREAT | O_TRUNC);
         f.write("%modern
 %requires(reexport) AotTcmBase
 
@@ -286,7 +290,16 @@ module AotTcmExt {
             testSkip("AOT compilation is not available in this build: " + out);
             return;
         }
+
+        string child_qmod = tmp.path + "/AotTcmExt.qmod";
+        cmd = sprintf("QORE_MODULE_DIR=%s %s -m %s -o %s 2>&1", tmp.path, qcc, child_src, child_qmod);
+        out = backquote(cmd);
+        if (!is_file(child_qmod)) {
+            testSkip("AOT child compilation is not available in this build: " + out);
+            return;
+        }
         unlink(base_src);
+        unlink(child_src);
 
         # run the check in a subprocess: the modules must be loaded in a process where they are not yet
         # registered, and module registration is global and permanent
@@ -295,11 +308,13 @@ module AotTcmExt {
         f.write(sprintf("%%modern
 %%prepend-module-path %y
 %%requires AotTcmBase
+%%requires AotTcmExt
 
 hash<string, hash<auto>> mh = get_module_hash();
 printf(\"status: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmExt.status);
 printf(\"absent: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmNoSuchChildModule.status);
 printf(\"children: %%y\\n\", keys AotTcmBase::children);
+printf(\"registrations: %%y\\n\", AotTcmBase::registrations);
 ", tmp.path));
         f.close();
 
@@ -307,5 +322,118 @@ printf(\"children: %%y\\n\", keys AotTcmBase::children);
         assertRegex("status: attached", out);
         assertRegex("absent: absent", out);
         assertRegex("children: \\[\"ext\"\\]", out);
+        assertRegex("registrations: \\[\"ext\"\\]", out);
+
+        # Loading the AOT child first pulls in its parent, whose child-attachment pass observes the child as
+        # already in progress.  Completing the explicit child load must still initialize it exactly once.
+        string child_first_script = tmp.path + "/aot-child-first.qr";
+        f.open2(child_first_script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("%%modern
+%%prepend-module-path %y
+%%requires AotTcmExt
+%%requires AotTcmBase
+
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"status: %%s\\n\", mh.AotTcmBase.\"child-modules\".AotTcmExt.status);
+printf(\"registrations: %%y\\n\", AotTcmBase::registrations);
+", tmp.path));
+        f.close();
+
+        out = backquote(sprintf("%s %s 2>&1", qore_bin, child_first_script));
+        assertRegex("status: attached", out);
+        assertRegex("registrations: \\[\"ext\"\\]", out);
+
+        # An exception from the deferred AOT child initializer is a sticky child-load failure, just like an
+        # exception from a source child module's init closure.
+        string broken_base_src = tmp.path + "/AotTcmBrokenBase.qm";
+        f.open2(broken_base_src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%try-child-module AotTcmBrokenExt
+
+module AotTcmBrokenBase {
+    version = \"1.0\";
+    desc = \"AOT child init failure test parent\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+");
+        f.close();
+
+        string broken_child_src = tmp.path + "/AotTcmBrokenExt.qm";
+        f.open2(broken_child_src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires(reexport) AotTcmBrokenBase
+
+module AotTcmBrokenExt {
+    version = \"1.0\";
+    desc = \"AOT child init failure test child\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        throw \"AOT-CHILD-INIT-ERROR\", \"intentional AOT child initialization failure\";
+    };
+}
+");
+        f.close();
+
+        string broken_base_qmod = tmp.path + "/AotTcmBrokenBase.qmod";
+        out = backquote(sprintf("%s -m %s -o %s 2>&1", qcc, broken_base_src, broken_base_qmod));
+        assertTrue(is_file(broken_base_qmod), "the broken AOT parent fixture compiles: " + out);
+
+        # Compile the child against a parent API stub without the child declaration.  Loading the real parent
+        # while compiling the child would correctly attach the source child and run its intentionally failing
+        # initializer before qcc could produce the fixture artifact.
+        string stub_dir = tmp.path + "/broken-compile-stub";
+        mkdir(stub_dir, 0755);
+        string stub_src = stub_dir + "/AotTcmBrokenBase.qm";
+        f.open2(stub_src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AotTcmBrokenBase {
+    version = \"1.0\";
+    desc = \"AOT child init failure compile stub\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+");
+        f.close();
+        string broken_child_qmod = tmp.path + "/AotTcmBrokenExt.qmod";
+        out = backquote(sprintf("QORE_MODULE_DIR=%s %s -m %s -o %s 2>&1", stub_dir, qcc,
+            broken_child_src, broken_child_qmod));
+        assertTrue(is_file(broken_child_qmod), "the broken AOT child fixture compiles: " + out);
+        unlink(broken_base_src);
+        unlink(broken_child_src);
+
+        string broken_script = tmp.path + "/aot-broken-child.qr";
+        f.open2(broken_script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("%%modern
+%%prepend-module-path %y
+try {
+    load_module(\"AotTcmBrokenBase\");
+    printf(\"unexpected first success\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"first: %%s: %%s\\n\", ex.err, ex.desc);
+}
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"status: %%s\\n\", mh.AotTcmBrokenBase.\"child-modules\".AotTcmBrokenExt.status);
+printf(\"stored: %%s: %%s\\n\", mh.AotTcmBrokenBase.\"child-modules\".AotTcmBrokenExt.err,
+    mh.AotTcmBrokenBase.\"child-modules\".AotTcmBrokenExt.desc);
+try {
+    load_module(\"AotTcmBrokenBase\");
+    printf(\"unexpected second success\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"second: %%s: %%s\\n\", ex.err, ex.desc);
+}
+", tmp.path));
+        f.close();
+
+        out = backquote(sprintf("%s %s 2>&1", qore_bin, broken_script));
+        assertRegex("first: AOT-CHILD-INIT-ERROR: intentional AOT child initialization failure", out);
+        assertRegex("while attaching child module \\\"AotTcmBrokenExt\\\" declared by module "
+            "\\\"AotTcmBrokenBase\\\"", out);
+        assertRegex("status: failed", out);
+        assertRegex("stored: AOT-CHILD-INIT-ERROR: intentional AOT child initialization failure", out);
+        assertRegex("second: AOT-CHILD-INIT-ERROR: module 'AotTcmBrokenBase': child module "
+            "'AotTcmBrokenExt' declared with %try-child-module is present but failed to load: "
+            "intentional AOT child initialization failure", out);
     }
 }

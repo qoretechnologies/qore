@@ -789,6 +789,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     declared child is reported by get_module_hash() under the
     \c "child-modules" key.
 
+    AOT-compiled optional children now run their module initializer exactly
+    once without exporting the child's private namespace through its parent.
+    This makes extension registration and initializer error reporting
+    consistent between source and precompiled modules.
+
     See @ref try-child-module "%try-child-module" and
     @ref user_module_children "Child Modules" for details.
     @endparblock

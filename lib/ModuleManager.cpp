@@ -2168,6 +2168,16 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
                 ppgm, &not_found);
         }
 
+        if (!cx && cmi && qore_is_aot_user_module(cmi->getName())) {
+            // Source child modules execute their init closure during global registration.  AOT module
+            // initialization is deferred until the module is applied to a Program, but child attachment
+            // intentionally loads with pgm=nullptr so the optional child cannot change the parent's public
+            // namespace.  Run the AOT child initializer against its private module Program to preserve both
+            // contracts: the extension side effects are active, and no child symbols are reexported.
+            AutoUnlocker au(&mutex);
+            qore_aot_initialize_module(cmi->getName(), cx);
+        }
+
         if (!cx) {
             // a null module with no exception means that the child's load is already in progress in this
             // thread (i.e. the child was loaded explicitly and pulled its parent in); it will complete
