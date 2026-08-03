@@ -98,6 +98,8 @@
     - I/O interruptibility for file, stream, database, and standard I/O operations
     - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" /
       @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
+    - sandboxed Qore modules can initialize immutable resources packaged beside the module, while canonical path
+      checks continue to reject traversal, external symlinks, writes, and later runtime filesystem access
     - new @ref Qore::ParseOptions "ParseOptions" container supporting more than 64 option bits
 
     <i>Networking and I/O:</i>

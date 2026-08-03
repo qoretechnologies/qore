@@ -62,14 +62,35 @@ When a module is loaded into a sandboxed program, all operations performed by th
 
 Modules that have not been audited and verified for sandbox compliance should not be made available in sandboxed environments.
 
+#### Read-only module resources during initialization
+
+Qore modules may package immutable resources such as application logos, schemas, and protocol definitions as files beside the
+module. During module loading and initialization only, the runtime permits a module to read files beneath its own module
+directory even when the importing program's sandbox otherwise denies filesystem access. This narrow capability allows module
+constants such as `File::readTextFile(get_script_dir() + "/app-logo.svg")` to be materialized safely.
+
+The exception has strict boundaries:
+
+- only `QSEC_READ` access is permitted;
+- both the module directory and target are canonicalized, so `..` traversal and symlinks cannot escape the module directory;
+- write, create, delete, execute, and network operations remain governed by the importing program's sandbox;
+- the capability ends when module initialization ends; ordinary module functions and methods always inherit the caller's
+  sandbox policy.
+
+Module resources should therefore be stored beside the module and read during initialization. Modules must not defer resource
+file reads until an action or method is invoked.
+
 #### How the active manager is resolved (program-context propagation)
 
 A Qore-language (`.qm`) module executes its functions/methods in the **module's own**
-`QoreProgram`, which normally has no `SandboxManager` of its own. So the no-arg
-`QoreSandboxManagerHelper smh;` does **not** resolve the manager from the current program
-alone — it walks the thread's **program-context (call) stack** from the innermost
-(current) program outward through each enclosing caller, and uses the first program that
-has an active manager. This is what makes the rule above hold in practice: when sandboxed
+`QoreProgram`. Source-module Programs inherit the importing Program's `SandboxManager`, so
+source constants and other initialization execute under the same policy. Compiled modules
+can have shared module Programs and therefore cannot retain one importing user's manager.
+
+For ordinary module calls, the no-arg `QoreSandboxManagerHelper smh;` also walks the
+thread's **program-context (call) stack** from the innermost (current) program outward
+through each enclosing caller, and uses the first program that has an active manager. This
+is what makes the rule above hold for both source and compiled modules: when sandboxed
 application code calls a module function that performs I/O, the helper finds the
 application's sandbox even though the I/O executes in the module's program.
 

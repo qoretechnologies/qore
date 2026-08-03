@@ -39,11 +39,13 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 
 //------------------------------------------------------------------------------
@@ -889,7 +891,56 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     return config.release();
 }
 
+//! Returns true for a read of a resource beneath the module's own directory while the module is being loaded
+/** Module initialization commonly materializes immutable resources such as application logos into constants.
+    The module loader sets a private thread-local module context only for the load/initialization phase.  Allowing
+    read-only access beneath that module's directory preserves this supported packaging pattern without granting
+    module methods any filesystem access when they are later called by sandboxed user code.
+
+    Both paths are canonicalized before the containment check, so `..` traversal and symlinks escaping the module
+    directory remain denied.  Directory-backed source modules use the module path itself; file-backed modules use
+    its lexical parent.  The parent is canonicalized rather than the module file because in-tree `.qmod` files can
+    be symlinks while their resources intentionally remain beside the symlink.
+*/
+static bool is_module_initialization_resource_read(const char* path, int mode) {
+    if (mode != QSEC_READ) {
+        return false;
+    }
+
+    const char* module_path = get_module_context_path();
+    if (!module_path || !*module_path) {
+        return false;
+    }
+
+    std::string module_root(module_path);
+    struct stat sb;
+    if (stat(module_path, &sb) || !S_ISDIR(sb.st_mode)) {
+        size_t sep = module_root.find_last_of("/\\");
+        if (sep == std::string::npos) {
+            // A module name alone does not establish a safe resource directory.
+            return false;
+        }
+        module_root.resize(sep ? sep : 1);
+    }
+
+    std::unique_ptr<char, decltype(&free)> canonical_root(realpath(module_root.c_str(), nullptr), &free);
+    std::unique_ptr<char, decltype(&free)> canonical_path(realpath(path, nullptr), &free);
+    if (!canonical_root || !canonical_path) {
+        return false;
+    }
+
+    std::string root(canonical_root.get());
+    std::string target(canonical_path.get());
+    if (target.compare(0, root.size(), root)) {
+        return false;
+    }
+    return target.size() == root.size() || root.back() == '/' || target[root.size()] == '/';
+}
+
 bool QoreSandboxManager::checkFilesystemAccess(const char* path, int mode, ExceptionSink* xsink) {
+    if (is_module_initialization_resource_read(path, mode)) {
+        return true;
+    }
     return fs_mgr.checkAccess(path, mode, xsink);
 }
 

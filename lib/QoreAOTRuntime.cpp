@@ -13913,10 +13913,12 @@ static int executeInitFunctions(
                 }
             }
             std::unique_ptr<QoreParseClassHelper> parse_ctx_helper = make_parse_context(desc, init_ctx_helper != nullptr);
+            const char* init_mod_name = is_module_init && !desc.ns_path.empty()
+                ? desc.ns_path.c_str() : mod_name;
+            const char* init_mod_path = is_module_init && !desc.item_name.empty()
+                ? desc.item_name.c_str() : mod_path;
+            ModuleInitNamePathContextHelper module_ctx(init_mod_name, init_mod_path);
             if (is_module_init) {
-                const char* init_mod_name = desc.ns_path.empty() ? mod_name : desc.ns_path.c_str();
-                const char* init_mod_path = desc.item_name.empty() ? mod_path : desc.item_name.c_str();
-                ModuleInitNamePathContextHelper module_ctx(init_mod_name, init_mod_path);
                 // The compiled closure body expects its body locals to be
                 // pre-instantiated on the thread's lvstack (mimicking evalTiered's
                 // contract with regular functions). Manually instantiate each

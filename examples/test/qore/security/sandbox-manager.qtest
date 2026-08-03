@@ -58,6 +58,14 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("QoreSandboxManagerHelper with specific Program", \testHelperWithProgram());
         addTestCase("Module-context network sandbox propagation", \testModuleContextNetworkSandbox());
         addTestCase("Module-context filesystem sandbox propagation", \testModuleContextFilesystemSandbox());
+        addTestCase("Module initialization resource access", \testModuleInitializationResourceAccess());
+        addTestCase("Separated module initialization resource access",
+            \testSeparatedModuleInitializationResourceAccess());
+        addTestCase("Module initialization resource escape denied", \testModuleInitializationResourceEscape());
+        addTestCase("Module initialization resource symlink escape denied",
+            \testModuleInitializationResourceSymlinkEscape());
+        addTestCase("Module initialization resource write denied", \testModuleInitializationResourceWrite());
+        addTestCase("DataProvider logo initialization in sandbox", \testDataProviderLogoInitialization());
         addTestCase("Module-context with no sandbox is unrestricted", \testModuleContextNoSandbox());
         addTestCase("Nested sandboxes resolve innermost-enclosing", \testNestedSandboxResolution());
         set_return_value(main());
@@ -1779,6 +1787,234 @@ string sub doRead(string path) { return %s::modReadFile(path); }
                 "module-context filesystem op enforced by caller's sandbox: " + ex.err);
         }
         assertTrue(caught, "module-context read outside sandbox root was denied");
+    }
+
+    #! Writes a Qore-language module source file
+    private writeModuleSource(string path, string source) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+    }
+
+    #! Writes a module resource file
+    private writeModuleResource(string path, string data) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(data);
+    }
+
+    testModuleInitializationResourceAccess() {
+        TmpDir td();
+        string modname = "SbInitResource" + getpid();
+        string module_dir = td.path + DirSep + modname;
+        mkdir(module_dir);
+        writeModuleResource(module_dir + DirSep + "logo.svg", "<svg>module resource</svg>");
+        writeModuleSource(module_dir + DirSep + modname + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed module resource test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const string Logo = File::readTextFile(get_script_dir() + \"/logo.svg\");
+    public string sub getLogo() { return Logo; }
+    public string sub readLogoAtRuntime() {
+        return File::readTextFile(get_script_dir() + \"/logo.svg\");
+    }
+}
+", modname, modname));
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+string sub getLogo() { return %s::getLogo(); }
+string sub readLogoAtRuntime() { return %s::readLogoAtRuntime(); }
+", module_dir, modname, modname, modname), modname + "Client");
+
+        assertEq("<svg>module resource</svg>", p.callFunction("getLogo"),
+            "module initialization can materialize its own read-only resource");
+
+        bool caught = False;
+        try {
+            p.callFunction("readLogoAtRuntime");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                "module resource read after initialization inherits caller sandbox");
+        }
+        assertTrue(caught, "module resource capability ends after initialization");
+    }
+
+    testModuleInitializationResourceEscape() {
+        TmpDir td();
+        string modname = "SbInitEscape" + getpid();
+        string module_dir = td.path + DirSep + modname;
+        mkdir(module_dir);
+        writeModuleResource(td.path + DirSep + "secret.txt", "not a module resource");
+        writeModuleSource(module_dir + DirSep + modname + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed module resource escape test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const string Secret = File::readTextFile(get_script_dir() + \"/../secret.txt\");
+}
+", modname, modname));
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        bool caught = False;
+        try {
+            p.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+string sub getSecret() { return %s::Secret; }
+", module_dir, modname, modname), modname + "Client");
+            p.callFunction("getSecret");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                "module initialization cannot escape its resource directory");
+        }
+        assertTrue(caught, "parent-directory module resource read is denied");
+    }
+
+    testSeparatedModuleInitializationResourceAccess() {
+        TmpDir td();
+        string modname = "SbSeparatedInitResource" + getpid();
+        string module_dir = td.path + DirSep + modname;
+        mkdir(module_dir);
+        writeModuleResource(module_dir + DirSep + "logo.svg", "<svg>separated module resource</svg>");
+        writeModuleSource(module_dir + DirSep + modname + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed separated module resource test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const string Logo = File::readTextFile(get_script_dir() + \"/logo.svg\");
+}
+", modname, modname));
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+string sub getLogo() { return %s::Logo; }
+", td.path, modname, modname), modname + "Client");
+        assertEq("<svg>separated module resource</svg>", p.callFunction("getLogo"),
+            "directory-backed separated module can materialize its own resource");
+    }
+
+    testModuleInitializationResourceSymlinkEscape() {
+        if (!Qore::Option::HAVE_UNIX_FILEMGT) {
+            testSkip("symbolic links are not supported on this platform");
+            return;
+        }
+
+        TmpDir td();
+        string modname = "SbInitSymlinkEscape" + getpid();
+        string module_dir = td.path + DirSep + modname;
+        string secret_path = td.path + DirSep + "secret.txt";
+        mkdir(module_dir);
+        writeModuleResource(secret_path, "not a module resource");
+        symlink(secret_path, module_dir + DirSep + "logo.svg");
+        writeModuleSource(module_dir + DirSep + modname + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed module resource symlink escape test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const string Logo = File::readTextFile(get_script_dir() + \"/logo.svg\");
+}
+", modname, modname));
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        bool caught = False;
+        try {
+            p.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+string sub getLogo() { return %s::Logo; }
+", module_dir, modname, modname), modname + "Client");
+            p.callFunction("getLogo");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                "module initialization cannot follow a resource symlink outside its directory");
+        }
+        assertTrue(caught, "external module resource symlink is denied");
+    }
+
+    testModuleInitializationResourceWrite() {
+        TmpDir td();
+        string modname = "SbInitWrite" + getpid();
+        string module_dir = td.path + DirSep + modname;
+        string output_path = module_dir + DirSep + "created.txt";
+        mkdir(module_dir);
+        writeModuleSource(module_dir + DirSep + modname + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed module resource write test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        File f();
+        f.open2(get_script_dir() + \"/created.txt\", O_WRONLY | O_CREAT | O_TRUNC);
+    };
+}
+", modname));
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        bool caught = False;
+        try {
+            p.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+nothing sub noop() {}
+", module_dir, modname), modname + "Client");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("ILLEGAL-CLASS-INSTANTIATION", ex.err,
+                "sandbox parse restrictions deny module initialization write APIs");
+            assertTrue(ex.desc.find("do not allow access to the 'File' class") >= 0,
+                "write denial identifies the unavailable filesystem API");
+        }
+        assertTrue(caught, "module initialization write is denied");
+        assertFalse(is_file(output_path), "denied module initialization did not create a file");
+    }
+
+    testDataProviderLogoInitialization() {
+        string data_provider = normalize_dir(get_script_dir()
+            + "/../../../../qlib/DataProvider/DataProvider.qmod");
+        assertTrue(is_file(data_provider), "local DataProvider qmod is available for the sandbox regression");
+
+        SandboxManager sm = SandboxManager::createLockdown();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(sprintf("%%modern
+%%requires %s
+string sub getQoreLogo() { return DataProvider::QoreApp::QoreLogo; }
+", data_provider), "SandboxDataProviderLogoClient");
+        string logo = p.callFunction("getQoreLogo");
+        assertTrue(logo.find("<svg") >= 0,
+            "DataProvider's built-in Qore app logo initializes in a filesystem-denied sandbox");
     }
 
     testModuleContextNoSandbox() {

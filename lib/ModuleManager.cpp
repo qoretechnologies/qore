@@ -1790,6 +1790,18 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     return nullptr;
 }
 
+//! Makes a source module Program subject to the importing Program's sandbox during initialization
+static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram* parent_pgm) {
+    if (!parent_pgm || &module_pgm == parent_pgm) {
+        return;
+    }
+    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
+    module_pgm.setSandboxManager(sm);
+    if (sm) {
+        sm->deref(nullptr);
+    }
+}
+
 QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
@@ -1856,6 +1868,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
+    // A source module has its own Program, so inherit the caller's sandbox manager explicitly.  This makes module
+    // constant initialization subject to the caller's sandbox even though it does not execute through a normal
+    // caller Program frame.  A narrowly-scoped exception in QoreSandboxManager permits read-only access to the
+    // module's own resources while its module context is active.
+    inherit_module_sandbox_manager(*mpgm, p);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
@@ -2579,6 +2596,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
             qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
+    // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
+    inherit_module_sandbox_manager(*mpgm, p);
     // inherit execution mode from parent program
     if (p) {
         qore_program_private* ppriv = qore_program_private::get(*p);
