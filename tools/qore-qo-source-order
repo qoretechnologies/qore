@@ -49,6 +49,27 @@ hashdecl SourceOrderGraph {
     list<hash<string, list<string>>> summaries;
 }
 
+#! The strongly connected components of the required-edge graph.
+/** A required edge that closes a cycle cannot be expressed as a build edge, so
+    every member of one component must be compiled and published as a single
+    atomic generation. This hashdecl is that decomposition: \c members is the
+    partition, \c predecessors is the condensed DAG, and \c component_keys names
+    each component by content rather than by node numbering so the same
+    component keeps its identity when the source list is reordered.
+*/
+hashdecl SourceOrderComponents {
+    #! component index -> member node indexes, ascending
+    list<list<int>> members;
+    #! node index -> component index
+    list<int> component_of;
+    #! component index -> direct predecessor component indexes, ascending
+    list<list<int>> predecessors;
+    #! component index -> stable component key derived from the member outputs
+    list<string> component_keys;
+    #! deterministic topological order of the condensed DAG
+    list<int> topological_order;
+}
+
 class SourceSymbolManifestGenerator {
     private {
         Regex class_re = new Regex("\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
@@ -1933,6 +1954,326 @@ class SourceOrderEngine {
         return result;
     }
 
+    #! Successor lists over required edges only, ascending.
+    private list<list<int>> requiredSuccessors(hash<SourceOrderGraph> graph) {
+        list<list<int>> successors = ();
+        for (int provider = 0; provider < graph.outgoing.size(); ++provider) {
+            list<int> consumers = ();
+            foreach string consumer_key in (graph.outgoing[provider].keys()) {
+                int consumer = consumer_key.toInt();
+                if (requiredEdge(graph, provider, consumer)) {
+                    push consumers, consumer;
+                }
+            }
+            push successors, sort(consumers);
+        }
+        return successors;
+    }
+
+    #! Tarjan's strongly connected components over the required-edge graph.
+    /** Iterative by construction: an object group holds thousands of sources
+        and a recursive walk would be bounded by the interpreter stack rather
+        than by the graph.
+    */
+    private list<list<int>> tarjanComponents(list<list<int>> successors) {
+        int count = successors.size();
+        list<int> node_index = ();
+        list<int> low = ();
+        list<bool> on_stack = ();
+        for (int node = 0; node < count; ++node) {
+            push node_index, -1;
+            push low, 0;
+            push on_stack, False;
+        }
+        int next_index = 0;
+        list<int> component_stack = ();
+        list<list<int>> raw = ();
+        for (int root = 0; root < count; ++root) {
+            if (node_index[root] >= 0) {
+                continue;
+            }
+            node_index[root] = next_index;
+            low[root] = next_index;
+            ++next_index;
+            push component_stack, root;
+            on_stack[root] = True;
+            list<hash<auto>> frames = (("node": root, "position": 0),);
+            while (frames) {
+                int top = frames.size() - 1;
+                int node = frames[top].node;
+                int position = frames[top].position;
+                if (position < successors[node].size()) {
+                    frames[top].position = position + 1;
+                    int consumer = successors[node][position];
+                    if (node_index[consumer] < 0) {
+                        node_index[consumer] = next_index;
+                        low[consumer] = next_index;
+                        ++next_index;
+                        push component_stack, consumer;
+                        on_stack[consumer] = True;
+                        push frames, ("node": consumer, "position": 0);
+                    } else if (on_stack[consumer] && node_index[consumer] < low[node]) {
+                        low[node] = node_index[consumer];
+                    }
+                    continue;
+                }
+                pop frames;
+                if (frames) {
+                    int parent = frames[frames.size() - 1].node;
+                    if (low[node] < low[parent]) {
+                        low[parent] = low[node];
+                    }
+                }
+                if (low[node] != node_index[node]) {
+                    continue;
+                }
+                list<int> members = ();
+                while (True) {
+                    int member = pop component_stack;
+                    on_stack[member] = False;
+                    push members, member;
+                    if (member == node) {
+                        break;
+                    }
+                }
+                push raw, sort(members);
+            }
+        }
+        return raw;
+    }
+
+    #! Names a component by its member outputs rather than by node numbering.
+    /** The key has to survive a context whose source list was reordered:
+        component membership is a property of the graph, but node indexes are a
+        property of the order CMake happened to emit.
+    */
+    private string componentKey(list<int> members, list<string> outputs) {
+        list<string> paths = ();
+        foreach int member in (members) {
+            push paths, absoluteNormalized(outputs[member]);
+        }
+        return "scc-"
+            + digest("sha256", join("\n", sort(paths)) + "\n").toHex().substr(0, 16);
+    }
+
+    #! A deterministic topological order over the condensed DAG.
+    /** The condensation of a directed graph is acyclic by construction, so a
+        Kahn sweep that cannot place every component means the decomposition
+        itself is wrong. That is a defect in this tool rather than a property of
+        the sources, so it is reported instead of worked around.
+    */
+    private list<int> condensationOrder(int count, list<list<int>> predecessors,
+            list<hash<string, bool>> successor_sets) {
+        list<int> pending = ();
+        for (int component = 0; component < count; ++component) {
+            push pending, predecessors[component].size();
+        }
+        hash<string, bool> ready = {};
+        for (int component = 0; component < count; ++component) {
+            if (!pending[component]) {
+                ready{string(component)} = True;
+            }
+        }
+        list<int> order = ();
+        while (ready) {
+            int component = minimumNode(ready);
+            remove ready{string(component)};
+            push order, component;
+            list<int> consumers = ();
+            foreach string consumer_key in (successor_sets[component].keys()) {
+                push consumers, consumer_key.toInt();
+            }
+            foreach int consumer in (sort(consumers)) {
+                --pending[consumer];
+                if (!pending[consumer]) {
+                    ready{string(consumer)} = True;
+                }
+            }
+        }
+        if (order.size() != count) {
+            throw "SOURCE-ORDER-COMPONENT-ERROR", sprintf(
+                "the condensation of %d strongly connected components is cyclic; only "
+                "%d could be ordered", count, order.size());
+        }
+        return order;
+    }
+
+    private hash<SourceOrderComponents> buildComponents(hash<SourceOrderGraph> graph,
+            list<string> outputs) {
+        int count = outputs.size();
+        list<list<int>> successors = requiredSuccessors(graph);
+        # Index components by their lowest member so the numbering is a function
+        # of the graph alone and not of Tarjan's discovery order.
+        list<list<int>> members = sort(tarjanComponents(successors),
+            int sub (list<int> left, list<int> right) {
+                return left[0] < right[0] ? -1 : (left[0] > right[0] ? 1 : 0);
+            });
+        list<int> component_of = ();
+        for (int node = 0; node < count; ++node) {
+            push component_of, -1;
+        }
+        list<string> component_keys = ();
+        list<hash<string, bool>> predecessor_sets = ();
+        list<hash<string, bool>> successor_sets = ();
+        for (int component = 0; component < members.size(); ++component) {
+            foreach int member in (members[component]) {
+                component_of[member] = component;
+            }
+            push component_keys, componentKey(members[component], outputs);
+            push predecessor_sets, {};
+            push successor_sets, {};
+        }
+        for (int provider = 0; provider < count; ++provider) {
+            int provider_component = component_of[provider];
+            foreach int consumer in (successors[provider]) {
+                int consumer_component = component_of[consumer];
+                if (provider_component == consumer_component) {
+                    continue;
+                }
+                predecessor_sets[consumer_component]{string(provider_component)} = True;
+                successor_sets[provider_component]{string(consumer_component)} = True;
+            }
+        }
+        list<list<int>> predecessors = ();
+        for (int component = 0; component < members.size(); ++component) {
+            list<int> values = ();
+            foreach string predecessor_key in (predecessor_sets[component].keys()) {
+                push values, predecessor_key.toInt();
+            }
+            push predecessors, sort(values);
+        }
+        return new hash<SourceOrderComponents>((
+            "members": members,
+            "component_of": component_of,
+            "predecessors": predecessors,
+            "component_keys": component_keys,
+            "topological_order": condensationOrder(members.size(), predecessors,
+                successor_sets),
+        ));
+    }
+
+    hash<SourceOrderComponents> sourceComponents(string context_path,
+            hash<SourceOrderContext> context_info) {
+        return buildComponents(loadOrBuildGraph(context_path, context_info),
+            context_info.outputs);
+    }
+
+    #! Every transitive predecessor component, in dependency order.
+    list<int> componentPrerequisites(hash<SourceOrderComponents> components,
+            int component) {
+        hash<string, bool> reached = {};
+        list<int> stack = (component,);
+        while (stack) {
+            int current = pop stack;
+            foreach int predecessor in (components.predecessors[current]) {
+                string predecessor_key = string(predecessor);
+                if (exists reached{predecessor_key}) {
+                    continue;
+                }
+                reached{predecessor_key} = True;
+                push stack, predecessor;
+            }
+        }
+        list<int> order = ();
+        foreach int candidate in (components.topological_order) {
+            if (exists reached{string(candidate)}) {
+                push order, candidate;
+            }
+        }
+        return order;
+    }
+
+    #! The build's content identity for one member source.
+    /** The configure-time digest sidecar is authoritative when present: it is
+        what the build itself treats as the source content, and it records the
+        same sha256 this would otherwise compute. Hashing the input directly is
+        the fallback for a context configured without sidecars.
+    */
+    private string memberContentDigest(hash<SourceOrderContext> context_info, int node) {
+        if (context_info.source_content_digests) {
+            string sidecar = context_info.source_content_digests[node];
+            if (is_file(sidecar)) {
+                foreach string line in (ReadOnlyFile::readTextFile(sidecar).split("\n")) {
+                    if (line.startsWith("sha256=")) {
+                        return line.substr(7);
+                    }
+                }
+            }
+        }
+        return fileDigest(context_info.inputs[node]);
+    }
+
+    #! Generation manifests and tokens for the given components, in the given order.
+    /** The token is a digest over the manifest text, and a manifest names its
+        direct predecessors' tokens, so one token is a Merkle identity for the
+        entire transitive source closure of that component. Members and
+        prerequisites are ordered by content, not by node index, so reordering
+        the context source list cannot change a token.
+
+        \a order must be a dependency order that contains every direct
+        predecessor of each listed component.
+    */
+    private hash<string, hash<auto>> generationsFor(
+            hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, list<int> order) {
+        hash<string, hash<auto>> generations = {};
+        foreach int component in (order) {
+            list<hash<auto>> members = ();
+            foreach int node in (components.members[component]) {
+                push members, (
+                    "input": absoluteNormalized(context_info.inputs[node]),
+                    "output": absoluteNormalized(context_info.outputs[node]),
+                    "content_digest": memberContentDigest(context_info, node),
+                );
+            }
+            members = sort(members, int sub (hash<auto> left, hash<auto> right) {
+                return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
+            });
+            list<hash<auto>> prerequisites = ();
+            foreach int predecessor in (components.predecessors[component]) {
+                *hash<auto> generation = generations{string(predecessor)};
+                if (!exists generation) {
+                    throw "SOURCE-ORDER-COMPONENT-ERROR", sprintf(
+                        "generation order for %y omits its predecessor %y",
+                        components.component_keys[component], components.component_keys[predecessor]);
+                }
+                push prerequisites, (
+                    "scc": components.component_keys[predecessor],
+                    "generation": generation.token,
+                );
+            }
+            prerequisites = sort(prerequisites, int sub (hash<auto> left, hash<auto> right) {
+                return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
+            });
+            string manifest = make_json((
+                "format": 1,
+                "scc": components.component_keys[component],
+                "members": members,
+                "prerequisites": prerequisites,
+            ));
+            generations{string(component)} = (
+                "manifest": manifest,
+                "token": digest("sha256", manifest).toHex(),
+            );
+        }
+        return generations;
+    }
+
+    #! The generation manifest and token of one component.
+    hash<auto> componentGeneration(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, int component) {
+        list<int> order = componentPrerequisites(components, component);
+        push order, component;
+        return generationsFor(components, context_info, order){string(component)};
+    }
+
+    #! Generation manifests and tokens for every component.
+    hash<string, hash<auto>> allComponentGenerations(
+            hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info) {
+        return generationsFor(components, context_info, components.topological_order);
+    }
+
     private bool artifactCurrentImpl(string context_path,
             hash<SourceOrderContext> context_info, int target,
             *string bootstrap_stamp) {
@@ -2044,20 +2385,79 @@ sub usage(*string error = NOTHING, bool success = False) {
     if (exists error) {
         stderr.printf("%s: %s\n", get_script_name(), error);
     }
+    string name = get_script_name();
     string text = sprintf(
         "usage: %s [--direct|--build-map|--artifact-current] CONTEXT TARGET_OUTPUT\n"
         "       %s --batch-artifact-current STAMP CONTEXT TARGET_OUTPUT\n"
         "       %s --direct-map-cmake PREFIX CONTEXT\n"
         "       %s --build-direct-map-cmake PREFIX CONTEXT\n"
-        "       %s --source-symbol-manifest FILE CONTEXT\n",
-        get_script_name(), get_script_name(), get_script_name(), get_script_name(),
-        get_script_name());
+        "       %s --source-symbol-manifest FILE CONTEXT\n"
+        "       %s --scc-map CONTEXT\n"
+        "       %s --scc-for CONTEXT TARGET_OUTPUT\n"
+        "       %s [--scc-members|--scc-prerequisites|--scc-generation\n"
+        "           |--scc-generation-token] CONTEXT SCC\n"
+        "\n"
+        "SCC selects a strongly connected component of the required-edge graph by\n"
+        "its index or by its key.\n",
+        name, name, name, name, name, name, name, name);
     if (success) {
         printf("%s", text);
     } else {
         stderr.printf("%s", text);
     }
     exit(success ? 0 : 2);
+}
+
+#! Resolves an SCC selector, which is either a component index or a component key.
+int sub findComponent(hash<SourceOrderComponents> components, string selector) {
+    if (selector =~ /^[0-9]+$/) {
+        int index = selector.toInt();
+        return index < components.members.size() ? index : -1;
+    }
+    for (int component = 0; component < components.component_keys.size(); ++component) {
+        if (components.component_keys[component] == selector) {
+            return component;
+        }
+    }
+    return -1;
+}
+
+hash<auto> sub componentMapData(SourceOrderEngine engine,
+        hash<SourceOrderComponents> components, hash<SourceOrderContext> context_info) {
+    hash<string, hash<auto>> generations =
+        engine.allComponentGenerations(components, context_info);
+    list<hash<auto>> entries = ();
+    for (int component = 0; component < components.members.size(); ++component) {
+        list<hash<auto>> members = ();
+        foreach int node in (components.members[component]) {
+            push members, (
+                "index": node,
+                "input": context_info.inputs[node],
+                "output": context_info.outputs[node],
+            );
+        }
+        list<string> predecessors = ();
+        foreach int predecessor in (components.predecessors[component]) {
+            push predecessors, components.component_keys[predecessor];
+        }
+        list<string> prerequisites = ();
+        foreach int prerequisite in (engine.componentPrerequisites(components, component)) {
+            push prerequisites, components.component_keys[prerequisite];
+        }
+        push entries, (
+            "index": component,
+            "scc": components.component_keys[component],
+            "generation": generations{string(component)}.token,
+            "members": members,
+            "predecessors": predecessors,
+            "prerequisites": prerequisites,
+        );
+    }
+    return (
+        "format": 1,
+        "components": entries,
+        "topological_order": components.topological_order,
+    );
 }
 
 int sub findTarget(list<string> outputs, string target_output) {
@@ -2081,6 +2481,7 @@ int sub main() {
     bool direct = False;
     bool build_map = False;
     bool artifact_current = False;
+    *string component_command;
     *string direct_map_prefix;
     *string build_direct_map_prefix;
     *string source_symbol_manifest;
@@ -2096,6 +2497,15 @@ int sub main() {
             build_map = True;
         } else if (arg == "--artifact-current") {
             artifact_current = True;
+        } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
+                || arg == "--scc-prerequisites" || arg == "--scc-generation"
+                || arg == "--scc-generation-token") {
+            string requested = arg.substr(6);
+            if (exists component_command && component_command != requested) {
+                usage(sprintf("--scc-%s conflicts with --scc-%s",
+                    requested, component_command));
+            }
+            component_command = requested;
         } else if (arg == "--direct-map-cmake"
                 || arg == "--build-direct-map-cmake"
                 || arg == "--source-symbol-manifest"
@@ -2149,6 +2559,65 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists component_command) {
+        hash<SourceOrderComponents> components =
+            engine.sourceComponents(context_path, context_info);
+        if (component_command == "map") {
+            if (positional.size() != 1) {
+                usage("--scc-map accepts only a context argument");
+            }
+            printf("%s\n", make_json(componentMapData(engine, components, context_info)));
+            return 0;
+        }
+        if (positional.size() != 2) {
+            usage(sprintf("--scc-%s requires a context and a %s argument",
+                component_command,
+                component_command == "for" ? "target output" : "component"));
+        }
+        int component;
+        if (component_command == "for") {
+            int target = findTarget(context_info.outputs, positional[1]);
+            if (target < 0) {
+                stderr.printf("%s: target output not present in context: %s\n",
+                    get_script_name(), positional[1]);
+                return 1;
+            }
+            component = components.component_of[target];
+        } else {
+            component = findComponent(components, positional[1]);
+            if (component < 0) {
+                stderr.printf("%s: no such strongly connected component: %s\n",
+                    get_script_name(), positional[1]);
+                return 1;
+            }
+        }
+        switch (component_command) {
+            case "for":
+                printf("%d\t%s\t%d\n", component, components.component_keys[component],
+                    components.members[component].size());
+                return 0;
+            case "members":
+                foreach int node in (components.members[component]) {
+                    printf("%s\t%s\n", context_info.inputs[node],
+                        context_info.outputs[node]);
+                }
+                return 0;
+            case "prerequisites":
+                foreach int prerequisite in (
+                        engine.componentPrerequisites(components, component)) {
+                    printf("%d\t%s\n", prerequisite, components.component_keys[prerequisite]);
+                }
+                return 0;
+            case "generation":
+                printf("%s\n",
+                    engine.componentGeneration(components, context_info, component).manifest);
+                return 0;
+            case "generation-token":
+                printf("%s\n",
+                    engine.componentGeneration(components, context_info, component).token);
+                return 0;
+        }
+    }
     if (exists direct_map_prefix || exists build_direct_map_prefix) {
         if (positional.size() != 1) {
             usage("direct-map output accepts only a context argument");

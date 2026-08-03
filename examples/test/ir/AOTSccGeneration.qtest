@@ -1,0 +1,439 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Verifies the strongly-connected-component decomposition and the generation
+# identity that qore-qo-source-order publishes for incremental AOT builds.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires json
+
+%exec-class AOTSccGenerationTest
+
+class AOTSccGenerationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string source_order_tool;
+    }
+
+    constructor() : QUnit::Test("AOTSccGenerationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        source_order_tool = normalize_dir(get_script_dir() + "/../../../tools")
+            + DirSep + "qore-qo-source-order";
+
+        addTestCase("required cycles condense into one component",
+            \testMutualDependencyComponent());
+        addTestCase("acyclic graphs decompose into singleton components",
+            \testAcyclicGraphSingletons());
+        addTestCase("generation tokens are a Merkle identity of the source closure",
+            \testGenerationIdentity());
+        addTestCase("a component larger than the old retry limit stays one unit",
+            \testLargeComponent());
+        addTestCase("component selectors reject unknown arguments",
+            \testSelectorErrors());
+
+        set_return_value(main());
+    }
+
+    #! Runs the helper and asserts that it succeeded.
+    private string order(string context_path, softlist<string> args) {
+        hash<auto> result = runOrder(context_path, args);
+        assertEq(0, result.rc, sprintf("qore-qo-source-order %y failed: %s",
+            args, result.output));
+        return result.output;
+    }
+
+    #! Runs the helper with \a args, inserting the context as its first positional.
+    private hash<auto> runOrder(string context_path, softlist<string> args) {
+        list<string> command = (sprintf("%y", qore_bin), sprintf("%y", source_order_tool));
+        list<string> positional = ();
+        foreach string arg in (args) {
+            if (arg.startsWith("--")) {
+                push command, sprintf("%y", arg);
+            } else {
+                push positional, sprintf("%y", arg);
+            }
+        }
+        push command, sprintf("%y", context_path);
+        command += positional;
+        string output = backquote("{ " + join(" ", command) + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return (
+            "output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt(),
+        );
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    #! Writes a qcc object-group context for the named sources.
+    /** \a names are written to \c src/NAME.qc with the given bodies and mapped
+        to \c qo/NAME.qo, which mirrors what QORE_QCC_COMPILE_OBJECTS emits.
+    */
+    private string writeContext(string root, hash<string, string> sources,
+            *list<string> order) {
+        string src_dir = root + "/src";
+        string qo_dir = root + "/qo";
+        mkdir(src_dir, 0777, True);
+        mkdir(qo_dir, 0777, True);
+        list<string> names = order ?? sort(sources.keys());
+        list<string> lines = ("format=1", "kind=qcc-object-group", "group=scc-test");
+        foreach string name in (names) {
+            write(src_dir + "/" + name + ".qc", sources{name});
+        }
+        foreach string name in (names) {
+            push lines, "input=" + src_dir + "/" + name + ".qc";
+        }
+        foreach string name in (names) {
+            push lines, "output=" + qo_dir + "/" + name + ".qo";
+        }
+        string path = qo_dir + "/.qcc-context" + (order ? ".ordered" : "");
+        write(path, join("\n", lines) + "\n");
+        return path;
+    }
+
+    #! A source whose body takes a call reference to each named function.
+    /** A call reference to a unique free function is a required edge, so mutual
+        references are the smallest cycle the build can actually compile.
+    */
+    private string callRefSource(string name, softlist<string> targets) {
+        string body = "%new-style\nstring sub " + name + "Func() {\n";
+        foreach string target in (targets) {
+            body += sprintf("    code %s_ref = \\%sFunc();\n", target, target);
+        }
+        body += "    return \"" + name + "\";\n}\n";
+        return body;
+    }
+
+    private hash<auto> componentMap(string context_path) {
+        auto data = parse_json(order(context_path, "--scc-map"));
+        assertEq(NT_HASH, data.typeCode(), "--scc-map emits a JSON object");
+        return data;
+    }
+
+    private *hash<auto> componentFor(hash<auto> decomposition, string output_basename) {
+        foreach hash<auto> component in (decomposition.components) {
+            foreach hash<auto> member in (component.members) {
+                if (basename(member.output) == output_basename) {
+                    return component;
+                }
+            }
+        }
+        return NOTHING;
+    }
+
+    private list<string> memberNames(hash<auto> component) {
+        list<string> names = ();
+        foreach hash<auto> member in (component.members) {
+            push names, basename(member.output);
+        }
+        return sort(names);
+    }
+
+    testMutualDependencyComponent() {
+        TmpDir tmp("qore-aot-scc-cycle-");
+        # a <-> b is a required cycle; c consumes it; d is unrelated.
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", "b"),
+            "b": callRefSource("b", "a"),
+            "c": callRefSource("c", "a"),
+            "d": callRefSource("d", ()),
+        ));
+
+        hash<auto> decomposition = componentMap(context_path);
+        assertEq(3, decomposition.components.size(),
+            "four sources with one two-member cycle yield three components");
+
+        hash<auto> cycle = componentFor(decomposition, "a.qo");
+        assertEq(("a.qo", "b.qo"), memberNames(cycle),
+            "both members of the required cycle land in one component");
+        assertEq(cycle.scc, componentFor(decomposition, "b.qo").scc,
+            "each cycle member resolves to the same component key");
+        assertEq((), cycle.predecessors, "the cycle has no predecessor component");
+
+        hash<auto> consumer = componentFor(decomposition, "c.qo");
+        assertEq(("c.qo",), memberNames(consumer),
+            "a consumer of the cycle is its own component");
+        assertEq((cycle.scc,), consumer.predecessors,
+            "the whole cycle is one predecessor of its consumer");
+        assertEq((cycle.scc,), consumer.prerequisites,
+            "the consumer's transitive prerequisites name the cycle once");
+
+        hash<auto> isolated = componentFor(decomposition, "d.qo");
+        assertEq((), isolated.predecessors, "an unrelated source has no predecessor");
+        assertNeq(cycle.scc, isolated.scc, "distinct components have distinct keys");
+
+        # The condensation must be acyclic: every predecessor of a component
+        # precedes it in the reported topological order.
+        hash<string, int> rank = {};
+        foreach int index in (decomposition.topological_order) {
+            rank{decomposition.components[index].scc} = rank.size();
+        }
+        assertEq(decomposition.components.size(), rank.size(),
+            "the topological order places every component exactly once");
+        foreach hash<auto> component in (decomposition.components) {
+            foreach string predecessor in (component.predecessors) {
+                assertTrue(rank{predecessor} < rank{component.scc},
+                    sprintf("%y precedes its consumer %y in the condensation",
+                        predecessor, component.scc));
+            }
+        }
+
+        # --scc-for and --scc-members agree with the decomposition.
+        string cycle_output = tmp.path + "/qo/a.qo";
+        list<string> resolved = trim(order(context_path,
+            ("--scc-for", cycle_output))).split("\t");
+        assertEq(cycle.scc, resolved[1], "--scc-for names the member's component");
+        assertEq("2", resolved[2], "--scc-for reports the member count");
+
+        list<string> member_lines = ();
+        foreach string line in (order(context_path,
+                ("--scc-members", cycle.scc)).split("\n")) {
+            if (trim(line)) {
+                push member_lines, basename(line.split("\t")[1]);
+            }
+        }
+        assertEq(("a.qo", "b.qo"), sort(member_lines),
+            "--scc-members lists every member of the component");
+
+        list<string> prerequisite_keys = ();
+        foreach string line in (order(context_path,
+                ("--scc-prerequisites", consumer.scc)).split("\n")) {
+            if (trim(line)) {
+                push prerequisite_keys, line.split("\t")[1];
+            }
+        }
+        assertEq((cycle.scc,), prerequisite_keys,
+            "--scc-prerequisites emits the predecessor component");
+        assertEq("", trim(order(context_path, ("--scc-prerequisites", cycle.scc))),
+            "a component with no predecessor has no prerequisites");
+    }
+
+    testAcyclicGraphSingletons() {
+        TmpDir tmp("qore-aot-scc-acyclic-");
+        # A chain plus a fan-in, with no required edge that points backwards.
+        string context_path = writeContext(tmp.path, (
+            "base": callRefSource("base", ()),
+            "middle": callRefSource("middle", "base"),
+            "leaf": callRefSource("leaf", ("middle", "base")),
+            "other": callRefSource("other", "base"),
+        ));
+
+        hash<auto> decomposition = componentMap(context_path);
+        assertEq(4, decomposition.components.size(),
+            "an acyclic required graph decomposes into one component per source");
+        foreach hash<auto> component in (decomposition.components) {
+            assertEq(1, component.members.size(),
+                sprintf("component %y is a singleton", component.scc));
+        }
+
+        # For singleton components the component prerequisites must be exactly
+        # the components of the per-file prerequisites the build uses today.
+        foreach hash<auto> component in (decomposition.components) {
+            string output = component.members[0].output;
+            hash<string, bool> expected = {};
+            foreach string line in (order(context_path,
+                    ("--build-map", output)).split("\n")) {
+                if (!trim(line)) {
+                    continue;
+                }
+                expected{componentFor(decomposition, basename(line.split("\t")[1])).scc} = True;
+            }
+            hash<string, bool> reported = {};
+            foreach string line in (order(context_path,
+                    ("--scc-prerequisites", component.scc)).split("\n")) {
+                if (trim(line)) {
+                    reported{line.split("\t")[1]} = True;
+                }
+            }
+            assertEq(sort(expected.keys()), sort(reported.keys()),
+                sprintf("singleton component %y reproduces the existing "
+                    "prerequisite closure of %s", component.scc, basename(output)));
+        }
+    }
+
+    testGenerationIdentity() {
+        TmpDir tmp("qore-aot-scc-generation-");
+        hash<string, string> sources = (
+            "a": callRefSource("a", "b"),
+            "b": callRefSource("b", "a"),
+            "c": callRefSource("c", "a"),
+            "d": callRefSource("d", ()),
+        );
+        string context_path = writeContext(tmp.path, sources);
+        hash<auto> decomposition = componentMap(context_path);
+        string cycle = componentFor(decomposition, "a.qo").scc;
+        string consumer = componentFor(decomposition, "c.qo").scc;
+        string isolated = componentFor(decomposition, "d.qo").scc;
+
+        string cycle_token = token(context_path, cycle);
+        string consumer_token = token(context_path, consumer);
+        string isolated_token = token(context_path, isolated);
+        assertEq(64, cycle_token.size(), "a generation token is a sha256 digest");
+        assertEq(cycle_token, token(context_path, cycle),
+            "an unchanged source tree yields the same generation token");
+
+        # The manifest is the token's preimage and names every member digest.
+        hash<auto> manifest = parse_json(order(context_path,
+            ("--scc-generation", cycle)));
+        assertEq(cycle, manifest.scc, "the manifest names its own component");
+        assertEq(2, manifest.members.size(), "the manifest names every member");
+        assertEq((), manifest.prerequisites,
+            "a component with no predecessor records no prerequisite generation");
+        foreach hash<auto> member in (manifest.members) {
+            assertEq(digest("sha256", ReadOnlyFile::readBinaryFile(member.input)).toHex(),
+                member.content_digest,
+                "the manifest records each member's source content digest");
+        }
+        hash<auto> consumer_manifest = parse_json(order(context_path,
+            ("--scc-generation", consumer)));
+        assertEq((("scc": cycle, "generation": cycle_token),),
+            consumer_manifest.prerequisites,
+            "a consumer manifest records its predecessor's generation token");
+
+        # An unrelated component's edit moves only that component.
+        write(tmp.path + "/src/d.qc", sources.d + "# unrelated edit\n");
+        assertEq(cycle_token, token(context_path, cycle),
+            "an unrelated source edit preserves the cycle generation");
+        assertEq(consumer_token, token(context_path, consumer),
+            "an unrelated source edit preserves the consumer generation");
+        assertNeq(isolated_token, token(context_path, isolated),
+            "the edited component's own generation changes");
+
+        # A member edit moves the component and every transitive consumer.
+        write(tmp.path + "/src/b.qc", sources.b + "# member edit\n");
+        string edited_cycle_token = token(context_path, cycle);
+        string edited_consumer_token = token(context_path, consumer);
+        assertNeq(cycle_token, edited_cycle_token,
+            "editing one cycle member changes the whole component generation");
+        assertNeq(consumer_token, edited_consumer_token,
+            "a predecessor edit propagates into its consumer's generation");
+
+        # A consumer-only edit leaves its predecessor alone.
+        write(tmp.path + "/src/c.qc", sources.c + "# consumer edit\n");
+        assertEq(edited_cycle_token, token(context_path, cycle),
+            "a consumer-only edit preserves the predecessor generation");
+        assertNeq(edited_consumer_token, token(context_path, consumer),
+            "a consumer-only edit changes the consumer generation");
+
+        # Reordering the context source list must not change any identity: the
+        # keys and tokens are derived from member outputs and content, not from
+        # the node numbering CMake happens to emit.
+        string reordered = writeContext(tmp.path, (
+            "a": ReadOnlyFile::readTextFile(tmp.path + "/src/a.qc"),
+            "b": ReadOnlyFile::readTextFile(tmp.path + "/src/b.qc"),
+            "c": ReadOnlyFile::readTextFile(tmp.path + "/src/c.qc"),
+            "d": ReadOnlyFile::readTextFile(tmp.path + "/src/d.qc"),
+        ), ("d", "c", "b", "a"));
+        hash<auto> reordered_map = componentMap(reordered);
+        assertEq(3, reordered_map.components.size(),
+            "reordering the source list preserves the decomposition");
+        foreach string key in ((cycle, consumer, isolated)) {
+            assertEq(token(context_path, key), token(reordered, key),
+                sprintf("component %y keeps its generation across a source "
+                    "list reorder", key));
+        }
+    }
+
+    private string token(string context_path, string selector) {
+        return trim(order(context_path, ("--scc-generation-token", selector)));
+    }
+
+    testLargeComponent() {
+        TmpDir tmp("qore-aot-scc-large-");
+        # 25 members: more than the 16-attempt retry budget the SCC build unit
+        # replaces, so a per-file convergence loop could not have finished.
+        int count = 25;
+        hash<string, string> sources = {};
+        for (int index = 0; index < count; ++index) {
+            sources{sprintf("m%02d", index)} = callRefSource(sprintf("m%02d", index),
+                sprintf("m%02d", (index + 1) % count));
+        }
+        string context_path = writeContext(tmp.path, sources);
+
+        hash<auto> decomposition = componentMap(context_path);
+        assertEq(1, decomposition.components.size(),
+            "a ring of required edges is a single component");
+        assertEq(count, decomposition.components[0].members.size(),
+            "every ring member belongs to the one component");
+        assertEq((), decomposition.components[0].predecessors,
+            "a component that spans the whole group has no predecessor");
+        assertEq((0,), decomposition.topological_order,
+            "a single component orders trivially");
+
+        hash<auto> manifest = parse_json(order(context_path,
+            ("--scc-generation", decomposition.components[0].scc)));
+        assertEq(count, manifest.members.size(),
+            "the generation manifest names every ring member");
+        # Members are ordered by output path so the identity cannot depend on
+        # the order the context listed them in.
+        list<string> outputs = ();
+        foreach hash<auto> member in (manifest.members) {
+            push outputs, member.output;
+        }
+        assertEq(sort(outputs), outputs,
+            "manifest members are ordered by output path");
+
+        # Every member resolves to the same component.
+        foreach hash<auto> member in (manifest.members) {
+            list<string> resolved = trim(order(context_path,
+                ("--scc-for", member.output))).split("\t");
+            assertEq(decomposition.components[0].scc, resolved[1],
+                sprintf("%s resolves to the group component", basename(member.output)));
+            assertEq(string(count), resolved[2],
+                "--scc-for reports the full member count");
+        }
+    }
+
+    testSelectorErrors() {
+        TmpDir tmp("qore-aot-scc-errors-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", "b"),
+            "b": callRefSource("b", "a"),
+        ));
+
+        hash<auto> unknown_component = runOrder(context_path, ("--scc-members", "17"));
+        assertEq(1, unknown_component.rc,
+            "an out-of-range component index fails: " + unknown_component.output);
+        assertTrue(unknown_component.output.find(
+                "no such strongly connected component") != -1,
+            "an out-of-range component index is diagnosed: "
+                + unknown_component.output);
+
+        hash<auto> unknown_key = runOrder(context_path, ("--scc-generation", "scc-000000"));
+        assertEq(1, unknown_key.rc,
+            "an unknown component key fails: " + unknown_key.output);
+
+        hash<auto> unknown_output = runOrder(context_path,
+            ("--scc-for", tmp.path + "/qo/missing.qo"));
+        assertEq(1, unknown_output.rc,
+            "an output outside the context fails: " + unknown_output.output);
+        assertTrue(unknown_output.output.find("target output not present") != -1,
+            "an output outside the context is diagnosed: " + unknown_output.output);
+
+        hash<auto> conflict = runOrder(context_path, ("--scc-map", "--scc-for"));
+        assertEq(2, conflict.rc, "conflicting component commands are a usage error: "
+            + conflict.output);
+        assertTrue(conflict.output.find("conflicts with") != -1,
+            "conflicting component commands are diagnosed: " + conflict.output);
+
+        # --scc-map takes no target; the component commands require one.
+        hash<auto> extra = runOrder(context_path, ("--scc-map", "extra"));
+        assertEq(2, extra.rc, "--scc-map rejects a second positional argument: "
+            + extra.output);
+        hash<auto> missing = runOrder(context_path, ("--scc-generation",));
+        assertEq(2, missing.rc, "--scc-generation requires a component selector: "
+            + missing.output);
+    }
+}
