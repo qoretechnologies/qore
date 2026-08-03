@@ -31,6 +31,8 @@ const SCRIPT_FILES = (
     ".qcc-batch-bootstrap.stamp": True,
     ".qcc-batch-bootstrap.stamp.d": True,
     ".qcc-bootstrap.stamp": True,
+    ".qcc-generation.map": True,
+    ".qcc-generation.stamp": True,
     ".qcc-context": True,
     ".qcc-context.source-order-v2.json": True,
     "build-deps.cmake": True,

@@ -37,6 +37,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testLargeComponent());
         addTestCase("component selectors reject unknown arguments",
             \testSelectorErrors());
+        addTestCase("degenerate object groups decompose without error",
+            \testDegenerateGroups());
 
         set_return_value(main());
     }
@@ -419,6 +421,48 @@ class AOTSccGenerationTest inherits QUnit::Test {
             assertEq(string(count), resolved[2],
                 "--scc-for reports the full member count");
         }
+    }
+
+    testDegenerateGroups() {
+        TmpDir tmp("qore-aot-scc-degenerate-");
+        # A group configured with no sources has no components, but CMake still
+        # asks for the decomposition and the generation directory at configure
+        # time, so every group-wide command has to answer rather than fault.
+        mkdir(tmp.path + "/qo", 0777, True);
+        string empty_context = tmp.path + "/qo/.qcc-context";
+        write(empty_context, "format=1\nkind=qcc-object-group\ngroup=empty\n");
+
+        hash<auto> decomposition = componentMap(empty_context);
+        assertEq((), decomposition.components,
+            "an empty group has no components");
+        assertEq((), decomposition.topological_order,
+            "an empty group has an empty topological order");
+        assertEq(0, runOrder(empty_context, "--scc-current-all").rc,
+            "an empty group is trivially current");
+        assertEq(0, runOrder(empty_context, "--scc-publish-all").rc,
+            "an empty group publishes nothing successfully");
+        string generation_dir = trim(order(empty_context, "--scc-generation-dir"));
+        assertEq(tmp.path + "/qo/.qcc-scc", generation_dir,
+            "an empty group still names a generation directory");
+        hash<auto> cmake_map = runOrder(empty_context, ("--scc-map-cmake=EMPTY",));
+        assertEq(0, cmake_map.rc,
+            "an empty group emits a CMake component map: " + cmake_map.output);
+        assertTrue(cmake_map.output.find("set(EMPTY_COUNT \"0\")") != -1,
+            "the CMake component map declares zero components: " + cmake_map.output);
+
+        # A single-source group is one singleton component with no predecessors.
+        string single_context = writeContext(tmp.path, (
+            "only": callRefSource("only", ()),
+        ));
+        hash<auto> single = componentMap(single_context);
+        assertEq(1, single.components.size(),
+            "a single-source group has one component");
+        assertEq(1, single.components[0].members.size(),
+            "the single component has one member");
+        assertEq((), single.components[0].predecessors,
+            "the single component has no predecessor");
+        assertEq(64, token(single_context, single.components[0].scc).size(),
+            "a single-source group still has a generation token");
     }
 
     testSelectorErrors() {

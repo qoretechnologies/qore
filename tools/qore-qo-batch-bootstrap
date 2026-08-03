@@ -26,7 +26,11 @@ source_order_tool=$4
 lock_dir="${bootstrap_stamp}.lock"
 lock_owned=false
 outputs_file=
-force_batch=${QORE_QCC_FORCE_BATCH:-0}
+# Set by qore-qo-incremental when the group holds a component that spans several
+# sources. It does NOT skip the currency check -- doing so made every member of
+# one component force its own redundant batch -- it only says that a batch
+# failure is fatal, because such a component has no per-source fallback.
+require_batch=${QORE_QCC_REQUIRE_BATCH:-0}
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -111,15 +115,13 @@ touch_member_stamps() {
 # follower that waited on the lock re-evaluates it here, so a stale marker can
 # never hide a crashed or incomplete bootstrap.
 current=false
-if [ "$force_batch" != 1 ]; then
-    if [ -f "$bootstrap_stamp" ]; then
-        if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
-                "$context"; then
-            current=true
-        fi
-    elif run_source_order --scc-current-all "$context"; then
+if [ -f "$bootstrap_stamp" ]; then
+    if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
+            "$context"; then
         current=true
     fi
+elif run_source_order --scc-current-all "$context"; then
+    current=true
 fi
 
 if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
@@ -136,6 +138,12 @@ if [ "$current" = true ]; then
     touch_member_stamps
     exit 0
 fi
+
+# One shared parse for the whole group. This message is emitted exactly once per
+# batch that actually runs, which is what makes "a component was built as one
+# unit" observable: several members of one component can each ask for the build,
+# but only the lock holder compiles, and the rest find the generation current.
+echo "$0: compiling the group in one shared parse"
 
 # One rebuild, never a convergence loop.  A batch can report that its inputs
 # moved only because an agent outside the build rewrote a source while qcc was
@@ -162,7 +170,7 @@ if [ "$batch_rc" -eq 75 ]; then
     fi
 fi
 if [ "$batch_rc" -ne 0 ]; then
-    if [ "$force_batch" = 1 ]; then
+    if [ "$require_batch" = 1 ]; then
         # A multi-member component has no per-source fallback: its members are
         # mutually dependent, so failing to share one parse is a hard failure
         # rather than something the per-file path could finish.

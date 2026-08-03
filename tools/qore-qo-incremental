@@ -57,7 +57,6 @@ single_script=$(canonical_path "$3")
 shift 3
 this_script=$(canonical_path "$0")
 qo_dir=$(dirname "$output")
-depfile="$output.d"
 idxfile="$output.idx.json"
 script_dir=$(CDPATH= cd "$(dirname "$(canonical_path "$this_script")")" && pwd -P)
 single_script_dir=$(CDPATH= cd "$(dirname "$single_script")" && pwd -P)
@@ -525,8 +524,11 @@ with_component_lock() (
 #  lock (never a component lock, because it writes every component's members)
 #  and republishes every generation record.
 build_group_batch() {
-    echo "$0: component $component_key spans $component_size sources;" \
-        "building the group as one shared parse"
+    # Several members of one component can each reach this point before any of
+    # them takes the group lock; only the holder compiles, and the rest find the
+    # generation current. The batch itself reports the one compile that happens.
+    echo "$0: component $component_key spans $component_size sources; delegating" \
+        "to the group's shared parse"
     if [ -z "$batch_bootstrap_stamp" ] || [ ! -f "$batch_script" ] \
             || [ ! -x "$batch_bootstrap_tool" ]; then
         echo "$0: component $component_key spans $component_size sources but the" \
@@ -534,7 +536,7 @@ build_group_batch() {
             "generation" >&2
         return 1
     fi
-    QORE_QCC_FORCE_BATCH=1 \
+    QORE_QCC_REQUIRE_BATCH=1 \
         QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
         "$batch_bootstrap_tool" "$context_file" "$batch_bootstrap_stamp" \
             "$batch_script" "$source_order_tool"
@@ -570,6 +572,8 @@ build_prerequisites() {
                 QORE_QCC_BATCH_BOOTSTRAP_STAMP="$batch_bootstrap_stamp" \
                 "$this_script" "$prerequisite_output" "$prerequisite_source" \
                     "$single_script"; then
+            echo "$0: cannot bring prerequisite component $prerequisite_key current" \
+                "for $component_key" >&2
             rc=1
             break
         fi

@@ -35,6 +35,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testGenericQccObjectHelpers());
         addTestCase("managed qcc outputs prune stale artifacts safely",
             \testManagedQccOutputPruning());
+        addTestCase("cyclic source components build as one atomic generation",
+            \testCyclicComponentBuilds());
 
         set_return_value(main());
     }
@@ -559,6 +561,8 @@ qore_qcc_compile_objects(QO_OBJECTS
     COMPILE_CONTRACT_STAMPS_VAR QO_COMPILE_CONTRACT_STAMPS
     ORDER_TARGETS_VAR QO_ORDER_TARGETS
     CONTEXT_VAR QO_CONTEXT
+    GENERATION_MAP_VAR QO_GENERATION_MAP
+    GENERATION_TARGET_VAR QO_GENERATION_TARGET
     BOOTSTRAP_AGGREGATE_OUTPUT \"${QO_SCRIPT_AGG_OUTPUT}\"
     BOOTSTRAP_AGGREGATE_SYMBOL QORE_CMAKE_SCRIPT_SMOKE
     BOOTSTRAP_AGGREGATE_CONTEXT \"${QO_SCRIPT_AGG_CONTEXT}\"
@@ -571,6 +575,8 @@ qore_qcc_link_objects(QO_LINK
     INPUTS ${QO_OBJECTS}
     INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    OBJECT_GENERATION_MAPS ${QO_GENERATION_MAP}
+    OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
     WARNINGS_ARE_ERRORS
     STAMP_VAR QO_LINK_STAMP
     LINK_MAP_VAR QO_LINK_MAP)
@@ -583,6 +589,7 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG
     SOURCES ${QO_SOURCES}
     INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
     LOAD_MODULES LateObjectModule LateAggregateModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
@@ -597,6 +604,7 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG_INDEXED
     SOURCES ${QO_SOURCES}
     INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
     LOAD_MODULES LateAggregateModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
@@ -649,7 +657,9 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"link_map=${QO_LINK_MAP}\\n\"
     \"script_aggregate=${QO_SCRIPT_AGG}\\n\"
     \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\"
-    \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\")
+    \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\"
+    \"generation_map=${QO_GENERATION_MAP}\\n\"
+    \"generation_target=${QO_GENERATION_TARGET}\\n\")
 file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
 ");
 
@@ -976,12 +986,249 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertEq(aba_source_out, aba_static_out,
             "the A -> B -> A component rebuild publishes native output for final A");
 
+        # Link publication contract: every consumer of the object set records the
+        # group's generation map as one of its own manifest inputs, so a consumer
+        # may skip only while its manifest names the same completed generations.
+        string generation_map = build_dir + "/qo-scripts/.qcc-generation.map";
+        assertTrue(is_file(generation_map),
+            "the object group publishes one generation map");
+        string generation_text = read(generation_map);
+        assertTrue(generation_text.find("format=1\n") == 0,
+            "the generation map has a stable format header: " + generation_text);
+        assertEq(24, generation_text.split("generation=").size() - 1,
+            "the generation map names every component of the group: "
+                + generation_text);
+        # The qo-link aggregate reads the member objects, so it validates the
+        # generation identity. A script aggregate is compiled from the sources in
+        # one parse and never reads a member .qo, so it is ordered after the
+        # generations without keying its skip decision on them.
+        assertTrue(read(build_dir + "/linked.qo.qolink.manifest.json").find(
+                generation_map) != -1,
+            "the qo-link aggregate validates the object generation map");
+        assertEq(-1, read(build_dir
+                + "/script-aggregate.qo.script-aggregate.manifest.json").find(
+                    generation_map),
+            "a source-compiled aggregate does not key its skip decision on object "
+                "generations");
+
+        # A republication that leaves every generation unchanged must not relink,
+        # and one that changes a generation must.
+        string link_stamp_before = read(build_dir + "/linked.qo.content.stamp");
+        string generation_before = generation_text;
+        run(sprintf("cmake -E touch %s", provider));
+        string generation_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(generation_before, read(generation_map),
+            "a timestamp-only source change publishes the same generations: "
+                + generation_no_op);
+        assertEq(link_stamp_before, read(build_dir + "/linked.qo.content.stamp"),
+            "an unchanged generation does not relink: " + generation_no_op);
+        write(provider, read(provider) + "# generation map change\n");
+        string generation_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertNeq(generation_before, read(generation_map),
+            "a source change publishes a new generation: " + generation_change);
+
         string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
         string provider_body = read(provider);
         write(provider, provider_body);
         string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
             "same-content source mtime rebuild does not relink aggregate: " + same_content);
+    }
+
+    #! A source whose body takes a call reference to each named function.
+    /** A call reference to a unique free function is a required edge and the
+        smallest cycle the build can actually compile, so a ring of them is a
+        strongly connected component that no build order can resolve.
+    */
+    private string cycleSource(string name, softlist<string> targets) {
+        string body = "%new-style\nstring sub " + name + "Func() {\n";
+        foreach string target in (targets) {
+            body += sprintf("    code %s_ref = \\%sFunc();\n", target, target);
+        }
+        body += "    return \"" + name + "\";\n}\n";
+        return body;
+    }
+
+    #! Counts non-overlapping occurrences of \a needle in \a text.
+    private int occurrences(string text, string needle) {
+        return text.split(needle).size() - 1;
+    }
+
+    testCyclicComponentBuilds() {
+        TmpDir tmp("qore-cmake-qcc-cycle-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        # PAIR is a two-source mutual dependency; RING has more members than the
+        # 16-attempt budget the component build unit replaces, so a per-file
+        # convergence loop could not have finished it.
+        int ring_size = 20;
+        list<string> names = ("pairone", "pairtwo");
+        write(snippets_dir + "/pairone.qc", cycleSource("pairone", "pairtwo"));
+        write(snippets_dir + "/pairtwo.qc", cycleSource("pairtwo", "pairone"));
+        # A consumer of the pair, in its own component, plus an unrelated source.
+        write(snippets_dir + "/pairuser.qc", cycleSource("pairuser", "pairone"));
+        write(snippets_dir + "/solo.qc", cycleSource("solo", ()));
+        push names, "pairuser";
+        push names, "solo";
+        for (int index = 0; index < ring_size; ++index) {
+            string name = sprintf("ring%02d", index);
+            write(snippets_dir + "/" + name + ".qc",
+                cycleSource(name, sprintf("ring%02d", (index + 1) % ring_size)));
+            push names, name;
+        }
+
+        string source_list = "";
+        foreach string name in (names) {
+            source_list += sprintf("    \"${CMAKE_SOURCE_DIR}/srcs/%s.qc\"\n", name);
+        }
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoCycleSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(QO_SOURCES
+" + source_list + ")
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP cycle
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES ${QO_SOURCES}
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS
+    GENERATION_MAP_VAR QO_GENERATION_MAP
+    GENERATION_TARGET_VAR QO_GENERATION_TARGET)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+
+qore_qcc_link_objects(QO_LINK
+    OUTPUT \"${CMAKE_BINARY_DIR}/linked.qo\"
+    AGGREGATE_SYMBOL QORE_CMAKE_CYCLE_SMOKE
+    INPUTS ${QO_OBJECTS}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    OBJECT_GENERATION_MAPS ${QO_GENERATION_MAP}
+    OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
+    WARNINGS_ARE_ERRORS
+    STAMP_VAR QO_LINK_STAMP)
+add_custom_target(qo-link ALL DEPENDS ${QO_LINK_STAMP})
+
+qore_qcc_finalize_managed_outputs(
+    OUTPUT_ROOT \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_ROOT \"${CMAKE_BINARY_DIR}/qo-scripts\")
+file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
+    \"generation_map=${QO_GENERATION_MAP}\\n\")
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            "configured the cyclic object group: " + configure);
+
+        # The decomposition must find the pair, the ring, and the singletons.
+        string scc_map = read(build_dir + "/qo-scripts/scc-map.cmake");
+        *list<*string> count_groups = scc_map.regexExtract("_COUNT \"([0-9]+)\"");
+        assertTrue(exists count_groups, "the component map declares a count");
+        # 2-member pair + pairuser + solo + 20-member ring = 4 components.
+        assertEq("4", count_groups[0],
+            "a 20-member ring and a 2-member cycle condense into components: "
+                + scc_map);
+        list<int> sizes = ();
+        for (int index = 0; index < count_groups[0].toInt(); ++index) {
+            *list<*string> outputs = scc_map.regexExtract(
+                sprintf("_OUTPUTS_%d \"([^\"]*)\"", index));
+            push sizes, outputs[0].split(";").size();
+        }
+        assertEq((1, 1, 2, 20), sort(sizes),
+            "the components are the ring, the mutual pair, and two singletons: "
+                + scc_map);
+
+        string clean = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(is_file(build_dir + "/linked.qo"),
+            "clean cyclic build links the object set: " + clean);
+        assertEq(0, occurrences(clean, "retrying ("),
+            "a clean cyclic build emits no input-change retry: " + clean);
+        assertEq(0, occurrences(clean, "moved during"),
+            "a clean cyclic build publishes without a rebuild: " + clean);
+
+        string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(0, occurrences(no_op, "qcc: script-context .qo"),
+            "a no-op cyclic rebuild recompiles nothing: " + no_op);
+        assertEq(0, occurrences(no_op, "one shared parse"),
+            "a no-op cyclic rebuild runs no shared parse: " + no_op);
+
+        # Changing EITHER member of the mutual pair performs exactly one
+        # component compilation, at high parallelism and serially.
+        foreach hash<auto> attempt in ((("member": "pairone", "jobs": 33),
+                ("member": "pairtwo", "jobs": 1))) {
+            string member = snippets_dir + "/" + attempt.member + ".qc";
+            write(member, read(member)
+                + sprintf("# %s edit at -j%d\n", attempt.member, attempt.jobs));
+            string edited = run(sprintf("cmake --build %s -- -j%d", build_dir,
+                attempt.jobs));
+            assertEq(1, occurrences(edited, "one shared parse"),
+                sprintf("editing %s performs exactly one component compilation "
+                    "at -j%d: %s", attempt.member, attempt.jobs, edited));
+            assertEq(0, occurrences(edited, "retrying ("),
+                sprintf("editing %s emits no input-change retry: %s",
+                    attempt.member, edited));
+            assertEq(0, occurrences(edited, "moved during"),
+                sprintf("editing %s publishes without a rebuild: %s",
+                    attempt.member, edited));
+            string converged = run(sprintf("cmake --build %s -- -j%d", build_dir,
+                attempt.jobs));
+            assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+                sprintf("the build after editing %s converges: %s",
+                    attempt.member, converged));
+        }
+
+        # A ring larger than the old retry limit is still one build unit.
+        string ring_member = snippets_dir + "/ring07.qc";
+        write(ring_member, read(ring_member) + "# ring edit\n");
+        string ring_edit = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(ring_edit, "one shared parse"),
+            sprintf("editing a %d-member ring performs exactly one component "
+                "compilation: %s", ring_size, ring_edit));
+        assertEq(0, occurrences(ring_edit, "retrying ("),
+            "a ring larger than the old retry limit needs no retry: " + ring_edit);
+        assertEq(0, occurrences(run(sprintf("cmake --build %s -- -j33", build_dir)),
+                "qcc: script-context .qo"),
+            "the build after a ring edit converges");
+
+        # Concurrent requests for different members of one component: exactly one
+        # builder publishes the generation.
+        list<string> ring_targets = ();
+        foreach string name in (names) {
+            if (name.startsWith("ring0")) {
+                push ring_targets, name;
+            }
+        }
+        write(snippets_dir + "/ring03.qc",
+            read(snippets_dir + "/ring03.qc") + "# concurrent ring edit\n");
+        string concurrent = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(concurrent, "one shared parse"),
+            "concurrent requests for different members publish exactly one "
+                "generation: " + concurrent);
+        assertEq(0, occurrences(concurrent, "retrying ("),
+            "concurrent member requests need no retry: " + concurrent);
+
+        # Every component has a published generation record, and the generation
+        # map the linker validates names all of them.
+        string generation_map = trim(read(build_dir + "/cycle-vars.txt")).substr(15);
+        assertTrue(is_file(generation_map),
+            "the cyclic group publishes a generation map: " + generation_map);
+        assertEq(4, occurrences(read(generation_map), "generation="),
+            "the generation map names every component: " + read(generation_map));
+        assertTrue(read(build_dir + "/linked.qo.qolink.manifest.json").find(
+                generation_map) != -1,
+            "the qo-link aggregate validates the cyclic group's generation map");
     }
 
     testManagedQccOutputPruning() {

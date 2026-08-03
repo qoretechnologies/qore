@@ -2348,20 +2348,27 @@ class SourceOrderEngine {
     /** Every member of a component shares one output directory, so the group's
         own output directory is the only location that needs no extra
         configuration to agree between the helper, CMake, and the pruner.
+
+        A group configured with no sources has no components and so no records,
+        but CMake still asks for the path at configure time; deriving it from the
+        context keeps that a well-defined answer instead of an indexing error.
     */
-    string generationDir(hash<SourceOrderContext> context_info) {
-        return dirname(absoluteNormalized(context_info.outputs[0])) + DirSep + ".qcc-scc";
+    string generationDir(hash<SourceOrderContext> context_info, string context_path) {
+        string base = context_info.outputs
+            ? dirname(absoluteNormalized(context_info.outputs[0]))
+            : dirname(absoluteNormalized(context_path));
+        return base + DirSep + ".qcc-scc";
     }
 
     string generationRecordPath(hash<SourceOrderContext> context_info,
-            hash<SourceOrderComponents> components, int component) {
-        return generationDir(context_info) + DirSep
+            string context_path, hash<SourceOrderComponents> components, int component) {
+        return generationDir(context_info, context_path) + DirSep
             + components.component_keys[component] + ".generation.json";
     }
 
     string generationLockPath(hash<SourceOrderContext> context_info,
-            hash<SourceOrderComponents> components, int component) {
-        return generationDir(context_info) + DirSep
+            string context_path, hash<SourceOrderComponents> components, int component) {
+        return generationDir(context_info, context_path) + DirSep
             + components.component_keys[component] + ".lock";
     }
 
@@ -2429,11 +2436,11 @@ class SourceOrderEngine {
         external build input has moved since it was published.
     */
     bool generationCurrent(hash<SourceOrderContext> context_info,
-            hash<SourceOrderComponents> components, int component,
+            string context_path, hash<SourceOrderComponents> components, int component,
             *string bootstrap_stamp) {
         try {
             *hash<auto> record = readGenerationRecord(
-                generationRecordPath(context_info, components, component));
+                generationRecordPath(context_info, context_path, components, component));
             if (!exists record) {
                 return False;
             }
@@ -2491,7 +2498,7 @@ class SourceOrderEngine {
         leave behind.
     */
     string publishGeneration(hash<SourceOrderContext> context_info,
-            hash<SourceOrderComponents> components, int component,
+            string context_path, hash<SourceOrderComponents> components, int component,
             *string expected) {
         if (exists expected
                 && expected != componentSourceToken(components, context_info,
@@ -2512,7 +2519,7 @@ class SourceOrderEngine {
             push outputs, absoluteNormalized(context_info.outputs[member]);
         }
         atomicWriteIfChanged(
-            generationRecordPath(context_info, components, component),
+            generationRecordPath(context_info, context_path, components, component),
             make_json((
                 "format": 1,
                 "scc": components.component_keys[component],
@@ -2533,7 +2540,7 @@ class SourceOrderEngine {
             int target, *string bootstrap_stamp) {
         hash<SourceOrderComponents> components = sourceComponents(context_path,
             context_info);
-        return generationCurrent(context_info, components,
+        return generationCurrent(context_info, context_path, components,
             components.component_of[target], bootstrap_stamp);
     }
 
@@ -2583,6 +2590,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --build-direct-map-cmake PREFIX CONTEXT\n"
         "       %s --source-symbol-manifest FILE CONTEXT\n"
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
+        "       %s --scc-generation-map FILE CONTEXT\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all] CONTEXT\n"
         "       %s --scc-for CONTEXT TARGET_OUTPUT\n"
@@ -2596,7 +2604,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "its index or by its key. --scc-publish exits 75 when the member sources\n"
         "moved away from the --expect source token, which means the compiled\n"
         "artifacts are not publishable.\n",
-        name, name, name, name, name, name, name, name, name, name, name);
+        name, name, name, name, name, name, name, name, name, name, name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -2628,19 +2636,21 @@ int sub findComponent(hash<SourceOrderComponents> components, string selector) {
 */
 string sub componentMapCMake(SourceOrderEngine engine,
         hash<SourceOrderComponents> components, hash<SourceOrderContext> context_info,
-        string prefix) {
+        string context_path, string prefix) {
     list<string> lines = ();
     int count = components.members.size();
     push lines, sprintf("set(%s_COUNT \"%d\")", prefix, count);
     push lines, sprintf("set(%s_GENERATION_DIR \"%s\")", prefix,
-        cmakeQuote(engine.generationDir(context_info)));
+        cmakeQuote(engine.generationDir(context_info, context_path)));
     list<string> records = ();
     list<string> locks = ();
     for (int component = 0; component < count; ++component) {
         push records, cmakeQuote(
-            engine.generationRecordPath(context_info, components, component));
+            engine.generationRecordPath(context_info, context_path, components,
+                component));
         push locks, cmakeQuote(
-            engine.generationLockPath(context_info, components, component));
+            engine.generationLockPath(context_info, context_path, components,
+                component));
         list<string> outputs = ();
         list<string> predecessors = ();
         foreach int node in (components.members[component]) {
@@ -2658,6 +2668,31 @@ string sub componentMapCMake(SourceOrderEngine engine,
     }
     push lines, sprintf("set(%s_RECORDS \"%s\")", prefix, join(";", records));
     push lines, sprintf("set(%s_LOCKS \"%s\")", prefix, join(";", locks));
+    return join("\n", lines) + "\n";
+}
+
+#! The published generation of every component in the group, as stable text.
+/** This is the object set's single identity. Every consumer of the set -- each
+    qo-link aggregate, each script aggregate, each generated native registration
+    aggregate, and the final native link -- takes this file as a qcc manifest
+    input, so a consumer may skip only while its own manifest names the same
+    completed generations. Sampling member files one at a time cannot express
+    that: the members of one component are published together, and nine
+    per-member sidecars do not say which generation they belong to.
+*/
+string sub componentGenerationMap(SourceOrderEngine engine,
+        hash<SourceOrderComponents> components, hash<SourceOrderContext> context_info) {
+    hash<string, hash<auto>> generations =
+        engine.allComponentGenerations(components, context_info);
+    hash<string, string> tokens = {};
+    for (int component = 0; component < components.members.size(); ++component) {
+        tokens{components.component_keys[component]} =
+            generations{string(component)}.token;
+    }
+    list<string> lines = ("format=1",);
+    foreach string key in (sort(tokens.keys())) {
+        push lines, sprintf("generation=%s %s", key, tokens{key});
+    }
     return join("\n", lines) + "\n";
 }
 
@@ -2722,6 +2757,7 @@ int sub main() {
     bool artifact_current = False;
     *string component_command;
     *string component_map_prefix;
+    *string component_generation_map;
     *string expected_generation;
     *string direct_map_prefix;
     *string build_direct_map_prefix;
@@ -2755,7 +2791,8 @@ int sub main() {
                 || arg == "--build-direct-map-cmake"
                 || arg == "--source-symbol-manifest"
                 || arg == "--batch-artifact-current"
-                || arg == "--scc-map-cmake") {
+                || arg == "--scc-map-cmake"
+                || arg == "--scc-generation-map") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
@@ -2767,6 +2804,8 @@ int sub main() {
                 build_direct_map_prefix = ARGV[index];
             } else if (arg == "--source-symbol-manifest") {
                 source_symbol_manifest = ARGV[index];
+            } else if (arg == "--scc-generation-map") {
+                component_generation_map = ARGV[index];
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
@@ -2791,6 +2830,8 @@ int sub main() {
             build_direct_map_prefix = arg.substr(25);
         } else if (arg.startsWith("--source-symbol-manifest=")) {
             source_symbol_manifest = arg.substr(25);
+        } else if (arg.startsWith("--scc-generation-map=")) {
+            component_generation_map = arg.substr(21);
         } else if (arg.startsWith("--batch-artifact-current=")) {
             batch_bootstrap_stamp = arg.substr(25);
         } else if (arg.startsWith("-")) {
@@ -2822,6 +2863,15 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists component_generation_map) {
+        if (positional.size() != 1) {
+            usage("--scc-generation-map accepts only a context argument");
+        }
+        atomicWriteIfChanged(component_generation_map,
+            componentGenerationMap(engine,
+                engine.sourceComponents(context_path, context_info), context_info));
+        return 0;
+    }
     if (exists component_map_prefix) {
         if (positional.size() != 1) {
             usage("--scc-map-cmake accepts only a context argument");
@@ -2831,7 +2881,7 @@ int sub main() {
         }
         printf("%s", componentMapCMake(engine,
             engine.sourceComponents(context_path, context_info), context_info,
-            component_map_prefix));
+            context_path, component_map_prefix));
         return 0;
     }
     if (exists component_command) {
@@ -2850,7 +2900,7 @@ int sub main() {
                         make_json(componentMapData(engine, components, context_info)));
                     return 0;
                 case "generation-dir":
-                    printf("%s\n", engine.generationDir(context_info));
+                    printf("%s\n", engine.generationDir(context_info, context_path));
                     return 0;
                 case "current-all":
                     # One invocation for the whole group: a per-output probe
@@ -2858,8 +2908,8 @@ int sub main() {
                     # for a large group costs more than the compile it guards.
                     for (int component = 0; component < components.members.size();
                             ++component) {
-                        if (!engine.generationCurrent(context_info, components,
-                                component, batch_bootstrap_stamp)) {
+                        if (!engine.generationCurrent(context_info, context_path,
+                                components, component, batch_bootstrap_stamp)) {
                             return 1;
                         }
                     }
@@ -2872,7 +2922,7 @@ int sub main() {
                     for (int component = 0; component < components.members.size();
                             ++component) {
                         string result = engine.publishGeneration(context_info,
-                            components, component, NOTHING);
+                            context_path, components, component, NOTHING);
                         if (result != "published") {
                             stderr.printf("%s: cannot publish component %s: %s\n",
                                 get_script_name(),
@@ -2948,19 +2998,19 @@ int sub main() {
                     engine.componentSourceToken(components, context_info, component));
                 return 0;
             case "record":
-                printf("%s\n",
-                    engine.generationRecordPath(context_info, components, component));
+                printf("%s\n", engine.generationRecordPath(context_info, context_path,
+                    components, component));
                 return 0;
             case "lock":
-                printf("%s\n",
-                    engine.generationLockPath(context_info, components, component));
+                printf("%s\n", engine.generationLockPath(context_info, context_path,
+                    components, component));
                 return 0;
             case "current":
-                return engine.generationCurrent(context_info, components, component,
-                    batch_bootstrap_stamp) ? 0 : 1;
+                return engine.generationCurrent(context_info, context_path, components,
+                    component, batch_bootstrap_stamp) ? 0 : 1;
             case "publish": {
-                string result = engine.publishGeneration(context_info, components,
-                    component, expected_generation);
+                string result = engine.publishGeneration(context_info, context_path,
+                    components, component, expected_generation);
                 if (result == "published") {
                     return 0;
                 }

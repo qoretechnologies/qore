@@ -514,7 +514,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(options WARNINGS_ARE_ERRORS BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
     set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
         STAMPS_VAR CONTENT_STAMPS_VAR COMPILE_CONTRACT_STAMPS_VAR
-        ORDER_TARGETS_VAR CONTEXT_VAR BOOTSTRAP_AGGREGATE_OUTPUT
+        ORDER_TARGETS_VAR CONTEXT_VAR GENERATION_MAP_VAR GENERATION_TARGET_VAR
+        BOOTSTRAP_AGGREGATE_OUTPUT
         BOOTSTRAP_AGGREGATE_SYMBOL BOOTSTRAP_AGGREGATE_CONTEXT)
     set(multiValueArgs SOURCES STUBS LOAD_MODULES PARSE_DEFINES PARSE_OPTIONS
         MANIFEST_INPUTS DEPENDS BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS)
@@ -895,6 +896,68 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 add_dependencies(${_qore_qcc_order_target} ${_qore_qcc_bootstrap_target})
             endif ()
         endforeach()
+
+        # Target-level publication order follows the condensed component DAG, not
+        # the required-edge graph. The required graph has cycles, and a CMake
+        # target cycle is invalid, so ordering members individually meant dropping
+        # every required edge that pointed backwards -- which is exactly what left
+        # a cyclic component's members racing each other. Condensing first removes
+        # the need to drop anything: the condensation is acyclic by construction,
+        # members of one component are published together and so need no order
+        # between them, and a member of a consuming component waits for every
+        # member of every component it depends on.
+        math(EXPR _qore_qcc_scc_last "${${_qore_qcc_scc_prefix}_COUNT} - 1")
+        if (${_qore_qcc_scc_prefix}_COUNT GREATER 0)
+            foreach(_qore_qcc_scc_idx RANGE 0 ${_qore_qcc_scc_last})
+                set(_qore_qcc_scc_member_targets)
+                foreach(_qore_qcc_scc_output
+                        ${${_qore_qcc_scc_prefix}_OUTPUTS_${_qore_qcc_scc_idx}})
+                    list(FIND _qore_qcc_outputs "${_qore_qcc_scc_output}"
+                        _qore_qcc_scc_member_idx)
+                    if (NOT _qore_qcc_scc_member_idx EQUAL -1)
+                        list(GET _qore_qcc_order_targets ${_qore_qcc_scc_member_idx}
+                            _qore_qcc_scc_member_target)
+                        list(APPEND _qore_qcc_scc_member_targets
+                            "${_qore_qcc_scc_member_target}")
+                    endif ()
+                endforeach()
+                set(_qore_qcc_scc_predecessor_targets)
+                foreach(_qore_qcc_scc_predecessor
+                        ${${_qore_qcc_scc_prefix}_PREDECESSORS_${_qore_qcc_scc_idx}})
+                    foreach(_qore_qcc_scc_predecessor_output
+                            ${${_qore_qcc_scc_prefix}_OUTPUTS_${_qore_qcc_scc_predecessor}})
+                        list(FIND _qore_qcc_outputs
+                            "${_qore_qcc_scc_predecessor_output}"
+                            _qore_qcc_scc_predecessor_idx)
+                        if (NOT _qore_qcc_scc_predecessor_idx EQUAL -1)
+                            list(GET _qore_qcc_order_targets
+                                ${_qore_qcc_scc_predecessor_idx}
+                                _qore_qcc_scc_predecessor_target)
+                            list(APPEND _qore_qcc_scc_predecessor_targets
+                                "${_qore_qcc_scc_predecessor_target}")
+                        endif ()
+                    endforeach()
+                endforeach()
+                if (_qore_qcc_scc_member_targets AND _qore_qcc_scc_predecessor_targets)
+                    list(REMOVE_DUPLICATES _qore_qcc_scc_predecessor_targets)
+                    foreach(_qore_qcc_scc_member_target ${_qore_qcc_scc_member_targets})
+                        add_dependencies(${_qore_qcc_scc_member_target}
+                            ${_qore_qcc_scc_predecessor_targets})
+                    endforeach()
+                endif ()
+                # A component that spans several sources is one build unit, so it
+                # is addressable as one target.
+                list(LENGTH _qore_qcc_scc_member_targets _qore_qcc_scc_member_count)
+                if (_qore_qcc_scc_member_count GREATER 1)
+                    add_custom_target(
+                        qore_qcc_${_qore_qcc_group_id}_scc_${_qore_qcc_scc_idx})
+                    add_dependencies(
+                        qore_qcc_${_qore_qcc_group_id}_scc_${_qore_qcc_scc_idx}
+                        ${_qore_qcc_scc_member_targets})
+                endif ()
+            endforeach()
+        endif ()
+
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
             list(GET _qore_qcc_order_targets ${_qore_qcc_idx}
                 _qore_qcc_order_target)
@@ -905,18 +968,6 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             set(_qore_qcc_stamp "${_qore_qcc_output}.stamp")
             set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
             set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
-            set(_qore_qcc_build_deps_var "${_qore_qcc_build_deps_prefix}_${_qore_qcc_idx}")
-            foreach(_qore_qcc_build_dep ${${_qore_qcc_build_deps_var}})
-                list(FIND _qore_qcc_outputs "${_qore_qcc_build_dep}"
-                    _qore_qcc_build_dep_idx)
-                if (NOT _qore_qcc_build_dep_idx EQUAL -1)
-                    list(GET _qore_qcc_order_targets
-                        ${_qore_qcc_build_dep_idx}
-                        _qore_qcc_build_dep_target)
-                    add_dependencies(${_qore_qcc_order_target}
-                        ${_qore_qcc_build_dep_target})
-                endif ()
-            endforeach()
             set(_qore_qcc_direct_dep_compile_contract_stamps)
             set(_qore_qcc_direct_dep_source_content_digests)
             foreach(_qore_qcc_direct_dep ${_qore_qcc_direct_deps})
@@ -981,6 +1032,37 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         endforeach()
     endif ()
 
+    # The object set's single published identity. Consumers take the map as a qcc
+    # manifest input, so a consumer may skip only while its own manifest names
+    # the same completed component generations; sampling member sidecars one at a
+    # time cannot express that, because the members of one component are
+    # published together and no per-member file says which generation it belongs
+    # to. The map is content-preserving and the stamp is always touched, which is
+    # what keeps an unchanged generation from relinking.
+    set(_qore_qcc_generation_map "${_QORE_QCO_SCRIPT_DIR}/.qcc-generation.map")
+    set(_qore_qcc_generation_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-generation.stamp")
+    set(_qore_qcc_generation_target "qore_qcc_${_qore_qcc_group_id}_generation")
+    add_custom_command(
+        OUTPUT ${_qore_qcc_generation_stamp}
+        BYPRODUCTS ${_qore_qcc_generation_map}
+        COMMAND ${CMAKE_COMMAND} -E env
+            "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+            ${_qore_qcc_source_order_command}
+                --scc-generation-map ${_qore_qcc_generation_map}
+                ${_qore_qcc_context_path}
+        COMMAND ${CMAKE_COMMAND} -E touch ${_qore_qcc_generation_stamp}
+        DEPENDS
+            ${_qore_qcc_stamps}
+            ${_qore_qcc_context_path}
+            ${_qore_qcc_source_order_helper}
+        COMMENT "Recording ${_QORE_QCO_GROUP} object generations"
+        VERBATIM)
+    add_custom_target(${_qore_qcc_generation_target}
+        DEPENDS ${_qore_qcc_generation_stamp})
+    if (_qore_qcc_order_targets)
+        add_dependencies(${_qore_qcc_generation_target} ${_qore_qcc_order_targets})
+    endif ()
+
     set_source_files_properties(${_qore_qcc_outputs}
         PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
     set_source_files_properties(${_qore_qcc_stamps} ${_qore_qcc_content_stamps}
@@ -998,6 +1080,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         "${_qore_qcc_build_deps_cmake}"
         "${_qore_qcc_scc_cmake}"
         "${_qore_qcc_single_script}"
+        "${_qore_qcc_generation_map}"
+        "${_qore_qcc_generation_stamp}"
         ${${_qore_qcc_scc_prefix}_RECORDS})
     _QORE_QCC_REGISTER_MANAGED_DIRS("${${_qore_qcc_scc_prefix}_GENERATION_DIR}")
     if (_qore_qcc_batch_script)
@@ -1041,13 +1125,21 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     if (_QORE_QCO_CONTEXT_VAR)
         set(${_QORE_QCO_CONTEXT_VAR} "${_qore_qcc_context_path}" PARENT_SCOPE)
     endif ()
+    if (_QORE_QCO_GENERATION_MAP_VAR)
+        set(${_QORE_QCO_GENERATION_MAP_VAR} "${_qore_qcc_generation_map}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_GENERATION_TARGET_VAR)
+        set(${_QORE_QCO_GENERATION_TARGET_VAR} "${_qore_qcc_generation_target}"
+            PARENT_SCOPE)
+    endif ()
 endfunction()
 
 function(QORE_QCC_LINK_OBJECTS _out_var)
     set(options WARNINGS_ARE_ERRORS ALLOW_UNRESOLVED_IMPORTS)
     set(oneValueArgs OUTPUT INCLUDE_DIR MODULE_DIR AGGREGATE_SYMBOL STAMP_VAR
         CONTENT_STAMP_VAR LINK_MAP_VAR INDEX_JSON_VAR STATUS_JSON_VAR MANIFEST_JSON_VAR)
-    set(multiValueArgs INPUTS INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS MANIFEST_INPUTS DEPENDS)
+    set(multiValueArgs INPUTS INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS MANIFEST_INPUTS DEPENDS
+        OBJECT_GENERATION_MAPS OBJECT_GENERATION_TARGETS)
     cmake_parse_arguments(_QORE_QLO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if (NOT _QORE_QLO_OUTPUT)
@@ -1090,9 +1182,15 @@ function(QORE_QCC_LINK_OBJECTS _out_var)
     QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content link_flag ${_qore_qlo_link_flags})
     QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content input ${_QORE_QLO_INPUTS})
     QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content manifest_input ${_QORE_QLO_MANIFEST_INPUTS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content object_generation_map
+        ${_QORE_QLO_OBJECT_GENERATION_MAPS})
     QORE_WRITE_IF_CHANGED("${_qore_qlo_context}" "${_qore_qlo_context_content}")
     set(_qore_qlo_manifest_input_flags "--manifest-input=${_qore_qlo_context}")
-    foreach(_qore_qlo_manifest_input ${_qore_qcc_deps} ${_QORE_QLO_MANIFEST_INPUTS})
+    # A linker may skip only while its own manifest names the same completed
+    # object generations, so the generation map is a manifest input like any other
+    # build input. It must never infer a generation by sampling member files.
+    foreach(_qore_qlo_manifest_input ${_qore_qcc_deps} ${_QORE_QLO_MANIFEST_INPUTS}
+            ${_QORE_QLO_OBJECT_GENERATION_MAPS})
         list(APPEND _qore_qlo_manifest_input_flags "--manifest-input=${_qore_qlo_manifest_input}")
     endforeach()
 
@@ -1130,6 +1228,8 @@ function(QORE_QCC_LINK_OBJECTS _out_var)
         DEPENDS
             ${_QORE_QLO_INPUT_ORDER_TARGETS}
             ${_QORE_QLO_INPUT_CONTENT_STAMPS}
+            ${_QORE_QLO_OBJECT_GENERATION_TARGETS}
+            ${_QORE_QLO_OBJECT_GENERATION_MAPS}
             ${_qore_qlo_context}
             ${_qore_qcc_deps}
             ${_QORE_QLO_DEPENDS}
@@ -1170,8 +1270,16 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     set(options WARNINGS_ARE_ERRORS NATIVE_REGISTERS)
     set(oneValueArgs OUTPUT AGGREGATE INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
         STAMP_VAR CONTENT_STAMP_VAR INDEX_JSON_VAR STATUS_JSON_VAR MANIFEST_JSON_VAR)
+    # OBJECT_GENERATION_TARGETS orders this aggregate after the object set's
+    # generations are published. It deliberately takes no generation MAP: an
+    # aggregate is compiled from SOURCES in one parse and never reads a member
+    # `.qo`, so its output is a function of the sources, not of which object
+    # generation is current. Keying its skip decision on object generations would
+    # only stop it from adopting the fused batch-bootstrap output, with nothing
+    # gained -- the qo-link path is where object generations are consumed.
     set(multiValueArgs SOURCES INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS STUBS LOAD_MODULES
-        PARSE_DEFINES PARSE_OPTIONS MANIFEST_INPUTS DEPENDS)
+        PARSE_DEFINES PARSE_OPTIONS MANIFEST_INPUTS DEPENDS
+        OBJECT_GENERATION_TARGETS)
     cmake_parse_arguments(_QORE_QSA "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if (NOT _QORE_QSA_OUTPUT)
@@ -1290,6 +1398,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
         DEPENDS
             ${_QORE_QSA_INPUT_ORDER_TARGETS}
             ${_QORE_QSA_INPUT_CONTENT_STAMPS}
+            ${_QORE_QSA_OBJECT_GENERATION_TARGETS}
             ${_QORE_QSA_STUBS}
             ${_qore_qsa_context}
             ${_qore_qsa_load_module_target_deps}
