@@ -8152,9 +8152,10 @@ load_local_done:
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (weak_ref_load && out.hasNode()) {
                         trackWeakLoadTemp(local_inst->result.id);
-                    } else if (local_inst->borrowed_local_load && out.hasNode()) {
-                        // clear the slot after the paired mutation consumes it so
-                        // no stale borrowed pointer outlives the local's reference
+                    } else if (out.hasNode()) {
+                        // Every non-owned node result borrows its local's reference.
+                        // Clear the slot after its final consumer so scope cleanup
+                        // cannot mistake the stale alias for an owned reference.
                         trackBorrowedTemp(local_inst->result.id);
                     }
                 }

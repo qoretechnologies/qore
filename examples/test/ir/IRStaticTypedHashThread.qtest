@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRStaticTypedHashThreadTest
+
+class IRStaticTypedHashThreadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRStaticTypedHashThreadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("cross-thread static typed hash lookup", \testStaticTypedHashLookup());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write(body);
+    }
+
+    testStaticTypedHashLookup() {
+        TmpDir tmp("qore-static-typed-hash-thread-");
+        string source_path = tmp.path + "/case.qr";
+        string app = tmp.path + "/case";
+        write(source_path, "%modern
+
+class Entry {
+    public {
+        string state = \"armed\";
+        bool released;
+        date expires;
+    }
+
+    constructor() {
+        expires = now_us() + milliseconds(5000);
+    }
+
+    hash<auto> info() {
+        return {
+            \"state\": state,
+            \"released\": released,
+        };
+    }
+}
+
+class Registry {
+    private {
+        static Mutex mutex();
+        static Condition condition();
+        static hash<string, Entry> entries;
+    }
+
+    static string key() {
+        return sprintf(\"%d:%s\", 100000000409, \"alignment_operation_running\");
+    }
+
+    static hash<auto> arm() {
+        string dynamic_key = key();
+        mutex.lock();
+        on_exit mutex.unlock();
+        Entry entry();
+        entries{dynamic_key} = entry;
+        return entry.info();
+    }
+
+    private static worker(Counter done) {
+        on_exit done.dec();
+        string dynamic_key = key();
+        mutex.lock();
+        on_exit mutex.unlock();
+        *Entry entry = entries{dynamic_key};
+        if (!entry) {
+            return;
+        }
+        entry.state = \"reached\";
+        condition.broadcast();
+        while (!entry.released) {
+            condition.wait(mutex, entry.expires - now_us());
+        }
+        entry.state = \"completed\";
+        condition.broadcast();
+    }
+
+    static start(Counter done) {
+        background worker(done);
+    }
+
+    static waitReached() {
+        string dynamic_key = key();
+        mutex.lock();
+        on_exit mutex.unlock();
+        Entry entry = entries{dynamic_key};
+        while (entry.state == \"armed\") {
+            condition.wait(mutex, entry.expires - now_us());
+        }
+    }
+
+    static hash<auto> release() {
+        string dynamic_key = key();
+        mutex.lock();
+        on_exit mutex.unlock();
+        Entry entry = entries{dynamic_key};
+        entry.released = True;
+        condition.broadcast();
+        return entry.info();
+    }
+
+    static string status() {
+        mutex.lock();
+        on_exit mutex.unlock();
+        foreach string dynamic_key in (keys entries) {
+            Entry entry = entries{dynamic_key};
+            return entry.state;
+        }
+        return \"missing\";
+    }
+}
+
+int sub main() {
+    hash<auto> info = Registry::arm();
+    Counter done(1);
+    Registry::start(done);
+    Registry::waitReached();
+    info = Registry::release();
+    if (done.waitForZero(5s)) {
+        printf(\"timeout\\n\");
+        return 2;
+    }
+    printf(\"%s\\n\", Registry::status());
+    return 0;
+}
+
+main();
+");
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        foreach string mode in (("ast", "ir", "jit")) {
+            string output = run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                source_path));
+            assertEq("completed\n", output, mode + " preserves the static typed-hash entry: " + output);
+        }
+
+        string compile_output = run(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, app,
+            source_path));
+        assertTrue(is_file(app), "AOT test executable compiles: " + compile_output);
+        if (is_file(app)) {
+            string output = run(sprintf("%s %s", env, app));
+            assertEq("completed\n", output,
+                "AOT preserves the cross-thread static typed-hash entry: " + output);
+        }
+    }
+}
