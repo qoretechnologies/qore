@@ -698,6 +698,29 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_WRITE_IF_CHANGED("${_qore_qcc_build_deps_cmake}" "${_qore_qcc_build_deps_cmake_content}")
     include("${_qore_qcc_build_deps_cmake}")
 
+    # The strongly connected components of the required-edge graph. Each one is
+    # an atomic build unit that publishes a single generation record, so the
+    # records must be registered as expected managed outputs: their names encode
+    # component membership, and a component that gains or loses a member has to
+    # leave a prunable stale record rather than an unrecognized file.
+    set(_qore_qcc_scc_prefix "QORE_QCC_SCC_${_qore_qcc_group_id}")
+    set(_qore_qcc_scc_cmake "${_QORE_QCO_SCRIPT_DIR}/scc-map.cmake")
+    execute_process(
+        COMMAND ${_qore_qcc_source_order_command}
+            --scc-map-cmake
+            ${_qore_qcc_scc_prefix}
+            ${_qore_qcc_context_path}
+        OUTPUT_VARIABLE _qore_qcc_scc_cmake_content
+        ERROR_VARIABLE _qore_qcc_scc_error
+        RESULT_VARIABLE _qore_qcc_scc_result
+    )
+    if (NOT _qore_qcc_scc_result EQUAL 0)
+        message(FATAL_ERROR
+            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_scc_error}")
+    endif ()
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_scc_cmake}" "${_qore_qcc_scc_cmake_content}")
+    include("${_qore_qcc_scc_cmake}")
+
     execute_process(
         COMMAND ${_qore_qcc_source_order_command}
             --source-symbol-manifest
@@ -973,7 +996,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         "${_qore_qcc_source_symbols}"
         "${_qore_qcc_direct_deps_cmake}"
         "${_qore_qcc_build_deps_cmake}"
-        "${_qore_qcc_single_script}")
+        "${_qore_qcc_scc_cmake}"
+        "${_qore_qcc_single_script}"
+        ${${_qore_qcc_scc_prefix}_RECORDS})
+    _QORE_QCC_REGISTER_MANAGED_DIRS("${${_qore_qcc_scc_prefix}_GENERATION_DIR}")
     if (_qore_qcc_batch_script)
         list(APPEND _qore_qcc_managed_files
             "${_qore_qcc_batch_script}"

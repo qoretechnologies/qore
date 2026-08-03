@@ -2203,82 +2203,135 @@ class SourceOrderEngine {
         return fileDigest(context_info.inputs[node]);
     }
 
-    #! Generation manifests and tokens for the given components, in the given order.
-    /** The token is a digest over the manifest text, and a manifest names its
-        direct predecessors' tokens, so one token is a Merkle identity for the
-        entire transitive source closure of that component. Members and
-        prerequisites are ordered by content, not by node index, so reordering
-        the context source list cannot change a token.
-
-        \a order must be a dependency order that contains every direct
-        predecessor of each listed component.
+    #! The published interface a consumer depends on, for one provider member.
+    /** The compile-contract stamp is qcc's content-preserving description of the
+        part of a provider that its consumers compile against, which is why a
+        comment-only provider edit leaves it byte-identical. Using it -- rather
+        than the provider's source digest -- is what keeps such an edit from
+        rebuilding every transitive consumer.
     */
-    private hash<string, hash<auto>> generationsFor(
-            hash<SourceOrderComponents> components,
-            hash<SourceOrderContext> context_info, list<int> order) {
-        hash<string, hash<auto>> generations = {};
-        foreach int component in (order) {
-            list<hash<auto>> members = ();
-            foreach int node in (components.members[component]) {
-                push members, (
-                    "input": absoluteNormalized(context_info.inputs[node]),
-                    "output": absoluteNormalized(context_info.outputs[node]),
-                    "content_digest": memberContentDigest(context_info, node),
-                );
+    private string memberContractDigest(string output) {
+        foreach string path in ((output + ".compile-contract.stamp",
+                output + ".content.stamp")) {
+            if (is_file(path)) {
+                return digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
             }
-            members = sort(members, int sub (hash<auto> left, hash<auto> right) {
-                return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
-            });
-            list<hash<auto>> prerequisites = ();
-            foreach int predecessor in (components.predecessors[component]) {
-                *hash<auto> generation = generations{string(predecessor)};
-                if (!exists generation) {
-                    throw "SOURCE-ORDER-COMPONENT-ERROR", sprintf(
-                        "generation order for %y omits its predecessor %y",
-                        components.component_keys[component], components.component_keys[predecessor]);
-                }
-                push prerequisites, (
-                    "scc": components.component_keys[predecessor],
-                    "generation": generation.token,
-                );
-            }
-            prerequisites = sort(prerequisites, int sub (hash<auto> left, hash<auto> right) {
-                return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
-            });
-            string manifest = make_json((
-                "format": 1,
-                "scc": components.component_keys[component],
-                "members": members,
-                "prerequisites": prerequisites,
-            ));
-            generations{string(component)} = (
-                "manifest": manifest,
-                "token": digest("sha256", manifest).toHex(),
+        }
+        return "";
+    }
+
+    #! An identity over only the sources of \a component's own members.
+    /** This is what a publication compare-and-swap must compare, and the full
+        generation token is not: a compile rewrites its own depfile, the depfile
+        contributes required edges to the graph, and those edges decide which
+        components are predecessors. Comparing full tokens across a compile would
+        therefore compare identities computed from two different graphs and
+        report that the inputs moved on every build that changes a depfile.
+
+        A component's member sources are the only part of its identity an agent
+        outside the build can change while qcc is reading them, so they are the
+        only part a "did this move under me" check may look at.
+    */
+    string componentSourceToken(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, int component) {
+        list<hash<auto>> members = ();
+        foreach int node in (components.members[component]) {
+            push members, (
+                "output": absoluteNormalized(context_info.outputs[node]),
+                "content_digest": memberContentDigest(context_info, node),
             );
         }
-        return generations;
+        members = sort(members, int sub (hash<auto> left, hash<auto> right) {
+            return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
+        });
+        return digest("sha256", make_json((
+            "format": 1,
+            "scc": components.component_keys[component],
+            "members": members,
+        ))).toHex();
     }
 
     #! The generation manifest and token of one component.
+    /** The manifest is the token's preimage. It names the component, the source
+        content digest of every member, and the published contract digest of
+        every member of every direct predecessor component.
+
+        The two halves are deliberately different kinds of identity. A member's
+        own source bytes decide whether the component must be recompiled, so
+        those are hashed directly. A predecessor contributes only the interface
+        its consumers compile against, so it contributes its compile contract:
+        that is what makes a provider edit that changes no declaration a no-op
+        for its consumers, while a declaration change propagates -- the
+        predecessor is rebuilt first, its contract moves, and every consumer's
+        token moves with it.
+
+        Members and prerequisites are ordered by output path rather than by node
+        index, so reordering the context source list cannot change a token.
+    */
     hash<auto> componentGeneration(hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info, int component) {
-        list<int> order = componentPrerequisites(components, component);
-        push order, component;
-        return generationsFor(components, context_info, order){string(component)};
+        list<hash<auto>> members = ();
+        foreach int node in (components.members[component]) {
+            push members, (
+                "input": absoluteNormalized(context_info.inputs[node]),
+                "output": absoluteNormalized(context_info.outputs[node]),
+                "content_digest": memberContentDigest(context_info, node),
+            );
+        }
+        members = sort(members, int sub (hash<auto> left, hash<auto> right) {
+            return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
+        });
+        list<hash<auto>> prerequisites = ();
+        foreach int predecessor in (components.predecessors[component]) {
+            list<hash<auto>> provided = ();
+            foreach int node in (components.members[predecessor]) {
+                push provided, (
+                    "output": absoluteNormalized(context_info.outputs[node]),
+                    "contract_digest": memberContractDigest(context_info.outputs[node]),
+                );
+            }
+            provided = sort(provided, int sub (hash<auto> left, hash<auto> right) {
+                return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
+            });
+            push prerequisites, (
+                "scc": components.component_keys[predecessor],
+                "provides": provided,
+            );
+        }
+        prerequisites = sort(prerequisites, int sub (hash<auto> left, hash<auto> right) {
+            return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
+        });
+        string manifest = make_json((
+            "format": 1,
+            "scc": components.component_keys[component],
+            "members": members,
+            "prerequisites": prerequisites,
+        ));
+        return (
+            "manifest": manifest,
+            "token": digest("sha256", manifest).toHex(),
+        );
     }
 
     #! Generation manifests and tokens for every component.
     hash<string, hash<auto>> allComponentGenerations(
             hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info) {
-        return generationsFor(components, context_info, components.topological_order);
+        hash<string, hash<auto>> generations = {};
+        for (int component = 0; component < components.members.size(); ++component) {
+            generations{string(component)} =
+                componentGeneration(components, context_info, component);
+        }
+        return generations;
     }
 
-    private bool artifactCurrentImpl(string context_path,
-            hash<SourceOrderContext> context_info, int target,
-            *string bootstrap_stamp) {
-        string output = context_info.outputs[target];
-        list<string> required_files = (
+    #! Every artifact one member publishes, in a fixed order.
+    /** artifactCurrentImpl(), the staging set in qore-qo-incremental, and
+        _QORE_QCC_OBJECT_ARTIFACT_PATHS() in QoreMacros.cmake must agree on this
+        list; the lock file is deliberately absent because it is transient.
+    */
+    list<string> memberArtifacts(string output) {
+        return (
             output,
             output + ".d",
             output + ".idx.json",
@@ -2289,51 +2342,130 @@ class SourceOrderEngine {
             output + ".source.manifest.json",
             output + ".source-parse-defines",
         );
-        if (exists bootstrap_stamp) {
-            push required_files, bootstrap_stamp;
-        }
-        foreach string path in (required_files) {
-            if (!is_file(path)) {
-                return False;
-            }
-        }
+    }
+
+    #! The directory holding one object group's published generation records.
+    /** Every member of a component shares one output directory, so the group's
+        own output directory is the only location that needs no extra
+        configuration to agree between the helper, CMake, and the pruner.
+    */
+    string generationDir(hash<SourceOrderContext> context_info) {
+        return dirname(absoluteNormalized(context_info.outputs[0])) + DirSep + ".qcc-scc";
+    }
+
+    string generationRecordPath(hash<SourceOrderContext> context_info,
+            hash<SourceOrderComponents> components, int component) {
+        return generationDir(context_info) + DirSep
+            + components.component_keys[component] + ".generation.json";
+    }
+
+    string generationLockPath(hash<SourceOrderContext> context_info,
+            hash<SourceOrderComponents> components, int component) {
+        return generationDir(context_info) + DirSep
+            + components.component_keys[component] + ".lock";
+    }
+
+    private *hash<auto> readGenerationRecord(string path) {
         try {
-            date stamp_time = hstat(output + ".stamp").mtime;
-            string source_dependency = context_info.source_content_digests
-                ? context_info.source_content_digests[target]
-                : context_info.inputs[target];
-            if ((exists bootstrap_stamp && hstat(bootstrap_stamp).mtime > stamp_time)
-                    || !is_file(source_dependency)
-                    || hstat(source_dependency).mtime >= stamp_time) {
+            if (!is_file(path)) {
+                return NOTHING;
+            }
+            auto data = parse_json(ReadOnlyFile::readTextFile(path));
+            if (data.typeCode() != NT_HASH) {
+                return NOTHING;
+            }
+            hash<auto> record = data;
+            return record.format == 1 && record.generation.typeCode() == NT_STRING
+                ? record : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+    }
+
+    #! Build inputs a member's depfile records that the generation token does not cover.
+    /** The token is a digest over the source content of the component and its
+        transitive predecessors, so every in-context source, digest sidecar, and
+        sibling artifact is already accounted for by comparing tokens. Keeping
+        those paths in an mtime comparison would be worse than redundant: all
+        members of one component are published together in a single flush, so one
+        member's contract stamp is routinely newer than another member's success
+        stamp, which would make the pair permanently stale. What remains -- the
+        toolchain, loaded modules, stubs, and includes from outside the group --
+        has no content identity in the manifest and is still compared by mtime.
+    */
+    private list<string> externalDepfileInputs(string output,
+            hash<SourceOrderContext> context_info,
+            reference<*hash<string, bool>> covered) {
+        if (!exists covered) {
+            covered = {};
+            for (int index = 0; index < context_info.outputs.size(); ++index) {
+                list<string> paths = memberArtifacts(context_info.outputs[index]);
+                push paths, context_info.inputs[index];
+                if (context_info.source_content_digests) {
+                    push paths, context_info.source_content_digests[index];
+                }
+                foreach string path in (paths) {
+                    covered{path} = True;
+                    covered{absoluteNormalized(path)} = True;
+                    covered{canonical(path)} = True;
+                }
+            }
+        }
+        list<string> external = ();
+        foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
+            if (exists covered{dependency}
+                    || exists covered{absoluteNormalized(dependency)}) {
+                continue;
+            }
+            push external, dependency;
+        }
+        return external;
+    }
+
+    #! True when the published generation of \a component matches its sources.
+    /** One token comparison validates the component's entire transitive source
+        closure, because the token is a Merkle digest over that closure. The
+        remaining checks confirm the publication is complete and that no
+        external build input has moved since it was published.
+    */
+    bool generationCurrent(hash<SourceOrderContext> context_info,
+            hash<SourceOrderComponents> components, int component,
+            *string bootstrap_stamp) {
+        try {
+            *hash<auto> record = readGenerationRecord(
+                generationRecordPath(context_info, components, component));
+            if (!exists record) {
                 return False;
             }
-            foreach int provider in (directOrder(context_path, context_info, target)) {
-                string provider_stamp = context_info.outputs[provider] + ".stamp";
-                string provider_source_dependency = context_info.source_content_digests
-                    ? context_info.source_content_digests[provider]
-                    : context_info.inputs[provider];
-                if (!is_file(provider_stamp)
-                        || !is_file(provider_source_dependency)
-                        || hstat(provider_source_dependency).mtime
-                            >= hstat(provider_stamp).mtime) {
-                    return False;
-                }
-                string contract_stamp = context_info.outputs[provider]
-                    + ".compile-contract.stamp";
-                if (!is_file(contract_stamp)) {
-                    contract_stamp = context_info.outputs[provider] + ".content.stamp";
-                }
-                if (!is_file(contract_stamp)) {
-                    return False;
-                }
-                if (hstat(contract_stamp).mtime > stamp_time) {
+            if (record.generation
+                    != componentGeneration(components, context_info, component).token) {
+                return False;
+            }
+            *hash<StatInfo> bootstrap_info;
+            if (exists bootstrap_stamp) {
+                bootstrap_info = hstat(bootstrap_stamp);
+                if (!exists bootstrap_info) {
                     return False;
                 }
             }
-            foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
-                *hash<StatInfo> info = hstat(dependency);
-                if (!exists info || info.mtime >= stamp_time) {
+            *hash<string, bool> covered;
+            foreach int member in (components.members[component]) {
+                string output = context_info.outputs[member];
+                foreach string path in (memberArtifacts(output)) {
+                    if (!is_file(path)) {
+                        return False;
+                    }
+                }
+                date stamp_time = hstat(output + ".stamp").mtime;
+                if (exists bootstrap_info && bootstrap_info.mtime > stamp_time) {
                     return False;
+                }
+                foreach string dependency in (externalDepfileInputs(output,
+                        context_info, \covered)) {
+                    *hash<StatInfo> info = hstat(dependency);
+                    if (!exists info || info.mtime >= stamp_time) {
+                        return False;
+                    }
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -2342,15 +2474,73 @@ class SourceOrderEngine {
         return True;
     }
 
+    #! Publishes the generation record for \a component; the build's commit point.
+    /** \a expected is the SOURCE token the caller computed before it compiled
+        (see componentSourceToken()). When it no longer matches, an agent outside
+        the build rewrote a member source while qcc was reading it, so the
+        artifacts on disk describe neither generation: nothing is published and
+        the caller is told to rebuild rather than left to discover a lie later.
+        This compare-and-swap on one identity replaces the per-file before/after
+        snapshot comparison that the retry loop used to drive.
+
+        The record itself stores the full generation token, recomputed here, so it
+        names the graph the artifacts were actually published against.
+
+        \return \c "published", \c "moved" when \a expected no longer holds, or
+        \c "incomplete: PATH" naming the first artifact the component did not
+        leave behind.
+    */
+    string publishGeneration(hash<SourceOrderContext> context_info,
+            hash<SourceOrderComponents> components, int component,
+            *string expected) {
+        if (exists expected
+                && expected != componentSourceToken(components, context_info,
+                    component)) {
+            return "moved";
+        }
+        hash<auto> generation = componentGeneration(components, context_info, component);
+        list<string> outputs = ();
+        foreach int member in (components.members[component]) {
+            foreach string path in (memberArtifacts(context_info.outputs[member])) {
+                if (!is_file(path)) {
+                    # Naming the artifact matters: a compile mode that does not
+                    # emit one sidecar cannot publish a generation at all, and
+                    # "incomplete" alone does not say which mode is at fault.
+                    return "incomplete: " + path;
+                }
+            }
+            push outputs, absoluteNormalized(context_info.outputs[member]);
+        }
+        atomicWriteIfChanged(
+            generationRecordPath(context_info, components, component),
+            make_json((
+                "format": 1,
+                "scc": components.component_keys[component],
+                "generation": generation.token,
+                "members": sort(outputs),
+                "manifest": parse_json(generation.manifest),
+            )) + "\n");
+        return "published";
+    }
+
+    #! True when the component that publishes \a target is current.
+    /** Member currency is a property of the component, never of nine files
+        compared against their inputs one at a time: the members of a cyclic
+        component are published as one generation, so asking the question per
+        file cannot describe the answer.
+    */
     bool artifactCurrent(string context_path, hash<SourceOrderContext> context_info,
-            int target) {
-        return artifactCurrentImpl(context_path, context_info, target, NOTHING);
+            int target, *string bootstrap_stamp) {
+        hash<SourceOrderComponents> components = sourceComponents(context_path,
+            context_info);
+        return generationCurrent(context_info, components,
+            components.component_of[target], bootstrap_stamp);
     }
 
     bool batchArtifactCurrent(string context_path,
             hash<SourceOrderContext> context_info, int target,
             string bootstrap_stamp) {
-        return artifactCurrentImpl(context_path, context_info, target, bootstrap_stamp);
+        return artifactCurrent(context_path, context_info, target, bootstrap_stamp);
     }
 }
 
@@ -2392,14 +2582,21 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --direct-map-cmake PREFIX CONTEXT\n"
         "       %s --build-direct-map-cmake PREFIX CONTEXT\n"
         "       %s --source-symbol-manifest FILE CONTEXT\n"
-        "       %s --scc-map CONTEXT\n"
+        "       %s --scc-map-cmake PREFIX CONTEXT\n"
+        "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
+        "           |--scc-current-all] CONTEXT\n"
         "       %s --scc-for CONTEXT TARGET_OUTPUT\n"
-        "       %s [--scc-members|--scc-prerequisites|--scc-generation\n"
-        "           |--scc-generation-token] CONTEXT SCC\n"
+        "       %s [--scc-members|--scc-prerequisites|--scc-preload\n"
+        "           |--scc-generation|--scc-generation-token|--scc-source-token\n"
+        "           |--scc-record|--scc-lock] CONTEXT SCC\n"
+        "       %s --scc-current [--batch-stamp STAMP] CONTEXT SCC\n"
+        "       %s --scc-publish [--expect TOKEN] CONTEXT SCC\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
-        "its index or by its key.\n",
-        name, name, name, name, name, name, name, name);
+        "its index or by its key. --scc-publish exits 75 when the member sources\n"
+        "moved away from the --expect source token, which means the compiled\n"
+        "artifacts are not publishable.\n",
+        name, name, name, name, name, name, name, name, name, name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -2420,6 +2617,48 @@ int sub findComponent(hash<SourceOrderComponents> components, string selector) {
         }
     }
     return -1;
+}
+
+#! Emits the component decomposition as CMake variables.
+/** CMake needs the decomposition at configure time to declare one target per
+    component and to register each component's generation record as an expected
+    managed output. The project's minimum CMake version predates string(JSON),
+    so the helper emits set() lines the way --direct-map-cmake does rather than
+    making the build parse JSON.
+*/
+string sub componentMapCMake(SourceOrderEngine engine,
+        hash<SourceOrderComponents> components, hash<SourceOrderContext> context_info,
+        string prefix) {
+    list<string> lines = ();
+    int count = components.members.size();
+    push lines, sprintf("set(%s_COUNT \"%d\")", prefix, count);
+    push lines, sprintf("set(%s_GENERATION_DIR \"%s\")", prefix,
+        cmakeQuote(engine.generationDir(context_info)));
+    list<string> records = ();
+    list<string> locks = ();
+    for (int component = 0; component < count; ++component) {
+        push records, cmakeQuote(
+            engine.generationRecordPath(context_info, components, component));
+        push locks, cmakeQuote(
+            engine.generationLockPath(context_info, components, component));
+        list<string> outputs = ();
+        list<string> predecessors = ();
+        foreach int node in (components.members[component]) {
+            push outputs, cmakeQuote(context_info.outputs[node]);
+        }
+        foreach int predecessor in (components.predecessors[component]) {
+            push predecessors, string(predecessor);
+        }
+        push lines, sprintf("set(%s_KEY_%d \"%s\")", prefix, component,
+            components.component_keys[component]);
+        push lines, sprintf("set(%s_OUTPUTS_%d \"%s\")", prefix, component,
+            join(";", outputs));
+        push lines, sprintf("set(%s_PREDECESSORS_%d \"%s\")", prefix, component,
+            join(";", predecessors));
+    }
+    push lines, sprintf("set(%s_RECORDS \"%s\")", prefix, join(";", records));
+    push lines, sprintf("set(%s_LOCKS \"%s\")", prefix, join(";", locks));
+    return join("\n", lines) + "\n";
 }
 
 hash<auto> sub componentMapData(SourceOrderEngine engine,
@@ -2482,6 +2721,8 @@ int sub main() {
     bool build_map = False;
     bool artifact_current = False;
     *string component_command;
+    *string component_map_prefix;
+    *string expected_generation;
     *string direct_map_prefix;
     *string build_direct_map_prefix;
     *string source_symbol_manifest;
@@ -2499,7 +2740,11 @@ int sub main() {
             artifact_current = True;
         } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
                 || arg == "--scc-prerequisites" || arg == "--scc-generation"
-                || arg == "--scc-generation-token") {
+                || arg == "--scc-generation-token" || arg == "--scc-generation-dir"
+                || arg == "--scc-current" || arg == "--scc-publish"
+                || arg == "--scc-publish-all" || arg == "--scc-record"
+                || arg == "--scc-lock" || arg == "--scc-preload"
+                || arg == "--scc-current-all" || arg == "--scc-source-token") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -2509,12 +2754,15 @@ int sub main() {
         } else if (arg == "--direct-map-cmake"
                 || arg == "--build-direct-map-cmake"
                 || arg == "--source-symbol-manifest"
-                || arg == "--batch-artifact-current") {
+                || arg == "--batch-artifact-current"
+                || arg == "--scc-map-cmake") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
             if (arg == "--direct-map-cmake") {
                 direct_map_prefix = ARGV[index];
+            } else if (arg == "--scc-map-cmake") {
+                component_map_prefix = ARGV[index];
             } else if (arg == "--build-direct-map-cmake") {
                 build_direct_map_prefix = ARGV[index];
             } else if (arg == "--source-symbol-manifest") {
@@ -2522,6 +2770,21 @@ int sub main() {
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
+        } else if (arg == "--expect" || arg == "--batch-stamp") {
+            if (++index >= ARGV.size()) {
+                usage(sprintf("argument expected after %s", arg));
+            }
+            if (arg == "--expect") {
+                expected_generation = ARGV[index];
+            } else {
+                batch_bootstrap_stamp = ARGV[index];
+            }
+        } else if (arg.startsWith("--expect=")) {
+            expected_generation = arg.substr(9);
+        } else if (arg.startsWith("--batch-stamp=")) {
+            batch_bootstrap_stamp = arg.substr(14);
+        } else if (arg.startsWith("--scc-map-cmake=")) {
+            component_map_prefix = arg.substr(16);
         } else if (arg.startsWith("--direct-map-cmake=")) {
             direct_map_prefix = arg.substr(19);
         } else if (arg.startsWith("--build-direct-map-cmake=")) {
@@ -2559,15 +2822,66 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists component_map_prefix) {
+        if (positional.size() != 1) {
+            usage("--scc-map-cmake accepts only a context argument");
+        }
+        if (component_map_prefix !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            usage(sprintf("invalid CMake variable prefix: %y", component_map_prefix));
+        }
+        printf("%s", componentMapCMake(engine,
+            engine.sourceComponents(context_path, context_info), context_info,
+            component_map_prefix));
+        return 0;
+    }
     if (exists component_command) {
         hash<SourceOrderComponents> components =
             engine.sourceComponents(context_path, context_info);
-        if (component_command == "map") {
+        if (component_command == "map" || component_command == "publish-all"
+                || component_command == "generation-dir"
+                || component_command == "current-all") {
             if (positional.size() != 1) {
-                usage("--scc-map accepts only a context argument");
+                usage(sprintf("--scc-%s accepts only a context argument",
+                    component_command));
             }
-            printf("%s\n", make_json(componentMapData(engine, components, context_info)));
-            return 0;
+            switch (component_command) {
+                case "map":
+                    printf("%s\n",
+                        make_json(componentMapData(engine, components, context_info)));
+                    return 0;
+                case "generation-dir":
+                    printf("%s\n", engine.generationDir(context_info));
+                    return 0;
+                case "current-all":
+                    # One invocation for the whole group: a per-output probe
+                    # would reload and rescan the graph once per source, which
+                    # for a large group costs more than the compile it guards.
+                    for (int component = 0; component < components.members.size();
+                            ++component) {
+                        if (!engine.generationCurrent(context_info, components,
+                                component, batch_bootstrap_stamp)) {
+                            return 1;
+                        }
+                    }
+                    return 0;
+                case "publish-all":
+                    # A whole-group compile republishes every component at once,
+                    # so every generation record has to be committed together;
+                    # a partial sweep would leave components claiming a
+                    # generation the group no longer has.
+                    for (int component = 0; component < components.members.size();
+                            ++component) {
+                        string result = engine.publishGeneration(context_info,
+                            components, component, NOTHING);
+                        if (result != "published") {
+                            stderr.printf("%s: cannot publish component %s: %s\n",
+                                get_script_name(),
+                                components.component_keys[component], result);
+                            return result == "moved" ? 75 : 1;
+                        }
+                    }
+                    return 0;
+            }
         }
         if (positional.size() != 2) {
             usage(sprintf("--scc-%s requires a context and a %s argument",
@@ -2602,6 +2916,19 @@ int sub main() {
                         context_info.outputs[node]);
                 }
                 return 0;
+            case "preload":
+                # Every member of every transitive predecessor component, in
+                # dependency order, and deliberately not the component's own
+                # members: a component compiles its own members together, so
+                # preloading a sibling would mean reading the generation this
+                # compile is about to replace.
+                foreach int prerequisite in (
+                        engine.componentPrerequisites(components, component)) {
+                    foreach int node in (components.members[prerequisite]) {
+                        printf("%s\n", context_info.outputs[node]);
+                    }
+                }
+                return 0;
             case "prerequisites":
                 foreach int prerequisite in (
                         engine.componentPrerequisites(components, component)) {
@@ -2616,6 +2943,33 @@ int sub main() {
                 printf("%s\n",
                     engine.componentGeneration(components, context_info, component).token);
                 return 0;
+            case "source-token":
+                printf("%s\n",
+                    engine.componentSourceToken(components, context_info, component));
+                return 0;
+            case "record":
+                printf("%s\n",
+                    engine.generationRecordPath(context_info, components, component));
+                return 0;
+            case "lock":
+                printf("%s\n",
+                    engine.generationLockPath(context_info, components, component));
+                return 0;
+            case "current":
+                return engine.generationCurrent(context_info, components, component,
+                    batch_bootstrap_stamp) ? 0 : 1;
+            case "publish": {
+                string result = engine.publishGeneration(context_info, components,
+                    component, expected_generation);
+                if (result == "published") {
+                    return 0;
+                }
+                stderr.printf("%s: cannot publish component %s: %s\n",
+                    get_script_name(), components.component_keys[component], result);
+                # 75 is the build's established "inputs moved, this attempt is
+                # not publishable" signal; anything else is a real failure.
+                return result == "moved" ? 75 : 1;
+            }
         }
     }
     if (exists direct_map_prefix || exists build_direct_map_prefix) {

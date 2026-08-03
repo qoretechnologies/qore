@@ -31,7 +31,7 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testMutualDependencyComponent());
         addTestCase("acyclic graphs decompose into singleton components",
             \testAcyclicGraphSingletons());
-        addTestCase("generation tokens are a Merkle identity of the source closure",
+        addTestCase("generation tokens combine member sources with predecessor contracts",
             \testGenerationIdentity());
         addTestCase("a component larger than the old retry limit stays one unit",
             \testLargeComponent());
@@ -284,13 +284,15 @@ class AOTSccGenerationTest inherits QUnit::Test {
         assertEq(cycle_token, token(context_path, cycle),
             "an unchanged source tree yields the same generation token");
 
-        # The manifest is the token's preimage and names every member digest.
+        # The manifest is the token's preimage: a component's own members
+        # contribute their source content, and a predecessor contributes only the
+        # published contract its consumers compile against.
         hash<auto> manifest = parse_json(order(context_path,
             ("--scc-generation", cycle)));
         assertEq(cycle, manifest.scc, "the manifest names its own component");
         assertEq(2, manifest.members.size(), "the manifest names every member");
         assertEq((), manifest.prerequisites,
-            "a component with no predecessor records no prerequisite generation");
+            "a component with no predecessor records no prerequisite contract");
         foreach hash<auto> member in (manifest.members) {
             assertEq(digest("sha256", ReadOnlyFile::readBinaryFile(member.input)).toHex(),
                 member.content_digest,
@@ -298,9 +300,17 @@ class AOTSccGenerationTest inherits QUnit::Test {
         }
         hash<auto> consumer_manifest = parse_json(order(context_path,
             ("--scc-generation", consumer)));
-        assertEq((("scc": cycle, "generation": cycle_token),),
-            consumer_manifest.prerequisites,
-            "a consumer manifest records its predecessor's generation token");
+        assertEq(1, consumer_manifest.prerequisites.size(),
+            "a consumer manifest records its one predecessor component");
+        assertEq(cycle, consumer_manifest.prerequisites[0].scc,
+            "the recorded prerequisite is the predecessor component");
+        assertEq(("a.qo", "b.qo"),
+            sort((map basename($1.output), consumer_manifest.prerequisites[0].provides)),
+            "the prerequisite entry names every provider member");
+        foreach hash<auto> provided in (consumer_manifest.prerequisites[0].provides) {
+            assertEq("", provided.contract_digest,
+                "an unbuilt provider contributes an empty contract digest");
+        }
 
         # An unrelated component's edit moves only that component.
         write(tmp.path + "/src/d.qc", sources.d + "# unrelated edit\n");
@@ -311,20 +321,35 @@ class AOTSccGenerationTest inherits QUnit::Test {
         assertNeq(isolated_token, token(context_path, isolated),
             "the edited component's own generation changes");
 
-        # A member edit moves the component and every transitive consumer.
+        # A member edit moves its own component, because its own source bytes
+        # decide whether it must be recompiled.
         write(tmp.path + "/src/b.qc", sources.b + "# member edit\n");
         string edited_cycle_token = token(context_path, cycle);
-        string edited_consumer_token = token(context_path, consumer);
         assertNeq(cycle_token, edited_cycle_token,
             "editing one cycle member changes the whole component generation");
-        assertNeq(consumer_token, edited_consumer_token,
-            "a predecessor edit propagates into its consumer's generation");
+        assertEq(consumer_token, token(context_path, consumer),
+            "a provider edit that publishes no new contract leaves its consumer "
+                "generation alone");
+
+        # Publishing a different contract for one provider member is what moves a
+        # consumer: that is the only provider change a consumer compiles against.
+        write(tmp.path + "/qo/a.qo.compile-contract.stamp", "contract=1\n");
+        string contract_consumer_token = token(context_path, consumer);
+        assertNeq(consumer_token, contract_consumer_token,
+            "a new provider contract moves the consumer generation");
+        assertEq(edited_cycle_token, token(context_path, cycle),
+            "publishing a provider contract does not move the provider's own "
+                "generation");
+        write(tmp.path + "/qo/a.qo.compile-contract.stamp", "contract=2\n");
+        assertNeq(contract_consumer_token, token(context_path, consumer),
+            "each distinct provider contract is a distinct consumer generation");
 
         # A consumer-only edit leaves its predecessor alone.
+        string before_consumer_edit = token(context_path, consumer);
         write(tmp.path + "/src/c.qc", sources.c + "# consumer edit\n");
         assertEq(edited_cycle_token, token(context_path, cycle),
             "a consumer-only edit preserves the predecessor generation");
-        assertNeq(edited_consumer_token, token(context_path, consumer),
+        assertNeq(before_consumer_edit, token(context_path, consumer),
             "a consumer-only edit changes the consumer generation");
 
         # Reordering the context source list must not change any identity: the

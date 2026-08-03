@@ -3,6 +3,14 @@
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 #
 # Seed a standalone qcc object group with one shared-parse batch compile.
+#
+# This is also the builder for any strongly connected component that spans more
+# than one source: its members are mutually dependent, so they have no valid
+# relative order and must share one parse.  The batch writes every member of
+# every component in the group, which is why it holds the GROUP lock rather than
+# a component lock, and why it publishes every component's generation record
+# when it completes.  `qore-qo-incremental` delegates here with
+# QORE_QCC_FORCE_BATCH=1 when a multi-member component is stale.
 
 set -eu
 
@@ -18,6 +26,7 @@ source_order_tool=$4
 lock_dir="${bootstrap_stamp}.lock"
 lock_owned=false
 outputs_file=
+force_batch=${QORE_QCC_FORCE_BATCH:-0}
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -54,7 +63,6 @@ if [ ! -x "$source_order_tool" ]; then
 fi
 
 mkdir -p "$(dirname "$bootstrap_stamp")"
-waited=false
 while ! mkdir "$lock_dir" 2>/dev/null; do
     if [ -r "$lock_dir/pid" ]; then
         owner=
@@ -71,7 +79,6 @@ while ! mkdir "$lock_dir" 2>/dev/null; do
                     rmdir "$lock_dir" 2>/dev/null || true
                     continue
                 fi
-                waited=true
                 ;;
         esac
     else
@@ -91,94 +98,94 @@ printf '%s\n' "$$" > "$lock_dir/pid"
 outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
 sed -n 's/^output=//p' "$context" > "$outputs_file"
 
-complete=true
-if [ ! -f "${bootstrap_stamp}.d" ]; then
-    complete=false
-fi
-while IFS= read -r output; do
-    [ -n "$output" ] || continue
-    for sidecar in \
-            "$output" \
-            "$output.d" \
-            "$output.idx.json" \
-            "$output.status.json" \
-            "$output.content.stamp" \
-            "$output.stamp" \
-            "$output.source.manifest.json"; do
-        if [ ! -f "$sidecar" ]; then
-            complete=false
-            break
-        fi
-    done
-done < "$outputs_file"
-
-# Recursive Make invocations can request the same generated rule concurrently.
-# A follower skips the work only when the first owner left every output and its
-# exact dependencies current.  This also prevents a stale marker from hiding a
-# crashed or incomplete bootstrap.
-if [ "$waited" = true ] && [ "$complete" = true ] \
-        && [ -f "$bootstrap_stamp" ]; then
+touch_member_stamps() {
     while IFS= read -r output; do
         [ -n "$output" ] || continue
-        if ! run_source_order --batch-artifact-current \
-                "$bootstrap_stamp" "$context" "$output"; then
-            complete=false
-            break
-        fi
+        touch "$output.stamp"
     done < "$outputs_file"
-    if [ "$complete" = true ]; then
-        exit 0
+}
+
+# Currency is a property of every component's published generation, not of a
+# per-file sidecar sweep: the whole point of the generation record is that one
+# token comparison covers a component's entire transitive source closure.  A
+# follower that waited on the lock re-evaluates it here, so a stale marker can
+# never hide a crashed or incomplete bootstrap.
+current=false
+if [ "$force_batch" != 1 ]; then
+    if [ -f "$bootstrap_stamp" ]; then
+        if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
+                "$context"; then
+            current=true
+        fi
+    elif run_source_order --scc-current-all "$context"; then
+        current=true
     fi
 fi
 
-had_bootstrap=false
-if [ -f "$bootstrap_stamp" ]; then
-    had_bootstrap=true
+if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
+    exit 0
 fi
 
-if [ "$had_bootstrap" = false ] && [ "$complete" = true ]; then
-    while IFS= read -r output; do
-        [ -n "$output" ] || continue
-        if ! run_source_order --artifact-current "$context" "$output"; then
-            complete=false
-            break
-        fi
-    done < "$outputs_file"
-fi
-
+# The marker has to precede every member success stamp: a member whose stamp is
+# older than the marker is treated as belonging to a previous bootstrap.
 touch "$bootstrap_stamp"
 
-if [ "$had_bootstrap" = true ] || [ "$complete" = false ]; then
-    batch_attempt=1
-    batch_succeeded=false
-    while :; do
-        if sh "$batch_script"; then
-            batch_succeeded=true
-            break
-        else
-            rc=$?
-        fi
-        if [ "$rc" -ne 75 ] || [ "$batch_attempt" -ge 3 ]; then
-            break
-        fi
-        batch_attempt=$((batch_attempt + 1))
-        echo "$0: qcc batch input changed during compilation; retrying ($batch_attempt/3)"
-    done
-    if [ "$batch_succeeded" = false ]; then
-        echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
-        # Keep the new marker but do not advance any object stamps.  Every
-        # per-source command therefore observes an older or missing stamp and
-        # rebuilds through the established incremental path.
-        exit 0
+if [ "$current" = true ]; then
+    # Adopt an already-current tree whose marker was missing, without rewriting
+    # any object or contract content.
+    touch_member_stamps
+    exit 0
+fi
+
+# One rebuild, never a convergence loop.  A batch can report that its inputs
+# moved only because an agent outside the build rewrote a source while qcc was
+# reading it; the members of this group cannot move it, because this lock covers
+# all of them.
+# `$?` after a NEGATED condition is the negation's status, not the command's, so
+# the batch status has to be captured in the else branch.
+if sh "$batch_script"; then
+    batch_rc=0
+else
+    batch_rc=$?
+fi
+if [ "$batch_rc" -eq 75 ]; then
+    echo "$0: qcc batch inputs moved during compilation; rebuilding the group once"
+    if sh "$batch_script"; then
+        batch_rc=0
+    else
+        batch_rc=$?
     fi
+    if [ "$batch_rc" -eq 75 ]; then
+        echo "$0: qcc batch inputs moved during the group rebuild; the sources are" \
+            "being changed by something other than this build" >&2
+        exit 1
+    fi
+fi
+if [ "$batch_rc" -ne 0 ]; then
+    if [ "$force_batch" = 1 ]; then
+        # A multi-member component has no per-source fallback: its members are
+        # mutually dependent, so failing to share one parse is a hard failure
+        # rather than something the per-file path could finish.
+        echo "$0: batch compile failed and this group has a component that spans" \
+            "several sources; there is no per-source fallback" >&2
+        exit "$batch_rc"
+    fi
+    echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
+    # Keep the new marker but do not advance any object stamps.  Every
+    # per-source command therefore observes an older or missing stamp and
+    # rebuilds through the established incremental path.
+    exit 0
 fi
 
 # Batch parsing has no preloaded source objects, so it inherits no parse
 # defines from siblings.  Clear this per-source input before later delta builds.
-# Touch success stamps after the bootstrap marker when adopting an existing
-# complete tree so dependent custom commands are immediately current.
 while IFS= read -r output; do
     [ -n "$output" ] || continue
     : > "$output.source-parse-defines"
-    touch "$output.stamp"
 done < "$outputs_file"
+touch_member_stamps
+
+# The batch rewrote every member of every component, so every generation record
+# is committed together.  A partial sweep would leave some component claiming a
+# generation the group no longer has.
+run_source_order --scc-publish-all "$context"

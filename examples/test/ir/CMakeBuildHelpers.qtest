@@ -59,6 +59,37 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         return info.mtime;
     }
 
+    #! The generation lock of the component that publishes \a object.
+    /** Read from the configure-time component map so the test names the same
+        path the build does, instead of restating how the key is derived.
+    */
+    private string componentLock(string build_dir, string object) {
+        string scc_map = read(build_dir + "/qo-scripts/scc-map.cmake");
+        *list<*string> count_groups = scc_map.regexExtract("_COUNT \"([0-9]+)\"");
+        assertTrue(exists count_groups, "component map declares a component count");
+        int count = count_groups[0].toInt();
+        for (int index = 0; index < count; ++index) {
+            *list<*string> outputs = scc_map.regexExtract(
+                sprintf("_OUTPUTS_%d \"([^\"]*)\"", index));
+            if (!outputs || !exists outputs[0]) {
+                continue;
+            }
+            foreach string member in (outputs[0].split(";")) {
+                if (member == object) {
+                    *list<*string> generation_dir =
+                        scc_map.regexExtract("_GENERATION_DIR \"([^\"]*)\"");
+                    *list<*string> key = scc_map.regexExtract(
+                        sprintf("_KEY_%d \"([^\"]*)\"", index));
+                    assertTrue(exists generation_dir && exists key,
+                        "component map declares the generation dir and key");
+                    return generation_dir[0] + "/" + key[0] + ".lock";
+                }
+            }
+        }
+        throw "COMPONENT-NOT-FOUND", sprintf("%y is not a member of any component "
+            "in %y", object, build_dir + "/qo-scripts/scc-map.cmake");
+    }
+
     testExportedHelpers() {
         TmpDir tmp("qore-cmake-build-helpers-");
         string src_dir = tmp.path + "/src";
@@ -679,9 +710,16 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             provider, build_dir));
         assertTrue(build1.find("batch bootstrapping cmake-smoke (24 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
+        # A source rewritten by an agent outside the build is the only reason a
+        # publication can be refused; the group is rebuilt exactly once rather
+        # than converged on by repeated per-file attempts.
         assertTrue(build1.find(
-                "qcc batch input changed during compilation; retrying (2/3)") != -1,
-            "source edit during batch publication retries the shared parse: " + build1);
+                "qcc batch inputs moved during compilation; rebuilding the group once")
+                != -1,
+            "source edit during batch publication rebuilds the shared parse once: "
+                + build1);
+        assertEq(-1, build1.find("retrying ("),
+            "input-change handling never enters a retry loop: " + build1);
         assertTrue(build1.find("script aggregate .qo") != -1,
             "clean object-group build emits its script aggregate during bootstrap: " + build1);
         assertEq(-1, build1.find("qcc --script-aggregate: QORE_CMAKE_SCRIPT_SMOKE"),
@@ -839,9 +877,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 + batch_to_single);
         date consumer_mtime = mtime(consumer_object);
         write(provider, read(provider) + "# second compile-contract no-op\n");
-        # qore-qo-incremental formerly used flock(1), which left this regular
-        # file behind. The portable output lock must migrate it automatically.
-        write(provider_object + ".lock", "");
+        # The build unit is the provider's strongly connected component, so the
+        # lock that serializes its publication is the component generation lock.
+        string provider_lock = componentLock(build_dir, provider_object);
+        # qore-qo-incremental formerly used flock(1), which left an empty regular
+        # file at the lock path. The portable lock must migrate it automatically.
+        write(provider_lock, "");
         string semantic_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(consumer_mtime, mtime(consumer_object),
             "steady-state comment-only provider edit preserves the consumer object: "
@@ -849,7 +890,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertEq(1, semantic_no_op.split("qcc: script-context .qo").size() - 1,
             "concurrent provider requests publish exactly one object generation: "
                 + semantic_no_op);
-        assertFalse(exists hlstat(provider_object + ".lock"),
+        assertFalse(exists hlstat(provider_lock),
             "incremental compilation migrates and removes a legacy flock file");
         string validated_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(validated_no_op.find("qcc -c:") == -1,
@@ -865,8 +906,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string replacement = src_dir + "/provider-replacement.qc";
         string validation_marker = build_dir + "/qcc-input-validation.marker";
         write(replacement, final_provider);
-        mkdir(provider_object + ".lock");
-        write(provider_object + ".lock/pid", "999999999\n");
+        mkdir(provider_lock);
+        write(provider_lock + "/pid", "999999999\n");
         string contract_change = run(sprintf(
             "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
             "[ -f %s ] && cp %s %s) & watcher=$!; "
@@ -879,10 +920,13 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(contract_change.find("provider.qc") != -1,
             "provider body change runs the precise incremental path: "
                 + contract_change);
-        assertTrue(contract_change.find("qcc input changed during compilation; retrying (2/16)") != -1,
-            "provider edit during qcc publication is retried in the same build: "
+        assertTrue(contract_change.find(
+                "moved during compilation; rebuilding the component once") != -1,
+            "provider edit during qcc publication rebuilds the component once: "
                 + contract_change);
-        assertFalse(exists hlstat(provider_object + ".lock"),
+        assertEq(-1, contract_change.find("retrying ("),
+            "a moved provider source never enters a retry loop: " + contract_change);
+        assertFalse(exists hlstat(provider_lock),
             "incremental compilation reclaims an interrupted output lock");
         string changed_source_out = run(sprintf("cd %s && %s %s",
             src_dir, source_qore, source_runner));
@@ -917,18 +961,20 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             snapshot_marker, aba_validation_marker, provider, build_dir));
         assertTrue(aba_change.find(
                 "qcc parsed input changed after its initial snapshot") == -1,
-            "successful A -> B -> A retry suppresses the superseded qcc error: "
+            "a successful A -> B -> A rebuild suppresses the superseded qcc error: "
                 + aba_change);
         assertTrue(aba_change.find(
-                "qcc input changed during compilation; retrying (2/16)") != -1,
-            "A -> B -> A source transition is retried in the same build: "
+                "moved during compilation; rebuilding the component once") != -1,
+            "A -> B -> A source transition rebuilds the component once: "
                 + aba_change);
+        assertEq(-1, aba_change.find("retrying ("),
+            "an A -> B -> A transition never enters a retry loop: " + aba_change);
         string aba_source_out = run(sprintf("cd %s && %s %s",
             src_dir, source_qore, source_runner));
         string aba_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
             qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
         assertEq(aba_source_out, aba_static_out,
-            "A -> B -> A retry publishes native output for final A");
+            "the A -> B -> A component rebuild publishes native output for final A");
 
         string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
         string provider_body = read(provider);

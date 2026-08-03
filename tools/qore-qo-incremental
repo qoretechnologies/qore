@@ -4,18 +4,30 @@
 #
 # Incremental driver for one AOT `.qo` artifact.
 #
-# Invoked by the build as the recipe for OUTPUT (a `.qo`).  It compiles SOURCE
-# standalone against sibling `.qo` metadata via SINGLE_SCRIPT
-# (`qcc -c -L <group-dir> --depfile=OUTPUT.d ...`).  qcc writes OUTPUT,
-# OUTPUT.d, OUTPUT.idx.json, status JSON, and success/content stamps. OUTPUT.d
-# lists the source's build dependencies: its `%include` closure plus sibling
-# body contracts imported by optimized native calls.
+# Invoked by the build as the recipe for OUTPUT (a `.qo`), but the unit of work
+# is not OUTPUT: it is the strongly connected component of the required-edge
+# graph that OUTPUT belongs to.  A required edge that closes a cycle cannot be
+# expressed as a build edge, so the members of a cyclic component have no valid
+# relative order and must be compiled and published as one generation under one
+# lock.  `qore-qo-source-order --scc-*` computes that decomposition and the
+# generation identity; this script is the builder for it.
 #
-# Clean parallel builds are seeded by the shared batch bootstrap.  On later
-# single-file builds, this wrapper brings precise transitive body-contract
-# providers current before checking the requested output.  This closes the
-# provider/consumer race on Make generators while output locks deduplicate
-# providers requested concurrently by multiple consumers.
+# A component is current when its published generation record names the token
+# that its current sources hash to.  Because the token is a Merkle digest over
+# the component's whole transitive source closure, that single comparison
+# answers the question for every member at once -- which is what per-file
+# freshness could not do.
+#
+# Publication is a compare-and-swap: the token is computed before the compile
+# and re-checked when the record is written.  If the sources moved underneath,
+# nothing is published and the whole component is rebuilt exactly once.  There
+# is no per-file retry loop, and a normal build performs no rebuild at all.
+#
+# A singleton component keeps the fast path: one `qcc -c -L <preload>` compile
+# of one source against the frozen outputs of its predecessor components.  A
+# multi-member component needs one shared parse across its members, so it is
+# delegated to the group batch bootstrap, which holds the group lock and
+# republishes every component's generation record.
 
 set -eu
 
@@ -55,18 +67,14 @@ if [ ! -f "$context_file" ] && [ -f "$qo_dir/.qcc-context" ]; then
 fi
 source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
 source_parse_define_tool="${QORE_QCC_SOURCE_PARSE_DEFINE_HELPER:-$script_dir/qore-qo-source-parse-defines}"
+batch_bootstrap_tool="${QORE_QCC_BATCH_BOOTSTRAP_HELPER:-$script_dir/qore-qo-batch-bootstrap}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
-max_input_attempts=${QORE_QCC_MAX_INPUT_ATTEMPTS:-16}
-case "$max_input_attempts" in
-    *[!0-9]*|'')
-        echo "$0: QORE_QCC_MAX_INPUT_ATTEMPTS must be a positive integer" >&2
-        exit 2
-        ;;
-esac
-if [ "$max_input_attempts" -lt 1 ]; then
-    echo "$0: QORE_QCC_MAX_INPUT_ATTEMPTS must be a positive integer" >&2
-    exit 2
-fi
+batch_script="$single_script_dir/qcc-batch.sh"
+
+# The component this recipe actually builds, resolved once.
+component_index=
+component_key=
+component_size=0
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -75,6 +83,40 @@ run_source_order() {
     else
         "$source_order_tool" "$@"
     fi
+}
+
+have_source_order() {
+    [ -x "$source_order_tool" ] && [ -f "$context_file" ]
+}
+
+#! Resolves the component that publishes OUTPUT.
+#  Failure is not fatal: a context-less invocation (or a helper that predates
+#  the component surface) falls back to treating OUTPUT as its own unit, which
+#  is what a singleton component is anyway.
+resolve_component() {
+    if ! have_source_order; then
+        return 1
+    fi
+    component_line=$(run_source_order --scc-for "$context_file" "$output") || return 1
+    component_index=$(printf '%s' "$component_line" | cut -f1)
+    component_key=$(printf '%s' "$component_line" | cut -f2)
+    component_size=$(printf '%s' "$component_line" | cut -f3)
+    case "$component_size" in
+        ''|*[!0-9]*)
+            echo "$0: cannot read component size for $output: $component_line" >&2
+            return 1
+            ;;
+    esac
+    [ -n "$component_index" ] && [ -n "$component_key" ]
+}
+
+#! The identity of the component's member sources, before anything is compiled.
+#  Deliberately NOT the full generation token: a compile rewrites its own depfile,
+#  which contributes required edges, which decide the component's predecessors.
+#  Comparing full tokens across a compile would report "inputs moved" on every
+#  build that changes a depfile.
+component_source_token() {
+    run_source_order --scc-source-token "$context_file" "$component_index"
 }
 
 cleanup_stage_dir() {
@@ -87,11 +129,9 @@ cleanup_stage_dir() {
 prepare_preload_dir() {
     preload_dir=$1
     preload_file=$2
-    snapshot_file=$3
 
     target_name=$(basename "$output")
     mkdir -p "$preload_dir"
-    : > "$snapshot_file"
     while IFS= read -r preload_qo; do
         [ -n "$preload_qo" ] || continue
         [ -f "$preload_qo" ] || continue
@@ -103,39 +143,15 @@ prepare_preload_dir() {
         # could expose different generations while qcc restores metadata and
         # executable bodies from the same logical preload.
         ln "$preload_qo" "$preload_dir/$preload_name"
-        printf '%s\n' "$preload_dir/$preload_name" >> "$snapshot_file"
         if [ -f "$preload_qo.compile-contract.stamp" ]; then
             # qcc canonicalizes this path into the generated depfile, so keep
-            # it linked to the live sidecar. The separate hard link below is
-            # the immutable value used for before/after validation.
+            # it linked to the live sidecar.
             ln -s "$preload_qo.compile-contract.stamp" \
                 "$preload_dir/$preload_name.compile-contract.stamp"
-            ln "$preload_qo.compile-contract.stamp" \
-                "$preload_dir/$preload_name.compile-contract.snapshot"
         fi
         if [ -f "$preload_qo.idx.json" ]; then
             ln "$preload_qo.idx.json" \
                 "$preload_dir/$preload_name.idx.json"
-        fi
-    done < "$preload_file"
-}
-
-preload_contracts_current() {
-    preload_dir=$1
-    preload_file=$2
-
-    target_name=$(basename "$output")
-    while IFS= read -r preload_qo; do
-        [ -n "$preload_qo" ] || continue
-        preload_name=$(basename "$preload_qo")
-        [ "$preload_name" = "$target_name" ] && continue
-        live_contract="$preload_qo.compile-contract.stamp"
-        snapshot_contract="$preload_dir/$preload_name.compile-contract.snapshot"
-        if [ -f "$live_contract" ]; then
-            [ -f "$snapshot_contract" ] || return 1
-            cmp -s "$live_contract" "$snapshot_contract" || return 1
-        elif [ -e "$snapshot_contract" ]; then
-            return 1
         fi
     done < "$preload_file"
 }
@@ -172,14 +188,18 @@ collect_source_parse_defines() {
     fi
 }
 
+#! Outputs of every member of every transitive predecessor component.
+#  The component's own members are excluded by construction: it compiles them
+#  together, so a sibling `.qo` would be the generation this build replaces.
 select_preload_outputs() {
     resolved_file=$1
     shift
     requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-requested.XXXXXX")
     : > "$resolved_file"
 
-    if [ -x "$source_order_tool" ] && [ -f "$context_file" ]; then
-        if ! run_source_order "$context_file" "$output" > "$requested_file"; then
+    if have_source_order && [ -n "$component_index" ]; then
+        if ! run_source_order --scc-preload "$context_file" "$component_index" \
+                > "$requested_file"; then
             rm -f "$requested_file"
             return 1
         fi
@@ -204,7 +224,7 @@ select_manifest_inputs() {
     requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-direct.XXXXXX")
     : > "$resolved_file"
 
-    if [ -x "$source_order_tool" ] && [ -f "$context_file" ]; then
+    if have_source_order; then
         if ! run_source_order --direct "$context_file" "$output" > "$requested_file"; then
             rm -f "$requested_file"
             return 1
@@ -226,12 +246,15 @@ select_manifest_inputs() {
     rm -f "$requested_file"
 }
 
-compile_current_source() {
+#! Compiles the one member of a singleton component.
+#  Returns 0 on success, 75 when qcc reports that its inputs moved under it, and
+#  1 on a real compile failure.  A 75 is never retried here: the caller decides,
+#  once, whether to rebuild the whole component.
+compile_single_member() {
     selected_preload_file=$1
     manifest_input_file=$2
     single_log=
     single_preload=
-    snapshot_preload_file=
     extra_define_file=
 
     if [ ! -f "$single_script" ]; then
@@ -239,102 +262,80 @@ compile_current_source() {
         return 1
     fi
 
-    # Recompile only this source against the selected sibling `.qo` preload.
+    # Recompile only this source against the frozen predecessor preload.
     # qcc-single.sh writes OUTPUT, OUTPUT.d, OUTPUT.idx.json, status JSON, the
     # source manifest, and success/content stamps. qcc itself decides whether
     # the manifest is current and can skip before Qore initialization when
     # nothing affecting the output changed.
     extra_define_file=$output.source-parse-defines
     single_log=$(mktemp "${TMPDIR:-/tmp}/qore-qo-single.XXXXXX")
+    single_preload=$(mktemp -d "$qo_dir/.qcc-preload.$(basename "$output").XXXXXX")
 
-    attempt=1
-    while :; do
-        single_preload=$(mktemp -d "$qo_dir/.qcc-preload.$(basename "$output").XXXXXX")
-        snapshot_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-snapshot.XXXXXX")
-        if ! prepare_preload_dir "$single_preload" "$selected_preload_file" \
-                "$snapshot_preload_file" >> "$single_log" 2>&1 \
-                || ! collect_source_parse_defines "$extra_define_file" \
-                    "$snapshot_preload_file" >> "$single_log" 2>&1; then
-            cat "$single_log" >&2
-            rm -f "$single_log" "$snapshot_preload_file"
-            cleanup_stage_dir "$single_preload"
-            return 1
-        fi
-
-        if ! preload_contracts_current "$single_preload" \
-                "$selected_preload_file"; then
-            rc=75
-        elif QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
-                QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
-                QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
-                QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
-                sh "$single_script" "$source" "$output" "$single_preload" \
-                    >> "$single_log" 2>&1; then
-            if preload_contracts_current "$single_preload" \
-                    "$selected_preload_file"; then
-                rm -f "$snapshot_preload_file"
-                break
-            fi
-            rc=75
-        else
-            rc=$?
-        fi
-        rm -f "$snapshot_preload_file"
+    if ! prepare_preload_dir "$single_preload" "$selected_preload_file" \
+            >> "$single_log" 2>&1 \
+            || ! collect_source_parse_defines "$extra_define_file" \
+                "$selected_preload_file" >> "$single_log" 2>&1; then
+        cat "$single_log" >&2
+        rm -f "$single_log"
         cleanup_stage_dir "$single_preload"
-        single_preload=
-        if [ "$rc" -ne 75 ] || [ "$attempt" -ge "$max_input_attempts" ]; then
+        return 1
+    fi
+
+    # `$?` after a NEGATED condition is the negation's status, not the command's,
+    # so the compile status has to be captured in the else branch.
+    if QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+            QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+            QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+            QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+            sh "$single_script" "$source" "$output" "$single_preload" \
+                >> "$single_log" 2>&1; then
+        rc=0
+    else
+        rc=$?
+    fi
+    cleanup_stage_dir "$single_preload"
+    if [ "$rc" -ne 0 ]; then
+        # A retryable attempt reports an error only because its snapshot is no
+        # longer publishable; that diagnostic is superseded by the rebuild the
+        # caller performs, so it is not preserved in a successful build log.
+        if [ "$rc" -eq 75 ]; then
+            rm -f "$single_log"
+        else
             cat "$single_log" >&2
             rm -f "$single_log"
-            return "$rc"
         fi
-        attempt=$((attempt + 1))
-        # The retryable qcc attempt reports an error because its snapshot is
-        # no longer publishable. Do not preserve that superseded diagnostic in
-        # an ultimately successful build log.
-        : > "$single_log"
-        echo "$0: qcc input changed during compilation; retrying ($attempt/$max_input_attempts)" \
-            >> "$single_log"
-    done
+        return "$rc"
+    fi
 
     cat "$single_log"
     rm -f "$single_log"
     if [ ! -f "$idxfile" ]; then
-        cleanup_stage_dir "$single_preload"
         echo "$0: single compile succeeded but did not create $idxfile" >&2
         return 1
     fi
-
-    cleanup_stage_dir "$single_preload"
     return 0
 }
 
-compile_or_skip_current() {
-    selected_preload_file=$1
-    manifest_input_file=$2
-
-    compile_current_source "$selected_preload_file" "$manifest_input_file"
-}
-
-artifact_is_current() {
-    if [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ]; then
+component_is_current() {
+    if ! have_source_order || [ -z "$component_index" ]; then
         return 1
     fi
     if [ -n "$batch_bootstrap_stamp" ]; then
-        run_source_order --batch-artifact-current "$batch_bootstrap_stamp" \
-            "$context_file" "$output"
+        run_source_order --scc-current --batch-stamp "$batch_bootstrap_stamp" \
+            "$context_file" "$component_index"
     else
-        run_source_order --artifact-current "$context_file" "$output"
+        run_source_order --scc-current "$context_file" "$component_index"
     fi
 }
 
-accept_current_artifact() {
-    if ! artifact_is_current; then
+accept_current_component() {
+    if ! component_is_current; then
         return 1
     fi
-    # The custom command can be newer than its output only because a provider
-    # source or ordering prerequisite changed. Record that this generation was
-    # validated against the newer input without rewriting object or contract
-    # content. Recursive prerequisite probes must remain observational.
+    # The custom command can be newer than its output only because a source or
+    # ordering prerequisite changed. Record that this generation was validated
+    # against the newer input without rewriting object or contract content.
+    # Recursive prerequisite probes must remain observational.
     if [ "${QORE_QCC_PREREQUISITES_READY:-0}" != 1 ]; then
         touch "$output.stamp"
     fi
@@ -360,8 +361,13 @@ read_output_lock_owner() {
     printf '%s\n' "$_lock_line"
 }
 
-with_output_lock() (
-    output_lock="$output.lock"
+#! Builds the component under its generation lock.
+#  One lock covers every member, so no sibling can publish a new compile
+#  contract while this compile runs — the condition the retry loop existed to
+#  absorb.  Prints the compile outcome; the caller escalates on 75.
+with_component_lock() (
+    output_lock=$1
+    shift
     output_lock_record=
     output_lock_token=
     selected_preload_file=
@@ -369,7 +375,7 @@ with_output_lock() (
 
     # Release only the generation this process acquired: a lock whose record no
     # longer names our token belongs to a successor, and removing it would
-    # unlock an artifact another builder is actively publishing.
+    # unlock a component another builder is actively publishing.
     cleanup_output_lock() {
         if [ -n "$selected_preload_file" ]; then
             rm -f "$selected_preload_file"
@@ -418,7 +424,8 @@ with_output_lock() (
     # exists without a complete owner record.  The record names a generation
     # token as well as a pid, so stale-owner cleanup can tell a dead owner's
     # lock from a live successor that reused the same path (the ABA case).
-    output_lock_record=$(mktemp "$output.lock.XXXXXX")
+    mkdir -p "$(dirname "$output_lock")"
+    output_lock_record=$(mktemp "$output_lock.XXXXXX")
     output_lock_token=${output_lock_record##*.}
     printf '%s %s\n' "$$" "$output_lock_token" > "$output_lock_record"
     while :; do
@@ -469,11 +476,16 @@ with_output_lock() (
     rm -f "$output_lock_record"
     output_lock_record=
 
-    # Another waiter may have published this exact artifact while this
-    # process was blocked. Validate inside the lock before selecting inputs.
-    if accept_current_artifact; then
+    # Another waiter may have published this exact component while this process
+    # was blocked. Validate inside the lock before selecting inputs.
+    if accept_current_component; then
         exit 0
     fi
+
+    # The member sources this compile is about to read.  Publication is refused
+    # if they move away from this, which can only happen if an agent outside the
+    # build rewrites one of them mid-compile.
+    expected_sources=$(component_source_token) || exit 1
 
     selected_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-selected.XXXXXX")
     if ! select_preload_outputs "$selected_preload_file" "$@"; then
@@ -485,39 +497,132 @@ with_output_lock() (
         exit 1
     fi
 
-    compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
+    if compile_single_member "$selected_preload_file" "$manifest_input_file"; then
+        compile_rc=0
+    else
+        compile_rc=$?
+    fi
+    if [ "$compile_rc" -ne 0 ]; then
+        exit "$compile_rc"
+    fi
+
+    if ! have_source_order || [ -z "$component_index" ]; then
+        exit 0
+    fi
+    if run_source_order --scc-publish --expect "$expected_sources" \
+            "$context_file" "$component_index" >&2; then
+        publish_rc=0
+    else
+        publish_rc=$?
+    fi
+    exit "$publish_rc"
 )
 
+#! Rebuilds every member of every component in the group through one shared parse.
+#  A component with more than one member has no valid internal order, so its
+#  members cannot be compiled separately against each other.  The group batch is
+#  the existing mechanism that parses many sources at once; it takes the group
+#  lock (never a component lock, because it writes every component's members)
+#  and republishes every generation record.
+build_group_batch() {
+    echo "$0: component $component_key spans $component_size sources;" \
+        "building the group as one shared parse"
+    if [ -z "$batch_bootstrap_stamp" ] || [ ! -f "$batch_script" ] \
+            || [ ! -x "$batch_bootstrap_tool" ]; then
+        echo "$0: component $component_key spans $component_size sources but the" \
+            "group has no batch compile script; cannot publish a coherent" \
+            "generation" >&2
+        return 1
+    fi
+    QORE_QCC_FORCE_BATCH=1 \
+        QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
+        "$batch_bootstrap_tool" "$context_file" "$batch_bootstrap_stamp" \
+            "$batch_script" "$source_order_tool"
+}
+
+#! Brings every transitive predecessor component current, in dependency order.
+#  One member per component is enough: the component is the unit of work, so
+#  building any member brings all of them current.
 build_prerequisites() {
-    if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
-            || [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ]; then
+    if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] || ! have_source_order \
+            || [ -z "$component_index" ]; then
         return 0
     fi
 
     prerequisite_map=$(mktemp "${TMPDIR:-/tmp}/qore-qo-prerequisites.XXXXXX")
-    if ! run_source_order --build-map "$context_file" "$output" \
+    if ! run_source_order --scc-prerequisites "$context_file" "$component_index" \
             > "$prerequisite_map"; then
         rm -f "$prerequisite_map"
         return 1
     fi
 
     tab=$(printf '\t')
-    while IFS="$tab" read -r prerequisite_source prerequisite_output; do
+    rc=0
+    while IFS="$tab" read -r prerequisite_index prerequisite_key; do
+        [ -n "$prerequisite_index" ] || continue
+        member_line=$(run_source_order --scc-members "$context_file" \
+            "$prerequisite_index" | head -1) || { rc=1; break; }
+        prerequisite_source=$(printf '%s' "$member_line" | cut -f1)
+        prerequisite_output=$(printf '%s' "$member_line" | cut -f2)
         [ -n "$prerequisite_source" ] || continue
         [ -n "$prerequisite_output" ] || continue
         if ! QORE_QCC_PREREQUISITES_READY=1 \
                 QORE_QCC_BATCH_BOOTSTRAP_STAMP="$batch_bootstrap_stamp" \
                 "$this_script" "$prerequisite_output" "$prerequisite_source" \
                     "$single_script"; then
-            rm -f "$prerequisite_map"
-            return 1
+            rc=1
+            break
         fi
     done < "$prerequisite_map"
     rm -f "$prerequisite_map"
+    return "$rc"
+}
+
+#! Makes the component current, rebuilding the whole component at most once more.
+#  The single rebuild is not a convergence loop: it is the response to an input
+#  that an agent outside the build mutated while qcc was reading it, which no
+#  amount of analysis can order.  Sibling artifacts cannot cause it, because one
+#  lock covers every member of the component.
+build_component() {
+    if [ "$component_size" -gt 1 ]; then
+        build_group_batch
+        return $?
+    fi
+
+    component_lock="$output.lock"
+    if have_source_order && [ -n "$component_index" ]; then
+        component_lock=$(run_source_order --scc-lock "$context_file" \
+            "$component_index") || return 1
+    fi
+
+    if with_component_lock "$component_lock" "$@"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    if [ "$rc" -ne 75 ]; then
+        return "$rc"
+    fi
+
+    echo "$0: inputs of component $component_key moved during compilation;" \
+        "rebuilding the component once"
+    if with_component_lock "$component_lock" "$@"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    if [ "$rc" -eq 75 ]; then
+        echo "$0: inputs of component $component_key moved during its rebuild;" \
+            "the sources are being changed by something other than this build" >&2
+        return 1
+    fi
+    return "$rc"
 }
 
 run_main() {
-    if accept_current_artifact; then
+    resolve_component || true
+
+    if accept_current_component; then
         exit 0
     fi
 
@@ -525,14 +630,14 @@ run_main() {
         exit 1
     fi
 
-    # A provider can become current without changing its compile contract.
+    # A predecessor can become current without changing its compile contract.
     # Recheck after the ordered handoff so dependents avoid preload setup and
     # qcc startup when their executable assumptions remain valid.
-    if accept_current_artifact; then
+    if accept_current_component; then
         exit 0
     fi
 
-    with_output_lock "$@"
+    build_component "$@"
 }
 
 run_main "$@"

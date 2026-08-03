@@ -38,6 +38,7 @@ const SCRIPT_FILES = (
     "qcc-batch.sh": True,
     "qcc-bootstrap.sh": True,
     "qcc-single.sh": True,
+    "scc-map.cmake": True,
     "source-content.map": True,
     "source-content.stamp": True,
     "source-symbols.manifest": True,
@@ -46,6 +47,8 @@ const TRANSIENT_DIR_NAMES = (
     ".qcc-batch-bootstrap.stamp.lock": True,
     ".qcc-bootstrap.stamp.lock": True,
 );
+#! Directory holding one object group's published SCC generation records.
+const GENERATION_DIR_NAME = ".qcc-scc";
 const ALLOWED_KEYS = (
     "format": True,
     "binary_root": True,
@@ -159,12 +162,27 @@ bool sub is_owned_file_name(string path, string name) {
     if (basename(path) == "source-content" && name.endsWith(".sha256")) {
         return True;
     }
+    # Published generation records and their per-component locks. The names are
+    # derived from component membership, so a component that gains or loses a
+    # member leaves its old record behind; recognising the name here is what
+    # makes that record prunable instead of a configure-time error.
+    if (basename(path) == GENERATION_DIR_NAME) {
+        if (name =~ /^scc-[0-9a-f]+\.generation\.json$/
+            || name =~ /^scc-[0-9a-f]+\.generation\.json\.[0-9]+\.tmp$/
+            || name =~ /^scc-[0-9a-f]+\.lock$/
+            || name =~ /^scc-[0-9a-f]+\.lock\.[A-Za-z0-9]+$/) {
+            return True;
+        }
+    }
     return False;
 }
 
 bool sub is_transient_dir_name(string name) {
+    # A DIRECTORY at a lock path is the shape an older lock protocol published;
+    # the current one publishes a regular file. Recognising it as transient is
+    # what lets an interrupted build's leftover be pruned rather than reported.
     return exists TRANSIENT_DIR_NAMES{name} || name.startsWith(".qcc-preload.")
-        || name.endsWith(".qo.lock");
+        || name.endsWith(".qo.lock") || name =~ /^scc-[0-9a-f]+\.lock$/;
 }
 
 list<string> sub list_names(string path) {
@@ -187,7 +205,7 @@ sub validate_owned_tree(string path, reference<list<string>> unexpected) {
                 push unexpected, entry_path;
             }
         } else if (info.type == "DIRECTORY") {
-            if (name == "source-content") {
+            if (name == "source-content" || name == GENERATION_DIR_NAME) {
                 validate_owned_tree(entry_path, \unexpected);
             } else if (!is_transient_dir_name(name)) {
                 push unexpected, entry_path;
