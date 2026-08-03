@@ -5396,10 +5396,19 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         // such as `foldl $1 | $2, ConstList`.  Keep containers and objects as
         // named constants; the AOT reverse map preserves their identity and
         // avoids inlining large or partially non-serializable graphs.
+        //
+        // Constants with a preserved init expression must also keep their
+        // identity, whatever their value type.  AOT emits a __const_init
+        // function for those and re-evaluates them when the image is loaded, so
+        // the parse-commit value here is the *compile-time* value; inlining it
+        // would freeze a runtime-dependent constant such as `const T = now_us();`
+        // at qcc time and make AOT-compiled readers disagree with interpreted
+        // ones, which read the initialized ConstantEntry.
         ConstantEntry* ce = rt_const->getConstantEntry();
         if (ce) {
             QoreValue resolved = ce->getReferencedValue();
-            if (!ce->aot_shell_pending && ce->hasValue() && !resolved.needsEval()) {
+            if (!ce->aot_shell_pending && !ce->hasInitExpr() && ce->hasValue()
+                    && !resolved.needsEval()) {
                 qore_type_t resolved_type = resolved.getType();
                 if (resolved.isEnum() || resolved_type == NT_INT || resolved_type == NT_FLOAT
                         || resolved_type == NT_BOOLEAN || resolved_type == NT_STRING

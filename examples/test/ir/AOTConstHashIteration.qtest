@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstHashIterationTest
+
+class AOTConstHashIterationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTConstHashIterationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT constant hash iteration", \testAOTConstHashIteration());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        # single-quoted so the module source needs no escaping
+        return '%modern
+
+module AOTConstHashIterMod {
+    version = "1.0";
+    desc = "AOT constant hash iteration regression module";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTConstHashIterMod {
+public class ConstIterHolder {
+    public {
+        const RequestData = {
+            "/pet": {
+                "post": "body1",
+                "put": "body2",
+            },
+            "/store": {
+                "get": "body3",
+            },
+        };
+
+        const ResponseData = {
+            "/inventory": {
+                "get": {
+                    200: "ok_body",
+                },
+            },
+        };
+    }
+
+    static string readViaRef(reference<hash<auto>> headers) {
+        return headers."content-type";
+    }
+
+    #! nested iteration over constant hashes
+    static string iterate() {
+        string rv;
+        foreach hash<auto> h in (RequestData.pairIterator()) {
+            foreach hash<auto> mh in (h.value.pairIterator()) {
+                rv += sprintf("req %s %s %s %s\n", h.key, mh.key, mh.value.type(), mh.value);
+            }
+        }
+        foreach hash<auto> h in (ResponseData.pairIterator()) {
+            foreach hash<auto> mh in (h.value.pairIterator()) {
+                foreach hash<auto> ch in (mh.value.pairIterator()) {
+                    rv += sprintf("rsp %s %s %s %s %s\n", h.key, mh.key, ch.key, ch.value.type(),
+                        ch.value);
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! implicit hash lvalue creation inside a constant-hash iteration
+    static string lvalueInLoop() {
+        string rv;
+        foreach hash<auto> h in (RequestData.pairIterator()) {
+            foreach hash<auto> mh in (h.value.pairIterator()) {
+                hash hdr."content-type" = "application/json";
+                rv += sprintf("lv %s %s %s %d\n", h.key, mh.key, hdr."content-type", hdr.size());
+            }
+        }
+        return rv;
+    }
+
+    #! passing a loop-local hash by reference inside a constant-hash iteration
+    static string refInLoop() {
+        string rv;
+        foreach hash<auto> h in (ResponseData.pairIterator()) {
+            foreach hash<auto> mh in (h.value.pairIterator()) {
+                foreach hash<auto> ch in (mh.value.pairIterator()) {
+                    hash hdr."content-type" = "application/json";
+                    rv += sprintf("ref %s %s %s %s\n", h.key, mh.key, ch.key, readViaRef(\hdr));
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! reports the shape of the constants so mutation by iteration is visible
+    static string shape() {
+        return sprintf("shape req=%d %y rsp=%d %y\n", RequestData.size(), RequestData.keys(),
+            ResponseData.size(), ResponseData.keys());
+    }
+}
+
+public string sub verify() {
+    string rv = ConstIterHolder::shape();
+    rv += ConstIterHolder::iterate();
+    rv += ConstIterHolder::lvalueInLoop();
+    rv += ConstIterHolder::refInLoop();
+    # iterating a constant must neither consume nor mutate it, so the second
+    # pass must produce byte-identical output and leave the shape unchanged
+    rv += ConstIterHolder::iterate();
+    rv += ConstIterHolder::shape();
+    return rv;
+}
+}
+';
+    }
+
+    private string expectedOutput() {
+        string iterated = "req /pet post string body1
+req /pet put string body2
+req /store get string body3
+rsp /inventory get 200 string ok_body
+";
+        string shape = "shape req=2 [\"/pet\", \"/store\"] rsp=1 [\"/inventory\"]\n";
+
+        return shape
+            + iterated
+            + "lv /pet post application/json 1
+lv /pet put application/json 1
+lv /store get application/json 1
+ref /inventory get 200 application/json
+"
+            + iterated
+            + shape;
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTConstHashIteration() {
+        TmpDir tmp("qore-aot-const-hash-iter-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTConstHashIterMod.qm";
+        writeFile(qm_path, moduleCode());
+
+        string script_path = tmp_dir + "/run.qr";
+        writeFile(script_path, "%modern
+%requires AOTConstHashIterMod
+printf(\"%s\", AOTConstHashIterMod::verify());
+");
+
+        string qmod_path = qmod_dir + "/AOTConstHashIterMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled constant hash iteration module: " + compile_out);
+
+        assertEq(expectedOutput(), runModule(src_dir, script_path),
+            "source module constant hash iteration");
+        assertEq(expectedOutput(), runModule(qmod_dir, script_path),
+            "AOT qmod constant hash iteration");
+    }
+}

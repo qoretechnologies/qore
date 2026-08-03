@@ -15775,6 +15775,9 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
                     // runtime.  Swap val for a self-referential
                     // RuntimeConstantRefNode; the init-func populates saved_val
                     // when it runs at register time.
+                    // See the namespace-constant path for why has_init_expr must
+                    // be recorded here as well.
+                    ce->has_init_expr = true;
                     ce->val.discard(nullptr);
                     ce->val = new RuntimeConstantRefNode(&loc_builtin, ce,
                         /*aot_deferred=*/true);
@@ -16704,6 +16707,12 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             // Pending init-func: parser-time references to this constant must
             // defer to runtime until the init-func populates saved_val.
             ce->aot_shell_pending = true;
+            // Record that the value comes from an init expression, exactly as
+            // parseCommitRuntimeInit() does for a source parse.  aot_shell_pending
+            // is cleared once the init-func has run, so without this a downstream
+            // qcc compiling against this loaded module would see a plain valued
+            // constant and inline its value, freezing it at that compile.
+            ce->has_init_expr = true;
             ce->val.discard(nullptr);
             ce->val = new RuntimeConstantRefNode(&loc_builtin, ce,
                 /*aot_deferred=*/true);

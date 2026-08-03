@@ -1,0 +1,435 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstInitTest
+
+class AOTConstInitTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        # expected verify() results; identical for source modules and AOT qmods
+        const ExpectedResults = {
+            "current_time_type": "date",
+            "base_value": "42",
+            "derived_value": "84",
+            "type_a_fulltype": "object<SimpleType>",
+            "type_a_name": "alpha",
+            "type_b_name": "beta",
+            "type_map_size": "2",
+            "type_map_a_name": "alpha",
+            "type_map_b_name": "beta",
+            "type_map_a_identity": "same",
+            "type_map_b_identity": "same",
+            "holder_type_fulltype": "object<SimpleType>",
+            "holder_type_name": "holder_42",
+            "holder_name": "holder_42",
+            "holder_name_type": "string",
+            "derived_name": "derived_holder_42",
+            "derived_name_type": "string",
+            "info_name": "derived_holder_42",
+            "info_type_instanceof": "yes",
+            "info_type_identity": "same",
+            "info_type_name": "holder_42",
+            "type_a_instanceof": "yes",
+            "holder_type_instanceof": "yes",
+            "static_type_fulltype": "object<SimpleType>",
+            "static_type_name": "default",
+            "static_config_name": "config",
+            "static_config_value": "100",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTConstInitTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT constant initialization", \testAOTConstInit());
+        addTestCase("runtime constant re-evaluated on load", \testRuntimeConstantReinitializedOnLoad());
+        addTestCase("runtime constant visible to AOT code", \testRuntimeConstantVisibleToAOTCode());
+        addTestCase("runtime constant across AOT modules", \testRuntimeConstantAcrossModules());
+        addTestCase("circular constant dependency", \testCircularConstantDependency());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        # single-quoted so the module source needs no escaping
+        return '%modern
+
+module AOTConstInitMod {
+    version = "1.0";
+    desc = "AOT constant initialization regression module";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTConstInitMod {
+public class SimpleType {
+    public {
+        string name;
+    }
+
+    constructor(string n) {
+        name = n;
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+# runtime-dependent constant; must be evaluated when the module is loaded and
+# never folded into the AOT image at compile time
+public const CurrentTime = now_us();
+
+public const BaseValue = 42;
+# must fold to a concrete 84, not a delayed reference to BaseValue
+public const DerivedValue = BaseValue * 2;
+
+# object constants cannot be serialized; they must be reconstructed on load
+public const TypeA = new SimpleType("alpha");
+public const TypeB = new SimpleType("beta");
+
+# hash constant holding object constants: the values must remain the same
+# objects, not copies made while restoring the AOT image
+public const TypeMap = {
+    "a": TypeA,
+    "b": TypeB,
+};
+
+public class ConstHolder {
+    public {
+        # class constant depending on a namespace constant
+        const HolderType = new SimpleType("holder_" + BaseValue.toString());
+        # class constant depending on another constant in the same class
+        const HolderName = HolderType.getName();
+    }
+}
+
+public class DerivedConstHolder {
+    public {
+        # class constant depending on a constant in another class
+        const DerivedName = "derived_" + ConstHolder::HolderName;
+        const Info = {
+            "name": DerivedName,
+            "type": ConstHolder::HolderType,
+        };
+    }
+}
+
+public class StaticVarHolder {
+    public {
+        static SimpleType defaultType = new SimpleType("default");
+        static hash<auto> config = {
+            "name": "config",
+            "value": 100,
+        };
+    }
+}
+
+public string sub verify() {
+    hash<string, string> h = {
+        "current_time_type": CurrentTime.type(),
+        "current_time_us": ((CurrentTime - 1970-01-01Z).durationMicroseconds()).toString(),
+        "base_value": BaseValue.toString(),
+        "derived_value": DerivedValue.toString(),
+        "type_a_fulltype": TypeA.fullType(),
+        "type_a_name": TypeA.getName(),
+        "type_b_name": TypeB.getName(),
+        "type_map_size": TypeMap.size().toString(),
+        "type_map_a_name": TypeMap.a.getName(),
+        "type_map_b_name": TypeMap.b.getName(),
+        "type_map_a_identity": TypeMap.a === TypeA ? "same" : "copy",
+        "type_map_b_identity": TypeMap.b === TypeB ? "same" : "copy",
+        "holder_type_fulltype": ConstHolder::HolderType.fullType(),
+        "holder_type_name": ConstHolder::HolderType.getName(),
+        "holder_name": ConstHolder::HolderName,
+        "holder_name_type": ConstHolder::HolderName.type(),
+        "derived_name": DerivedConstHolder::DerivedName,
+        "derived_name_type": DerivedConstHolder::DerivedName.type(),
+        "info_name": DerivedConstHolder::Info.name,
+        "info_type_instanceof": DerivedConstHolder::Info.type instanceof SimpleType ? "yes" : "no",
+        "info_type_identity": DerivedConstHolder::Info.type === ConstHolder::HolderType ? "same" : "copy",
+        "info_type_name": DerivedConstHolder::Info.type.getName(),
+        "type_a_instanceof": TypeA instanceof SimpleType ? "yes" : "no",
+        "holder_type_instanceof": ConstHolder::HolderType instanceof SimpleType ? "yes" : "no",
+        "static_type_fulltype": StaticVarHolder::defaultType.fullType(),
+        "static_type_name": StaticVarHolder::defaultType.getName(),
+        "static_config_name": StaticVarHolder::config.name,
+        "static_config_value": StaticVarHolder::config.value.toString(),
+    };
+    string rv;
+    foreach hash<auto> i in (h.pairIterator()) {
+        rv += sprintf("%s=%s\n", i.key, i.value);
+    }
+    return rv;
+}
+}
+';
+    }
+
+    private string circularModuleCode() {
+        return '%modern
+
+module AOTConstCircMod {
+    version = "1.0";
+    desc = "AOT circular constant dependency module";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTConstCircMod {
+public const CircA = CircB + 1;
+public const CircB = CircA + 1;
+}
+';
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    private string compileModule(string qmod_path, string qm_path) {
+        return backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+    }
+
+    #! parses the "key=value" lines emitted by the module's verify() function
+    private hash<string, string> parseResults(string output) {
+        hash<string, string> rv;
+        foreach string line in (output.split("\n")) {
+            if (line.empty()) {
+                continue;
+            }
+            int pos = line.find("=");
+            assertTrue(pos > 0, sprintf("verify() line %y is a key=value pair", line));
+            rv{line.substr(0, pos)} = line.substr(pos + 1);
+        }
+        return rv;
+    }
+
+    #! writes the module + runner script and returns (src_dir, qmod_dir, script_path)
+    private hash<auto> setupModule(string tmp_dir) {
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        writeFile(src_dir + "/AOTConstInitMod.qm", moduleCode());
+        string script_path = tmp_dir + "/run.qr";
+        # "current_time_us" is read by the module's AOT-compiled verify(), while
+        # "script_current_time_us" is read from the interpreted script; the two
+        # reach the constant by different paths and must agree
+        writeFile(script_path, "%modern
+%requires AOTConstInitMod
+printf(\"%s\", AOTConstInitMod::verify());
+printf(\"script_current_time_us=%d\\n\",
+    (AOTConstInitMod::CurrentTime - 1970-01-01Z).durationMicroseconds());
+");
+
+        return {
+            "src_dir": src_dir,
+            "qmod_dir": qmod_dir,
+            "qmod_path": qmod_dir + "/AOTConstInitMod.qmod",
+            "script_path": script_path,
+        };
+    }
+
+    testAOTConstInit() {
+        TmpDir tmp("qore-aot-const-init-");
+        hash<auto> m = setupModule(tmp.path);
+
+        string compile_out = compileModule(m.qmod_path, m.src_dir + "/AOTConstInitMod.qm");
+        assertTrue(is_file(m.qmod_path), "compiled constant-initialization module: " + compile_out);
+
+        hash<string, string> src = parseResults(runModule(m.src_dir, m.script_path));
+        hash<string, string> aot = parseResults(runModule(m.qmod_dir, m.script_path));
+
+        foreach hash<auto> i in (ExpectedResults.pairIterator()) {
+            assertEq(i.value, src{i.key}, "source module: " + i.key);
+            assertEq(i.value, aot{i.key}, "AOT qmod: " + i.key);
+        }
+
+        # the AOT image must not add or drop any results
+        assertEq(src.keys(), aot.keys(), "AOT qmod reports the same constants as the source module");
+    }
+
+    #! the __const_init function generated for a runtime-dependent constant must run on load
+    testRuntimeConstantReinitializedOnLoad() {
+        TmpDir tmp("qore-aot-const-init-runtime-");
+        hash<auto> m = setupModule(tmp.path);
+
+        string compile_out = compileModule(m.qmod_path, m.src_dir + "/AOTConstInitMod.qm");
+        assertTrue(is_file(m.qmod_path), "compiled constant-initialization module: " + compile_out);
+
+        # taken after compilation: a constant frozen into the AOT image at compile
+        # time is necessarily older than this, one evaluated on load is not
+        int after_compile_us = (now_us() - 1970-01-01Z).durationMicroseconds();
+
+        hash<string, string> aot = parseResults(runModule(m.qmod_dir, m.script_path));
+        assertGe(after_compile_us, aot.script_current_time_us.toInt(),
+            "AOT qmod __const_init evaluates now_us() on load, not at compile time");
+
+        hash<string, string> src = parseResults(runModule(m.src_dir, m.script_path));
+        assertGe(after_compile_us, src.current_time_us.toInt(),
+            "source module evaluates now_us() on load");
+        assertGe(after_compile_us, src.script_current_time_us.toInt(),
+            "source module constant is current from the script as well");
+
+        # in the source module both read paths see the same evaluation
+        assertEq(src.current_time_us, src.script_current_time_us,
+            "source module: module code and script read the same constant value");
+    }
+
+    #! AOT-compiled code must observe the load-time value of a runtime-dependent constant
+    /** Regression test: IR lowering used to inline the parse-commit value of a constant
+        whose resolved value was a primitive (NT_INT, NT_DATE, ...), dropping the
+        RuntimeConstantRefNode and with it the constant's identity. For a constant with a
+        __const_init function that value is the *compile-time* one, so AOT-compiled
+        readers returned a frozen qcc-time value while interpreted readers correctly saw
+        what __const_init computed on load. Container and object constants were unaffected
+        because they always kept their identity.
+    */
+    testRuntimeConstantVisibleToAOTCode() {
+        TmpDir tmp("qore-aot-const-init-visible-");
+        hash<auto> m = setupModule(tmp.path);
+
+        string compile_out = compileModule(m.qmod_path, m.src_dir + "/AOTConstInitMod.qm");
+        assertTrue(is_file(m.qmod_path), "compiled constant-initialization module: " + compile_out);
+
+        int after_compile_us = (now_us() - 1970-01-01Z).durationMicroseconds();
+
+        hash<string, string> aot = parseResults(runModule(m.qmod_dir, m.script_path));
+        assertGe(after_compile_us, aot.current_time_us.toInt(),
+            "AOT-compiled module code sees the load-time constant value");
+        assertEq(aot.current_time_us, aot.script_current_time_us,
+            "AOT qmod: module code and script read the same constant value");
+    }
+
+    private string providerModuleCode() {
+        return '%modern
+
+module AOTConstInitProvMod {
+    version = "1.0";
+    desc = "AOT runtime-constant provider";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTConstInitProvMod {
+# getpid() is process-identifying, so a value frozen at qcc time is unmistakable
+public const ProvPid = getpid();
+
+public string sub readHere() {
+    return sprintf("provider=%d\n", ProvPid);
+}
+}
+';
+    }
+
+    private string consumerModuleCode() {
+        return '%modern
+%requires AOTConstInitProvMod
+
+module AOTConstInitConsMod {
+    version = "1.0";
+    desc = "AOT runtime-constant consumer";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTConstInitConsMod {
+public string sub readThere() {
+    return sprintf("consumer=%d\n", AOTConstInitProvMod::ProvPid);
+}
+}
+';
+    }
+
+    #! a constant deserialized from a compiled module must keep its identity for a later qcc
+    /** Regression test for the cross-module half of the inlining defect: an AOT-loaded
+        constant shell carries a pending-init-func flag, but has_init_expr was only ever
+        set by parseCommitRuntimeInit() during a source parse. A downstream qcc therefore
+        saw a plain valued constant and inlined it, freezing the value at *that* compile
+        rather than the provider's.
+    */
+    testRuntimeConstantAcrossModules() {
+        TmpDir tmp("qore-aot-const-init-xmod-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string prov_qm = src_dir + "/AOTConstInitProvMod.qm";
+        string cons_qm = src_dir + "/AOTConstInitConsMod.qm";
+        writeFile(prov_qm, providerModuleCode());
+        writeFile(cons_qm, consumerModuleCode());
+
+        string script_path = tmp_dir + "/run.qr";
+        writeFile(script_path, "%modern
+%requires AOTConstInitConsMod
+printf(\"%s\", AOTConstInitProvMod::readHere());
+printf(\"%s\", AOTConstInitConsMod::readThere());
+printf(\"script=%d\\nreal=%d\\n\", AOTConstInitProvMod::ProvPid, getpid());
+");
+
+        string prov_qmod = qmod_dir + "/AOTConstInitProvMod.qmod";
+        string compile_out = compileModule(prov_qmod, prov_qm);
+        assertTrue(is_file(prov_qmod), "compiled provider module: " + compile_out);
+
+        # the consumer is compiled in a separate qcc run, against the provider's AOT image
+        string cons_qmod = qmod_dir + "/AOTConstInitConsMod.qmod";
+        compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source "
+                "--output %s %s 2>&1",
+            libqore_dir, qmod_dir, qore_bin, cons_qmod, cons_qm));
+        assertTrue(is_file(cons_qmod), "compiled consumer module: " + compile_out);
+
+        # two runs: every reader must agree with that run's own pid
+        int previous_pid = 0;
+        foreach int run in (xrange(1, 2)) {
+            hash<string, string> r = parseResults(runModule(qmod_dir, script_path));
+            string tag = sprintf("run %d: ", run);
+            assertEq(r.real, r.provider, tag + "provider module code reads the live constant");
+            assertEq(r.real, r.consumer, tag + "separately compiled consumer reads the live constant");
+            assertEq(r.real, r.script, tag + "interpreted script reads the live constant");
+
+            int pid = r.real.toInt();
+            assertNeq(0, pid, tag + "pid is set");
+            if (previous_pid) {
+                assertNeq(previous_pid, pid, tag + "each run is a distinct process");
+            }
+            previous_pid = pid;
+        }
+    }
+
+    testCircularConstantDependency() {
+        TmpDir tmp("qore-aot-const-init-circular-");
+        string tmp_dir = tmp.path;
+        string qm_path = tmp_dir + "/AOTConstCircMod.qm";
+        string qmod_path = tmp_dir + "/AOTConstCircMod.qmod";
+        writeFile(qm_path, circularModuleCode());
+
+        string compile_out = compileModule(qmod_path, qm_path);
+        assertFalse(is_file(qmod_path), "circular constant dependency produces no qmod");
+        assertRegex("recursive constant reference", compile_out,
+            "circular constant dependency is reported: " + compile_out);
+    }
+}
