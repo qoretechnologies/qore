@@ -6296,8 +6296,8 @@ sub main() {
 %ifdef NO_JNI
     printf(\"no-jni\\n\");
 %else
-    ArrayList $l = new ArrayList();
-    $l.add(\"x\");
+    ArrayList l = new ArrayList();
+    l.add(\"x\");
     printf(\"ok\\n\");
 %endif
 }

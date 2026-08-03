@@ -7659,6 +7659,110 @@ static bool build_aot_compile_contract_provider_map(
     return true;
 }
 
+//! Adds the provider source of every hash-verified import to a script object's depfile.
+/** `--link-qo` validates each imported symbol's recorded signature/declaration/value/body-contract
+    hash against the hash the providing object publishes, so an import whose record carries any of
+    those hashes is a hard build dependency: if the provider's declaration changes, this object's
+    recorded hash goes stale and the aggregate link fails with "qo-link hash mismatch" naming a
+    consumer the build had no reason to rebuild.
+
+    The parse-time dependency sink only records declarations whose VALUES the target folds
+    (constants, enum members), on the assumption that every other cross-unit reference re-resolves by
+    name at load time.  That holds for the runtime, but not for these link-time hash checks — the
+    consumer object bakes the provider's hash in.  Recording the provider source closes that hole; a
+    following `--depfile-compile-contract-stamps` pass narrows each entry to the provider's
+    compile-contract stamp so unrelated provider edits still do not rebuild this object.
+
+    A provider source this object also defines into is skipped: an object cannot depend on itself.
+
+    @param object_path the generated `.qo` whose symbol index names the providers
+    @param depfile the Make-format dependency file to extend; a missing file is a no-op
+    @param depfile_target the target written before the colon when the file is rewritten
+    @param error receives a description when the depfile cannot be read back or rewritten
+
+    @return true on success, false with @a error set on failure */
+static bool add_aot_import_provider_depfile_inputs(
+        const std::string& object_path, const std::string& depfile,
+        const std::string& depfile_target, std::string& error) {
+    if (depfile.empty() || !is_file(depfile)) {
+        return true;
+    }
+
+    QOLinkInputInfo consumer;
+    if (!collect_qo_link_input(object_path.c_str(), consumer, error)) {
+        return false;
+    }
+
+    std::set<std::string> owned_sources;
+    for (size_t i = 0; i < consumer.index.defined.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT import-provider owned-source collection", error)) {
+            return false;
+        }
+        const std::string& source = consumer.index.defined[i].source_file;
+        if (!source.empty() && source.front() != '<') {
+            owned_sources.insert(canonical_existing_path(source));
+        }
+    }
+
+    std::set<std::string> provider_sources;
+    for (size_t i = 0; i < consumer.index.imported.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT import-provider dependency collection", error)) {
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = consumer.index.imported[i];
+        // only hash-verified imports need the edge: an import with no recorded hash is resolved by
+        // name at load time and cannot go stale
+        if (rec.signature_hash.empty() && rec.declaration_hash.empty()
+                && rec.value_hash.empty() && rec.body_contract_hash.empty()) {
+            continue;
+        }
+        const std::string& provider = rec.provider_source_file;
+        if (provider.empty() || provider.front() == '<') {
+            continue;
+        }
+        std::string canon = canonical_existing_path(provider);
+        if (!owned_sources.count(canon)) {
+            provider_sources.insert(std::move(canon));
+        }
+    }
+    if (provider_sources.empty()) {
+        return true;
+    }
+
+    std::vector<std::string> deps;
+    read_make_depfile_inputs(depfile, deps);
+    std::set<std::string> present;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT import-provider depfile scan", error)) {
+            return false;
+        }
+        present.insert(canonical_existing_path(deps[i]));
+    }
+    bool changed = false;
+    size_t provider_i = 0;
+    for (const std::string& provider : provider_sources) {
+        if (!qo_link_check_cancel(provider_i++,
+                "AOT import-provider depfile merge", error)) {
+            return false;
+        }
+        if (present.insert(provider).second) {
+            deps.push_back(provider);
+            changed = true;
+        }
+    }
+    if (!changed) {
+        return true;
+    }
+    std::sort(deps.begin(), deps.end());
+    if (!write_depfile_list(depfile.c_str(), depfile_target, deps)) {
+        error = "cannot add AOT import providers to depfile '" + depfile + "'";
+        return false;
+    }
+    return true;
+}
+
 static bool rewrite_aot_compile_contract_depfile(
         const std::string& object_path,
         const std::vector<std::string>& library_dirs,
@@ -9030,6 +9134,12 @@ int main(int argc, char** argv) {
                 compile_contract_stamp_path =
                     compile_contract_stamp.c_str();
 
+                if (!add_aot_import_provider_depfile_inputs(object, depfile,
+                        object + ".stamp", error)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
                 if (!rewrite_aot_compile_contract_depfile(object,
                         {batch_output_dir}, depfile, object + ".stamp",
                         error, &batch_contract_providers)) {
@@ -9480,6 +9590,11 @@ int main(int argc, char** argv) {
             // any `%include`d file changes — not just the target itself.
             if (!rc && depfile_path && !write_depfile_list(depfile_path,
                     qcc_depfile_target(output), parsed_files)) {
+                rc = 1;
+            } else if (!rc && depfile_path
+                    && !add_aot_import_provider_depfile_inputs(output,
+                        depfile_path, qcc_depfile_target(output), error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
             } else if (!rc && depfile_path
                     && !rewrite_aot_compile_contract_depfile(output,

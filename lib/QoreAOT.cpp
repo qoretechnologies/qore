@@ -24137,6 +24137,38 @@ static std::string fileBasenameKeepExt(const std::string& path) {
     return base;
 }
 
+//! Applies the extension-based \c %%modern default to an AOT compile's parse options.
+/** The interpreter auto-enables \c %%modern in QoreProgram::parseFile() for every extension except a
+    bare \c .q, so the same source is modern when run and legacy when compiled: the AOT compiler reads
+    the source itself and parses it with parsePending(), which never passes through that hook.  A
+    \c .qc or \c .qr file without an explicit \c %%modern directive therefore failed to compile with
+    "declared without '$' prefix" while running fine — and AOT requires \c %%modern in the first place.
+
+    Applied per compile unit; a batch keeps legacy semantics if ANY of its sources is a \c .q file,
+    since a batch shares one Program and cannot parse half its sources each way.
+
+    @param po the parse options to extend
+    @param files the compile unit's target sources */
+static void applyAOTModernSourceDefault(QoreParseOptions& po,
+        const std::vector<std::string>& files) {
+    if (files.empty()) {
+        return;
+    }
+    size_t i = 0;
+    for (const std::string& f : files) {
+        // A cancelled scan leaves the default unset; the caller aborts the compile on its own
+        // cancellation check immediately afterwards, so the parse options are never used.
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT modern-source default scan")) {
+            return;
+        }
+        ++i;
+        if (!qore_program_private::should_auto_enable_modern(f.c_str())) {
+            return;
+        }
+    }
+    po |= QoreParseOptions(PO_MODERN);
+}
+
 //! Source identity for script-context batch `.qo` artifacts.
 //!
 //! Batch mode can compile unrelated directories into one output dir and
@@ -26947,6 +26979,7 @@ bool QoreAOT::compileScriptFilesBatch(
     input_done = std::chrono::steady_clock::now();
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
+    applyAOTModernSourceDefault(po, target_files);
     // Phase 4 slice 11f: apply `--parse-option=NAME` additions
     // before QoreProgram construction so method-domain checks
     // (e.g. PO_ALLOW_INJECTION-gated `Program::loadApplyTo*`)
@@ -27960,6 +27993,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     QoreParseOptions po = parse_options;
+    applyAOTModernSourceDefault(po, {target_canon});
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -28008,7 +28042,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     std::unordered_set<std::string> parsed_decl_files_canon;
     parsed_decl_files_canon.insert(target_canon);
     {
-        QoreParseOptions probe_po = parse_options;
+        // same options as the real parse below (including the extension-based `%modern` default), so
+        // the probe's declared-file set matches what the real parse will declare
+        QoreParseOptions probe_po = po;
         ExceptionSink probe_xsink;
         ExceptionSink probe_wsink;
         QoreProgramHelper probe_pgm(probe_po, probe_xsink);

@@ -341,12 +341,35 @@ accept_current_artifact() {
     return 0
 }
 
+#! Reads the owner record published at the public lock path.
+#  Prints "PID TOKEN" on success; fails silently when the lock is gone, so a
+#  waiter that loses the race between an existence test and the read simply
+#  retries instead of emitting a shell redirection diagnostic.
+read_output_lock_owner() {
+    _lock_line=
+    # `2>/dev/null` must precede the input redirection: redirections apply left
+    # to right, so with the input first the shell reports a vanished lock on the
+    # inherited stderr before the suppression takes effect — which is exactly
+    # the "No such file or directory" build diagnostic this replaces.
+    if ! IFS= read -r _lock_line 2>/dev/null < "$1"; then
+        return 1
+    fi
+    if [ -z "$_lock_line" ]; then
+        return 1
+    fi
+    printf '%s\n' "$_lock_line"
+}
+
 with_output_lock() (
-    output_lock_dir="$output.lock"
-    output_lock_owned=false
+    output_lock="$output.lock"
+    output_lock_record=
+    output_lock_token=
     selected_preload_file=
     manifest_input_file=
 
+    # Release only the generation this process acquired: a lock whose record no
+    # longer names our token belongs to a successor, and removing it would
+    # unlock an artifact another builder is actively publishing.
     cleanup_output_lock() {
         if [ -n "$selected_preload_file" ]; then
             rm -f "$selected_preload_file"
@@ -354,50 +377,97 @@ with_output_lock() (
         if [ -n "$manifest_input_file" ]; then
             rm -f "$manifest_input_file"
         fi
-        if [ "$output_lock_owned" = true ]; then
-            rm -f "$output_lock_dir/pid"
-            rmdir "$output_lock_dir" 2>/dev/null || true
+        if [ -n "$output_lock_record" ]; then
+            rm -f "$output_lock_record"
+        fi
+        if [ -n "$output_lock_token" ]; then
+            held=$(read_output_lock_owner "$output_lock") || held=
+            if [ "$held" = "$$ $output_lock_token" ]; then
+                rm -f "$output_lock"
+            fi
         fi
     }
     trap cleanup_output_lock EXIT
     trap 'exit 1' HUP INT TERM
 
-    # Older wrappers used flock(1), which left an empty regular file at this
-    # path. Migrate it before using the portable atomic-directory lock.
-    if [ -f "$output_lock_dir" ] && [ ! -d "$output_lock_dir" ]; then
-        rm -f "$output_lock_dir"
-    fi
-    while ! mkdir "$output_lock_dir" 2>/dev/null; do
-        if [ -r "$output_lock_dir/pid" ]; then
-            owner=
-            IFS= read -r owner < "$output_lock_dir/pid" || true
-            case "$owner" in
-                *[!0-9]*|'')
-                    rm -f "$output_lock_dir/pid"
-                    rmdir "$output_lock_dir" 2>/dev/null || true
-                    continue
-                    ;;
-                *)
-                    if ! kill -0 "$owner" 2>/dev/null; then
-                        rm -f "$output_lock_dir/pid"
-                        rmdir "$output_lock_dir" 2>/dev/null || true
-                        continue
-                    fi
-                    ;;
-            esac
-        else
-            # Allow an owner that just created the directory to publish its
-            # pid before treating an ownerless directory as interrupted work.
-            sleep 1
-            if [ ! -r "$output_lock_dir/pid" ]; then
-                rmdir "$output_lock_dir" 2>/dev/null || true
+    # Reclaim a lock shape this protocol never publishes.  Two older ones exist:
+    # flock(1) left an EMPTY regular file here, and the previous protocol
+    # published a DIRECTORY whose `pid` file was written after the directory
+    # existed — a window in which a waiter could see an ownerless lock, and
+    # whose path name carried no generation identity.  Neither is removed by a
+    # plain `rm -f` of a live-lock path, and leaving them would spin the acquire
+    # loop forever, since `ln` keeps failing while no owner record can be read.
+    #
+    # Both tests are shape tests, never "the record was unreadable": a failed
+    # read most often means the lock was released a moment ago, and by the time
+    # this runs a successor may already hold it.  Removing on that signal would
+    # delete a live successor's lock — exactly the ABA this protocol exists to
+    # prevent.  A live lock is a non-empty regular file, so neither branch can
+    # match one.
+    reclaim_foreign_output_lock() {
+        if [ -d "$output_lock" ]; then
+            rm -f "$output_lock/pid"
+            rmdir "$output_lock" 2>/dev/null || true
+        elif [ -e "$output_lock" ] && [ ! -s "$output_lock" ]; then
+            rm -f "$output_lock"
+        fi
+    }
+
+    # The owner record is written in full BEFORE it is published, and published
+    # with a single atomic link(2): there is no state in which the public lock
+    # exists without a complete owner record.  The record names a generation
+    # token as well as a pid, so stale-owner cleanup can tell a dead owner's
+    # lock from a live successor that reused the same path (the ABA case).
+    output_lock_record=$(mktemp "$output.lock.XXXXXX")
+    output_lock_token=${output_lock_record##*.}
+    printf '%s %s\n' "$$" "$output_lock_token" > "$output_lock_record"
+    while :; do
+        # `ln FILE DIR` links INTO the directory rather than failing, so a
+        # leftover directory lock would let every waiter "acquire" a distinct
+        # name inside it and enter the critical section together.  Clear that
+        # shape first; this protocol never publishes a directory here, so
+        # removing one is unconditionally safe.
+        if [ -d "$output_lock" ]; then
+            rm -f "$output_lock/pid"
+            rmdir "$output_lock" 2>/dev/null || true
+        fi
+        if ln "$output_lock_record" "$output_lock" 2>/dev/null; then
+            break
+        fi
+        if ! owner=$(read_output_lock_owner "$output_lock"); then
+            # Either the owner released between the failed link and this read —
+            # retry immediately, the next link wins — or the lock is one of the
+            # older shapes, which reclaim recognises by shape rather than by the
+            # failed read.
+            reclaim_foreign_output_lock
+            continue
+        fi
+        owner_pid=${owner%% *}
+        case $owner_pid in
+            ''|*[!0-9]*)
+                # A malformed record cannot be attributed to a live builder;
+                # drop it only if it is still the record we inspected.
+                if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
+                    rm -f "$output_lock"
+                fi
                 continue
+                ;;
+        esac
+        if ! kill -0 "$owner_pid" 2>/dev/null; then
+            # Compare-and-remove: re-read the record and drop the lock only
+            # while it still names the dead generation we inspected.  A new
+            # owner has a different token, so its lock is left alone.
+            if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
+                rm -f "$output_lock"
             fi
+            continue
         fi
         sleep 1
     done
-    output_lock_owned=true
-    printf '%s\n' "$$" > "$output_lock_dir/pid"
+    # The public link keeps the inode alive; drop the private name so an
+    # interrupted builder cannot leave a second reference behind.
+    rm -f "$output_lock_record"
+    output_lock_record=
 
     # Another waiter may have published this exact artifact while this
     # process was blocked. Validate inside the lock before selecting inputs.

@@ -1199,6 +1199,41 @@ static std::string describeUnresolvedAOTSymbol(const char* what, const char* sym
     return msg;
 }
 
+//! Records why an expression slot could not be resolved, naming the slot that failed
+/** The slot loop reports failure only through the function-wide unsupported flag, so without this the
+    caller sees "unsupported AOT slot metadata" naming the enclosing function and has no way to tell
+    which slot -- of possibly hundreds -- could not be resolved, or why.
+
+    The first failure in a function wins: it is the one that made the function unregisterable, and later
+    slots are skipped once the flag is set, so their diagnostics would be less specific.
+
+    @param slot the expression slot ordinal
+    @param kind_name the slot's expression kind name, e.g. \c "STATIC_METHOD_CALL"
+    @param detail why the slot could not be resolved */
+static void setAOTExprSlotResolveError(int slot, const char* kind_name, const std::string& detail) {
+    if (!aot_slot_resolve_error.empty()) {
+        return;
+    }
+    std::string msg = "expr slot " + std::to_string(slot);
+    if (kind_name && *kind_name) {
+        msg += " (";
+        msg += kind_name;
+        msg += ")";
+    }
+    msg += ": ";
+    msg += detail;
+    aot_slot_resolve_error = std::move(msg);
+}
+
+//! Renders a serialized static-call target as \c Class::method() for diagnostics
+static std::string describeAOTStaticCallTarget(const char* class_path, const char* method_name) {
+    std::string desc = class_path && *class_path ? class_path : "<unknown class>";
+    desc += "::";
+    desc += method_name && *method_name ? method_name : "<unknown method>";
+    desc += "()";
+    return desc;
+}
+
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
     if (!pgm) {
@@ -3708,6 +3743,11 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     };
 
+    // Slot-resolution detail is only consumed when a function is rejected; a slot that resolves to 0
+    // legitimately (CLOSURE_CREATE) leaves it set, so a stale message from an earlier, successfully
+    // registered function would otherwise be reported against this one.  Start each function clean.
+    aot_slot_resolve_error.clear();
+
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
     //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
@@ -3950,6 +3990,11 @@ static QoreAOTContext* buildContextFromSlotMap(
             // If this is a param and we have LValuePath instructions, mark unsupported
             // to prevent crash from null locals in LValuePath navigation
             if ((lflags & 0x01) && num_lv_path_insts > 0) {
+                if (aot_slot_resolve_error.empty()) {
+                    aot_slot_resolve_error = "parameter slot " + std::to_string(i) + " ('"
+                        + (lname && *lname ? lname : "<unnamed>")
+                        + "') could not be bound to a local variable in the parsed signature";
+                }
                 has_unsupported = true;
             }
         }
@@ -4039,6 +4084,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 fprintf(stderr, "[aot-slot-reg] '%s': unsupported expr kind byte %u (%s) at slot %d\n",
                     name, kind_byte, expr_kind_name, i);
             }
+            setAOTExprSlotResolveError(i, expr_kind_name,
+                "unsupported expression kind byte " + std::to_string(kind_byte)
+                    + "; the artifact was written by a newer Qore than the one reading it");
             has_unsupported = true;
             break;
         }
@@ -4715,6 +4763,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading static method arg %d for '%s::%s': %s\n",
                                 j, ref1 ? ref1 : "", ref2 ? ref2 : "", arg_err.c_str());
+                            setAOTExprSlotResolveError(i, expr_kind_name,
+                                "cannot read argument " + std::to_string(j) + " of the call to '"
+                                    + describeAOTStaticCallTarget(ref1, method_name) + "': " + arg_err);
                             arg.discard(nullptr);
                             call_args->push(QoreValue(), nullptr);
                             has_unsupported = true;
@@ -4762,6 +4813,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                                             "resolve receiver type '%s': %s\n", name, i, ref3,
                                             type_error.c_str());
                                     }
+                                    setAOTExprSlotResolveError(i, expr_kind_name,
+                                        "cannot resolve receiver type '" + std::string(ref3)
+                                            + "' of the call to '"
+                                            + describeAOTStaticCallTarget(ref1, method_name) + "'"
+                                            + (type_error.empty() ? "" : ": " + type_error));
                                     if (call_args) {
                                         call_args->deref(nullptr);
                                     }
@@ -4830,6 +4886,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                             }
                             if (!applyAOTExplicitTypeArgs(*call_node, method_ref,
                                     pgm, uvb ? uvb->getUserSignature() : nullptr)) {
+                                setAOTExprSlotResolveError(i, expr_kind_name,
+                                    "cannot apply the explicit type arguments recorded for the call to '"
+                                        + describeAOTStaticCallTarget(ref1, method_name) + "'");
                                 delete call_node;
                                 has_unsupported = true;
                                 continue;
@@ -4881,6 +4940,28 @@ static QoreAOTContext* buildContextFromSlotMap(
                         name, i, ref1 ? ref1 : "", method_name ? method_name : "",
                         method_ref.sig_text ? method_ref.sig_text : "",
                         method_ref.arg_type_sig ? method_ref.arg_type_sig : "");
+                }
+                // Name the call that could not be bound.  An artifact only references call targets that
+                // resolved when it was written, so one that cannot be resolved now means the declaration
+                // is missing from this Program: in split AOT builds a sibling `.qo` absent from the `-L`
+                // preload set, or one older than the source that referenced it; otherwise a missing or
+                // stale module.  None of that is recoverable from the enclosing function's name alone.
+                {
+                    std::string detail = "cannot resolve the call to '"
+                        + describeAOTStaticCallTarget(ref1, method_name) + "': ";
+                    if (qc) {
+                        detail += "class '";
+                        detail += ref1 ? ref1 : "";
+                        detail += "' was found but has no such method";
+                    } else {
+                        detail += "class '";
+                        detail += ref1 && *ref1 ? ref1 : "<unknown>";
+                        detail += "' is not declared in this Program";
+                    }
+                    detail += "; the artifact was compiled against a build where it existed, so the "
+                        "sibling object or module providing it is missing here or is older than the one "
+                        "compiled against";
+                    setAOTExprSlotResolveError(i, expr_kind_name, detail);
                 }
                 if (call_args) {
                     call_args->deref(nullptr);

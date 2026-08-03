@@ -49,6 +49,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded namespace constant", \testNamespaceConstant());
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
+        addTestCase("typed global import is a build dependency", \testTypedGlobalImportDep());
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
         addTestCase("module depfiles use deterministic dependency forms",
             \testModuleDependencyForms());
@@ -150,6 +151,93 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "a pure-type reference is not recorded as a build dependency: " + dep);
         assertTrue(dep.find("use_type.qc") != -1,
             "depfile still records the target's own source: " + dep);
+    }
+
+    # A typed global is the one cross-unit reference that IS hash-verified at link
+    # time: the consumer bakes the provider's declaration hash into its own symbol
+    # index, and `--link-qo` compares the two.  Unlike a call or an inherited
+    # method, a stale consumer therefore does not silently pick up the new
+    # declaration — it fails the aggregate link with "qo-link hash mismatch"
+    # naming an object the build had no recorded reason to rebuild.  The provider
+    # source (or its compile-contract stamp) must be in the consumer's depfile.
+    testTypedGlobalImportDep() {
+        TmpDir tmp = initDirs();
+        string thing = tmp_dir + "/gthing.qc";
+        string prov = tmp_dir + "/gprov.qr";
+        string cons = tmp_dir + "/gcons.qc";
+        write(thing, "%modern\npublic class GThing { public { int calls = 0; } }\n");
+        # the provider is a main script, as a program entry point that owns the
+        # process-wide typed globals is
+        write(prov, "%modern\nour GThing GSM;\nint sub main() { GSM = new GThing(); return GSM.calls; }\n");
+        write(cons, "%modern\nclass GCons { static int f() { return GSM.calls; } }\n");
+
+        string thing_out = run(sprintf("%s %s -c -L %s"
+            + " --compile-contract-stamp=%s/gthing.qo.compile-contract.stamp -o %s/gthing.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, lib_dir, thing));
+        assertTrue(is_file(lib_dir + "/gthing.qo"), "compiled the class sibling: " + thing_out);
+
+        string prov_stamp = lib_dir + "/gprov.qo.compile-contract.stamp";
+        string prov_out = run(sprintf("%s %s -c -L %s"
+            + " --compile-contract-stamp=%s -o %s/gprov.qo %s",
+            env, qcc_bin, lib_dir, prov_stamp, lib_dir, prov));
+        assertTrue(is_file(lib_dir + "/gprov.qo"), "compiled the global provider: " + prov_out);
+        assertTrue(is_file(prov_stamp), "emitted the provider compile-contract stamp: " + prov_out);
+        string first_stamp = File::readTextFile(prov_stamp);
+
+        string cons_dep = lib_dir + "/gcons.qo.d";
+        string cons_out = run(sprintf("%s %s -c -L %s --depfile=%s -o %s/gcons.qo %s",
+            env, qcc_bin, lib_dir, cons_dep, lib_dir, cons));
+        assertTrue(is_file(lib_dir + "/gcons.qo"), "compiled the global consumer: " + cons_out);
+        # THE REGRESSION: without this edge nothing rebuilds gcons.qo when the
+        # declaration of GSM changes, and the aggregate link fails
+        assertTrue(File::readTextFile(cons_dep).find("gprov.qr") != -1,
+            "depfile records the source providing the typed global: " + File::readTextFile(cons_dep));
+
+        # with contract stamps the edge narrows to the provider's API contract, so
+        # unrelated edits to the provider still do not rebuild the consumer
+        string cons_stamp_dep = lib_dir + "/gcons.stamps.d";
+        run(sprintf("%s %s -c -L %s --depfile=%s"
+            + " --depfile-compile-contract-stamps -o %s/gcons.qo %s",
+            env, qcc_bin, lib_dir, cons_stamp_dep, lib_dir, cons));
+        string stamp_dep = File::readTextFile(cons_stamp_dep);
+        assertTrue(stamp_dep.find("gprov.qo.compile-contract.stamp") != -1,
+            "the dependency narrows to the provider's compile-contract stamp: " + stamp_dep);
+
+        # link cleanly before the provider changes
+        string link_ok = run(sprintf("%s %s --link-qo --aggregate-symbol=GAPP -o %s/gagg.qo"
+            + " %s/gthing.qo %s/gprov.qo %s/gcons.qo",
+            env, qcc_bin, lib_dir, lib_dir, lib_dir, lib_dir));
+        assertEq(-1, link_ok.find("hash mismatch"),
+            "the aggregate links with a current consumer: " + link_ok);
+
+        # change the declaration of the typed global and rebuild ONLY the provider
+        write(prov, "%modern\nour *GThing GSM;\nint sub main() { GSM = new GThing(); return GSM.calls; }\n");
+        string prov_out2 = run(sprintf("%s %s -c -L %s"
+            + " --compile-contract-stamp=%s -o %s/gprov.qo %s",
+            env, qcc_bin, lib_dir, prov_stamp, lib_dir, prov));
+        assertTrue(is_file(lib_dir + "/gprov.qo"), "rebuilt the global provider: " + prov_out2);
+        assertNeq(first_stamp, File::readTextFile(prov_stamp),
+            "the provider's compile-contract stamp changes with the declaration, so the recorded "
+            "dependency fires");
+
+        # a retained consumer now carries the old hash: this is the failure the
+        # dependency edge prevents
+        string link_stale = run(sprintf("%s %s --link-qo --aggregate-symbol=GAPP -o %s/gagg.qo"
+            + " %s/gthing.qo %s/gprov.qo %s/gcons.qo",
+            env, qcc_bin, lib_dir, lib_dir, lib_dir, lib_dir));
+        assertTrue(link_stale.find("hash mismatch") != -1,
+            "a retained consumer fails the aggregate link after the provider changes: " + link_stale);
+
+        # rebuilding the consumer — what the recorded dependency makes the build do
+        # — restores the link
+        string cons_out2 = run(sprintf("%s %s -c -L %s --depfile=%s -o %s/gcons.qo %s",
+            env, qcc_bin, lib_dir, cons_dep, lib_dir, cons));
+        assertTrue(is_file(lib_dir + "/gcons.qo"), "rebuilt the global consumer: " + cons_out2);
+        string link_fixed = run(sprintf("%s %s --link-qo --aggregate-symbol=GAPP -o %s/gagg.qo"
+            + " %s/gthing.qo %s/gprov.qo %s/gcons.qo",
+            env, qcc_bin, lib_dir, lib_dir, lib_dir, lib_dir));
+        assertEq(-1, link_fixed.find("hash mismatch"),
+            "rebuilding the consumer restores the aggregate link: " + link_fixed);
     }
 
     testBatchDepfileDir() {

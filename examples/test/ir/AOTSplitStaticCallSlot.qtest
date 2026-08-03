@@ -1,0 +1,334 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTSplitStaticCallSlotTest
+
+# Regression test for source-stripped split AOT (`qcc -c --strip-source -L <dir>`)
+# where one file's static method is only reachable through a static call into a
+# class declared in ANOTHER file.
+#
+# Shape under test (mirrors Qorus' QorusMapManagerBase/GroupRuntimeContext pair):
+#
+#   grc.qc    class GroupRuntimeContext { static OmqMap hostOmqMap() { return host_map; } }
+#   base.qc   class MapManagerBase      { static OmqMap hostOmqMap() { return GroupRuntimeContext::hostOmqMap(); } }
+#   mgr.qc    class MapManager inherits MapManagerBase {
+#                 static Meta queues = new Meta(hostOmqMap());     # class static initializer
+#                 ... <SlaMapEventInfo>{"part_period": RetentionPeriod::monthStart(created)} ...
+#             }
+#
+# `base.qc`'s `.qo` records the call to `GroupRuntimeContext::hostOmqMap()` as a
+# STATIC_METHOD_CALL expression slot.  Compiling `mgr.qc` per-source evaluates the
+# derived class's static initializers at parse commit, which calls the inherited
+# `hostOmqMap()` and therefore materializes `base.qo`'s source-stripped IR — so the
+# recorded call must re-resolve against the preloaded siblings.
+#
+# When it cannot re-resolve (the providing sibling `.qo` is missing from the `-L`
+# preload set, or is older than the source that referenced it), registration fails.
+# That failure used to surface as a bare
+#
+#   AOT slot map registration failed for 'MapManagerBase::_static_hostOmqMap()':
+#   unsupported AOT slot metadata; source fallback is disabled
+#
+# which names only the enclosing function and gives no hint that the real cause is
+# an unresolvable call into a different file.  The error must name the call.
+class AOTSplitStaticCallSlotTest inherits QUnit::Test {
+    public {
+        # the fixed event timestamp main() records, and the month start the nested
+        # static call must derive from it
+        const EventDate = 2026-08-03T14:25:36.123456;
+        const ExpectedPartPeriod = "2026-08-01";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTSplitStaticCallSlotTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a cross-file static call slot re-resolves in a per-source split AOT build",
+            \testCrossFileStaticCallSlotResolves());
+        addTestCase("a missing sibling names the static call that could not be resolved",
+            \testMissingSiblingNamesTheCall());
+        addTestCase("a stale sibling names the method that no longer exists",
+            \testStaleSiblingNamesTheMethod());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+    }
+
+    #! the metadata map every tier's accessor hands back
+    private string omqMapCode() {
+        return "%modern
+
+public namespace OMQ {
+public class OmqMap {
+    public {
+        string tier = \"host\";
+    }
+}
+}
+";
+    }
+
+    #! the class that owns the host-tier map; \a with_accessor drops the static
+    #! method so the caller's `.qo` can be tested against a stale sibling
+    private string grcCode(bool with_accessor = True) {
+        string accessor = with_accessor
+            ? "
+    static OmqMap hostOmqMap() {
+        return host_map;
+    }
+"
+            : "";
+        return "%modern
+
+public namespace OMQ {
+public class GroupRuntimeContext {
+    public {
+        static OmqMap host_map();
+    }
+" + accessor + "}
+}
+";
+    }
+
+    #! the base class whose static method calls into GroupRuntimeContext: this is
+    #! the STATIC_METHOD_CALL expression slot the consumer must re-resolve
+    private string baseCode() {
+        return "%modern
+
+public namespace OMQ {
+public class MapManagerBase {
+    static OmqMap hostOmqMap() {
+        return GroupRuntimeContext::hostOmqMap();
+    }
+}
+}
+";
+    }
+
+    #! the unrelated class the consumer's typed hash literal calls into
+    private string utilCode() {
+        return "%modern
+
+public namespace OMQ {
+public class RetentionPeriod {
+    static date monthStart(date d) {
+        return date(sprintf(\"%04d-%02d-01\", get_years(d), get_months(d)));
+    }
+}
+}
+";
+    }
+
+    #! the consumer: class static initializers call the inherited static method, and
+    #! a typed hash literal with optional date fields nests a static call
+    private string mgrCode() {
+        return "%modern
+
+public namespace OMQ {
+public hashdecl SlaMapEventInfo {
+    *int sla_eventid;
+    int slaid;
+    *date created;
+    *date part_period;
+    string producer;
+}
+
+public class Meta {
+    public {
+        OmqMap m;
+    }
+    constructor(OmqMap m) {
+        self.m = m;
+    }
+}
+
+public class MapManager inherits MapManagerBase {
+    public {
+        static Meta queues = new Meta(hostOmqMap());
+        static Meta classes = new Meta(hostOmqMap());
+    }
+
+    private {
+        list<hash<SlaMapEventInfo>> slaq();
+    }
+
+    list<hash<SlaMapEventInfo>> getEvents() {
+        return slaq;
+    }
+
+    postSlaEvent(int slaid, string producer, date created) {
+        slaq += <SlaMapEventInfo>{
+            \"sla_eventid\": slaid,
+            \"slaid\": slaid,
+            \"created\": created,
+            \"part_period\": RetentionPeriod::monthStart(created),
+            \"producer\": producer,
+        };
+    }
+}
+}
+";
+    }
+
+    private string mainCode() {
+        return sprintf("%%modern
+
+int sub main() {
+    OMQ::MapManager mgr();
+    mgr.postSlaEvent(7, \"producer\", %s);
+    list<hash<OMQ::SlaMapEventInfo>> l = mgr.getEvents();
+    printf(\"%%d|%%s|%%s|%%s\\n\", l.size(), l[0].producer,
+        l[0].part_period.format(\"YYYY-MM-DD\"), OMQ::MapManager::queues.m.tier);
+    return 0;
+}
+", EventDate.format("YYYY-MM-DDTHH:mm:SS.xx"));
+    }
+
+    #! writes the five sources into \a dir and returns their paths by short name
+    private hash<string, string> writeSources(string dir, bool grc_with_accessor = True) {
+        hash<string, string> paths = {
+            "omqmap": dir + "/omqmap.qc",
+            "grc": dir + "/grc.qc",
+            "base": dir + "/base.qc",
+            "util": dir + "/util.qc",
+            "mgr": dir + "/mgr.qc",
+            "main": dir + "/main.qr",
+        };
+        write(paths.omqmap, omqMapCode());
+        write(paths.grc, grcCode(grc_with_accessor));
+        write(paths.base, baseCode());
+        write(paths.util, utilCode());
+        write(paths.mgr, mgrCode());
+        write(paths.main, mainCode());
+        return paths;
+    }
+
+    #! batch-compiles the provider sources into \a lib_dir (one shared parse cycle)
+    private string compileProviders(string lib_dir, hash<string, string> paths) {
+        return run(sprintf("%s %s -c --strip-source -O3 --output-dir=%s %s %s %s %s",
+            env, qcc_bin, lib_dir, paths.omqmap, paths.grc, paths.base, paths.util));
+    }
+
+    #! compiles one source on its own against the sibling `.qo`s in \a lib_dir
+    private string compileSingle(string lib_dir, string src, string out) {
+        return run(sprintf("%s %s -c --strip-source -O3 -L %s -o %s %s",
+            env, qcc_bin, lib_dir, out, src));
+    }
+
+    testCrossFileStaticCallSlotResolves() {
+        TmpDir tmp("qore-aot-split-static-call-slot-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+        hash<string, string> paths = writeSources(tmp.path);
+
+        string providers_out = compileProviders(lib_dir, paths);
+        assertEq(4, glob(lib_dir + "/*.qo").size(),
+            "compiled one object per provider source: " + providers_out);
+
+        # THE REGRESSION: the consumer's class static initializers call the inherited
+        # MapManagerBase::hostOmqMap() at parse commit, materializing base.qo's
+        # source-stripped IR; its recorded call to GroupRuntimeContext::hostOmqMap()
+        # must re-resolve against the preloaded siblings.  The nested static call in
+        # the typed hash literal must not disturb that.
+        string mgr_out = compileSingle(lib_dir, paths.mgr, lib_dir + "/mgr.qo");
+        assertEq(-1, mgr_out.find("unsupported AOT slot metadata"),
+            "per-source compile of the consumer: " + mgr_out);
+        assertTrue(is_file(lib_dir + "/mgr.qo"), "compiled the consumer: " + mgr_out);
+
+        string main_out = compileSingle(lib_dir, paths.main, lib_dir + "/main.qo");
+        assertTrue(is_file(lib_dir + "/main.qo"), "compiled the entry point: " + main_out);
+
+        # link the per-source objects and run: the static initializers and the nested
+        # static call must produce the same values the interpreter would
+        string app = tmp.path + "/app";
+        string link_out = run(sprintf("%s %s -o %s -e main %s/*.qo",
+            env, qcc_bin, app, lib_dir));
+        assertTrue(is_file(app), "linked the AOT executable: " + link_out);
+
+        string value_out = run(sprintf("%s %s -b", env, app));
+        assertEq(sprintf("1|producer|%s|host\n", ExpectedPartPeriod), value_out,
+            "linked AOT executable reproduces the interpreted values: " + value_out);
+    }
+
+    testMissingSiblingNamesTheCall() {
+        TmpDir tmp("qore-aot-split-static-call-slot-missing-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+        hash<string, string> paths = writeSources(tmp.path);
+
+        string providers_out = compileProviders(lib_dir, paths);
+        assertEq(4, glob(lib_dir + "/*.qo").size(),
+            "compiled one object per provider source: " + providers_out);
+
+        # drop the object declaring GroupRuntimeContext, as an out-of-order or
+        # incomplete build would: base.qo's recorded static call now has no receiver
+        list<string> grc_objs = glob(lib_dir + "/*grc*.qo");
+        assertEq(1, grc_objs.size(), sprintf("found the GroupRuntimeContext object: %y", grc_objs));
+        unlink(grc_objs[0]);
+
+        string mgr_out = compileSingle(lib_dir, paths.mgr, lib_dir + "/mgr.qo");
+        assertTrue(mgr_out.find("unsupported AOT slot metadata") != -1,
+            "an unresolvable static call slot fails the compile: " + mgr_out);
+        # the diagnostic must name the call, not just the enclosing function
+        assertTrue(mgr_out.find("GroupRuntimeContext::hostOmqMap()") != -1,
+            "the error names the static call that could not be resolved: " + mgr_out);
+        assertTrue(mgr_out.find("STATIC_METHOD_CALL") != -1,
+            "the error names the failing expression slot kind: " + mgr_out);
+        assertTrue(mgr_out.find("is not declared in this Program") != -1,
+            "the error says the receiver class is missing here: " + mgr_out);
+    }
+
+    testStaleSiblingNamesTheMethod() {
+        TmpDir tmp("qore-aot-split-static-call-slot-stale-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+        hash<string, string> paths = writeSources(tmp.path);
+
+        string providers_out = compileProviders(lib_dir, paths);
+        assertEq(4, glob(lib_dir + "/*.qo").size(),
+            "compiled one object per provider source: " + providers_out);
+
+        # replace the GroupRuntimeContext object with one built from a source that no
+        # longer declares the static method — the class resolves, the method does not
+        list<string> grc_objs = glob(lib_dir + "/*grc*.qo");
+        assertEq(1, grc_objs.size(), sprintf("found the GroupRuntimeContext object: %y", grc_objs));
+        unlink(grc_objs[0]);
+        write(paths.grc, grcCode(False));
+        string grc_out = compileSingle(lib_dir, paths.grc, grc_objs[0]);
+        assertTrue(is_file(grc_objs[0]), "recompiled the stale sibling: " + grc_out);
+
+        string mgr_out = compileSingle(lib_dir, paths.mgr, lib_dir + "/mgr.qo");
+        assertTrue(mgr_out.find("unsupported AOT slot metadata") != -1,
+            "a stale sibling fails the compile: " + mgr_out);
+        assertTrue(mgr_out.find("GroupRuntimeContext::hostOmqMap()") != -1,
+            "the error names the static call that could not be resolved: " + mgr_out);
+        assertTrue(mgr_out.find("has no such method") != -1,
+            "the error distinguishes a stale sibling from a missing one: " + mgr_out);
+    }
+}
