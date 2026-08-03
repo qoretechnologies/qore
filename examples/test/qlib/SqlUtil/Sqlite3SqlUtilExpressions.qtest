@@ -139,6 +139,38 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
             sub () { db.createTempTable("tt_ids", {"id": {"qore_type": "integer", "notnull": True}},
                 {"scope": "bogus"}); });
 
+        # scope-only hashes retain a narrow string value type; internal creation options must use a widened copy
+        {
+            hash<string, string> opts = {"scope": SqlUtil::TT_Transaction};
+            hash<string, string> expected_opts = opts;
+            AbstractTable tmp = db.createTempTable("tt_narrow_transaction",
+                {"id": {"qore_type": "integer", "notnull": True}}, opts);
+            TempTableHelper th(tmp);
+            assertEq(SqlUtil::TT_Transaction, tmp.getTempScope());
+            assertEq(expected_opts, opts);
+            th.dropTempTable();
+        }
+        {
+            hash<string, string> opts = {"scope": SqlUtil::TT_Session};
+            hash<string, string> expected_opts = opts;
+            AbstractTable tmp = db.createTempTable("tt_narrow_session",
+                {"id": {"qore_type": "integer", "notnull": True}}, opts);
+            TempTableHelper th(tmp);
+            assertEq(SqlUtil::TT_Session, tmp.getTempScope());
+            assertEq(expected_opts, opts);
+            th.dropTempTable();
+        }
+        {
+            hash<auto> opts = {"scope": SqlUtil::TT_Session, "precreated": False};
+            hash<auto> expected_opts = opts;
+            AbstractTable tmp = db.createTempTable("tt_mixed_session",
+                {"id": {"qore_type": "integer", "notnull": True}}, opts);
+            TempTableHelper th(tmp);
+            assertEq(SqlUtil::TT_Session, tmp.getTempScope());
+            assertEq(expected_opts, opts);
+            th.dropTempTable();
+        }
+
         # source table with known data
         string src_name = "tt_src";
         db.dropTableIfExists(src_name);

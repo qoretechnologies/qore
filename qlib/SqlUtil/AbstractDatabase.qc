@@ -873,7 +873,7 @@ list<auto> rows = target.selectRows({"join": join_inner(tmp, NOTHING, {"id": "id
         }
 
         # options passed through to table creation (temporary-table control keys removed)
-        hash<auto> topts = (opts ?? {}) - ("scope", "precreated", "primary_key", "indexes");
+        hash<auto> topts += (opts ?? {}) - ("scope", "precreated", "primary_key", "indexes");
 
         AbstractTable t = makeTable(pname, desc, topts);
         t.setTempScope(scope, precreated);
