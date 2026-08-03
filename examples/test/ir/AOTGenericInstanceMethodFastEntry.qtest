@@ -167,8 +167,8 @@ if (!is_file(enabled_path) || !is_file(disabled_path)) {
         enabled_compile, disabled_compile);
     exit(2);
 }
-if (enabled_compile !~ /method fast entry 'GenericInstanceSelector[^']*_generic_fast'/
-        || enabled_compile !~ /method fast entry 'MethodGenericInstanceSelector[^']*_generic_fast'/
+if (enabled_compile !~ /method fast entry 'GenericInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/
+        || enabled_compile !~ /method fast entry 'MethodGenericInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/
         || enabled_compile =~ /method fast entry 'ConflictingInstanceSelector[^']*_generic_fast'/
         || enabled_compile =~ /method fast entry 'ContextDependentInstanceSelector[^']*_generic_fast'/
         || disabled_compile =~ /_generic_fast/) {

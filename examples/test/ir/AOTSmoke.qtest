@@ -10120,7 +10120,7 @@ printf(\"%d\\n\", FastEntryProbe::add(20, 22));
         assertTrue(compile_out.regex("EXIT=0"),
             "standalone fast-entry probe compiles: " + compile_out);
         assertTrue(compile_out.regex(
-                "call i64 @FastEntryProbe___static_add[^\\n]*_fast\\("),
+                "call i64 @FastEntryProbe___static_add[^\\n]*_fast_h[0-9a-f]{16}\\("),
             "top-level static call uses the native fast entry: " + compile_out);
 
         string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",

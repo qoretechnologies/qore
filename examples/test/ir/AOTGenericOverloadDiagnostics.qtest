@@ -168,7 +168,7 @@ printf(\"%s\", AOTGenericOverloadDiagnosticsMod::verify());
             shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(qmod_path), shellQuote(qm_path)));
         assertTrue(is_file(qmod_path), "compiled generic overload diagnostics module: " + compile_out);
         assertTrue(compile_out.regex(
-                "call i64 @[^\\n]*GenericBox[^\\n]*echo[^\\n]*_fast\\("),
+                "call i64 @[^\\n]*GenericBox[^\\n]*echo[^\\n]*_fast_h[0-9a-f]{16}\\("),
             "generic object call uses the native fast entry: " + compile_out);
 
         assertEq(expectedOutput(), runModule(src_dir, script_path),

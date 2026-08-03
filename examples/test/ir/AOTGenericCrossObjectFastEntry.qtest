@@ -93,9 +93,9 @@ string provider_compile = backquote(sprintf(
     libqore_dir, qcc_bin, provider_dir, provider_path));
 string provider_qo = provider_dir + "/cross-provider.qo";
 if (!is_file(provider_qo)
-        || provider_compile !~ /fast entry '[^']*crossGenericSelect[^']*_generic_fast'/
-        || provider_compile !~ /method fast entry '[^']*CrossStaticSelector[^']*_generic_fast'/
-        || provider_compile !~ /method fast entry '[^']*CrossInstanceSelector[^']*_generic_fast'/) {
+        || provider_compile !~ /fast entry '[^']*crossGenericSelect[^']*_generic_fast_h[0-9a-f]{16}'/
+        || provider_compile !~ /method fast entry '[^']*CrossStaticSelector[^']*_generic_fast_h[0-9a-f]{16}'/
+        || provider_compile !~ /method fast entry '[^']*CrossInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/) {
     printf("provider compile failed or omitted generic entries:\n%s",
         provider_compile);
     exit(2);
@@ -105,9 +105,9 @@ string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, provider_qo));
 if (provider_index !~ /\"symbol_index_version\", \"value\": \"37\"/
-        || provider_index !~ /\"native_symbol\": \"crossGenericSelect[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"\\|M:<int>\"/
-        || provider_index !~ /\"native_symbol\": \"CrossStaticSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossStaticSelector<int>>\\|M:<int>\"/
-        || provider_index !~ /\"native_symbol\": \"CrossInstanceSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossInstanceSelector<int>>\"/) {
+        || provider_index !~ /\"native_symbol\": \"crossGenericSelect[^\"]*_generic_fast_h[0-9a-f]{16}\"[^\n]*\"fast_specialization_key\": \"\\|M:<int>\"/
+        || provider_index !~ /\"native_symbol\": \"CrossStaticSelector[^\"]*_generic_fast_h[0-9a-f]{16}\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossStaticSelector<int>>\\|M:<int>\"/
+        || provider_index !~ /\"native_symbol\": \"CrossInstanceSelector[^\"]*_generic_fast_h[0-9a-f]{16}\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossInstanceSelector<int>>\"/) {
     printf("provider generic metadata mismatch:\n%s", provider_index);
     exit(2);
 }
@@ -131,9 +131,9 @@ if (!is_file(consumer_qo)) {
 }
 
 string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
-if (undefined_symbols !~ /crossGenericSelect[^\n]*_generic_fast/
-        || undefined_symbols !~ /CrossStaticSelector[^\n]*_generic_fast/
-        || undefined_symbols !~ /CrossInstanceSelector[^\n]*_generic_fast/) {
+if (undefined_symbols !~ /crossGenericSelect[^\n]*_generic_fast_h[0-9a-f]{16}/
+        || undefined_symbols !~ /CrossStaticSelector[^\n]*_generic_fast_h[0-9a-f]{16}/
+        || undefined_symbols !~ /CrossInstanceSelector[^\n]*_generic_fast_h[0-9a-f]{16}/) {
     printf("consumer did not import all generic fast entries:\n%scompile:\n%s",
         undefined_symbols, consumer_compile);
     exit(2);
