@@ -29,13 +29,17 @@ const QO_SUFFIXES = (
 );
 const SCRIPT_FILES = (
     ".qcc-batch-bootstrap.stamp": True,
+    ".qcc-batch-bootstrap.stamp.d": True,
     ".qcc-bootstrap.stamp": True,
     ".qcc-context": True,
     ".qcc-context.source-order-v2.json": True,
+    "build-deps.cmake": True,
     "direct-deps.cmake": True,
     "qcc-batch.sh": True,
     "qcc-bootstrap.sh": True,
     "qcc-single.sh": True,
+    "source-content.map": True,
+    "source-content.stamp": True,
     "source-symbols.manifest": True,
 );
 const TRANSIENT_DIR_NAMES = (
@@ -135,11 +139,16 @@ sub validate_keys(hash<string, list<string>> values, string path) {
     }
 }
 
-bool sub is_owned_file_name(string name) {
+bool sub is_owned_file_name(string path, string name) {
     if (exists SCRIPT_FILES{name}) {
         return True;
     }
     if (name.startsWith(".qcc-context.source-order-v2.json.") && name.endsWith(".tmp")) {
+        return True;
+    }
+    # emitObjectFile() atomically publishes .qo files through this exact
+    # process-qualified temporary name. A killed qcc can leave it behind.
+    if (name =~ /\.qo\.tmp\.[0-9]+$/) {
         return True;
     }
     foreach string suffix in (QO_SUFFIXES) {
@@ -147,11 +156,15 @@ bool sub is_owned_file_name(string name) {
             return True;
         }
     }
+    if (basename(path) == "source-content" && name.endsWith(".sha256")) {
+        return True;
+    }
     return False;
 }
 
 bool sub is_transient_dir_name(string name) {
-    return exists TRANSIENT_DIR_NAMES{name} || name.startsWith(".qcc-preload.");
+    return exists TRANSIENT_DIR_NAMES{name} || name.startsWith(".qcc-preload.")
+        || name.endsWith(".qo.lock");
 }
 
 list<string> sub list_names(string path) {
@@ -170,14 +183,16 @@ sub validate_owned_tree(string path, reference<list<string>> unexpected) {
             prune_error("cannot inspect managed path: " + entry_path);
         }
         if (info.type == "SYMBOLIC-LINK") {
-            if (!is_owned_file_name(name)) {
+            if (!is_owned_file_name(path, name)) {
                 push unexpected, entry_path;
             }
         } else if (info.type == "DIRECTORY") {
-            if (!is_transient_dir_name(name)) {
+            if (name == "source-content") {
+                validate_owned_tree(entry_path, \unexpected);
+            } else if (!is_transient_dir_name(name)) {
                 push unexpected, entry_path;
             }
-        } else if (info.type != "REGULAR" || !is_owned_file_name(name)) {
+        } else if (info.type != "REGULAR" || !is_owned_file_name(path, name)) {
             push unexpected, entry_path;
         }
     }
@@ -342,7 +357,7 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
                 if (exists expected_files{entry_path}) {
                     continue;
                 }
-                if (is_owned_file_name(name)) {
+                if (is_owned_file_name(path, name)) {
                     stale_files{entry_path} = True;
                 } else {
                     push unexpected, entry_path;
@@ -360,7 +375,7 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
                 }
             } else if (exists expected_files{entry_path}) {
                 continue;
-            } else if (info.type == "REGULAR" && is_owned_file_name(name)) {
+            } else if (info.type == "REGULAR" && is_owned_file_name(path, name)) {
                 stale_files{entry_path} = True;
             } else {
                 push unexpected, entry_path;

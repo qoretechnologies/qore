@@ -188,7 +188,7 @@ public class QccSidecarConsumer {
         string provider_out = run(provider_cmd);
         assertTrue(is_file(provider_qo), "compiled provider preload .qo: " + provider_out);
         mkdir(preload_dir);
-        run(sprintf("ln -s %s %s/provider.qo", provider_qo, preload_dir));
+        run(sprintf("ln %s %s/provider.qo", provider_qo, preload_dir));
         run(sprintf("ln -s %s %s/provider.qo.compile-contract.stamp",
             provider_compile_contract_stamp, preload_dir));
 
@@ -222,6 +222,8 @@ public class QccSidecarConsumer {
         provider_changed =~ s/return 7/return 8/;
         write(provider_src, provider_changed);
         provider_out = run(provider_cmd);
+        unlink(preload_dir + "/provider.qo");
+        run(sprintf("ln %s %s/provider.qo", provider_qo, preload_dir));
         assertNeq(provider_contract,
             File::readTextFile(provider_compile_contract_stamp),
             "provider semantic change updates its compile contract: "
@@ -234,6 +236,8 @@ public class QccSidecarConsumer {
         write(provider_src, File::readTextFile(provider_src)
             + "# provider semantic no-op\n");
         provider_out = run(provider_cmd);
+        unlink(preload_dir + "/provider.qo");
+        run(sprintf("ln %s %s/provider.qo", provider_qo, preload_dir));
         string unchanged_consumer = run(consumer_cmd);
         assertContains(unchanged_consumer, "manifest current, skipped",
             "unchanged provider contract keeps consumer manifest current: "

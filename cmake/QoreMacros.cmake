@@ -571,15 +571,23 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_compile_contract_stamps)
     set(_qore_qcc_order_targets)
     set(_qore_qcc_abs_sources)
+    set(_qore_qcc_source_content_digests)
     set(_qore_qcc_managed_files)
+    set(_qore_qcc_source_content_map_content)
     set(_qore_qcc_index 0)
     foreach(_qore_qcc_source ${_QORE_QCO_SOURCES})
         get_filename_component(_qore_qcc_abs_source "${_qore_qcc_source}" ABSOLUTE)
         get_filename_component(_qore_qcc_real_source "${_qore_qcc_abs_source}" REALPATH)
         QORE_QCC_SOURCE_ID(_qore_qcc_source_id "${_qore_qcc_real_source}")
         set(_qore_qcc_output "${_QORE_QCO_OUTPUT_DIR}/${_qore_qcc_source_id}.qo")
+        set(_qore_qcc_source_content_digest
+            "${_QORE_QCO_SCRIPT_DIR}/source-content/${_qore_qcc_source_id}.sha256")
         set(_qore_qcc_order_target "qore_qcc_${_qore_qcc_group_id}_${_qore_qcc_index}")
         list(APPEND _qore_qcc_abs_sources "${_qore_qcc_real_source}")
+        list(APPEND _qore_qcc_source_content_digests
+            "${_qore_qcc_source_content_digest}")
+        string(APPEND _qore_qcc_source_content_map_content
+            "${_qore_qcc_real_source}\t${_qore_qcc_source_content_digest}\n")
         list(APPEND _qore_qcc_outputs "${_qore_qcc_output}")
         list(APPEND _qore_qcc_stamps "${_qore_qcc_output}.stamp")
         list(APPEND _qore_qcc_content_stamps "${_qore_qcc_output}.content.stamp")
@@ -592,6 +600,32 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         math(EXPR _qore_qcc_index "${_qore_qcc_index} + 1")
     endforeach()
 
+    set(_qore_qcc_source_content_map
+        "${_QORE_QCO_SCRIPT_DIR}/source-content.map")
+    set(_qore_qcc_source_content_stamp
+        "${_QORE_QCO_SCRIPT_DIR}/source-content.stamp")
+    set(_qore_qcc_source_content_target
+        "qore_qcc_${_qore_qcc_group_id}_source_content")
+    set(_qore_qcc_source_content_script
+        "${QORE_CMAKE_DIR}/QoreWriteSourceContentDigests.cmake")
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_source_content_map}"
+        "${_qore_qcc_source_content_map_content}")
+    add_custom_command(
+        OUTPUT ${_qore_qcc_source_content_stamp}
+        BYPRODUCTS ${_qore_qcc_source_content_digests}
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_MAP=${_qore_qcc_source_content_map}
+            -DSUCCESS_STAMP=${_qore_qcc_source_content_stamp}
+            -P ${_qore_qcc_source_content_script}
+        DEPENDS
+            ${_qore_qcc_source_content_script}
+            ${_qore_qcc_source_content_map}
+            ${_qore_qcc_abs_sources}
+        COMMENT "Checking ${_QORE_QCO_GROUP} source content"
+        VERBATIM)
+    add_custom_target(${_qore_qcc_source_content_target}
+        DEPENDS ${_qore_qcc_source_content_stamp})
+
     set(_qore_qcc_context_path "${_QORE_QCO_SCRIPT_DIR}/.qcc-context")
     set(_qore_qcc_context "format=1\nkind=qcc-object-group\ngroup=${_QORE_QCO_GROUP}\nqcc=${_qore_qcc_command}\n")
     string(APPEND _qore_qcc_context "qore_include_dir=${_QORE_QCO_INCLUDE_DIR}\n")
@@ -603,6 +637,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context parse_define ${_QORE_QCO_PARSE_DEFINES})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context parse_option ${_QORE_QCO_PARSE_OPTIONS})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context input ${_qore_qcc_abs_sources})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context source_content_digest
+        ${_qore_qcc_source_content_digests})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context output ${_qore_qcc_outputs})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context manifest_input ${_QORE_QCO_MANIFEST_INPUTS})
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context bootstrap_aggregate_output
@@ -621,8 +657,6 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     foreach(_qore_qcc_manifest_input
             ${_qore_qcc_context_path}
             ${_qore_qcc_source_symbols}
-            ${_qore_qcc_incremental_helper}
-            ${_qore_qcc_source_order_helper}
             ${_qore_qcc_deps}
             ${_QORE_QCO_MANIFEST_INPUTS})
         list(APPEND _qore_qcc_manifest_input_flags "--manifest-input=${_qore_qcc_manifest_input}")
@@ -645,6 +679,24 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     endif ()
     QORE_WRITE_IF_CHANGED("${_qore_qcc_direct_deps_cmake}" "${_qore_qcc_direct_deps_cmake_content}")
     include("${_qore_qcc_direct_deps_cmake}")
+
+    set(_qore_qcc_build_deps_prefix "QORE_QCC_BUILD_DEPS_${_qore_qcc_group_id}")
+    set(_qore_qcc_build_deps_cmake "${_QORE_QCO_SCRIPT_DIR}/build-deps.cmake")
+    execute_process(
+        COMMAND ${_qore_qcc_source_order_command}
+            --build-direct-map-cmake
+            ${_qore_qcc_build_deps_prefix}
+            ${_qore_qcc_context_path}
+        OUTPUT_VARIABLE _qore_qcc_build_deps_cmake_content
+        ERROR_VARIABLE _qore_qcc_build_deps_error
+        RESULT_VARIABLE _qore_qcc_build_deps_result
+    )
+    if (NOT _qore_qcc_build_deps_result EQUAL 0)
+        message(FATAL_ERROR
+            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_build_deps_error}")
+    endif ()
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_build_deps_cmake}" "${_qore_qcc_build_deps_cmake_content}")
+    include("${_qore_qcc_build_deps_cmake}")
 
     execute_process(
         COMMAND ${_qore_qcc_source_order_command}
@@ -734,7 +786,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
     endforeach()
-    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
@@ -747,6 +799,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_bootstrap_stamp)
     set(_qore_qcc_bootstrap_target)
     if (_qore_qcc_count GREATER 1)
+        set(_qore_qcc_bootstrap_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-batch-bootstrap.stamp")
+        set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
         set(_qore_qcc_batch_script "${_QORE_QCO_SCRIPT_DIR}/qcc-batch.sh")
         set(_qore_qcc_batch_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
         foreach(_qore_qcc_arg
@@ -764,15 +818,13 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         foreach(_qore_qcc_arg ${_qore_qcc_bootstrap_aggregate_flags})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} --batch-build-sidecars --depfile-compile-contract-stamps --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}'")
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile='${_qore_qcc_bootstrap_stamp}.d' --depfile-target='${_qore_qcc_bootstrap_stamp}'")
         foreach(_qore_qcc_source ${_qore_qcc_abs_sources})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_source}'")
         endforeach()
         string(APPEND _qore_qcc_batch_cmd "\n")
         QORE_WRITE_IF_CHANGED("${_qore_qcc_batch_script}" "${_qore_qcc_batch_cmd}")
 
-        set(_qore_qcc_bootstrap_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-batch-bootstrap.stamp")
-        set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
             COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -797,11 +849,14 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_QORE_QCO_MANIFEST_INPUTS}
                 ${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT}
                 ${_QORE_QCO_BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS}
+            DEPFILE ${_qore_qcc_bootstrap_stamp}.d
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "qcc -c: batch bootstrapping ${_QORE_QCO_GROUP} (${_qore_qcc_count} sources)"
             VERBATIM)
         add_custom_target(${_qore_qcc_bootstrap_target}
             DEPENDS ${_qore_qcc_bootstrap_stamp})
+        add_dependencies(${_qore_qcc_bootstrap_target}
+            ${_qore_qcc_source_content_target})
     endif ()
 
     if (_qore_qcc_count GREATER 0)
@@ -811,27 +866,46 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             list(GET _qore_qcc_stamps ${_qore_qcc_idx} _qore_qcc_stamp)
             add_custom_target(${_qore_qcc_order_target}
                 DEPENDS ${_qore_qcc_stamp})
+            add_dependencies(${_qore_qcc_order_target}
+                ${_qore_qcc_source_content_target})
             if (_qore_qcc_bootstrap_target)
                 add_dependencies(${_qore_qcc_order_target} ${_qore_qcc_bootstrap_target})
             endif ()
         endforeach()
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
+            list(GET _qore_qcc_order_targets ${_qore_qcc_idx}
+                _qore_qcc_order_target)
             list(GET _qore_qcc_abs_sources ${_qore_qcc_idx} _qore_qcc_source)
+            list(GET _qore_qcc_source_content_digests ${_qore_qcc_idx}
+                _qore_qcc_source_content_digest)
             list(GET _qore_qcc_outputs ${_qore_qcc_idx} _qore_qcc_output)
             set(_qore_qcc_stamp "${_qore_qcc_output}.stamp")
             set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
             set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
+            set(_qore_qcc_build_deps_var "${_qore_qcc_build_deps_prefix}_${_qore_qcc_idx}")
+            foreach(_qore_qcc_build_dep ${${_qore_qcc_build_deps_var}})
+                list(FIND _qore_qcc_outputs "${_qore_qcc_build_dep}"
+                    _qore_qcc_build_dep_idx)
+                if (NOT _qore_qcc_build_dep_idx EQUAL -1)
+                    list(GET _qore_qcc_order_targets
+                        ${_qore_qcc_build_dep_idx}
+                        _qore_qcc_build_dep_target)
+                    add_dependencies(${_qore_qcc_order_target}
+                        ${_qore_qcc_build_dep_target})
+                endif ()
+            endforeach()
             set(_qore_qcc_direct_dep_compile_contract_stamps)
-            set(_qore_qcc_direct_dep_sources)
+            set(_qore_qcc_direct_dep_source_content_digests)
             foreach(_qore_qcc_direct_dep ${_qore_qcc_direct_deps})
                 list(APPEND _qore_qcc_direct_dep_compile_contract_stamps
                     "${_qore_qcc_direct_dep}.compile-contract.stamp")
                 list(FIND _qore_qcc_outputs "${_qore_qcc_direct_dep}" _qore_qcc_direct_dep_idx)
                 if (NOT _qore_qcc_direct_dep_idx EQUAL -1)
-                    list(GET _qore_qcc_abs_sources ${_qore_qcc_direct_dep_idx}
-                        _qore_qcc_direct_dep_source)
-                    list(APPEND _qore_qcc_direct_dep_sources
-                        ${_qore_qcc_direct_dep_source})
+                    list(GET _qore_qcc_source_content_digests
+                        ${_qore_qcc_direct_dep_idx}
+                        _qore_qcc_direct_dep_source_content_digest)
+                    list(APPEND _qore_qcc_direct_dep_source_content_digests
+                        ${_qore_qcc_direct_dep_source_content_digest})
                 endif ()
             endforeach()
             add_custom_command(OUTPUT ${_qore_qcc_stamp}
@@ -852,7 +926,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                         ${_qore_qcc_source}
                         ${_qore_qcc_single_script}
                 DEPENDS
-                    ${_qore_qcc_source}
+                    ${_qore_qcc_source_content_digest}
+                    ${_qore_qcc_source_content_map}
                     ${_qore_qcc_source_symbols}
                     ${_qore_qcc_single_script}
                     ${_qore_qcc_context_path}
@@ -861,7 +936,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_QORE_QCO_DEPENDS}
                     ${_qore_qcc_load_module_target_deps}
                     ${_qore_qcc_deps}
-                    ${_qore_qcc_direct_dep_sources}
+                    ${_qore_qcc_direct_dep_source_content_digests}
                     ${_qore_qcc_direct_dep_compile_contract_stamps}
                     ${_qore_qcc_incremental_helper}
                     ${_qore_qcc_source_order_helper}
@@ -892,17 +967,23 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     list(APPEND _qore_qcc_managed_files
         "${_qore_qcc_context_path}"
         "${_qore_qcc_context_path}.source-order-v2.json"
+        "${_qore_qcc_source_content_map}"
+        "${_qore_qcc_source_content_stamp}"
+        ${_qore_qcc_source_content_digests}
         "${_qore_qcc_source_symbols}"
         "${_qore_qcc_direct_deps_cmake}"
+        "${_qore_qcc_build_deps_cmake}"
         "${_qore_qcc_single_script}")
     if (_qore_qcc_batch_script)
         list(APPEND _qore_qcc_managed_files
             "${_qore_qcc_batch_script}"
-            "${_qore_qcc_bootstrap_stamp}")
+            "${_qore_qcc_bootstrap_stamp}"
+            "${_qore_qcc_bootstrap_stamp}.d")
     endif ()
     _QORE_QCC_REGISTER_MANAGED_DIRS(
         "${_QORE_QCO_OUTPUT_DIR}"
-        "${_QORE_QCO_SCRIPT_DIR}")
+        "${_QORE_QCO_SCRIPT_DIR}"
+        "${_QORE_QCO_SCRIPT_DIR}/source-content")
     if (_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT)
         get_filename_component(_qore_qcc_bootstrap_output_dir
             "${_QORE_QCO_BOOTSTRAP_AGGREGATE_OUTPUT}" DIRECTORY)

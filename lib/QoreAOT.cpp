@@ -643,17 +643,27 @@ void qore_aot_set_module_dep_sink(std::vector<std::string>* sink) {
     aot_module_dep_sink = sink;
 }
 
-// Record the on-disk file of every module loaded into the compile program into
-// the active module-dep sink.  These are the module's direct %requires closure;
-// per-module transitivity makes recording direct deps sufficient for the build
-// to rebuild a dependent when any dependency .qmod it loaded changes.  No-op
-// when no sink is set.
-static void qore_aot_record_module_deps(QoreProgram* pgm) {
-    if (!aot_module_dep_sink || !pgm) {
-        return;
+// Collect the on-disk file of every module loaded into the compile program and
+// also append it to the active module-dep sink. These are the module's direct
+// %requires closure; per-module transitivity makes recording direct deps
+// sufficient for the build to rebuild a dependent when a loaded artifact
+// changes.
+static bool qore_aot_record_module_deps(QoreProgram* pgm,
+        std::vector<std::string>& deps, std::string& error) {
+    deps.clear();
+    if (!pgm) {
+        return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
+    size_t module_i = 0;
     for (const std::string& name : pp->parse_modules) {
+        if (module_i && !(module_i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT module dependency collection")) {
+            error = "cancelled during AOT module dependency collection";
+            return false;
+        }
+        ++module_i;
         QoreAbstractModule* m = QMM.findModule(name.c_str());
         if (!m) {
             continue;
@@ -661,9 +671,24 @@ static void qore_aot_record_module_deps(QoreProgram* pgm) {
         const char* fn = m->getFileName();
         // skip synthetic ("<builtin>") and empty paths
         if (fn && *fn && *fn != '<') {
-            aot_module_dep_sink->push_back(fn);
+            char* resolved = realpath(fn, nullptr);
+            deps.emplace_back(resolved ? resolved : fn);
+            free(resolved);
         }
     }
+    std::sort(deps.begin(), deps.end());
+    deps.erase(std::unique(deps.begin(), deps.end()), deps.end());
+    if (aot_module_dep_sink) {
+        aot_module_dep_sink->insert(aot_module_dep_sink->end(),
+            deps.begin(), deps.end());
+    }
+    return true;
+}
+
+static bool qore_aot_record_module_deps(QoreProgram* pgm,
+        std::string& error) {
+    std::vector<std::string> deps;
+    return qore_aot_record_module_deps(pgm, deps, error);
 }
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
@@ -11901,8 +11926,8 @@ static bool qore_aot_collect_float_expression_summaries(
 
 class AOTBodyContractHasher {
 public:
-    AOTBodyContractHasher() {
-        addString("qore-aot-body-contract-v1");
+    explicit AOTBodyContractHasher(const char* domain = "qore-aot-body-contract-v1") {
+        addString(domain);
     }
 
     void addU64(uint64_t value) {
@@ -12207,6 +12232,64 @@ static std::string qoreAOTBodyContractHash(const BatchCalleeInfo& info) {
     hash.addString(info.object_compound_get_member);
     hash.addI64(info.object_compound_get_param);
     hash.addU64(info.object_compound_get_op);
+    return hash.digest();
+}
+
+static std::string qoreAOTFastEntryContractHash(const BatchCalleeInfo& info) {
+    AOTBodyContractHasher hash("qore-aot-fast-entry-contract-v1");
+    size_t item_i = 0;
+    auto cancelled = [&item_i]() {
+        ++item_i;
+        return !(item_i % 100)
+            && qore_check_cancel(nullptr,
+                "AOT fast-entry contract hashing");
+    };
+    hash.addU64(info.generic_specialized_fast_entry);
+    hash.addU64(info.implicit_self_method);
+    hash.addU64(info.context_independent_fast_entry);
+    hash.addU64(info.may_invalidate_external_caches);
+    hash.addU64(info.may_modify_runtime_locals
+        || !info.modified_runtime_locals.empty());
+    hash.addU64(info.never_returns_nothing);
+    hash.addU64(static_cast<uint8_t>(info.return_kind));
+    hash.addU64(static_cast<uint8_t>(info.boxed_return_kind));
+    hash.addString(info.specialization_key);
+    hash.addU64(info.num_params);
+    hash.addU64(info.param_kinds.size());
+    for (BatchCalleeParamKind kind : info.param_kinds) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(static_cast<uint8_t>(kind));
+    }
+    hash.addU64(info.param_rejects_nothing.size());
+    for (uint8_t value : info.param_rejects_nothing) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.param_noescape.size());
+    for (uint8_t value : info.param_noescape) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.param_may_modify.size());
+    for (uint8_t value : info.param_may_modify) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(value);
+    }
+    hash.addU64(info.capture_kinds.size());
+    for (BatchCalleeParamKind kind : info.capture_kinds) {
+        if (cancelled()) {
+            return {};
+        }
+        hash.addU64(static_cast<uint8_t>(kind));
+    }
     return hash.digest();
 }
 
@@ -14714,6 +14797,54 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
     return true;
 }
 
+static bool finalizeAOTBatchFastEntrySymbols(llvm::Module& module,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    size_t entry_i = 0;
+    for (auto& [variant, info] : batch_callees) {
+        (void)variant;
+        if (entry_i++ && !(entry_i % 100)
+                && qore_check_cancel(nullptr, "AOT fast-entry contract symbol generation")) {
+            return false;
+        }
+        if (!info.approach_b_eligible || info.fast_name.empty()
+                || info.preloaded_fast_entry) {
+            continue;
+        }
+        std::string contract_hash = qoreAOTFastEntryContractHash(info);
+        if (contract_hash.empty()) {
+            return false;
+        }
+        if (info.fast_contract_hash == contract_hash) {
+            continue;
+        }
+        std::string base_name = info.fast_name;
+        if (!info.fast_contract_hash.empty()) {
+            const size_t old_colon = info.fast_contract_hash.find(':');
+            const std::string old_suffix = "_h" + info.fast_contract_hash.substr(
+                old_colon == std::string::npos ? 0 : old_colon + 1);
+            if (base_name.size() >= old_suffix.size()
+                    && base_name.compare(base_name.size() - old_suffix.size(),
+                        old_suffix.size(), old_suffix) == 0) {
+                base_name.resize(base_name.size() - old_suffix.size());
+            }
+        }
+        const size_t colon = contract_hash.find(':');
+        std::string new_name = base_name + "_h"
+            + contract_hash.substr(colon == std::string::npos ? 0 : colon + 1);
+        llvm::Function* old_fn = module.getFunction(info.fast_name);
+        llvm::Function* collision = module.getFunction(new_name);
+        if (collision && collision != old_fn) {
+            return false;
+        }
+        if (old_fn) {
+            old_fn->setName(new_name);
+        }
+        info.fast_name = std::move(new_name);
+        info.fast_contract_hash = std::move(contract_hash);
+    }
+    return true;
+}
+
 static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         const AOTGenericSpecializationCandidates& specializations,
@@ -14782,6 +14913,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         callee.approach_b_eligible = true;
         callee.implicit_self_method = implicit_self;
         callee.fast_name = callee.name + "_generic_fast";
+        callee.fast_contract_hash.clear();
         callee.specialization_key = specialization.key;
         callee.specialization_receiver_type_info =
             specialization.receiver_type_info;
@@ -14840,8 +14972,9 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
                 variant, info->second.never_returns_nothing, ir.get());
         }
     }
-    return refreshAOTBatchFastEntryDeclarations(ctx, module,
-        batch_callees);
+    return finalizeAOTBatchFastEntrySymbols(module, batch_callees)
+        && refreshAOTBatchFastEntryDeclarations(ctx, module,
+            batch_callees);
 }
 
 static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
@@ -15318,7 +15451,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             info->second.approach_b_eligible = false;
         }
     }
-    if (!refreshAOTBatchFastEntryDeclarations(ctx, module, aot_batch_callee_map)) {
+    if (!finalizeAOTBatchFastEntrySymbols(module, aot_batch_callee_map)
+            || !refreshAOTBatchFastEntryDeclarations(ctx, module, aot_batch_callee_map)) {
         return false;
     }
 
@@ -15522,6 +15656,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.body_dependency_files = rec.body_dependency_files;
     info.body_contract_dependencies = rec.body_contract_dependencies;
     info.fast_name = callable ? rec.native_symbol : std::string();
+    info.preloaded_fast_entry = callable;
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
@@ -19526,7 +19661,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     && !generic_specialized_fast_entry
                     && hasAOTSelfRecursiveCall(ir_func);
                 if (fast_entry_eligible) {
-                    fast_entry_name = generic_specialized_fast_entry
+                    fast_entry_name = analyzed_fast_entry
                         ? analyzed_fast_entry->fast_name
                         : ir_func->name + "_fast";
                     const UserSignature* sig = uvb->getUserSignature();
@@ -20073,7 +20208,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     generic_specialized_fast_entry))
                             || implicit_self_fast_entry);
                     if (fast_entry_eligible) {
-                        fast_entry_name = generic_specialized_fast_entry
+                        fast_entry_name = analyzed_fast_entry
                             ? analyzed_fast_entry->fast_name
                             : ir_func->name + "_fast";
                         const UserSignature* sig = uvb->getUserSignature();
@@ -21850,6 +21985,15 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
     module.setDataLayout(tm->createDataLayout());
 
+    // LLVM emits functions in module-list order. That list can inherit
+    // unordered namespace traversal order even though symbol names and
+    // contents are stable, producing byte-different objects and unnecessary
+    // incremental relinks. Source-order-sensitive initializer arrays retain
+    // their element order.
+    module.getFunctionList().sort([](const llvm::Function& lhs,
+            const llvm::Function& rhs) {
+        return lhs.getName() < rhs.getName();
+    });
     // Force frame-pointer emission for every defined function in the object.
     //
     // By default LLVM omits the frame pointer (x29 on AArch64, rbp on x86-64)
@@ -24705,7 +24849,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
     // record the dependency modules loaded for the %requires closure so qcc can
     // list their .qmod files as Make depfile prerequisites
-    qore_aot_record_module_deps(*qpgm);
+    if (!qore_aot_record_module_deps(*qpgm, error)) {
+        return false;
+    }
 
     // Step 3: Initialize LLVM and compile functions
     llvm::InitializeNativeTarget();
@@ -25181,7 +25327,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
         // record the dependency modules loaded for the %requires closure so qcc
         // can list their .qmod files as Make depfile prerequisites
-        qore_aot_record_module_deps(*qpgm);
+        if (!qore_aot_record_module_deps(*qpgm, error)) {
+            return false;
+        }
 
         // Step 9: Initialize LLVM and compile functions
         llvm::InitializeNativeTarget();
@@ -26795,6 +26943,10 @@ bool QoreAOT::compileScriptFilesBatch(
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
     }
+    std::vector<std::string> module_dep_files;
+    if (!qore_aot_record_module_deps(*qpgm, module_dep_files, error)) {
+        return false;
+    }
     parse_done = std::chrono::steady_clock::now();
 
     // Emit the aggregate before per-file lowering. Per-file lowering can
@@ -26834,6 +26986,19 @@ bool QoreAOT::compileScriptFilesBatch(
             std::unordered_set<std::string> seen;
             seen.insert(e.canon);
             e.dep_sources.push_back(e.canon);
+            size_t module_dep_i = 0;
+            for (const std::string& module_dep : module_dep_files) {
+                if (module_dep_i && !(module_dep_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch module dependency attribution")) {
+                    error = "cancelled during AOT batch module dependency attribution";
+                    return false;
+                }
+                ++module_dep_i;
+                if (seen.insert(module_dep).second) {
+                    e.dep_sources.push_back(module_dep);
+                }
+            }
             size_t stub_i = 0;
             for (const std::string& stub : canonical_stubs) {
                 if (stub_i++ && !(stub_i % 100)
@@ -28114,6 +28279,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     if (qoreAotHandleWarnings(wsink, error, "script parsing")) {
         return false;
     }
+    if (!qore_aot_record_module_deps(*qpgm, error)) {
+        return false;
+    }
 
     // LLVM codegen setup.
     llvm::InitializeNativeTarget();
@@ -28718,7 +28886,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
         // record the dependency modules loaded for the %requires closure so qcc
         // can list their .qmod files as Make depfile prerequisites
-        qore_aot_record_module_deps(*qpgm);
+        if (!qore_aot_record_module_deps(*qpgm, error)) {
+            return false;
+        }
 
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();

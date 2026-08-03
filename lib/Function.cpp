@@ -4805,8 +4805,16 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 
 void UserVariantBase::registerPrecompiledAOTFunction(
         AotFunctionPtr fn, QoreAOTContext* ctx) {
+    if (cached_aot_ctx != ctx) {
+        delete cached_aot_ctx;
+    }
     cached_aot_fn = fn;
     cached_aot_ctx = ctx;
+    {
+        std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+        aot_lazy_function_ir.reset();
+        has_aot_lazy_function_ir.store(false, std::memory_order_release);
+    }
     if (ctx) {
         if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
             uses_argv = signature.argvid != nullptr;
@@ -4962,6 +4970,37 @@ bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSin
     setCachedIR(ir.release());
     aot_lazy_closure_ir.reset();
     has_aot_lazy_closure_ir.store(false, std::memory_order_release);
+    return true;
+}
+
+bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+    if (cached_ir || hasCachedAOT()) {
+        aot_lazy_function_ir.reset();
+        has_aot_lazy_function_ir.store(false, std::memory_order_release);
+        return true;
+    }
+    if (!aot_lazy_function_ir) {
+        return statements != nullptr;
+    }
+
+    std::string error;
+    QoreAOTContext* context = nullptr;
+    std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_function_ir(
+        *aot_lazy_function_ir, const_cast<UserVariantBase*>(this), xsink, context, error);
+    if (!ir) {
+        if (!*xsink) {
+            xsink->raiseException("AOT-SOURCE-IR-ERROR",
+                "could not materialize source-stripped function IR for '%s': %s",
+                name ? name : "<function>", error.empty() ? "unknown error" : error.c_str());
+        }
+        return false;
+    }
+
+    cached_aot_ctx = context;
+    setCachedIR(ir.release());
+    aot_lazy_function_ir.reset();
+    has_aot_lazy_function_ir.store(false, std::memory_order_release);
     return true;
 }
 
@@ -6668,6 +6707,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
+    if (!statements && hasLazyAOTFunctionIR()
+            && !materializeLazyAOTFunctionIR(name, xsink)) {
+        return QoreValue();
+    }
     // Tiered compilation dispatch
     // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
     if (pgm) {

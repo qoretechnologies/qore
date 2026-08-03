@@ -8,7 +8,7 @@
 %modern
 %requires json
 
-const CACHE_VERSION = 37;
+const CACHE_VERSION = 38;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
     "classes",
@@ -37,6 +37,7 @@ const SOURCE_SUMMARY_KEYS = (
 
 hashdecl SourceOrderContext {
     list<string> inputs;
+    list<string> source_content_digests;
     list<string> outputs;
     hash<string, bool> parse_defines;
 }
@@ -61,6 +62,8 @@ class SourceSymbolManifestGenerator {
         Regex const_re = new Regex("\\bconst\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
         Regex const_init_re = new Regex(
             "\\bconst\\s+[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*(.*?);", RE_Global | RE_DotAll);
+        Regex static_decl_re = new Regex(
+            "\\bstatic[ \\t]+([^;{}]+);", RE_Global | RE_DotAll);
         Regex global_group_re = new Regex("(?<![-A-Za-z0-9_])(?:our|thread_local)\\b\\s*\\(", RE_Global);
         Regex global_scalar_re = new Regex(
             "(?<![-A-Za-z0-9_])(?:our|thread_local)\\b\\s+(?!\\()"
@@ -826,6 +829,20 @@ class SourceSymbolManifestGenerator {
                 addSet(\values, collectUnqualifiedMentions(expression));
             }
         }
+        foreach hash<RegexMatchInfo> match in (static_decl_re.extractDetailed(code) ?? ()) {
+            *string declaration = match.groups ? match.groups[0] : NOTHING;
+            if (!exists declaration) {
+                continue;
+            }
+            int expression_offset = declaration.find("=");
+            if (expression_offset < 0) {
+                expression_offset = declaration.find("(");
+            }
+            if (expression_offset >= 0) {
+                addSet(\values, collectUnqualifiedMentions(
+                    declaration.substr(expression_offset + 1)));
+            }
+        }
         foreach string expression in (caseExpressions(code)) {
             addSet(\values, collectMentions(expression));
         }
@@ -1056,11 +1073,14 @@ string sub canonical(string path) {
 
 hash<SourceOrderContext> sub parseContext(string path) {
     list<string> inputs = ();
+    list<string> source_content_digests = ();
     list<string> outputs = ();
     hash<string, bool> parse_defines = {};
     foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
         if (line.startsWith("input=")) {
             push inputs, line.substr(6);
+        } else if (line.startsWith("source_content_digest=")) {
+            push source_content_digests, line.substr(22);
         } else if (line.startsWith("output=")) {
             push outputs, line.substr(7);
         } else if (line.startsWith("parse_define=")) {
@@ -1076,8 +1096,14 @@ hash<SourceOrderContext> sub parseContext(string path) {
         throw "SOURCE-ORDER-CONTEXT-ERROR", sprintf(
             "context has %d inputs but %d outputs: %s", inputs.size(), outputs.size(), path);
     }
+    if (source_content_digests && source_content_digests.size() != inputs.size()) {
+        throw "SOURCE-ORDER-CONTEXT-ERROR", sprintf(
+            "context has %d inputs but %d source-content digests: %s",
+            inputs.size(), source_content_digests.size(), path);
+    }
     return new hash<SourceOrderContext>((
         "inputs": inputs,
+        "source_content_digests": source_content_digests,
         "outputs": outputs,
         "parse_defines": parse_defines,
     ));
@@ -1854,6 +1880,41 @@ class SourceOrderEngine {
         return result;
     }
 
+    list<list<int>> allBuildDirectOrders(string context_path,
+            hash<SourceOrderContext> context_info) {
+        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        hash<string, bool> nodes = {};
+        for (int index = 0; index < context_info.inputs.size(); ++index) {
+            nodes{string(index)} = True;
+        }
+        list<int> order = topoSubset(nodes, graph, -1);
+        list<int> rank = ();
+        for (int index = 0; index < order.size(); ++index) {
+            push rank, 0;
+        }
+        for (int index = 0; index < order.size(); ++index) {
+            rank[order[index]] = index;
+        }
+
+        list<list<int>> result = ();
+        for (int target = 0; target < context_info.inputs.size(); ++target) {
+            list<int> providers = ();
+            foreach string provider_key in (graph.incoming[target].keys()) {
+                int provider = provider_key.toInt();
+                # A required edge that points backwards in the deterministic
+                # order belongs to a dependency cycle. CMake target cycles are
+                # invalid, so retain every forward edge and leave the cyclic
+                # edge to qore-qo-incremental's locked prerequisite handling.
+                if (requiredEdge(graph, provider, target)
+                        && rank[provider] < rank[target]) {
+                    push providers, provider;
+                }
+            }
+            push result, sort(providers);
+        }
+        return result;
+    }
+
     list<int> prerequisiteOrder(string context_path,
             hash<SourceOrderContext> context_info, int target) {
         hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
@@ -1897,15 +1958,32 @@ class SourceOrderEngine {
         }
         try {
             date stamp_time = hstat(output + ".stamp").mtime;
+            string source_dependency = context_info.source_content_digests
+                ? context_info.source_content_digests[target]
+                : context_info.inputs[target];
             if ((exists bootstrap_stamp && hstat(bootstrap_stamp).mtime > stamp_time)
-                    || hstat(context_info.inputs[target]).mtime >= stamp_time) {
+                    || !is_file(source_dependency)
+                    || hstat(source_dependency).mtime >= stamp_time) {
                 return False;
             }
             foreach int provider in (directOrder(context_path, context_info, target)) {
+                string provider_stamp = context_info.outputs[provider] + ".stamp";
+                string provider_source_dependency = context_info.source_content_digests
+                    ? context_info.source_content_digests[provider]
+                    : context_info.inputs[provider];
+                if (!is_file(provider_stamp)
+                        || !is_file(provider_source_dependency)
+                        || hstat(provider_source_dependency).mtime
+                            >= hstat(provider_stamp).mtime) {
+                    return False;
+                }
                 string contract_stamp = context_info.outputs[provider]
                     + ".compile-contract.stamp";
                 if (!is_file(contract_stamp)) {
                     contract_stamp = context_info.outputs[provider] + ".content.stamp";
+                }
+                if (!is_file(contract_stamp)) {
+                    return False;
                 }
                 if (hstat(contract_stamp).mtime > stamp_time) {
                     return False;
@@ -1913,7 +1991,7 @@ class SourceOrderEngine {
             }
             foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
                 *hash<StatInfo> info = hstat(dependency);
-                if (exists info && info.mtime >= stamp_time) {
+                if (!exists info || info.mtime >= stamp_time) {
                     return False;
                 }
             }
@@ -1970,8 +2048,10 @@ sub usage(*string error = NOTHING, bool success = False) {
         "usage: %s [--direct|--build-map|--artifact-current] CONTEXT TARGET_OUTPUT\n"
         "       %s --batch-artifact-current STAMP CONTEXT TARGET_OUTPUT\n"
         "       %s --direct-map-cmake PREFIX CONTEXT\n"
+        "       %s --build-direct-map-cmake PREFIX CONTEXT\n"
         "       %s --source-symbol-manifest FILE CONTEXT\n",
-        get_script_name(), get_script_name(), get_script_name(), get_script_name());
+        get_script_name(), get_script_name(), get_script_name(), get_script_name(),
+        get_script_name());
     if (success) {
         printf("%s", text);
     } else {
@@ -2002,6 +2082,7 @@ int sub main() {
     bool build_map = False;
     bool artifact_current = False;
     *string direct_map_prefix;
+    *string build_direct_map_prefix;
     *string source_symbol_manifest;
     *string batch_bootstrap_stamp;
     list<string> positional = ();
@@ -2016,6 +2097,7 @@ int sub main() {
         } else if (arg == "--artifact-current") {
             artifact_current = True;
         } else if (arg == "--direct-map-cmake"
+                || arg == "--build-direct-map-cmake"
                 || arg == "--source-symbol-manifest"
                 || arg == "--batch-artifact-current") {
             if (++index >= ARGV.size()) {
@@ -2023,6 +2105,8 @@ int sub main() {
             }
             if (arg == "--direct-map-cmake") {
                 direct_map_prefix = ARGV[index];
+            } else if (arg == "--build-direct-map-cmake") {
+                build_direct_map_prefix = ARGV[index];
             } else if (arg == "--source-symbol-manifest") {
                 source_symbol_manifest = ARGV[index];
             } else {
@@ -2030,6 +2114,8 @@ int sub main() {
             }
         } else if (arg.startsWith("--direct-map-cmake=")) {
             direct_map_prefix = arg.substr(19);
+        } else if (arg.startsWith("--build-direct-map-cmake=")) {
+            build_direct_map_prefix = arg.substr(25);
         } else if (arg.startsWith("--source-symbol-manifest=")) {
             source_symbol_manifest = arg.substr(25);
         } else if (arg.startsWith("--batch-artifact-current=")) {
@@ -2063,15 +2149,19 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
-    if (exists direct_map_prefix) {
+    if (exists direct_map_prefix || exists build_direct_map_prefix) {
         if (positional.size() != 1) {
-            usage("--direct-map-cmake accepts only a context argument");
+            usage("direct-map output accepts only a context argument");
         }
-        if (direct_map_prefix !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
-            usage(sprintf("invalid CMake variable prefix: %y", direct_map_prefix));
+        string map_prefix = exists build_direct_map_prefix
+            ? build_direct_map_prefix : direct_map_prefix;
+        if (map_prefix !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            usage(sprintf("invalid CMake variable prefix: %y", map_prefix));
         }
         int order_started = clock_getmicros_monotonic();
-        list<list<int>> orders = engine.allDirectOrders(context_path, context_info);
+        list<list<int>> orders = exists build_direct_map_prefix
+            ? engine.allBuildDirectOrders(context_path, context_info)
+            : engine.allDirectOrders(context_path, context_info);
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
             stderr.printf("main direct orders=%d us\n",
                 clock_getmicros_monotonic() - order_started);
@@ -2082,7 +2172,7 @@ int sub main() {
             foreach int provider in (orders[target]) {
                 push dependencies, cmakeQuote(context_info.outputs[provider]);
             }
-            printf("set(%s_%d \"%s\")\n", direct_map_prefix, target,
+            printf("set(%s_%d \"%s\")\n", map_prefix, target,
                 join(";", dependencies));
         }
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {

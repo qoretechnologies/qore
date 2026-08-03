@@ -3699,6 +3699,8 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     decompressed_string_pool.clear();
     data = in_data;
     total_size = in_size;
+    input_data = in_data;
+    input_size = in_size;
 
     // Fixed header size (60 bytes)
     const uint32_t header_size = QORE_AOT_HEADER_SIZE;

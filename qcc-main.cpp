@@ -711,6 +711,12 @@ static bool depfile_qo_input_content_stamps = false;
 // symbol/body contracts to the provider object's semantic compile-contract
 // stamp. This avoids recompiling callers after source-only provider edits.
 static bool depfile_compile_contract_stamps = false;
+// Optional tab-separated source -> content-digest map supplied by build-system
+// integrations. After imported sources have been narrowed to compile-contract
+// stamps, remaining source dependencies are rewritten to content-preserving
+// sidecars so timestamp-only source changes do not propagate to qcc objects.
+static const char* depfile_source_content_map_path = nullptr;
+static std::map<std::string, std::string> depfile_source_content_stamps;
 enum class DepfileModuleDepsMode {
     Source,
     Artifact,
@@ -1036,6 +1042,10 @@ static void print_usage(const char* prog) {
            "                         provider .qo.compile-contract.stamp sidecars so\n"
            "                         comments and non-imported body edits do not\n"
            "                         recompile consumers.\n");
+    printf("      --depfile-source-content-map=FILE\n"
+           "                         Rewrite remaining source dependencies using a\n"
+           "                         tab-separated source/content-digest map so\n"
+           "                         timestamp-only edits do not rebuild objects.\n");
     printf("      --depfile-module-deps=MODE\n"
            "                         Module dependency form: source (default), artifact,\n"
            "                         or none. Source expands split modules to .qm/.qc/.ql.\n");
@@ -1248,6 +1258,7 @@ static struct option long_options[] = {
     {"batch-script-aggregate", required_argument, nullptr, 0x123},
     {"batch-script-aggregate-output", required_argument, nullptr, 0x124},
     {"batch-script-aggregate-manifest-input", required_argument, nullptr, 0x125},
+    {"depfile-source-content-map", required_argument, nullptr, 0x126},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1457,6 +1468,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x125:  // --batch-script-aggregate-manifest-input
                 batch_script_aggregate_manifest_inputs.emplace_back(optarg);
+                break;
+            case 0x126:  // --depfile-source-content-map
+                depfile_source_content_map_path = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -5707,6 +5721,23 @@ static bool build_aot_contract_content(const QoreAOTSymbolIndex& index,
     std::vector<std::string> compile_rows;
     compile_rows.reserve(index.context.size() + index.defined.size()
         + index.native.size());
+    std::set<std::string> required_namespaces;
+    for (size_t i = 0; i < index.defined.size(); ++i) {
+        if (!json_dump_check_cancel(i,
+                "AOT compile-contract namespace collection")) {
+            error = "operation cancelled during AOT compile-contract namespace collection";
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = index.defined[i];
+        if (rec.kind == QoreAOTSymbolKind::NAMESPACE) {
+            continue;
+        }
+        size_t separator = rec.qore_path.find("::");
+        while (separator != std::string::npos) {
+            required_namespaces.insert(rec.qore_path.substr(0, separator));
+            separator = rec.qore_path.find("::", separator + 2);
+        }
+    }
     for (size_t i = 0; i < index.context.size(); ++i) {
         if (!json_dump_check_cancel(i,
                 "AOT context compile-contract collection")) {
@@ -5725,6 +5756,15 @@ static bool build_aot_contract_content(const QoreAOTSymbolIndex& index,
             return false;
         }
         const QoreAOTSymbolIndexRecord& rec = index.defined[i];
+        // Per-file objects retain namespace context from the full parse or
+        // preload program. Only namespace ancestors of symbols this object
+        // actually defines are part of its consumer contract; recording the
+        // complete ambient namespace set makes batch and single contracts
+        // depend on unrelated sibling and loaded-module declarations.
+        if (rec.kind == QoreAOTSymbolKind::NAMESPACE
+                && !required_namespaces.count(rec.qore_path)) {
+            continue;
+        }
         std::string row = "defined\t";
         append_aot_contract_field(row, qoreAOTSymbolKindName(rec.kind));
         append_aot_contract_field(row,
@@ -5986,6 +6026,69 @@ static std::string canonical_existing_path(const std::string& path) {
     std::string rv = resolved;
     free(resolved);
     return rv;
+}
+
+static bool load_depfile_source_content_map(std::string& error) {
+    if (!depfile_source_content_map_path) {
+        return true;
+    }
+
+    std::string content;
+    if (!read_file_required(depfile_source_content_map_path, content, error)) {
+        return false;
+    }
+    size_t line_number = 0;
+    for (size_t offset = 0; offset < content.size();) {
+        size_t end = content.find('\n', offset);
+        if (end == std::string::npos) {
+            end = content.size();
+        }
+        ++line_number;
+        if (!(line_number % 100)
+                && qcc_check_cancel("qcc source-content map read")) {
+            error = "operation cancelled while reading source-content map '"
+                + std::string(depfile_source_content_map_path) + "'";
+            return false;
+        }
+        std::string line = content.substr(offset, end - offset);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        offset = end == content.size() ? end : end + 1;
+        if (line.empty()) {
+            continue;
+        }
+        size_t separator = line.find('\t');
+        if (separator == std::string::npos || !separator
+                || separator + 1 == line.size()
+                || line.find('\t', separator + 1) != std::string::npos) {
+            error = "invalid source-content map entry at line "
+                + std::to_string(line_number) + " in '"
+                + depfile_source_content_map_path + "'";
+            return false;
+        }
+        std::string source = canonical_existing_path(
+            line.substr(0, separator));
+        std::string stamp = canonical_existing_path(
+            line.substr(separator + 1));
+        if (!depfile_dependency_exists(source)) {
+            error = "source-content map source does not exist: '" + source
+                + "'";
+            return false;
+        }
+        if (!depfile_dependency_exists(stamp)) {
+            error = "source-content map digest does not exist: '" + stamp
+                + "'";
+            return false;
+        }
+        auto inserted = depfile_source_content_stamps.emplace(source, stamp);
+        if (!inserted.second && inserted.first->second != stamp) {
+            error = "conflicting source-content map entries for '" + source
+                + "'";
+            return false;
+        }
+    }
+    return true;
 }
 
 static QoreAOTSourceSymbolMap* source_symbol_map_for_kind(QoreAOTSourceSymbolManifest& manifest,
@@ -6874,6 +6977,32 @@ static void capture_qcc_input_snapshots(QCCBuildManifest& manifest,
         std::move(snapshots));
 }
 
+static bool extend_qcc_input_snapshots(QCCBuildManifest& manifest,
+        const std::vector<std::string>& inputs, std::string& error) {
+    std::map<std::string, QCCFileFingerprint> snapshots;
+    if (manifest.input_snapshots) {
+        snapshots = *manifest.input_snapshots;
+    }
+    std::vector<std::string> paths;
+    add_qcc_snapshot_paths(inputs, paths);
+    for (size_t i = 0; i < paths.size(); ++i) {
+        if (i && !(i % 100)
+                && qcc_check_cancel("qcc input snapshot extension")) {
+            error = "operation cancelled during qcc input snapshot extension";
+            return false;
+        }
+        const std::string& path = paths[i];
+        std::string canonical = canonical_existing_path(path);
+        if (snapshots.find(canonical) == snapshots.end()) {
+            snapshots.emplace(canonical, qcc_input_fingerprint(canonical));
+        }
+    }
+    manifest.input_snapshots =
+        std::make_shared<const std::map<std::string, QCCFileFingerprint>>(
+            std::move(snapshots));
+    return true;
+}
+
 static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
         const std::vector<QoreAOTSourceFingerprint>& fingerprints,
         std::string& error) {
@@ -7608,6 +7737,37 @@ static bool rewrite_aot_compile_contract_depfile(
     return true;
 }
 
+static bool rewrite_depfile_source_content_stamps(
+        const std::string& depfile, const std::string& depfile_target,
+        std::string& error) {
+    if (depfile_source_content_stamps.empty() || depfile.empty()
+            || !is_file(depfile)) {
+        return true;
+    }
+
+    std::vector<std::string> deps;
+    read_make_depfile_inputs(depfile, deps);
+    bool changed = false;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "qcc source-content depfile rewrite", error)) {
+            return false;
+        }
+        auto stamp = depfile_source_content_stamps.find(
+            canonical_existing_path(deps[i]));
+        if (stamp != depfile_source_content_stamps.end()) {
+            deps[i] = stamp->second;
+            changed = true;
+        }
+    }
+    if (changed && !write_depfile_list(depfile.c_str(), depfile_target, deps)) {
+        error = "cannot rewrite source dependencies in depfile '" + depfile
+            + "'";
+        return false;
+    }
+    return true;
+}
+
 static bool validate_script_object_body_contracts(
         const std::vector<std::string>& object_paths) {
     bool initialize_qore = !q_libqore_initalized();
@@ -7904,9 +8064,12 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    if (depfile_path && depfile_dir) {
+    bool batch_compile_arguments = compile_only && !context_dir
+        && (optind + 1 < argc);
+    if (depfile_path && depfile_dir && !batch_compile_arguments) {
         fprintf(stderr,
-            "error: --depfile and --depfile-dir are mutually exclusive\n");
+            "error: --depfile and --depfile-dir are mutually exclusive "
+            "outside batch compile mode\n");
         return 1;
     }
     if (depfile_target_path && !depfile_path) {
@@ -7922,6 +8085,16 @@ int main(int argc, char** argv) {
     if (skip_if_manifest_current && !write_manifest_path) {
         fprintf(stderr,
             "error: --skip-if-manifest-current requires --write-manifest=FILE\n");
+        return 1;
+    }
+    if (depfile_source_content_map_path && !depfile_path && !depfile_dir) {
+        fprintf(stderr,
+            "error: --depfile-source-content-map requires --depfile or --depfile-dir\n");
+        return 1;
+    }
+    std::string depfile_source_content_error;
+    if (!load_depfile_source_content_map(depfile_source_content_error)) {
+        fprintf(stderr, "error: %s\n", depfile_source_content_error.c_str());
         return 1;
     }
 
@@ -8596,12 +8769,23 @@ int main(int argc, char** argv) {
         qore_init(QL_GPL, "UTF-8", true);
         std::string error;
         int compiled_count = 0;
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
         bool ok = QoreAOT::compileScriptAggregate(
             target_files, output_path, script_aggregate_symbol, PO_DEFAULT,
             error, opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines, parse_option_flags,
             &compiled_count, script_aggregate_native_registers);
+        qore_aot_set_module_dep_sink(nullptr);
         if (!ok) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        std::sort(dep_module_files.begin(), dep_module_files.end());
+        dep_module_files.erase(std::unique(dep_module_files.begin(),
+            dep_module_files.end()), dep_module_files.end());
+        if (!extend_qcc_input_snapshots(manifest, dep_module_files, error)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
@@ -8611,8 +8795,11 @@ int main(int argc, char** argv) {
                 opt_level, compiled_count, source_mode_suffix(include_source),
                 output_path);
         }
+        std::vector<std::string> aggregate_dep_inputs = target_files;
+        aggregate_dep_inputs.insert(aggregate_dep_inputs.end(),
+            dep_module_files.begin(), dep_module_files.end());
         if (depfile_path && !write_depfile_list(depfile_path,
-                qcc_depfile_target(output_path), target_files)) {
+                qcc_depfile_target(output_path), aggregate_dep_inputs)) {
             qore_cleanup();
             return 1;
         }
@@ -8656,12 +8843,6 @@ int main(int argc, char** argv) {
         if (!script_lib_dirs.empty()) {
             fprintf(stderr, "error: -L <dir> is per-file-compile only; "
                 "not needed in batch mode (sources share one parse)\n");
-            return 1;
-        }
-        if (depfile_path) {
-            fprintf(stderr,
-                "error: --depfile is single-output only; use --depfile-dir "
-                "with batch -c --output-dir mode\n");
             return 1;
         }
         if (qcc_single_output_sidecars_requested()
@@ -8734,6 +8915,8 @@ int main(int argc, char** argv) {
         std::string aggregate_symbol_arg = batch_script_aggregate_symbol
             ? batch_script_aggregate_symbol : "";
         std::vector<QoreAOTSourceFingerprint> observed_source_fingerprints;
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
@@ -8745,10 +8928,33 @@ int main(int argc, char** argv) {
             script_aggregate_native_registers,
             batch_script_aggregate_output ? &aggregate_compiled_count : nullptr,
             &observed_source_fingerprints);
+        qore_aot_set_module_dep_sink(nullptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
             return 1;
+        }
+        std::sort(dep_module_files.begin(), dep_module_files.end());
+        dep_module_files.erase(std::unique(dep_module_files.begin(),
+            dep_module_files.end()), dep_module_files.end());
+        if (!extend_qcc_input_snapshots(batch_input_manifest,
+                dep_module_files, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        if (depfile_path) {
+            if (!write_depfile_list(depfile_path,
+                    qcc_depfile_target(batch_input_manifest.output),
+                    dep_module_files)
+                    || !rewrite_depfile_source_content_stamps(depfile_path,
+                        qcc_depfile_target(batch_input_manifest.output), error)) {
+                if (!error.empty()) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                }
+                qore_cleanup();
+                return 1;
+            }
         }
         if (!capture_qcc_observed_source_snapshots(batch_input_manifest,
                 observed_source_fingerprints, error)) {
@@ -8831,6 +9037,12 @@ int main(int argc, char** argv) {
                     qore_cleanup();
                     return 1;
                 }
+                if (!rewrite_depfile_source_content_stamps(depfile,
+                        object + ".stamp", error)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
 
                 QCCBuildManifest manifest;
                 manifest.kind = "script-file";
@@ -8870,6 +9082,7 @@ int main(int argc, char** argv) {
             manifest.output = batch_script_aggregate_output;
             manifest.index_json = write_index_json_path
                 ? write_index_json_path : "";
+            manifest.depfile = depfile_path ? depfile_path : "";
             manifest.aggregate_symbol = batch_script_aggregate_symbol;
             manifest.inputs = batch_sources;
             manifest.extra_inputs = batch_script_aggregate_manifest_inputs;
@@ -9217,7 +9430,9 @@ int main(int argc, char** argv) {
                 source_symbol_arg = &source_symbols;
             }
         }
-        if (!QoreAOT::compileScriptFile(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool script_ok = QoreAOT::compileScriptFile(
                 source_file,
                 script_lib_dirs,
                 output,
@@ -9231,11 +9446,25 @@ int main(int argc, char** argv) {
                 parse_defines,
                 depfile_path ? &parsed_files : nullptr,
                 source_symbol_arg,
-                &observed_source_fingerprints)) {
+                &observed_source_fingerprints);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!script_ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            if (!capture_qcc_observed_source_snapshots(manifest,
+            std::sort(dep_module_files.begin(), dep_module_files.end());
+            dep_module_files.erase(std::unique(dep_module_files.begin(),
+                dep_module_files.end()), dep_module_files.end());
+            parsed_files.insert(parsed_files.end(), dep_module_files.begin(),
+                dep_module_files.end());
+            std::sort(parsed_files.begin(), parsed_files.end());
+            parsed_files.erase(std::unique(parsed_files.begin(),
+                parsed_files.end()), parsed_files.end());
+            if (!extend_qcc_input_snapshots(manifest,
+                    dep_module_files, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                rc = 1;
+            } else if (!capture_qcc_observed_source_snapshots(manifest,
                     observed_source_fingerprints, error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
@@ -9255,6 +9484,11 @@ int main(int argc, char** argv) {
             } else if (!rc && depfile_path
                     && !rewrite_aot_compile_contract_depfile(output,
                         script_lib_dirs, depfile_path,
+                        qcc_depfile_target(output), error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                rc = 1;
+            } else if (!rc && depfile_path
+                    && !rewrite_depfile_source_content_stamps(depfile_path,
                         qcc_depfile_target(output), error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;

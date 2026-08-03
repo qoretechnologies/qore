@@ -279,7 +279,11 @@ class CMakeQoEnumConsumer {
 ");
         write(callref_provider,
 "%new-style
-string sub cmakeQoCallRefFunction() { return \"callref\"; }
+string sub cmakeQoCallRefFunction() {
+    # Keep a transitive provider -> provider -> consumer body-contract chain.
+    string ignored = cmakeQoFreeFunction();
+    return \"callref\";
+}
 ");
         write(callref_consumer,
 "%new-style
@@ -367,17 +371,19 @@ class CMakeQoProgramLike {
 ");
         write(sibling_const_holder,
 "%new-style
+namespace CMakeQoSiblingConst {
 class CMakeQoSiblingConstHolder {
     public {
-        static CMakeQoProgramLike Dynamic(CMakeQoSiblingConst::Defines);
+        static CMakeQoProgramLike Dynamic(Defines);
     }
     static string get() { return Dynamic.get(); }
+}
 }
 ");
         write(sibling_const_consumer,
 "%new-style
 class CMakeQoSiblingConstConsumer {
-    static string get() { return CMakeQoSiblingConstHolder::get(); }
+    static string get() { return CMakeQoSiblingConst::CMakeQoSiblingConstHolder::get(); }
 }
 ");
         write(entry,
@@ -625,6 +631,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "qcc object helper exports compile-contract stamps");
 
         string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
+        string build_deps = read(build_dir + "/qo-scripts/build-deps.cmake");
         assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_1 \"\"\\)"),
             "linkable provider references do not become consumer build deps: " + direct);
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_3.*base_qc\\.qo"),
@@ -639,10 +646,18 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "enum annotations and members become source-scanned build prerequisites: " + direct);
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_13.*callrefprovider_qc\\.qo"),
             "function call references become source-scanned build prerequisites: " + direct);
+        assertTrue(build_deps.regex(
+                "QORE_QCC_BUILD_DEPS_cmake_smoke_13.*callrefprovider_qc\\.qo"),
+            "transitive fast-entry consumer waits for its direct provider: "
+                + build_deps);
         assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_15 \"\"\\)"),
             "static calls in constant initializers remain source-deferred callable imports: " + direct);
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_17.*consthashdeclprovider_qc\\.qo"),
             "typed-hash constructors in constant initializers become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex(
+                "QORE_QCC_DIRECT_DEPS_cmake_smoke_21.*siblingconstprovider_qc\\.qo"),
+            "unqualified constants in static constructor defaults become build prerequisites: "
+                + direct);
 
         string initial_provider = read(provider);
         write(provider, replace(initial_provider,
@@ -689,14 +704,27 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertFalse(is_file(build_dir + "/script-aggregate.qo.idx.json"),
             "script aggregate helper removes an unrequested legacy index: " + reconfigure);
         string rebuilt_direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
+        string rebuilt_build_deps = read(build_dir + "/qo-scripts/build-deps.cmake");
         assertTrue(rebuilt_direct.regex(
                 "QORE_QCC_DIRECT_DEPS_cmake_smoke_1.*provider_qc\\.qo"),
             "native-body depfiles order an unqualified function provider before its consumer: "
                 + rebuilt_direct);
+        assertTrue(rebuilt_build_deps.regex(
+                "QORE_QCC_BUILD_DEPS_cmake_smoke_12.*provider_qc\\.qo"),
+            "transitive fast-entry provider has target-level publication ordering: "
+                + rebuilt_build_deps);
         assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
             "late-defined object module dependency built: " + build1);
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
             "late-defined aggregate module dependency built: " + build1);
+        string bootstrap_depfile = read(build_dir
+            + "/qo-scripts/.qcc-batch-bootstrap.stamp.d");
+        assertTrue(bootstrap_depfile.find(
+                build_dir + "/late-modules/LateObjectModule.qmod") != -1
+                && bootstrap_depfile.find(
+                    build_dir + "/late-modules/LateAggregateModule.qmod") != -1,
+            "batch bootstrap records the exact loaded qmod artifacts: "
+                + bootstrap_depfile);
         assertTrue(is_file(build_dir + "/qo-static-host"),
             "static AOT host linked from per-file and aggregate objects: " + build1);
         string source_qore = realpath(qore_bin) ?? qore_bin;
@@ -707,6 +735,28 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             source_out, "source-mode fixture output");
         assertEq(source_out, static_out,
             "statically linked AOT aggregate is load-equivalent to parsed source");
+
+        list<string> object_paths =
+            trim(read(build_dir + "/qo-objects.txt")).split(";");
+        string provider_object = "";
+        foreach string object_path in (object_paths) {
+            if (object_path.endsWith("_provider_qc.qo")) {
+                provider_object = object_path;
+            }
+        }
+        assertTrue(provider_object != "",
+            "provider object is present in the generated object list");
+        date module_object_stamp = mtime(object_paths[0] + ".stamp");
+        write(late_object_module, replace(read(late_object_module),
+            "late-defined qcc object dependency",
+            "rebuilt qcc object dependency"));
+        string module_rebuild = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(module_rebuild.find(
+                "batch bootstrapping cmake-smoke (24 sources)") != -1,
+            "same-path qmod replacement reruns one coherent batch bootstrap: "
+                + module_rebuild);
+        assertNeq(module_object_stamp, mtime(object_paths[0] + ".stamp"),
+            "module replacement republishes the script object group");
 
         write(sibling_const_consumer, read(sibling_const_consumer)
             + "# force incremental sibling const_ref resolution\n");
@@ -753,21 +803,58 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 && no_op.find("qcc --script-aggregate:") == -1,
             "no-op rebuild does not rerun qcc helper targets: " + no_op);
 
-        list<string> object_paths = trim(read(build_dir + "/qo-objects.txt")).split(";");
+        string provider_depfile = read(provider_object + ".d");
+        assertTrue(provider_depfile.find("/source-content/") != -1,
+            "object depfile records a source-content digest: " + provider_depfile);
+        assertEq(-1, provider_depfile.find(provider),
+            "object depfile does not retain the raw primary source path: "
+                + provider_depfile);
+        hash<string, date> object_mtimes = {};
+        foreach string object_path in (object_paths) {
+            object_mtimes{object_path} = mtime(object_path);
+        }
+        run(sprintf("cmake -E touch %s", provider));
+        string timestamp_only = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(timestamp_only.find("qcc -c:") == -1
+                && timestamp_only.find("qcc: scanning") == -1,
+            "timestamp-only source change stops after content validation: "
+                + timestamp_only);
+        foreach string object_path in (object_paths) {
+            assertEq(object_mtimes{object_path}, mtime(object_path),
+                "timestamp-only source change preserves object: " + object_path);
+        }
+
         string consumer_object = object_paths[1];
         date batch_consumer_mtime = mtime(consumer_object);
+        string batch_provider_contract = read(
+            provider_object + ".compile-contract.stamp");
         write(provider, read(provider) + "# compile-contract no-op\n");
         string batch_to_single = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertNeq(batch_consumer_mtime, mtime(consumer_object),
-            "batch-to-single contract transition revalidates the unqualified caller: "
+        assertEq(batch_provider_contract,
+            read(provider_object + ".compile-contract.stamp"),
+            "batch and single compilation publish the same provider contract: "
                 + batch_to_single);
-
+        assertEq(batch_consumer_mtime, mtime(consumer_object),
+            "batch-to-single provider rebuild preserves the unqualified caller: "
+                + batch_to_single);
         date consumer_mtime = mtime(consumer_object);
         write(provider, read(provider) + "# second compile-contract no-op\n");
+        # qore-qo-incremental formerly used flock(1), which left this regular
+        # file behind. The portable output lock must migrate it automatically.
+        write(provider_object + ".lock", "");
         string semantic_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(consumer_mtime, mtime(consumer_object),
             "steady-state comment-only provider edit preserves the consumer object: "
                 + semantic_no_op);
+        assertEq(1, semantic_no_op.split("qcc: script-context .qo").size() - 1,
+            "concurrent provider requests publish exactly one object generation: "
+                + semantic_no_op);
+        assertFalse(exists hlstat(provider_object + ".lock"),
+            "incremental compilation migrates and removes a legacy flock file");
+        string validated_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(validated_no_op.find("qcc -c:") == -1,
+            "provider validation converges without repeated qcc recipes: "
+                + validated_no_op);
 
         string transient_provider = replace(read(provider),
             "return CMakeQoProvider::label();",
@@ -778,6 +865,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string replacement = src_dir + "/provider-replacement.qc";
         string validation_marker = build_dir + "/qcc-input-validation.marker";
         write(replacement, final_provider);
+        mkdir(provider_object + ".lock");
+        write(provider_object + ".lock/pid", "999999999\n");
         string contract_change = run(sprintf(
             "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
             "[ -f %s ] && cp %s %s) & watcher=$!; "
@@ -790,9 +879,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(contract_change.find("provider.qc") != -1,
             "provider body change runs the precise incremental path: "
                 + contract_change);
-        assertTrue(contract_change.find("qcc input changed during compilation; retrying (2/3)") != -1,
+        assertTrue(contract_change.find("qcc input changed during compilation; retrying (2/16)") != -1,
             "provider edit during qcc publication is retried in the same build: "
                 + contract_change);
+        assertFalse(exists hlstat(provider_object + ".lock"),
+            "incremental compilation reclaims an interrupted output lock");
         string changed_source_out = run(sprintf("cd %s && %s %s",
             src_dir, source_qore, source_runner));
         string changed_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
@@ -825,11 +916,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             aba_validation_marker, aba_validation_marker, aba_provider_copy, provider,
             snapshot_marker, aba_validation_marker, provider, build_dir));
         assertTrue(aba_change.find(
-                "qcc parsed input changed after its initial snapshot") != -1,
-            "A -> B -> A source transition rejects output parsed from transient B: "
+                "qcc parsed input changed after its initial snapshot") == -1,
+            "successful A -> B -> A retry suppresses the superseded qcc error: "
                 + aba_change);
         assertTrue(aba_change.find(
-                "qcc input changed during compilation; retrying (2/3)") != -1,
+                "qcc input changed during compilation; retrying (2/16)") != -1,
             "A -> B -> A source transition is retried in the same build: "
                 + aba_change);
         string aba_source_out = run(sprintf("cd %s && %s %s",
@@ -945,6 +1036,7 @@ endif()
         mkdir(build_dir + "/qo");
         mkdir(build_dir + "/qo/LEGACY_GROUP");
         write(build_dir + "/qo/LEGACY_GROUP/legacy.qo", "legacy\n");
+        write(build_dir + "/qo/LEGACY_GROUP/legacy.qo.tmp.12345", "interrupted qcc\n");
         mkdir(build_dir + "/qo-scripts");
         mkdir(build_dir + "/qo-scripts/LEGACY_GROUP");
         write(build_dir + "/qo-scripts/LEGACY_GROUP/qcc-single.sh", "#!/bin/sh\n");
@@ -1002,6 +1094,8 @@ endif()
             "single-source transition prunes the obsolete batch script");
         assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp"),
             "single-source transition prunes the obsolete bootstrap stamp");
+        assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp.d"),
+            "single-source transition prunes the obsolete bootstrap depfile");
         assertEq(retained_after_replace, mtime(replacement_a[0]),
             "source removal configuration preserves the retained object timestamp");
         string single_build = run(sprintf("cmake --build %s -- -j17", build_dir));

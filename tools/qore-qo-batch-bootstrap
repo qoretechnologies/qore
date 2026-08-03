@@ -92,6 +92,9 @@ outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
 sed -n 's/^output=//p' "$context" > "$outputs_file"
 
 complete=true
+if [ ! -f "${bootstrap_stamp}.d" ]; then
+    complete=false
+fi
 while IFS= read -r output; do
     [ -n "$output" ] || continue
     for sidecar in \

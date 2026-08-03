@@ -959,6 +959,8 @@ public:
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
     uint32_t total_size = 0;
+    const uint8_t* input_data = nullptr;
+    uint32_t input_size = 0;
 
     // Parsed header
     QoreAOTBinaryHeader header;
@@ -1011,6 +1013,8 @@ public:
         std::vector<std::vector<uint8_t>>().swap(decompressed_sections);
         data = nullptr;
         total_size = 0;
+        input_data = nullptr;
+        input_size = 0;
         data_area = nullptr;
         data_area_size = 0;
         string_pool = nullptr;
@@ -1058,6 +1062,10 @@ public:
 
     //! Get the parsed binary header
     const QoreAOTBinaryHeader& getHeader() const { return header; }
+
+    //! Original encoded metadata passed to open(); valid until the caller releases it.
+    const uint8_t* getInputData() const { return input_data; }
+    uint32_t getInputSize() const { return input_size; }
 
     //! Get the number of sections
     uint32_t getSectionCount() const { return static_cast<uint32_t>(sections.size()); }
@@ -2750,6 +2758,9 @@ public:
     //! the single cross-session index rebuild.
     bool finalizePostIndex(std::string& error);
 
+    //! Install lazy executable IR on source-stripped variants for qcc parse-time calls.
+    bool installSourceParseIRFallbacks(std::string& error);
+
     ~QoreAOTBinaryDeserializer() {
         delete type_resolver;
         // Clean up any pending QoreValues that weren't transferred to the namespace tree
@@ -3309,7 +3320,10 @@ public:
                 })) {
             return false;
         }
-        return true;
+        return runSessionPhase("AOT source-parse IR fallback installation",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.installSourceParseIRFallbacks(error);
+            });
     }
 
     //! Finish AOT-only post-commit work after source parseCommit().

@@ -56,6 +56,17 @@ fi
 source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
 source_parse_define_tool="${QORE_QCC_SOURCE_PARSE_DEFINE_HELPER:-$script_dir/qore-qo-source-parse-defines}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
+max_input_attempts=${QORE_QCC_MAX_INPUT_ATTEMPTS:-16}
+case "$max_input_attempts" in
+    *[!0-9]*|'')
+        echo "$0: QORE_QCC_MAX_INPUT_ATTEMPTS must be a positive integer" >&2
+        exit 2
+        ;;
+esac
+if [ "$max_input_attempts" -lt 1 ]; then
+    echo "$0: QORE_QCC_MAX_INPUT_ATTEMPTS must be a positive integer" >&2
+    exit 2
+fi
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -76,19 +87,55 @@ cleanup_stage_dir() {
 prepare_preload_dir() {
     preload_dir=$1
     preload_file=$2
+    snapshot_file=$3
 
     target_name=$(basename "$output")
     mkdir -p "$preload_dir"
+    : > "$snapshot_file"
     while IFS= read -r preload_qo; do
         [ -n "$preload_qo" ] || continue
         [ -f "$preload_qo" ] || continue
         preload_name=$(basename "$preload_qo")
         [ "$preload_name" = "$target_name" ] && continue
         [ -e "$preload_dir/$preload_name" ] && continue
-        ln -s "$preload_qo" "$preload_dir/$preload_name"
+        # Freeze one coherent artifact generation for this qcc process.  A
+        # symlink would follow a concurrent provider's atomic replacement and
+        # could expose different generations while qcc restores metadata and
+        # executable bodies from the same logical preload.
+        ln "$preload_qo" "$preload_dir/$preload_name"
+        printf '%s\n' "$preload_dir/$preload_name" >> "$snapshot_file"
         if [ -f "$preload_qo.compile-contract.stamp" ]; then
+            # qcc canonicalizes this path into the generated depfile, so keep
+            # it linked to the live sidecar. The separate hard link below is
+            # the immutable value used for before/after validation.
             ln -s "$preload_qo.compile-contract.stamp" \
                 "$preload_dir/$preload_name.compile-contract.stamp"
+            ln "$preload_qo.compile-contract.stamp" \
+                "$preload_dir/$preload_name.compile-contract.snapshot"
+        fi
+        if [ -f "$preload_qo.idx.json" ]; then
+            ln "$preload_qo.idx.json" \
+                "$preload_dir/$preload_name.idx.json"
+        fi
+    done < "$preload_file"
+}
+
+preload_contracts_current() {
+    preload_dir=$1
+    preload_file=$2
+
+    target_name=$(basename "$output")
+    while IFS= read -r preload_qo; do
+        [ -n "$preload_qo" ] || continue
+        preload_name=$(basename "$preload_qo")
+        [ "$preload_name" = "$target_name" ] && continue
+        live_contract="$preload_qo.compile-contract.stamp"
+        snapshot_contract="$preload_dir/$preload_name.compile-contract.snapshot"
+        if [ -f "$live_contract" ]; then
+            [ -f "$snapshot_contract" ] || return 1
+            cmp -s "$live_contract" "$snapshot_contract" || return 1
+        elif [ -e "$snapshot_contract" ]; then
+            return 1
         fi
     done < "$preload_file"
 }
@@ -96,17 +143,32 @@ prepare_preload_dir() {
 collect_source_parse_defines() {
     define_file=$1
     preload_file=$2
+    define_tmp=$(mktemp "$define_file.tmp.XXXXXX")
 
     if [ ! -x "$source_parse_define_tool" ]; then
         echo "$0: missing source parse define helper: $source_parse_define_tool" >&2
+        rm -f "$define_tmp"
         return 1
     fi
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
             && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
-        "$QORE_QCC_QORE_EXECUTABLE" --exec-mode=ast \
-            "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
+        if ! "$QORE_QCC_QORE_EXECUTABLE" --exec-mode=ast \
+                "$source_parse_define_tool" "$output" "$preload_file" \
+                > "$define_tmp"; then
+            rm -f "$define_tmp"
+            return 1
+        fi
     else
-        "$source_parse_define_tool" "$output" "$preload_file" > "$define_file"
+        if ! "$source_parse_define_tool" "$output" "$preload_file" \
+                > "$define_tmp"; then
+            rm -f "$define_tmp"
+            return 1
+        fi
+    fi
+    if [ -f "$define_file" ] && cmp -s "$define_file" "$define_tmp"; then
+        rm -f "$define_tmp"
+    else
+        mv "$define_tmp" "$define_file"
     fi
 }
 
@@ -169,6 +231,7 @@ compile_current_source() {
     manifest_input_file=$2
     single_log=
     single_preload=
+    snapshot_preload_file=
     extra_define_file=
 
     if [ ! -f "$single_script" ]; then
@@ -181,44 +244,55 @@ compile_current_source() {
     # source manifest, and success/content stamps. qcc itself decides whether
     # the manifest is current and can skip before Qore initialization when
     # nothing affecting the output changed.
-    single_preload=$(mktemp -d "$qo_dir/.qcc-preload.$(basename "$output").XXXXXX")
     extra_define_file=$output.source-parse-defines
     single_log=$(mktemp "${TMPDIR:-/tmp}/qore-qo-single.XXXXXX")
 
-    if ! prepare_preload_dir "$single_preload" "$selected_preload_file" > "$single_log" 2>&1; then
-        cat "$single_log" >&2
-        rm -f "$single_log"
-        cleanup_stage_dir "$single_preload"
-        return 1
-    fi
-
-    if ! collect_source_parse_defines "$extra_define_file" "$selected_preload_file" >> "$single_log" 2>&1; then
-        cat "$single_log" >&2
-        rm -f "$single_log"
-        cleanup_stage_dir "$single_preload"
-        return 1
-    fi
-
     attempt=1
     while :; do
-        if QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+        single_preload=$(mktemp -d "$qo_dir/.qcc-preload.$(basename "$output").XXXXXX")
+        snapshot_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-snapshot.XXXXXX")
+        if ! prepare_preload_dir "$single_preload" "$selected_preload_file" \
+                "$snapshot_preload_file" >> "$single_log" 2>&1 \
+                || ! collect_source_parse_defines "$extra_define_file" \
+                    "$snapshot_preload_file" >> "$single_log" 2>&1; then
+            cat "$single_log" >&2
+            rm -f "$single_log" "$snapshot_preload_file"
+            cleanup_stage_dir "$single_preload"
+            return 1
+        fi
+
+        if ! preload_contracts_current "$single_preload" \
+                "$selected_preload_file"; then
+            rc=75
+        elif QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
                 QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
                 QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
                 QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
                 sh "$single_script" "$source" "$output" "$single_preload" \
                     >> "$single_log" 2>&1; then
-            break
+            if preload_contracts_current "$single_preload" \
+                    "$selected_preload_file"; then
+                rm -f "$snapshot_preload_file"
+                break
+            fi
+            rc=75
         else
             rc=$?
         fi
-        if [ "$rc" -ne 75 ] || [ "$attempt" -ge 3 ]; then
+        rm -f "$snapshot_preload_file"
+        cleanup_stage_dir "$single_preload"
+        single_preload=
+        if [ "$rc" -ne 75 ] || [ "$attempt" -ge "$max_input_attempts" ]; then
             cat "$single_log" >&2
             rm -f "$single_log"
-            cleanup_stage_dir "$single_preload"
             return "$rc"
         fi
         attempt=$((attempt + 1))
-        echo "$0: qcc input changed during compilation; retrying ($attempt/3)" \
+        # The retryable qcc attempt reports an error because its snapshot is
+        # no longer publishable. Do not preserve that superseded diagnostic in
+        # an ultimately successful build log.
+        : > "$single_log"
+        echo "$0: qcc input changed during compilation; retrying ($attempt/$max_input_attempts)" \
             >> "$single_log"
     done
 
@@ -241,20 +315,108 @@ compile_or_skip_current() {
     compile_current_source "$selected_preload_file" "$manifest_input_file"
 }
 
-with_output_lock() {
-    selected_preload_file=$1
-    manifest_input_file=$2
-
-    if command -v flock >/dev/null 2>&1; then
-        lock_file="$output.lock"
-        (
-            flock 9
-            compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
-        ) 9>"$lock_file"
+artifact_is_current() {
+    if [ ! -x "$source_order_tool" ] || [ ! -f "$context_file" ]; then
+        return 1
+    fi
+    if [ -n "$batch_bootstrap_stamp" ]; then
+        run_source_order --batch-artifact-current "$batch_bootstrap_stamp" \
+            "$context_file" "$output"
     else
-        compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
+        run_source_order --artifact-current "$context_file" "$output"
     fi
 }
+
+accept_current_artifact() {
+    if ! artifact_is_current; then
+        return 1
+    fi
+    # The custom command can be newer than its output only because a provider
+    # source or ordering prerequisite changed. Record that this generation was
+    # validated against the newer input without rewriting object or contract
+    # content. Recursive prerequisite probes must remain observational.
+    if [ "${QORE_QCC_PREREQUISITES_READY:-0}" != 1 ]; then
+        touch "$output.stamp"
+    fi
+    return 0
+}
+
+with_output_lock() (
+    output_lock_dir="$output.lock"
+    output_lock_owned=false
+    selected_preload_file=
+    manifest_input_file=
+
+    cleanup_output_lock() {
+        if [ -n "$selected_preload_file" ]; then
+            rm -f "$selected_preload_file"
+        fi
+        if [ -n "$manifest_input_file" ]; then
+            rm -f "$manifest_input_file"
+        fi
+        if [ "$output_lock_owned" = true ]; then
+            rm -f "$output_lock_dir/pid"
+            rmdir "$output_lock_dir" 2>/dev/null || true
+        fi
+    }
+    trap cleanup_output_lock EXIT
+    trap 'exit 1' HUP INT TERM
+
+    # Older wrappers used flock(1), which left an empty regular file at this
+    # path. Migrate it before using the portable atomic-directory lock.
+    if [ -f "$output_lock_dir" ] && [ ! -d "$output_lock_dir" ]; then
+        rm -f "$output_lock_dir"
+    fi
+    while ! mkdir "$output_lock_dir" 2>/dev/null; do
+        if [ -r "$output_lock_dir/pid" ]; then
+            owner=
+            IFS= read -r owner < "$output_lock_dir/pid" || true
+            case "$owner" in
+                *[!0-9]*|'')
+                    rm -f "$output_lock_dir/pid"
+                    rmdir "$output_lock_dir" 2>/dev/null || true
+                    continue
+                    ;;
+                *)
+                    if ! kill -0 "$owner" 2>/dev/null; then
+                        rm -f "$output_lock_dir/pid"
+                        rmdir "$output_lock_dir" 2>/dev/null || true
+                        continue
+                    fi
+                    ;;
+            esac
+        else
+            # Allow an owner that just created the directory to publish its
+            # pid before treating an ownerless directory as interrupted work.
+            sleep 1
+            if [ ! -r "$output_lock_dir/pid" ]; then
+                rmdir "$output_lock_dir" 2>/dev/null || true
+                continue
+            fi
+        fi
+        sleep 1
+    done
+    output_lock_owned=true
+    printf '%s\n' "$$" > "$output_lock_dir/pid"
+
+    # Another waiter may have published this exact artifact while this
+    # process was blocked. Validate inside the lock before selecting inputs.
+    if accept_current_artifact; then
+        exit 0
+    fi
+
+    selected_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-selected.XXXXXX")
+    if ! select_preload_outputs "$selected_preload_file" "$@"; then
+        exit 1
+    fi
+
+    manifest_input_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-manifest.XXXXXX")
+    if ! select_manifest_inputs "$manifest_input_file"; then
+        exit 1
+    fi
+
+    compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
+)
 
 build_prerequisites() {
     if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
@@ -285,41 +447,22 @@ build_prerequisites() {
 }
 
 run_main() {
-    selected_preload_file=
-    manifest_input_file=
-    rc=0
+    if accept_current_artifact; then
+        exit 0
+    fi
 
     if ! build_prerequisites; then
         exit 1
     fi
 
-    if [ -n "$batch_bootstrap_stamp" ] && [ -x "$source_order_tool" ] \
-            && [ -f "$context_file" ]; then
-        if run_source_order --batch-artifact-current "$batch_bootstrap_stamp" \
-                "$context_file" "$output"; then
-            exit 0
-        fi
+    # A provider can become current without changing its compile contract.
+    # Recheck after the ordered handoff so dependents avoid preload setup and
+    # qcc startup when their executable assumptions remain valid.
+    if accept_current_artifact; then
+        exit 0
     fi
 
-    selected_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-selected.XXXXXX")
-    if ! select_preload_outputs "$selected_preload_file" "$@"; then
-        rm -f "$selected_preload_file"
-        exit 1
-    fi
-
-    manifest_input_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-manifest.XXXXXX")
-    if ! select_manifest_inputs "$manifest_input_file"; then
-        rm -f "$selected_preload_file" "$manifest_input_file"
-        exit 1
-    fi
-
-    if with_output_lock "$selected_preload_file" "$manifest_input_file"; then
-        rc=0
-    else
-        rc=$?
-    fi
-    rm -f "$selected_preload_file" "$manifest_input_file"
-    exit "$rc"
+    with_output_lock "$@"
 }
 
 run_main "$@"

@@ -57,6 +57,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("inlined body summary is a build dependency", \testBodySummaryDep());
         addTestCase("body summary dependencies are transitive", \testTransitiveBodySummaryDep());
         addTestCase("ordinary cross-file call has no body dependency", \testOrdinaryCallNotBodyDep());
+        addTestCase("source parse can execute a preloaded AOT body",
+            \testSourceParsePreloadedBody());
+        addTestCase("repeated AOT compilation is byte reproducible",
+            \testByteReproducibleObject());
         # NOTE: enum members route through the SAME constant hook — they are
         # registered as ConstantList entries, so a folded `SiblingEnum::Member`
         # is captured identically to a constant.  An end-to-end enum case is not
@@ -369,8 +373,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string out = batchCompileFastPair();
         assertEq("", undefinedFastSymbols("fastcallee"),
             "the callee defines its own fast entry: " + out);
-        assertTrue(undefinedFastSymbols("fastcaller").find("_fast") != -1,
-            "the caller emits a direct cross-file fast-entry reference: " + out);
+        assertTrue(undefinedFastSymbols("fastcaller").find("_fast_h") != -1,
+            "the caller emits a contract-qualified cross-file fast-entry reference: " + out);
 
         string caller_dep = run(sprintf("cat %s/*fastcaller_qc.qo.d", lib_dir));
         assertTrue(caller_dep.find("fastcallee.qc") != -1,
@@ -564,5 +568,48 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string dep = objectDep("ordinarycaller");
         assertEq(-1, dep.find("ordinarycallee.qc"),
             "ordinary runtime-resolved call does not depend on the callee body: " + dep);
+    }
+
+    testSourceParsePreloadedBody() {
+        TmpDir tmp = initDirs();
+        compileSibling("parse_provider", "public class ParseProvider {\n"
+            + "    public static int value() { return 42; }\n"
+            + "}\n");
+
+        string src = tmp_dir + "/parse_consumer.qc";
+        write(src, "%modern\npublic const PARSE_VALUE = ParseProvider::value();\n"
+            + "int sub main() { printf(\"%d\\n\", PARSE_VALUE); return 0; }\n");
+        string object = lib_dir + "/parse_consumer.qo";
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, object, src));
+        assertTrue(is_file(object),
+            "consumer compile executes the source-stripped provider body: " + out);
+
+        string link = run(sprintf("%s %s -o %s/parse-app %s/parse_provider.qo %s",
+            env, qcc_bin, tmp_dir, lib_dir, object));
+        assertTrue(is_file(tmp_dir + "/parse-app"),
+            "consumer links with the provider: " + link);
+        assertEq("42", trim(run(sprintf("%s %s/parse-app", env, tmp_dir))),
+            "consumer preserves the value produced during source parse");
+    }
+
+    testByteReproducibleObject() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/repro.qc";
+        string object = lib_dir + "/repro.qo";
+        write(src, "%modern\nnamespace Repro {\n"
+            + "    int sub zed(int x) { return x + 1; }\n"
+            + "    int sub alpha(int x) { return zed(x) * 2; }\n"
+            + "    int sub middle(int x) { return alpha(x) - 3; }\n"
+            + "}\n");
+        string cmd = sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, object, src);
+        string first_out = run(cmd);
+        assertTrue(is_file(object), "first reproducibility compile: " + first_out);
+        binary first = File::readBinaryFile(object);
+        string second_out = run(cmd);
+        assertTrue(is_file(object), "second reproducibility compile: " + second_out);
+        assertEq(first, File::readBinaryFile(object),
+            "identical source and output path produce an identical AOT object");
     }
 }
