@@ -468,13 +468,31 @@ double QoreNumberNode::getAsFloatImpl() const {
     return priv->getAsFloat();
 }
 
+// in the YAML formats, non-finite values must be rendered as ".nan", ".inf", and "-.inf"; the default rendering
+// ("@NaN@", "@Inf@", "-@Inf@") cannot be parsed as YAML
+// note that the sign is only queried for infinite values; mpfr_sgn() sets the erange flag when called on NaN
+static bool concat_yaml_nonfinite_number(QoreString& str, const qore_number_private& n) {
+    bool is_inf = n.inf();
+    return q_concat_yaml_nonfinite(str, n.nan(), is_inf, is_inf && n.sign() < 0);
+}
+
 int QoreNumberNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    if (q_yaml_format(foff) && concat_yaml_nonfinite_number(str, *priv)) {
+        return 0;
+    }
     getStringRepresentation(str);
     return 0;
 }
 
 // if del is true, then the returned QoreString * should be deleted, if false, then it must not be
 QoreString *QoreNumberNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+    if (q_yaml_format(foff)) {
+        std::unique_ptr<QoreString> rv(new QoreString);
+        if (concat_yaml_nonfinite_number(*rv, *priv)) {
+            del = true;
+            return rv.release();
+        }
+    }
     return getStringRepresentation(del);
 }
 

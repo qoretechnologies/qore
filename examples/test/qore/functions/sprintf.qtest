@@ -6,9 +6,24 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
+%try-module yaml
+%define NoYaml
+%endtry
+
 %exec-class SprintfTest
 
 public class A {
+}
+
+public class Empty {
+}
+
+public class YamlObj {
+    public {
+        int i = 1;
+        hash<auto> h = {"a": 1};
+        list<auto> l = (1, 2);
+    }
 }
 
 public class SprintfTest inherits QUnit::Test {
@@ -17,6 +32,10 @@ public class SprintfTest inherits QUnit::Test {
         addTestCase("broken sprintf test", \brokenSprintf());
         addTestCase("Test 1", \test(), NOTHING);
         addTestCase("yaml long format", \yamlLongFormat());
+        addTestCase("yaml date format", \yamlDateFormat());
+        addTestCase("yaml non-finite float format", \yamlNonFiniteFormat());
+        addTestCase("yaml object format", \yamlObjectFormat());
+        addTestCase("yaml parsing", \yamlParsing());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -145,5 +164,179 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         );
         string expected = "users:\n  - name: \"Alice\"\n    age: 30\n  - name: \"Bob\"\n    age: 25\nconfig:\n  debug: True\n  timeout: 30";
         assertEq(expected, sprintf("%Y", complex));
+    }
+
+    yamlDateFormat() {
+        # absolute date/time values are rendered as YAML timestamps with "%y" and "%Y": no day of week and no
+        # time zone name, only the UTC offset
+        date off = 2026-08-03T11:12:28.795991+02:00;
+        assertEq("2026-08-03 11:12:28.795991 +02:00", sprintf("%y", off));
+        assertEq("2026-08-03 11:12:28.795991 +02:00", sprintf("%Y", off));
+
+        # the zone name is dropped with "%y"/"%Y" for named zones
+        date named = new TimeZone("Europe/Prague").date(2026-08-03T09:12:28.795991Z);
+        assertEq("2026-08-03 11:12:28.795991 +02:00", sprintf("%y", named));
+        assertEq("2026-08-03 11:12:28.795991 +02:00", sprintf("%Y", named));
+
+        # UTC values use an explicit "+00:00" offset
+        assertEq("2026-08-03 09:12:28.795991 +00:00", sprintf("%y", 2026-08-03T09:12:28.795991Z));
+
+        # "%n" and "%N" are unchanged: the day of the week and the zone name are still included
+        assertEq("2026-08-03 11:12:28.795991 Mon +02:00 (CEST)", sprintf("%n", named));
+        assertEq("2026-08-03 11:12:28.795991 Mon +02:00 (CEST)", sprintf("%N", named));
+        assertEq("2026-08-03 11:12:28.795991 Mon +02:00", sprintf("%n", off));
+
+        # YAML timestamps only support UTC offsets with minute resolution; values with an offset with a seconds
+        # component are rendered in UTC, which designates the same point in time
+        date secs = new TimeZone(3464).date(2026-01-01T00:00:00Z);
+        assertEq("2026-01-01 00:57:44.000000 Thu +00:57:44", sprintf("%n", secs));
+        assertEq("2026-01-01 00:00:00.000000 +00:00", sprintf("%y", secs));
+        assertEq(2026-01-01T00:00:00Z, secs);
+
+        # negative offsets
+        assertEq("2026-08-03 05:12:28.795991 -04:00",
+            sprintf("%y", new TimeZone("America/New_York").date(2026-08-03T09:12:28.795991Z)));
+
+        # dates nested in containers
+        assertEq("{d: 2026-08-03 11:12:28.795991 +02:00}", sprintf("%y", {"d": named}));
+        assertEq("[2026-08-03 11:12:28.795991 +02:00]", sprintf("%y", (named,)));
+        assertEq("d: 2026-08-03 11:12:28.795991 +02:00", sprintf("%Y", {"d": named}));
+
+        # relative date/time values have no YAML representation and are rendered unchanged
+        assertEq("<time: 2 seconds 500 milliseconds>", sprintf("%y", 2s + 500ms));
+        assertEq("<time: 2 seconds 500 milliseconds>", sprintf("%Y", 2s + 500ms));
+        assertEq("<time: 2 seconds 500 milliseconds>", sprintf("%n", 2s + 500ms));
+    }
+
+    yamlNonFiniteFormat() {
+        # non-finite floating-point values are rendered in the YAML format with "%y" and "%Y"
+        assertEq(".nan", sprintf("%y", @nan@));
+        assertEq(".inf", sprintf("%y", @inf@));
+        assertEq("-.inf", sprintf("%y", -@inf@));
+        assertEq(".nan", sprintf("%Y", @nan@));
+        assertEq(".inf", sprintf("%Y", @inf@));
+        assertEq("-.inf", sprintf("%Y", -@inf@));
+
+        # the same applies to arbitrary-precision numbers
+        assertEq(".nan", sprintf("%y", @nan@n));
+        assertEq(".inf", sprintf("%y", @inf@n));
+        assertEq("-.inf", sprintf("%y", -@inf@n));
+        assertEq(".nan", sprintf("%Y", @nan@n));
+        assertEq(".inf", sprintf("%Y", @inf@n));
+        assertEq("-.inf", sprintf("%Y", -@inf@n));
+
+        # "%n" and "%N" are unchanged
+        assertEq("nan.0", sprintf("%n", @nan@));
+        assertEq("inf.0", sprintf("%n", @inf@));
+        assertEq("-inf.0", sprintf("%n", -@inf@));
+        assertEq("@NaN@", sprintf("%n", @nan@n));
+        assertEq("@Inf@", sprintf("%n", @inf@n));
+        assertEq("-@Inf@", sprintf("%n", -@inf@n));
+        assertEq("nan.0", sprintf("%N", @nan@));
+        assertEq("@NaN@", sprintf("%N", @nan@n));
+
+        # finite values are unaffected
+        assertEq("1.5", sprintf("%y", 1.5));
+        assertEq("1.0", sprintf("%y", 1.0));
+        assertEq("-0.0", sprintf("%y", -0.0));
+        assertEq("0.0", sprintf("%y", 0.0));
+        assertEq("1.5", sprintf("%y", 1.5n));
+        assertEq("0", sprintf("%y", 0.0n));
+
+        # non-finite values nested in containers
+        assertEq("{f: .nan, n: -.inf}", sprintf("%y", {"f": @nan@, "n": -@inf@n}));
+        assertEq("[.inf, .nan]", sprintf("%y", (@inf@, @nan@n)));
+        assertEq("f: .nan\nn: -.inf", sprintf("%Y", {"f": @nan@, "n": -@inf@n}));
+    }
+
+    yamlObjectFormat() {
+        # an object is rendered as a single-key mapping from the class to the mapping of its members; with "%y"
+        # the member mapping is a flow mapping, so that the output can be parsed as YAML
+        assertEq("{<YamlObj object>: {i: 1, h: {a: 1}, l: [1, 2]}}", sprintf("%y", new YamlObj()));
+        assertEq("{<Empty object>: {}}", sprintf("%y", new Empty()));
+
+        # with "%Y" the members are indented in a block mapping
+        assertEq("<YamlObj object>:\n  i: 1\n  h:\n    a: 1\n  l:\n    - 1\n    - 2",
+            sprintf("%Y", new YamlObj()));
+        assertEq("<Empty object>: {}", sprintf("%Y", new Empty()));
+
+        # objects nested in containers are indented one level further
+        assertEq("o:\n  <YamlObj object>:\n    i: 1\n    h:\n      a: 1\n    l:\n      - 1\n      - 2",
+            sprintf("%Y", {"o": new YamlObj()}));
+        assertEq("o:\n  <Empty object>: {}", sprintf("%Y", {"o": new Empty()}));
+        assertEq("-\n  <Empty object>: {}", sprintf("%Y", (new Empty(),)));
+        assertEq("{o: {<Empty object>: {}}}", sprintf("%y", {"o": new Empty()}));
+        assertEq("[{<Empty object>: {}}]", sprintf("%y", (new Empty(),)));
+
+        # "%n" and "%N" are unchanged
+        assertEq("class Empty: <NO MEMBERS>", sprintf("%n", new Empty()));
+        assertEq("class Empty: (<NO PRIVATE DATA>) <NO MEMBERS>", sprintf("%N", new Empty()));
+    }
+
+    yamlParsing() {
+%ifdef NoYaml
+        testSkip("the yaml module is not available");
+%else
+        # verify that "%y" output for date/time and floating-point values can be parsed as YAML
+        date named = new TimeZone("Europe/Prague").date(2026-08-03T09:12:28.795991Z);
+        hash<auto> h = {
+            "date-local": named,
+            "date-utc": 2026-08-03T09:12:28.795991Z,
+            "date-neg-offset": new TimeZone("America/New_York").date(2026-08-03T09:12:28.795991Z),
+            "date-second-offset": new TimeZone(3464).date(2026-01-01T00:00:00Z),
+            "date-no-us": 2026-08-03T11:00:00+02:00,
+            "float": 1.5,
+            "float-nan": @nan@,
+            "float-inf": @inf@,
+            "float-neg-inf": -@inf@,
+            "number": 1.5n,
+            "number-nan": @nan@n,
+            "number-inf": @inf@n,
+            "number-neg-inf": -@inf@n,
+            "int": 42,
+            "string": "hello",
+            "nothing": NOTHING,
+        };
+
+        # both the short (flow) and long (block) formats must parse
+        hash<auto> short_h = parse_yaml(sprintf("%y", h));
+        hash<auto> long_h = parse_yaml(sprintf("%Y", h));
+
+        map assertEq(h.$1.type(), short_h.$1.type(), sprintf("%%y type: %s", $1)),
+            ("date-local", "date-utc", "date-neg-offset", "date-second-offset", "date-no-us", "float", "int",
+                "string", "nothing");
+
+        # YAML has no arbitrary-precision number type; numbers are rendered as YAML floats
+        assertEq(1.5, short_h."number");
+
+        # date/time values must survive the round trip as the same point in time
+        map assertEq(h.$1, short_h.$1, sprintf("%%y value: %s", $1)),
+            ("date-local", "date-utc", "date-neg-offset", "date-second-offset", "date-no-us");
+        map assertEq(h.$1, long_h.$1, sprintf("%%Y value: %s", $1)),
+            ("date-local", "date-utc", "date-neg-offset", "date-second-offset", "date-no-us");
+
+        assertEq(1.5, short_h."float");
+        assertEq(42, short_h."int");
+        assertEq("hello", short_h."string");
+        assertNothing(short_h."nothing");
+
+        # top-level values must parse as well
+        assertEq(named, parse_yaml(sprintf("%y", named)));
+        assertEq((named,), parse_yaml(sprintf("%y", (named,))));
+
+        # objects must parse in both formats, at the top level and nested in containers
+        hash<auto> expected = {"<YamlObj object>": {"i": 1, "h": {"a": 1}, "l": (1, 2)}};
+        assertEq(expected, parse_yaml(sprintf("%y", new YamlObj())));
+        assertEq(expected, parse_yaml(sprintf("%Y", new YamlObj())));
+        assertEq({"o": expected}, parse_yaml(sprintf("%y", {"o": new YamlObj()})));
+        assertEq({"o": expected}, parse_yaml(sprintf("%Y", {"o": new YamlObj()})));
+        assertEq((expected,), parse_yaml(sprintf("%y", (new YamlObj(),))));
+        assertEq((expected,), parse_yaml(sprintf("%Y", (new YamlObj(),))));
+
+        hash<auto> empty_expected = {"<Empty object>": {}};
+        assertEq(empty_expected, parse_yaml(sprintf("%y", new Empty())));
+        assertEq(empty_expected, parse_yaml(sprintf("%Y", new Empty())));
+        assertEq({"o": empty_expected}, parse_yaml(sprintf("%Y", {"o": new Empty()})));
+%endif
     }
 }

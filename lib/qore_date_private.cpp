@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -714,17 +714,34 @@ int64 qore_absolute_time::getRelativeMicroseconds() const {
     return ds < 0 ? 0 : ds;
 }
 
-void qore_absolute_time::getAsString(QoreString &str) const {
+void qore_absolute_time::getAsString(QoreString &str, bool yaml) const {
     qore_time_info i;
     get(i);
 
+    // YAML timestamps only support UTC offsets with a resolution of one minute; if this value's offset has a
+    // seconds component (only possible with historic LMT zone rules), then render the value in UTC instead, which
+    // designates the same point in time with an offset that can be represented
+    if (yaml && (i.utcoffset % SECS_PER_MINUTE)) {
+        get(nullptr, i);
+    }
+
     str.sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", i.year, i.month, i.day, i.hour, i.minute, i.second, i.us);
+
+    if (yaml) {
+        // YAML timestamps take the UTC offset directly after the time with no day of week and no zone name,
+        // otherwise the value cannot be parsed as a YAML timestamp
+        str.concat(' ');
+        concatOffset(i.utcoffset, str, false);
+        return;
+    }
+
     const char *wday = days[qore_date_info::getDayOfWeek(i.year, i.month, i.day)].abbr;
     str.sprintf(" %s ", wday);
     concatOffset(i.utcoffset, str, false);
     // only concat zone name if it exists and is not the same as the offset just output
-    if (*i.zname && *i.zname != '+' && *i.zname != '-')
+    if (*i.zname && *i.zname != '+' && *i.zname != '-') {
         str.sprintf(" (%s)", i.zname);
+    }
 }
 
 qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt) {

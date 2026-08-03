@@ -129,6 +129,7 @@ extern char* strcasestr(const char* s1, const char* s2);
 #define QSD "%d"
 #endif
 
+#include <cmath>
 #include <set>
 #include <list>
 #include <map>
@@ -720,6 +721,68 @@ DLLLOCAL bool node_has_effect(const AbstractQoreNode* n);
 
 DLLLOCAL QoreString* q_fix_decimal(QoreString* str, size_t offset);
 DLLLOCAL QoreStringNode* q_fix_decimal(QoreStringNode* str, size_t offset);
+
+//! returns true if the given format offset selects one of the YAML output formats (\c "%y" and \c "%Y")
+static inline bool q_yaml_format(int foff) {
+    return foff == FMT_YAML_SHORT || foff <= FMT_YAML_LONG;
+}
+
+//! returns true if the given value is rendered as a nested block in the YAML long format (\c "%Y")
+/** container values are rendered on their own indented lines, all other values are rendered inline in the YAML
+    short format after the key or list-element marker
+
+    @param t the type of the value to render
+*/
+static inline bool q_yaml_block_value(qore_type_t t) {
+    return t == NT_HASH || t == NT_LIST || t == NT_OBJECT;
+}
+
+//! concatenates the value of a YAML long format (\c "%Y") block-mapping entry to the given string
+/** the key and its \c ':' must already have been written to \a str; container values are written on their own
+    indented lines, all other values are written inline after a space in the YAML short format
+
+    @param str the string to concatenate the value to
+    @param v the value to render
+    @param value_foff the format offset to use when the value is rendered as a nested block; this is the format
+    offset of the entry's key line less 2
+    @param xsink Qore-language exceptions are raised here
+
+    @return 0 for OK, -1 if a Qore-language exception was raised
+*/
+DLLLOCAL int q_yaml_block_entry_value(QoreString& str, const QoreValue v, int value_foff, ExceptionSink* xsink);
+
+//! concatenates the YAML representation of a non-finite floating-point value to the given string
+/** YAML renders these values as \c ".nan", \c ".inf", and \c "-.inf"; %Qore's default rendering (\c "nan.0",
+    \c "inf.0", \c "@NaN@", \c "@Inf@") cannot be parsed as YAML
+
+    @param str the string to concatenate the value to
+    @param nan true if the value is not a number
+    @param inf true if the value is infinite
+    @param neg true if the value is negative
+
+    @return true if the value was non-finite and was rendered, false if the value is finite and nothing was written
+*/
+static inline bool q_concat_yaml_nonfinite(QoreString& str, bool nan, bool inf, bool neg) {
+    if (nan) {
+        str.concat(".nan");
+        return true;
+    }
+    if (inf) {
+        str.concat(neg ? "-.inf" : ".inf");
+        return true;
+    }
+    return false;
+}
+
+//! concatenates the YAML representation of a non-finite floating-point value to the given string
+/** @param str the string to concatenate the value to
+    @param val the value to render
+
+    @return true if the value was non-finite and was rendered, false if the value is finite and nothing was written
+*/
+static inline bool q_concat_yaml_nonfinite(QoreString& str, double val) {
+    return q_concat_yaml_nonfinite(str, std::isnan(val), std::isinf(val), std::signbit(val));
+}
 
 #ifdef _Q_WINDOWS
 // simulated block size for statvfs() on Windows

@@ -3454,6 +3454,32 @@ QoreStringNode* q_fix_decimal(QoreStringNode* str, size_t offset) {
     return q_fix_decimal_tmpl<QoreStringNode>(str, offset);
 }
 
+int q_yaml_block_entry_value(QoreString& str, const QoreValue v, int value_foff, ExceptionSink* xsink) {
+    qore_type_t vtype = v.getType();
+    if (q_yaml_block_value(vtype)) {
+        // empty containers are rendered inline; objects render their own inline form for an empty member mapping
+        bool empty = false;
+        if (vtype == NT_HASH) {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            empty = h && !h->size();
+        } else if (vtype == NT_LIST) {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            empty = l && !l->size();
+        }
+        if (empty) {
+            // Empty container: inline in YAML long format
+            str.concat(' ');
+            return v.getAsString(str, FMT_YAML_SHORT, xsink);
+        }
+        // Complex value: newline then indented content
+        str.concat('\n');
+        return v.getAsString(str, value_foff, xsink);
+    }
+    // Simple value: space then value in YAML short format
+    str.concat(' ');
+    return v.getAsString(str, FMT_YAML_SHORT, xsink);
+}
+
 bool q_libqore_shutdown() {
     return qore_shutdown.load(std::memory_order_relaxed);
 }

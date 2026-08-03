@@ -609,6 +609,28 @@ int echoed = child.echo(value);
     - Catch \c REGEX-ERROR where an indeterminate result is acceptable and treat it as no match
     @endparblock
 
+    @par YAML-Parsable Output With the "%y" Format Specifier
+    @parblock
+    The \c "%y" @ref string_formatting "printf format specifier" now renders
+    @ref absolute_dates "absolute date/time values" and non-finite @ref float "floating-point" and
+    @ref number "arbitrary-precision number" values so that the output can be parsed as YAML; see
+    @ref yaml_format_specifications.
+
+    |!Value|!Old Output|!New Output
+    |<tt>2026-08-03T11:12:28.795991+02:00</tt>|\c "2026-08-03 11:12:28.795991 Mon +02:00 (CEST)"|\c "2026-08-03 11:12:28.795991 +02:00"
+    |<tt>\@nan\@</tt>|\c "nan.0"|\c ".nan"
+    |<tt>\@inf\@</tt>|\c "inf.0"|\c ".inf"
+    |<tt>-\@inf\@</tt>|\c "-inf.0"|\c "-.inf"
+    |<tt>\@nan\@n</tt>|\c "\@NaN\@"|\c ".nan"
+    |<tt>\@inf\@n</tt>|\c "\@Inf\@"|\c ".inf"
+    |<tt>-\@inf\@n</tt>|\c "-\@Inf\@"|\c "-.inf"
+    |<tt>new MyClass()</tt>|\c "{&lt;MyClass object&gt;: a: 1}"|\c "{&lt;MyClass object&gt;: {a: 1}}"
+
+    <b>Workarounds:</b>
+    - Use \c "%n" instead of \c "%y" where the previous output is required; the \c "%n" and \c "%N" format
+      specifiers are unchanged
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Opt-In Structured Datasource Mutation Observer
     @parblock

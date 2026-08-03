@@ -848,9 +848,13 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
         }
         str.concat('\'');
     } else if (isFloat()) {
-        size_t offset = str.size();
-        str.sprintf("%.9g", getDouble());
-        q_fix_decimal(&str, offset);
+        double val = getDouble();
+        // in the YAML formats, non-finite values must be rendered as ".nan", ".inf", and "-.inf"
+        if (!q_yaml_format(format_offset) || !q_concat_yaml_nonfinite(str, val)) {
+            size_t offset = str.size();
+            str.sprintf("%.9g", val);
+            q_fix_decimal(&str, offset);
+        }
     } else if (isShortString()) {
         char buf[8];
         getShortString(buf);
@@ -903,7 +907,15 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
     }
     if (isFloat()) {
         del = true;
-        return q_fix_decimal(new QoreStringMaker("%.9g", getDouble()), 0);
+        double val = getDouble();
+        // in the YAML formats, non-finite values must be rendered as ".nan", ".inf", and "-.inf"
+        if (q_yaml_format(format_offset)) {
+            std::unique_ptr<QoreString> rv(new QoreString);
+            if (q_concat_yaml_nonfinite(*rv, val)) {
+                return rv.release();
+            }
+        }
+        return q_fix_decimal(new QoreStringMaker("%.9g", val), 0);
     }
     if (isShortString()) {
         del = true;

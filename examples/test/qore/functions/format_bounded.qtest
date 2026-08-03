@@ -154,7 +154,7 @@ public class FormatBoundedTest inherits QUnit::Test {
         Node n("n1");
         n.next = {"a": 1};
 
-        assertEq("{<Node object>: name: \"n1\", next: {a: 1}, other: null}", format_bounded(n));
+        assertEq("{<Node object>: {name: \"n1\", next: {a: 1}, other: null}}", format_bounded(n));
         assertEq(sprintf("%y", n), format_bounded(n));
 
         # objects are subject to the depth limit like any other container

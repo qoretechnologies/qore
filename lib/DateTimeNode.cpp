@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_date_private.h"
 
 DateTimeNode::DateTimeNode(qore_date_private* n_priv) : SimpleValueQoreNode(NT_DATE), DateTime(n_priv) {
@@ -132,7 +133,9 @@ QoreString* DateTimeNode::getAsString(bool& del, int foff, ExceptionSink* xsink)
 }
 
 int DateTimeNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    priv->getAsString(str);
+    // with the YAML format offsets ("%y" and "%Y"), absolute date/time values are rendered so that they can be
+    // parsed as YAML timestamps
+    priv->getAsString(str, q_yaml_format(foff));
     return 0;
 }
 

@@ -632,14 +632,39 @@ hashdecl Qore::FormatBounds {
     |\c w|String where field widths specify actual character widths instead of the number of characters (ex: the character width of \c "ス" is 2)
     |\c x|Integer, output in base 16 (hexadecimal) format with lower-case a-f
     |\c X|Integer, output in base 16 (hexadecimal) format with upper-case A-F
-    |\c y|Any %Qore value, formatted as a pseudo-YAML string, without any line breaks; this format option is similar to \c "%n", but uses a YAML-like format.  Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
-    |\c Y|Any %Qore value, formatted as a multi-line pseudo-YAML string with proper indentation for nested structures; similar to \c "%y" but with line breaks and indentation for readability. Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
+    |\c y|Any %Qore value, formatted as a pseudo-YAML string, without any line breaks; this format option is similar to \c "%n", but uses a YAML-like format; see @ref yaml_format_specifications.  Note that the output is not guaranteed to be parsable by the yaml module's parse_yaml() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
+    |\c Y|Any %Qore value, formatted as a multi-line pseudo-YAML string with proper indentation for nested structures; similar to \c "%y" but with line breaks and indentation for readability; see @ref yaml_format_specifications. Note that the output is not guaranteed to be parsable by the yaml module's parse_yaml() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
 
     @note The value format specifications (\c "%n", \c "%N", \c "%y", and \c "%Y") expand containers with no limit
     on the size of the output, and a container shared by more than one reference path in the value is expanded once
     for every path leading to it, so the output can be much larger than the value itself. Use
     @ref format_bounded(), @ref sprintf_bounded(), or @ref vsprintf_bounded() to format values whose size is not
     known in advance, such as when logging values that reach live internal data structures.
+
+    @subsection yaml_format_specifications YAML Format Specifications
+
+    The \c "%y" and \c "%Y" format specifications render values so that they can be parsed as YAML; this differs
+    from \c "%n" and \c "%N" for the following types:
+    - @ref absolute_dates "absolute date/time values" are rendered as YAML timestamps (ex:
+      \c "2026-08-03 11:12:28.795991 +02:00"); the day of the week and the time zone name are omitted, since YAML
+      timestamps cannot represent them
+    - non-finite @ref float "floating-point" and @ref number "arbitrary-precision number" values are rendered as
+      \c ".nan", \c ".inf", and \c "-.inf" instead of \c "nan.0", \c "inf.0", \c "@NaN@", and \c "@Inf@"
+    - @ref object "objects" are rendered as a single-key mapping from the class to the mapping of the object's
+      members; with \c "%y" the member mapping is a flow mapping
+      (ex: <tt>{&lt;MyClass object&gt;: {a: 1, b: 2}}</tt>), and with \c "%Y" the members are indented in a block
+      mapping:
+      @verbatim
+<MyClass object>:
+  a: 1
+  b: 2@endverbatim
+
+    @note
+    - YAML timestamps support UTC offsets with a resolution of one minute only; absolute date/time values with an
+      offset with a seconds component (only possible with historic local mean time zone rules) are rendered in UTC
+      instead, which designates the same point in time
+    - @ref relative_dates "relative date/time values" have no YAML representation and are rendered identically in
+      all value format specifications (ex: \c "&lt;time: 2 seconds&gt;"); such values cannot be parsed as YAML
 
     <b>String Escape Characters</b>
     |!Escape Characters|!Description

@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreBigFloatNode.h>
+#include "qore/intern/QoreLibIntern.h"
 
 #include <cmath>
 
@@ -64,6 +65,10 @@ double QoreBigFloatNode::getAsFloatImpl() const {
 }
 
 int QoreBigFloatNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // in the YAML formats, non-finite values must be rendered as ".nan", ".inf", and "-.inf"
+    if (q_yaml_format(foff) && q_concat_yaml_nonfinite(str, val)) {
+        return 0;
+    }
     // Handle special values
     if (std::isnan(val)) {
         str.concat("nan");

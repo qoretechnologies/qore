@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/qore_list_private.h"
@@ -1070,8 +1071,8 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
             str.concat('-');
             QoreValue v = li.getValue();
             qore_type_t vtype = v.getType();
-            if (vtype == NT_LIST) {
-                // List value: newline then indented content
+            if (vtype == NT_LIST || vtype == NT_OBJECT) {
+                // List or object value: newline then indented content
                 str.concat('\n');
                 if (v.getAsString(str, foff - 2, xsink))
                     return -1;
@@ -1083,7 +1084,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
                     hi.next();
                     QoreValue hv = hi.get();
                     qore_type_t hvtype = hv.getType();
-                    if (hvtype != NT_HASH && hvtype != NT_LIST) {
+                    if (!q_yaml_block_value(hvtype)) {
                         // Simple single-key hash: output inline "- key: value"
                         str.concat(' ');
                         str.sprintf("%s: ", hi.getKey());
@@ -1103,7 +1104,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
                     str.sprintf("%s:", hhi.getKey());
                     QoreValue hv = hhi.get();
                     qore_type_t hvtype = hv.getType();
-                    if (hvtype == NT_HASH || hvtype == NT_LIST) {
+                    if (q_yaml_block_value(hvtype)) {
                         // First value is complex: newline and indent
                         str.concat('\n');
                         if (hv.getAsString(str, foff - 4, xsink))
@@ -1121,7 +1122,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
                         str.sprintf("%s:", hhi.getKey());
                         hv = hhi.get();
                         hvtype = hv.getType();
-                        if (hvtype == NT_HASH || hvtype == NT_LIST) {
+                        if (q_yaml_block_value(hvtype)) {
                             str.concat('\n');
                             if (hv.getAsString(str, foff - 4, xsink))
                                 return -1;

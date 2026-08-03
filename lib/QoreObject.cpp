@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/QoreTypeSafeReferenceHelper.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -2131,25 +2132,57 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     }
 
     if (foff == FMT_YAML_SHORT) {
-        str.sprintf("{<%s object>", getClassName());
-        if (!h->empty()) {
-            str.concat(": ");
-            ConstHashIterator hi(*h);
+        // the object is rendered as a single-key mapping from the class to the member mapping, so that the
+        // output can be parsed as YAML
+        str.sprintf("{<%s object>: {", getClassName());
+        ConstHashIterator hi(*h);
 
-            size_t count = 0;
-            while (hi.next()) {
-                if (fbh.elideElements(str, count, h->size())) {
-                    break;
-                }
-                str.sprintf("%s: ", hi.getKey());
-                if (hi.get().getAsString(str, foff, xsink))
-                    return -1;
-                if (!hi.last())
-                    str.concat(", ");
-                ++count;
+        size_t count = 0;
+        while (hi.next()) {
+            if (fbh.elideElements(str, count, h->size())) {
+                break;
+            }
+            str.sprintf("%s: ", hi.getKey());
+            if (hi.get().getAsString(str, foff, xsink))
+                return -1;
+            if (!hi.last())
+                str.concat(", ");
+            ++count;
+        }
+        str.concat("}}");
+        return 0;
+    }
+
+    if (foff <= FMT_YAML_LONG) {
+        // Multi-line YAML format; indent encoded as FMT_YAML_LONG - foff
+        int indent = FMT_YAML_LONG - foff;
+        if (indent > 0) {
+            str.addch(' ', indent);
+        }
+        // the object is rendered as a block mapping from the class to the block mapping of its members
+        str.sprintf("<%s object>:", getClassName());
+        if (!h->size()) {
+            // Empty member mapping: inline in YAML long format
+            str.concat(" {}");
+            return 0;
+        }
+
+        ConstHashIterator hi(*h);
+        size_t count = 0;
+        while (hi.next()) {
+            if (fbh.elideElements(str, count, h->size())) {
+                break;
+            }
+            ++count;
+            // members are indented one level further than the class key
+            str.concat('\n');
+            str.addch(' ', indent + 2);
+            str.sprintf("%s:", hi.getKey());
+            // members are one level deeper than the object's own key line, so nested blocks are indented twice
+            if (q_yaml_block_entry_value(str, hi.get(), foff - 4, xsink)) {
+                return -1;
             }
         }
-        str.concat('}');
         return 0;
     }
 

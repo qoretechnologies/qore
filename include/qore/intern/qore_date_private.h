@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -834,7 +834,13 @@ public:
     DLLLOCAL qore_absolute_time& operator+=(const qore_relative_time& dt);
     DLLLOCAL qore_absolute_time& operator-=(const qore_relative_time& dt);
 
-    DLLLOCAL void getAsString(QoreString& str) const;
+    //! concatenates the string representation of this value to the given string
+    /** @param str the string to concatenate the value to
+        @param yaml if true, then the value is rendered in a format that can be parsed as a YAML timestamp
+        (ex: \c "2026-08-03 11:12:28.795991 +02:00"), otherwise the default format including the day of the week
+        and the time zone name is used (ex: \c "2026-08-03 11:12:28.795991 Mon +02:00 (CEST)")
+    */
+    DLLLOCAL void getAsString(QoreString& str, bool yaml = false) const;
 
     DLLLOCAL void unaryMinus() {
         epoch = -epoch;
@@ -1530,11 +1536,18 @@ public:
 
     DLLLOCAL void format(QoreString& str, const char* fmt) const;
 
-    DLLLOCAL void getAsString(QoreString& str) const {
-        if (!relative)
-            d.abs.getAsString(str);
-        else
+    //! concatenates the string representation of this value to the given string
+    /** @param str the string to concatenate the value to
+        @param yaml if true, then absolute date/time values are rendered in a format that can be parsed as a YAML
+        timestamp (ex: \c "2026-08-03 11:12:28.795991 +02:00"); relative date/time values have no YAML
+        representation and are rendered identically in both cases
+    */
+    DLLLOCAL void getAsString(QoreString& str, bool yaml = false) const {
+        if (!relative) {
+            d.abs.getAsString(str, yaml);
+        } else {
             d.rel.getAsString(str);
+        }
     }
 
     // note that ISO-8601 week days go from 1 - 7 = Mon - Sun
