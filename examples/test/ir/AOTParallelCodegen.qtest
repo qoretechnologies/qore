@@ -31,9 +31,8 @@ class AOTParallelCodegenTest inherits QUnit::Test {
 
         addTestCase("parallel codegen is load-equivalent to single-object", \testLoadEquivalence());
         addTestCase("parallel codegen is deterministic (same binary)", \testDeterminism());
-        # The externalized-local re-internalization (symbol equivalence) is ELF-only:
-        # on Mach-O the final .qmod link strips the extras and GNU objcopy corrupts Mach-O.
-        if (Qore::PlatformOS != "Darwin" && PlatformOS != "Windows") {
+        # SplitModule-promoted locals must be restored on both ELF and Mach-O.
+        if (PlatformOS != "Windows") {
             addTestCase("split .qo has no extra global symbols vs single", \testQoSymbolEquivalence());
         }
 
@@ -120,7 +119,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
             body += sprintf("int sub qoe_f%d(int x) { switch (x) { case 1: return %d; default: "
                 "return x * %d; } }\n", i, i, i + 1);
         }
-        body += "string sub qoe_space_key() { hash<auto> h = (\"key with spaces\": 1); "
+        body += "*int sub qoe_space_key() { hash<auto> h = (\"key with spaces\": 1); "
             "return h.\"key with spaces\"; }\n";
         write(src, body);
 
@@ -130,8 +129,14 @@ class AOTParallelCodegenTest inherits QUnit::Test {
         string sp = tmp_dir + "/sp";
         mkdir(sg);
         mkdir(sp);
-        run(sprintf("QCC_JOBS=1 %s -c %s -o %s/x.qo", qcc_bin, src, sg));
-        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -c %s -o %s/x.qo", qcc_bin, src, sp));
+        string single_out = run(sprintf(
+            "QCC_JOBS=1 %s -c %s -o %s/x.qo", qcc_bin, src, sg));
+        string split_out = run(sprintf(
+            "QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -c %s -o %s/x.qo",
+            qcc_bin, src, sp));
+        assertTrue(is_file(sg + "/x.qo") && is_file(sp + "/x.qo"),
+            "single and split symbol-equivalence objects compile: single="
+                + single_out + " split=" + split_out);
 
         list<string> single_syms = globalSyms(sg + "/x.qo");
         list<string> split_syms = globalSyms(sp + "/x.qo");

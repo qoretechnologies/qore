@@ -930,6 +930,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Object/ELFObjectFile.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Mangler.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/SplitModule.h>
@@ -21707,10 +21708,19 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
     // external so cross-partition references resolve; after the ld -r merge those are
     // re-internalized (below) so the produced object's symbol visibility matches a
     // single-codegen object — no extra globals leak into a downstream static link.
+    const bool macho = llvm::Triple(triple).isOSBinFormatMachO();
     std::unordered_set<std::string> keep_global;
-    auto collect_global = [&keep_global](llvm::GlobalValue& gv) {
+    std::unordered_set<std::string> keep_macho_global;
+    auto collect_global = [&module, macho, &keep_global,
+            &keep_macho_global](llvm::GlobalValue& gv) {
         if (!gv.isDeclaration() && !gv.hasLocalLinkage() && gv.hasName()) {
             keep_global.insert(gv.getName().str());
+            if (macho) {
+                llvm::SmallString<128> name;
+                llvm::Mangler::getNameWithPrefix(name, gv.getName(),
+                    module.getDataLayout());
+                keep_macho_global.insert(name.str().str());
+            }
         }
     };
     for (llvm::Function& f : module.functions()) {
@@ -21801,7 +21811,15 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
     if (all) {
         // Partial-link the parts into one relocatable object (sections, including
         // qore_aot_pcloc, are concatenated; cross-part references resolve).
-        std::string cmd = "ld -r -o '" + out_o + "'";
+        // ld64 normally demotes every private extern to a local during a
+        // relocatable link. Original hidden fast entries must remain resolvable
+        // from sibling .qo files; promoted SplitModule locals are selectively
+        // restored below with nmedit.
+        std::string cmd = "ld -r";
+        if (macho) {
+            cmd += " -keep_private_externs";
+        }
+        cmd += " -o '" + out_o + "'";
         for (const auto& o : objs) {
             cmd += " '" + o + "'";
         }
@@ -21814,31 +21832,128 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         // Re-internalize the symbols SplitModule externalized: any DEFINED GLOBAL in the merged
         // object that was not global in the original module is a promoted local -> localize it,
         // so the object's symbol visibility matches a single-codegen object (no global-namespace
-        // pollution, no downstream static-link collision risk). ELF only via GNU objcopy: on
-        // Mach-O the final .qmod link already strips these (verified: identical dynsyms), GNU
-        // objcopy corrupts Mach-O, and llvm-objcopy has no --localize-symbols for Mach-O.
+        // pollution, no downstream static-link collision risk). ELF uses GNU objcopy. Mach-O
+        // uses nmedit after ld64 preserves private externs; this keeps original hidden fast
+        // entries linkable while restoring SplitModule-promoted locals to static linkage.
         std::vector<std::string> to_localize;
+        std::vector<std::string> macho_globals;
         auto buf = llvm::MemoryBuffer::getFile(out_o);
-        if (buf) {
+        if (!buf) {
+            if (macho) {
+                all = false;
+                error = "cannot read Mach-O split-codegen object '" + out_o + "'";
+            }
+        } else {
             auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf)->getMemBufferRef());
             if (!obj_or) {
                 llvm::consumeError(obj_or.takeError());
-            } else if ((*obj_or)->isELF()) {
+                if (macho) {
+                    all = false;
+                    error = "cannot parse Mach-O split-codegen object '" + out_o + "'";
+                }
+            } else if ((*obj_or)->isELF() || (macho && (*obj_or)->isMachO())) {
                 for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
                     auto fl = sym.getFlags();
-                    if (!fl) { llvm::consumeError(fl.takeError()); continue; }
+                    if (!fl) {
+                        llvm::Error symbol_error = fl.takeError();
+                        if (macho) {
+                            all = false;
+                            error = "cannot inspect Mach-O split-codegen symbol flags in '"
+                                + out_o + "': " + llvm::toString(std::move(symbol_error));
+                            break;
+                        }
+                        llvm::consumeError(std::move(symbol_error));
+                        continue;
+                    }
                     if (!(*fl & llvm::object::SymbolRef::SF_Global)
                             || (*fl & llvm::object::SymbolRef::SF_Undefined)) {
                         continue;
                     }
                     auto nm = sym.getName();
-                    if (!nm) { llvm::consumeError(nm.takeError()); continue; }
+                    if (!nm) {
+                        llvm::Error symbol_error = nm.takeError();
+                        if (macho) {
+                            all = false;
+                            error = "cannot inspect Mach-O split-codegen symbol name in '"
+                                + out_o + "': " + llvm::toString(std::move(symbol_error));
+                            break;
+                        }
+                        llvm::consumeError(std::move(symbol_error));
+                        continue;
+                    }
                     std::string s = nm->str();
-                    if (!s.empty() && !keep_global.count(s)) {
+                    if (macho) {
+                        if (!s.empty() && keep_macho_global.count(s)) {
+                            macho_globals.push_back(std::move(s));
+                        }
+                    } else if (!s.empty() && !keep_global.count(s)) {
                         to_localize.push_back(std::move(s));
                     }
                 }
+            } else if (macho) {
+                all = false;
+                error = "split-codegen object is not Mach-O: '" + out_o + "'";
             }
+        }
+        if (macho && all) {
+            std::sort(macho_globals.begin(), macho_globals.end());
+            macho_globals.erase(std::unique(macho_globals.begin(),
+                macho_globals.end()), macho_globals.end());
+            if (macho_globals.empty() && !keep_macho_global.empty()) {
+                all = false;
+                error = "Mach-O split-codegen object has no preserved original globals: '"
+                    + out_o + "'";
+            }
+        }
+        if (macho && all) {
+            std::string gf = out_o + ".globals." + std::to_string(getpid());
+            FILE* gfp = fopen(gf.c_str(), "w");
+            if (!gfp) {
+                all = false;
+                error = "cannot write AOT split global-symbol list '"
+                    + gf + "': " + strerror(errno);
+            } else {
+                bool cancelled = false;
+                bool write_ok = true;
+                for (size_t i = 0; i < macho_globals.size(); ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT Mach-O split global-symbol list")) {
+                        cancelled = true;
+                        break;
+                    }
+                    if (fprintf(gfp, "%s\n", macho_globals[i].c_str()) < 0) {
+                        write_ok = false;
+                        break;
+                    }
+                }
+                if (fclose(gfp) != 0) {
+                    write_ok = false;
+                }
+                if (cancelled) {
+                    all = false;
+                    error = "operation cancelled during AOT Mach-O split symbol localization";
+                } else if (!write_ok) {
+                    all = false;
+                    error = "failed to write AOT Mach-O split global-symbol list";
+                } else {
+                    std::string quoted_gf;
+                    std::string quoted_out;
+                    if (!shellSingleQuote(gf, quoted_gf)
+                            || !shellSingleQuote(out_o, quoted_out)) {
+                        all = false;
+                        error = "operation cancelled during AOT Mach-O symbol-list quoting";
+                    } else {
+                        std::string cmd = "nmedit -s " + quoted_gf + " " + quoted_out;
+                        if (system(cmd.c_str()) != 0) {
+                            all = false;
+                            error = "nmedit failed to localize split-codegen symbols for '"
+                                + out_o + "'";
+                        }
+                    }
+                }
+            }
+            remove(gf.c_str());
         }
         if (!to_localize.empty()) {
             std::string lf = out_o + ".loc." + std::to_string(getpid());

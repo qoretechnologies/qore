@@ -89,10 +89,12 @@ provider_file.write(provider_source);
 provider_file.close();
 
 string provider_compile = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -c --output-dir=%s %s 2>&1",
+    "LD_LIBRARY_PATH=%s MAKEFLAGS= QCC_SPLIT_THRESHOLD=1 QORE_AOT_DEBUG=1"
+        + " QORE_DEBUG_OPT=1 %s --jobs=4 -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, provider_path));
 string provider_qo = provider_dir + "/cross-provider.qo";
 if (!is_file(provider_qo)
+        || provider_compile !~ /AOT: parallel codegen/
         || provider_compile !~ /fast entry '[^']*crossGenericSelect[^']*_generic_fast_h[0-9a-f]{16}'/
         || provider_compile !~ /method fast entry '[^']*CrossStaticSelector[^']*_generic_fast_h[0-9a-f]{16}'/
         || provider_compile !~ /method fast entry '[^']*CrossInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/) {
