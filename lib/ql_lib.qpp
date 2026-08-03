@@ -1123,9 +1123,12 @@ int num = rand();
 
     @see srand() for a function to seed the random number generator
 
+    @note This function advances the random number generator's state, so calling it and discarding the
+    result is observable; it therefore carries no code flags and calls to it are never elided.
+
     @since %Qore 0.8.13 the random number generator is seeded randomly when the %Qore library is initialized
  */
-int rand() [flags=CONSTANT] {
+int rand() {
 #ifdef HAVE_RANDOM
    // return a random 64-bit integer by calling random() twice
    return random() | (((int64)random()) << 32);

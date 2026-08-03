@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QppCodeFlagChecksTest
+
+#! verifies qpp's build-time enforcement of the determinism code flags
+/** QCF_CONSTANT decayed into a contract that nothing checked: a large share of the declarations
+    carrying it can throw or are outright non-deterministic. QCF_DETERMINISTIC is the flag that
+    optimizers are permitted to fold on, so qpp rejects it at build time when the declaration
+    itself shows it cannot hold. These tests are the guard on that guard.
+*/
+class QppCodeFlagChecksTest inherits QUnit::Test {
+    private {
+        string qpp_bin;
+
+        const Preamble = '/* -*- mode: c++; indent-tabs-mode: nil -*- */
+#include <qore/Qore.h>
+
+/** @defgroup test_functions Test Functions
+    Test functions
+*/
+///@{
+//! test function
+/** @return a value
+*/
+';
+    }
+
+    constructor() : QUnit::Test("QppCodeFlagChecksTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qpp_bin = ENV.QPP ?? ENV.QORE_QPP
+            ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");
+
+        addTestCase("provable flags are accepted", \testProvableFlagsAccepted());
+        addTestCase("non-deterministic call is rejected", \testNonDeterministicCallRejected());
+        addTestCase("state-reading domain is rejected", \testStateReadingDomainRejected());
+        addTestCase("method declarations are checked", \testMethodDeclarationsChecked());
+        addTestCase("unflagged declarations are unaffected", \testUnflaggedUnaffected());
+
+        set_return_value(main());
+    }
+
+    #! runs qpp over a source fragment; returns the exit status and combined output
+    private hash<auto> runQpp(string source) {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+
+        TmpDir tmp("qore-qpp-flag-check-");
+        string qpp_path = tmp.path + "/flagtest.qpp";
+        string cpp_path = tmp.path + "/flagtest.cpp";
+
+        File f();
+        f.open2(qpp_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        # backquote() discards the exit status, so capture it explicitly
+        string status_path = tmp.path + "/status";
+        string out = backquote(sprintf("%s -o %s %s 2>&1; echo $? > %s",
+            qpp_bin, cpp_path, qpp_path, status_path));
+
+        return {
+            "out": out,
+            "status": trim(ReadOnlyFile::readTextFile(status_path)).toInt(),
+            "cpp_created": is_file(cpp_path),
+            "cpp": is_file(cpp_path) ? ReadOnlyFile::readTextFile(cpp_path) : "",
+        };
+    }
+
+    private string func(string decl, string body) {
+        return Preamble + decl + " {\n" + body + "\n}\n///@}\n";
+    }
+
+    testProvableFlagsAccepted() {
+        # a genuine pure function: result is a function of its arguments alone
+        hash<auto> r = runQpp(func("int t_add(int a, int b) [flags=PURE]", "    return a + b;"));
+        assertEq(0, r.status, "qpp accepts a provable QCF_PURE function: " + r.out);
+        assertTrue(r.cpp_created, "generated cpp exists");
+        assertRegex("QCF_PURE", r.cpp, "the composite flag reaches the generated code");
+    }
+
+    testNonDeterministicCallRejected() {
+        hash<auto> r = runQpp(func("int t_clock() [flags=PURE]",
+            "    struct timeval tv;\n    gettimeofday(&tv, nullptr);\n    return tv.tv_sec;"));
+        assertNeq(0, r.status, "qpp rejects QCF_PURE on a function calling gettimeofday()");
+        assertRegex("gettimeofday", r.out, "the diagnostic names the offending call");
+        assertRegex("must not be folded", r.out, "the diagnostic explains the consequence");
+        assertFalse(r.cpp_created, "no output is produced for a rejected declaration");
+
+        # the bare flag is rejected as well as the composite
+        r = runQpp(func("int t_rand() [flags=DETERMINISTIC]", "    return random();"));
+        assertNeq(0, r.status, "qpp rejects QCF_DETERMINISTIC on a function calling random()");
+    }
+
+    testStateReadingDomainRejected() {
+        hash<auto> r = runQpp(func("int t_dom() [flags=DETERMINISTIC;dom=EXTERNAL_INFO]", "    return 1;"));
+        assertNeq(0, r.status, "qpp rejects QCF_DETERMINISTIC alongside dom=EXTERNAL_INFO");
+        assertRegex("EXTERNAL_INFO", r.out, "the diagnostic names the offending domain");
+
+        # a domain that does not imply reading mutable state is fine
+        r = runQpp(func("int t_ok_dom() [flags=DETERMINISTIC;dom=MODULES]", "    return 1;"));
+        assertEq(0, r.status, "an unrelated domain does not block QCF_DETERMINISTIC: " + r.out);
+    }
+
+    testMethodDeclarationsChecked() {
+        # methods are parsed on a separate path in qpp and need their own check
+        string src = '/* -*- mode: c++; indent-tabs-mode: nil -*- */
+#include <qore/Qore.h>
+
+//! test class
+/** test
+*/
+qclass TestCls [arg=void* p; ns=Qore];
+
+//! test method
+/** @return a value
+*/
+int TestCls::readClock() [flags=PURE] {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return tv.tv_sec;
+}
+';
+        hash<auto> r = runQpp(src);
+        assertNeq(0, r.status, "qpp rejects QCF_PURE on a non-deterministic method");
+        assertRegex("TestCls::readClock", r.out, "the diagnostic names the method");
+    }
+
+    testUnflaggedUnaffected() {
+        # the check must only constrain declarations that opt in; the legacy QCF_CONSTANT
+        # population is explicitly out of scope and must keep building
+        hash<auto> r = runQpp(func("int t_now() [flags=CONSTANT]",
+            "    struct timeval tv;\n    gettimeofday(&tv, nullptr);\n    return tv.tv_sec;"));
+        assertEq(0, r.status, "QCF_CONSTANT is diagnostic only and is not constrained: " + r.out);
+
+        r = runQpp(func("int t_plain()", "    return 1;"));
+        assertEq(0, r.status, "an unflagged declaration is unaffected: " + r.out);
+    }
+}

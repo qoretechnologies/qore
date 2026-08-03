@@ -131,6 +131,15 @@ typedef std::vector<int> sig_vec_t;
 //! defined for q_enforce_thread_size_on_primary_thread()
 #define _QORE_HAS_ENFORCE_THREAD_SIZE_ON_PRIMARY_THREAD 1
 
+/** @defgroup qore_code_flags Qore Code Flags
+    Flags describing properties of a builtin function or method variant.
+
+    @note Resource-exhaustion exceptions are outside every contract expressed by these flags and
+    are possible at any call: \c STACK-LIMIT-EXCEEDED (the shared call-setup path checks the stack
+    before the callee body runs), out-of-memory, and thread cancellation.  No flag here excludes
+    them, and none can: an absolute "cannot throw" guarantee is unsatisfiable in %Qore.
+*/
+///@{
 // qore code flags
 #define QCF_NO_FLAGS                     0   //! no flag
 #define QCF_NOOP                   (1 << 0)  //! this variant is a noop, meaning it returns a constant value with the given argument types
@@ -141,9 +150,34 @@ typedef std::vector<int> sig_vec_t;
 #define QCF_RUNTIME_NOOP           (1 << 5)  //! this variant is a noop like QCF_NOOP, but additionally is not available to programs executing with %require-types (PO_REQUIRE_TYPES)
 #define QCF_ABSTRACT_OVERRIDE_ALL  (1 << 6)  //! this variant overrides all abstract base class variants in the same method
 #define QCF_NAMED_ARGS             (1 << 7)  //! builtin variant opts in to named-argument calls
+#define QCF_NO_SIDE_EFFECTS        (1 << 8)  //! code mutates no observable state; calling it twice is indistinguishable from calling it once
+#define QCF_DETERMINISTIC          (1 << 9)  //! the result depends only on the arguments and on immutable state; no clock, RNG, PID/TID, environment, locale, time zone, filesystem, network, or mutable global is read
+#define QCF_NO_DOMAIN_THROW        (1 << 10) //! code raises no exception determined by its arguments or by program state (resource-exhaustion exceptions remain possible; see @ref qore_code_flags)
 
 // composite flags
-#define QCF_CONSTANT (QCF_CONSTANT_INTERN | QCF_RET_VALUE_ONLY) //! code is safe to use in a constant expression (i.e. has no side effects, does not change internal state, cannot throw an exception under any circumstances, just returns a calculation based on its arguments)
+
+//! the call yields a value and has no side effects the caller need care about; discarding the result is almost certainly an error
+/** @warning This is a <b>diagnostic</b> flag only.  Despite the name it does <b>not</b> guarantee
+    determinism, freedom from exceptions, or freedom from reads of mutable external state, and no
+    optimizer may fold, hoist, common up, or eliminate a call on the strength of it.  Use
+    @ref QCF_PURE or @ref QCF_TOTAL for contracts that an optimizer may rely on.
+*/
+#define QCF_CONSTANT (QCF_CONSTANT_INTERN | QCF_RET_VALUE_ONLY)
+
+//! the call may be evaluated at compile time or commoned up with an identical call
+/** Sufficient for constant folding and common subexpression elimination.  It is <b>not</b>
+    sufficient on its own for hoisting out of a loop that may not execute, nor for eliminating a
+    call whose result is unused, because a pure function may still raise a domain exception; see
+    @ref QCF_TOTAL.
+*/
+#define QCF_PURE (QCF_RET_VALUE_ONLY | QCF_NO_SIDE_EFFECTS | QCF_DETERMINISTIC)
+
+//! a total function: pure, and raising no exception determined by its arguments or by program state
+/** Additionally permits eliminating a call whose result is unused and speculative execution,
+    subject to the resource-exhaustion carve-out in @ref qore_code_flags.
+*/
+#define QCF_TOTAL (QCF_PURE | QCF_NO_DOMAIN_THROW)
+///@}
 
 class BinaryNode;
 class QoreStringNode;

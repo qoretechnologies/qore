@@ -800,8 +800,11 @@ binary sub get_key(int size) {
     @code{.py}
 binary bin = des_random_key();
     @endcode
+
+    @note This function consumes entropy and can throw an exception, so it carries no code flags and
+    calls to it are never elided.
  */
-binary des_random_key() [flags=CONSTANT] [flags=CONSTANT] {
+binary des_random_key() {
 #ifdef OPENSSL_3_PLUS
     QoreEvpCipherCtxHelper ctx;
     if (!ctx) {

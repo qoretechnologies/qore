@@ -2793,6 +2793,67 @@ int flags_get(strlist_t& flags, const std::string& str) {
     return 0;
 }
 
+//! Returns true if \a flags asserts determinism (directly or through a composite)
+static bool flags_assert_determinism(const strlist_t& flags) {
+    for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
+        if (*i == "DETERMINISTIC" || *i == "PURE" || *i == "TOTAL") {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Verifies that a variant claiming QCF_DETERMINISTIC can actually satisfy it
+/** QCF_CONSTANT decayed into a contract that nothing checked and that a large fraction of
+    declarations violated; QCF_DETERMINISTIC is the flag optimizers are permitted to fold on, so it
+    is checked here at build time.  Only the determinism clause is machine-checkable: an absolute
+    nothrow guarantee is unsatisfiable in %Qore (the shared call-setup path can raise
+    STACK-LIMIT-EXCEEDED before the callee runs), and side-effect freedom is review-gated.
+
+    The check is conservative and keyed on evidence in the declaration itself: a functional domain
+    that by definition reads mutable state outside the arguments, or a call to a known
+    non-deterministic primitive in the body.
+*/
+static int check_determinism_flags(const strlist_t& flags, const strlist_t& dom, const std::string& code,
+        const char* what, const std::string& name) {
+    if (!flags_assert_determinism(flags)) {
+        return 0;
+    }
+
+    // domains that by definition read mutable state outside the arguments
+    static const char* nondet_dom[] = {
+        "PROCESS", "NETWORK", "EXTERNAL_PROCESS", "FILESYSTEM", "DATABASE", "TERMINAL_IO",
+        "EXTERNAL_INFO", "THREAD_INFO", "LOCALE_CONTROL", "GUI", "DEBUGGER", "REFLECTION", nullptr
+    };
+    for (strlist_t::const_iterator i = dom.begin(), e = dom.end(); i != e; ++i) {
+        for (unsigned j = 0; nondet_dom[j]; ++j) {
+            if (*i == nondet_dom[j]) {
+                error("%s %s() declares QCF_DETERMINISTIC (or a composite including it) but also "
+                    "dom=%s; a variant reading mutable state outside its arguments is not "
+                    "deterministic and must not be folded\n", what, name.c_str(), i->c_str());
+                return -1;
+            }
+        }
+    }
+
+    // calls to primitives whose result is not a function of the arguments
+    static const char* nondet_call[] = {
+        "gettimeofday", "clock_gettime", "clock_get_time", "arc4random", "drand48", "srand",
+        "getpid(", "getppid(", "gettid(", "getenv(", "localtime", "gmtime", "q_gettime",
+        "random()", "rand()", "time(", nullptr
+    };
+    for (unsigned j = 0; nondet_call[j]; ++j) {
+        if (code.find(nondet_call[j]) != std::string::npos) {
+            error("%s %s() declares QCF_DETERMINISTIC (or a composite including it) but calls "
+                "'%s'; its result is not a function of its arguments and it must not be folded\n",
+                what, name.c_str(), nondet_call[j]);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 static void flags_output_cpp(FILE* fp, const strlist_t& flags, bool uses_extra_args) {
     if (flags.empty()) {
         fputs(uses_extra_args ? "QCF_USES_EXTRA_ARGS" : "QCF_NO_FLAGS", fp);
@@ -4200,6 +4261,10 @@ protected:
                 error("unknown flag '%s' = '%s' defining function %s()\n", i->first.c_str(), i->second.c_str(), fn.c_str());
                 return -1;
             }
+        }
+
+        if (check_determinism_flags(cf, dom, code, "function", fn)) {
+            return -1;
         }
 
         //log(LL_INFO, "+ method %s::%s() attr: 0x%x (static: %d)\n", name.c_str(), mname.c_str(), attr, attr & QCA_STATIC);
@@ -6761,6 +6826,10 @@ public:
             }
         }
 
+        if (check_determinism_flags(cf, dom, code, "method", name + "::" + mname)) {
+            return -1;
+        }
+
         //log(LL_INFO, "+ method %s::%s() attr: 0x%x (static: %d)\n", name.c_str(), mname.c_str(), attr, attr & QCA_STATIC);
 
         if ((attr & QCA_STATIC) && is_pseudo) {
@@ -8345,6 +8414,11 @@ void init() {
     fset.insert("RUNTIME_NOOP");
     fset.insert("NAMED_ARGS");
     fset.insert("CONSTANT");
+    fset.insert("NO_SIDE_EFFECTS");
+    fset.insert("DETERMINISTIC");
+    fset.insert("NO_DOMAIN_THROW");
+    fset.insert("PURE");
+    fset.insert("TOTAL");
 }
 
 void usage() {
