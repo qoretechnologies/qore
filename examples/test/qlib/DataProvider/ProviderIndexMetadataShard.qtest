@@ -24,8 +24,80 @@
 public class ProviderIndexMetadataShardTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex metadata shard test", "1.0") {
         addTestCase("unrequested corrupt shard is isolated", \unrequestedCorruptShardIsIsolated());
+        addTestCase("unreferenced shards are removed", \unreferencedShardsAreRemoved());
 
         set_return_value(main());
+    }
+
+    #! Builds a one-app index in @a dir and returns that app's chunk path.
+    private string writeSingleAppIndex(string dir, string app) {
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {
+                app: {
+                    "name": app,
+                },
+            },
+            "actioninfomap": {
+                app: {
+                    "an-action": {
+                        "app": app,
+                        "action": "an-action",
+                    },
+                },
+            },
+            "top_actioninfomap": {},
+        }, 0s, {});
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, digest("sha256", app).toHex());
+    }
+
+    #! A chunk the manifest no longer names can never be read again, so it must not survive.
+    /** The chunks are regenerable cache reachable only through the manifest, but nothing removed
+        them: uninstalling or renaming a provider module stranded its chunk permanently, and the
+        index directory grew for the life of the installation.
+    */
+    unreferencedShardsAreRemoved() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+
+        string gone_chunk = writeSingleAppIndex(dir, "QoreTestGoneApp");
+        assertTrue(hstat(gone_chunk) != NOTHING, "the first index writes its app chunk");
+
+        # rebuild the index without that app: its chunk is now unreachable
+        string kept_chunk = writeSingleAppIndex(dir, "QoreTestKeptApp");
+        assertTrue(hstat(kept_chunk) != NOTHING, "the rebuilt index writes the current app chunk");
+        assertEq(NOTHING, hstat(gone_chunk),
+            "a chunk the manifest no longer references is removed rather than stranded");
+
+        # the manifest itself has no chunk suffix and must never be swept up with them
+        assertTrue(hstat(sprintf("%s%sqore-data-index.msgpack", dir, DirSep)) != NOTHING,
+            "the manifest survives the sweep");
+
+        # an unrelated file in the index directory is not the cache's to delete
+        string unrelated = sprintf("%s%sqore-data-index-notahash.msgpack", dir, DirSep);
+        File f();
+        f.open2(path: unrelated, flags: O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("x");
+        f.close();
+        writeSingleAppIndex(dir, "QoreTestKeptApp");
+        assertTrue(hstat(unrelated) != NOTHING,
+            "only files matching the chunk name pattern are considered");
     }
 
     private checkModules() {

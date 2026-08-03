@@ -924,8 +924,58 @@ public class ProviderIndexUtil {
             "apps": chunks,
         }, MSGPACK_QORE_MODE);
         writeFileAtomic(getMetadataCachePath(), data);
+        # the manifest is the only way a chunk is ever reached, so every chunk it does not name is
+        # unreachable from this point on; remove them rather than leaving them to accumulate
+        removeUnreferencedMetadataCacheChunks(keys chunks);
         return digest("sha256", data).toHex();
 %endif
+    }
+
+    #! Removes app metadata cache chunks that the current manifest does not reference
+    /** A chunk is only ever read through the manifest written above (@ref readMetadataCacheChunk is called only
+        for an app the manifest names, and re-verifies the recorded size and SHA-256), so a chunk for an app that
+        is no longer indexed can never be read again.  Nothing removed them, so renaming or uninstalling a
+        provider module stranded its chunk in the index directory permanently: the files are regenerable cache,
+        but they are not small, and they accumulated for the life of the installation.
+
+        Removal is deliberately driven by the manifest rather than by comparing against the modules present:
+        the manifest is what the reader consults, so "unreferenced" is exactly "unreachable".
+
+        @param apps the app names the manifest references
+
+        @par Example
+        Uninstalling a provider module and rebuilding the index removes that app's chunk, so the index directory
+        holds one chunk per indexed app and nothing else.
+
+        @note Errors are logged and ignored: failing to remove a stale cache file must never fail an index write,
+            because the index itself is already valid at this point.
+    */
+    static private removeUnreferencedMetadataCacheChunks(list<string> apps) {
+        hash<string, bool> keep = map {sprintf("qore-data-index-%s.msgpack", digest("sha256", $1).toHex()): True},
+            apps;
+        *string dir = tryGetIndexDir();
+        if (!dir.val()) {
+            return;
+        }
+        try {
+            Dir d();
+            d.chdir(dir);
+            # the manifest itself (`qore-data-index.msgpack`) has no chunk suffix and must not match
+            foreach string name in (d.listFiles("^qore-data-index-[0-9a-f]{64}\\.msgpack$")) {
+                if (keep{name}) {
+                    continue;
+                }
+                try {
+                    unlink(dir + DirSep + name);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::LevelWarn, "Unable to remove stale data provider metadata cache chunk %y: "
+                        "%s: %s", name, ex.err, ex.desc);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelWarn, "Unable to scan the data provider index directory for stale metadata "
+                "cache chunks: %s: %s", ex.err, ex.desc);
+        }
     }
 
     #! Reads the data provider index from the configured directory
