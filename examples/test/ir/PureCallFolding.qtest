@@ -71,8 +71,9 @@ public class PureCallFoldingTest inherits QUnit::Test {
     */
     private hash<string, list<int>> parseFoldCounts(string output, string prefix) {
         # "<prefix> <name>: loops=... pure-calls=<n>"; the name is anchored on the first statistic
-        # rather than on ":" because a method name contains "::"
-        string pattern = sprintf("^%s (.+): loops=.* pure-calls=([0-9]+)$", prefix);
+        # rather than on ":" because a method name contains "::", and the count is not anchored on
+        # the end of the line because further statistics are reported after it
+        string pattern = sprintf("^%s (.+): loops=.* pure-calls=([0-9]+)", prefix);
         hash<string, list<int>> rv = {};
         foreach string line in (output.split("\n")) {
             *list<*string> parts = regex_extract(line, pattern);

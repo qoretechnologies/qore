@@ -5112,6 +5112,48 @@ static bool qore_ir_is_forwardable_scalar_load(const QoreIRFunction& func,
         || facts->representation == QoreIRValueRepresentation::NativeBool;
 }
 
+//! Returns true when \a inst is a call whose callee mutates nothing the caller can observe.
+/** \c QCF_NO_SIDE_EFFECTS is exactly the claim this asks about: the variant mutates no observable
+    state, so calling it twice is indistinguishable from calling it once.  A caller local is
+    observable state, and so is a container the caller still holds, so a call carrying the flag can
+    neither write a local nor mutate a value reachable from one - which is what makes it safe to
+    keep cached local loads and borrowed container reads alive across it.
+
+    The flag is a claim about the whole call, including anything the callee invokes, so it covers a
+    hypothetical callee that runs user code; the qualifications here are the ones the flag does
+    <b>not</b> cover:
+
+    - A user variant carries no such contract at all (the flags are declared only for builtins), so
+      only builtins are admitted.
+    - A \c reference parameter lets the callee write a caller local through the reference.  Such a
+      write would contradict the flag, but \a has_ref_args is cheap and is checked rather than
+      assumed.
+    - A non-default functional domain means the callee touches an external resource; nothing there
+      can reach a caller local either, but admitting only \c QDOM_DEFAULT keeps this predicate in
+      step with the pure-call folding above and costs nothing - no declaration today combines a
+      domain with this flag.
+
+    An unresolved callee yields a null variant and is treated as mutating, as before.
+*/
+static bool qore_ir_call_has_no_side_effects(const QoreIRInstruction& inst) {
+    // this is reached once per instruction in several nested analysis loops, so the kill switch is
+    // read once rather than on every query
+    static const bool disabled = std::getenv("QORE_DISABLE_IR_PURE_CALL_NO_INVALIDATE") != nullptr;
+    if (disabled) {
+        return false;
+    }
+    bool has_ref_args = true;
+    const AbstractQoreFunctionVariant* variant =
+        qore_ir_get_resolved_effect_callee(&inst, has_ref_args);
+    if (!variant || has_ref_args || variant->isUser()) {
+        return false;
+    }
+    if (!(variant->getFlags() & QCF_NO_SIDE_EFFECTS)) {
+        return false;
+    }
+    return variant->getFunctionality() == QDOM_DEFAULT;
+}
+
 static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
     switch (opcode) {
         case QoreIROpcode::NewObject:
@@ -5170,6 +5212,212 @@ static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
         default:
             return false;
     }
+}
+
+//! Instruction-level form of the opcode test above: a call that mutates nothing is not a barrier.
+/** The opcode alone cannot answer the question for a call, because whether the callee can write a
+    caller local is a property of the resolved variant, not of the calling convention.  Every caller
+    of the opcode form that is asking "can this instruction have changed state I have cached?"
+    should use this form; the opcode form remains for callers that only classify opcodes.
+*/
+static bool qore_ir_may_mutate_unknown_local(const QoreIRInstruction& inst) {
+    if (!qore_ir_may_mutate_unknown_local(inst.opcode)) {
+        return false;
+    }
+    return !qore_ir_call_has_no_side_effects(inst);
+}
+
+/*
+    Common-subexpression elimination for pure builtin calls.
+
+    QCF_DETERMINISTIC makes the result a function of the arguments alone: nothing the program does
+    between two calls with the same arguments can change what the second one returns.  That is
+    exactly the licence CSE needs, and it is a stronger claim than the scalar CSE below relies on,
+    which is why calls were left out of it.
+
+    Three restrictions keep this obviously correct rather than merely arguable:
+
+    - Only calls within one basic block are commoned, so the surviving call trivially dominates the
+      one removed and no control flow separates them.  QCF_PURE does not imply nothrow, and this is
+      what makes the throw case sound: if the first call raises, the second never ran anyway.
+    - The surviving value is forwarded only when every use of it is non-consuming, checked against
+      the uses the function actually has rather than assumed from the declared return type.  A call
+      result can own a reference even when it looks scalar - QoreValue stores a double inline, but
+      the NaN bit patterns that would collide with its tags are allocated as a QoreBigFloatNode, and
+      an int outside 48 bits as a QoreBigIntNode - so a consuming use would release it while the
+      second consumer still needs it.
+    - DiscardTemps is a barrier.  An owned result is released when the cleanup vector drains back to
+      its mark, and forwarding across a drain would hand the second consumer a freed value.  With no
+      drain between the two calls, the second call's mark region is nested in or equal to the
+      first's, so the surviving value outlives every use the removed call had.
+
+    Two calls present identical operands far less often than they compute identical values, because
+    each argument is loaded separately: sqrt(f) + sqrt(f) lowers to two `load.local @f` feeding two
+    calls.  The scalar CSE below cannot merge those loads - a call is not one of the uses it can
+    prove non-consuming - so the operands are numbered here instead, over the same conditions that
+    pass proves safe for a load and with the same invalidation rules.  Numbering only decides which
+    keys match; the surviving call keeps its own operand and the now-unused loads are simply left
+    for the backend to drop, so no value is shared as a side effect of it.
+*/
+
+struct QoreIRPureCallKey {
+    const QoreFunction* func = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    std::vector<uint32_t> operands;
+
+    bool operator==(const QoreIRPureCallKey& other) const {
+        return func == other.func && variant == other.variant && operands == other.operands;
+    }
+};
+
+struct QoreIRPureCallKeyHash {
+    size_t operator()(const QoreIRPureCallKey& key) const {
+        size_t h = std::hash<const void*>()(key.func);
+        h ^= std::hash<const void*>()(key.variant) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        for (uint32_t id : key.operands) {
+            h ^= std::hash<uint32_t>()(id) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        }
+        return h;
+    }
+};
+
+//! Returns true when this call may be commoned up with an identical earlier one.
+static bool qore_ir_pure_call_cse_candidate(const QoreIRInstruction* inst,
+        const AbstractQoreFunctionVariant*& variant) {
+    if (inst->opcode != QoreIROpcode::CallDirect || inst->exception_target
+            || !inst->result.isValid()) {
+        return false;
+    }
+    const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+    if (!call->func || call->has_ref_args || call->explicit_type_param_inst
+            || call->operands.size() > 100) {
+        return false;
+    }
+    bool has_ref_args = true;
+    variant = qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+    if (!variant || has_ref_args || variant->isUser()) {
+        return false;
+    }
+    if ((variant->getFlags() & QCF_PURE) != QCF_PURE) {
+        return false;
+    }
+    if (variant->getFunctionality() != QDOM_DEFAULT) {
+        return false;
+    }
+    return true;
+}
+
+static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_PURE_CALL_CSE")) {
+        return 0;
+    }
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+    const bool number_loads = !std::getenv("QORE_DISABLE_IR_PURE_CALL_CSE_LOAD_NUMBERING");
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR pure call common-expression analysis")) {
+            return 0;
+        }
+        std::unordered_map<QoreIRPureCallKey, QoreIRValue, QoreIRPureCallKeyHash> available;
+        // canonical id per local for the loads live at this point, and the canonical id each
+        // numbered load result maps to
+        std::unordered_map<const LocalVar*, uint32_t> live_loads;
+        std::unordered_map<uint32_t, uint32_t> load_numbers;
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR pure call common-expression analysis")) {
+                return 0;
+            }
+            if (number_loads) {
+                const LocalVar* written_local = nullptr;
+                if (inst->opcode == QoreIROpcode::StoreLocal
+                        || inst->opcode == QoreIROpcode::StoreClosure
+                        || inst->opcode == QoreIROpcode::InstantiateLocal
+                        || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                    written_local = static_cast<const QoreIRLocalInstruction&>(*inst).local;
+                } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                    written_local =
+                        static_cast<const QoreIRAddAssignLocalIntInstruction&>(*inst).target;
+                } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                    written_local =
+                        static_cast<const QoreIRIncrementLocalIntInstruction&>(*inst).local;
+                }
+                if (written_local) {
+                    live_loads.erase(written_local);
+                } else if (qore_ir_may_mutate_unknown_local(*inst)) {
+                    live_loads.clear();
+                }
+                if (qore_ir_is_forwardable_scalar_load(func, *inst)) {
+                    const auto& load = static_cast<const QoreIRLocalInstruction&>(*inst);
+                    auto live = live_loads.emplace(load.local, inst->result.id).first;
+                    load_numbers.emplace(inst->result.id, live->second);
+                    continue;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::DiscardTemps) {
+                // an owned call result is released here, so a call before this point must not be
+                // reused after it
+                available.clear();
+                continue;
+            }
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            if (!qore_ir_pure_call_cse_candidate(inst.get(), variant)) {
+                continue;
+            }
+            bool cancelled = false;
+            if (!qore_ir_has_only_nonconsuming_scalar_uses(func, inst->result, uses, false,
+                    check_count, cancelled, true)) {
+                if (cancelled) {
+                    return 0;
+                }
+                continue;
+            }
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+            QoreIRPureCallKey key;
+            key.func = call->func;
+            key.variant = variant;
+            key.operands.reserve(call->operands.size());
+            for (QoreIRValue operand : call->operands) {
+                // an argument may itself have been forwarded by an earlier round of this pass
+                auto replaced = replacements.find(operand.id);
+                uint32_t id = replaced == replacements.end() ? operand.id : replaced->second.id;
+                auto numbered = load_numbers.find(id);
+                key.operands.push_back(numbered == load_numbers.end() ? id : numbered->second);
+            }
+            auto existing = available.find(key);
+            if (existing == available.end()) {
+                available.emplace(std::move(key), inst->result);
+                continue;
+            }
+            replacements.emplace(inst->result.id, existing->second);
+            eliminated.insert(inst.get());
+        }
+    }
+    if (replacements.empty()) {
+        return 0;
+    }
+    for (const auto& block : func.blocks) {
+        // the decision is committed; finish the rewrite even under cancellation, so no use can
+        // reference an erased definition
+        (void)qore_ir_analysis_cancelled(check_count, "IR pure call common-expression elimination");
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR pure call common-expression elimination");
+            }
+            if (eliminated.count(it->get())) {
+                it = instructions.erase(it);
+                continue;
+            }
+            (void)qore_ir_rewrite_value_operands(**it, replacements, check_count, false);
+            ++it;
+        }
+    }
+    return eliminated.size();
 }
 
 struct QoreIRScalarCSEStats {
@@ -5462,7 +5710,7 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
             if (written_local) {
                 available_loads.erase(written_local);
-            } else if (qore_ir_may_mutate_unknown_local(inst.opcode)) {
+            } else if (qore_ir_may_mutate_unknown_local(inst)) {
                 available_loads.clear();
             }
 
@@ -5633,7 +5881,7 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
             if (qore_ir_analysis_cancelled(check_count, "IR borrowed list source analysis")) {
                 return false;
             }
-            if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
+            if (qore_ir_may_mutate_unknown_local(*inst)) {
                 safety.may_mutate_unknown = true;
             }
             switch (inst->opcode) {
@@ -6084,7 +6332,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 if (!after_assignment || !cfg.dominates(block_id, loop.header)) {
                     continue;
                 }
-                if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
+                if (qore_ir_may_mutate_unknown_local(*inst)) {
                     assignment_invalidated = true;
                     break;
                 }
@@ -6118,7 +6366,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     if (!after_bound_assignment || !cfg.dominates(block_id, loop.header)) {
                         continue;
                     }
-                    if (qore_ir_may_mutate_unknown_local(inst->opcode)
+                    if (qore_ir_may_mutate_unknown_local(*inst)
                             || qore_ir_may_mutate_list(inst->opcode)
                             || (inst->opcode == QoreIROpcode::IncrementLocalInt
                                 && static_cast<QoreIRIncrementLocalIntInstruction*>(inst)->local
@@ -6236,7 +6484,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                     return changed;
                 }
                 QoreIRInstruction* inst = instructions[offset].get();
-                if ((qore_ir_may_mutate_unknown_local(inst->opcode)
+                if ((qore_ir_may_mutate_unknown_local(*inst)
                         && !is_unrelated_local_lvalue_path(inst)
                         && !is_read_only_string_candidate(inst))
                         || qore_ir_may_mutate_list(inst->opcode)) {
@@ -8801,7 +9049,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                     }
                     return;
                 }
-                if (qore_ir_may_mutate_unknown_local(inst->opcode)
+                if (qore_ir_may_mutate_unknown_local(*inst)
                         && !qore_ir_is_hoistable_read_only_query(
                             func, *inst)) {
                     loop_may_invalidate_query_loads = true;
@@ -8928,6 +9176,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func, cfg);
         local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
         local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
+        local_stats.pure_calls_commoned =
+            qore_ir_eliminate_common_pure_calls(func, check_count);
     }
 
     if (!getenv("QORE_DISABLE_IR_CONST_FOLD")) {

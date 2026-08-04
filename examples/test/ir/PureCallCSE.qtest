@@ -1,0 +1,345 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class PureCallCSETest
+
+#! Checks the IR pass that commons up repeated pure builtin calls, and the invalidation it rests on.
+/** Two separate things are covered here, and the first is the prerequisite for the second.
+
+    qore_ir_may_mutate_unknown_local() used to answer on the opcode alone, so every call was a
+    barrier that discarded every cached local load.  QCF_NO_SIDE_EFFECTS says the callee mutates no
+    observable state, and a caller local is observable state, so a call carrying it cannot be that
+    barrier.  Making the check variant-aware is what lets a load be forwarded across a pure call.
+
+    On top of that, QCF_DETERMINISTIC makes a pure call's result a function of its arguments alone,
+    so two such calls with the same arguments in the same basic block can be commoned.
+
+    A commoned call produces the same value as an uncommoned one, so comparing values cannot tell
+    "commoned correctly" from "not commoned at all".  QORE_IR_OPT_STATS reports the per-function
+    counts, so the tests assert on those as well as on the values, and use the kill switches to
+    show that the counts move for the reason claimed.
+*/
+public class PureCallCSETest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("PureCallCSETest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("commoned calls produce the uncommoned values", \testCommonedValuesMatchUncommoned());
+        addTestCase("only identical pure calls are commoned", \testOnlyIdenticalPureCallsAreCommoned());
+        addTestCase("a pure call does not invalidate cached loads", \testPureCallDoesNotInvalidateLoads());
+        addTestCase("side-effecting calls are never commoned", \testSideEffectingCallsAreNotCommoned());
+        addTestCase("a raising pure call raises exactly once", \testRaisingPureCallRaisesOnce());
+        addTestCase("AOT commons the same calls", \testImageCommoning());
+
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    #! runs a script and returns its combined output
+    private string runScript(string script_path, *hash<auto> env) {
+        string prefix = "";
+        foreach hash<auto> i in (env.pairIterator()) {
+            prefix += sprintf("%s=%s ", i.key, i.value);
+        }
+        return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1",
+            prefix, libqore_dir, qore_bin, script_path));
+    }
+
+    #! extracts one per-function statistic from QORE_IR_OPT_STATS output
+    /** A function can be lowered more than once, so every count reported for one name is kept and
+        the caller asserts on the whole set; a name that silently changed count between lowerings
+        would otherwise be invisible.
+    */
+    private hash<string, list<int>> parseCounts(string output, string prefix, string stat) {
+        # the name is anchored on the first statistic rather than on ":" because a method name
+        # contains "::"
+        string pattern = sprintf("^%s (.+): loops=.* %s=([0-9]+)", prefix, stat);
+        hash<string, list<int>> rv = {};
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = regex_extract(line, pattern);
+            if (parts.size() != 2 || !exists parts[0] || !exists parts[1]) {
+                continue;
+            }
+            string name = parts[0];
+            list<int> counts = rv{name} ?? ();
+            counts += parts[1].toInt();
+            rv{name} = counts;
+        }
+        return rv;
+    }
+
+    #! asserts that every reported count for \a name equals \a expected
+    private assertCount(hash<string, list<int>> counts, string name, int expected, string stat) {
+        assertTrue(exists counts{name}, sprintf("%y was lowered and reported %s", name, stat));
+        foreach int count in (counts{name}) {
+            assertEq(expected, count, sprintf("%s for %y", stat, name));
+        }
+    }
+
+    #! probe functions covering the commoned shapes and every reason to refuse
+    /** Every argument here is a body local rather than a parameter: a call whose argument is a
+        parameter still lowers to the generic Call opcode carrying an AST expression, which is not
+        a candidate.
+    */
+    private string probeCode() {
+        return '%modern
+
+# two identical pure calls on the same value: one call survives
+float sub c_same(float x)   { float f = x; return sqrt(f) + sqrt(f); }
+# three of them: two are removed
+float sub c_three(float x)  { float f = x; return sqrt(f) + sqrt(f) + sqrt(f); }
+# different locals are different arguments
+float sub c_diff(float x, float y) { float a = x; float b = y; return sqrt(a) + sqrt(b); }
+# a write to the argument between the calls makes them different calls
+float sub c_store(float x)  { float f = x; float a = sqrt(f); f = f + 1.0; float b = sqrt(f); return a + b; }
+# different argument expressions
+float sub c_args(float x)   { float f = x; return sqrt(f) + sqrt(f + 1.0); }
+# an unrelated pure call between them is not a barrier
+float sub c_across_pure(float x, float y) { float f = x; float g = y; return sqrt(f) + sqrt(g) + sqrt(f); }
+# neither is an impure one, because a deterministic result cannot depend on what it did
+float sub c_impure(float x) { float f = x; return sqrt(f) + pow(f, 2.0) + sqrt(f); }
+# commoning is intra-block, so a conditional second call is left alone
+float sub c_block(float x, bool b) { float f = x; float a = sqrt(f); if (b) { a += sqrt(f); } return a; }
+# a call carrying an unwind edge is left alone: replacing it would drop the edge
+float sub c_try(float x)    { float f = x; try { return sqrt(f) + sqrt(f); } catch (hash<ExceptionInfo> ex) { return -1.0; } }
+# the result is an owned string, and string concatenation is not a use that can share one
+string sub c_string(string s) { string t = s; return toupper(t) + toupper(t); }
+# the loop body is where the invalidation matters: the second load of f follows the first call
+float sub c_loop(int n)     { float s = 0.0; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += sqrt(f) + sqrt(f); } return s; }
+# no call to common here, only two loads of f separated by one pure call
+float sub c_loop_fwd(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += f * 2.0 + sqrt(g) + f * 3.0; } return s; }
+
+printf("same=%y\n", c_same(2.0));
+printf("three=%y\n", c_three(2.0));
+printf("diff=%y\n", c_diff(2.0, 3.0));
+printf("store=%y\n", c_store(3.0));
+printf("args=%y\n", c_args(2.0));
+printf("across_pure=%y\n", c_across_pure(2.0, 9.0));
+printf("impure=%y\n", c_impure(2.0));
+printf("block=%y\n", c_block(4.0, True));
+printf("try=%y\n", c_try(4.0));
+printf("string=%y\n", c_string("ab"));
+printf("loop=%y\n", c_loop(4));
+printf("loop_fwd=%y\n", c_loop_fwd(4, 9.0));
+';
+    }
+
+    #! a commoned call must produce exactly what the repeated calls produce
+    private testCommonedValuesMatchUncommoned() {
+        TmpDir tmp("pure-call-cse-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string commoned = runScript(script);
+        string uncommoned = runScript(script, {"QORE_DISABLE_IR_PURE_CALL_CSE": "1"});
+        assertEq(uncommoned, commoned, "commoning does not change any result");
+        assertRegex("same=2.82842712", commoned);
+        assertRegex("three=4.24264069", commoned);
+        assertRegex("store=3.73205081", commoned);
+        assertRegex("loop=8.29252874", commoned);
+
+        # the comparison above is only meaningful if the commoned run really commoned
+        hash<string, list<int>> counts = parseCounts(
+            runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:", "pure-cse");
+        assertCount(counts, "c_three", 2, "pure-cse");
+    }
+
+    #! the flags and the arguments decide what is commoned, not the shape of the call
+    private testOnlyIdenticalPureCallsAreCommoned() {
+        TmpDir tmp("pure-call-cse-shapes-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        hash<string, list<int>> counts = parseCounts(
+            runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:", "pure-cse");
+
+        map assertCount(counts, $1, 1, "pure-cse"), (
+            "c_same", "c_across_pure", "c_impure", "c_loop",
+        );
+        assertCount(counts, "c_three", 2, "pure-cse");
+        # a different argument value, a control-flow edge between the calls, an unwind edge, or a
+        # result no use can share
+        map assertCount(counts, $1, 0, "pure-cse"), (
+            "c_diff", "c_store", "c_args", "c_block", "c_try", "c_string", "c_loop_fwd",
+        );
+    }
+
+    #! QCF_NO_SIDE_EFFECTS says the callee writes nothing, so it cannot invalidate a cached load
+    private testPureCallDoesNotInvalidateLoads() {
+        TmpDir tmp("pure-call-cse-invalidate-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string aware = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        string blind = runScript(script,
+            {"QORE_IR_OPT_STATS": "1", "QORE_DISABLE_IR_PURE_CALL_NO_INVALIDATE": "1"});
+
+        # two loads of the same local separated by a pure call: forwarded only when the call is
+        # known not to write
+        assertCount(parseCounts(aware, "IR-OPT:", "scalar-loads"), "c_loop_fwd", 1, "scalar-loads");
+        assertCount(parseCounts(blind, "IR-OPT:", "scalar-loads"), "c_loop_fwd", 0, "scalar-loads");
+
+        # and the commoning depends on it: without it the second load of f in the loop body is a
+        # different value and the two sqrt() calls no longer look identical
+        assertCount(parseCounts(aware, "IR-OPT:", "pure-cse"), "c_loop", 1, "pure-cse");
+        assertCount(parseCounts(blind, "IR-OPT:", "pure-cse"), "c_loop", 0, "pure-cse");
+
+        # neither setting may change a result
+        assertEq(runScript(script, {"QORE_DISABLE_IR_PURE_CALL_NO_INVALIDATE": "1"}),
+            runScript(script), "the invalidation setting does not change any result");
+    }
+
+    #! a call that mutates state must be executed as often as it is written
+    /** The oracle functions only exist in a debug build, and a direct call to one fails to parse on
+        a release build - which is why the probe lives in a script written at run time rather than
+        in this file.  Both take no arguments, so their operand lists are trivially identical and
+        only the flags can distinguish them.
+    */
+    private testSideEffectingCallsAreNotCommoned() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("library debugging is not available in this build");
+        }
+        TmpDir tmp("pure-call-cse-effects-");
+        string script = tmp.path + "/oracle.q";
+        writeFile(script, '%modern
+
+# QCF_NO_DOMAIN_THROW with a real side effect: the counter must be bumped twice
+int sub o_effects() { return dbg_flags_nodomain_with_effects() + dbg_flags_nodomain_with_effects(); }
+# no claims at all: the control
+int sub o_unflagged() { return dbg_flags_unflagged() + dbg_flags_unflagged(); }
+# QCF_PURE with no arguments: the constant folder reaches these first, so neither call survives
+# to be commoned
+int sub o_pure() { return dbg_flags_pure() + dbg_flags_pure(); }
+# QCF_CONSTANT is diagnostic-only and licenses nothing
+int sub o_legacy_constant() { return dbg_flags_legacy_constant() + dbg_flags_legacy_constant(); }
+
+printf("effects=%y\n", o_effects());
+printf("unflagged=%y\n", o_unflagged());
+printf("pure=%y\n", o_pure());
+printf("legacy_constant=%y\n", o_legacy_constant());
+printf("effect_count=%y\n", dbg_flags_effect_count());
+');
+        string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        hash<string, list<int>> counts = parseCounts(out, "IR-OPT:", "pure-cse");
+        # commoning either of these would drop a side effect
+        assertCount(counts, "o_effects", 0, "pure-cse");
+        assertCount(counts, "o_unflagged", 0, "pure-cse");
+        # commoning on QCF_CONSTANT would reintroduce exactly the defect #5385 was filed over
+        assertCount(counts, "o_legacy_constant", 0, "pure-cse");
+        # a no-argument call has trivially literal arguments, so the constant folder replaces both
+        # calls before this pass sees them; the count is zero for that reason and not for a flag
+        assertCount(counts, "o_pure", 0, "pure-cse");
+        assertCount(parseCounts(out, "IR-OPT:", "pure-calls"), "o_pure", 2, "pure-calls");
+        map assertCount(parseCounts(out, "IR-OPT:", "pure-calls"), $1, 0, "pure-calls"), (
+            "o_effects", "o_unflagged", "o_legacy_constant",
+        );
+
+        # the counter proves the side effects really happened, twice per function
+        assertRegex("effects=3\n", out);
+        assertRegex("unflagged=7\n", out);
+        assertRegex("effect_count=4\n", out);
+        assertRegex("pure=6\n", out);
+    }
+
+    #! QCF_PURE makes no nothrow claim, and the surviving call is the one that would have raised
+    private testRaisingPureCallRaisesOnce() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("library debugging is not available in this build");
+        }
+        TmpDir tmp("pure-call-cse-throw-");
+        string script = tmp.path + "/throw.q";
+        writeFile(script, '%modern
+
+# QCF_PURE | QCF_HOST_PORTABLE; raises for a negative argument
+int sub t_pair(int n) { int v = n; return dbg_flags_pure_throw(v) + dbg_flags_pure_throw(v); }
+
+printf("ok=%y\n", t_pair(21));
+try {
+    t_pair(-1);
+    printf("raises=none\n");
+} catch (hash<ExceptionInfo> ex) {
+    printf("raises=%s\n", ex.err);
+}
+');
+        string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        assertCount(parseCounts(out, "IR-OPT:", "pure-cse"), "t_pair", 1, "pure-cse");
+
+        assertRegex("ok=84", out);
+        # the removed call sat after the surviving one, so if the first raises the second never ran
+        assertRegex("raises=DBG-NEGATIVE-ARGUMENT", out);
+        assertEq(runScript(script, {"QORE_DISABLE_IR_PURE_CALL_CSE": "1"}), runScript(script),
+            "commoning does not change the raising behaviour");
+    }
+
+    #! the pass runs in qcc too, and the image must agree with the interpreted source
+    private testImageCommoning() {
+        TmpDir tmp("pure-call-cse-aot-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/PureCseProbeMod.qm";
+        string qmod_path = qmod_dir + "/PureCseProbeMod.qmod";
+        writeFile(qm_path, '%modern
+
+module PureCseProbeMod {
+    version = "1.0";
+    desc = "pure call commoning probe";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace PureCseProbeMod {
+public class PureCseProbe {
+    #! three identical calls, two of which are removed
+    static float three(float x) { float f = x; return sqrt(f) + sqrt(f) + sqrt(f); }
+
+    #! a write between the calls makes them different calls
+    static float written(float x) { float f = x; float a = sqrt(f); f = f + 1.0; return a + sqrt(f); }
+}
+}
+');
+        string compile_out = backquote(sprintf(
+            "QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("module compiled: %s", compile_out));
+
+        hash<string, list<int>> counts = parseCounts(compile_out, "IR-OPT-AOT:", "pure-cse");
+        assertCount(counts, "PureCseProbeMod::PureCseProbe::_static_three", 2, "pure-cse");
+        assertCount(counts, "PureCseProbeMod::PureCseProbe::_static_written", 0, "pure-cse");
+
+        string script = tmp.path + "/run.q";
+        writeFile(script, '%modern
+%requires PureCseProbeMod
+
+printf("three=%y\n", PureCseProbeMod::PureCseProbe::three(2.0));
+printf("written=%y\n", PureCseProbeMod::PureCseProbe::written(3.0));
+');
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, qmod_dir, qore_bin, script));
+        string src_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, src_dir, qore_bin, script));
+        assertEq(src_out, aot_out, "AOT and source module agree");
+        assertRegex("three=4.24264069", aot_out);
+        assertRegex("written=3.73205081", aot_out);
+    }
+}
