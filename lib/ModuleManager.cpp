@@ -31,6 +31,9 @@
 */
 
 #include "qore/Qore.h"
+// inherit_module_sandbox_manager() derefs a QoreSandboxManager; QoreProgram.h only forward-declares
+// it, so this translation unit needs the definition to compile outside a single-compilation-unit
+// build
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
