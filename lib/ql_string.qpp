@@ -149,9 +149,9 @@ static void split_add_element(QoreListNode* l, const char* str, unsigned len, co
     if (enc) {
         l->push(new QoreStringNode(str, len, enc), nullptr);
     } else {
-        BinaryNode* b = new BinaryNode;
+        SimpleRefHolder<BinaryNode> b(new BinaryNode);
         b->append(str, len);
-        l->push(b, nullptr);
+        l->push(b.release(), nullptr);
     }
 }
 
@@ -960,9 +960,9 @@ binary b1 = substr(b, -10);
     @since %Qore 0.8.8
  */
 binary substr(binary bin, softint start) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
-   BinaryNode* b1 = new BinaryNode;
-   bin->substr(*b1, start);
-   return b1;
+   SimpleRefHolder<BinaryNode> b1(new BinaryNode);
+   bin->substr(**b1, start);
+   return b1.release();
 }
 
 //! Returns a portion of a binary object starting from an integer offset, with a length parameter
@@ -985,9 +985,9 @@ binary b1 = substr(b, 10, -2);
     @since %Qore 0.8.8
  */
 binary substr(binary bin, softint start, softint len) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
-   BinaryNode* b1 = new BinaryNode;
-   bin->substr(*b1, start, len);
-   return b1;
+   SimpleRefHolder<BinaryNode> b1(new BinaryNode);
+   bin->substr(**b1, start, len);
+   return b1.release();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
