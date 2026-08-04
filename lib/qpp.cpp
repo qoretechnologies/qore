@@ -2793,6 +2793,16 @@ int flags_get(strlist_t& flags, const std::string& str) {
     return 0;
 }
 
+//! Returns true if \a flags contains the given flag name
+static bool flags_contains(const strlist_t& flags, const char* name) {
+    for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
+        if (*i == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! Returns true if \a flags asserts determinism (directly or through a composite)
 static bool flags_assert_determinism(const strlist_t& flags) {
     for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
@@ -2816,6 +2826,15 @@ static bool flags_assert_determinism(const strlist_t& flags) {
 */
 static int check_determinism_flags(const strlist_t& flags, const strlist_t& dom, const std::string& code,
         const char* what, const std::string& name) {
+    // QCF_HOST_PORTABLE is the strictly stronger claim - bit-identical on every conforming host,
+    // not merely repeatable on this one - so claiming it without QCF_DETERMINISTIC is incoherent
+    if (flags_contains(flags, "HOST_PORTABLE") && !flags_assert_determinism(flags)) {
+        error("%s %s() declares QCF_HOST_PORTABLE without QCF_DETERMINISTIC (directly or through a "
+            "composite); a result cannot be identical across hosts unless it is first a function "
+            "of the arguments alone\n", what, name.c_str());
+        return -1;
+    }
+
     if (!flags_assert_determinism(flags)) {
         return 0;
     }
@@ -8417,6 +8436,7 @@ void init() {
     fset.insert("NO_SIDE_EFFECTS");
     fset.insert("DETERMINISTIC");
     fset.insert("NO_DOMAIN_THROW");
+    fset.insert("HOST_PORTABLE");
     fset.insert("PURE");
     fset.insert("TOTAL");
 }

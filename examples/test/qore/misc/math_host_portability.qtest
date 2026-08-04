@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MathHostPortabilityTest
+
+#! Checks the numeric reasoning behind which ql_math variants carry QCF_HOST_PORTABLE.
+/** QCF_HOST_PORTABLE claims a result is bit-identical on every conforming host, which is what
+    ahead-of-time compilation needs: qcc evaluates on the build host and the value is consumed
+    somewhere else.  The claim rests on two facts that this test exercises directly rather than
+    taking on trust:
+
+    - IEEE 754 requires correct rounding for square root, so the float sqrt() variant agrees with
+      the correctly-rounded result and may carry the flag.
+    - It does not require correct rounding for the transcendentals, so the float sin(), exp(),
+      pow() and friends may differ in the last ulp between libm implementations and may not.
+
+    The arbitrary-precision number variants are unaffected either way: MPFR guarantees correct
+    rounding for every function it exposes, which is why they all carry the flag even where the
+    corresponding float variant does not.
+*/
+public class MathHostPortabilityTest inherits QUnit::Test {
+    #! inputs chosen to span normal magnitudes, exact powers of two, and awkward mantissas
+    const Inputs = (
+        0.5, 1.0, 2.0, 3.0, 4.0, 7.0, 10.0, 0.1, 0.25, 1.5, 2.5,
+        1e-8, 1e8, 123.456, 0.7071067811865476, 1e300, 1e-300,
+    );
+
+    constructor() : Test("MathHostPortabilityTest", "1.0") {
+        addTestCase("exact float ops are host portable", \exactFloatOpsArePortable());
+        addTestCase("sqrt is correctly rounded", \sqrtIsCorrectlyRounded());
+        addTestCase("integer ops are exact", \integerOpsAreExact());
+        addTestCase("number variants match float closely", \numberVariantsMatchFloatClosely());
+        set_return_value(main());
+    }
+
+    #! abs() and logb() are bit manipulations, not approximations, so they must be exact
+    exactFloatOpsArePortable() {
+        foreach float v in (Inputs) {
+            assertEq(v, abs(-v), sprintf("abs(-%y) is exact", v));
+            assertEq(v, abs(v), sprintf("abs(%y) is exact", v));
+        }
+        # logb() returns the unbiased exponent; these are exactly representable by construction
+        assertEq(0.0, logb(1.0));
+        assertEq(1.0, logb(2.0));
+        assertEq(2.0, logb(4.0));
+        assertEq(-1.0, logb(0.5));
+    }
+
+    #! IEEE 754 requires sqrt to be correctly rounded, which is what lets it claim QCF_HOST_PORTABLE
+    /** Comparing against the MPFR-backed number variant is the check: if this host's libm sqrt were
+        not correctly rounded, the two would disagree and the flag on the float variant would be
+        wrong.
+    */
+    sqrtIsCorrectlyRounded() {
+        foreach float v in (Inputs) {
+            float from_double = sqrt(v);
+            float from_number = sqrt(v.toNumber()).toFloat();
+            assertEq(from_number, from_double,
+                sprintf("sqrt(%y) agrees with the correctly-rounded result", v));
+        }
+        # squaring the result must return the input where the input is a perfect square
+        assertEq(2.0, sqrt(4.0));
+        assertEq(3.0, sqrt(9.0));
+        assertEq(10.0, sqrt(100.0));
+    }
+
+    #! integer abs/round/ceil/floor never touch libm, so they are portable by construction
+    integerOpsAreExact() {
+        assertEq(1, abs(-1));
+        assertEq(9223372036854775807, abs(-9223372036854775807));
+        assertEq(0, abs(0));
+
+        # round/ceil/floor on integers with a negative precision are string and integer arithmetic
+        assertEq(6500, round(6450, -2));
+        assertEq(6000, round(6450, -3));
+        assertEq(6500, ceil(6450, -2));
+        assertEq(6400, floor(6450, -2));
+        assertEq(-6500, round(-6450, -2));
+    }
+
+    #! the transcendentals are close to the correctly-rounded result but need not equal it
+    /** This is the reason the float transcendental variants do NOT carry QCF_HOST_PORTABLE.  The
+        assertion is a tolerance rather than equality precisely because equality is not guaranteed:
+        asserting equality here would be asserting the very thing IEEE 754 declines to require, and
+        would make the test a hostage to whichever libm it happens to run against.
+    */
+    numberVariantsMatchFloatClosely() {
+        foreach float v in ((0.5, 1.0, 2.0, 3.0, 0.1, 1.5)) {
+            assertLe(1e-12, abs(sin(v) - sin(v.toNumber()).toFloat()) / (abs(sin(v)) + 1e-30),
+                sprintf("sin(%y) is close to the correctly-rounded result", v));
+            assertLe(1e-12, abs(exp(v) - exp(v.toNumber()).toFloat()) / exp(v),
+                sprintf("exp(%y) is close to the correctly-rounded result", v));
+        }
+    }
+}

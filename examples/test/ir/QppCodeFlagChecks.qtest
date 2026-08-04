@@ -44,6 +44,7 @@ class QppCodeFlagChecksTest inherits QUnit::Test {
         addTestCase("state-reading domain is rejected", \testStateReadingDomainRejected());
         addTestCase("method declarations are checked", \testMethodDeclarationsChecked());
         addTestCase("unflagged declarations are unaffected", \testUnflaggedUnaffected());
+        addTestCase("host portable requires determinism", \testHostPortableRequiresDeterminism());
 
         set_return_value(main());
     }
@@ -144,5 +145,29 @@ int TestCls::readClock() [flags=PURE] {
 
         r = runQpp(func("int t_plain()", "    return 1;"));
         assertEq(0, r.status, "an unflagged declaration is unaffected: " + r.out);
+    }
+
+    #! QCF_HOST_PORTABLE is the stronger claim, so it cannot stand without QCF_DETERMINISTIC
+    /** A result cannot be identical across hosts unless it is first a function of the arguments
+        alone, so the combination is incoherent rather than merely unusual.
+    */
+    testHostPortableRequiresDeterminism() {
+        hash<auto> r = runQpp(func("int t_portable_only() [flags=HOST_PORTABLE]", "    return 1;"));
+        assertNeq(0, r.status, "qpp rejects QCF_HOST_PORTABLE without QCF_DETERMINISTIC");
+        assertRegex("QCF_HOST_PORTABLE", r.out, "the diagnostic names the offending flag");
+        assertFalse(r.cpp_created, "no output is produced for a rejected declaration");
+
+        # paired with the determinism claim, directly or through a composite, it is accepted
+        r = runQpp(func("int t_portable_det() [flags=DETERMINISTIC,HOST_PORTABLE]", "    return 1;"));
+        assertEq(0, r.status, "QCF_HOST_PORTABLE is accepted alongside QCF_DETERMINISTIC: " + r.out);
+
+        r = runQpp(func("int t_portable_total(int a) [flags=TOTAL,HOST_PORTABLE]", "    return a;"));
+        assertEq(0, r.status, "QCF_HOST_PORTABLE is accepted alongside QCF_TOTAL: " + r.out);
+        assertRegex("QCF_HOST_PORTABLE", r.cpp, "the flag reaches the generated code");
+
+        # the determinism check still applies to a host-portable declaration
+        r = runQpp(func("int t_portable_clock() [flags=TOTAL,HOST_PORTABLE]",
+            "    struct timeval tv;\n    gettimeofday(&tv, nullptr);\n    return tv.tv_sec;"));
+        assertNeq(0, r.status, "a host-portable declaration is still checked for determinism");
     }
 }

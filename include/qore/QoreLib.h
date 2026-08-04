@@ -141,18 +141,19 @@ typedef std::vector<int> sig_vec_t;
 */
 ///@{
 // qore code flags
-#define QCF_NO_FLAGS                     0   //! no flag
-#define QCF_NOOP                   (1 << 0)  //! this variant is a noop, meaning it returns a constant value with the given argument types
-#define QCF_USES_EXTRA_ARGS        (1 << 1)  //! code accesses arguments beyond the declared parameter list
-#define QCF_CONSTANT_INTERN        (1 << 2)  //! internal constant flag, use QCF_CONSTANT instead
-#define QCF_DEPRECATED             (1 << 3)  //! function or method is deprecated and will be removed in a later release
-#define QCF_RET_VALUE_ONLY         (1 << 4)  //! code only returns a value and has no other side effects
-#define QCF_RUNTIME_NOOP           (1 << 5)  //! this variant is a noop like QCF_NOOP, but additionally is not available to programs executing with %require-types (PO_REQUIRE_TYPES)
-#define QCF_ABSTRACT_OVERRIDE_ALL  (1 << 6)  //! this variant overrides all abstract base class variants in the same method
-#define QCF_NAMED_ARGS             (1 << 7)  //! builtin variant opts in to named-argument calls
-#define QCF_NO_SIDE_EFFECTS        (1 << 8)  //! code mutates no observable state; calling it twice is indistinguishable from calling it once
-#define QCF_DETERMINISTIC          (1 << 9)  //! the result depends only on the arguments and on immutable state; no clock, RNG, PID/TID, environment, locale, time zone, filesystem, network, or mutable global is read
-#define QCF_NO_DOMAIN_THROW        (1 << 10) //! code raises no exception determined by its arguments or by program state (resource-exhaustion exceptions remain possible; see @ref qore_code_flags)
+#define QCF_NO_FLAGS                     0   //!< no flag
+#define QCF_NOOP                   (1 << 0)  //!< this variant is a noop, meaning it returns a constant value with the given argument types
+#define QCF_USES_EXTRA_ARGS        (1 << 1)  //!< code accesses arguments beyond the declared parameter list
+#define QCF_CONSTANT_INTERN        (1 << 2)  //!< internal constant flag, use QCF_CONSTANT instead
+#define QCF_DEPRECATED             (1 << 3)  //!< function or method is deprecated and will be removed in a later release
+#define QCF_RET_VALUE_ONLY         (1 << 4)  //!< code only returns a value and has no other side effects
+#define QCF_RUNTIME_NOOP           (1 << 5)  //!< this variant is a noop like QCF_NOOP, but additionally is not available to programs executing with %require-types (PO_REQUIRE_TYPES)
+#define QCF_ABSTRACT_OVERRIDE_ALL  (1 << 6)  //!< this variant overrides all abstract base class variants in the same method
+#define QCF_NAMED_ARGS             (1 << 7)  //!< builtin variant opts in to named-argument calls
+#define QCF_NO_SIDE_EFFECTS        (1 << 8)  //!< code mutates no observable state; calling it twice is indistinguishable from calling it once
+#define QCF_DETERMINISTIC          (1 << 9)  //!< the result depends only on the arguments and on immutable state; no clock, RNG, PID/TID, environment, locale, time zone, filesystem, network, or mutable global is read
+#define QCF_NO_DOMAIN_THROW        (1 << 10) //!< code raises no exception determined by its arguments or by program state (resource-exhaustion exceptions remain possible; see @ref qore_code_flags)
+#define QCF_HOST_PORTABLE          (1 << 11) //!< the result is bit-identical on every conforming host, not merely repeatable on one; see @ref qore_code_flags_portability
 
 // composite flags
 
@@ -169,6 +170,10 @@ typedef std::vector<int> sig_vec_t;
     sufficient on its own for hoisting out of a loop that may not execute, nor for eliminating a
     call whose result is unused, because a pure function may still raise a domain exception; see
     @ref QCF_TOTAL.
+
+    @warning Sufficient for folding at run time only.  Folding at <b>compile</b> time - where the
+    value is computed on the build host and consumed on another - additionally requires
+    @ref QCF_HOST_PORTABLE; see @ref qore_code_flags_portability.
 */
 #define QCF_PURE (QCF_RET_VALUE_ONLY | QCF_NO_SIDE_EFFECTS | QCF_DETERMINISTIC)
 
@@ -177,6 +182,35 @@ typedef std::vector<int> sig_vec_t;
     subject to the resource-exhaustion carve-out in @ref qore_code_flags.
 */
 #define QCF_TOTAL (QCF_PURE | QCF_NO_DOMAIN_THROW)
+
+/** @defgroup qore_code_flags_portability Determinism versus Host Portability
+    @ref QCF_DETERMINISTIC and @ref QCF_HOST_PORTABLE answer two different questions, and an
+    optimizer that folds a call needs whichever one matches where the folding happens.
+
+    @ref QCF_DETERMINISTIC says that repeating a call with the same arguments in the same process
+    yields the same result.  That is what a JIT or interpreter needs: it folds and the folded value
+    is consumed on the same host that produced it.
+
+    @ref QCF_HOST_PORTABLE says something strictly stronger - that the result is bit-identical on
+    any conforming host.  Ahead-of-time compilation needs this one, because \c qcc evaluates the
+    call on the build host and bakes the result into an image that runs somewhere else.  Folding a
+    merely-deterministic call at AOT time freezes the build host's answer, so an AOT-compiled reader
+    and an interpreted reader of the same expression can disagree - structurally the same defect as
+    baking in a compile-time value for a runtime-dependent constant, or baking in \c QCS_DEFAULT
+    when the runtime host's locale differs.
+
+    The distinction is real for floating point.  IEEE 754 requires correct rounding only for a
+    handful of operations - addition, subtraction, multiplication, division, square root, fused
+    multiply-add, and conversions - so \c sqrt() agrees everywhere, while \c sin(), \c exp(),
+    \c pow() and the rest of the transcendentals are permitted to differ in the last ulp between
+    libm implementations, and do.  Arbitrary-precision \c number arithmetic is not affected: MPFR
+    guarantees correct rounding for every function it exposes, so the \c number variants are
+    portable even where the \c float variants are not.
+
+    @note @ref QCF_HOST_PORTABLE implies @ref QCF_DETERMINISTIC; \c qpp rejects a declaration that
+    claims the former without the latter.
+*/
+
 ///@}
 
 class BinaryNode;

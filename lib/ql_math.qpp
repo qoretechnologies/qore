@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -92,7 +92,7 @@ const MININT = qore(QoreValue(-LLONG_MAX - 1));
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int round(softint value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+int round(softint value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return round_ceil_floor_intern(value, precision, ROUND);
 }
 
@@ -146,7 +146,7 @@ float round(softfloat value, int precision = 0) [flags=PURE,NAMED_ARGS] {
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number round(number value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+number round(number value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doRoundNR(*value, mpfr_round, precision);
 }
 
@@ -173,7 +173,7 @@ float round() [flags=RUNTIME_NOOP] {
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int ceil(int value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+int ceil(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return round_ceil_floor_intern(value, precision, CEIL);
 }
 
@@ -225,7 +225,7 @@ float ceil(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number ceil(number value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+number ceil(number value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doRoundNR(*value, mpfr_ceil, precision);
 }
 
@@ -252,7 +252,7 @@ float ceil() [flags=RUNTIME_NOOP] {
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int floor(int value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+int floor(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return round_ceil_floor_intern(value, precision, FLOOR);
 }
 
@@ -304,7 +304,7 @@ float floor(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number floor(number value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
+number floor(number value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doRoundNR(*value, mpfr_floor, precision);
 }
 
@@ -403,7 +403,7 @@ int i = abs(-20); # returns 20
 
     @note equivalent to <int>::abs()
  */
-int abs(int value) [flags=TOTAL,NAMED_ARGS] {
+int abs(int value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return value < 0 ? -value : value;
 }
 
@@ -420,7 +420,7 @@ number n = abs(-20n); # returns 20n
 
     @note equivalent to <number>::abs()
  */
-number abs(number value) [flags=TOTAL,NAMED_ARGS] {
+number abs(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_abs);
 }
 
@@ -437,7 +437,7 @@ float f = abs(-20.2); # returns 20.2
 
     @note equivalent to <float>::abs()
  */
-float abs(softfloat value) [flags=TOTAL,NAMED_ARGS] {
+float abs(softfloat value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return fabs(value);
 }
 
@@ -460,7 +460,7 @@ float abs() [flags=RUNTIME_NOOP] {
 number z = hypot(x, y);
     @endcode
  */
-number hypot(number x, number y) [flags=TOTAL,NAMED_ARGS] {
+number hypot(number x, number y) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doBinary(*x, mpfr_hypot, *y);
 }
 
@@ -498,7 +498,7 @@ float hypot() [flags=RUNTIME_NOOP] {
 number x = sqrt(y);
     @endcode
  */
-number sqrt(number value) [flags=TOTAL,NAMED_ARGS] {
+number sqrt(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_sqrt);
 }
 
@@ -513,7 +513,7 @@ number sqrt(number value) [flags=TOTAL,NAMED_ARGS] {
 float x = sqrt(y);
     @endcode
  */
-float sqrt(softfloat value) [flags=TOTAL,NAMED_ARGS] {
+float sqrt(softfloat value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return sqrt(value);
 }
 
@@ -535,7 +535,7 @@ float sqrt() [flags=RUNTIME_NOOP] {
 number x = cbrt(y);
     @endcode
  */
-number cbrt(number value) [flags=TOTAL,NAMED_ARGS] {
+number cbrt(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_cbrt);
 }
 
@@ -572,7 +572,7 @@ float cbrt() [flags=RUNTIME_NOOP] {
 number x = sin(y);
     @endcode
  */
-number sin(number value) [flags=TOTAL,NAMED_ARGS] {
+number sin(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_sin);
 }
 
@@ -609,7 +609,7 @@ float sin() [flags=RUNTIME_NOOP] {
 number x = cos(y);
     @endcode
  */
-number cos(number value) [flags=TOTAL,NAMED_ARGS] {
+number cos(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_cos);
 }
 
@@ -646,7 +646,7 @@ float cos() [flags=RUNTIME_NOOP] {
 number x = tan(y);
     @endcode
  */
-number tan(number value) [flags=TOTAL,NAMED_ARGS] {
+number tan(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     return qore_number_private::doUnary(*value, mpfr_tan);
 }
 
@@ -683,7 +683,7 @@ float tan() [flags=RUNTIME_NOOP] {
 number x = asin(y);
     @endcode
  */
-number asin(number value) [flags=TOTAL,NAMED_ARGS] {
+number asin(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_asin);
 }
 
@@ -720,7 +720,7 @@ float asin() [flags=RUNTIME_NOOP] {
 number x = acos(y);
     @endcode
  */
-number acos(number value) [flags=TOTAL,NAMED_ARGS] {
+number acos(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_acos);
 }
 
@@ -750,7 +750,7 @@ float acos(softfloat value) [flags=TOTAL,NAMED_ARGS] {
 number x = atan(y);
     @endcode
  */
-number atan(number value) [flags=TOTAL,NAMED_ARGS] {
+number atan(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_atan);
 }
 
@@ -788,7 +788,7 @@ float atan() [flags=RUNTIME_NOOP] {
 number f = atan2(y, x);
     @endcode
  */
-number atan2(number y, number x) [flags=TOTAL,NAMED_ARGS] {
+number atan2(number y, number x) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doBinary(*y, mpfr_atan2, *x);
 }
 
@@ -826,7 +826,7 @@ float atan2() [flags=RUNTIME_NOOP] {
 number x = sinh(y);
     @endcode
  */
-number sinh(number value) [flags=TOTAL,NAMED_ARGS] {
+number sinh(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_sinh);
 }
 
@@ -863,7 +863,7 @@ float sinh() [flags=RUNTIME_NOOP] {
 number x = cosh(y);
     @endcode
  */
-number cosh(number value) [flags=TOTAL,NAMED_ARGS] {
+number cosh(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_cosh);
 }
 
@@ -900,7 +900,7 @@ float cosh() [flags=RUNTIME_NOOP] {
 number x = tanh(y);
     @endcode
  */
-number tanh(number value) [flags=TOTAL,NAMED_ARGS] {
+number tanh(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_tanh);
 }
 
@@ -937,7 +937,7 @@ float tanh() [flags=RUNTIME_NOOP] {
 float x = nlog(y);
     @endcode
  */
-number nlog(number value) [flags=TOTAL,NAMED_ARGS] {
+number nlog(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_log);
 }
 
@@ -974,7 +974,7 @@ float nlog() [flags=RUNTIME_NOOP] {
 number x = log10(y);
     @endcode
  */
-number log10(number value) [flags=TOTAL,NAMED_ARGS] {
+number log10(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_log10);
 }
 
@@ -1011,7 +1011,7 @@ float log10() [flags=RUNTIME_NOOP] {
 number x = log1p(y);
     @endcode
  */
-number log1p(number value) [flags=TOTAL,NAMED_ARGS] {
+number log1p(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_log1p);
 }
 
@@ -1048,7 +1048,7 @@ float log1p() [flags=RUNTIME_NOOP] {
 float x = logb(y);
     @endcode
  */
-float logb(softfloat value) [flags=TOTAL,NAMED_ARGS] {
+float logb(softfloat value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return logb(value);
 }
 
@@ -1070,7 +1070,7 @@ float logb() [flags=RUNTIME_NOOP] {
 number x = exp(y);
     @endcode
  */
-number exp(number value) [flags=TOTAL,NAMED_ARGS] {
+number exp(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_exp);
 }
 
@@ -1107,7 +1107,7 @@ float exp() [flags=RUNTIME_NOOP] {
 number x = exp2(y);
     @endcode
  */
-number exp2(number value) [flags=TOTAL,NAMED_ARGS] {
+number exp2(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_exp2);
 }
 
@@ -1148,7 +1148,7 @@ float exp2() [flags=RUNTIME_NOOP] {
 number x = exp1m(y);
     @endcode
  */
-number expm1(number value) [flags=TOTAL,NAMED_ARGS] {
+number expm1(number value) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return qore_number_private::doUnary(*value, mpfr_expm1);
 }
 
@@ -1184,7 +1184,7 @@ float expm1() [flags=RUNTIME_NOOP] {
 
     @since %Qore 0.9.5
 */
-int compare(number left, number right, number epsilon) [flags=TOTAL,NAMED_ARGS] {
+int compare(number left, number right, number epsilon) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     SimpleRefHolder<QoreNumberNode> v(left->doMinus(*right));
     if (v->zero()) {
         return 0;
@@ -1207,7 +1207,7 @@ int compare(number left, number right, number epsilon) [flags=TOTAL,NAMED_ARGS] 
 
     @since %Qore 0.9.5
 */
-int compare(float left, float right, float epsilon) [flags=TOTAL,NAMED_ARGS] {
+int compare(float left, float right, float epsilon) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
     double v = left - right;
     if (v == 0.0) {
         return 0;
