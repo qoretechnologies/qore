@@ -31,6 +31,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreNamespaceIntern.h"
