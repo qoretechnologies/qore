@@ -86,6 +86,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("IMDS credentials body parse", \imdsParseTest());
         addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
         addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
+        addTestCase("IMDS probe is bounded by its timeout", \imdsTimeoutTest());
         set_return_value(main());
     }
 
@@ -412,6 +413,33 @@ class AwsTest inherits QUnit::Test {
             "aws_imds_url": "http://localhost:" + imds_port,
         });
         assertEq(True, instance_client instanceof AwsRestClient);
+    }
+
+    #! The IMDS probe must give up on its own timeout rather than the 60s HTTP default
+    /** IMDS lives on a link-local address that is routed like any other address off AWS, so the
+        SYN goes unanswered instead of being rejected and the probe blocks for a full connect
+        timeout.  isEc2Compute() suppresses the doomed probe where it can answer, but it reads
+        Linux sysfs and returns NOTHING on other platforms, which callers must treat as "maybe" -
+        a macOS host may be an EC2 Mac instance.  The timeout is what bounds that case.
+
+        192.0.2.1 is TEST-NET-1 from RFC 5737: reserved for documentation and guaranteed not to
+        be a real host, so the probe either fails immediately or hangs until it gives up.  The
+        bound is deliberately far above the configured timeout and far below the 60s default, so
+        the assertion distinguishes the two without depending on scheduling.
+    */
+    imdsTimeoutTest() {
+        # monotonic: a realtime clock step on a CI VM would otherwise skew the duration
+        int start = clock_get_monotonic_us();
+        assertThrows("AWSRESTCLIENT-ERROR", sub () {
+            new AwsRestClient({
+                "url": "http://localhost:" + port,
+                "aws_imds_url": "http://192.0.2.1",
+                "aws_imds_timeout": 250,
+            });
+        });
+        int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+        assertLt(20000, elapsed_ms, "the IMDS probe honored its timeout rather than the 60s "
+            "HTTP default");
     }
 
     #! aws_imds_disabled must short-circuit instance-credential pickup

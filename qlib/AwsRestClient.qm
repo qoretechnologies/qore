@@ -92,6 +92,11 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_3 AwsRestClient v1.3
+    - bounded the IMDS credential probe with its own timeout (\c aws_imds_timeout, default
+      @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs"); off AWS the
+      link-local metadata address is routed rather than rejected on some platforms, so the probe
+      previously blocked for the full 60-second HTTP connect timeout whenever
+      @ref AwsRestClient::AwsRestClientBase::isEc2Compute() "isEc2Compute()" could not answer
     - added \c prepareAsyncSend() override for AWS Signature V4 signing in async REST requests
 
     @subsection awsrestclientv2_0 AwsRestClient v1.2
@@ -136,6 +141,7 @@ public class AwsRestClientBase {
             "aws_external_id": True,
             "aws_imds_disabled": True,
             "aws_imds_url": True,
+            "aws_imds_timeout": True,
         };
 
         #! Standard AWS environment-variable names recognized by the credential chain
@@ -375,6 +381,22 @@ public class AwsRestClientBase {
     #! IMDS v2 session-token TTL in seconds (6 hours, the documented maximum)
     const ImdsTokenTtlSeconds = 21600;
 
+    #! Connect and response timeout in milliseconds for IMDS requests
+    /** IMDS is a link-local service answered in under a millisecond by the hypervisor when it
+        exists at all, so a short timeout costs nothing on a real instance.  It matters off AWS,
+        where 169.254.169.254 is normally routed like any other address: the SYN goes unanswered
+        rather than being rejected, and the probe blocks for the full
+        \c HTTPCLIENT_DEFAULT_CONNECT_TIMEOUT (60 seconds) instead of failing fast.
+
+        @ref isEc2Compute() suppresses the doomed probe wherever it can answer, but it reads Linux
+        sysfs and returns @ref NOTHING elsewhere, which callers must treat as "maybe" - a macOS
+        host is not necessarily off AWS, since EC2 Mac instances run macOS and do serve IMDS.  This
+        timeout is what bounds the cost of that unavoidable "maybe".
+
+        The AWS SDKs use one second for the same reason.  Override with \c aws_imds_timeout.
+    */
+    const ImdsTimeoutMs = 1000;
+
     #! Returns credentials from the EC2/EKS Instance Metadata Service v2
     /** Implements the IMDSv2 token-protected flow:
         - PUT \c /latest/api/token (with \c X-aws-ec2-metadata-token-ttl-seconds)
@@ -389,6 +411,8 @@ public class AwsRestClientBase {
           @ref ImdsV2Endpoint (useful for tests with a fake IMDS server)
         - \c aws_imds_token_ttl_seconds (\c int): override
           @ref ImdsTokenTtlSeconds
+        - \c aws_imds_timeout (\c int): connect and response timeout in
+          milliseconds; overrides @ref ImdsTimeoutMs
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
 
@@ -397,10 +421,18 @@ public class AwsRestClientBase {
     static hash<auto> getImdsCredentials(*hash<auto> opts) {
         string endpoint = opts.aws_imds_url ?? ImdsV2Endpoint;
         int ttl = opts.aws_imds_token_ttl_seconds ?? ImdsTokenTtlSeconds;
+        int timeout_ms = opts.aws_imds_timeout ?? ImdsTimeoutMs;
 
         # IMDS speaks plain HTTP with no special framing; a plain
-        # RestClientIo with data="text" is sufficient
-        RestClientIo::RestClientIo imds({"url": endpoint, "data": "text"});
+        # RestClientIo with data="text" is sufficient.  Both timeouts are set
+        # explicitly: the default 60s would otherwise be spent in full on every
+        # host where the link-local address is routed rather than rejected.
+        RestClientIo::RestClientIo imds({
+            "url": endpoint,
+            "data": "text",
+            "connect_timeout": timeout_ms,
+            "timeout": timeout_ms,
+        });
 
         # Step 1: obtain a session token via IMDSv2 PUT
         hash<auto> token_resp;
