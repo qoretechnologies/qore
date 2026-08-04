@@ -103,6 +103,34 @@ application's sandbox even though the I/O executes in the module's program.
   specific program" and does **not** walk the stack; use the no-arg form for I/O on behalf
   of user code.
 
+#### The policy barrier: a sanctioned exception to inheritance
+
+Inheritance is correct by default, but it is wrong for trusted infrastructure that must use
+a **system** resource while acting on a sandboxed caller's behalf — reading a service
+account credential to authenticate an outbound API call, say. There the caller must not be
+able to reach the resource, but the infrastructure must; inheriting the caller's policy
+denies the read and the feature is simply unavailable to sandboxed users.
+
+`SandboxManager::callWithSystemPolicy()` (C++: `QoreSandboxPolicyBarrierHelper`) establishes
+a **policy barrier** for the duration of a call: policy resolution stops at the current
+program instead of walking out to enclosing callers, so the caller's policy is not
+inherited. Three properties keep it from becoming a general bypass, and all three are
+asserted in `examples/test/qore/classes/SandboxManager/policy-barrier.qtest`:
+
+- It does **not** override the current program's own manager. Code that re-enters a
+  sandboxed program — a callback — is still checked against that program's sandbox, because
+  that resolves at step 1, before the barrier is consulted.
+- It applies to **filesystem/network policy only**. Interrupt and force-terminate checks
+  resolve with the full walk, so a barriered call stays cancellable. Use
+  `QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)` for a policy check;
+  the no-arg form for anything else. When auditing a call site, ask which of the two it is:
+  a site that uses the manager's *presence* to drive cancellation behavior (process-group
+  setup, for example) is **not** a policy site and must keep the no-arg form.
+- It is restricted to `PO_NO_UNCONTROLLED_APIS`, so sandboxed code cannot establish one.
+
+Scope it as tightly as possible: everything executed inside the barrier runs without the
+caller's policy.
+
 ### Key Principle: Sandbox Manager May Be Absent
 
 When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:

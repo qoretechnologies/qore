@@ -682,8 +682,26 @@ private:
 */
 class DLLEXPORT QoreSandboxManagerHelper {
 public:
+    //! Selects which kind of check the resolved manager is for
+    enum Purpose {
+        //! any check; resolution always walks out to enclosing callers
+        All = 0,
+        //! a filesystem/network POLICY check; honors an active policy barrier
+        Policy = 1,
+    };
+
     //! Acquires a ref'd sandbox manager for the current program
     QoreSandboxManagerHelper();
+
+    //! Acquires a ref'd sandbox manager for the current program for the given purpose
+    /** @param purpose @ref Policy for a filesystem/network policy check, which honors a
+        policy barrier established by @ref QoreSandboxPolicyBarrierHelper; @ref All (the
+        default behavior of the no-argument constructor) for anything else, notably
+        interrupt/force-terminate checks, which must never be suppressed by a barrier
+
+        @since Qore 2.2
+    */
+    QoreSandboxManagerHelper(Purpose purpose);
 
     //! Acquires a ref'd sandbox manager for the given program
     /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
@@ -716,6 +734,65 @@ private:
     QoreSandboxManagerHelper& operator=(const QoreSandboxManagerHelper&) = delete;
 };
 
+
+//! RAII barrier that stops a sandboxed CALLER's policy from being inherited
+/** Sandbox policy normally propagates across program boundaries: code in a Qore-language
+    module executes in the module's own QoreProgram, which has no manager of its own, so
+    resolution walks out to the calling program and the module inherits the caller's sandbox.
+    That is what stops a module from being used to bypass a sandbox, and it is the correct
+    default.
+
+    It is wrong, however, for trusted infrastructure that must use a SYSTEM resource while
+    acting on a sandboxed caller's behalf -- reading a service-account credential to
+    authenticate an outbound API call, for example.  There the caller must not be able to
+    reach the resource, but the infrastructure must.
+
+    Establishing this barrier around such a call stops policy resolution at the current
+    Program, so the caller's policy is not inherited.  Two properties make it narrow:
+
+    - it does not override the CURRENT Program's own manager, so if the barriered code calls
+      back into sandboxed code (a callback), that code is still checked against its own
+      sandbox
+    - it applies to filesystem/network POLICY only.  Interrupt and force-terminate checks
+      resolve unchanged, so a barriered call stays cancellable
+
+    Scope it as tightly as possible: it is a sanctioned exception to sandbox inheritance, and
+    everything executed inside it runs without the caller's policy.
+
+    @par Example:
+    @code{.cpp}
+    {
+        QoreSandboxPolicyBarrierHelper barrier;
+        // system credential read on the caller's behalf; the caller cannot reach this path
+        // except through this trusted entry point
+        rv = read_system_credential(path, xsink);
+    }
+    @endcode
+
+    @see design/module-sandboxing-audit-guide.md
+
+    @since Qore 2.2
+*/
+class DLLEXPORT QoreSandboxPolicyBarrierHelper {
+public:
+    //! Establishes the barrier on the current thread
+    DLLEXPORT QoreSandboxPolicyBarrierHelper();
+
+    //! Releases the barrier
+    DLLEXPORT ~QoreSandboxPolicyBarrierHelper();
+
+    //! Returns true if the barrier is active
+    DLLEXPORT operator bool() const {
+        return active;
+    }
+
+private:
+    bool active;
+
+    // non-copyable
+    QoreSandboxPolicyBarrierHelper(const QoreSandboxPolicyBarrierHelper&) = delete;
+    QoreSandboxPolicyBarrierHelper& operator=(const QoreSandboxPolicyBarrierHelper&) = delete;
+};
 
 //! Polling interval for blocking I/O operations in milliseconds
 /** This constant defines how frequently blocking I/O operations check for

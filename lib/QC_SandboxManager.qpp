@@ -608,3 +608,55 @@ bool SandboxManager::getNetworkDefaultPolicy() {
 hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
     return sm->network().getConfiguration(xsink);
 }
+
+//! Calls the given code with the caller's sandbox policy barriered off
+/** Sandbox policy normally propagates across program boundaries: code in a Qore-language
+    module executes in the module's own %Program, which has no manager of its own, so
+    resolution walks out to the calling program and the module inherits the caller's sandbox.
+    That is what stops a module from being used to bypass a sandbox, and it is the correct
+    default.
+
+    It is wrong, however, for trusted infrastructure that must use a SYSTEM resource while
+    acting on a sandboxed caller's behalf -- reading a service-account credential to
+    authenticate an outbound API call, for example.  There the caller must not be able to
+    reach the resource, but the infrastructure must.
+
+    Calling through this method stops filesystem/network policy resolution at the current
+    %Program for the duration of the call, so the caller's policy is not inherited.  Two
+    properties keep it narrow:
+
+    - the CURRENT %Program's own manager still applies, so if @p call re-enters sandboxed
+      code (a callback, for example), that code is still checked against its own sandbox
+    - only filesystem/network policy is affected; interrupt and force-terminate checks
+      resolve unchanged, so a barriered call remains cancellable
+
+    @param call the code to call with the barrier established
+    @param call_args optional arguments to @p call
+
+    @return the return value of @p call
+
+    @par Example:
+    @code{.py}
+# read a system credential on a sandboxed caller's behalf
+auto rv = SandboxManager::callWithSystemPolicy(\read_credential(), path);
+    @endcode
+
+    @note Restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS": this
+    is by definition an exception to sandbox inheritance, so sandboxed code cannot call it
+
+    @see design/module-sandboxing-audit-guide.md
+
+    @since Qore 2.2
+*/
+static auto SandboxManager::callWithSystemPolicy(code call, *softlist<auto> call_args)
+        [dom=UNCONTROLLED_API] {
+    QoreSandboxPolicyBarrierHelper barrier;
+    if (!barrier) {
+        xsink->raiseException("SANDBOX-BARRIER-ERROR",
+            "cannot establish a sandbox policy barrier: no thread data");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> arglist(call_args ? call_args->listRefSelf() : nullptr,
+        xsink);
+    return call->execValue(*arglist, xsink);
+}

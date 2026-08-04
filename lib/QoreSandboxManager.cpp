@@ -1032,6 +1032,15 @@ QoreSandboxManagerHelper::QoreSandboxManagerHelper() {
     ptr = qore_find_thread_sandbox_manager_ref();
 }
 
+QoreSandboxManagerHelper::QoreSandboxManagerHelper(Purpose purpose) {
+    // a POLICY check honors an active policy barrier, so trusted infrastructure does not
+    // inherit a sandboxed caller's filesystem/network policy; every other purpose (notably
+    // interrupt/force-terminate) resolves unchanged
+    ptr = purpose == Policy
+        ? qore_find_thread_sandbox_policy_manager_ref()
+        : qore_find_thread_sandbox_manager_ref();
+}
+
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {
     if (pgm) {
         ptr = qore_program_private::get(*pgm)->getSandboxManagerRef();
@@ -1043,5 +1052,15 @@ QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {
 QoreSandboxManagerHelper::~QoreSandboxManagerHelper() {
     if (ptr) {
         ptr->deref(nullptr);
+    }
+}
+
+QoreSandboxPolicyBarrierHelper::QoreSandboxPolicyBarrierHelper() {
+    active = !qore_push_sandbox_policy_barrier();
+}
+
+QoreSandboxPolicyBarrierHelper::~QoreSandboxPolicyBarrierHelper() {
+    if (active) {
+        qore_pop_sandbox_policy_barrier();
     }
 }

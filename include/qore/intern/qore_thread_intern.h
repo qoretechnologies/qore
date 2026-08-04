@@ -299,6 +299,22 @@ DLLLOCAL void set_runtime_loc_sp(uintptr_t sp);
     sandboxed application program inherits the caller's sandbox. */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 
+//! Resolves the manager for a POLICY check (filesystem/network); honors the policy barrier
+/** Identical to @ref qore_find_thread_sandbox_manager_ref() except that an active policy
+    barrier stops resolution at the current Program, so trusted infrastructure code does not
+    inherit a sandboxed caller's filesystem/network policy.  The current Program's own manager
+    still wins, so a callback re-entering sandboxed code remains sandboxed.
+
+    @since Qore 2.2
+*/
+DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
+
+//! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
+DLLLOCAL int qore_push_sandbox_policy_barrier();
+
+//! Pops a sandbox policy barrier pushed with @ref qore_push_sandbox_policy_barrier()
+DLLLOCAL void qore_pop_sandbox_policy_barrier();
+
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
 DLLLOCAL const char* get_parse_code();
 

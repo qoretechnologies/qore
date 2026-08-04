@@ -582,7 +582,7 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
     }
 
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         // Determine access mode based on flags
         int access_mode = 0;

@@ -403,6 +403,15 @@ public:
     // current program context helper
     ProgramThreadCountContextHelper* current_pgm_ctx = nullptr;
 
+    // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
+    // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
+    // infrastructure code does not inherit a sandboxed caller's policy for the call it
+    // makes on that caller's behalf.  Interrupt resolution is deliberately unaffected:
+    // the same manager provides interruptible I/O and force-terminate, and a barriered
+    // call must remain cancellable.  The barrier never overrides the CURRENT Program's
+    // own manager, so re-entering sandboxed code (a callback) stays sandboxed.
+    unsigned sandbox_policy_barrier = 0;
+
     // current namespace context for parsing
     qore_ns_private* current_ns = nullptr;
 
@@ -2636,7 +2645,8 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
 
     @return the referenced manager (the caller owns the reference), or nullptr if there is none
 */
-static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** pgm = nullptr) {
+static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** pgm = nullptr,
+        bool policy = false) {
     if (pgm) {
         *pgm = nullptr;
     }
@@ -2644,6 +2654,9 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
     if (!td) {
         return nullptr;
     }
+    // issue #4285: with a policy barrier active, resolution does not walk out to enclosing
+    // callers; see ThreadData::sandbox_policy_barrier
+    const bool barrier = policy && td->sandbox_policy_barrier;
     // helper: try to resolve a ref'd manager from a single program
     auto try_pgm = [pgm](QoreProgram* p) -> QoreSandboxManager* {
         QoreSandboxManager* sm = p ? qore_program_private::get(*p)->getSandboxManagerRef() : nullptr;
@@ -2655,6 +2668,12 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
     // 1) the current program context
     if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
         return sm;
+    }
+    // a policy barrier stops here: the current Program's own manager (step 1) still governs,
+    // so a callback that re-enters sandboxed code is still checked against its own sandbox,
+    // but a caller's sandbox is not inherited by the trusted code running under the barrier
+    if (barrier) {
+        return nullptr;
     }
     // 2) enclosing caller programs via the program-context (call) stack, innermost first
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
@@ -2674,6 +2693,27 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
 
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
+}
+
+QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref() {
+    return find_thread_sandbox_manager_ref_intern(nullptr, true);
+}
+
+int qore_push_sandbox_policy_barrier() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return -1;
+    }
+    ++td->sandbox_policy_barrier;
+    return 0;
+}
+
+void qore_pop_sandbox_policy_barrier() {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        assert(td->sandbox_policy_barrier);
+        --td->sandbox_policy_barrier;
+    }
 }
 
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,

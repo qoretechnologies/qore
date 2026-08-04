@@ -2356,7 +2356,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     // the only place where xsink is optional
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
         // Check sandbox network security restrictions for bind
-        QoreSandboxManagerHelper smh;
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh && xsink) {
             int proto = (stype == SOCK_STREAM) ? QSEC_NET_TCP :
                         (stype == SOCK_DGRAM) ? QSEC_NET_UDP :

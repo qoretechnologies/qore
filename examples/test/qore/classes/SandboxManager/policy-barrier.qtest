@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%exec-class SandboxPolicyBarrierTest
+
+%requires QUnit
+%requires Util
+
+#! Verifies the sandbox policy barrier: what it lifts, and what it must not.
+/** Sandbox policy propagates across program boundaries so that a Qore-language module --
+    which executes in the module's own Program, with no manager of its own -- inherits the
+    sandbox of the program that called it.  That inheritance is what stops a module from
+    being used to bypass a sandbox.
+
+    @ref Qore::SandboxManager::callWithSystemPolicy() is the sanctioned exception, for
+    trusted infrastructure that must reach a SYSTEM resource while acting on a sandboxed
+    caller's behalf.  It is only safe while three properties hold, and each is asserted
+    here because losing any of them turns it into a general bypass:
+
+    - it lifts an INHERITED policy (the caller's), so module/library code can reach the
+      resource
+    - it does NOT override the CURRENT program's own policy, so code that re-enters a
+      sandboxed program -- a callback, typically -- is still checked against that sandbox
+    - it is unreachable from sandboxed code, being restricted to
+      @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"
+*/
+class SandboxPolicyBarrierTest inherits QUnit::Test {
+    private {
+        string tmp_path;
+    }
+
+    constructor() : QUnit::Test("SandboxPolicyBarrierTest", "1.0") {
+        addTestCase("inherited policy is barriered off", \testInheritedPolicyLifted());
+        addTestCase("the current program's policy still applies",
+            \testCurrentProgramPolicyNotLifted());
+        addTestCase("sandboxed code cannot establish a barrier",
+            \testBarrierIsRestricted());
+        addTestCase("the barrier does not leak past the call", \testNoLeak());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp_path = tmp_location() + DirSep + "sandbox-barrier-" + get_random_string(8);
+        File f();
+        f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("barrier probe\n");
+    }
+
+    globalTearDown() {
+        if (tmp_path.val()) {
+            try {
+                unlink(tmp_path);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+    }
+
+    #! A denying policy on the CALLER is not inherited inside the barrier
+    /** Models the real case: trusted infrastructure lives in a Program with no manager of
+        its own (a Qore-language module), and is called from sandboxed code.  Resolution
+        walks out to the caller and the trusted code inherits the sandbox -- unless it
+        establishes a barrier.
+    */
+    private testInheritedPolicyLifted() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        # the sandboxed program calls back out into trusted code
+        p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-caller");
+
+        # this test program has no sandbox manager, so closures defined here stand in for
+        # module code: while they run, the current Program has no manager and resolution
+        # walks out to the sandboxed caller
+        code plain = string sub (string path) {
+            return ReadOnlyFile::readTextFile(path);
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            \p.callFunction(), ("run", plain, tmp_path),
+            "trusted code called from a sandbox inherits the caller's policy");
+
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(),
+                path);
+        };
+        assertEq("barrier probe\n", p.callFunction("run", barriered, tmp_path),
+            "the barrier stops the caller's policy from being inherited");
+    }
+
+    #! The barrier must not override the policy of the program actually running the code
+    private testCurrentProgramPolicyNotLifted() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("
+            auto sub sandboxed_read(string path) {
+                return ReadOnlyFile::readTextFile(path);
+            }
+        ", "barrier-callback");
+
+        # calling back INTO the sandboxed program from inside the barrier: that code runs
+        # with its own Program current, so its own manager still governs.  This is what
+        # stops the barrier from being a general bypass for callbacks into sandboxed code.
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            sub () {
+                SandboxManager::callWithSystemPolicy(\p.callFunction(),
+                    ("sandboxed_read", tmp_path));
+            }, NOTHING,
+            "a callback into sandboxed code is still checked against its own sandbox");
+    }
+
+    #! Sandboxed code cannot reach the barrier at all
+    private testBarrierIsRestricted() {
+        Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        assertThrows("PARSE-EXCEPTION", NOTHING,
+            \p.parse(), ("
+                auto sub escape(string path) {
+                    return SandboxManager::callWithSystemPolicy(
+                        \\ReadOnlyFile::readTextFile(), path);
+                }
+            ", "barrier-restricted-test"));
+    }
+
+    #! The barrier is scoped strictly to the call
+    private testNoLeak() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+
+        p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-leak-run");
+        code plain = string sub (string path) {
+            return ReadOnlyFile::readTextFile(path);
+        };
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(),
+                path);
+        };
+        # a barriered call first, then an unbarriered one through the same sandboxed
+        # caller: the second must still be denied, or the barrier leaked past its scope
+        assertEq("barrier probe\n", p.callFunction("run", barriered, tmp_path));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            \p.callFunction(), ("run", plain, tmp_path),
+            "the barrier does not outlive the call it was established for");
+    }
+}

@@ -89,7 +89,7 @@ QoreStringNode *QoreDir::dirname() const {
 // return 0 if directory exists and is openable
 int QoreDir::chdir(const char* ndir, ExceptionSink* xsink) {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         // If absolute path, check directly; otherwise, combine with current dir
         std::string path;
@@ -115,7 +115,7 @@ int QoreDir::chdir(const char* ndir) {
 // return amount of created directories, -1 if error
 int QoreDir::create(int mode, ExceptionSink* xsink) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         // Get the directory name
         QoreStringNode* dir = priv->get_dir_string();
@@ -141,7 +141,7 @@ int QoreDir::create(int mode) const {
 // directories '.' and '..' will be skipped
 QoreListNode* QoreDir::list(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options, bool full) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         QoreStringNode* dir = priv->get_dir_string();
         if (dir) {
@@ -157,7 +157,7 @@ QoreListNode* QoreDir::list(ExceptionSink* xsink, int stat_filter, const QoreStr
 
 int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         std::string path;
         if (q_absolute_path(subdir)) {
@@ -174,7 +174,7 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
 
 int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         std::string path;
         if (q_absolute_path(subdir)) {
@@ -199,7 +199,7 @@ int QoreDir::checkPath() const {
 
 int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         QoreStringNode* dir = priv->get_dir_string();
         if (dir) {
@@ -216,7 +216,7 @@ int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
 #ifdef HAVE_PWD_H
 int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         QoreStringNode* dir = priv->get_dir_string();
         if (dir) {

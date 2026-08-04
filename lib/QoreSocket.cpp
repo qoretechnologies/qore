@@ -91,6 +91,8 @@ static QoreObject* qore_socket_new_poll_result_queue_object(Queue* queue) {
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
 static QoreSandboxManager* qore_socket_ref_current_sandbox_manager() {
+    // generic accessor: the returned manager is retained by the socket and also serves
+    // interrupt/force-terminate checks, so resolution must NOT honor a policy barrier
     QoreSandboxManagerHelper smh;
     if (!smh) {
         return nullptr;
@@ -11424,7 +11426,7 @@ QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
 
 static int qore_socket_bind_check_sandbox(const struct sockaddr* addr, int size, int socktype,
         ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         int proto = socktype == SOCK_STREAM ? QSEC_NET_TCP : socktype == SOCK_DGRAM ? QSEC_NET_UDP : QSEC_NET_ALL;
         if (!smh->checkNetworkAccess(addr, size, proto, xsink)) {

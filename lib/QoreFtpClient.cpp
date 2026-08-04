@@ -1890,7 +1890,7 @@ QoreStringNode* QoreFtpClient::list(const char* path, bool long_list, ExceptionS
 int QoreFtpClient::put(const char* localpath, const char* remotename, ExceptionSink* xsink) {
     printd(5, "QoreFtpClient::put(%s, %s)\n", localpath, remotename ? remotename : "NULL");
 
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(localpath, QSEC_READ, xsink)) {
         return -1;
     }
@@ -1947,7 +1947,7 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
 
     TmpLocalName ln(localname, remotepath);
     FtpLocalTempPath tmp_path(*ln);
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (!smh->checkFilesystemAccess(*ln, QSEC_WRITE | QSEC_CREATE, xsink)
                 || !smh->checkFilesystemAccess(tmp_path.c_str(),
