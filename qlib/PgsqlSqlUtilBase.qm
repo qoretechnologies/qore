@@ -163,6 +163,20 @@ $function$
     @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
     - added temporary-table support (\c "create temporary table ... on commit drop"); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+    - \c date, \c timestamp, and \c timestamptz partition bounds are now parsed from the catalog as Qore dates,
+      using the same time zone rules the driver uses to convert column values of the same type: a literal with an
+      explicit UTC offset identifies a point in time on its own, and a literal without one is read in the
+      datasource's time zone.  Such bounds previously stayed strings, so a range partition created from typed
+      date bounds could never be resolved again by those bounds and every structural bound-specification
+      lifecycle call on it failed with \c PARTITION-ERROR
+    - the targeted single-partition catalog lookup now loads the table's columns before parsing bounds, so
+      \c getPartition() reports the same typed bounds as \c listPartitions(); without them every bound it
+      returned stayed an unparsed string, which also broke name-bearing bound specifications
+    - a bound for a \c date column is now canonicalized to the calendar day that contains it, in the
+      datasource's time zone, on both the specification and catalog sides; a \c date column has no time of day,
+      so a bound that kept one could never match the day the database stores
+    - fixed introspection of a text bound containing the cast separator (\c "::"): the literal was truncated at
+      the first occurrence, which discarded both bounds of the partition
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
@@ -1902,6 +1916,21 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "sparsevec": ("qore": Type::Hash, "size": SZ_OPT,),
         );
 
+        #! the driver option giving the time zone used to convert date/time values
+        const TimeZoneOption = "timezone";
+
+        #! PostgreSQL date/time type names, in the simple form returned by @ref normalizePgTypeName()
+        /** used to interpret a partition bound literal that declares its own type when the partition key has no
+            column metadata
+
+            @since PgsqlSqlUtilBase 1.10
+        */
+        const PgPartitionDateTypes = {
+            "date": True,
+            "timestamp": True,
+            "timestamptz": True,
+        };
+
         #! maps from verbose type names to simple type names
         const PgsqlNameMap = (
             "bit varying": "varbit",
@@ -2632,6 +2661,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         #! PostgreSQL server sub version
         int server_version_sub;
+
+        #! the datasource's time zone, used to interpret date/time partition bound literals
+        *TimeZone datasource_tz;
 
         #! Lock for atomicity for setting state info
         transient Mutex pg_state();
@@ -4555,6 +4587,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private populatePgPartitionBounds(reference<hash<PartitionInfo>> info) {
+        # catalog bound literals are parsed according to the partition key's column metadata, so the columns
+        # must be loaded first; the targeted single-partition lookup does not load them itself, and without
+        # this every bound it returned stayed an unparsed string while listPartitions() returned typed bounds
+        getColumnsUnlocked();
+
         string bound_sql = info.bound_sql;
         # NOTE: use the match operator (=~ //), not the extract operator (=~ x//): the latter has no capture
         # groups here and returns an empty list, which is false, so the default partition was never flagged
@@ -4639,16 +4676,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private *auto parsePgPartitionBoundValue(string sql, *AbstractColumn col) {
-        trim sql;
-        sql =~ s/::.*$//;
-        trim sql;
+        *string type_name = stripPgLiteralTypeDeclaration(\sql);
 
-        *string str = (sql =~ x/^'(.*)'$/)[0];
+        *string str = (sql =~ x/^'(.*)'$/s)[0];
         if (exists str) {
             str =~ s/''/'/g;
-            return parsePgPartitionTypedLiteral(str, col) ?? str;
+            return parsePgPartitionTypedLiteral(str, col, type_name) ?? str;
         }
-        if (*auto typed = parsePgPartitionTypedLiteral(sql, col)) {
+        if (*auto typed = parsePgPartitionTypedLiteral(sql, col, type_name)) {
             return typed;
         }
         if (sql =~ /^-?\d+$/) {
@@ -4665,11 +4700,74 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
     }
 
-    private *auto parsePgPartitionTypedLiteral(string value, *AbstractColumn col) {
-        if (!col || !col.qore_type) {
+    #! removes any explicit type declaration from a PostgreSQL literal and returns the declared type name
+    /** PostgreSQL renders partition bound literals without a type declaration, but SqlUtil emits the leading
+        type-name form (\c "timestamptz '2026-01-01 00:00:00.000000+00:00'") and callers can supply native SQL
+        bounds using either that form or a trailing cast (\c "'2026-01-01'::date").
+
+        @param sql a reference to the literal; the type declaration is removed in place
+
+        @return the normalized declared type name, if the literal declared one
+
+        @note the cast separator is only recognized outside the quoted literal; a text bound containing \c "::"
+        was previously truncated at the first occurrence, which discarded the bound entirely
+
+        @since PgsqlSqlUtilBase 1.10
+    */
+    private static *string stripPgLiteralTypeDeclaration(reference<string> sql) {
+        trim sql;
+
+        # leading type-name form: <type> '<literal>'
+        (*string leading, *string leading_rest) =
+            (sql =~ x/^([A-Za-z_][A-Za-z0-9_]*(?:\s+[A-Za-z][A-Za-z0-9_]*)*(?:\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\))?)\s+('.*)$/s);
+        if (exists leading && exists leading_rest) {
+            sql = leading_rest;
+            trim sql;
+            return normalizePgTypeName(leading);
+        }
+
+        # trailing cast on a quoted literal: '<literal>'::<type>
+        (*string quoted, *string quoted_cast) =
+            (sql =~ x/^('(?:[^']|'')*')\s*::\s*([A-Za-z_][A-Za-z0-9_]*(?:\s+[A-Za-z][A-Za-z0-9_]*)*(?:\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\))?)$/s);
+        if (exists quoted && exists quoted_cast) {
+            sql = quoted;
+            return normalizePgTypeName(quoted_cast);
+        }
+
+        # trailing cast on an unquoted value: <value>::<type>
+        (*string bare, *string bare_cast) =
+            (sql =~ x/^([^']*?)\s*::\s*([A-Za-z_][A-Za-z0-9_]*(?:\s+[A-Za-z][A-Za-z0-9_]*)*(?:\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\))?)$/s);
+        if (exists bare && exists bare_cast) {
+            sql = bare;
+            trim sql;
+            return normalizePgTypeName(bare_cast);
+        }
+    }
+
+    #! returns a PostgreSQL type name in the simple, lower-case, unqualified form used by column metadata
+    /** @since PgsqlSqlUtilBase 1.10
+    */
+    private static string normalizePgTypeName(string type_name) {
+        type_name = type_name.lwr();
+        # remove any precision or scale qualifier
+        type_name =~ s/\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\)\s*$//;
+        # collapse internal whitespace so verbose names match the name map
+        type_name =~ s/\s+/ /g;
+        trim type_name;
+        return PgsqlNameMap{type_name} ?? type_name;
+    }
+
+    private *auto parsePgPartitionTypedLiteral(string value, *AbstractColumn col, *string type_name) {
+        *string qore_type = col.qore_type;
+        if (!qore_type && exists type_name && PgPartitionDateTypes{type_name}) {
+            # the partition key has no column metadata (a partition key expression, for example), but the
+            # literal declares a date/time type itself
+            qore_type = Type::Date;
+        }
+        if (!qore_type) {
             return;
         }
-        switch (col.qore_type) {
+        switch (qore_type) {
             case Type::Int: {
                 if (value =~ /^-?\d+$/) {
                     return value.toInt();
@@ -4697,12 +4795,105 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 }
                 break;
             }
+            case Type::Date: {
+                return parsePgDateLiteral(value);
+            }
         }
+    }
+
+    #! parses a PostgreSQL date, timestamp, or timestamptz literal as a Qore date
+    /** The literal is converted exactly as the driver converts a column value of the same type, so a bound read
+        back from the catalog compares equal to the bound used to create the partition:
+        - a literal with an explicit UTC offset identifies an absolute point in time on its own
+        - a literal without one is a wall-clock value, read in the datasource's time zone, which is the same time
+          zone the driver uses to convert \c timestamp and \c date values
+
+        @param value the unquoted literal text
+
+        @return the parsed date, or @ref nothing "NOTHING" if the text is not a supported date literal; the
+        PostgreSQL \c "infinity", \c "-infinity", and \c "BC" forms have no Qore date equivalent and are
+        deliberately left as strings, as are the \c MINVALUE and \c MAXVALUE range sentinels
+
+        @since PgsqlSqlUtilBase 1.10
+    */
+    private *date parsePgDateLiteral(string value) {
+        trim value;
+        # supported forms are YYYY-MM-DD and YYYY-MM-DD[T ]HH:mm:SS, with optional 1-6 digit fractional seconds
+        # and an optional Z or +/-HH[:mm[:ss]] UTC offset
+        if (!(value =~ /^\d{4,}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::\d{2}){0,2})?)?$/)) {
+            return;
+        }
+
+        try {
+            return getPgDatasourceTimeZone().date(value);
+        } catch (hash<ExceptionInfo> ex) {
+            # not a date literal that Qore can represent; leave it as a string rather than failing
+            # introspection of the whole table
+            return;
+        }
+    }
+
+    #! returns the time zone used to convert date/time values on this table's datasource
+    /** the result is cached with the rest of the driver-specific state read from the connection and is
+        discarded by @ref SqlUtil::AbstractTable::clear() "clear()"
+
+        @since PgsqlSqlUtilBase 1.10
+    */
+    private TimeZone getPgDatasourceTimeZone() {
+        pg_state.lock();
+        on_exit pg_state.unlock();
+
+        if (datasource_tz) {
+            return datasource_tz;
+        }
+
+        auto tz;
+        try {
+            tz = ds.getOption(TimeZoneOption);
+        } catch (hash<ExceptionInfo> ex) {
+            # the datasource does not expose the option; fall back to the current time zone below
+        }
+        if (tz instanceof TimeZone) {
+            return datasource_tz = tz;
+        }
+        if (tz.typeCode() == NT_STRING) {
+            try {
+                return datasource_tz = new TimeZone(tz);
+            } catch (hash<ExceptionInfo> ex) {
+                # unknown region name; fall back to the current time zone below
+            }
+        }
+        return datasource_tz = TimeZone::get();
+    }
+
+    #! Returns the canonical representation of a typed partition bound for the given column
+    /** A PostgreSQL \c date column stores a calendar day with no time of day, so a bound carrying a time
+        component is stored by the database as the day that contains it.  Both the specification supplied by the
+        caller and the bound read back from the catalog are therefore reduced to that day - midnight in the
+        datasource's time zone, which is how the driver returns \c date column values - so that a partition
+        created from a typed bound can be resolved again by the same bound.
+
+        \c timestamp and \c timestamptz bounds identify a point in time that survives the round trip unchanged
+        and are returned as-is.
+
+        @since PgsqlSqlUtilBase 1.10
+    */
+    private auto canonicalizePartitionBoundValueImpl(auto value, *AbstractColumn col) {
+        if (value.typeCode() != NT_DATE || !value.absolute() || normalizePgTypeName(col.native_type ?? "") != "date") {
+            return value;
+        }
+
+        # read the value in the datasource's time zone, then reduce it to the start of that calendar day
+        return getPgDatasourceTimeZone().date(value).midnight();
     }
 
     #! clears PostgreSQL-specific table information
     private clearImpl() {
         delete triggerFunctions;
+
+        pg_state.lock();
+        on_exit pg_state.unlock();
+        delete datasource_tz;
     }
 
     private softlist getDropSqlImpl(*hash<auto> opt) {

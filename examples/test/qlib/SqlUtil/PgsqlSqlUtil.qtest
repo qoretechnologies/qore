@@ -375,6 +375,8 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("sequence schema resolution", \sequenceSchemaResolutionTest());
             addTestCase("index introspection schema isolation", \indexSchemaIsolationTest());
             addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
+            addTestCase("fresh table object partition lifecycle", \freshTablePartitionLifecycleTest());
+            addTestCase("typed date partition bounds", \typedDatePartitionBoundTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
             addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
@@ -1687,7 +1689,10 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(Type::Date, parts.p1.bound_from.type(), "generic date shorthand is coerced after driver overrides");
         assertEq(Type::Date, parts.p1.bound_to.type(), "ISO datetime is coerced");
         assertEq("2026-01-01 00:00:00.000000", parts.p1.bound_from.format("YYYY-MM-DD HH:mm:SS.us"));
-        assertEq("2026-01-02 12:34:56.123456", parts.p1.bound_to.format("YYYY-MM-DD HH:mm:SS.us"));
+        # a PostgreSQL "date" column stores a calendar day with no time of day, so a bound carrying one is
+        # canonicalized to the day that contains it; a bound that keeps the time could never match the catalog
+        assertEq(TimeZone::get().date(2026-01-02T12:34:56.123456Z).midnight(), parts.p1.bound_to,
+            "a date column bound is canonicalized to the calendar day that contains it");
 
         PgsqlTable composite(ds, "pgsql_partition_composite_coercion");
         composite.setupTable({
@@ -1784,6 +1789,253 @@ class PgsqlTest inherits SqlTestBase {
                 "unique_constraints": {"uk_pgsql_partition_bad_uk": {"columns": "id"}},
             });
         });
+    }
+
+    #! Lifecycle calls on a table object created by name must resolve the object instead of doing nothing
+    freshTablePartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        string parent = "pgsql_fresh_partition";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string p3 = parent + "_p3";
+        string manual_name = parent + "_manual";
+
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+        code cleanup = sub () {
+            map drop_if_exists($1), (p3, parent, manual_name);
+        };
+        cleanup();
+        on_exit cleanup();
+
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                # a varlena column gives every partition child a TOAST relation
+                "payload": {"native_type": "text"},
+            },
+            "primary_key": {"name": "pk_" + parent, "columns": ("id",), "partition_aligned": True},
+            "indexes": {
+                (parent + "_payload_idx"): {"columns": ("payload",), "partition_aligned": True},
+            },
+            "partition_strategy": {"method": "range", "columns": ("id",)},
+            "partitions": {
+                (p1): {"bound_from": 0, "bound_to": 10},
+                (p2): {"bound_from": 10, "bound_to": 20},
+            },
+        };
+        {
+            PgsqlTable tmpl(ds, parent);
+            tmpl.setupTable(desc);
+            tmpl.createCommit();
+        }
+
+        # record the child heap, its indexes, and its TOAST relation before the drop
+        hash<auto> child = ds.selectRow("select c.oid, c.reltoastrelid from pg_catalog.pg_class c "
+            "where c.relname = %v", p1);
+        assertTrue(child.reltoastrelid > 0, "the partition child has a TOAST relation");
+        list<auto> child_indexes = map $1.indexrelid,
+            ds.select("select i.indexrelid from pg_catalog.pg_index i where i.indrelid = cast(%v as oid)",
+                child.oid).contextIterator();
+        assertTrue(child_indexes.size() > 0, "the partition child has indexes");
+
+        code relation_exists = bool sub (auto oid) {
+            return exists ds.selectRow("select 1 as x from pg_catalog.pg_class where oid = cast(%v as oid)", oid);
+        };
+
+        # the drop must execute even though the object was constructed by name and never loaded
+        PgsqlTable fresh(ds, parent);
+        assertFalse(fresh.inDb(), "a table object created by name is not yet known to be in the database");
+        fresh.dropPartitionCommit(p1);
+        assertFalse(relation_exists(child.oid), "the child heap is gone");
+        assertFalse(relation_exists(child.reltoastrelid), "the child TOAST relation is gone");
+        foreach auto index_oid in (child_indexes) {
+            assertFalse(relation_exists(index_oid), sprintf("child index %y is gone", index_oid));
+        }
+        assertFalse((new PgsqlTable(ds, parent)).listPartitions().hasKey(p1),
+            "the dropped partition is no longer attached to the parent");
+
+        # the structural bound-spec overload resolves and executes on a fresh object as well
+        PgsqlTable fresh_spec(ds, parent);
+        fresh_spec.dropPartitionCommit({"bound_from": 10, "bound_to": 20});
+        assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p2),
+            "the bound-spec overload dropped the child relation");
+
+        # an unresolvable partition still fails instead of returning success
+        PgsqlTable fresh_missing(ds, parent);
+        assertThrows("PARTITION-ERROR", "is not a partition of this table", \fresh_missing.dropPartitionCommit(),
+            parent + "_missing");
+
+        # adding and detaching are governed by the same decision
+        PgsqlTable fresh_add(ds, parent);
+        fresh_add.addPartitionCommit({"name": p3, "bound_from": 20, "bound_to": 30});
+        assertTrue(exists ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p3),
+            "addPartition on a fresh object created the child relation");
+
+        PgsqlTable fresh_detach(ds, parent);
+        AbstractTable detached = fresh_detach.detachPartitionCommit(p3);
+        assertTrue(detached.checkExistence(), "the detached relation exists as a standalone table");
+        assertFalse((new PgsqlTable(ds, parent)).listPartitions().hasKey(p3),
+            "the detached partition is no longer attached to the parent");
+        detached.dropCommit();
+
+        # a table object that maintains its description locally issues no DDL and keeps its other partitions
+        PgsqlTable manual_table(ds, manual_name);
+        manual_table.setupTable(desc);
+        manual_table.dropPartition(p1);
+        hash<string, PartitionInfo> manual_parts = manual_table.listPartitions();
+        assertFalse(manual_parts.hasKey(p1), "the description drops the partition addressed by the call");
+        assertTrue(manual_parts.hasKey(p2), "the description keeps every other partition");
+        assertFalse(manual_table.checkExistence(), "no DDL was issued for a description-only object");
+    }
+
+    #! Typed date bounds must round trip through the PostgreSQL catalog for every date/time column type
+    typedDatePartitionBoundTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        date bound_from = 2026-01-01T00:00:00Z;
+        date bound_to = 2026-02-01T00:00:00Z;
+        date bound_end = 2026-03-01T00:00:00Z;
+        hash<auto> spec = {"bound_from": bound_from, "bound_to": bound_to};
+
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+
+        foreach string native_type in (("timestamptz", "timestamp", "date")) {
+            string parent = "pgsql_typed_bound_" + native_type;
+            string p1 = parent + "_p1";
+            string p2 = parent + "_p2";
+            drop_if_exists(parent);
+            on_exit drop_if_exists(parent);
+
+            hash<string, PartitionInfo> created;
+            {
+                PgsqlTable tmpl(ds, parent);
+                tmpl.setupTable({
+                    "columns": {"event_ts": {"native_type": native_type, "notnull": True}},
+                    "partition_strategy": {"method": "range", "columns": ("event_ts",)},
+                    "partitions": {
+                        (p1): {"bound_from": bound_from, "bound_to": bound_to},
+                        (p2): {"bound_from": bound_to, "bound_to": bound_end},
+                    },
+                });
+                tmpl.createCommit();
+                created = tmpl.listPartitions();
+            }
+
+            # bounds read back from the catalog are typed, and the full and targeted lookups agree
+            hash<string, PartitionInfo> listed = (new PgsqlTable(ds, parent)).listPartitions();
+            assertEq(Type::Date, listed{p1}.bound_from.type(),
+                sprintf("%s: catalog lower bound is a date", native_type));
+            assertEq(Type::Date, listed{p1}.bound_to.type(),
+                sprintf("%s: catalog upper bound is a date", native_type));
+            *hash<PartitionInfo> targeted = (new PgsqlTable(ds, parent)).getPartition(p1);
+            assertEq(listed{p1}.bound_from, targeted.bound_from,
+                sprintf("%s: targeted lookup parses the lower bound like the full listing", native_type));
+            assertEq(listed{p1}.bound_to, targeted.bound_to,
+                sprintf("%s: targeted lookup parses the upper bound like the full listing", native_type));
+            assertEq(created{p1}.bound_from, listed{p1}.bound_from,
+                sprintf("%s: the bound used to create the partition is the bound read back", native_type));
+
+            # the original typed bounds resolve the partition on a freshly introspected table
+            PgsqlTable lookup_table(ds, parent);
+            hash<PartitionLookupResult> found = lookup_table.findPartitionBySpec(spec);
+            assertEq(PartitionLookupStatus::Found, found.status,
+                sprintf("%s: typed bounds resolve the partition", native_type));
+            assertEq(p1, found.partition.name, sprintf("%s: typed bounds resolve the right partition", native_type));
+
+            # a name-bearing specification takes the targeted lookup path and must compare typed bounds there too
+            assertEq(PartitionLookupStatus::Found,
+                (new PgsqlTable(ds, parent)).findPartitionBySpec(spec + {"name": p1}).status,
+                sprintf("%s: named typed bounds resolve through the targeted lookup", native_type));
+
+            # a genuinely different boundary is still rejected
+            assertNeq(PartitionLookupStatus::Found,
+                (new PgsqlTable(ds, parent)).findPartitionBySpec({
+                    "bound_from": bound_from, "bound_to": bound_end,
+                }).status, sprintf("%s: a different upper bound does not match", native_type));
+
+            # every lifecycle overload resolves the same typed specification
+            (new PgsqlTable(ds, parent)).truncatePartitionCommit(spec);
+            assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", p1)).c,
+                sprintf("%s: truncate by typed bounds executed", native_type));
+            assertEq(sprintf("alter table public.%s detach partition public.%s concurrently", parent, p1),
+                (new PgsqlTable(ds, parent)).getDetachPartitionConcurrentlySql(spec),
+                sprintf("%s: concurrent detach SQL resolves typed bounds", native_type));
+            AbstractTable detached = (new PgsqlTable(ds, parent)).detachPartitionCommit(spec);
+            assertTrue(detached.checkExistence(), sprintf("%s: detach by typed bounds executed", native_type));
+            detached.dropCommit();
+            (new PgsqlTable(ds, parent)).dropPartitionCommit({"bound_from": bound_to, "bound_to": bound_end});
+            assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p2),
+                sprintf("%s: drop by typed bounds executed", native_type));
+            ds.commit();
+        }
+
+        # a text bound containing the cast separator must survive introspection intact
+        {
+            string parent = "pgsql_typed_bound_text";
+            drop_if_exists(parent);
+            on_exit drop_if_exists(parent);
+            {
+                PgsqlTable tmpl(ds, parent);
+                tmpl.setupTable({
+                    "columns": {"k": {"native_type": "text", "notnull": True}},
+                    "partition_strategy": {"method": "range", "columns": ("k",)},
+                    "partitions": {(parent + "_p1"): {"bound_from": "a::b", "bound_to": "c::d"}},
+                });
+                tmpl.createCommit();
+            }
+            hash<string, PartitionInfo> listed = (new PgsqlTable(ds, parent)).listPartitions();
+            assertEq("a::b", listed{parent + "_p1"}.bound_from, "a text lower bound keeps its cast separator");
+            assertEq("c::d", listed{parent + "_p1"}.bound_to, "a text upper bound keeps its cast separator");
+            ds.commit();
+        }
+
+        # PostgreSQL range sentinels have no Qore date equivalent and must not break introspection
+        {
+            string parent = "pgsql_typed_bound_sentinel";
+            drop_if_exists(parent);
+            on_exit drop_if_exists(parent);
+            ds.execRaw(sprintf("create table %s (event_ts timestamptz not null) partition by range (event_ts)",
+                parent));
+            ds.execRaw(sprintf("create table %s_p1 partition of %s for values from (MINVALUE) to "
+                "('2026-01-01 00:00:00+00')", parent, parent));
+            ds.execRaw(sprintf("create table %s_p2 partition of %s for values from ('2026-01-01 00:00:00+00') to "
+                "('infinity')", parent, parent));
+            ds.commit();
+
+            hash<string, PartitionInfo> listed = (new PgsqlTable(ds, parent)).listPartitions();
+            assertEq(2, listed.size(), "both sentinel partitions are listed");
+            # MINVALUE is not a value at all, so the pair it belongs to has no typed bounds
+            assertNothing(listed{parent + "_p1"}.bound_from, "an unbounded lower bound is left unparsed");
+            assertNothing(listed{parent + "_p1"}.bound_to, "the bound paired with MINVALUE is left unparsed");
+            assertTrue(listed{parent + "_p1"}.bound_sql =~ /minvalue/i,
+                "the native bound SQL is reported even when the bounds cannot be typed");
+            # "infinity" has no Qore date equivalent and keeps its literal text
+            assertEq(bound_from, listed{parent + "_p2"}.bound_from,
+                "a typed bound beside an infinite bound is still parsed");
+            assertEq("infinity", listed{parent + "_p2"}.bound_to, "an infinite upper bound keeps its literal text");
+            ds.commit();
+        }
     }
 
     rangePartitionLifecycleTest() {

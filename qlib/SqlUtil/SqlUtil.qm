@@ -132,6 +132,24 @@ module SqlUtil {
     - fixed @ref SqlUtil::AbstractColumn::getDescriptionHash() "AbstractColumn::getDescriptionHash()" to report the
       column scale; without it, rebuilding a table from its own description hash truncated the scale of every
       numeric column
+    - fixed @ref SqlUtil::AbstractTable::dropPartition() "AbstractTable::dropPartition()",
+      @ref SqlUtil::AbstractTable::detachPartition() "AbstractTable::detachPartition()", and
+      @ref SqlUtil::AbstractTable::addPartition() "AbstractTable::addPartition()" deciding whether to issue DDL
+      from the \c inDb cache flag as read before the partition was resolved; on a table object created by name
+      that flag is still @ref False "False" at that point, so the call returned successfully without executing
+      anything and the commit wrapper committed an empty transaction - a partition drop reported success and left
+      the partition in place.  Lifecycle methods now resolve an object that has not been loaded against the
+      database before deciding, and objects with manual edits keep their description-only behavior
+    - fixed @ref SqlUtil::AbstractTable::dropPartition() "dropPartition()" and
+      @ref SqlUtil::AbstractTable::detachPartition() "detachPartition()" discarding the entire partition cache on
+      a table object that maintains its description locally; for such an object that cache <i>is</i> the
+      description, so dropping one partition dropped every other partition's description as well
+    - fixed typed partition bound coercion to load the table's columns first; a specification passed to a lookup
+      or lifecycle call on a table object that had not been loaded yet was coerced with no column metadata at
+      all, so it could not be compared against the bounds read back from the catalog
+    - added a driver hook for canonicalizing typed partition bounds, so a driver whose native column type cannot
+      represent everything a Qore value carries (a date column with no time of day, for example) reduces the
+      caller's specification and the catalog bound to the same representation
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()

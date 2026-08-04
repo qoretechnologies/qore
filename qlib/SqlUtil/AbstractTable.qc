@@ -7685,7 +7685,7 @@ if (june) {
             validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
             sql = getAddPartitionSqlImpl(ps, opt);
             info = makePartitionInfoUnlocked(ps);
-            execute = inDb;
+            execute = partitionLifecycleExecutesUnlocked();
         }
 
         {
@@ -7785,8 +7785,8 @@ if (june) {
             on_exit l.unlock();
 
             assertPartitionSupportUnlocked();
-            execute = inDb;
             sql = getDropPartitionSqlImpl(partition_name, opt);
+            execute = partitionLifecycleExecutesUnlocked();
         }
 
         {
@@ -7803,10 +7803,13 @@ if (june) {
 
         l.lock();
         on_exit l.unlock();
-        clearPartitionsUnlocked();
         if (!execute) {
+            # the description is maintained locally; drop only the partition addressed by this call
+            removePartitionFromCacheUnlocked(partition_name);
             manual = True;
+            return;
         }
+        clearPartitionsUnlocked();
     }
 
     #! drops a partition matching the given specification without transaction management
@@ -8073,8 +8076,8 @@ if (june) {
             assertPartitionDetachSupportUnlocked();
             # resolve the detached relation's name while the partition still belongs to this table
             detached_name = getDetachedTableNameImpl(partition_name);
-            execute = inDb;
             sql = getDetachPartitionSqlImpl(partition_name, opt);
+            execute = partitionLifecycleExecutesUnlocked();
         }
 
         {
@@ -8089,11 +8092,16 @@ if (june) {
             ds.execRaw(sql);
         }
 
-        l.lock();
-        on_exit l.unlock();
-        clearPartitionsUnlocked();
-        if (!execute) {
-            manual = True;
+        {
+            l.lock();
+            on_exit l.unlock();
+            if (execute) {
+                clearPartitionsUnlocked();
+            } else {
+                # the description is maintained locally; detach only the partition addressed by this call
+                removePartitionFromCacheUnlocked(partition_name);
+                manual = True;
+            }
         }
 
         # return the detached relation as a standalone table; not added to this table's cache
@@ -9507,6 +9515,11 @@ string sql = table.getCreateTableSql();
     */
     private auto coercePartitionBoundUnlocked(auto value, softlist<string> pcols, string err, string key,
             *string partition_name) {
+        # the coercion is driven by the partition key's column metadata, so the columns must be loaded; a
+        # specification passed to a lookup or lifecycle call on a table object that has not been loaded yet
+        # would otherwise be coerced with no column metadata at all and could not match the catalog
+        getColumnsUnlocked();
+
         if (value.typeCode() != NT_LIST) {
             return coercePartitionScalarBoundUnlocked(value, pcols[0], err, key, partition_name);
         }
@@ -9521,22 +9534,48 @@ string sql = table.getCreateTableSql();
     #! Coerces one typed partition-bound value according to final column metadata
     private auto coercePartitionScalarBoundUnlocked(auto value, string column_name, string err, string key,
             *string partition_name) {
-        if (value.typeCode() != NT_STRING || columns{column_name}.qore_type != Type::Date) {
-            return value;
+        # NOTE: partition keys can be driver expressions with no matching column, so the column metadata is
+        # looked up without assuming that the key names a column
+        *AbstractColumn col = columns.hasKey(column_name) ? columns{column_name} : NOTHING;
+
+        if (value.typeCode() == NT_STRING && col.qore_type == Type::Date) {
+            # Supported forms are YYYY-MM-DD and YYYY-MM-DD[T ]HH:mm:SS, with optional 1-6 digit fractional
+            # seconds and optional Z or +/-HH:mm timezone on datetime values.
+            if (value =~ /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/) {
+                try {
+                    value = date(value);
+                } catch (hash<ExceptionInfo> ex) {
+                    throw err, sprintf("%s: partition %y %s value %y is not a valid ISO date or datetime for "
+                        "column %y: %s", getDesc(), partition_name, key, value, column_name, ex.desc);
+                }
+            }
         }
 
-        # Supported forms are YYYY-MM-DD and YYYY-MM-DD[T ]HH:mm:SS, with optional 1-6 digit fractional seconds
-        # and optional Z or +/-HH:mm timezone on datetime values.
-        if (!(value =~ /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/)) {
-            return value;
-        }
+        return canonicalizePartitionBoundValueImpl(value, col);
+    }
 
-        try {
-            return date(value);
-        } catch (hash<ExceptionInfo> ex) {
-            throw err, sprintf("%s: partition %y %s value %y is not a valid ISO date or datetime for column %y: "
-                "%s", getDesc(), partition_name, key, value, column_name, ex.desc);
-        }
+    #! Returns the canonical representation of a typed partition-bound value for the given column
+    /** Partition bounds are resolved by comparing the specification supplied by the caller against the bounds
+        read back from the database catalog, so both sides must use the same representation for the same
+        boundary.  Drivers override this method when a native column type cannot represent everything a Qore
+        value can carry, and the database therefore stores a reduced value; for example a PostgreSQL \c date
+        column holds a calendar day with no time of day, so a bound with a time component is stored as the day
+        that contains it, and a specification that keeps the original time can never match the catalog.
+
+        The default implementation returns the value unchanged.
+
+        @param value the typed partition-bound value; never a list (composite bounds are canonicalized element by
+        element, each with its own column)
+        @param col the column metadata for the partition key element, if the partition key names a column
+
+        @return the canonical value to store in the partition specification and to compare against catalog bounds
+
+        @note the table lock is held when this method is called
+
+        @since SqlUtil 3.2.0
+    */
+    private auto canonicalizePartitionBoundValueImpl(auto value, *AbstractColumn col) {
+        return value;
     }
 
     private validatePartitionTypedBoundsStructureUnlocked(hash<auto> ps, string err) {
@@ -9783,6 +9822,28 @@ string sql = table.getCreateTableSql();
         if (exists ps.driver) info.driver = ps.driver;
 
         return info;
+    }
+
+    #! removes one partition from the cached table description without issuing any SQL
+    /** Used when a lifecycle call is applied to a table object that maintains its description locally; the
+        entire partition cache must not be discarded in that case, because for such an object the cache is the
+        description itself, and clearing it dropped every other partition as well.
+
+        @param partition_name the canonical name of the partition to remove from the description
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.2.0
+    */
+    private removePartitionFromCacheUnlocked(string partition_name) {
+        ensurePartitionsHashUnlocked();
+        remove partitions{partition_name};
+        # keep the remaining descriptions contiguously ordered
+        int ordinal = 0;
+        foreach string pname in (keys partitions) {
+            partitions{pname}.ordinal = ordinal++;
+        }
+        partitionsLoaded = True;
     }
 
     private hash<PartitionInfo> addPartitionToCacheUnlocked(hash<PartitionSpec> ps) {
@@ -10042,6 +10103,39 @@ string sql = table.getCreateTableSql();
 
     private bool partitionSqlExecutedByCallback(*hash<auto> opt) {
         return opt && opt.sql_callback && opt.sql_callback_executed;
+    }
+
+    #! returns @ref True "True" if partition lifecycle DDL must be executed in the database
+    /** Partition lifecycle methods must not decide whether to issue DDL from the \a inDb cache flag alone; that
+        flag only reports whether configuration has already been read from (or created in) the database, so a
+        table object created by name has it set to @ref False "False" until something loads the object.  Deciding
+        from that snapshot made a lifecycle call on a freshly-constructed object a silent no-op: the operation
+        returned successfully, any enclosing commit committed an empty transaction, and the partition was left in
+        place.
+
+        Objects with manual edits keep their description-only behavior; any other object that is not yet known to
+        be in the database is resolved against the database before the decision is made.
+
+        @return @ref True "True" if the operation must be executed in the database, @ref False "False" if it
+        applies to the table description only
+
+        @note the table lock must be held when calling this method
+
+        @see
+        - @ref inDb()
+        - @ref checkExistence()
+
+        @since SqlUtil 3.2.0
+    */
+    private bool partitionLifecycleExecutesUnlocked() {
+        if (inDb) {
+            return True;
+        }
+        if (manual) {
+            return False;
+        }
+        # checkExistenceImpl() sets inDb when the table exists in the database
+        return checkExistenceImpl();
     }
 
     private clearPartitionCache() {
