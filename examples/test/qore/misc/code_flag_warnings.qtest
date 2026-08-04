@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CodeFlagWarningTest
+
+#! Verifies that the parser's return-value-ignored diagnostics follow the code flags a variant
+#! actually carries.
+/** The flag combinations are supplied by the debug-only oracle in lib/ql_debug.cpp, which registers
+    builtins with hand-written masks.  That is the only way to reach combinations no production
+    function declares - notably QCF_NO_DOMAIN_THROW without QCF_RET_VALUE_ONLY, which qpp accepts
+    and which must NOT be reported as a call with no side effects.
+*/
+public class CodeFlagWarningTest inherits QUnit::Test {
+    #! text emitted when the call can neither have side effects nor raise a domain exception
+    const StrongWarning = "does not have any side effects and the return value is ignored";
+
+    #! text emitted when the call has no side effects but may still throw
+    const WeakWarning = "does not have any side effects except that it may throw an exception "
+        "and the return value is ignored";
+
+    constructor() : Test("CodeFlagWarningTest", "1.0") {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("warning mask is required", \warningMaskRequired());
+            addTestCase("strong warning flags", \strongWarningFlags());
+            addTestCase("weak warning flags", \weakWarningFlags());
+            addTestCase("no warning flags", \noWarningFlags());
+            addTestCase("declared side effect is real", \declaredSideEffectIsReal());
+        } else {
+            addTestCase("skip (release build)", \skipRelease());
+        }
+        set_return_value(main());
+    }
+
+    skipRelease() {
+        testSkip("the code flag oracle in lib/ql_debug.cpp is only built with DEBUG");
+    }
+
+    #! parses a statement-level call and returns the warning hash, or NOTHING if none was emitted
+    private *hash parseCall(string func) {
+        Program p(PO_NEW_STYLE);
+        return p.parse(func + "();", "", WARN_RETURN_VALUE_IGNORED){"err", "desc"};
+    }
+
+    #! asserts that a statement-level call to func emits the given warning text
+    private assertWarning(string func, string expected) {
+        *hash warn = parseCall(func);
+        assertEq("RETURN-VALUE-IGNORED", warn.err, func + "(): warning code");
+        assertRegex(expected, warn.desc, func + "(): warning text");
+    }
+
+    #! asserts that a statement-level call to func emits no warning at all
+    private assertNoWarning(string func) {
+        assertEq(NOTHING, parseCall(func), func + "(): expected no warning");
+    }
+
+    #! Program::parse*() only returns warnings when a warning mask is supplied.
+    /** Without this control a test that forgets the mask passes vacuously: every assertion below
+        compares against NOTHING-free parse results, so an unmasked parse would make the
+        "no warning" cases succeed for entirely the wrong reason.
+    */
+    warningMaskRequired() {
+        Program p(PO_NEW_STYLE);
+        # dbg_flags_total() warns when a mask is given, as strongWarningFlags() asserts
+        assertEq(NOTHING, p.parse("dbg_flags_total();", ""),
+            "an unmasked parse returns no warnings even for a genuine warning");
+    }
+
+    #! QCF_CONSTANT and its explicit spelling QCF_TOTAL both claim no side effects and no throw
+    strongWarningFlags() {
+        assertWarning("dbg_flags_legacy_constant", StrongWarning);
+        assertWarning("dbg_flags_total", StrongWarning);
+    }
+
+    #! QCF_RET_VALUE_ONLY and QCF_PURE claim no side effects but do not rule out an exception
+    weakWarningFlags() {
+        assertWarning("dbg_flags_retval_only", WeakWarning);
+        assertWarning("dbg_flags_pure", WeakWarning);
+    }
+
+    #! a call that has side effects must not be described as having none
+    /** dbg_flags_nodomain_with_effects() carries QCF_NO_DOMAIN_THROW on its own.  Testing that flag
+        without also requiring QCF_RET_VALUE_ONLY would emit StrongWarning here, which would be a
+        false report: the call does have an observable effect, as declaredSideEffectIsReal() proves.
+    */
+    noWarningFlags() {
+        assertNoWarning("dbg_flags_nodomain_with_effects");
+        assertNoWarning("dbg_flags_unflagged");
+    }
+
+    #! the oracle's declared side effect is observable, so suppressing the warning above is correct
+    /** The oracle is resolved through call_function() rather than called directly: these functions
+        only exist in a debug build, and a direct call would make this file fail to parse on a
+        release build before the HAVE_LIBRARY_DEBUGGING gate in the constructor could skip anything.
+    */
+    declaredSideEffectIsReal() {
+        int before = call_function("dbg_flags_effect_count");
+
+        call_function("dbg_flags_nodomain_with_effects");
+        assertEq(before + 1, call_function("dbg_flags_effect_count"),
+            "dbg_flags_nodomain_with_effects() bumps the effect counter");
+
+        call_function("dbg_flags_unflagged");
+        assertEq(before + 2, call_function("dbg_flags_effect_count"),
+            "dbg_flags_unflagged() bumps the effect counter");
+
+        # the flagged-as-effect-free oracles must leave the counter alone, which is what makes the
+        # StrongWarning/WeakWarning assertions above truthful rather than merely self-consistent
+        int sink = call_function("dbg_flags_total") + call_function("dbg_flags_legacy_constant")
+            + call_function("dbg_flags_pure") + call_function("dbg_flags_retval_only");
+        assertEq(1 + 2 + 3 + 4, sink, "the effect-free oracles return their declared constants");
+        assertEq(before + 2, call_function("dbg_flags_effect_count"),
+            "the side-effect-free oracles do not bump the effect counter");
+    }
+}

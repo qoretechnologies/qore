@@ -2943,6 +2943,67 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
 }
 #endif
 
+// --- code flag oracle (debug builds only) ---
+
+/* The functions below exist so that the parser's code-flag diagnostics can be tested against every
+   flag combination, including combinations that no production function carries.  In particular
+   QCF_NO_DOMAIN_THROW without QCF_RET_VALUE_ONLY is a legal claim - "this call has side effects but
+   cannot raise a domain exception" - which qpp accepts but which nothing in the core or in any
+   module currently declares, so without an oracle there is no way to prove that check_flags()
+   handles it correctly rather than describing such a call as having no side effects.
+
+   Every declaration here must be honest: the mask registered in init_debug_functions() has to
+   describe what the body actually does.  These are real builtins in a debug build, so a false
+   declaration would be a genuine defect rather than a test fixture.
+*/
+
+// counts calls to the side-effecting oracle functions, so that tests can prove the declared side
+// effect is real instead of asserting on the flag masks alone
+static std::atomic<int64_t> dbg_flag_effect_count{0};
+
+//! Debug-only: no side effects, deterministic, cannot throw; declared with the legacy QCF_CONSTANT
+static QoreValue f_dbg_flags_legacy_constant(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return (int64)1;
+}
+
+//! Debug-only: the QCF_CONSTANT properties spelled out explicitly as QCF_TOTAL
+static QoreValue f_dbg_flags_total(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)2;
+}
+
+//! Debug-only: no side effects and deterministic, but makes no claim about raising an exception
+static QoreValue f_dbg_flags_pure(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)3;
+}
+
+//! Debug-only: no side effects, but neither deterministic nor exception-free
+static QoreValue f_dbg_flags_retval_only(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)4;
+}
+
+//! Debug-only: has a side effect but cannot raise a domain exception
+/** This is the combination with no production analogue.  Discarding the return value is observable
+    - the call still bumps the effect counter - so the parser must not report the call as having no
+    effect, even though the variant does carry QCF_NO_DOMAIN_THROW.
+ */
+static QoreValue f_dbg_flags_nodomain_with_effects(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return (int64)dbg_flag_effect_count.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+//! Debug-only: makes no claims at all; the control for the oracle
+static QoreValue f_dbg_flags_unflagged(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)dbg_flag_effect_count.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+//! Debug-only: reads the oracle's effect counter
+/** Reads mutable process state, so it deliberately carries no determinism flags.
+ */
+static QoreValue f_dbg_flags_effect_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)dbg_flag_effect_count.load(std::memory_order_relaxed);
+}
+
 static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* xsink) {
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);
@@ -3032,4 +3093,21 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
 #endif
+
+    // code flag oracle; the mask on each of these is the point of the declaration, so it must match
+    // what the corresponding body actually does
+    qns.addBuiltinVariant("dbg_flags_legacy_constant", f_dbg_flags_legacy_constant,
+        QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_total", f_dbg_flags_total,
+        QCF_TOTAL, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_pure", f_dbg_flags_pure,
+        QCF_PURE, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_retval_only", f_dbg_flags_retval_only,
+        QCF_RET_VALUE_ONLY, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_nodomain_with_effects", f_dbg_flags_nodomain_with_effects,
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_unflagged", f_dbg_flags_unflagged,
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_effect_count", f_dbg_flags_effect_count,
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
 }
