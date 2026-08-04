@@ -1350,6 +1350,13 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_6 DataProvider v3.6
+    - the generic data provider APIs now preserve the exception they wrap: the provider-specific exception is
+      reported under the \c "ex" key of the wrapping exception's argument, so a caller catching a generic error
+      such as \c SEND-MESSAGE-ERROR can recover the original error code and any machine-readable detail the
+      provider attached to it - a protocol status code, for example.  Previously several of these wrappers
+      discarded the original argument entirely, leaving the rendered description as the only place that detail
+      appeared, and description text cannot be parsed reliably by a caller; the keys of an argument that was
+      already forwarded are still reported where they were
     - added @ref DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps() "DataProviderActionCatalog::cacheAllRegisteredApps()",
       which populates the provider index app cache from all registered applications; this allows a complete app
       catalog to be recovered when the data provider index cannot be read, instead of silently degrading to the

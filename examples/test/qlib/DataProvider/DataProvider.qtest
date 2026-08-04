@@ -588,6 +588,50 @@ class BufferColumnBulkRecordProvider inherits AbstractDataProviderBulkRecordInte
     }
 }
 
+#! A provider whose operations fail with a protocol error carrying machine-readable detail
+class StructuredFailureTestProvider inherits AbstractDataProvider {
+    public {
+        #! a protocol status code that a caller must be able to recover from the generic API error
+        const StatusCode = 2151415808;
+
+        const MessageId = "write-value";
+
+        const ErrorCode = "PROTOCOL-WRITE-ERROR";
+    }
+
+    string getName() {
+        return "StructuredFailureTestProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": "structured-failure-test",
+            "desc": "test provider failing with structured protocol errors",
+            "type": "structured-failure-test",
+            "supports_messages": MSG_Async,
+            "supports_create": True,
+        };
+    }
+
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
+        return {
+            MessageId: <DataProviderMessageInfo>{
+                "desc": "test message",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+        };
+    }
+
+    private sendMessageImpl(string message_id, auto msg, *hash<auto> send_message_options) {
+        throw ErrorCode, sprintf("failed to write value to node %y: status code %d", msg.node_id, StatusCode),
+            {"status_code": StatusCode, "node_id": msg.node_id};
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        throw ErrorCode, sprintf("record rejected: status code %d", StatusCode), {"status_code": StatusCode};
+    }
+}
+
 class BulkShapeTestProvider inherits AbstractDataProvider {
     public {
         *DataProviderShape last_shape;
@@ -690,6 +734,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("generic record iterator test", \genericRecordIteratorTest());
         addTestCase("processor shape API test", \processorShapeApiTest());
         addTestCase("bulk provider shape API test", \bulkProviderShapeApiTest());
+        addTestCase("wrapped exception cause test", \wrappedExceptionCauseTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -747,6 +792,55 @@ public class DataProviderTest inherits QUnit::Test {
         assertTrue(proc.supportsInputShape(DataProviderShape::HashOfLists));
         assertTrue(proc.supportsInputShape(DataProviderShape::RowRecords));
         assertFalse(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
+    }
+
+    #! A generic API error must keep the provider-specific exception that caused it
+    wrappedExceptionCauseTest() {
+        StructuredFailureTestProvider provider();
+
+        # a caller must be able to recover the protocol status code without inspecting the description text
+        code get_status_code = auto sub (auto arg, int depth = 0) {
+            if (arg.typeCode() != NT_HASH || depth > 8) {
+                return;
+            }
+            if (exists arg.status_code) {
+                return arg.status_code;
+            }
+            foreach auto value in (arg.iterator()) {
+                if (auto rv = get_status_code(value, depth + 1)) {
+                    return rv;
+                }
+            }
+        };
+
+        hash<ExceptionInfo> ex;
+        try {
+            provider.sendMessage(StructuredFailureTestProvider::MessageId, {"node_id": "ns=2;s=Setpoint"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("SEND-MESSAGE-ERROR", ex.err, "the generic API error code is unchanged");
+        assertEq(StructuredFailureTestProvider::ErrorCode, ex.arg.ex.err,
+            "the wrapper carries the provider-specific error code");
+        assertEq(StructuredFailureTestProvider::StatusCode, ex.arg.ex.arg.status_code,
+            "the wrapper carries the provider's structured argument");
+        assertEq("ns=2;s=Setpoint", ex.arg.ex.arg.node_id, "every key of the structured argument is preserved");
+        assertEq(StructuredFailureTestProvider::StatusCode, get_status_code(ex.arg),
+            "a generic traversal of the structured argument recovers the status code");
+        assertTrue(get_exception_string(ex) =~ /source exception/,
+            "the cause is rendered as the source exception: " + get_exception_string(ex));
+
+        # a wrapper that already forwarded the original argument keeps those keys where they were
+        try {
+            provider.createRecord({"id": 1});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("CREATE-RECORD-ERROR", ex.err, "the generic API error code is unchanged");
+        assertEq(StructuredFailureTestProvider::StatusCode, ex.arg.status_code,
+            "the original argument's keys remain where callers already read them");
+        assertEq(StructuredFailureTestProvider::ErrorCode, ex.arg.ex.err,
+            "the cause is added alongside the original argument's keys");
     }
 
     bulkProviderShapeApiTest() {

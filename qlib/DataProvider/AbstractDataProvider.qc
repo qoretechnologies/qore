@@ -2265,7 +2265,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         return createRecordImpl(rec, validateCreateOptions(create_options));
@@ -2301,7 +2301,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         create_options = validateCreateOptions(create_options);
@@ -2324,7 +2324,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         create_options = validateCreateOptions(create_options);
@@ -2345,7 +2345,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         create_options = validateCreateOptions(create_options);
@@ -2393,7 +2393,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         create_options = validateCreateOptions(create_options);
@@ -2426,7 +2426,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         create_options = validateCreateOptions(create_options);
@@ -2544,7 +2544,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         hash<auto> h;
@@ -2952,7 +2952,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
                     && $1.err != "UPDATE-SINGLE-RECORD-ERROR") {
-                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         return updateSingleRecordImpl(processFieldValues(set, search_options),
@@ -2976,7 +2976,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
                     && $1.err != "UPDATE-SINGLE-RECORD-ERROR") {
-                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         return updateSingleRecordImpl(processFieldValues(set, search_options),
@@ -3033,7 +3033,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
                     && $1.err != "MAX-RECORDS-EXCEEDED") {
-                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
@@ -3063,7 +3063,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
                     && $1.err != "MAX-RECORDS-EXCEEDED") {
-                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
@@ -3123,7 +3123,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         search_options = validateSearchOptions(search_options);
         on_error {
             if ($1.err != "DELETE-RECORDS-ERROR" && $1.err != "MAX-RECORDS-EXCEEDED") {
-                rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
@@ -3151,7 +3151,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         search_options = validateSearchOptions(search_options);
         on_error {
             if ($1.err != "DELETE-RECORDS-ERROR" && $1.err != "MAX-RECORDS-EXCEEDED") {
-                rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+                rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
         int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
@@ -3188,7 +3188,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 req = request_type.acceptsValue(req);
             } catch (hash<ExceptionInfo> ex) {
                 rethrow "INVALID-REQUEST", sprintf("invalid request argument for request %y: %s: %s", getName(),
-                    ex.err, ex.desc);
+                    ex.err, ex.desc), getWrappedExceptionArg(ex);
             }
         }
         return doRequestImpl(req, validateRequestOptions(request_options));
@@ -3407,7 +3407,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             throw "CREATE-CHILD-PROVIDER-ERROR", "at least one field must be present in the field hash";
         }
         on_error if ($1.err != "CREATE-CHILD-PROVIDER-ERROR") {
-            rethrow "CREATE-CHILD-PROVIDER-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            rethrow "CREATE-CHILD-PROVIDER-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         AbstractDataProvider child = createChildProviderImpl(name, fields, child_create_options);
         if (logger && !child.logger) {
@@ -3429,7 +3429,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkDeleteChild();
         child_delete_options = validateChildDeleteOptions(child_delete_options);
         on_error if ($1.err != "DELETE-CHILD-PROVIDER-ERROR") {
-            rethrow "DELETE-CHILD-PROVIDER-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            rethrow "DELETE-CHILD-PROVIDER-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         return deleteChildProviderImpl(name, child_delete_options);
     }
@@ -3448,7 +3448,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkAddField();
         field_add_options = validateFieldAddOptions(field_add_options);
         on_error if ($1.err != "ADD-FIELD-ERROR") {
-            rethrow "ADD-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            rethrow "ADD-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         addFieldImpl(field, field_add_options);
     }
@@ -3467,7 +3467,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkUpdateField();
         field_update_options = validateFieldUpdateOptions(field_update_options);
         on_error if ($1.err != "UPDATE-FIELD-ERROR") {
-            rethrow "UPDATE-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            rethrow "UPDATE-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         return updateFieldImpl(name, field, field_update_options);
     }
@@ -3485,7 +3485,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkDeleteField();
         field_delete_options = validateFieldDeleteOptions(field_delete_options);
         on_error if ($1.err != "DELETE-FIELD-ERROR") {
-            rethrow "DELETE-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc);
+            rethrow "DELETE-FIELD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         return deleteFieldImpl(name, field_delete_options);
     }
@@ -3498,7 +3498,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION thrown if the data provider does not support this API
         @throw INVALID-MESSAGE the message_id is not valid
-        @throw SEND-MESSAGE-ERROR error sending the message
+        @throw SEND-MESSAGE-ERROR error sending the message; the exception that the provider raised is preserved
+        under the \c "ex" key of this exception's argument, so a caller can recover the protocol-specific error
+        code and any structured detail the provider attached to it - a protocol status code, for example -
+        without parsing the description text; see getWrappedExceptionArg()
 
         @since DataProvider 2.5
     */
@@ -3507,7 +3510,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         send_message_options = validateSendMessageOptions(send_message_options);
         hash<DataProviderMessageInfo> message_info = getMessageInfoImpl(message_id);
         on_error if ($1.err != "SEND-MESSAGE-ERROR") {
-            rethrow "SEND-MESSAGE-ERROR", sprintf("%s: (message ID %y) %s", $1.err, message_id, $1.desc);
+            rethrow "SEND-MESSAGE-ERROR", sprintf("%s: (message ID %y) %s", $1.err, message_id, $1.desc),
+                getWrappedExceptionArg($1);
         }
         msg = message_info.type.acceptsValue(msg);
         sendMessageImpl(message_id, msg, send_message_options);
@@ -4949,7 +4953,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *list<hash<AllowedValueInfo>> getReferenceData(string type, *hash<auto> action_opts) {
         on_error rethrow "REFERENCE-DATA-ERROR", sprintf("Failed to retrieve reference data of type %y: %s: %s",
-            type, $1.err, $1.desc);
+            type, $1.err, $1.desc), getWrappedExceptionArg($1);
         return getReferenceDataImpl(type, action_opts);
     }
 
@@ -5039,7 +5043,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *list<hash<AllowedValueInfo>> getElementReferenceData(string type, *hash<auto> action_opts) {
         on_error rethrow "ELEMENT-REFERENCE-DATA-ERROR", sprintf("Failed to retrieve element reference data of "
-            "type %y: %s: %s", type, $1.err, $1.desc);
+            "type %y: %s: %s", type, $1.err, $1.desc), getWrappedExceptionArg($1);
         return getElementReferenceDataImpl(type, action_opts);
     }
 
@@ -5128,7 +5132,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getReferenceDataValue(string type, *hash<auto> action_opts) {
         on_error rethrow "REFERENCE-DATA-ERROR", sprintf("Failed to retrieve reference data value of type %y: %s: %s",
-            type, $1.err, $1.desc);
+            type, $1.err, $1.desc), getWrappedExceptionArg($1);
         return getReferenceDataValueImpl(type, action_opts);
     }
 
@@ -5165,6 +5169,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     updateConnectionObjects(object conn, object connobj) {
         # intentially blank
+    }
+
+    #! Returns the structured argument for an exception rethrown as a generic data provider error
+    /** The generic APIs in this class report failures with their own error code, so the provider-specific
+        exception that caused the failure is no longer identified by the exception the caller catches.  Any
+        machine-readable detail the provider attached to it - a protocol status code, for example - was lost with
+        it, leaving the rendered description as the only place that detail still appeared; description text is
+        meant for humans and cannot be parsed reliably by a caller.
+
+        The complete original exception is therefore preserved under the \c "ex" key of the wrapper's argument, so
+        a caller can recover the original error code and argument by walking \c arg.ex.  This is the same
+        convention @ref Util::get_exception_string() "get_exception_string()" renders as the source exception.
+        Any keys of the original argument are preserved alongside it, so consumers reading the wrapped
+        argument's keys directly are unaffected.
+
+        @param ex the original exception
+
+        @return the structured argument for the wrapping exception
+
+        @note if the original argument is a hash with an \c "ex" key of its own, the original exception takes
+        that key in the wrapper's argument, and the replaced value remains reachable at \c arg.ex.arg.ex
+
+        @since DataProvider 3.6
+    */
+    private static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
+        return (ex.arg.typeCode() == NT_HASH ? ex.arg : {}) + {"ex": ex};
     }
 
     #! Creates the given records in the data provider
