@@ -491,7 +491,15 @@ static void warn_deprecated(const QoreProgramLocation* loc, QoreFunction* func) 
 static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int64 flags, int64 pflag) {
     if (pflag & (PF_RETURN_VALUE_IGNORED | PF_BACKGROUND)) {
         bool is_bg_call = (pflag & PF_BACKGROUND);
-        if ((flags & QCF_CONSTANT) == QCF_CONSTANT) {
+        // the stronger diagnostic is warranted when the call neither has side effects nor can raise
+        // a domain exception.  QCF_CONSTANT is the legacy, unchecked spelling of that pair;
+        // QCF_RET_VALUE_ONLY + QCF_NO_DOMAIN_THROW is the explicit one, so a variant flagged
+        // QCF_TOTAL must not be demoted to the weaker "may throw" wording just because it does not
+        // also carry the legacy flag.  both halves must be tested: QCF_NO_DOMAIN_THROW on its own
+        // is a legal claim for a function that does have side effects, and such a call must not be
+        // described as having none
+        if ((flags & QCF_CONSTANT) == QCF_CONSTANT
+            || ((flags & QCF_RET_VALUE_ONLY) && (flags & QCF_NO_DOMAIN_THROW))) {
             warn_retval_ignored(loc, func, is_bg_call);
         } else if (flags & QCF_RET_VALUE_ONLY && (pflag & PF_RETURN_VALUE_IGNORED)) {
             warn_only_may_throw_and_retval_ignored(loc, func, is_bg_call);

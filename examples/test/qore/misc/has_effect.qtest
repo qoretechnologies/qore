@@ -86,6 +86,14 @@ public class HasEffectTest inherits QUnit::Test {
         retValIgnoredImpl("string s = 'asdf '; trim(s);", False, False);
         retValIgnoredImpl("string s = 'asdf '; background trim(s);", False, False);
         retValIgnoredImpl("substr('asdf ', 2);", True);
+
+        # QCF_TOTAL asserts that no domain exception can be raised, so a variant carrying it must
+        # get the same diagnostic as the legacy QCF_CONSTANT rather than the weaker "may throw"
+        # wording.  The weaker wording is covered by substr() above, which is QCF_RET_VALUE_ONLY
+        # only, and is the same code path a QCF_PURE variant takes.
+        retValIgnoredImpl("sqrt(4.0);", False);
+        retValIgnoredImpl("cos(1.0);", False);
+        retValIgnoredImpl("exp(1.0);", False);
     }
 
     hasEffect() {
