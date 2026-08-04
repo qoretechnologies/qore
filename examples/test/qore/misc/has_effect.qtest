@@ -82,10 +82,22 @@ public class HasEffectTest inherits QUnit::Test {
     retValIgnored() {
         retValIgnoredImpl("int(1);", False);
         retValIgnoredImpl("int('1');", True);
-        retValIgnoredImpl("trim('asdf ');", False);
-        retValIgnoredImpl("string s = 'asdf '; trim(s);", False, False);
-        retValIgnoredImpl("string s = 'asdf '; background trim(s);", False, False);
+        # trim() takes an xsink and raises if the character set of the optional `chars` argument
+        # cannot be converted, so it is QCF_PURE rather than QCF_TOTAL and gets the "may throw"
+        # wording.  It reported the stronger wording while it carried the legacy QCF_CONSTANT,
+        # which claimed an absence of exceptions that the implementation never provided.
+        retValIgnoredImpl("trim('asdf ');", True);
+        retValIgnoredImpl("string s = 'asdf '; trim(s);", True, False);
+        retValIgnoredImpl("string s = 'asdf '; background trim(s);", True, False);
         retValIgnoredImpl("substr('asdf ', 2);", True);
+
+        # tolower()/toupper() are QCF_PURE for the same reason: the Unicode case mapping is
+        # host-independent, but converting the result to the source encoding can fail
+        retValIgnoredImpl("tolower('ASDF');", True);
+        retValIgnoredImpl("toupper('asdf');", True);
+
+        # chomp() needs no xsink, so it keeps the stronger wording as QCF_TOTAL
+        retValIgnoredImpl("chomp(\"asdf\\n\");", False);
 
         # QCF_TOTAL asserts that no domain exception can be raised, so a variant carrying it must
         # get the same diagnostic as the legacy QCF_CONSTANT rather than the weaker "may throw"

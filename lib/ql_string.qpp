@@ -715,6 +715,14 @@ int len = length(str);
     - strlen()
     - <string>::strlen()
     - <string>::size()
+
+    @note This variant, and the other \c softstring variants in this file, deliberately carry no
+    determinism flags even though the body itself is a pure function of its argument.  Converting a
+    non-string argument to \c string produces a \c QCS_DEFAULT-encoded string (see the QoreString
+    constructors), and that encoding is derived from the environment and locale when the library
+    starts, so the converted argument - and therefore the call as a whole - is host-dependent.  The
+    strict \c string and \c binary variants have no such conversion and are flagged; see
+    @ref qore_code_flags_portability.
  */
 int length(softstring str) [flags=CONSTANT,NAMED_ARGS] {
    return str->length();
@@ -732,7 +740,7 @@ int length(softstring str) [flags=CONSTANT,NAMED_ARGS] {
 int nbytes = length(bin);
     @endcode
  */
-int length(binary bin) [flags=CONSTANT,NAMED_ARGS] {
+int length(binary bin) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    return bin->size();
 }
 
@@ -832,7 +840,7 @@ string lwr = tolower(str);
 
     @since %Qore 0.8.8 this function operates on a wide range of characters and is no longer limited to ASCII characters
  */
-string tolower(string str) [flags=CONSTANT,NAMED_ARGS] {
+string tolower(string str) [flags=PURE,HOST_PORTABLE,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_tolower(*(*rv), *str, xsink))
       return QoreValue();
@@ -868,7 +876,7 @@ string upr = toupper(str);
 
     @since %Qore 0.8.8 this function operates on a wide range of characters and is no longer limited to ASCII characters
  */
-string toupper(string str) [flags=CONSTANT,NAMED_ARGS] {
+string toupper(string str) [flags=PURE,HOST_PORTABLE,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_toupper(*(*rv), *str, xsink))
       return QoreValue();
@@ -951,7 +959,7 @@ binary b1 = substr(b, -10);
 
     @since %Qore 0.8.8
  */
-binary substr(binary bin, softint start) [flags=CONSTANT,NAMED_ARGS] {
+binary substr(binary bin, softint start) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
    bin->substr(*b1, start);
    return b1;
@@ -976,7 +984,7 @@ binary b1 = substr(b, 10, -2);
 
     @since %Qore 0.8.8
  */
-binary substr(binary bin, softint start, softint len) [flags=CONSTANT,NAMED_ARGS] {
+binary substr(binary bin, softint start, softint len) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
    bin->substr(*b1, start, len);
    return b1;
@@ -1176,6 +1184,11 @@ string char = chr(13);
     @endcode
 
     @since %Qore 0.8.5 the encoding argument is supported
+
+    @note This function deliberately carries no determinism flags: when @a encoding is omitted the
+    result is tagged with \c QCS_DEFAULT, which the library derives from the environment and locale
+    at startup, so the same call can produce differently-encoded strings on different hosts.  It
+    must not be folded at compile time; see @ref qore_code_flags_portability.
  */
 string chr(softint value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
@@ -1308,6 +1321,11 @@ string enc = get_encoding(str);
     @endcode
 
     @note equivalent to <string>::encoding()
+
+    @note This function deliberately carries no determinism flags.  The encoding name it returns is
+    ASCII, but the string object holding it is tagged with \c QCS_DEFAULT, which varies by host, so
+    the result is observably host-dependent even though its bytes are not; see
+    @ref qore_code_flags_portability.
  */
 string get_encoding(string str) [flags=CONSTANT,NAMED_ARGS] {
    return new QoreStringNode(str->getEncoding()->getCode());
@@ -1355,6 +1373,10 @@ nothing convert_encoding() [flags=RUNTIME_NOOP] {
     @code{.py}
 string nstr = force_encoding(str, "iso-8859-1");
     @endcode
+
+    @note This function deliberately carries no determinism flags: \c QEM.findCreate() registers the
+    encoding in a process-global table if it is not already present, so the call mutates state
+    outside its arguments and is not side-effect free in the sense @ref QCF_NO_SIDE_EFFECTS requires.
  */
 string force_encoding(string str, string encoding) [flags=CONSTANT,NAMED_ARGS] {
    return new QoreStringNode(str->c_str(), str->strlen(), QEM.findCreate(encoding));
@@ -1842,7 +1864,7 @@ string line = chomp("hello\n"); # returns "hello"
 
     @see the @ref chomp "chomp operator"
  */
-string chomp(string str) [flags=CONSTANT,NAMED_ARGS] {
+string chomp(string str) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
    QoreStringNode* rv = str->copy();
    rv->chomp();
    return rv;
@@ -1892,7 +1914,7 @@ nothing chomp() [flags=RUNTIME_NOOP] {
 string tstr = trim(str);
     @endcode
  */
-string trim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
+string trim(string str, *string chars) [flags=PURE,HOST_PORTABLE,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trim(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -1944,7 +1966,7 @@ string tstr = ltrim(" ABC ");
 # returns string "ABC "
     @endcode
  */
-string ltrim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
+string ltrim(string str, *string chars) [flags=PURE,HOST_PORTABLE,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trimLeading(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -1992,7 +2014,7 @@ string tstr = rtrim(str);
 
     @bug it is not possible to trim multi-byte characters from strings using this function; each byte is treated as a character.  No encoding conversions are done even if the \a chars argument has a different @ref character_encoding "character encoding" than the \a str argument.
  */
-string rtrim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
+string rtrim(string str, *string chars) [flags=PURE,HOST_PORTABLE,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trimTrailing(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -2549,6 +2571,12 @@ bool b = parse_boolean(str);
     @return a boolean value according to the parsed argument
 
     @since Qore 0.8.12 \c "y" is also parsed as @ref True "True"
+
+    @note This function deliberately carries no determinism flags: q_parse_bool() matches with
+    \c strcasecmp() and falls back to \c atoi(), both of which consult the C locale that the library
+    inherits from the environment at startup.  Case folding in particular is not locale-invariant -
+    a Turkish locale folds \c "I" differently - so the result is not host-independent; see
+    @ref qore_code_flags_portability.
  */
 bool parse_boolean(string str) [flags=CONSTANT,NAMED_ARGS] {
    return q_parse_bool(str->c_str());
