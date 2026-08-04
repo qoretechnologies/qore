@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Observable class definition
 
-/** Observable.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** Observable.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -194,10 +194,43 @@ public class Observable {
     #! The method notifies all subscribed observers
     /** @param event_id unique ID identifying an event
         @param data_ hash representing new data to be passed to observers' update() methods
+
+        Every subscribed observer is notified even if an earlier one failed; an observer that throws
+        must not starve the observers registered after it.  Failures are collected and reported as a
+        single aggregate exception once every observer has been given the event.
+
+        @throw OBSERVER-NOTIFICATION-ERROR at least one observer (or its event filter) threw while
+        handling the event; the exception's \c arg holds the list of the individual
+        @ref Qore::ExceptionInfo "ExceptionInfo" hashes in notification order
+
+        @note Observer exceptions reach the caller by design: an event source with a durable cursor
+        has no other way to tell a delivered event from a lost one, so it must not be told that a
+        failed notification succeeded.  An event source that does not want back-pressure catches
+        exceptions from this method itself; see @ref DataProvider::Observer "Observer".
+
+        @since DataProvider 3.6 all observers are notified and failures are reported as an aggregate
+        \c OBSERVER-NOTIFICATION-ERROR exception; previously the first failure propagated directly
+        and every remaining observer was skipped
     */
     notifyObservers(string event_id, hash<auto> data_) {
-        map $1.observer.update(event_id, data_), observer_map.iterator(),
-            !$1.event_map || $1.event_map{event_id} || ($1.filter && $1.filter.filter(event_id, data_));
+        list<hash<ExceptionInfo>> errors();
+        int notified = 0;
+        foreach hash<ObserverEventInfo> info in (observer_map.iterator()) {
+            try {
+                if (!info.event_map || info.event_map{event_id}
+                    || (info.filter && info.filter.filter(event_id, data_))) {
+                    ++notified;
+                    info.observer.update(event_id, data_);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                push errors, ex;
+            }
+        }
+        if (errors) {
+            throw "OBSERVER-NOTIFICATION-ERROR", sprintf("%d of %d notified observer%s failed to handle event %y: "
+                "%s", errors.size(), notified, notified == 1 ? "" : "s", event_id,
+                (foldl $1 + "; " + $2, (map sprintf("%s: %s", $1.err, $1.desc), errors))), errors;
+        }
     }
 
     #! Is this object still generating events

@@ -1272,6 +1272,13 @@ fetch
     the in-memory cursor changes, so a storage failure retries the item instead of silently advancing
     past it.
 
+    An item is never skipped to unblock the feed, because skipping is exactly the loss this rule
+    exists to prevent. The cost is that an item that fails permanently holds the feed indefinitely,
+    so the block is reported rather than left to be inferred from a log that has gone quiet:
+    @ref DataProvider::AbstractOrderedWatchDataProvider::setWatchItemBlockedHandler() "setWatchItemBlockedHandler()"
+    registers a handler called once the same item has failed a configurable number of consecutive
+    cycles, and called again when that item is finally delivered.
+
     @subsection dataprovider_watch_durability Durability
 
     Checkpoint persistence is optional at this layer because %Qore does not own a database:
@@ -1302,21 +1309,43 @@ fetch
     because the retained event has already been raised and the cursor has already moved past it. The
     item is therefore never raised as an event again, but it is also never lost silently.
 
-    @subsection dataprovider_watch_removal Removal Is Dispatch-Aware, Not Processing-Aware
+    @subsection dataprovider_watch_delivery Observer Failures Reach The Source
+
+    @ref DataProvider::Observable::notifyObservers() "notifyObservers()" notifies every subscribed
+    observer, collects the failures, and then throws an aggregate \c OBSERVER-NOTIFICATION-ERROR
+    exception carrying the individual exceptions.
+
+    Both halves of that are load-bearing. Notifying every observer means one broken handler cannot
+    starve the handlers registered after it. Letting the failures out means the event source is told
+    the truth: a watch provider's entire durability guarantee rests on the fact that raising an event
+    returned without an exception, so an observer that catches its own processing failure and returns
+    normally reports the item as delivered. The cursor then advances past it and any post-dispatch
+    action runs — the item is lost, silently, and the log shows a clean cycle.
+
+    An @ref DataProvider::Observer "Observer" that cannot process an event therefore lets the
+    exception out. An event source that genuinely wants no back-pressure — a fire-and-forget push
+    feed with no cursor to protect — catches around
+    @ref DataProvider::Observable::notifyObservers() "notifyObservers()" itself, where the decision
+    is visible in the source rather than hidden in every handler.
+
+    @subsection dataprovider_watch_removal Removal Follows The Delivery Call
 
     A watch provider observes exactly one thing: that raising an event returned without an exception.
-    It does not — and at this layer cannot — observe whether the consumer went on to process the
-    event successfully.
+    Because observer failures reach it (see @ref dataprovider_watch_delivery), that one fact covers a
+    consumer that does its work <b>in the delivery thread</b>: the consumer signals failure by
+    throwing, the cycle stops without advancing the cursor, no removal runs, and the item is
+    delivered again on the next cycle.
 
-    Any option that removes the source item after its event has been raised (deleting mail, flagging
-    a message, emptying a queue) therefore acts on <b>dispatch</b>, not on <b>completion</b>. A
-    consumer that receives the event and then fails, times out, or is restarted mid-processing has
-    already lost the source item. Providers document such options in exactly those terms and must not
-    describe them as processing-aware.
+    It does not — and at this layer cannot — cover a consumer that hands the event off to another
+    thread, queue, or process. There the delivery call returns as soon as the hand-off succeeds, so
+    an option that removes the source item after its event has been raised (deleting mail, flagging a
+    message, emptying a queue) removes it while the real work is still outstanding. Providers
+    document such options in exactly those terms and must not describe them as covering an
+    asynchronous consumer.
 
-    For a workload that must not lose the source item, leave those options unset and act from the
-    consumer once processing has succeeded: every event carries the identity of its source item, and
-    providers expose first-class actions that take it.
+    For a workload with an asynchronous consumer, leave those options unset and act from the consumer
+    once processing has succeeded: every event carries the identity of its source item, and providers
+    expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
 
@@ -1338,6 +1367,24 @@ fetch
     - a watch cycle now <b>stops at the first dispatch failure</b> instead of continuing with later items;
       continuing advanced the monotonic cursor past the failed item and dropped it permanently on what may
       well have been a transient error
+    - @ref DataProvider::Observable::notifyObservers() "notifyObservers()" now notifies <b>every</b>
+      subscribed observer and reports any failures as a single aggregate \c OBSERVER-NOTIFICATION-ERROR
+      exception carrying the individual exceptions; previously the first observer that threw silently
+      skipped every observer registered after it, so one broken handler could starve the others; see
+      @ref dataprovider_watch_delivery
+    - documented at the @ref DataProvider::Observer "Observer" contract level that observer exceptions
+      reach the event source, and that an observer must not swallow a processing failure: a watch
+      provider reads a clean return as proof of delivery, advances its durable cursor, and runs any
+      post-dispatch removal, so a swallowed failure loses the source item silently
+    - a watch cycle now reports the items its durable cursor discarded, with the highest discarded
+      ordering key and the cursor position, instead of dropping them with no log line at all — a cycle
+      that listed items and then did nothing was indistinguishable from a hung poller
+    - added
+      @ref DataProvider::AbstractOrderedWatchDataProvider::setWatchItemBlockedHandler() "setWatchItemBlockedHandler()",
+      which reports an item that has failed a configurable number of consecutive cycles and is therefore
+      holding up the whole feed, and reports again when that item is finally delivered; stopping at the
+      first failure is what keeps the item from being lost, but without this the resulting stall had no
+      signal at all
     - added an explicit dispatch-order contract: every watch provider declares how its upstream feed is
       ordered with @ref DataProvider::AbstractWatchDataProviderBase::getSourceOrdering() "getSourceOrdering()"
       and whether its events arrive oldest-first with

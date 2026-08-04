@@ -94,6 +94,9 @@ public hashdecl WatchCycleInfo {
     #! the number of items dispatched to observers
     int dispatched = 0;
 
+    #! the number of candidate items discarded because the durable cursor already covers them
+    int discarded = 0;
+
     #! the number of items collapsed away by snapshot mode
     int superseded = 0;
 
@@ -102,6 +105,31 @@ public hashdecl WatchCycleInfo {
 
     #! the number of items whose dispatch failed; the cycle stops at the first failure
     int failed = 0;
+}
+
+#! Describes an item that repeated dispatch failures have stuck the feed on
+/** A cycle stops at its first dispatch failure so that the monotonic cursor cannot advance past an
+    item that was never delivered. That is the right default, but an item that fails permanently then
+    holds the whole feed, and the only symptom visible from outside is that events stop arriving.
+    This is the record that turns that silence into a signal.
+
+    @since DataProvider 3.6
+*/
+public hashdecl WatchItemBlockedInfo {
+    #! The blocked item's stable identity
+    string id;
+
+    #! The blocked item's ordering key
+    auto order_key;
+
+    #! The number of consecutive cycles in which dispatching the item failed
+    int attempts;
+
+    #! @ref True when the item was finally dispatched and the feed is moving again
+    bool cleared = False;
+
+    #! The most recent dispatch failure; not set once @ref cleared is @ref True
+    *hash<ExceptionInfo> ex;
 }
 
 #! Watch data provider base class implementing the shared ordered polling sequence
@@ -142,6 +170,12 @@ public hashdecl WatchCycleInfo {
     advance the monotonic cursor past the failed item and lose it; stopping leaves it in place to be
     retried on the next cycle. Delivery is therefore at-least-once, never at-most-once.
 
+    An item is never skipped to get the feed moving again, because skipping is exactly the loss the
+    rule exists to prevent. An item that fails permanently therefore holds the feed indefinitely, so
+    it is reported instead: @ref setWatchItemBlockedHandler() "setWatchItemBlockedHandler()"
+    registers a handler that is called once the same item has failed a configurable number of cycles
+    in a row, and called again when it is finally delivered.
+
     @par Durability
     With @ref AbstractWatchDataProviderBase::setCheckpointPersistence() "checkpoint persistence"
     configured, the cursor survives a host restart, so an item that was never dispatched is still
@@ -153,6 +187,11 @@ public hashdecl WatchCycleInfo {
     @since DataProvider 3.6
 */
 public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProviderBase {
+    public {
+        #! Consecutive dispatch failures before a blocked item is reported by default
+        const DefaultBlockedThreshold = 3;
+    }
+
     private {
         #! collapse a backlog to the latest item per group?
         bool snapshot_mode = False;
@@ -162,6 +201,28 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
 
         #! maximum number of items dispatched per cycle; 0 means unlimited
         int max_items_per_cycle = 0;
+
+        #! the ID of the item the feed is currently stuck on, if any
+        /** the block state below is owned by the polling thread; only the polling thread reads or
+            writes it, so it needs no lock
+        */
+        *string blocked_id;
+
+        #! consecutive dispatch failures recorded for blocked_id
+        int blocked_attempts = 0;
+
+        #! has the current block already been reported?
+        bool blocked_reported = False;
+
+        #! consecutive failures required before a block is reported
+        /** immutable once polling has started; see setWatchItemBlockedHandler()
+        */
+        int blocked_threshold = DefaultBlockedThreshold;
+
+        #! called when an item blocks the feed, and again when that block clears
+        /** immutable once polling has started; see setWatchItemBlockedHandler()
+        */
+        *code<nothing(hash<WatchItemBlockedInfo>)> blocked_handler;
     }
 
     #! Creates the object
@@ -189,6 +250,39 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
     */
     int getMaxItemsPerCycle() {
         return max_items_per_cycle;
+    }
+
+    #! Sets the handler called when repeated dispatch failures block the feed
+    /** A permanently-failing item is retried forever by design: skipping it is what loses data. The
+        cost of that choice is that the feed stops, so the block has to be reported rather than left
+        for someone to infer from a silent log.
+
+        @param handler called with a @ref WatchItemBlockedInfo once an item has failed @a threshold
+        cycles in a row, and called once more with @ref WatchItemBlockedInfo::cleared "cleared" set
+        when that item is finally dispatched; an exception thrown by the handler is logged through
+        @ref AbstractWatchDataProviderBase::logPollError() "logPollError()" and does not stop polling
+        @param threshold consecutive failures before the block is reported; defaults to
+        @ref DefaultBlockedThreshold
+
+        @throw WATCH-POLICY-ERROR the threshold is less than 1
+        @throw WATCH-HANDLER-ERROR polling has already started
+
+        @note the handler is called from the polling thread, so it must be installed before polling
+        starts; installing it afterwards is rejected rather than raced
+
+        @since DataProvider 3.6
+    */
+    setWatchItemBlockedHandler(code<nothing(hash<WatchItemBlockedInfo>)> handler, *int threshold) {
+        if (exists threshold && threshold < 1) {
+            throw "WATCH-POLICY-ERROR", sprintf("the blocked-item threshold must be at least 1 (got %d); a "
+                "threshold of 0 would report every transient failure as a block", threshold);
+        }
+        AutoLock al(sleep_m);
+        if (started) {
+            throw "WATCH-HANDLER-ERROR", "the blocked-item handler cannot be configured after polling has started";
+        }
+        blocked_handler = handler;
+        blocked_threshold = threshold ?? DefaultBlockedThreshold;
     }
 
     #! Returns @ref True if this provider dispatches events in ascending source order
@@ -247,7 +341,30 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
         hash<WatchCycleInfo> info();
 
         # discard everything at or before the durable cursor before doing any other work
-        items = map $1, items, isNewWatchItem($1);
+        /* a cycle that lists items and then silently drops all of them is indistinguishable from a
+           hung poller in the log, so the discard is always reported: the counts and the highest
+           discarded ordering key against the cursor are what tell an operator that the provider is
+           working and simply has nothing new */
+        int listed = items.size();
+        list<hash<WatchItemInfo>> new_items = ();
+        auto highest_discarded;
+        foreach hash<WatchItemInfo> item in (items) {
+            if (isNewWatchItem(item)) {
+                push new_items, item;
+                continue;
+            }
+            ++info.discarded;
+            if (!exists highest_discarded || compareWatchOrderKeys(item.order_key, highest_discarded) > 0) {
+                highest_discarded = item.order_key;
+            }
+        }
+        if (info.discarded) {
+            *string cursor_desc = getWatchCursorDescription();
+            logWatchDebug("%d of %d listed item(s) already covered by the cursor%s discarded; highest discarded "
+                "ordering key: %y; %d new item(s) remain", info.discarded, listed,
+                cursor_desc.val() ? sprintf(" (%s)", cursor_desc) : "", highest_discarded, new_items.size());
+        }
+        items = new_items;
         if (!items) {
             return info;
         }
@@ -291,11 +408,13 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
             } catch (hash<ExceptionInfo> ex) {
                 ++info.failed;
                 logPollError(ex);
+                noteWatchItemFailed(item, ex);
                 # stop here: dispatching a later item would advance the monotonic cursor past this
                 # one and drop it permanently on what may well be a transient error
                 break;
             }
             ++info.dispatched;
+            noteWatchItemDelivered(item);
             if (superseded) {
                 info.superseded += superseded.size();
                 # the retained event is already delivered and its cursor is durable, so a failure
@@ -308,6 +427,72 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
             }
         }
         return info;
+    }
+
+    #! Records a dispatch failure and reports the item once it has blocked the feed
+    /** @param item the item whose dispatch failed
+        @param ex the failure
+    */
+    private noteWatchItemFailed(hash<WatchItemInfo> item, hash<ExceptionInfo> ex) {
+        if (blocked_id != item.id) {
+            # a different item now leads the feed, so this is the start of a new block
+            blocked_id = item.id;
+            blocked_attempts = 0;
+            blocked_reported = False;
+        }
+        ++blocked_attempts;
+        if (blocked_reported || blocked_attempts < blocked_threshold) {
+            return;
+        }
+        blocked_reported = True;
+        logWatchInfo("item %y has failed %d consecutive cycle(s) and is holding up the feed; it is retried every "
+            "cycle and no later item can be delivered until it succeeds: %s: %s", item.id, blocked_attempts,
+            ex.err, ex.desc);
+        callBlockedHandler(<WatchItemBlockedInfo>{
+            "id": item.id,
+            "order_key": item.order_key,
+            "attempts": blocked_attempts,
+            "ex": ex,
+        });
+    }
+
+    #! Clears any block recorded against an item that has now been delivered
+    /** @param item the item that was dispatched successfully
+    */
+    private noteWatchItemDelivered(hash<WatchItemInfo> item) {
+        if (blocked_id != item.id) {
+            return;
+        }
+        int attempts = blocked_attempts;
+        bool reported = blocked_reported;
+        remove blocked_id;
+        blocked_attempts = 0;
+        blocked_reported = False;
+        if (!reported) {
+            return;
+        }
+        logWatchInfo("item %y was delivered after %d failed cycle(s); the feed is moving again", item.id, attempts);
+        callBlockedHandler(<WatchItemBlockedInfo>{
+            "id": item.id,
+            "order_key": item.order_key,
+            "attempts": attempts,
+            "cleared": True,
+        });
+    }
+
+    #! Calls the blocked-item handler, if any
+    /** A handler failure is reported and discarded: the handler exists to make a stalled feed
+        visible, so a broken handler must not become a second way for the polling thread to die.
+    */
+    private callBlockedHandler(hash<WatchItemBlockedInfo> info) {
+        if (!blocked_handler) {
+            return;
+        }
+        try {
+            blocked_handler(info);
+        } catch (hash<ExceptionInfo> ex) {
+            logPollError(ex);
+        }
     }
 
     #! Collapses items to the latest item per group, preserving ascending dispatch order
@@ -441,6 +626,26 @@ public class AbstractOrderedWatchDataProvider inherits AbstractWatchDataProvider
     */
     private logWatchInfo(string fmt, ...) {
         # default: ignore; subclasses should override for proper logging
+    }
+
+    #! Logs a debug-level message about a polling cycle
+    /** Overridden by providers that have a logger; the default implementation discards the message.
+
+        @since DataProvider 3.6
+    */
+    private logWatchDebug(string fmt, ...) {
+        # default: ignore; subclasses should override for proper logging
+    }
+
+    #! Returns a short description of the current durable cursor for log messages
+    /** Providers whose cursor has a compact rendering override this so that a cursor-discard log
+        line can be read without cross-referencing the persisted checkpoint.
+
+        The default implementation returns @ref nothing.
+
+        @since DataProvider 3.6
+    */
+    private *string getWatchCursorDescription() {
     }
 }
 }

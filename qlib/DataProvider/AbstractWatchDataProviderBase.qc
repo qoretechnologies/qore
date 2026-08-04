@@ -59,15 +59,21 @@ public namespace DataProvider {
       the restart time when it has none.
 
     @anchor watch_removal_semantics
-    @par Removal is dispatch-aware, not processing-aware
-    A watch provider observes one thing: that raising an event returned without an exception. It does
-    not, and at this layer cannot, observe whether the consumer went on to process the event
-    successfully. Any option that removes the source item after its event has been raised
-    (ex: deleting mail) therefore acts on <b>dispatch</b>, not on <b>completion</b>: a consumer that
-    receives the event and then fails, times out, or is restarted mid-processing has already lost the
-    source item. Providers must document such options in those terms and must not describe them as
-    processing-aware. Workloads that must not lose the source item leave those options unset and act
-    from the consumer once processing has succeeded, using the item identity that every event carries.
+    @par Removal follows the delivery call, not the consumer's work
+    A watch provider observes one thing: that raising an event returned without an exception.
+    @ref DataProvider::Observable::notifyObservers() "notifyObservers()" lets observer failures
+    reach the source, so that single fact does cover a consumer that does its work <b>in the
+    delivery thread</b>: such a consumer signals failure by throwing, the cycle stops without
+    advancing the cursor, no post-dispatch action runs, and the item is delivered again.
+
+    It does not, and at this layer cannot, cover a consumer that hands the event off to another
+    thread, queue, or process. There the delivery call returns as soon as the hand-off succeeds, so
+    an option that removes the source item after its event has been raised (ex: deleting mail)
+    removes it while the real work is still outstanding, and a consumer that then fails, times out,
+    or is restarted mid-processing has lost the source item. Providers must document such options in
+    exactly those terms and must not describe them as covering an asynchronous consumer. Workloads
+    with an asynchronous consumer leave those options unset and act from the consumer once
+    processing has succeeded, using the item identity that every event carries.
 
     @since DataProvider 3.4
 */

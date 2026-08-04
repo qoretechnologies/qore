@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class ObservableTest
+
+#! An observer that records the events it saw and can be told to refuse them
+class ScriptedObserver inherits DataProvider::Observer {
+    public {
+        #! the observer's name, used in failure messages
+        string name;
+
+        #! the event IDs seen, in order
+        list<string> seen = ();
+
+        #! when set, the error code thrown instead of handling the event
+        *string err;
+    }
+
+    constructor(string name, *string err) {
+        self.name = name;
+        self.err = err;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        push seen, event_id;
+        if (err.val()) {
+            throw err, sprintf("observer %y refused event %y", name, event_id);
+        }
+    }
+}
+
+#! An event filter that can be told to refuse the event or to fail
+class ScriptedFilter inherits DataProvider::AbstractEventFilter {
+    public {
+        #! the value returned when the filter does not fail
+        bool result;
+
+        #! when set, the error code thrown instead of filtering
+        *string err;
+
+        #! the number of times the filter was called
+        int calls = 0;
+    }
+
+    constructor(bool result, *string err) {
+        self.result = result;
+        self.err = err;
+    }
+
+    bool filter(string event_id, hash<auto> event) {
+        ++calls;
+        if (err.val()) {
+            throw err, sprintf("filter failed for event %y", event_id);
+        }
+        return result;
+    }
+}
+
+public class ObservableTest inherits QUnit::Test {
+    constructor() : Test("ObservableTest", "1.0") {
+        addTestCase("a clean notification throws nothing", \cleanNotificationTest());
+        addTestCase("a failing observer does not starve the others", \failureDoesNotStarveTest());
+        addTestCase("every failure is reported in the aggregate", \aggregateReportsEveryFailureTest());
+        addTestCase("only subscribed observers are notified and counted", \eventIdFilteringTest());
+        addTestCase("a failing event filter is reported like an observer", \filterFailureTest());
+        addTestCase("a deregistered observer is not notified", \deregistrationTest());
+
+        set_return_value(main());
+    }
+
+    #! An event every observer handles must return normally
+    cleanNotificationTest() {
+        DataProvider::Observable obs();
+        ScriptedObserver first("first");
+        ScriptedObserver second("second");
+        obs.registerObserver(first);
+        obs.registerObserver(second);
+
+        obs.notifyObservers("evt", {"key": 1});
+        assertEq(("evt",), first.seen);
+        assertEq(("evt",), second.seen);
+    }
+
+    #! The observers registered after a failing one must still see the event
+    failureDoesNotStarveTest() {
+        DataProvider::Observable obs();
+        ScriptedObserver broken("broken", "BROKEN-OBSERVER-ERROR");
+        ScriptedObserver healthy("healthy");
+        obs.registerObserver(broken);
+        obs.registerObserver(healthy);
+
+        assertThrows("OBSERVER-NOTIFICATION-ERROR", "BROKEN-OBSERVER-ERROR",
+            \obs.notifyObservers(), ("evt", {}));
+        assertEq(("evt",), broken.seen);
+        assertEq(("evt",), healthy.seen, "an observer registered after a failing one is still notified");
+    }
+
+    #! Every failure must reach the event source, not just the first
+    aggregateReportsEveryFailureTest() {
+        DataProvider::Observable obs();
+        ScriptedObserver first("first", "FIRST-ERROR");
+        ScriptedObserver middle("middle");
+        ScriptedObserver last("last", "LAST-ERROR");
+        obs.registerObserver(first);
+        obs.registerObserver(middle);
+        obs.registerObserver(last);
+
+        *hash<ExceptionInfo> ex;
+        try {
+            obs.notifyObservers("evt", {});
+        } catch (hash<ExceptionInfo> caught) {
+            ex = caught;
+        }
+        assertEq("OBSERVER-NOTIFICATION-ERROR", ex.err);
+        assertEq(2, ex.arg.size(), "both failures are carried in the exception argument");
+        assertEq(("FIRST-ERROR", "LAST-ERROR"), (map $1.err, ex.arg),
+            "the failures are reported in notification order");
+        assertEq(("evt",), middle.seen, "the observer between two failures is notified");
+        assertTrue(ex.desc =~ /FIRST-ERROR/, "the description names the first failure");
+        assertTrue(ex.desc =~ /LAST-ERROR/, "the description names the last failure");
+        assertTrue(ex.desc =~ /2 of 3/, "the description reports how many observers failed of how many notified");
+    }
+
+    #! An observer subscribed to other event IDs must not be notified or counted
+    eventIdFilteringTest() {
+        DataProvider::Observable obs();
+        ScriptedObserver subscribed("subscribed", "SUBSCRIBED-ERROR");
+        ScriptedObserver other("other");
+        obs.registerObserver(subscribed, "evt");
+        obs.registerObserver(other, "unrelated-evt");
+
+        *hash<ExceptionInfo> ex;
+        try {
+            obs.notifyObservers("evt", {});
+        } catch (hash<ExceptionInfo> caught) {
+            ex = caught;
+        }
+        assertEq("OBSERVER-NOTIFICATION-ERROR", ex.err);
+        assertEq(("evt",), subscribed.seen);
+        assertEq((), other.seen, "an observer subscribed to another event ID is not notified");
+        assertTrue(ex.desc =~ /1 of 1/, "an observer that was not notified is not counted as notified");
+    }
+
+    #! A filter that throws must be reported and must not starve the remaining observers
+    filterFailureTest() {
+        DataProvider::Observable obs();
+        # the filter is consulted only for an event the observer did not subscribe to, so register
+        # the guarded observers for a different event ID than the one raised below
+        ScriptedFilter accepting(True);
+        ScriptedObserver guarded("guarded");
+        ScriptedFilter failing(True, "FILTER-ERROR");
+        ScriptedObserver never_reached("never-reached");
+        ScriptedObserver plain("plain");
+        obs.registerObserverWithFilter(guarded, accepting, "unrelated-evt");
+        obs.registerObserverWithFilter(never_reached, failing, "unrelated-evt");
+        obs.registerObserver(plain);
+
+        *hash<ExceptionInfo> ex;
+        try {
+            obs.notifyObservers("evt", {});
+        } catch (hash<ExceptionInfo> caught) {
+            ex = caught;
+        }
+        assertEq("OBSERVER-NOTIFICATION-ERROR", ex.err);
+        assertEq(("FILTER-ERROR",), (map $1.err, ex.arg), "a filter failure is reported like an observer failure");
+        assertEq(1, accepting.calls, "an accepting filter admits an event outside the observer's event list");
+        assertEq(("evt",), guarded.seen);
+        assertEq((), never_reached.seen, "an observer whose filter failed is not notified");
+        assertEq(("evt",), plain.seen, "a failing filter does not starve the observers after it");
+    }
+
+    #! A deregistered observer must not be notified at all
+    deregistrationTest() {
+        DataProvider::Observable obs();
+        ScriptedObserver removed("removed", "REMOVED-ERROR");
+        ScriptedObserver kept("kept");
+        obs.registerObserver(removed);
+        obs.registerObserver(kept);
+
+        assertTrue(obs.deregisterObserver(removed));
+        assertFalse(obs.deregisterObserver(removed), "deregistering twice reports that nothing was removed");
+        obs.notifyObservers("evt", {});
+        assertEq((), removed.seen, "a deregistered observer cannot fail the notification");
+        assertEq(("evt",), kept.seen);
+    }
+}

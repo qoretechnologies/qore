@@ -32,17 +32,19 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         const ConstructorOptions = {
             "delete_messages": <DataProviderOptionInfo>{
                 "display_name": "Delete Messages?",
-                "short_desc": "Permanently delete each matched message after raising its event?",
+                "short_desc": "Permanently delete each matched message once its event has been handled?",
                 "type": (AbstractDataProviderTypeMap."bool",),
-                "desc": "Permanently delete each matched message after raising its event?\n\n"
-                    "**The message is deleted as soon as its event has been raised, whatever the event "
-                    "consumer then does with it.** Event delivery is not consumer processing: a consumer "
-                    "that fails, times out, or is restarted mid-processing has already lost the only copy "
-                    "of the message, and a Gmail delete cannot be undone.\n\n"
-                    "For any workload that must not lose the source message, leave this option unset and "
-                    "delete from the consumer once processing has succeeded — every event carries the "
-                    "`message_id` of its source message, and the `delete-message` and `trash-message` "
-                    "actions take that ID",
+                "desc": "Permanently delete each matched message once its event has been handled?\n\n"
+                    "The message is deleted after its event has been raised **and every event handler has "
+                    "returned without an exception**. A handler that does its work in the delivery thread is "
+                    "therefore covered: if it fails, the watch cursor does not advance, the message is not "
+                    "deleted, and the same message is delivered again on the next polling cycle.\n\n"
+                    "**A handler that hands the event off to another thread, queue, or process is not "
+                    "covered.** The delivery call returns as soon as the hand-off succeeds, so the message is "
+                    "deleted while the actual work is still outstanding, and a Gmail delete cannot be undone.\n\n"
+                    "For an asynchronous consumer, leave this option unset and delete from the consumer once "
+                    "processing has succeeded — every event carries the `message_id` of its source message, and "
+                    "the `delete-message` and `trash-message` actions take that ID",
             },
             "q": <DataProviderOptionInfo>{
                 "display_name": "Search Criteria",
@@ -205,6 +207,22 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         #! Message IDs already processed at current epoch (deduplication)
         hash<string, bool> last_msg = {};
 
+        #! Listed message IDs known to lie at or before the durable cursor
+        /** Gmail's \c after: operator has day granularity, so every cycle re-lists the messages
+            already delivered earlier the same day. Retrieving each of them again only to have the
+            cursor discard them is pure waste: the cursor is monotonic and a message's
+            \c internalDate never changes, so a message the cursor covers once it covers forever.
+
+            The set is rebuilt from each cycle's listing, so it cannot outgrow the query's result
+            set, and it is dropped whenever a checkpoint is restored, because a restored cursor is
+            not necessarily the one these IDs were judged against.
+
+            Owned by the polling thread, like the cursor it mirrors: it is written by
+            fetchWatchItems() and advanceWatchCursor(), both of which run only there, and cleared by
+            restoreCheckpoint(), which runs before polling starts.
+        */
+        hash<string, bool> covered_msg = {};
+
         #! How messages are grouped in snapshot mode
         string snapshot_key = SnapshotKeyAll;
 
@@ -317,6 +335,8 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         }
         poll_epoch = checkpoint.poll_epoch;
         last_msg = restored_ids;
+        # the covered-message set was judged against the cursor being replaced here
+        covered_msg = {};
     }
 
     #! Durably advances the Gmail polling cursor
@@ -409,6 +429,13 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         paying for their payloads, which needs each message's timestamp up front. Without either
         option every listed message is delivered anyway, so the full retrieval doubles as the
         ordering pass and no extra API call is made.
+
+        @note The cursor discarding re-listed messages is deliberately not a reason to turn the
+        ordering pass on. A \c messages.get costs the same Gmail quota whatever format it requests,
+        so an ordering pass for cursor filtering would charge every delivered message a second
+        retrieval forever in order to make the repeated ones cheaper. The repeated ones are instead
+        removed outright by @ref covered_msg, which retrieves a message the cursor covers at most
+        once.
     */
     private bool usesOrderingPass() {
         return hasSnapshotMode() || getMaxItemsPerCycle() > 0;
@@ -424,10 +451,20 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         }
         bool ordering_pass = usesOrderingPass();
         list<hash<WatchItemInfo>> items = ();
+        # rebuilt from this cycle's listing so that IDs the query no longer returns are forgotten
+        hash<string, bool> next_covered = {};
+        int covered = 0;
         foreach hash<auto> minfo in (listMessages(gmail_query)) {
             # check for shutdown between REST calls
             if (isStopping()) {
                 return ();
+            }
+            if (covered_msg{minfo.id}) {
+                # the cursor already covers this message and cannot uncover it, so there is nothing
+                # to learn from retrieving it again
+                next_covered{minfo.id} = True;
+                ++covered;
+                continue;
             }
             hash<auto> msg;
             if (ordering_pass) {
@@ -437,13 +474,23 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             } else {
                 msg = getFullMessage(minfo.id);
             }
-            push items, <WatchItemInfo>{
+            hash<WatchItemInfo> item = <WatchItemInfo>{
                 "id": msg.id,
                 "order_key": GmailMessageWatchDataProviderBase::getMessageEpoch(msg.internalDate),
                 "group_key": snapshot_key == SnapshotKeyThread ? msg.threadId : NOTHING,
                 "data": ordering_pass ? NOTHING : msg,
             };
+            if (!isNewWatchItem(item)) {
+                next_covered{item.id} = True;
+            }
+            push items, item;
         }
+        if (covered) {
+            LoggerWrapper::debug("Gmail: %d listed message(s) known to be covered by the cursor (epoch %d); no "
+                "retrieval performed for them", covered, poll_epoch);
+        }
+        # messages delivered later in this cycle are added by advanceWatchCursor()
+        covered_msg = next_covered;
         return items;
     }
 
@@ -507,6 +554,9 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         int msg_epoch = item.order_key;
         bool epoch_updated = msg_epoch > poll_epoch;
         commitCheckpoint(msg_epoch, item.id);
+        # the cursor now covers this message; the next cycle re-lists it and must not pay to
+        # retrieve it again just to discard it
+        covered_msg{item.id} = True;
         if (epoch_updated) {
             LoggerWrapper::debug("Gmail using new epoch: %y", poll_epoch);
         }
@@ -570,6 +620,16 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     #! Logs an informational message about a polling cycle
     private logWatchInfo(string fmt, ...) {
         LoggerWrapper::logArgs(LoggerLevel::INFO, "Gmail: " + fmt, argv);
+    }
+
+    #! Logs a debug-level message about a polling cycle
+    private logWatchDebug(string fmt, ...) {
+        LoggerWrapper::logArgs(LoggerLevel::DEBUG, "Gmail: " + fmt, argv);
+    }
+
+    #! Returns the current Gmail cursor position for log messages
+    private *string getWatchCursorDescription() {
+        return sprintf("cursor epoch %d = %y", poll_epoch, poll_epoch ? localtime(poll_epoch) : NOTHING);
     }
 
     #! Process headers and body

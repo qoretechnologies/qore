@@ -54,6 +54,12 @@ class MockOrderedWatchProvider inherits DataProvider::AbstractOrderedWatchDataPr
         #! messages reported through logWatchInfo()
         list<string> infos = ();
 
+        #! messages reported through logWatchDebug()
+        list<string> debugs = ();
+
+        #! blocked-item reports received, in order
+        list<hash<WatchItemBlockedInfo>> blocked_reports = ();
+
         #! checkpoints persisted, in order
         list<hash<auto>> checkpoints = ();
     }
@@ -140,6 +146,34 @@ class MockOrderedWatchProvider inherits DataProvider::AbstractOrderedWatchDataPr
 
     private logWatchInfo(string fmt, ...) {
         push infos, vsprintf(fmt, argv);
+    }
+
+    private logWatchDebug(string fmt, ...) {
+        push debugs, vsprintf(fmt, argv);
+    }
+
+    #! Installs a handler that records every blocked-item report in blocked_reports
+    installBlockedHandler(*int threshold) {
+        setWatchItemBlockedHandler(sub (hash<WatchItemBlockedInfo> info) {
+            push blocked_reports, info;
+        }, threshold);
+    }
+
+    #! Installs a handler that fails, to prove a broken handler cannot stop the polling thread
+    installFailingBlockedHandler(*int threshold) {
+        setWatchItemBlockedHandler(sub (hash<WatchItemBlockedInfo> info) {
+            push blocked_reports, info;
+            throw "MOCK-HANDLER-ERROR", "the blocked-item handler failed";
+        }, threshold);
+    }
+
+    #! Exposes the setter so its validation can be tested
+    setBlockedHandler(code<nothing(hash<WatchItemBlockedInfo>)> handler, *int threshold) {
+        setWatchItemBlockedHandler(handler, threshold);
+    }
+
+    private *string getWatchCursorDescription() {
+        return sprintf("cursor %d", cursor);
     }
 }
 
@@ -234,6 +268,9 @@ public class OrderedWatchDataProviderTest inherits QUnit::Test {
         addTestCase("watch policy validation", \watchPolicyValidationTest());
         addTestCase("the dispatch budget defers from the newest end", \dispatchBudgetTest());
         addTestCase("ordering declarations", \orderingDeclarationTest());
+        addTestCase("items discarded by the cursor are reported", \cursorDiscardReportingTest());
+        addTestCase("an item that blocks the feed is reported and cleared", \blockedItemReportingTest());
+        addTestCase("blocked-item handler validation and isolation", \blockedItemHandlerTest());
         addTestCase("timestamp cursor ordering and checkpoints", \timestampWatchTest());
         addTestCase("timestamp checkpoint validation", \timestampCheckpointValidationTest());
 
@@ -442,6 +479,115 @@ public class OrderedWatchDataProviderTest inherits QUnit::Test {
         assertTrue(snap.hasSnapshotMode());
         assertEq(WSA_TRASH, snap.getSupersededAction());
         assertEq(5, snap.getMaxItemsPerCycle());
+    }
+
+    #! A cycle that lists items and drops all of them must not look like a hung poller
+    cursorDiscardReportingTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.feed = ({"id": "b", "order_key": 20}, {"id": "a", "order_key": 10});
+
+        hash<WatchCycleInfo> first = provider.runCycle();
+        assertEq(2, first.dispatched);
+        assertEq(0, first.discarded, "nothing is discarded while the cursor is still behind the feed");
+        assertEq((), provider.debugs, "a cycle that discards nothing does not report a discard");
+
+        # the same feed on the next cycle is entirely covered by the cursor
+        hash<WatchCycleInfo> second = provider.runCycle();
+        assertEq(0, second.dispatched);
+        assertEq(2, second.discarded, "every item the cursor covers is counted");
+        assertEq(1, provider.debugs.size(), "the discard is reported once per cycle");
+        assertTrue(provider.debugs[0] =~ /2 of 2/, "the report gives the discarded count against the listed count");
+        assertTrue(provider.debugs[0] =~ /cursor 20/, "the report names the cursor position");
+        assertTrue(provider.debugs[0] =~ /20/, "the report gives the highest discarded ordering key");
+        assertEq(2, obs.events.size(), "a discarded item is not raised again");
+
+        # a cycle with both new and covered items reports the covered ones and delivers the rest
+        provider.feed += {"id": "c", "order_key": 30};
+        hash<WatchCycleInfo> third = provider.runCycle();
+        assertEq(1, third.dispatched);
+        assertEq(2, third.discarded);
+        assertEq(2, provider.debugs.size());
+        assertTrue(provider.debugs[1] =~ /1 new item/, "the report gives what is left after the discard");
+        assertEq(("a", "b", "c"), obs.getIds());
+    }
+
+    #! Never skipping a failed item is what keeps it; the resulting stall must not be silent
+    blockedItemReportingTest() {
+        MockOrderedWatchProvider provider();
+        RecordingObserver obs();
+        provider.registerObserver(obs);
+        provider.installBlockedHandler(3);
+        provider.feed = ({"id": "b", "order_key": 20}, {"id": "a", "order_key": 10});
+        provider.fail_on = "a";
+
+        provider.runCycle();
+        assertEq((), provider.blocked_reports, "a single failure is not yet a block");
+        provider.runCycle();
+        assertEq((), provider.blocked_reports, "a failure below the threshold is not yet a block");
+
+        provider.runCycle();
+        assertEq(1, provider.blocked_reports.size(), "the block is reported once the threshold is reached");
+        assertEq("a", provider.blocked_reports[0].id);
+        assertEq(10, provider.blocked_reports[0].order_key);
+        assertEq(3, provider.blocked_reports[0].attempts);
+        assertFalse(provider.blocked_reports[0].cleared);
+        assertEq("MOCK-DISPATCH-ERROR", provider.blocked_reports[0].ex.err, "the report carries the failure");
+
+        provider.runCycle();
+        assertEq(1, provider.blocked_reports.size(), "a block is reported once, not on every cycle");
+        assertEq(0, obs.events.size(), "no later item is delivered while the feed is blocked");
+
+        # the block clears only when the blocking item is actually delivered
+        provider.fail_on = NOTHING;
+        assertEq(2, provider.runCycle().dispatched);
+        assertEq(2, provider.blocked_reports.size(), "the clear is reported");
+        assertEq("a", provider.blocked_reports[1].id);
+        assertTrue(provider.blocked_reports[1].cleared);
+        assertEq(4, provider.blocked_reports[1].attempts,
+            "the clear reports every failed cycle, including the ones after the block was reported");
+        assertNothing(provider.blocked_reports[1].ex);
+        assertEq(("a", "b"), obs.getIds());
+    }
+
+    #! A different failing item restarts the count, and a broken handler must not stop polling
+    blockedItemHandlerTest() {
+        MockOrderedWatchProvider provider();
+        assertThrows("WATCH-POLICY-ERROR", "at least 1", \provider.setBlockedHandler(),
+            (sub (hash<WatchItemBlockedInfo> info) {}, 0));
+
+        # a block is per item: when the leading item changes, the count starts again
+        MockOrderedWatchProvider counted();
+        RecordingObserver obs();
+        counted.registerObserver(obs);
+        counted.installBlockedHandler(2);
+        counted.feed = ({"id": "b", "order_key": 20},);
+        counted.fail_on = "b";
+        counted.runCycle();
+        # an older item arrives and now leads the feed
+        counted.feed += {"id": "a", "order_key": 10};
+        counted.fail_on = "a";
+        counted.runCycle();
+        assertEq((), counted.blocked_reports, "a new leading item restarts the failure count");
+        counted.runCycle();
+        assertEq(("a",), (map $1.id, counted.blocked_reports), "the new leading item is reported on its own count");
+
+        # a handler that throws is reported through logPollError() and the cycle continues
+        MockOrderedWatchProvider broken();
+        broken.registerObserver(new RecordingObserver());
+        broken.installFailingBlockedHandler(1);
+        broken.feed = ({"id": "a", "order_key": 10},);
+        broken.fail_on = "a";
+        hash<WatchCycleInfo> info = broken.runCycle();
+        assertEq(1, info.failed);
+        assertEq(1, broken.blocked_reports.size(), "the handler was called");
+        assertEq(2, broken.errors.size(), "the dispatch failure and the handler failure are both reported");
+        assertTrue((foldl $1 + " " + $2, broken.errors) =~ /MOCK-HANDLER-ERROR/,
+            "a failing handler is reported, not propagated");
+
+        broken.fail_on = NOTHING;
+        assertEq(1, broken.runCycle().dispatched, "a failing handler does not stop the feed from recovering");
     }
 
     #! The timestamp cursor must order by record time and survive a restart

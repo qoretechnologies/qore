@@ -201,6 +201,7 @@ public class GmailWatchOrderingTest inherits QUnit::Test {
         addTestCase("the per-cycle budget delivers the oldest messages first", \messageBudgetTest());
         addTestCase("watch option validation", \optionValidationTest());
         addTestCase("stream identity covers only the scan-defining options", \streamIdentityTest());
+        addTestCase("messages the cursor covers are not retrieved again", \coveredMessageRetrievalTest());
 
         set_return_value(main());
     }
@@ -489,5 +490,66 @@ public class GmailWatchOrderingTest inherits QUnit::Test {
         # the start date sets where the scan begins
         assertNeq(base, (new TestGmailWatch(rest, base_opts + {"start_date": 2026-01-01Z}))
             .getWatchStreamIdentity(), "a changed start date is a different scan");
+    }
+
+    #! Gmail's "after:" operator has day granularity, so every cycle re-lists what was already
+    #! delivered earlier the same day; retrieving those messages again teaches the cycle nothing
+    coveredMessageRetrievalTest() {
+        MockGmailRestClient rest = getRest();
+        list<hash<auto>> mailbox = (
+            {"id": "m2", "internal_date": BaseMs + 20000},
+            {"id": "m1", "internal_date": BaseMs + 10000},
+        );
+        rest.setMailbox(mailbox);
+        TestGmailWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+
+        assertEq(2, watch.runCycle().dispatched);
+        assertEq(2, GmailWatchOrderingTest::countMessageGets(rest), "each new message is retrieved exactly once");
+
+        rest.gets = ();
+        hash<WatchCycleInfo> second = watch.runCycle();
+        assertEq(0, second.dispatched, "nothing is delivered twice");
+        assertEq(0, GmailWatchOrderingTest::countMessageGets(rest),
+            "a message the cursor already covers is not retrieved again");
+        assertEq(0, second.discarded, "a covered message never becomes a candidate item");
+
+        # a genuinely new message must still cost exactly one retrieval
+        rest.setMailbox(({"id": "m3", "internal_date": BaseMs + 30000},) + mailbox);
+        rest.gets = ();
+        assertEq(1, watch.runCycle().dispatched);
+        assertEq(1, GmailWatchOrderingTest::countMessageGets(rest), "only the new message is retrieved");
+        assertEq(("m1", "m2", "m3"), obs.getIds());
+
+        # a restored checkpoint was not judged against the messages this object has seen, so the
+        # cursor itself has to do the filtering again
+        TestGmailWatch restored(rest, {"q": "in:inbox"});
+        restored.setCheckpointPersistence({
+            "version": 1,
+            "poll_epoch": (BaseMs + 30000) / 1000,
+            "last_message_ids": ("m3",),
+        }, sub (hash<auto> checkpoint) {});
+        rest.gets = ();
+        hash<WatchCycleInfo> after_restore = restored.runCycle();
+        assertEq(0, after_restore.dispatched, "the restored cursor covers the whole mailbox");
+        assertEq(3, after_restore.discarded, "the restored cursor discards every listed message");
+        assertEq(3, GmailWatchOrderingTest::countMessageGets(rest),
+            "the first cycle after a restore has to retrieve what it has not judged before");
+
+        rest.gets = ();
+        assertEq(0, restored.runCycle().discarded, "the second cycle knows what the cursor covers");
+        assertEq(0, GmailWatchOrderingTest::countMessageGets(rest), "and pays nothing to rediscover it");
+    }
+
+    #! Returns the number of single-message retrievals performed, ignoring listing calls
+    private static int countMessageGets(MockGmailRestClient rest) {
+        int count = 0;
+        foreach string path in (rest.gets) {
+            if (path =~ /messages\/[^\/\?]/) {
+                ++count;
+            }
+        }
+        return count;
     }
 }

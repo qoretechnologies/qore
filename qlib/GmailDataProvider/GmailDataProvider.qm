@@ -407,8 +407,13 @@ module GmailDataProvider {
     - added the \c trash-message and \c delete-message actions, so a consumer can clear a source message
       itself once it has finished processing it
     - attachment watch events carry the \c message_id of the source message, so a consumer can address it
-    - documented that the \c delete_messages watch option deletes each matched message as soon as its
-      event has been raised, whatever the consumer then does with it
+    - documented that the \c delete_messages watch option deletes each matched message once its event has
+      been raised and every handler has returned without an exception; a handler that works in the
+      delivery thread therefore protects the message, while a handler that hands the event off to another
+      thread, queue, or process does not
+    - the watch no longer retrieves a listed message that its cursor has already covered: Gmail's \c after:
+      operator has day granularity, so every cycle re-lists the messages already delivered earlier the same
+      day, and each of them was being retrieved in full only to be discarded
     - the watch now follows \c nextPageToken and processes every page of matching messages in one polling
       cycle; previously only the first page was ever seen, so a backlog larger than one page was never
       fully delivered
