@@ -14,7 +14,9 @@ if (!is_file(qcc_bin)) {
 
 string source_path = get_script_dir() + "/../qlib/DataProvider/DataProvider.qtest";
 string exe_path = "/tmp/qore-aot-dataprovider-executable-" + string(getpid());
+string status_path = exe_path + ".status";
 on_exit unlink(exe_path);
+on_exit unlink(status_path);
 
 string compile_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
@@ -24,8 +26,10 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 
-string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-if (run_out !~ /Ran 23 test cases, 23 succeeded/) {
-    printf("AOT DataProvider execution failed:\n%s", run_out);
+string run_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1; echo $? > %s", libqore_dir, exe_path, status_path));
+int run_status = trim(ReadOnlyFile::readTextFile(status_path)).toInt();
+if (run_status || run_out !~ /Ran [0-9]+ test cases, [0-9]+ succeeded/) {
+    printf("AOT DataProvider execution failed with status %d:\n%s", run_status, run_out);
     exit(2);
 }
