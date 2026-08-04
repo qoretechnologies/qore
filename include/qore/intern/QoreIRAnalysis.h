@@ -87,6 +87,29 @@ struct QoreIROptimizationStats {
     size_t bounded_boxed_direct_reads = 0;
     size_t in_place_list_pushes = 0;
     size_t in_place_string_appends = 0;
+    size_t pure_calls_folded = 0;
+};
+
+//! Where the values produced by compile-time folding are consumed.
+enum class QoreIRFoldTarget : unsigned char {
+    //! the folded value is observed by the process that computed it (interpreter and JIT), so
+    //! @ref QCF_PURE is enough
+    Runtime,
+    //! the folded value is written into an AOT image that runs on other hosts, so @ref QCF_PURE
+    //! must be accompanied by @ref QCF_HOST_PORTABLE
+    Image,
+};
+
+//! Everything compile-time folding needs beyond the function itself.
+struct QoreIRFoldContext {
+    //! where the folded values are consumed; the default is the conservative AOT-image answer, so
+    //! a caller that folds for its own process must say so explicitly
+    QoreIRFoldTarget target = QoreIRFoldTarget::Image;
+    //! program context used to evaluate a call at compile time
+    /** AOT lowering must supply this: neither the IR function nor the call instruction carries a
+        program there.  When null the folder falls back to the call instruction's program and then
+        to the current thread's program, which is what the interpreter and JIT paths have. */
+    QoreProgram* pgm = nullptr;
 };
 
 //! Conservative interprocedural effects used to preserve caller-side caches.
@@ -162,8 +185,9 @@ DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
 //! @param enable_licm enables loop-invariant code motion; pathological AOT
 //! functions selected for outlining disable it so values are not hoisted
 //! across prospective helper boundaries
+//! @param fold_context what compile-time folding may assume and what it evaluates with
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats = nullptr,
-    bool enable_licm = true);
+    bool enable_licm = true, const QoreIRFoldContext& fold_context = QoreIRFoldContext());
 
 using QoreIRParamNoEscapeQuery =
     std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;

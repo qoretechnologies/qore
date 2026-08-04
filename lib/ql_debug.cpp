@@ -3004,6 +3004,24 @@ static QoreValue f_dbg_flags_effect_count(const QoreListNode* params, RuntimeCon
     return (int64)dbg_flag_effect_count.load(std::memory_order_relaxed);
 }
 
+//! Debug-only: doubles its argument, but raises a domain exception for a negative one
+/** An honest QCF_PURE declaration: the same argument always yields the same outcome and nothing
+    outside the call observes it, but QCF_PURE deliberately makes no nothrow claim.  This is the
+    combination the constant folder has to handle by abandoning the fold rather than by letting the
+    hypothetical call's exception escape into the program being compiled.
+
+    The doubling is exact integer arithmetic below the overflow threshold, so the declaration also
+    carries QCF_HOST_PORTABLE and the fold applies when compiling for an AOT image.
+ */
+static QoreValue f_dbg_flags_pure_throw(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 value = get_param_value(params, 0).getAsBigInt();
+    if (value < 0) {
+        return xsink->raiseException("DBG-NEGATIVE-ARGUMENT",
+            "dbg_flags_pure_throw() rejects the negative argument " QLLD, value);
+    }
+    return value * 2;
+}
+
 //! Debug-only: declares QCF_NO_DOMAIN_THROW and then raises anyway
 /** The one deliberately false declaration in the oracle.  It exists so that the runtime check in
     ~CodeEvaluationHelper() can be shown to fire; without a liar, a passing test proves only that
@@ -3146,6 +3164,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_effect_count", f_dbg_flags_effect_count,
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_pure_throw", f_dbg_flags_pure_throw,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "value");
 
     // the two liars: these declare QCF_NO_DOMAIN_THROW and then raise, so that the runtime check in
     // ~CodeEvaluationHelper() can be shown to detect a violation and to exempt the carve-outs

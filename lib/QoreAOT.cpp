@@ -2590,7 +2590,13 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // boundary. Preserve lexical region independence for pathological AOT
     // bodies; all other IR optimizations remain enabled.
     bool preserve_outline_regions = aotFunctionBodyMayBeOutlined(*ir_func);
-    qore_ir_optimize(*ir_func, &optimization_stats, !preserve_outline_regions);
+    // qcc evaluates on the build host and the image runs elsewhere: only host-portable values may
+    // be folded into it.  The program has to be passed explicitly here - QoreIRFunction::pgm is
+    // null in AOT mode and qcc has no current-thread program while lowering.
+    QoreIRFoldContext fold_context;
+    fold_context.target = QoreIRFoldTarget::Image;
+    fold_context.pgm = pgm;
+    qore_ir_optimize(*ir_func, &optimization_stats, !preserve_outline_regions, fold_context);
     if (!QoreIRVerifier::verify(*ir_func, error)) {
         if (getenv("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: optimized IR verification failed for '%s': %s\n",
@@ -2601,7 +2607,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2619,7 +2625,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.bounded_typed_list_reads,
             optimization_stats.bounded_boxed_direct_reads,
             optimization_stats.in_place_list_pushes,
-            optimization_stats.in_place_string_appends);
+            optimization_stats.in_place_string_appends,
+            optimization_stats.pure_calls_folded);
     }
 
     return 0;

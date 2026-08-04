@@ -1,0 +1,341 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class PureCallFoldingTest
+
+#! Checks the IR fold that replaces a pure builtin call on literal arguments with its value.
+/** The fold rests entirely on the code flag taxonomy from #5385, and each of its rules is checked
+    here against what the optimizer actually did rather than against the result alone - a call that
+    was never folded produces the same value, so comparing values cannot distinguish "folded
+    correctly" from "not folded at all".  QORE_IR_OPT_STATS reports the per-function fold count, so
+    the tests assert on that and on the value.
+
+    The two contracts that must not be confused:
+
+    - QCF_PURE licenses folding when the value is consumed by the process that computed it, which
+      is the interpreter and the JIT.
+    - QCF_HOST_PORTABLE is required on top of that when the value is written into an AOT image,
+      because qcc evaluates on the build host and the image runs somewhere else.
+
+    float sin() is the discriminator: it is QCF_TOTAL but not QCF_HOST_PORTABLE, because IEEE 754
+    does not require correct rounding for the transcendentals.  It must fold for the interpreter
+    and must not fold into an image.  float sqrt() carries both and must fold in either.
+*/
+public class PureCallFoldingTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("PureCallFoldingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("folded calls produce the unfolded values", \testFoldedValuesMatchUnfolded());
+        addTestCase("only the flagged calls are folded", \testOnlyFlaggedCallsAreFolded());
+        addTestCase("host portability gates AOT folding", \testHostPortabilityGatesImageFolding());
+        addTestCase("code flag oracle drives the fold", \testCodeFlagOracle());
+        addTestCase("a raising pure call is not folded", \testRaisingPureCallIsNotFolded());
+
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    #! runs a script and returns its combined output
+    private string runScript(string script_path, *hash<auto> env) {
+        string prefix = "";
+        foreach hash<auto> i in (env.pairIterator()) {
+            prefix += sprintf("%s=%s ", i.key, i.value);
+        }
+        return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1",
+            prefix, libqore_dir, qore_bin, script_path));
+    }
+
+    #! extracts the per-function fold counts from QORE_IR_OPT_STATS output
+    /** A function can be lowered more than once, so every count reported for one name is kept and
+        the caller asserts on the whole set; a name that silently changed count between lowerings
+        would otherwise be invisible.
+    */
+    private hash<string, list<int>> parseFoldCounts(string output, string prefix) {
+        # "<prefix> <name>: loops=... pure-calls=<n>"; the name is anchored on the first statistic
+        # rather than on ":" because a method name contains "::"
+        string pattern = sprintf("^%s (.+): loops=.* pure-calls=([0-9]+)$", prefix);
+        hash<string, list<int>> rv = {};
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = regex_extract(line, pattern);
+            if (parts.size() != 2 || !exists parts[0] || !exists parts[1]) {
+                continue;
+            }
+            string name = parts[0];
+            list<int> counts = rv{name} ?? ();
+            counts += parts[1].toInt();
+            rv{name} = counts;
+        }
+        return rv;
+    }
+
+    #! asserts that every reported count for \a name equals \a expected
+    private assertFoldCount(hash<string, list<int>> counts, string name, int expected) {
+        assertTrue(exists counts{name}, sprintf("%y was lowered and reported a fold count", name));
+        foreach int count in (counts{name}) {
+            assertEq(expected, count, sprintf("fold count for %y", name));
+        }
+    }
+
+    #! probe functions covering every folded result representation plus the rejected cases
+    private string probeCode() {
+        return '%modern
+
+# QCF_TOTAL + QCF_HOST_PORTABLE, native int result
+int sub p_abs_int() { return abs(-7); }
+int sub p_ceil_int() { return ceil(7, 0); }
+int sub p_floor_int() { return floor(9, 0); }
+int sub p_round_int() { return round(7); }
+# QCF_TOTAL + QCF_HOST_PORTABLE, native float result
+float sub p_sqrt() { return sqrt(2.0); }
+float sub p_abs_float() { return abs(-3.5); }
+float sub p_logb() { return logb(8.0); }
+# QCF_TOTAL + QCF_HOST_PORTABLE, int result from float arguments
+int sub p_compare() { return compare(1.0, 2.0, 0.0001); }
+# QCF_TOTAL only: deterministic in this process but not bit-identical everywhere
+float sub p_sin() { return sin(1.0); }
+float sub p_exp() { return exp(1.0); }
+# nested: the inner fold makes the outer argument a literal
+float sub p_nested() { return sqrt(abs(-4.0)); }
+# QCF_RET_VALUE_ONLY only: raises DIVISION-BY-ZERO, so it makes no determinism claim
+float sub p_pow() { return pow(2.0, 10.0); }
+# arbitrary-precision result: there is no IR literal for it
+number sub p_number() { return abs(-7n); }
+# not a literal argument
+float sub p_variable(float f) { return sqrt(f); }
+# a call carrying an unwind edge is left alone: replacing it would drop the edge
+float sub p_in_try() { try { return sqrt(2.0); } catch (hash<ExceptionInfo> ex) { return -1.0; } }
+# values the IR literal encoding has to special-case
+int sub p_big_int() { return abs(-9223372036854775807); }
+float sub p_neg_inf() { return logb(0.0); }
+float sub p_nan() { return sqrt(-1.0); }
+float sub p_neg_zero() { return ceil(-0.5, 0); }
+# three rounds: each fold turns the next argument into a literal
+float sub p_deep() { return sqrt(sqrt(sqrt(256.0))); }
+
+printf("abs_int=%y\n", p_abs_int());
+printf("ceil_int=%y\n", p_ceil_int());
+printf("floor_int=%y\n", p_floor_int());
+printf("round_int=%y\n", p_round_int());
+printf("sqrt=%y\n", p_sqrt());
+printf("abs_float=%y\n", p_abs_float());
+printf("logb=%y\n", p_logb());
+printf("compare=%y\n", p_compare());
+printf("sin=%y\n", p_sin());
+printf("exp=%y\n", p_exp());
+printf("nested=%y\n", p_nested());
+printf("pow=%y\n", p_pow());
+printf("number=%y\n", p_number());
+printf("variable=%y\n", p_variable(2.0));
+printf("in_try=%y\n", p_in_try());
+printf("big_int=%y\n", p_big_int());
+printf("neg_inf=%y\n", p_neg_inf());
+printf("nan=%y\n", p_nan());
+# %.17g exposes the sign of a negative zero, which %y does not
+printf("neg_zero=%.17g\n", p_neg_zero());
+printf("deep=%y\n", p_deep());
+';
+    }
+
+    #! a folded call must produce exactly what the unfolded call produces
+    private testFoldedValuesMatchUnfolded() {
+        TmpDir tmp("pure-call-fold-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string folded = runScript(script);
+        string unfolded = runScript(script, {"QORE_DISABLE_IR_PURE_CALL_FOLD": "1"});
+        assertEq(unfolded, folded, "folding does not change any result");
+        assertRegex("sqrt=1.41421356", folded);
+        # the encodings the IR literal representation has to get right
+        assertRegex("big_int=9223372036854775807", folded);
+        assertRegex("neg_inf=-.inf", folded);
+        assertRegex("nan=.nan", folded);
+        assertRegex("neg_zero=-0", folded);
+        assertRegex("deep=2", folded);
+
+        # the comparison above is only meaningful if the folded run really folded
+        hash<string, list<int>> counts = parseFoldCounts(
+            runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:");
+        assertFoldCount(counts, "p_sqrt", 1);
+    }
+
+    #! the flags decide which calls are folded, not the shape of the call
+    private testOnlyFlaggedCallsAreFolded() {
+        TmpDir tmp("pure-call-fold-flags-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        hash<string, list<int>> counts = parseFoldCounts(
+            runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:");
+
+        # QCF_PURE is enough when the value stays in this process
+        map assertFoldCount(counts, $1, 1), (
+            "p_abs_int", "p_ceil_int", "p_floor_int", "p_round_int",
+            "p_sqrt", "p_abs_float", "p_logb", "p_compare",
+            "p_sin", "p_exp",
+            "p_big_int", "p_neg_inf", "p_nan", "p_neg_zero",
+        );
+        # sqrt(abs(-4.0)): the inner call folds first and the outer one then sees a literal
+        assertFoldCount(counts, "p_nested", 2);
+        assertFoldCount(counts, "p_deep", 3);
+        # no determinism claim, no literal to produce, no literal argument, or an unwind edge
+        map assertFoldCount(counts, $1, 0), ("p_pow", "p_number", "p_variable", "p_in_try");
+    }
+
+    #! qcc evaluates on the build host, so only QCF_HOST_PORTABLE values may enter the image
+    private testHostPortabilityGatesImageFolding() {
+        TmpDir tmp("pure-call-fold-aot-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/PureFoldProbeMod.qm";
+        string qmod_path = qmod_dir + "/PureFoldProbeMod.qmod";
+        writeFile(qm_path, '%modern
+
+module PureFoldProbeMod {
+    version = "1.0";
+    desc = "host portability fold gate probe";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace PureFoldProbeMod {
+public class PureFoldProbe {
+    #! QCF_TOTAL + QCF_HOST_PORTABLE: correctly rounded on every conforming host
+    static float portable() { return sqrt(2.0); }
+
+    #! QCF_TOTAL only: libm may differ in the last ulp between hosts
+    static float hostDependent() { return sin(1.0); }
+
+    #! QCF_TOTAL + QCF_HOST_PORTABLE: exact integer arithmetic
+    static int portableInt() { return abs(-7); }
+}
+}
+');
+        string compile_out = backquote(sprintf(
+            "QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("module compiled: %s", compile_out));
+
+        hash<string, list<int>> counts = parseFoldCounts(compile_out, "IR-OPT-AOT:");
+        assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_portable", 1);
+        assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_portableInt", 1);
+        # the whole point of the gate: the build host's sin() must not be baked in
+        assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_hostDependent", 0);
+
+        # and the compiled module must still agree with an interpreted run of the same source
+        string script = tmp.path + "/run.q";
+        writeFile(script, '%modern
+%requires PureFoldProbeMod
+
+printf("portable=%y\n", PureFoldProbeMod::PureFoldProbe::portable());
+printf("hostDependent=%y\n", PureFoldProbeMod::PureFoldProbe::hostDependent());
+printf("portableInt=%y\n", PureFoldProbeMod::PureFoldProbe::portableInt());
+');
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, qmod_dir, qore_bin, script));
+        string src_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, src_dir, qore_bin, script));
+        assertEq(src_out, aot_out, "AOT and source module agree");
+        assertRegex("portable=1.41421356", aot_out);
+    }
+
+    #! the debug-only flag oracle covers combinations no production declaration carries
+    /** The oracle functions only exist in a debug build, and a direct call to one fails to parse
+        on a release build - which is why the probe lives in a script written at run time rather
+        than in this file.
+    */
+    private testCodeFlagOracle() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("library debugging is not available in this build");
+        }
+        TmpDir tmp("pure-call-fold-oracle-");
+        string script = tmp.path + "/oracle.q";
+        writeFile(script, '%modern
+
+# QCF_CONSTANT: diagnostic-only, it licenses no optimization at all
+int sub o_legacy_constant() { return dbg_flags_legacy_constant(); }
+# QCF_TOTAL: the same claim spelled out, and it does license folding
+int sub o_total() { return dbg_flags_total(); }
+# QCF_PURE: deterministic with no nothrow claim
+int sub o_pure() { return dbg_flags_pure(); }
+# QCF_RET_VALUE_ONLY: no determinism claim
+int sub o_retval_only() { return dbg_flags_retval_only(); }
+# no claims at all
+int sub o_unflagged() { return dbg_flags_unflagged(); }
+
+printf("legacy_constant=%y\n", o_legacy_constant());
+printf("total=%y\n", o_total());
+printf("pure=%y\n", o_pure());
+printf("retval_only=%y\n", o_retval_only());
+printf("unflagged=%y\n", o_unflagged());
+');
+        string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        hash<string, list<int>> counts = parseFoldCounts(out, "IR-OPT:");
+        assertFoldCount(counts, "o_total", 1);
+        assertFoldCount(counts, "o_pure", 1);
+        # folding on QCF_CONSTANT would reintroduce exactly the defect #5385 was filed over
+        assertFoldCount(counts, "o_legacy_constant", 0);
+        assertFoldCount(counts, "o_retval_only", 0);
+        assertFoldCount(counts, "o_unflagged", 0);
+
+        assertRegex("legacy_constant=1", out);
+        assertRegex("total=2", out);
+        assertRegex("pure=3", out);
+    }
+
+    #! QCF_PURE does not imply nothrow: a raising evaluation must abandon the fold
+    private testRaisingPureCallIsNotFolded() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("library debugging is not available in this build");
+        }
+        TmpDir tmp("pure-call-fold-throw-");
+        string script = tmp.path + "/throw.q";
+        writeFile(script, '%modern
+
+# QCF_PURE | QCF_HOST_PORTABLE; raises for a negative argument
+int sub t_ok() { return dbg_flags_pure_throw(21); }
+int sub t_raises() { return dbg_flags_pure_throw(-1); }
+
+printf("ok=%y\n", t_ok());
+try {
+    t_raises();
+    printf("raises=none\n");
+} catch (hash<ExceptionInfo> ex) {
+    printf("raises=%s\n", ex.err);
+}
+');
+        string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        hash<string, list<int>> counts = parseFoldCounts(out, "IR-OPT:");
+        assertFoldCount(counts, "t_ok", 1);
+        assertFoldCount(counts, "t_raises", 0);
+
+        assertRegex("ok=42", out);
+        # the exception belongs to the run, not to the parse: it must surface exactly once, when
+        # the call is executed, and must not have leaked into the compiling program
+        assertRegex("raises=DBG-NEGATIVE-ARGUMENT", out);
+        assertFalse(out =~ /DBG-NEGATIVE-ARGUMENT.*DBG-NEGATIVE-ARGUMENT/s,
+            "the abandoned compile-time evaluation raised nothing");
+    }
+}

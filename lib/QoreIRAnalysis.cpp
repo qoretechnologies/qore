@@ -4504,6 +4504,344 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     return stats;
 }
 
+/*
+    Compile-time evaluation of pure builtin calls.
+
+    Two independent conditions license this fold, and neither implies the other:
+
+    - QCF_PURE (QCF_RET_VALUE_ONLY | QCF_NO_SIDE_EFFECTS | QCF_DETERMINISTIC) says the call returns
+      the same value for the same arguments within one process, so its value may replace the call
+      when both are observed by that same process: the interpreter and the JIT.
+    - QCF_HOST_PORTABLE says the value is bit-identical on every conforming host.  It is required in
+      addition to QCF_PURE when the value is baked into an AOT image, because qcc evaluates on the
+      build host while the image runs elsewhere; folding on determinism alone would freeze the build
+      host's answer.
+
+    QCF_CONSTANT licenses nothing at all - it is diagnostic-only and selects warning wording.
+
+    QCF_PURE also does not imply nothrow: a pure variant may still raise a domain exception.  When
+    compile-time evaluation raises, the exception belongs to the hypothetical run and not to the
+    program being compiled, so it is discarded and the original call is kept.
+*/
+
+//! Returns the literal value defined by an IR constant instruction.
+//! Only value kinds whose compile-time and run-time materialization are identical are accepted:
+//! strings carry an encoding and dates a timezone, both of which are host state, so they are not
+//! folded here even when the callee is host-portable.
+static bool qore_ir_pure_fold_get_literal(const QoreIRInstruction* def, QoreValue& arg) {
+    if (!def) {
+        return false;
+    }
+    switch (def->opcode) {
+        case QoreIROpcode::ConstInt:
+            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.int_value);
+            return true;
+        case QoreIROpcode::ConstFloat:
+            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.float_value);
+            return true;
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstBoolBoxed:
+            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.bool_value);
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns true when passing an int, float or bool literal to this parameter cannot introduce a
+//! host-derived value.  Argument conversion happens in the call machinery and is not covered by the
+//! callee's own flags, so for example a softstring parameter is rejected: QoreString(double) applies
+//! QCS_DEFAULT, which is host state.
+static bool qore_ir_pure_fold_param_type_supported(const QoreTypeInfo* type) {
+    return type == bigIntTypeInfo || type == softBigIntTypeInfo
+        || type == floatTypeInfo || type == softFloatTypeInfo
+        || type == boolTypeInfo || type == softBoolTypeInfo
+        || type == numberTypeInfo || type == softNumberTypeInfo;
+}
+
+//! Maps a declared return type to the runtime type the fold must observe, and to the IR constant
+//! that will carry it.  The declared type is required to match the produced value so that consumers
+//! specialized on the declared type keep seeing the representation they were specialized for.
+static bool qore_ir_pure_fold_result_kind(const QoreTypeInfo* return_type, qore_type_t& expected,
+        QoreIROpcode& opcode, QoreIRConstant::Kind& kind, const QoreTypeInfo*& type_info,
+        QoreIRValueRepresentation& representation) {
+    if (return_type == bigIntTypeInfo) {
+        expected = NT_INT;
+        opcode = QoreIROpcode::ConstInt;
+        kind = QoreIRConstant::Kind::Int;
+        type_info = bigIntTypeInfo;
+        representation = QoreIRValueRepresentation::NativeInt;
+        return true;
+    }
+    if (return_type == floatTypeInfo) {
+        expected = NT_FLOAT;
+        opcode = QoreIROpcode::ConstFloat;
+        kind = QoreIRConstant::Kind::Float;
+        type_info = floatTypeInfo;
+        representation = QoreIRValueRepresentation::NativeFloat;
+        return true;
+    }
+    if (return_type == boolTypeInfo) {
+        expected = NT_BOOLEAN;
+        opcode = QoreIROpcode::ConstBoolBoxed;
+        kind = QoreIRConstant::Kind::Bool;
+        type_info = boolTypeInfo;
+        representation = QoreIRValueRepresentation::Boxed;
+        return true;
+    }
+    return false;
+}
+
+//! Builds the argument list for a compile-time call from IR literal definitions.
+//! Returns false unless every operand is a literal of a kind this fold accepts.
+static bool qore_ir_pure_fold_build_args(const QoreIRCallDirectInstruction* call,
+        const std::unordered_map<uint32_t, const QoreIRInstruction*>& definitions,
+        ReferenceHolder<QoreListNode>& arg_list, ExceptionSink& xsink) {
+    for (QoreIRValue operand : call->operands) {
+        auto def = definitions.find(operand.id);
+        QoreValue arg;
+        if (def == definitions.end() || !qore_ir_pure_fold_get_literal(def->second, arg)) {
+            return false;
+        }
+        arg_list->push(arg, &xsink);
+        if (xsink) {
+            xsink.clear();
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Returns the variant this call will execute.
+/** A CallDirect does not always carry one: parse-time resolution gives up whenever a sibling
+    variant could match the same arguments through a soft conversion, and the call is then
+    dispatched on the argument values at run time.  Because the arguments here are literals, the
+    same dispatch can be performed now, through the same entry point the run-time dispatch reaches
+    (CodeEvaluationHelper resolves an unresolved plain function call with a null class context).
+
+    The one input that dispatch reads from outside the arguments is the parse options, and it reads
+    them only to exclude QCF_NOOP / QCF_RUNTIME_NOOP variants and to reject a variant whose
+    functional domain the program disallows.  Neither can make this fold disagree with the run-time
+    dispatch: a NOOP variant never carries a determinism flag, and this fold requires
+    QDOM_DEFAULT.
+*/
+static const AbstractQoreFunctionVariant* qore_ir_pure_fold_resolve_variant(
+        const QoreIRInstruction* inst, const QoreIRCallDirectInstruction* call,
+        const QoreListNode* args) {
+    bool has_ref_args = true;
+    const AbstractQoreFunctionVariant* variant =
+        qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+    if (has_ref_args) {
+        return nullptr;
+    }
+    if (variant) {
+        return variant;
+    }
+    ExceptionSink xsink;
+    variant = call->func->runtimeFindVariant(&xsink, args, false, nullptr);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return variant;
+}
+
+//! Evaluates the call and stores the result in \a constant; returns false when the call must be
+//! kept, including when evaluation raised an exception.
+static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+        const QoreIRFoldContext& fold_context, QoreProgram* current_pgm, qore_type_t expected,
+        QoreIRConstant::Kind kind, QoreIRConstant& constant) {
+    QoreProgram* pgm = fold_context.pgm ? fold_context.pgm
+        : (call->pgm ? call->pgm : current_pgm);
+    if (!pgm) {
+        return false;
+    }
+    ExceptionSink xsink;
+    RuntimeConfig& rc = rc_get_current_ref();
+    ValueHolder result(call->func->evalFunctionTmpArgs(variant, args, pgm, rc, &xsink), &xsink);
+    if (xsink) {
+        // the exception belongs to the hypothetical call, not to the program being compiled
+        xsink.clear();
+        return false;
+    }
+    if (result->getType() != expected) {
+        return false;
+    }
+    constant.kind = kind;
+    switch (kind) {
+        case QoreIRConstant::Kind::Int:
+            constant.int_value = result->getAsBigInt();
+            return true;
+        case QoreIRConstant::Kind::Float:
+            constant.float_value = result->getAsFloat();
+            return true;
+        case QoreIRConstant::Kind::Bool:
+            constant.bool_value = result->getAsBool();
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! One committed fold: the literal that replaces the call, and the facts describing it.
+struct QoreIRPureCallFold {
+    QoreIROpcode opcode = QoreIROpcode::ConstInt;
+    QoreIRConstant constant;
+    const QoreTypeInfo* type_info = nullptr;
+    QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
+};
+
+static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t& check_count,
+        const QoreIRFoldContext& fold_context) {
+    const bool require_host_portable = fold_context.target == QoreIRFoldTarget::Image;
+    QoreProgram* current_pgm = getProgram();
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR pure builtin call definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
+
+    std::unordered_map<const QoreIRInstruction*, QoreIRPureCallFold> folds;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR pure builtin call candidate analysis")) {
+                return 0;
+            }
+            if (inst->opcode != QoreIROpcode::CallDirect || inst->exception_target
+                    || !inst->result.isValid()) {
+                continue;
+            }
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+            // the argument loops below run without their own cancellation checks, so bound the
+            // arity the same way the other literal folds bound their operand counts
+            if (!call->func || call->has_ref_args || call->explicit_type_param_inst
+                    || call->operands.size() > 100) {
+                continue;
+            }
+            if (call->expr.hasNode()) {
+                const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                    call->expr.getInternalNode());
+                if (expr && expr->getExplicitTypeParamInstantiation()) {
+                    continue;
+                }
+            }
+            ExceptionSink arg_xsink;
+            ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &arg_xsink);
+            if (!qore_ir_pure_fold_build_args(call, definitions, args, arg_xsink)) {
+                continue;
+            }
+            const AbstractQoreFunctionVariant* variant =
+                qore_ir_pure_fold_resolve_variant(inst.get(), call, *args);
+            if (!variant) {
+                continue;
+            }
+            // user code carries no flag contract an optimizer may rely on here
+            if (variant->isUser()) {
+                continue;
+            }
+            const int64 flags = variant->getFlags();
+            if ((flags & QCF_PURE) != QCF_PURE) {
+                continue;
+            }
+            if (require_host_portable && !(flags & QCF_HOST_PORTABLE)) {
+                continue;
+            }
+            // a sandboxed domain is checked against the parse options of the program that runs the
+            // call, which is not necessarily the one being compiled
+            if (variant->getFunctionality() != QDOM_DEFAULT) {
+                continue;
+            }
+            AbstractFunctionSignature* sig = variant->getSignature();
+            if (!sig || call->operands.size() > sig->numParams()) {
+                continue;
+            }
+            bool supported_params = true;
+            for (unsigned i = 0; i < sig->numParams(); ++i) {
+                if (!qore_ir_pure_fold_param_type_supported(sig->getParamTypeInfo(i))) {
+                    supported_params = false;
+                    break;
+                }
+            }
+            if (!supported_params) {
+                continue;
+            }
+            QoreIRPureCallFold fold;
+            qore_type_t expected = NT_NOTHING;
+            QoreIRConstant::Kind kind = QoreIRConstant::Kind::Nothing;
+            if (!qore_ir_pure_fold_result_kind(variant->getReturnTypeInfo(), expected, fold.opcode,
+                    kind, fold.type_info, fold.representation)) {
+                continue;
+            }
+            if (!qore_ir_pure_fold_evaluate(call, variant, *args, fold_context, current_pgm,
+                    expected, kind, fold.constant)) {
+                continue;
+            }
+            folds.emplace(inst.get(), std::move(fold));
+        }
+    }
+
+    if (folds.empty()) {
+        return 0;
+    }
+    for (const auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            // the folds are already computed; finish the rewrite even under cancellation
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR pure builtin call folding");
+            }
+            auto fold = folds.find(inst.get());
+            if (fold == folds.end()) {
+                continue;
+            }
+            auto replacement = std::make_unique<QoreIRConstInstruction>();
+            replacement->opcode = fold->second.opcode;
+            replacement->loc = inst->loc;
+            replacement->cached_start_line = inst->cached_start_line;
+            replacement->result = inst->result;
+            replacement->temp_scope_id = inst->temp_scope_id;
+            replacement->constant = fold->second.constant;
+            QoreIRValueFacts facts;
+            facts.type_info = fold->second.type_info;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = fold->second.representation;
+            facts.never_nothing = true;
+            func.setValueFacts(replacement->result, facts);
+            inst = std::move(replacement);
+        }
+    }
+    return folds.size();
+}
+
+//! Folds calls to pure builtin variants whose arguments are all IR literals.
+//! @param fold_context selects the flag contract to require and the evaluation program
+static size_t qore_ir_fold_pure_builtin_calls(QoreIRFunction& func, size_t& check_count,
+        const QoreIRFoldContext& fold_context) {
+    if (std::getenv("QORE_DISABLE_IR_PURE_CALL_FOLD")) {
+        return 0;
+    }
+    // repeat so that a call whose arguments become literals through an earlier fold is also folded
+    constexpr size_t max_rounds = 4;
+    size_t folded = 0;
+    for (size_t round = 0; round < max_rounds; ++round) {
+        size_t round_folded = qore_ir_fold_pure_builtin_calls_round(func, check_count,
+            fold_context);
+        if (!round_folded) {
+            break;
+        }
+        folded += round_folded;
+    }
+    return folded;
+}
+
 static size_t qore_ir_fold_scalar_list_queries(QoreIRFunction& func,
         size_t& check_count) {
     if (std::getenv("QORE_DISABLE_IR_SCALAR_LIST_QUERY_FOLDING")) {
@@ -8243,7 +8581,7 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
 }
 
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
-        bool enable_licm) {
+        bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
     if (getenv("QORE_DISABLE_IR_OPT")) {
         if (stats) {
@@ -8252,6 +8590,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         return;
     }
     size_t check_count = 0;
+    // run before the CFG is built: this pass erases nothing, but it produces literals that the
+    // folds below consume
+    local_stats.pure_calls_folded = qore_ir_fold_pure_builtin_calls(func, check_count,
+        fold_context);
     local_stats.scalar_list_queries_folded =
         qore_ir_fold_scalar_list_queries(func, check_count);
     QoreIRControlFlowGraph cfg(func);

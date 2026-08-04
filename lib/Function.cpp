@@ -5591,7 +5591,12 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     }
 
     QoreIROptimizationStats optimization_stats;
-    qore_ir_optimize(*func, &optimization_stats);
+    // this IR is executed by the interpreter and the JIT in this process only; it is never written
+    // to an AOT image, so folding on QCF_PURE alone is sound here
+    QoreIRFoldContext fold_context;
+    fold_context.target = QoreIRFoldTarget::Runtime;
+    fold_context.pgm = func->pgm;
+    qore_ir_optimize(*func, &optimization_stats, /*enable_licm=*/true, fold_context);
     if (!QoreIRVerifier::verify(*func, error)) {
         if (mark_failure) {
             ir_lower_failed = true;
@@ -5610,7 +5615,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu\n",
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -5629,7 +5634,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.bounded_typed_list_reads,
             optimization_stats.bounded_boxed_direct_reads,
             optimization_stats.in_place_list_pushes,
-            optimization_stats.in_place_string_appends);
+            optimization_stats.in_place_string_appends,
+            optimization_stats.pure_calls_folded);
     }
 
     if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
