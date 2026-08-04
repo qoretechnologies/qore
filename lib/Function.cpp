@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreClassIntern.h"
+// for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_list_private.h"
@@ -999,7 +1001,70 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
+#ifdef DEBUG
+// how a QCF_NO_DOMAIN_THROW violation is reported; see qore_set_flag_violation_mode()
+static std::atomic<int> qore_flag_violation_mode{QORE_FLAG_VIOLATION_ABORT};
+
+// number of violations seen since process start
+static std::atomic<int64_t> qore_flag_violation_count{0};
+
+void qore_set_flag_violation_mode(int mode) {
+    qore_flag_violation_mode.store(mode, std::memory_order_relaxed);
+}
+
+int64 qore_get_flag_violations() {
+    return qore_flag_violation_count.load(std::memory_order_relaxed);
+}
+
+//! true for exceptions that QCF_NO_DOMAIN_THROW deliberately does not cover
+/** These are resource-exhaustion and thread-lifecycle conditions that can be injected into any
+    frame regardless of what the called code does, which is exactly why the flag is defined as
+    "cannot raise a *domain* exception" rather than as a blanket nothrow guarantee.
+
+    Out-of-memory needs no entry here: it surfaces as a C++ std::bad_alloc and never reaches an
+    ExceptionSink, so it cannot reach this check in the first place.
+ */
+static bool qore_exception_is_exempt_from_flags(ExceptionSink* xsink) {
+    const QoreValue err = xsink->getExceptionErr();
+    if (err.getType() != NT_STRING) {
+        return false;
+    }
+    const char* e = err.get<const QoreStringNode>()->c_str();
+    return !strcmp(e, "STACK-LIMIT-EXCEEDED") || !strcmp(e, "THREAD-CANCELLED");
+}
+
+//! reports a variant that raised an exception after declaring QCF_NO_DOMAIN_THROW
+/** Called from ~CodeEvaluationHelper() while an exception is propagating, so nothing here may
+    throw: getExceptionErr() only reads the head exception, and printd()/assert() do not allocate
+    through the Qore allocator.
+ */
+static void qore_report_flag_violation(const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink,
+        const char* name) {
+    if (qore_exception_is_exempt_from_flags(xsink)) {
+        return;
+    }
+    qore_flag_violation_count.fetch_add(1, std::memory_order_relaxed);
+    if (qore_flag_violation_mode.load(std::memory_order_relaxed) == QORE_FLAG_VIOLATION_RECORD) {
+        return;
+    }
+    const QoreValue err = xsink->getExceptionErr();
+    printd(0, "QCF_NO_DOMAIN_THROW violated by '%s()': raised '%s'\n", name ? name : "<unknown>",
+        err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "<non-string>");
+    assert(false);
+}
+#endif
+
 CodeEvaluationHelper::~CodeEvaluationHelper() {
+#ifdef DEBUG
+    // Verify a QCF_NO_DOMAIN_THROW claim: dbg_variant is only set once init() committed to running
+    // the call, so an exception present now appeared during the call itself and escaped a frame
+    // that declared it could not raise one.  This covers function, method, and pseudo-method calls
+    // alike, because every one of them constructs a CodeEvaluationHelper.
+    if (dbg_variant && dbg_no_exception_on_entry && xsink && *xsink
+            && (dbg_variant->getFlags() & QCF_NO_DOMAIN_THROW)) {
+        qore_report_flag_violation(dbg_variant, xsink, name);
+    }
+#endif
     if (restore_stack) {
         if (ct == CT_BUILTIN) {
             update_runtime_stack_location(stack_loc, old_runtime_loc);
@@ -1181,6 +1246,15 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             }
         }
     }
+
+#ifdef DEBUG
+    // reaching this point means init() has committed to running the call: argument processing, the
+    // functional-domain check, the stack check, and variant resolution have all succeeded.  Record
+    // what was resolved so the destructor can verify a QCF_NO_DOMAIN_THROW claim against what the
+    // call actually did.
+    dbg_variant = variant;
+    dbg_no_exception_on_entry = !*xsink;
+#endif
 
     setCallType(variant->getCallType());
     setReturnTypeInfo(variant_needs_type_param_substitution

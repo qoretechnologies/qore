@@ -3004,6 +3004,42 @@ static QoreValue f_dbg_flags_effect_count(const QoreListNode* params, RuntimeCon
     return (int64)dbg_flag_effect_count.load(std::memory_order_relaxed);
 }
 
+//! Debug-only: declares QCF_NO_DOMAIN_THROW and then raises anyway
+/** The one deliberately false declaration in the oracle.  It exists so that the runtime check in
+    ~CodeEvaluationHelper() can be shown to fire; without a liar, a passing test proves only that
+    the check does not produce false positives, not that it detects anything at all.
+
+    Tests must switch the reporting mode to QORE_FLAG_VIOLATION_RECORD before calling this, or the
+    check will abort the process as it is designed to.
+ */
+static QoreValue f_dbg_flags_lying_nodomain_throw(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return xsink->raiseException("DBG-DELIBERATE-FLAG-VIOLATION",
+        "raised by dbg_flags_lying_nodomain_throw(), which declares QCF_NO_DOMAIN_THROW");
+}
+
+//! Debug-only: raises an exception exempt from the QCF_NO_DOMAIN_THROW guarantee
+/** Used to prove the carve-out: a variant that declares QCF_NO_DOMAIN_THROW and is then hit by a
+    thread-lifecycle or resource-exhaustion condition must NOT be reported as a violation, since
+    those can be injected into any frame no matter what the code does.
+ */
+static QoreValue f_dbg_flags_exempt_throw(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return xsink->raiseException("THREAD-CANCELLED",
+        "raised by dbg_flags_exempt_throw() to exercise the code flag carve-out");
+}
+
+//! Debug-only: selects how a detected code flag violation is reported
+static QoreValue f_dbg_set_flag_violation_mode(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_set_flag_violation_mode((int)get_param_value(params, 0).getAsBigInt());
+    return QoreValue();
+}
+
+//! Debug-only: returns the number of code flag violations detected since process start
+static QoreValue f_dbg_get_flag_violations(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_get_flag_violations();
+}
+
 static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* xsink) {
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);
@@ -3109,5 +3145,18 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_flags_unflagged", f_dbg_flags_unflagged,
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_effect_count", f_dbg_flags_effect_count,
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+
+    // the two liars: these declare QCF_NO_DOMAIN_THROW and then raise, so that the runtime check in
+    // ~CodeEvaluationHelper() can be shown to detect a violation and to exempt the carve-outs
+    qns.addBuiltinVariant("dbg_flags_lying_nodomain_throw", f_dbg_flags_lying_nodomain_throw,
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_flags_exempt_throw", f_dbg_flags_exempt_throw,
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
+
+    qns.addBuiltinVariant("dbg_set_flag_violation_mode", f_dbg_set_flag_violation_mode,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "mode");
+    qns.addBuiltinVariant("dbg_get_flag_violations", f_dbg_get_flag_violations,
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
 }

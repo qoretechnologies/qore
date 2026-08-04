@@ -35,4 +35,27 @@
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
+#ifdef DEBUG
+//! a QCF_NO_DOMAIN_THROW violation aborts the process (the default)
+#define QORE_FLAG_VIOLATION_ABORT   0
+//! a QCF_NO_DOMAIN_THROW violation is only counted
+/** Tests select this so that they can drive a deliberately-lying variant and assert that the check
+    fired, instead of having the process abort out from under them.
+ */
+#define QORE_FLAG_VIOLATION_RECORD  1
+
+//! selects how a detected code flag violation is reported
+/** The mode and the counter are both process-global, not per-thread: a test that switches to
+    QORE_FLAG_VIOLATION_RECORD suppresses the abort for every thread for as long as it is set, and a
+    violation on any thread moves the same counter.  That is a deliberate trade for testability -
+    the check runs in ~CodeEvaluationHelper(), which has no natural place to hang per-thread state -
+    so a caller that reads the counter as a delta should not have other threads running code under
+    test at the same time.
+ */
+DLLLOCAL void qore_set_flag_violation_mode(int mode);
+
+//! returns the number of code flag violations detected since process start
+DLLLOCAL int64 qore_get_flag_violations();
+#endif
+
 #endif

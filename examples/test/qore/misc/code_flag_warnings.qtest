@@ -24,6 +24,12 @@ public class CodeFlagWarningTest inherits QUnit::Test {
     const WeakWarning = "does not have any side effects except that it may throw an exception "
         "and the return value is ignored";
 
+    #! QORE_FLAG_VIOLATION_ABORT from include/qore/intern/ql_debug.h
+    const FlagViolationAbort = 0;
+
+    #! QORE_FLAG_VIOLATION_RECORD from include/qore/intern/ql_debug.h
+    const FlagViolationRecord = 1;
+
     constructor() : Test("CodeFlagWarningTest", "1.0") {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("warning mask is required", \warningMaskRequired());
@@ -31,6 +37,9 @@ public class CodeFlagWarningTest inherits QUnit::Test {
             addTestCase("weak warning flags", \weakWarningFlags());
             addTestCase("no warning flags", \noWarningFlags());
             addTestCase("declared side effect is real", \declaredSideEffectIsReal());
+            addTestCase("no domain throw violation detected", \noDomainThrowViolationDetected());
+            addTestCase("no domain throw carve outs exempt", \noDomainThrowCarveOutsExempt());
+            addTestCase("honest variants raise no violation", \honestVariantsRaiseNoViolation());
         } else {
             addTestCase("skip (release build)", \skipRelease());
         }
@@ -116,5 +125,55 @@ public class CodeFlagWarningTest inherits QUnit::Test {
         assertEq(1 + 2 + 3 + 4, sink, "the effect-free oracles return their declared constants");
         assertEq(before + 2, call_function("dbg_flags_effect_count"),
             "the side-effect-free oracles do not bump the effect counter");
+    }
+
+    #! runs code with violation reporting switched from abort to record, restoring the mode after
+    /** The default mode aborts the process, which is what makes the check useful in a debug build
+        but would take the test run down with it.
+    */
+    private int countViolations(code c) {
+        call_function("dbg_set_flag_violation_mode", FlagViolationRecord);
+        on_exit call_function("dbg_set_flag_violation_mode", FlagViolationAbort);
+
+        int before = call_function("dbg_get_flag_violations");
+        c();
+        return call_function("dbg_get_flag_violations") - before;
+    }
+
+    #! a variant that declares QCF_NO_DOMAIN_THROW and raises anyway is detected
+    /** Without this the suite would only show that the check produces no false positives, which a
+        check that never fires would also satisfy.
+    */
+    noDomainThrowViolationDetected() {
+        int violations = countViolations(sub () {
+            assertThrows("DBG-DELIBERATE-FLAG-VIOLATION", \call_function(),
+                "dbg_flags_lying_nodomain_throw");
+        });
+        assertEq(1, violations, "the deliberate liar is reported exactly once");
+    }
+
+    #! resource-exhaustion and thread-lifecycle exceptions are exempt from the guarantee
+    /** These can be injected into any frame regardless of what the called code does, which is why
+        QCF_NO_DOMAIN_THROW is defined as "cannot raise a domain exception" rather than as a blanket
+        nothrow guarantee.  Reporting them would make the check fire on correct declarations.
+    */
+    noDomainThrowCarveOutsExempt() {
+        int violations = countViolations(sub () {
+            assertThrows("THREAD-CANCELLED", \call_function(), "dbg_flags_exempt_throw");
+        });
+        assertEq(0, violations, "an exempt exception is not reported as a violation");
+    }
+
+    #! the honestly-declared oracles and the QCF_TOTAL math functions raise no violation
+    honestVariantsRaiseNoViolation() {
+        int violations = countViolations(sub () {
+            int sink = call_function("dbg_flags_total") + call_function("dbg_flags_nodomain_with_effects");
+            assertEq(True, sink > 0, "the honest oracles returned values");
+            # ql_math functions carrying QCF_TOTAL exercise the same check on real declarations
+            assertEq(2.0, sqrt(4.0));
+            assertEq(1, abs(-1));
+            assertEq(8.0, exp2(3.0));
+        });
+        assertEq(0, violations, "honest QCF_NO_DOMAIN_THROW declarations raise no violation");
     }
 }

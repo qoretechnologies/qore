@@ -644,6 +644,17 @@ protected:
     // target/creation Program's options.
     bool defer_domain_po = false;
 
+#ifdef DEBUG
+    //! the resolved variant, recorded once init() has committed to actually running the call
+    /** Used only to verify a QCF_NO_DOMAIN_THROW claim in the destructor; nullptr means init()
+        returned early, so no body ran and nothing can be attributed to the variant.
+     */
+    const AbstractQoreFunctionVariant* dbg_variant = nullptr;
+
+    //! true when no exception was pending at the point where init() committed to the call
+    bool dbg_no_exception_on_entry = false;
+#endif
+
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
 
