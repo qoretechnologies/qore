@@ -376,6 +376,12 @@ struct QoreAOTSymbolIndexRecord {
     QoreAOTDependencyClass dependency_class = QoreAOTDependencyClass::UNKNOWN;
     uint16_t flags = 0;
     uint32_t metadata_slot = UINT32_MAX;
+    //! Serialization-only declaration location; represented as SYMBOL_INDEX
+    //! context and deliberately not part of the per-record wire format.
+    int32_t declaration_start_line = -1;
+    int32_t declaration_end_line = -1;
+    int32_t declaration_entry_start_line = -1;
+    int32_t declaration_entry_end_line = -1;
     std::string qore_path;
     std::string source_file;
     std::string visibility;

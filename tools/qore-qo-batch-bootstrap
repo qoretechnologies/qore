@@ -23,7 +23,8 @@ context=$1
 bootstrap_stamp=$2
 batch_script=$3
 source_order_tool=$4
-lock_dir="${bootstrap_stamp}.lock"
+lock_path="${bootstrap_stamp}.lock"
+lock_candidate="${lock_path}.$$"
 lock_owned=false
 outputs_file=
 # Set by qore-qo-incremental when the group holds a component that spans several
@@ -31,6 +32,11 @@ outputs_file=
 # one component force its own redundant batch -- it only says that a batch
 # failure is fatal, because such a component has no per-source fallback.
 require_batch=${QORE_QCC_REQUIRE_BATCH:-0}
+# A group coordinator has already completed the source-generation currency
+# pass. The first lock owner may proceed directly; a process that had to wait
+# must recheck because the preceding owner may have completed the same build.
+force_batch=${QORE_QCC_FORCE_BATCH:-0}
+lock_waited=false
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -46,9 +52,9 @@ cleanup() {
         rm -f "$outputs_file"
     fi
     if [ "$lock_owned" = true ]; then
-        rm -f "$lock_dir/pid"
-        rmdir "$lock_dir" 2>/dev/null || true
+        rm -f "$lock_path"
     fi
+    rm -f "$lock_candidate"
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -67,37 +73,63 @@ if [ ! -x "$source_order_tool" ]; then
 fi
 
 mkdir -p "$(dirname "$bootstrap_stamp")"
-while ! mkdir "$lock_dir" 2>/dev/null; do
-    if [ -r "$lock_dir/pid" ]; then
+printf '%s\n' "$$" > "$lock_candidate"
+while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
+    lock_waited=true
+    if [ -d "$lock_path" ]; then
+        # Migrate a lock directory left by the previous helper version.
         owner=
-        IFS= read -r owner < "$lock_dir/pid" || true
+        if [ -r "$lock_path/pid" ]; then
+            IFS= read -r owner < "$lock_path/pid" || true
+        fi
         case "$owner" in
             *[!0-9]*|'')
-                rm -f "$lock_dir/pid"
-                rmdir "$lock_dir" 2>/dev/null || true
+                rm -f "$lock_path/pid"
+                rmdir "$lock_path" 2>/dev/null || true
                 continue
                 ;;
             *)
                 if ! kill -0 "$owner" 2>/dev/null; then
-                    rm -f "$lock_dir/pid"
-                    rmdir "$lock_dir" 2>/dev/null || true
+                    rm -f "$lock_path/pid"
+                    rmdir "$lock_path" 2>/dev/null || true
+                    continue
+                fi
+                ;;
+        esac
+    elif [ -r "$lock_path" ]; then
+        owner=
+        IFS= read -r owner < "$lock_path" || true
+        case "$owner" in
+            *[!0-9]*|'')
+                rm -f "$lock_path"
+                continue
+                ;;
+            *)
+                if ! kill -0 "$owner" 2>/dev/null; then
+                    # Recheck the published owner before reclaiming it.  The
+                    # hard link makes initial publication atomic; this check
+                    # keeps two stale-lock waiters from removing a successor's
+                    # lock in the normal PID-distinct case.
+                    current_owner=
+                    IFS= read -r current_owner < "$lock_path" || true
+                    if [ "$current_owner" = "$owner" ]; then
+                        rm -f "$lock_path" "$lock_path.$owner"
+                    fi
                     continue
                 fi
                 ;;
         esac
     else
-        # Allow an owner that just created the directory to publish its pid;
-        # reclaim the directory if it remains ownerless.
-        sleep 1
-        if [ ! -r "$lock_dir/pid" ]; then
-            rmdir "$lock_dir" 2>/dev/null || true
+        # A dangling or otherwise unreadable legacy lock cannot name a live
+        # owner.
+        if [ -e "$lock_path" ] || [ -L "$lock_path" ]; then
+            rm -f "$lock_path"
             continue
         fi
     fi
     sleep 1
 done
 lock_owned=true
-printf '%s\n' "$$" > "$lock_dir/pid"
 
 outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
 sed -n 's/^output=//p' "$context" > "$outputs_file"
@@ -115,16 +147,35 @@ touch_member_stamps() {
 # follower that waited on the lock re-evaluates it here, so a stale marker can
 # never hide a crashed or incomplete bootstrap.
 current=false
-if [ -f "$bootstrap_stamp" ]; then
-    if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
-            "$context"; then
+context_changed=false
+if [ "$force_batch" != 1 ] || [ "$lock_waited" = true ]; then
+    if [ -f "$bootstrap_stamp" ] && [ "$context" -nt "$bootstrap_stamp" ]; then
+        # The context is written only when an effective qcc input changes.  Its
+        # custom command is shared by every member target, so allowing an existing
+        # generation marker to hide this transition makes Make start one standalone
+        # qcc process per source.  Large groups must cross a context generation with
+        # one shared parse instead.
+        context_changed=true
+    fi
+    if [ "$context_changed" = false ] && [ -f "$bootstrap_stamp" ]; then
+        if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
+                "$context"; then
+            current=true
+        fi
+    elif [ "$context_changed" = false ] \
+            && run_source_order --scc-current-all "$context"; then
         current=true
     fi
-elif run_source_order --scc-current-all "$context"; then
-    current=true
 fi
 
 if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
+    # The custom command can be rerun because an orchestration helper changed
+    # even though the published object generation is still current.  Acknowledge
+    # that dependency generation once for the whole group; otherwise every
+    # member stamp remains older than the helper and Make launches the
+    # standalone wrapper for every source.
+    touch "$bootstrap_stamp"
+    touch_member_stamps
     exit 0
 fi
 

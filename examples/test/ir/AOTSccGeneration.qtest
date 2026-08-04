@@ -12,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires Util
 %requires json
 
 %exec-class AOTSccGenerationTest
@@ -33,12 +34,16 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testAcyclicGraphSingletons());
         addTestCase("generation tokens combine member sources with predecessor contracts",
             \testGenerationIdentity());
+        addTestCase("source-only stale planning delegates external dependencies to CMake",
+            \testSourceStalePlanning());
         addTestCase("a component larger than the old retry limit stays one unit",
             \testLargeComponent());
         addTestCase("component selectors reject unknown arguments",
             \testSelectorErrors());
         addTestCase("degenerate object groups decompose without error",
             \testDegenerateGroups());
+        addTestCase("CMake dependency plan is atomic and content-stable",
+            \testCMakePlan());
 
         set_return_value(main());
     }
@@ -70,6 +75,16 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "output": output.substr(0, marker),
             "rc": output.substr(marker + 3).toInt(),
         );
+    }
+
+    private string cmakePlan(string context_path, string group) {
+        string command = sprintf("%y %y --cmake-plan %y %y",
+            qore_bin, source_order_tool, group, context_path);
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        assertEq(0, output.substr(marker + 3).toInt(),
+            "--cmake-plan succeeds: " + output.substr(0, marker));
+        return dirname(context_path);
     }
 
     private write(string path, string body) {
@@ -141,6 +156,50 @@ class AOTSccGenerationTest inherits QUnit::Test {
             push names, basename(member.output);
         }
         return sort(names);
+    }
+
+    testCMakePlan() {
+        TmpDir tmp("qore-aot-cmake-plan-");
+        string context_path = writeContext(tmp.path, (
+            "provider": callRefSource("provider", ()),
+            "consumer": callRefSource("consumer", "provider"),
+        ));
+        string output_dir = cmakePlan(context_path, "PLAN_TEST");
+        string direct_path = output_dir + "/direct-deps.cmake";
+        string build_path = output_dir + "/build-deps.cmake";
+        string scc_path = output_dir + "/scc-map.cmake";
+        string symbols_path = output_dir + "/source-symbols.manifest";
+        foreach string path in ((direct_path, build_path, scc_path, symbols_path,
+                symbols_path + ".cache")) {
+            assertTrue(is_file(path), "--cmake-plan writes " + basename(path));
+        }
+        string direct = ReadOnlyFile::readTextFile(direct_path);
+        string build = ReadOnlyFile::readTextFile(build_path);
+        string scc = ReadOnlyFile::readTextFile(scc_path);
+        string symbols = ReadOnlyFile::readTextFile(symbols_path);
+        assertTrue(direct.find("QORE_QCC_DIRECT_DEPS_PLAN_TEST_1") >= 0,
+            "direct dependency map uses the requested group prefix");
+        assertTrue(build.find("QORE_QCC_BUILD_DEPS_PLAN_TEST_1") >= 0,
+            "build dependency map uses the requested group prefix");
+        assertTrue(scc.find("QORE_QCC_SCC_PLAN_TEST_COUNT \"2\"") >= 0,
+            "SCC map is emitted from the same dependency plan");
+        assertTrue(symbols.find("function\tproviderFunc\t") >= 0,
+            "the plan emits the source symbol manifest");
+
+        # A trailing comment changes the source file but not any configure-time
+        # dependency or symbol contract. The cache must absorb the edit without
+        # perturbing the generated plan files.
+        write(tmp.path + "/src/provider.qc",
+            callRefSource("provider", ()) + "# plan-cache comment\n");
+        cmakePlan(context_path, "PLAN_TEST");
+        assertEq(direct, ReadOnlyFile::readTextFile(direct_path),
+            "comment-only edits preserve the direct map");
+        assertEq(build, ReadOnlyFile::readTextFile(build_path),
+            "comment-only edits preserve the build map");
+        assertEq(scc, ReadOnlyFile::readTextFile(scc_path),
+            "comment-only edits preserve the SCC map");
+        assertEq(symbols, ReadOnlyFile::readTextFile(symbols_path),
+            "comment-only edits preserve the symbol manifest");
     }
 
     testMutualDependencyComponent() {
@@ -377,6 +436,77 @@ class AOTSccGenerationTest inherits QUnit::Test {
         return trim(order(context_path, ("--scc-generation-token", selector)));
     }
 
+    private writeArtifactFamily(string output, string external_dependency) {
+        write(output, "object\n");
+        write(output + ".d", sprintf("%s.stamp: %s\n", output,
+            external_dependency));
+        foreach string suffix in ((".idx.json", ".status.json", ".content.stamp",
+                ".compile-contract.stamp", ".aggregate-contract.stamp", ".stamp",
+                ".source.manifest.json", ".source-parse-defines")) {
+            write(output + suffix, suffix + "\n");
+        }
+    }
+
+    testSourceStalePlanning() {
+        TmpDir tmp("qore-aot-scc-source-stale-");
+        string context_path = writeContext(tmp.path, (
+            "provider": callRefSource("provider", ()),
+            "consumer": callRefSource("consumer", "provider"),
+        ));
+        string external = tmp.path + "/external.qmod";
+        write(external, "module\n");
+        # generationCurrent() deliberately treats an equal depfile-input mtime as
+        # stale; separate the fixture's dependency and success-stamp generations.
+        # Some supported filesystems expose only whole-second mtimes.  Cross a
+        # full timestamp tick so the fixture cannot make the dependency and the
+        # generated success stamp compare equal.
+        sleep(1100ms);
+        foreach string name in (("provider", "consumer")) {
+            writeArtifactFamily(tmp.path + "/qo/" + name + ".qo", external);
+        }
+        assertEq(0, runOrder(context_path, "--scc-publish-all").rc,
+            "the complete fixture publishes every component generation");
+        assertEq("", trim(order(context_path, "--scc-source-stale")),
+            "the complete fixture is source-current");
+        hash<auto> decomposition = componentMap(context_path);
+        hash<auto> consumer_component = componentFor(decomposition, "consumer.qo");
+        assertEq("current\t1\n", order(context_path,
+                ("--scc-compile-plan", consumer_component.scc)),
+            "a locked compile plan stops after one current-generation result");
+
+        write(external, "new module generation\n");
+        list<string> externally_stale = ();
+        foreach string line in (order(context_path, "--scc-stale").split("\n")) {
+            if (trim(line)) {
+                push externally_stale, line;
+            }
+        }
+        assertEq(2, externally_stale.size(),
+            "the authoritative currency check rejects every newer external input");
+        assertEq("", trim(order(context_path, "--scc-source-stale")),
+            "source-only planning leaves external depfile invalidation to CMake");
+        foreach string line in (externally_stale) {
+            assertEq(5, line.split("\t").size(),
+                "a stale-plan row identifies the component and representative member");
+        }
+        string compile_plan = order(context_path,
+            ("--scc-compile-plan", consumer_component.scc));
+        assertTrue(compile_plan.find("current\t0\n") == 0,
+            "a stale locked compile plan reports that compilation is required: "
+                + compile_plan);
+        assertTrue(compile_plan.regex("source-token\\t[0-9a-f]{64}\\n"),
+            "the compile plan carries the publication compare-and-swap token: "
+                + compile_plan);
+        assertTrue(compile_plan.find("preload\t" + tmp.path
+                + "/qo/provider.qo\n") != -1,
+            "the compile plan carries the transitive predecessor preload: "
+                + compile_plan);
+        assertTrue(compile_plan.find("direct\t" + tmp.path
+                + "/qo/provider.qo\n") != -1,
+            "the compile plan carries the direct manifest dependency: "
+                + compile_plan);
+    }
+
     testLargeComponent() {
         TmpDir tmp("qore-aot-scc-large-");
         # 25 members: more than the 16-attempt retry budget the SCC build unit
@@ -411,6 +541,14 @@ class AOTSccGenerationTest inherits QUnit::Test {
         }
         assertEq(sort(outputs), outputs,
             "manifest members are ordered by output path");
+        hash<auto> compile_plan = runOrder(context_path,
+            ("--scc-compile-plan", decomposition.components[0].scc));
+        assertEq(1, compile_plan.rc,
+            "a multi-member component is delegated to the shared batch: "
+                + compile_plan.output);
+        assertTrue(compile_plan.output.find("use the shared batch") != -1,
+            "the invalid standalone plan names the required build path: "
+                + compile_plan.output);
 
         # Every member resolves to the same component.
         foreach hash<auto> member in (manifest.members) {

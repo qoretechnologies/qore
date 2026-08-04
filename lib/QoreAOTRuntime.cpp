@@ -15585,13 +15585,15 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             int registered = 0;
             auto& session = batch->mdes.session(session_idx++);
             std::vector<std::string> registration_errors;
-            auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
-                d.metadata, d.metadata_len);
             uint64_t t0 = time_on ? now_us() : 0;
-            registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
-                tpgm, func_map, registered, &init_func_contexts,
-                session.getTypeResolver(), &registration_errors, debug_metadata,
-                false, nullptr, nullptr, &session);
+            if (!func_map.empty()) {
+                auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
+                    d.metadata, d.metadata_len);
+                registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
+                    tpgm, func_map, registered, &init_func_contexts,
+                    session.getTypeResolver(), &registration_errors, debug_metadata,
+                    false, nullptr, nullptr, &session);
+            }
             if (time_on) {
                 us_register += now_us() - t0;
             }

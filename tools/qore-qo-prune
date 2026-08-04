@@ -16,6 +16,7 @@ const QO_SUFFIXES = (
     ".status.json",
     ".content.stamp",
     ".compile-contract.stamp",
+    ".aggregate-contract.stamp",
     ".stamp",
     ".source.manifest.json",
     ".source-parse-defines",
@@ -30,6 +31,7 @@ const QO_SUFFIXES = (
 const SCRIPT_FILES = (
     ".qcc-batch-bootstrap.stamp": True,
     ".qcc-batch-bootstrap.stamp.d": True,
+    ".qcc-incremental-plan.stamp": True,
     ".qcc-bootstrap.stamp": True,
     ".qcc-generation.map": True,
     ".qcc-generation.stamp": True,
@@ -44,6 +46,7 @@ const SCRIPT_FILES = (
     "source-content.map": True,
     "source-content.stamp": True,
     "source-symbols.manifest": True,
+    "source-symbols.manifest.cache": True,
 );
 const TRANSIENT_DIR_NAMES = (
     ".qcc-batch-bootstrap.stamp.lock": True,
@@ -149,6 +152,16 @@ bool sub is_owned_file_name(string path, string name) {
         return True;
     }
     if (name.startsWith(".qcc-context.source-order-v2.json.") && name.endsWith(".tmp")) {
+        return True;
+    }
+    if (name.startsWith("source-symbols.manifest.cache.") && name.endsWith(".tmp")) {
+        return True;
+    }
+    # qore-qo-batch-bootstrap publishes a hard-link lock and keeps its
+    # process-qualified candidate until EXIT cleanup. SIGKILL or an interrupted
+    # recursive make can leave either regular file behind; both are helper-owned
+    # and must be recoverable at the next configure.
+    if (name =~ /^\.qcc-(batch-)?bootstrap\.stamp\.lock(\.[0-9]+)?$/) {
         return True;
     }
     # emitObjectFile() atomically publishes .qo files through this exact

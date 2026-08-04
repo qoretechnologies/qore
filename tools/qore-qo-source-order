@@ -8,7 +8,12 @@
 %modern
 %requires json
 
+# The cache version, rather than this helper's mtime, is the graph-semantics
+# contract.  Bump it whenever source summaries or graph construction change;
+# command/output and orchestration-only edits must not make every large consumer
+# rescan all of its sources on the next otherwise-no-op build.
 const CACHE_VERSION = 38;
+const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
     "classes",
@@ -996,12 +1001,15 @@ class SourceSymbolManifestGenerator {
     private runScanWorker(Queue work, Queue results, hash<string, bool> true_defines) {
         SourceSymbolManifestGenerator scanner();
         while (True) {
-            hash<string, *string> task = work.get();
+            hash<auto> task = work.get();
             if (!exists task.input) {
                 return;
             }
             try {
-                results.push(("result": scanner.scanSourceSymbols(task.input, true_defines)));
+                results.push((
+                    "index": task.index,
+                    "result": scanner.scanSourceSymbols(task.input, true_defines),
+                ));
             } catch (hash<ExceptionInfo> ex) {
                 results.push(("error": ex));
             }
@@ -1015,12 +1023,15 @@ class SourceSymbolManifestGenerator {
         });
     }
 
-    string generate(string context_path, list<string> inputs) {
-        hash<string, bool> true_defines = contextDefines(context_path);
-        hash<string, hash<string, bool>> classes = {};
-        hash<string, hash<string, bool>> hashdecls = {};
-        hash<string, hash<string, bool>> functions = {};
-        hash<string, hash<string, bool>> globals = {};
+    private list<hash<auto>> scanSourceSymbolResults(list<string> inputs,
+            hash<string, bool> true_defines) {
+        list<hash<auto>> results_by_index = ();
+        for (int index = 0; index < inputs.size(); ++index) {
+            push results_by_index, {};
+        }
+        if (!inputs) {
+            return results_by_index;
+        }
         hash<string, int> timing = ("read": 0, "mask": 0, "condition": 0, "extract": 0);
         int thread_count = ENV.QORE_QO_SOURCE_ORDER_THREADS
             ? ENV.QORE_QO_SOURCE_ORDER_THREADS.toInt()
@@ -1029,8 +1040,8 @@ class SourceSymbolManifestGenerator {
         ThreadPool pool(max_threads: thread_count);
         Queue work();
         Queue results();
-        foreach string input in (inputs) {
-            work.push(("input": input));
+        for (int index = 0; index < inputs.size(); ++index) {
+            work.push(("index": index, "input": inputs[index]));
         }
         for (int index = 0; index < thread_count; ++index) {
             work.push(("input": NOTHING));
@@ -1046,6 +1057,42 @@ class SourceSymbolManifestGenerator {
             foreach string stage in (timing.keys()) {
                 timing{stage} += result.timing{stage};
             }
+            results_by_index[envelope.index] = result;
+        }
+        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
+            stderr.printf("scan timing us: read=%d mask=%d condition=%d extract=%d\n",
+                timing{"read"}, timing{"mask"}, timing{"condition"}, timing{"extract"});
+        }
+        return results_by_index;
+    }
+
+    private bool sourceSymbolResultValid(auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return False;
+        }
+        hash<auto> result = value;
+        if (!exists result.source || result.source.typeCode() != NT_STRING) {
+            return False;
+        }
+        foreach string key in (("classes", "hashdecls", "functions", "globals")) {
+            if (!exists result{key} || result{key}.typeCode() != NT_LIST) {
+                return False;
+            }
+            foreach auto item in (result{key}) {
+                if (item.typeCode() != NT_STRING) {
+                    return False;
+                }
+            }
+        }
+        return True;
+    }
+
+    private string manifestFromResults(list<hash<auto>> results) {
+        hash<string, hash<string, bool>> classes = {};
+        hash<string, hash<string, bool>> hashdecls = {};
+        hash<string, hash<string, bool>> functions = {};
+        hash<string, hash<string, bool>> globals = {};
+        foreach hash<auto> result in (results) {
             foreach string name in (result.classes) {
                 addProvider(\classes, name, result.source);
             }
@@ -1058,10 +1105,6 @@ class SourceSymbolManifestGenerator {
             foreach string name in (result.globals) {
                 addProvider(\globals, name, result.source);
             }
-        }
-        if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
-            stderr.printf("scan timing us: read=%d mask=%d condition=%d extract=%d\n",
-                timing{"read"}, timing{"mask"}, timing{"condition"}, timing{"extract"});
         }
         list<string> lines = ("format=1",);
         foreach hash<auto> kind in (("name": "class", "providers": classes),
@@ -1076,6 +1119,129 @@ class SourceSymbolManifestGenerator {
             }
         }
         return join("\n", lines) + "\n";
+    }
+
+    private string fileDigest(string path) {
+        return digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
+    }
+
+    private hash<auto> fileRecord(string path) {
+        hash<StatInfo> info = hstat(path);
+        return (
+            "path": absoluteNormalized(path),
+            "size": info.size,
+            "sha256": fileDigest(path),
+        );
+    }
+
+    private saveCache(string cache_path, list<string> inputs,
+            hash<string, bool> true_defines, list<hash<auto>> records,
+            list<hash<auto>> results) {
+        hash<auto> data = (
+            "version": SOURCE_SYMBOL_CACHE_VERSION,
+            "inputs": inputs,
+            "parse_defines": sort(true_defines.keys()),
+            "input_records": records,
+            "source_symbols": results,
+        );
+        mkdir(dirname(cache_path), 0777, True);
+        string temporary = sprintf("%s.%d.tmp", cache_path, getpid());
+        try {
+            {
+                File file();
+                file.open2(temporary, O_CREAT | O_TRUNC | O_WRONLY, 0666, "UTF-8");
+                file.write(make_json(data));
+            }
+            rename(temporary, cache_path);
+        } catch (hash<ExceptionInfo> ex) {
+            try { unlink(temporary); } catch (hash<ExceptionInfo> ignored) {}
+        }
+    }
+
+    string generate(string context_path, list<string> inputs) {
+        hash<string, bool> true_defines = contextDefines(context_path);
+        return manifestFromResults(scanSourceSymbolResults(inputs, true_defines));
+    }
+
+    #! Generates a manifest while rescanning only sources changed since the cache.
+    string generateCached(string context_path, list<string> inputs, string cache_path) {
+        hash<string, bool> true_defines = contextDefines(context_path);
+        list<hash<auto>> records = ();
+        list<hash<auto>> results = ();
+        bool cache_valid = False;
+        *hash<StatInfo> cache_info = hstat(cache_path);
+        try {
+            if (exists cache_info) {
+                auto raw = parse_json(ReadOnlyFile::readTextFile(cache_path));
+                hash<auto> data = raw;
+                *hash<StatInfo> context_info = hstat(context_path);
+                if (data.version == SOURCE_SYMBOL_CACHE_VERSION
+                        && data.inputs == inputs
+                        && data.parse_defines == sort(true_defines.keys())
+                        && data.input_records.typeCode() == NT_LIST
+                        && data.input_records.size() == inputs.size()
+                        && data.source_symbols.typeCode() == NT_LIST
+                        && data.source_symbols.size() == inputs.size()
+                        && exists context_info
+                        && context_info.mtime < cache_info.mtime) {
+                    cache_valid = True;
+                    for (int index = 0; index < inputs.size(); ++index) {
+                        auto raw_record = data.input_records[index];
+                        auto raw_result = data.source_symbols[index];
+                        if (raw_record.typeCode() != NT_HASH
+                                || !sourceSymbolResultValid(raw_result)) {
+                            cache_valid = False;
+                            break;
+                        }
+                        hash<auto> record = raw_record;
+                        hash<auto> result = raw_result;
+                        if (record.path != absoluteNormalized(inputs[index])) {
+                            cache_valid = False;
+                            break;
+                        }
+                        push records, record;
+                        push results, result;
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ignored) {
+            cache_valid = False;
+        }
+
+        bool inspected = False;
+        if (cache_valid) {
+            for (int index = 0; index < inputs.size(); ++index) {
+                *hash<StatInfo> info = hstat(inputs[index]);
+                if (!exists info) {
+                    cache_valid = False;
+                    break;
+                }
+                if (records[index].size == info.size && info.mtime < cache_info.mtime) {
+                    continue;
+                }
+                inspected = True;
+                hash<auto> record = fileRecord(inputs[index]);
+                if (record.size != records[index].size
+                        || record.sha256 != records[index].sha256) {
+                    results[index] = scanSourceSymbols(inputs[index], true_defines);
+                }
+                records[index] = record;
+            }
+        }
+        if (!cache_valid) {
+            results = scanSourceSymbolResults(inputs, true_defines);
+            records = ();
+            foreach string input in (inputs) {
+                push records, fileRecord(input);
+            }
+            inspected = True;
+        }
+        if (inspected) {
+            # Replacing the cache advances its observation time even when a
+            # touched source retained identical content.
+            saveCache(cache_path, inputs, true_defines, records, results);
+        }
+        return manifestFromResults(results);
     }
 }
 
@@ -1134,6 +1300,9 @@ class SourceOrderEngine {
     private {
         Regex compile_contract_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+\\.compile-contract\\.stamp)", RE_Global);
+        hash<string, string> contract_digests = {};
+        *string loaded_graph_context;
+        *hash<SourceOrderGraph> loaded_graph;
     }
 
     private list<hash<string, bool>> emptyGraph(int count) {
@@ -1570,10 +1739,7 @@ class SourceOrderEngine {
                 }
             }
             *hash<StatInfo> context_info = hstat(context_path);
-            *hash<StatInfo> script_info = hstat(get_script_path());
-            if (!exists context_info || !exists script_info
-                    || context_info.mtime >= cache_info.mtime
-                    || script_info.mtime >= cache_info.mtime) {
+            if (!exists context_info || context_info.mtime >= cache_info.mtime) {
                 return NOTHING;
             }
 
@@ -1629,8 +1795,12 @@ class SourceOrderEngine {
                 hash<auto> record = fileRecord(inputs[index]);
                 hash<auto> old_record = data.input_records[index];
                 if (record.size != old_record.size || record.sha256 != old_record.sha256) {
-                    summaries[index] = scanner.scanDependencySummary(inputs[index], true_defines);
-                    graph_changed = True;
+                    hash<string, list<string>> summary =
+                        scanner.scanDependencySummary(inputs[index], true_defines);
+                    if (summary != summaries[index]) {
+                        summaries[index] = summary;
+                        graph_changed = True;
+                    }
                 }
                 records[index] = record;
             }
@@ -1749,6 +1919,11 @@ class SourceOrderEngine {
 
     private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
             hash<SourceOrderContext> context_info) {
+        string graph_context = absoluteNormalized(context_path);
+        if (exists loaded_graph_context && exists loaded_graph
+                && loaded_graph_context == graph_context) {
+            return loaded_graph;
+        }
         string cache_file = context_path + ".source-order-v2.json";
         *hash<SourceOrderGraph> cached = loadGraphCache(cache_file, context_path,
             context_info.inputs, context_info.outputs, context_info.parse_defines);
@@ -1768,6 +1943,8 @@ class SourceOrderEngine {
             stderr.printf("depfile contract edges=%d us\n",
                 clock_getmicros_monotonic() - depfile_started);
         }
+        loaded_graph_context = graph_context;
+        loaded_graph = graph;
         return graph;
     }
 
@@ -1884,11 +2061,9 @@ class SourceOrderEngine {
         return sort(order);
     }
 
-    list<list<int>> allDirectOrders(string context_path,
-            hash<SourceOrderContext> context_info) {
-        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+    private list<list<int>> directOrders(hash<SourceOrderGraph> graph, int count) {
         list<list<int>> result = ();
-        for (int target = 0; target < context_info.inputs.size(); ++target) {
+        for (int target = 0; target < count; ++target) {
             list<int> order = ();
             foreach string provider_key in (graph.incoming[target].keys()) {
                 int provider = provider_key.toInt();
@@ -1901,11 +2076,15 @@ class SourceOrderEngine {
         return result;
     }
 
-    list<list<int>> allBuildDirectOrders(string context_path,
+    list<list<int>> allDirectOrders(string context_path,
             hash<SourceOrderContext> context_info) {
-        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        return directOrders(loadOrBuildGraph(context_path, context_info),
+            context_info.inputs.size());
+    }
+
+    private list<list<int>> buildDirectOrders(hash<SourceOrderGraph> graph, int count) {
         hash<string, bool> nodes = {};
-        for (int index = 0; index < context_info.inputs.size(); ++index) {
+        for (int index = 0; index < count; ++index) {
             nodes{string(index)} = True;
         }
         list<int> order = topoSubset(nodes, graph, -1);
@@ -1918,7 +2097,7 @@ class SourceOrderEngine {
         }
 
         list<list<int>> result = ();
-        for (int target = 0; target < context_info.inputs.size(); ++target) {
+        for (int target = 0; target < count; ++target) {
             list<int> providers = ();
             foreach string provider_key in (graph.incoming[target].keys()) {
                 int provider = provider_key.toInt();
@@ -1934,6 +2113,12 @@ class SourceOrderEngine {
             push result, sort(providers);
         }
         return result;
+    }
+
+    list<list<int>> allBuildDirectOrders(string context_path,
+            hash<SourceOrderContext> context_info) {
+        return buildDirectOrders(loadOrBuildGraph(context_path, context_info),
+            context_info.inputs.size());
     }
 
     list<int> prerequisiteOrder(string context_path,
@@ -2158,6 +2343,22 @@ class SourceOrderEngine {
             context_info.outputs);
     }
 
+    #! Computes every configure-time graph view from one cache load.
+    /** Large object groups used to start this helper three times and reload,
+        validate, and augment the same graph independently for the direct-edge,
+        build-edge, and SCC maps.  Keeping the views in one plan also guarantees
+        that CMake cannot observe maps from different source snapshots.
+    */
+    hash<auto> cmakePlan(string context_path,
+            hash<SourceOrderContext> context_info) {
+        hash<SourceOrderGraph> graph = loadOrBuildGraph(context_path, context_info);
+        return (
+            "direct_orders": directOrders(graph, context_info.inputs.size()),
+            "build_direct_orders": buildDirectOrders(graph, context_info.inputs.size()),
+            "components": buildComponents(graph, context_info.outputs),
+        );
+    }
+
     #! Every transitive predecessor component, in dependency order.
     list<int> componentPrerequisites(hash<SourceOrderComponents> components,
             int component) {
@@ -2211,13 +2412,20 @@ class SourceOrderEngine {
         rebuilding every transitive consumer.
     */
     private string memberContractDigest(string output) {
+        *string cached = contract_digests{output};
+        if (exists cached) {
+            return cached;
+        }
+        string result = "";
         foreach string path in ((output + ".compile-contract.stamp",
                 output + ".content.stamp")) {
             if (is_file(path)) {
-                return digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
+                result = digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
+                break;
             }
         }
-        return "";
+        contract_digests{output} = result;
+        return result;
     }
 
     #! An identity over only the sources of \a component's own members.
@@ -2338,6 +2546,7 @@ class SourceOrderEngine {
             output + ".status.json",
             output + ".content.stamp",
             output + ".compile-contract.stamp",
+            output + ".aggregate-contract.stamp",
             output + ".stamp",
             output + ".source.manifest.json",
             output + ".source-parse-defines",
@@ -2435,9 +2644,10 @@ class SourceOrderEngine {
         remaining checks confirm the publication is complete and that no
         external build input has moved since it was published.
     */
-    bool generationCurrent(hash<SourceOrderContext> context_info,
+    private bool generationCurrentImpl(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
-            *string bootstrap_stamp) {
+            *string bootstrap_stamp, reference<*hash<string, bool>> covered,
+            bool check_external_dependencies) {
         try {
             *hash<auto> record = readGenerationRecord(
                 generationRecordPath(context_info, context_path, components, component));
@@ -2455,7 +2665,6 @@ class SourceOrderEngine {
                     return False;
                 }
             }
-            *hash<string, bool> covered;
             foreach int member in (components.members[component]) {
                 string output = context_info.outputs[member];
                 foreach string path in (memberArtifacts(output)) {
@@ -2467,11 +2676,13 @@ class SourceOrderEngine {
                 if (exists bootstrap_info && bootstrap_info.mtime > stamp_time) {
                     return False;
                 }
-                foreach string dependency in (externalDepfileInputs(output,
-                        context_info, \covered)) {
-                    *hash<StatInfo> info = hstat(dependency);
-                    if (!exists info || info.mtime >= stamp_time) {
-                        return False;
+                if (check_external_dependencies) {
+                    foreach string dependency in (externalDepfileInputs(output,
+                            context_info, \covered)) {
+                        *hash<StatInfo> info = hstat(dependency);
+                        if (!exists info || info.mtime >= stamp_time) {
+                            return False;
+                        }
                     }
                 }
             }
@@ -2479,6 +2690,55 @@ class SourceOrderEngine {
             return False;
         }
         return True;
+    }
+
+    bool generationCurrent(hash<SourceOrderContext> context_info,
+            string context_path, hash<SourceOrderComponents> components, int component,
+            *string bootstrap_stamp) {
+        *hash<string, bool> covered;
+        return generationCurrentImpl(context_info, context_path, components, component,
+            bootstrap_stamp, \covered, True);
+    }
+
+    #! True when every component is current, sharing the group-wide covered-path index.
+    /** externalDepfileInputs() canonicalizes every artifact path in the group the
+        first time it is called.  Recreating that index for each component makes
+        a whole-group currency check quadratic in the source count. */
+    bool allGenerationsCurrent(hash<SourceOrderContext> context_info,
+            string context_path, hash<SourceOrderComponents> components,
+            *string bootstrap_stamp) {
+        *hash<string, bool> covered;
+        for (int component = 0; component < components.members.size(); ++component) {
+            if (!generationCurrentImpl(context_info, context_path, components,
+                    component, bootstrap_stamp, \covered, True)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Stale components in dependency order, sharing the group-wide covered-path index.
+    /** This is the planning counterpart to allGenerationsCurrent().  A large
+        incremental build must decide once, before per-object recipes occupy the
+        build tool's worker slots, whether the stale closure is small enough for
+        individual compiles or should use the shared-parse batch.  Returning the
+        components in condensation-DAG order also lets a small plan compile every
+        predecessor before its consumers without recursively traversing the same
+        closure from every member recipe.
+    */
+    list<int> staleGenerations(hash<SourceOrderContext> context_info,
+            string context_path, hash<SourceOrderComponents> components,
+            *string bootstrap_stamp, bool check_external_dependencies) {
+        *hash<string, bool> covered;
+        list<int> stale = ();
+        foreach int component in (components.topological_order) {
+            if (!generationCurrentImpl(context_info, context_path, components,
+                    component, bootstrap_stamp, \covered,
+                    check_external_dependencies)) {
+                push stale, component;
+            }
+        }
+        return stale;
     }
 
     #! Publishes the generation record for \a component; the build's commit point.
@@ -2590,13 +2850,16 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --build-direct-map-cmake PREFIX CONTEXT\n"
         "       %s --source-symbol-manifest FILE CONTEXT\n"
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
+        "       %s --cmake-plan GROUP CONTEXT\n"
         "       %s --scc-generation-map FILE CONTEXT\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
-        "           |--scc-current-all] CONTEXT\n"
+        "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
+        "           [--batch-stamp STAMP] CONTEXT\n"
         "       %s --scc-for CONTEXT TARGET_OUTPUT\n"
         "       %s [--scc-members|--scc-prerequisites|--scc-preload\n"
         "           |--scc-generation|--scc-generation-token|--scc-source-token\n"
-        "           |--scc-record|--scc-lock] CONTEXT SCC\n"
+        "           |--scc-record|--scc-lock|--scc-compile-plan]\n"
+        "           [--batch-stamp STAMP] CONTEXT SCC\n"
         "       %s --scc-current [--batch-stamp STAMP] CONTEXT SCC\n"
         "       %s --scc-publish [--expect TOKEN] CONTEXT SCC\n"
         "\n"
@@ -2604,7 +2867,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "its index or by its key. --scc-publish exits 75 when the member sources\n"
         "moved away from the --expect source token, which means the compiled\n"
         "artifacts are not publishable.\n",
-        name, name, name, name, name, name, name, name, name, name, name, name);
+        name, name, name, name, name, name, name, name, name, name, name, name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -2625,6 +2888,21 @@ int sub findComponent(hash<SourceOrderComponents> components, string selector) {
         }
     }
     return -1;
+}
+
+#! Emits one dependency map as CMake variables.
+string sub dependencyMapCMake(list<list<int>> orders, list<string> outputs,
+        string prefix) {
+    list<string> lines = ();
+    for (int target = 0; target < orders.size(); ++target) {
+        list<string> dependencies = ();
+        foreach int provider in (orders[target]) {
+            push dependencies, cmakeQuote(outputs[provider]);
+        }
+        push lines, sprintf("set(%s_%d \"%s\")", prefix, target,
+            join(";", dependencies));
+    }
+    return join("\n", lines) + "\n";
 }
 
 #! Emits the component decomposition as CMake variables.
@@ -2755,6 +3033,7 @@ int sub main() {
     bool direct = False;
     bool build_map = False;
     bool artifact_current = False;
+    bool cmake_plan = False;
     *string component_command;
     *string component_map_prefix;
     *string component_generation_map;
@@ -2774,13 +3053,17 @@ int sub main() {
             build_map = True;
         } else if (arg == "--artifact-current") {
             artifact_current = True;
+        } else if (arg == "--cmake-plan") {
+            cmake_plan = True;
         } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
                 || arg == "--scc-prerequisites" || arg == "--scc-generation"
                 || arg == "--scc-generation-token" || arg == "--scc-generation-dir"
                 || arg == "--scc-current" || arg == "--scc-publish"
                 || arg == "--scc-publish-all" || arg == "--scc-record"
                 || arg == "--scc-lock" || arg == "--scc-preload"
-                || arg == "--scc-current-all" || arg == "--scc-source-token") {
+                || arg == "--scc-current-all" || arg == "--scc-source-token"
+                || arg == "--scc-stale" || arg == "--scc-source-stale"
+                || arg == "--scc-compile-plan") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -2843,10 +3126,39 @@ int sub main() {
     if (!positional) {
         usage("context is required");
     }
-    string context_path = positional[0];
+    if (cmake_plan && positional.size() != 2) {
+        usage("--cmake-plan requires a group and a context argument");
+    }
+    string context_path = cmake_plan ? positional[1] : positional[0];
     hash<SourceOrderContext> context_info = parseContext(context_path);
     if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
         stderr.printf("main argument+context=%d us\n", clock_getmicros_monotonic() - started);
+    }
+
+    if (cmake_plan) {
+        string group = positional[0];
+        if (group !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            usage(sprintf("invalid CMake group identifier: %y", group));
+        }
+        SourceOrderEngine engine();
+        hash<auto> plan = engine.cmakePlan(context_path, context_info);
+        hash<SourceOrderComponents> components = plan.components;
+        string output_dir = dirname(context_path);
+        atomicWriteIfChanged(output_dir + DirSep + "direct-deps.cmake",
+            dependencyMapCMake(plan.direct_orders, context_info.outputs,
+                "QORE_QCC_DIRECT_DEPS_" + group));
+        atomicWriteIfChanged(output_dir + DirSep + "build-deps.cmake",
+            dependencyMapCMake(plan.build_direct_orders, context_info.outputs,
+                "QORE_QCC_BUILD_DEPS_" + group));
+        atomicWriteIfChanged(output_dir + DirSep + "scc-map.cmake",
+            componentMapCMake(engine, components, context_info, context_path,
+                "QORE_QCC_SCC_" + group));
+        string symbols = output_dir + DirSep + "source-symbols.manifest";
+        SourceSymbolManifestGenerator generator();
+        atomicWriteIfChanged(symbols,
+            generator.generateCached(context_path, context_info.inputs,
+                symbols + ".cache"));
+        return 0;
     }
 
     if (exists source_symbol_manifest) {
@@ -2858,7 +3170,8 @@ int sub main() {
             ? (ENV.QORE_QO_SOURCE_ORDER_INPUT,)
             : context_info.inputs;
         atomicWriteIfChanged(source_symbol_manifest,
-            generator.generate(context_path, inputs));
+            generator.generateCached(context_path, inputs,
+                source_symbol_manifest + ".cache"));
         return 0;
     }
 
@@ -2889,7 +3202,8 @@ int sub main() {
             engine.sourceComponents(context_path, context_info);
         if (component_command == "map" || component_command == "publish-all"
                 || component_command == "generation-dir"
-                || component_command == "current-all") {
+                || component_command == "current-all" || component_command == "stale"
+                || component_command == "source-stale") {
             if (positional.size() != 1) {
                 usage(sprintf("--scc-%s accepts only a context argument",
                     component_command));
@@ -2906,12 +3220,25 @@ int sub main() {
                     # One invocation for the whole group: a per-output probe
                     # would reload and rescan the graph once per source, which
                     # for a large group costs more than the compile it guards.
-                    for (int component = 0; component < components.members.size();
-                            ++component) {
-                        if (!engine.generationCurrent(context_info, context_path,
-                                components, component, batch_bootstrap_stamp)) {
-                            return 1;
-                        }
+                    return engine.allGenerationsCurrent(context_info, context_path,
+                        components, batch_bootstrap_stamp) ? 0 : 1;
+                case "stale":
+                case "source-stale":
+                    # One group-wide currency pass.  Each row contains enough
+                    # information for the coordinator to build one representative
+                    # member without another graph scan.  The source-only mode is
+                    # used behind CMake's dependency barrier: CMake and the batch
+                    # target already track toolchain/module/stub depfiles, so
+                    # reparsing every member depfile here would duplicate that
+                    # work on every one-source incremental build.
+                    foreach int component in (engine.staleGenerations(context_info,
+                            context_path, components, batch_bootstrap_stamp,
+                            component_command == "stale")) {
+                        int member = components.members[component][0];
+                        printf("%d\t%s\t%d\t%s\t%s\n", component,
+                            components.component_keys[component],
+                            components.members[component].size(),
+                            context_info.inputs[member], context_info.outputs[member]);
                     }
                     return 0;
                 case "publish-all":
@@ -3005,6 +3332,37 @@ int sub main() {
                 printf("%s\n", engine.generationLockPath(context_info, context_path,
                     components, component));
                 return 0;
+            case "compile-plan":
+                # One locked standalone-compile snapshot replaces separate
+                # current/token/preload/direct queries.  Every one of those
+                # queries otherwise reloads the same large graph and rescans
+                # every member depfile in a fresh Qore process.
+                if (components.members[component].size() != 1) {
+                    stderr.printf("%s: component %s has %d members; use the shared batch\n",
+                        get_script_name(), components.component_keys[component],
+                        components.members[component].size());
+                    return 1;
+                }
+                if (engine.generationCurrent(context_info, context_path, components,
+                        component, batch_bootstrap_stamp)) {
+                    printf("current\t1\n");
+                    return 0;
+                }
+                printf("current\t0\n");
+                printf("source-token\t%s\n",
+                    engine.componentSourceToken(components, context_info, component));
+                foreach int prerequisite in (
+                        engine.componentPrerequisites(components, component)) {
+                    foreach int node in (components.members[prerequisite]) {
+                        printf("preload\t%s\n", context_info.outputs[node]);
+                    }
+                }
+                int member = components.members[component][0];
+                foreach int provider in (
+                        engine.directOrder(context_path, context_info, member)) {
+                    printf("direct\t%s\n", context_info.outputs[provider]);
+                }
+                return 0;
             case "current":
                 return engine.generationCurrent(context_info, context_path, components,
                     component, batch_bootstrap_stamp) ? 0 : 1;
@@ -3040,14 +3398,7 @@ int sub main() {
                 clock_getmicros_monotonic() - order_started);
         }
         int output_started = clock_getmicros_monotonic();
-        for (int target = 0; target < orders.size(); ++target) {
-            list<string> dependencies = ();
-            foreach int provider in (orders[target]) {
-                push dependencies, cmakeQuote(context_info.outputs[provider]);
-            }
-            printf("set(%s_%d \"%s\")\n", map_prefix, target,
-                join(";", dependencies));
-        }
+        printf("%s", dependencyMapCMake(orders, context_info.outputs, map_prefix));
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
             stderr.printf("main direct output=%d us\n",
                 clock_getmicros_monotonic() - output_started);

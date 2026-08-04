@@ -21623,8 +21623,10 @@ public:
             return 0;
         }
         int fl = fcntl(rfd, F_GETFL);
+        bool restore_flags = false;
         if (fl != -1) {
-            fcntl(rfd, F_SETFL, fl | O_NONBLOCK);
+            restore_flags = !(fl & O_NONBLOCK)
+                && fcntl(rfd, F_SETFL, fl | O_NONBLOCK) != -1;
         }
         int got = 0;
         while (got < max) {
@@ -21636,6 +21638,14 @@ public:
             } else {
                 break;  // EAGAIN / empty -> no more tokens available right now
             }
+        }
+        // With the inherited-fd jobserver used by older GNU make (including
+        // Apple's make 3.81), file-status flags belong to the shared open-file
+        // description.  Leaving O_NONBLOCK set here would therefore also
+        // change make's copy of the pipe descriptor after qcc returns from
+        // this poll.  Keep the nonblocking window local to token acquisition.
+        if (restore_flags) {
+            fcntl(rfd, F_SETFL, fl);
         }
         return got;
     }
@@ -26790,15 +26800,16 @@ static uint64_t qoreAotAvailableMemoryBytes() {
     return 0;
 }
 
-// Choose the AOT batch worker-thread count.  An explicit QORE_AOT_BATCH_JOBS
-// always wins (1 = serial, identical to the pre-parallel path).  Otherwise the
-// default is hardware concurrency, capped at the measured throughput knee and
-// then by available memory so a large parallel -O3 codegen run cannot exhaust
-// RAM: each worker runs an independent LLVM -O3 backend on top of the shared
-// parsed program, and on a big core file set that private working set is on the
-// order of ~1 GB per worker. More than 12 concurrent -O3 modules increases
-// allocator/cache contention on large and medium batches without improving
-// throughput; QORE_AOT_BATCH_JOBS remains available for host-specific tuning.
+// Choose the maximum AOT batch worker-thread count. An explicit
+// QORE_AOT_BATCH_JOBS controls the requested cap (1 = serial, identical to the
+// pre-parallel path). Otherwise the default is hardware concurrency, capped at
+// the measured throughput knee and then by available memory so a large -O3 run
+// cannot exhaust RAM: each worker runs an independent LLVM backend on top of
+// the shared parsed program, and on a big core file set that private working
+// set is on the order of ~1 GB per worker. More than 12 concurrent modules
+// increases allocator/cache contention without improving throughput. The
+// caller narrows this maximum further through GNU make's jobserver so several
+// qcc groups cannot each create a full-sized pool during the same build.
 //
 // @param num_entries number of files in the batch (final clamp; never spin up
 //        more workers than files)
@@ -27247,11 +27258,15 @@ bool QoreAOT::compileScriptFilesBatch(
     // the committed program.  So the emits run on a worker-thread pool to
     // parallelize the otherwise single-threaded -O3 LLVM backend, which
     // dominates clean-build time.  The shared parse/commit above stays
-    // single-threaded.  The worker count defaults to hardware concurrency
-    // capped by available memory (qoreAotChooseBatchJobs); QORE_AOT_BATCH_JOBS
-    // overrides it (1 = serial, identical to the old path).
+    // single-threaded. The requested worker count defaults to hardware
+    // concurrency capped by available memory (qoreAotChooseBatchJobs), then
+    // GNU make's jobserver supplies the actually spare build slots across all
+    // concurrently running qcc groups. QORE_AOT_BATCH_JOBS overrides the
+    // requested cap (1 = serial, identical to the old path).
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
-    unsigned jobs = qoreAotChooseBatchJobs(entries.size());
+    unsigned requested_jobs = qoreAotChooseBatchJobs(entries.size());
+    JobserverClient batch_jobserver;
+    unsigned jobs = batch_jobserver.available() ? 1u : requested_jobs;
     AOTBatchEmitTiming emit_timing;
 
     // Long source files generally produce the largest LLVM modules. Dispatch
@@ -27396,8 +27411,51 @@ bool QoreAOT::compileScriptFilesBatch(
         }
     };
 
-    if (jobs == 1) {
+    if (requested_jobs == 1) {
         worker();
+    } else if (batch_jobserver.available()) {
+        // A one-shot nonblocking jobserver read can permanently starve the
+        // long-pole batch: QORUS_CORE_MAIN commonly finishes parsing while
+        // several short groups hold every spare token, then those groups exit
+        // while core continues serially. Keep one worker productive under the
+        // process's implicit make slot and admit new workers whenever tokens
+        // become available. This also avoids blocking a make slot in a waiter;
+        // the coordinator polls only while this qcc has unclaimed file emits.
+        std::vector<std::thread> pool;
+        pool.reserve(requested_jobs);
+        pool.emplace_back(worker);
+        unsigned wait_iterations = 0;
+        while (!stop.load() && jobs < requested_jobs) {
+            if (++wait_iterations == 100) {
+                wait_iterations = 0;
+                if (qore_check_cancel(nullptr, "AOT batch jobserver wait")) {
+                    std::lock_guard<std::mutex> l(err_mutex);
+                    if (first_error.empty()) {
+                        first_error = "cancelled while waiting for AOT batch jobserver slots";
+                    }
+                    stop.store(true);
+                    break;
+                }
+            }
+            size_t claimed = next_work.load();
+            if (claimed >= work_order.size()) {
+                break;
+            }
+            unsigned remaining = static_cast<unsigned>(std::min<size_t>(
+                work_order.size() - claimed, requested_jobs - jobs));
+            int acquired = batch_jobserver.acquire(static_cast<int>(remaining));
+            if (acquired <= 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+            for (int i = 0; i < acquired; ++i) {
+                pool.emplace_back(worker);
+            }
+            jobs += static_cast<unsigned>(acquired);
+        }
+        for (auto& th : pool) {
+            th.join();
+        }
     } else {
         std::vector<std::thread> pool;
         pool.reserve(jobs);
@@ -27426,12 +27484,14 @@ bool QoreAOT::compileScriptFilesBatch(
             return std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
         };
         fprintf(stderr,
-            "AOT-BATCH-TIMING: sources=%zu jobs=%u input=%lldms setup=%lldms"
+            "AOT-BATCH-TIMING: sources=%zu jobs=%u requested-jobs=%u jobserver=%s"
+            " input=%lldms setup=%lldms"
             " parse=%lldms aggregate=%lldms deps=%lldms discovery=%lldms constants=%lldms"
             " stmt-locs=%lldms"
             " emit-wall=%lldms lowering-cpu=%llums metadata-cpu=%llums"
             " glue-cpu=%llums object-cpu=%llums total=%lldms\n",
-            entries.size(), jobs,
+            entries.size(), jobs, requested_jobs,
+            batch_jobserver.available() ? "yes" : "no",
             static_cast<long long>(ms(batch_start, input_done)),
             static_cast<long long>(ms(input_done, setup_done)),
             static_cast<long long>(ms(setup_done, parse_done)),
@@ -27623,20 +27683,29 @@ bool QoreAOT::compileScriptAggregate(
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
-    std::string fatal_lowering_error;
-    compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
-        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
-        failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
-        /*compile_module=*/nullptr, /*compile_file=*/nullptr,
-        /*metadata_only=*/true, nullptr, nullptr, &fatal_lowering_error,
-        nullptr, &target_set);
-    if (!fatal_lowering_error.empty()) {
-        error = fatal_lowering_error;
-        return false;
-    }
+    // A native-register aggregate deserializes declarations, then delegates
+    // every executable body, slot map, init descriptor, statement location,
+    // and debug IR to its linked per-source object. Lowering the whole program
+    // merely to create unused external LLVM declarations and slot identities
+    // duplicated the most expensive serial phase of a clean group build.
+    const bool declaration_only = register_native_inputs && !include_source;
+    if (!declaration_only) {
+        std::string fatal_lowering_error;
+        compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+            failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+            /*compile_module=*/nullptr, /*compile_file=*/nullptr,
+            /*metadata_only=*/true, nullptr, nullptr, &fatal_lowering_error,
+            nullptr, &target_set);
+        if (!fatal_lowering_error.empty()) {
+            error = fatal_lowering_error;
+            return false;
+        }
 
-    reportAOTCompileStats("script aggregate (metadata-only)",
-        compiled_count, total_funcs, failed_count, compiled_funcs, target_triple, true);
+        reportAOTCompileStats("script aggregate (metadata-only)",
+            compiled_count, total_funcs, failed_count, compiled_funcs,
+            target_triple, true);
+    }
 
     std::vector<uint8_t> metadata;
     {
@@ -27684,77 +27753,100 @@ bool QoreAOT::compileScriptAggregate(
             return false;
         }
 
-        std::vector<AOTCompiledFuncWithSlots> func_slots;
-        size_t func_i = 0;
-        for (auto& cf : compiled_funcs) {
-            if (func_i && !(func_i % 100) && qore_check_cancel(nullptr, "AOT aggregate slot-map collection")) {
-                error = "operation cancelled during AOT aggregate slot-map collection";
+        // A native-register aggregate owns declarations only. Each linked
+        // per-source object immediately follows aggregate deserialization with
+        // qore_aot_script_register_native(), which consumes that object's own
+        // slot maps, init descriptors, statement locations, and debug IR. The
+        // aggregate register deliberately passes an empty native function table,
+        // so serializing a second copy of those sections here can never be used
+        // for registration. In Qorus that redundant copy dominates both the
+        // aggregate object (hundreds of MiB) and every interim aggregate rebuild.
+        // Keep the complete legacy payload for standalone aggregates and for
+        // explicit embedded-source output.
+        if (!declaration_only) {
+            std::vector<AOTCompiledFuncWithSlots> func_slots;
+            size_t func_i = 0;
+            for (auto& cf : compiled_funcs) {
+                if (func_i && !(func_i % 100) && qore_check_cancel(nullptr, "AOT aggregate slot-map collection")) {
+                    error = "operation cancelled during AOT aggregate slot-map collection";
+                    return false;
+                }
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cf.name;
+                fws.num_locals = cf.num_locals;
+                fws.num_globals = cf.num_globals;
+                fws.num_exprs = cf.num_exprs;
+                fws.num_stmts = cf.num_stmts;
+                fws.num_regex_cases = cf.num_regex_cases;
+                fws.num_lv_path_insts = cf.num_lv_path_insts;
+                fws.slot_ids = cf.slot_ids;
+                for (auto& hir : cf.handler_irs) {
+                    fws.handler_irs.push_back(hir);
+                }
+                fws.aot_locs = cf.aot_locs;
+                fws.llvm_symbol = cf.llvm_symbol;
+                fws.debug_ir = cf.debug_ir.get();
+                func_slots.push_back(std::move(fws));
+                ++func_i;
+            }
+            size_t init_slot_i = 0;
+            for (auto& cif : compiled_init_funcs) {
+                if (init_slot_i && !(init_slot_i % 100)
+                        && qore_check_cancel(nullptr, "AOT aggregate init slot-map collection")) {
+                    error = "operation cancelled during AOT aggregate init slot-map collection";
+                    return false;
+                }
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cif.name;
+                fws.num_locals = cif.num_locals;
+                fws.num_globals = cif.num_globals;
+                fws.num_exprs = cif.num_exprs;
+                fws.num_stmts = cif.num_stmts;
+                fws.num_regex_cases = cif.num_regex_cases;
+                fws.num_lv_path_insts = cif.num_lv_path_insts;
+                fws.slot_ids = cif.slot_ids;
+                setAOTInitFuncConstantExclusions(fws, cif);
+                fws.llvm_symbol = cif.llvm_symbol;
+                func_slots.push_back(std::move(fws));
+                ++init_slot_i;
+            }
+            if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, nullptr, &target_set)) {
                 return false;
             }
-            AOTCompiledFuncWithSlots fws;
-            fws.name = cf.name;
-            fws.num_locals = cf.num_locals;
-            fws.num_globals = cf.num_globals;
-            fws.num_exprs = cf.num_exprs;
-            fws.num_stmts = cf.num_stmts;
-            fws.num_regex_cases = cf.num_regex_cases;
-            fws.num_lv_path_insts = cf.num_lv_path_insts;
-            fws.slot_ids = cf.slot_ids;
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
-            fws.aot_locs = cf.aot_locs;
-            fws.llvm_symbol = cf.llvm_symbol;
-            fws.debug_ir = cf.debug_ir.get();
-            func_slots.push_back(std::move(fws));
-            ++func_i;
-        }
-        size_t init_slot_i = 0;
-        for (auto& cif : compiled_init_funcs) {
-            if (init_slot_i && !(init_slot_i % 100)
-                    && qore_check_cancel(nullptr, "AOT aggregate init slot-map collection")) {
-                error = "operation cancelled during AOT aggregate init slot-map collection";
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
-            AOTCompiledFuncWithSlots fws;
-            fws.name = cif.name;
-            fws.num_locals = cif.num_locals;
-            fws.num_globals = cif.num_globals;
-            fws.num_exprs = cif.num_exprs;
-            fws.num_stmts = cif.num_stmts;
-            fws.num_regex_cases = cif.num_regex_cases;
-            fws.num_lv_path_insts = cif.num_lv_path_insts;
-            fws.slot_ids = cif.slot_ids;
-            setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
-            func_slots.push_back(std::move(fws));
-            ++init_slot_i;
-        }
-        if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, nullptr, &target_set)) {
-            return false;
-        }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
-            return false;
-        }
-        // Script aggregates provide declaration/dependency metadata only.
-        // Native function ownership stays with each per-file .qo because its
-        // native body and slot map were compiled from the same source context.
-        const std::vector<AOTCompiledFunc> no_native_funcs;
-        const std::vector<AOTCompiledInitFunc> no_native_init_funcs;
-        if (!appendSymbolIndexSection(writer, root_ns, no_native_funcs, no_native_init_funcs, error, &func_slots,
-                nullptr, nullptr, nullptr, &target_set)) {
-            return false;
-        }
-        if (!compiled_init_funcs.empty()) {
-            serializeInitFuncs(writer, compiled_init_funcs);
-        }
-        {
-            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+            // Script aggregates provide declaration/dependency metadata only.
+            // Native function ownership stays with each per-file .qo because its
+            // native body and slot map were compiled from the same source context.
+            const std::vector<AOTCompiledFunc> no_native_funcs;
+            const std::vector<AOTCompiledInitFunc> no_native_init_funcs;
+            if (!appendSymbolIndexSection(writer, root_ns, no_native_funcs, no_native_init_funcs, error, &func_slots,
+                    nullptr, nullptr, nullptr, &target_set)) {
                 return false;
             }
-            if (include_source) {
-                serializeEmbeddedSource(writer, func_slots,
-                    combined_source.c_str(), (int)combined_source.size());
+            if (!compiled_init_funcs.empty()) {
+                serializeInitFuncs(writer, compiled_init_funcs);
+            }
+            {
+                if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                    return false;
+                }
+                if (include_source) {
+                    serializeEmbeddedSource(writer, func_slots,
+                        combined_source.c_str(), (int)combined_source.size());
+                }
+            }
+        } else {
+            // Keep an empty slot-map family for runtimes predating the
+            // declaration-only aggregate optimization. Those runtimes enumerate
+            // SLOT_MAPS even when the aggregate passes a 0-entry native table;
+            // an empty section preserves wire compatibility without duplicating
+            // any per-function payload.
+            const std::vector<AOTCompiledFuncWithSlots> no_func_slots;
+            if (!serializeSlotMaps(writer, no_func_slots,
+                    &const_reverse_map, error)) {
+                return false;
             }
         }
 

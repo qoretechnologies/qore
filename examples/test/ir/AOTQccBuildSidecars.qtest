@@ -58,6 +58,7 @@ class AOTQccBuildSidecarsTest inherits QUnit::Test {
         string success_stamp = qo + ".success.stamp";
         string content_stamp = qo + ".content.stamp";
         string compile_contract_stamp = qo + ".compile-contract.stamp";
+        string aggregate_contract_stamp = qo + ".aggregate-contract.stamp";
 
         write(src, "%new-style
 %define QccSidecarContractDefine 1
@@ -76,10 +77,10 @@ public class QccSidecarSingle {
             "%s %s -v -c --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
-            " --compile-contract-stamp=%s"
+            " --compile-contract-stamp=%s --aggregate-contract-stamp=%s"
             " -o %s %s",
             env, qcc_bin, dep, success_stamp, idx, manifest, status, success_stamp,
-            content_stamp, compile_contract_stamp, qo, src);
+            content_stamp, compile_contract_stamp, aggregate_contract_stamp, qo, src);
         string first = run(cmd);
         assertTrue(is_file(qo), "compiled single source .qo: " + first);
         assertTrue(is_file(dep), "wrote single source depfile: " + first);
@@ -90,6 +91,8 @@ public class QccSidecarSingle {
         assertTrue(is_file(content_stamp), "touched single source content stamp: " + first);
         assertTrue(is_file(compile_contract_stamp),
             "wrote single source compile-contract stamp: " + first);
+        assertTrue(is_file(aggregate_contract_stamp),
+            "wrote single source aggregate-contract stamp: " + first);
 
         string single_dep_text = File::readTextFile(dep);
         assertTrue(single_dep_text.find(success_stamp + ":") == 0,
@@ -101,6 +104,8 @@ public class QccSidecarSingle {
         assertContains(index_json, "QccSidecarSingle::C", "index JSON has class constant");
         assertContains(index_json, "\"compile_contract_hash\"",
             "index JSON has semantic compile-contract hash");
+        assertContains(index_json, "\"aggregate_contract_hash\"",
+            "index JSON has aggregate-visible metadata hash");
         string compile_contract = File::readTextFile(compile_contract_stamp);
         assertContains(compile_contract, "native\t",
             "compile contract includes native capability rows");
@@ -113,10 +118,14 @@ public class QccSidecarSingle {
         string manifest_json = File::readTextFile(manifest);
         assertContains(manifest_json, "\"kind\": \"script-file\"", "manifest records mode");
         assertContains(manifest_json, "\"inputs\"", "manifest records inputs");
+        assertContains(manifest_json, aggregate_contract_stamp,
+            "manifest records aggregate-contract sidecar");
         string status_json = File::readTextFile(status);
         assertContains(status_json, "\"built\": true", "status records initial build");
         assertContains(status_json, "\"skipped\": false", "status records initial non-skip");
         assertContains(status_json, "\"output_changed\": true", "status records initial content change");
+        assertContains(status_json, aggregate_contract_stamp,
+            "status records aggregate-contract sidecar");
 
         string second = run(cmd);
         assertContains(second, "manifest current, skipped script-file",
@@ -128,27 +137,72 @@ public class QccSidecarSingle {
 
         unlink(content_stamp);
         unlink(compile_contract_stamp);
+        unlink(aggregate_contract_stamp);
         string third = run(cmd);
         assertContains(third, "manifest current, skipped script-file",
             "manifest skip creates a missing content-stamp baseline");
         assertTrue(is_file(content_stamp), "manifest skip recreated missing content stamp: " + third);
         assertTrue(is_file(compile_contract_stamp),
             "manifest skip recreated missing compile-contract stamp: " + third);
+        assertTrue(is_file(aggregate_contract_stamp),
+            "manifest skip recreated missing aggregate-contract stamp: " + third);
         assertContains(File::readTextFile(status), "\"output_changed\": false",
             "status still records no content change when baseline stamp is recreated");
 
         string contract_before = File::readTextFile(compile_contract_stamp);
+        string aggregate_contract_before = File::readTextFile(aggregate_contract_stamp);
         write(src, File::readTextFile(src) + "# semantic no-op\n");
         string comment_rebuild = run(cmd);
         assertEq(contract_before, File::readTextFile(compile_contract_stamp),
             "source-only edit preserves compile contract: " + comment_rebuild);
+        assertEq(aggregate_contract_before, File::readTextFile(aggregate_contract_stamp),
+            "trailing comment preserves aggregate contract: " + comment_rebuild);
+
+        string shifted = "# shift all source locations\n" + File::readTextFile(src);
+        write(src, shifted);
+        string location_rebuild = run(cmd);
+        assertEq(contract_before, File::readTextFile(compile_contract_stamp),
+            "source-location edit preserves compile contract: " + location_rebuild);
+        assertNeq(aggregate_contract_before,
+            File::readTextFile(aggregate_contract_stamp),
+            "source-location edit changes aggregate declaration locations: "
+                + location_rebuild);
+        string location_aggregate_contract =
+            File::readTextFile(aggregate_contract_stamp);
+
+        string body_changed = File::readTextFile(src);
+        body_changed =~ s/return C \+ 1/return C + 2/;
+        write(src, body_changed);
+        string body_rebuild = run(cmd);
+        assertNeq(contract_before, File::readTextFile(compile_contract_stamp),
+            "native body edit changes compile contract: " + body_rebuild);
+        assertEq(location_aggregate_contract,
+            File::readTextFile(aggregate_contract_stamp),
+            "native body edit preserves declaration-only aggregate contract: "
+                + body_rebuild);
+
+        string ranged_body_changed = File::readTextFile(src);
+        ranged_body_changed =~ s/        return C \+ 2;/        int ignored = 0;\n        return C + 2;/;
+        write(src, ranged_body_changed);
+        string aggregate_contract_before_body_range =
+            File::readTextFile(aggregate_contract_stamp);
+        string body_range_rebuild = run(cmd);
+        assertNeq(aggregate_contract_before_body_range,
+            File::readTextFile(aggregate_contract_stamp),
+            "body line-count edit changes aggregate entry location range: "
+                + body_range_rebuild);
 
         string changed = File::readTextFile(src);
         changed =~ s/const C = 41/const C = 42/;
         write(src, changed);
+        string aggregate_contract_before_semantic =
+            File::readTextFile(aggregate_contract_stamp);
         string semantic_rebuild = run(cmd);
         assertNeq(contract_before, File::readTextFile(compile_contract_stamp),
             "folded value edit changes compile contract: " + semantic_rebuild);
+        assertNeq(aggregate_contract_before_semantic,
+            File::readTextFile(aggregate_contract_stamp),
+            "folded value edit changes aggregate contract: " + semantic_rebuild);
     }
 
     testScriptPreloadManifestInputs() {

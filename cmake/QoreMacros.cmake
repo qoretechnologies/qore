@@ -219,7 +219,7 @@ endfunction()
 function(QORE_QCC_SIDECAR_PATHS _output)
     set(options)
     set(oneValueArgs DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
-        COMPILE_CONTRACT_STAMP MANIFEST_JSON)
+        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP MANIFEST_JSON)
     cmake_parse_arguments(_QORE_QSP "${options}" "${oneValueArgs}" "" ${ARGN})
 
     if (_QORE_QSP_DEPFILE)
@@ -241,6 +241,10 @@ function(QORE_QCC_SIDECAR_PATHS _output)
         set(${_QORE_QSP_COMPILE_CONTRACT_STAMP}
             "${_output}.compile-contract.stamp" PARENT_SCOPE)
     endif ()
+    if (_QORE_QSP_AGGREGATE_CONTRACT_STAMP)
+        set(${_QORE_QSP_AGGREGATE_CONTRACT_STAMP}
+            "${_output}.aggregate-contract.stamp" PARENT_SCOPE)
+    endif ()
     if (_QORE_QSP_MANIFEST_JSON)
         set(${_QORE_QSP_MANIFEST_JSON} "${_output}.source.manifest.json" PARENT_SCOPE)
     endif ()
@@ -248,7 +252,8 @@ endfunction()
 
 function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
-        COMPILE_CONTRACT_STAMP MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT
+        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP MANIFEST_JSON
+        SKIP_IF_MANIFEST_CURRENT
         QO_INPUT_CONTENT_STAMPS COMPILE_CONTRACT_DEPENDENCIES
         SCRIPT_AGGREGATE_NATIVE_REGISTERS)
     set(oneValueArgs DEPFILE_TARGET QOLINK_MAP AGGREGATE_SYMBOL SCRIPT_AGGREGATE)
@@ -261,6 +266,7 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
         set(_QORE_QSF_SUCCESS_STAMP TRUE)
         set(_QORE_QSF_CONTENT_STAMP TRUE)
         set(_QORE_QSF_COMPILE_CONTRACT_STAMP TRUE)
+        set(_QORE_QSF_AGGREGATE_CONTRACT_STAMP TRUE)
         set(_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES TRUE)
         set(_QORE_QSF_MANIFEST_JSON TRUE)
         set(_QORE_QSF_SKIP_IF_MANIFEST_CURRENT TRUE)
@@ -288,6 +294,10 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     if (_QORE_QSF_COMPILE_CONTRACT_STAMP)
         list(APPEND _flags
             "--compile-contract-stamp=${_output}.compile-contract.stamp")
+    endif ()
+    if (_QORE_QSF_AGGREGATE_CONTRACT_STAMP)
+        list(APPEND _flags
+            "--aggregate-contract-stamp=${_output}.aggregate-contract.stamp")
     endif ()
     if (_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES)
         list(APPEND _flags "--depfile-compile-contract-stamps")
@@ -337,6 +347,10 @@ function(QORE_QCC_HELPER_PATH _out_var _name)
             AND DEFINED QORE_QCC_BATCH_BOOTSTRAP_HELPER
             AND NOT "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}" STREQUAL "")
         set(_qore_qcc_helper "${QORE_QCC_BATCH_BOOTSTRAP_HELPER}")
+    elseif ("${_name}" STREQUAL "qore-qo-incremental-plan"
+            AND DEFINED QORE_QCC_INCREMENTAL_PLAN_HELPER
+            AND NOT "${QORE_QCC_INCREMENTAL_PLAN_HELPER}" STREQUAL "")
+        set(_qore_qcc_helper "${QORE_QCC_INCREMENTAL_PLAN_HELPER}")
     elseif ("${_name}" STREQUAL "qore-qo-prune"
             AND DEFINED QORE_QCC_PRUNE_HELPER
             AND NOT "${QORE_QCC_PRUNE_HELPER}" STREQUAL "")
@@ -379,6 +393,7 @@ function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
         "${_output}.status.json"
         "${_output}.content.stamp"
         "${_output}.compile-contract.stamp"
+        "${_output}.aggregate-contract.stamp"
         "${_output}.stamp"
         "${_output}.source.manifest.json"
         "${_output}.source-parse-defines"
@@ -514,6 +529,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(options WARNINGS_ARE_ERRORS BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
     set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
         STAMPS_VAR CONTENT_STAMPS_VAR COMPILE_CONTRACT_STAMPS_VAR
+        AGGREGATE_CONTRACT_STAMPS_VAR
         ORDER_TARGETS_VAR CONTEXT_VAR GENERATION_MAP_VAR GENERATION_TARGET_VAR
         BOOTSTRAP_AGGREGATE_OUTPUT
         BOOTSTRAP_AGGREGATE_SYMBOL BOOTSTRAP_AGGREGATE_CONTEXT)
@@ -560,6 +576,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_QCC_HELPER_PATH(_qore_qcc_incremental_helper qore-qo-incremental)
     QORE_QCC_HELPER_PATH(_qore_qcc_source_order_helper qore-qo-source-order)
     QORE_QCC_HELPER_PATH(_qore_qcc_batch_bootstrap_helper qore-qo-batch-bootstrap)
+    QORE_QCC_HELPER_PATH(_qore_qcc_incremental_plan_helper qore-qo-incremental-plan)
     set(_qore_qcc_source_order_command ${_qore_qcc_source_order_helper})
     if (DEFINED QORE_EXECUTABLE AND EXISTS "${QORE_EXECUTABLE}")
         set(_qore_qcc_source_order_command
@@ -570,6 +587,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_stamps)
     set(_qore_qcc_content_stamps)
     set(_qore_qcc_compile_contract_stamps)
+    set(_qore_qcc_aggregate_contract_stamps)
     set(_qore_qcc_order_targets)
     set(_qore_qcc_abs_sources)
     set(_qore_qcc_source_content_digests)
@@ -594,6 +612,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         list(APPEND _qore_qcc_content_stamps "${_qore_qcc_output}.content.stamp")
         list(APPEND _qore_qcc_compile_contract_stamps
             "${_qore_qcc_output}.compile-contract.stamp")
+        list(APPEND _qore_qcc_aggregate_contract_stamps
+            "${_qore_qcc_output}.aggregate-contract.stamp")
         list(APPEND _qore_qcc_order_targets "${_qore_qcc_order_target}")
         _QORE_QCC_OBJECT_ARTIFACT_PATHS(_qore_qcc_object_artifacts
             "${_qore_qcc_output}")
@@ -665,39 +685,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
 
     set(_qore_qcc_direct_deps_prefix "QORE_QCC_DIRECT_DEPS_${_qore_qcc_group_id}")
     set(_qore_qcc_direct_deps_cmake "${_QORE_QCO_SCRIPT_DIR}/direct-deps.cmake")
-    execute_process(
-        COMMAND ${_qore_qcc_source_order_command}
-            --direct-map-cmake
-            ${_qore_qcc_direct_deps_prefix}
-            ${_qore_qcc_context_path}
-        OUTPUT_VARIABLE _qore_qcc_direct_deps_cmake_content
-        ERROR_VARIABLE _qore_qcc_direct_deps_error
-        RESULT_VARIABLE _qore_qcc_direct_deps_result
-    )
-    if (NOT _qore_qcc_direct_deps_result EQUAL 0)
-        message(FATAL_ERROR
-            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_direct_deps_error}")
-    endif ()
-    QORE_WRITE_IF_CHANGED("${_qore_qcc_direct_deps_cmake}" "${_qore_qcc_direct_deps_cmake_content}")
-    include("${_qore_qcc_direct_deps_cmake}")
-
     set(_qore_qcc_build_deps_prefix "QORE_QCC_BUILD_DEPS_${_qore_qcc_group_id}")
     set(_qore_qcc_build_deps_cmake "${_QORE_QCO_SCRIPT_DIR}/build-deps.cmake")
-    execute_process(
-        COMMAND ${_qore_qcc_source_order_command}
-            --build-direct-map-cmake
-            ${_qore_qcc_build_deps_prefix}
-            ${_qore_qcc_context_path}
-        OUTPUT_VARIABLE _qore_qcc_build_deps_cmake_content
-        ERROR_VARIABLE _qore_qcc_build_deps_error
-        RESULT_VARIABLE _qore_qcc_build_deps_result
-    )
-    if (NOT _qore_qcc_build_deps_result EQUAL 0)
-        message(FATAL_ERROR
-            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_build_deps_error}")
-    endif ()
-    QORE_WRITE_IF_CHANGED("${_qore_qcc_build_deps_cmake}" "${_qore_qcc_build_deps_cmake_content}")
-    include("${_qore_qcc_build_deps_cmake}")
 
     # The strongly connected components of the required-edge graph. Each one is
     # an atomic build unit that publishes a single generation record, so the
@@ -708,36 +697,62 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_scc_cmake "${_QORE_QCO_SCRIPT_DIR}/scc-map.cmake")
     execute_process(
         COMMAND ${_qore_qcc_source_order_command}
-            --scc-map-cmake
-            ${_qore_qcc_scc_prefix}
+            --cmake-plan
+            ${_qore_qcc_group_id}
             ${_qore_qcc_context_path}
-        OUTPUT_VARIABLE _qore_qcc_scc_cmake_content
-        ERROR_VARIABLE _qore_qcc_scc_error
-        RESULT_VARIABLE _qore_qcc_scc_result
+        ERROR_VARIABLE _qore_qcc_plan_error
+        RESULT_VARIABLE _qore_qcc_plan_result
     )
-    if (NOT _qore_qcc_scc_result EQUAL 0)
+    if (NOT _qore_qcc_plan_result EQUAL 0)
         message(FATAL_ERROR
-            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_scc_error}")
+            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_plan_error}")
     endif ()
-    QORE_WRITE_IF_CHANGED("${_qore_qcc_scc_cmake}" "${_qore_qcc_scc_cmake_content}")
+    include("${_qore_qcc_direct_deps_cmake}")
+    include("${_qore_qcc_build_deps_cmake}")
     include("${_qore_qcc_scc_cmake}")
 
-    execute_process(
+    # Source content no longer causes a CMake configure, so keep the qcc symbol
+    # provider manifest current at build time.  This target is one group-wide
+    # barrier: it incrementally rescans only changed sources through the helper's
+    # cache, before either the batch bootstrap or a standalone object compile can
+    # consume the manifest.
+    set(_qore_qcc_source_symbols_stamp
+        "${_qore_qcc_source_symbols}.stamp")
+    set(_qore_qcc_source_symbols_target
+        "qore_qcc_${_qore_qcc_group_id}_source_symbols")
+    add_custom_command(
+        OUTPUT ${_qore_qcc_source_symbols_stamp}
+        BYPRODUCTS
+            ${_qore_qcc_source_symbols}
+            ${_qore_qcc_source_symbols}.cache
         COMMAND ${_qore_qcc_source_order_command}
             --source-symbol-manifest
             ${_qore_qcc_source_symbols}
             ${_qore_qcc_context_path}
-        ERROR_VARIABLE _qore_qcc_source_symbols_error
-        RESULT_VARIABLE _qore_qcc_source_symbols_result
-    )
-    if (NOT _qore_qcc_source_symbols_result EQUAL 0)
-        message(FATAL_ERROR
-            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_source_symbols_error}")
-    endif ()
+        COMMAND ${CMAKE_COMMAND} -E touch
+            ${_qore_qcc_source_symbols_stamp}
+        DEPENDS
+            ${_qore_qcc_source_content_stamp}
+            ${_qore_qcc_source_content_digests}
+            ${_qore_qcc_context_path}
+            ${_qore_qcc_source_order_helper}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Updating ${_QORE_QCO_GROUP} source symbol manifest"
+        VERBATIM)
+    add_custom_target(${_qore_qcc_source_symbols_target}
+        DEPENDS ${_qore_qcc_source_symbols_stamp})
+    add_dependencies(${_qore_qcc_source_symbols_target}
+        ${_qore_qcc_source_content_target})
 
+    # Source-content changes are handled by the build-time incremental planner,
+    # which recomputes the live SCC graph from the current depfiles before any
+    # object recipe can run. Registering every source here forced a complete
+    # CMake configure after every implementation edit (25s for Qorus) and only
+    # regenerated a static copy of the same graph. Source additions/removals
+    # still reconfigure through the caller's CONFIGURE_DEPENDS glob or source
+    # list, while helper/manifest changes retain their configure-time contract.
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         ${_qore_qcc_source_order_helper}
-        ${_qore_qcc_abs_sources}
         ${_QORE_QCO_MANIFEST_INPUTS})
 
     set(_qore_qcc_stub_flags)
@@ -810,7 +825,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
     endforeach()
-    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --aggregate-contract-stamp=\"$out.aggregate-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
@@ -822,6 +837,16 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     endif ()
     set(_qore_qcc_bootstrap_stamp)
     set(_qore_qcc_bootstrap_target)
+    # CMake 3.28+ can tell Unix Makefiles that these recipes are jobserver
+    # clients. This is essential with older GNU make (including Apple's 3.81),
+    # whose pipe descriptors are closed for ordinary recipes. GNU make 4.4's
+    # named-FIFO jobserver works without it, but marking the recipes is harmless
+    # and gives both protocols the same bounded parallelism.
+    set(_qore_qcc_job_server_args)
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.28
+            AND CMAKE_GENERATOR MATCHES "Makefiles")
+        set(_qore_qcc_job_server_args JOB_SERVER_AWARE TRUE)
+    endif ()
     if (_qore_qcc_count GREATER 1)
         set(_qore_qcc_bootstrap_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-batch-bootstrap.stamp")
         set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
@@ -876,11 +901,62 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             DEPFILE ${_qore_qcc_bootstrap_stamp}.d
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "qcc -c: batch bootstrapping ${_QORE_QCO_GROUP} (${_qore_qcc_count} sources)"
+            ${_qore_qcc_job_server_args}
             VERBATIM)
         add_custom_target(${_qore_qcc_bootstrap_target}
             DEPENDS ${_qore_qcc_bootstrap_stamp})
         add_dependencies(${_qore_qcc_bootstrap_target}
-            ${_qore_qcc_source_content_target})
+            ${_qore_qcc_source_content_target}
+            ${_qore_qcc_source_symbols_target})
+    endif ()
+
+    # Decide how to rebuild the group before any per-object recipe occupies a
+    # build-tool worker. Without this barrier a broad semantic invalidation
+    # starts one recursive helper per object; each traverses the same component
+    # closure and then sleeps behind the same locks, exhausting GNU Make's
+    # jobserver while only one or two qcc processes do useful work. The planner
+    # keeps small invalidations on the standalone path and sends a broad stale
+    # closure through one shared parse with parallel LLVM emission.
+    set(_qore_qcc_incremental_plan_stamp)
+    set(_qore_qcc_incremental_plan_target)
+    if (_qore_qcc_count GREATER 1)
+        set(_qore_qcc_incremental_plan_stamp
+            "${_QORE_QCO_SCRIPT_DIR}/.qcc-incremental-plan.stamp")
+        set(_qore_qcc_incremental_plan_target
+            "qore_qcc_${_qore_qcc_group_id}_incremental_plan")
+        add_custom_command(
+            OUTPUT ${_qore_qcc_incremental_plan_stamp}
+            COMMAND ${CMAKE_COMMAND} -E env
+                "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+                ${_qore_qcc_incremental_plan_helper}
+                    ${_qore_qcc_context_path}
+                    ${_qore_qcc_incremental_plan_stamp}
+                    ${_qore_qcc_bootstrap_stamp}
+                    ${_qore_qcc_batch_script}
+                    ${_qore_qcc_single_script}
+                    ${_qore_qcc_source_order_helper}
+                    ${_qore_qcc_incremental_helper}
+                    ${_qore_qcc_batch_bootstrap_helper}
+            DEPENDS
+                ${_qore_qcc_source_content_stamp}
+                ${_qore_qcc_source_content_digests}
+                ${_qore_qcc_bootstrap_stamp}
+                ${_qore_qcc_context_path}
+                ${_qore_qcc_batch_script}
+                ${_qore_qcc_single_script}
+                ${_qore_qcc_incremental_plan_helper}
+                ${_qore_qcc_incremental_helper}
+                ${_qore_qcc_source_order_helper}
+                ${_qore_qcc_batch_bootstrap_helper}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Planning ${_QORE_QCO_GROUP} incremental qcc build"
+            ${_qore_qcc_job_server_args}
+            VERBATIM)
+        add_custom_target(${_qore_qcc_incremental_plan_target}
+            DEPENDS ${_qore_qcc_incremental_plan_stamp})
+        add_dependencies(${_qore_qcc_incremental_plan_target}
+            ${_qore_qcc_source_content_target}
+            ${_qore_qcc_bootstrap_target})
     endif ()
 
     if (_qore_qcc_count GREATER 0)
@@ -891,9 +967,14 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             add_custom_target(${_qore_qcc_order_target}
                 DEPENDS ${_qore_qcc_stamp})
             add_dependencies(${_qore_qcc_order_target}
-                ${_qore_qcc_source_content_target})
+                ${_qore_qcc_source_content_target}
+                ${_qore_qcc_source_symbols_target})
             if (_qore_qcc_bootstrap_target)
                 add_dependencies(${_qore_qcc_order_target} ${_qore_qcc_bootstrap_target})
+            endif ()
+            if (_qore_qcc_incremental_plan_target)
+                add_dependencies(${_qore_qcc_order_target}
+                    ${_qore_qcc_incremental_plan_target})
             endif ()
         endforeach()
 
@@ -994,6 +1075,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
                 COMMAND ${CMAKE_COMMAND} -E env
                     "QORE_QCC_BATCH_BOOTSTRAP_STAMP=${_qore_qcc_bootstrap_stamp}"
+                    "QORE_QCC_PREREQUISITES_ORDERED=1"
                     "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
                     ${_qore_qcc_incremental_helper}
                         ${_qore_qcc_output}
@@ -1018,6 +1100,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 DEPFILE ${_qore_qcc_output}.d
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 COMMENT "qcc -c: compiling ${_QORE_QCO_GROUP} ${_qore_qcc_source} (.qo)"
+                ${_qore_qcc_job_server_args}
                 VERBATIM)
             # qcc writes this content-preserving file with the main success
             # stamp. Give Make generators a rule without a timestamp
@@ -1027,6 +1110,13 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             # Make rebuild callers after a comment-only edit.
             add_custom_command(
                 OUTPUT ${_qore_qcc_output}.compile-contract.stamp
+                COMMAND ${CMAKE_COMMAND} -E true
+                VERBATIM)
+            # This content-preserving contract is the aggregate's semantic
+            # dependency. Like the compile contract above, it must not inherit
+            # the always-touched object success stamp as a timestamp input.
+            add_custom_command(
+                OUTPUT ${_qore_qcc_output}.aggregate-contract.stamp
                 COMMAND ${CMAKE_COMMAND} -E true
                 VERBATIM)
         endforeach()
@@ -1059,7 +1149,18 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         VERBATIM)
     add_custom_target(${_qore_qcc_generation_target}
         DEPENDS ${_qore_qcc_generation_stamp})
-    if (_qore_qcc_order_targets)
+    # Multi-source groups are already brought to one coherent generation by
+    # the planner.  Depending on every per-object convenience target here makes
+    # large consumers traverse hundreds of recursive Make targets even when
+    # nothing changed.  The generation stamp still has file dependencies on
+    # every object stamp above, so missing/corrupt partial output is recovered;
+    # the planner is the one target-level ordering barrier needed before those
+    # file dependencies are examined.  Keep the per-object dependency for a
+    # single-source group, which has no planner.
+    if (_qore_qcc_incremental_plan_target)
+        add_dependencies(${_qore_qcc_generation_target}
+            ${_qore_qcc_incremental_plan_target})
+    elseif (_qore_qcc_order_targets)
         add_dependencies(${_qore_qcc_generation_target} ${_qore_qcc_order_targets})
     endif ()
 
@@ -1067,6 +1168,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
     set_source_files_properties(${_qore_qcc_stamps} ${_qore_qcc_content_stamps}
         ${_qore_qcc_compile_contract_stamps}
+        ${_qore_qcc_aggregate_contract_stamps}
         PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
 
     list(APPEND _qore_qcc_managed_files
@@ -1076,6 +1178,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         "${_qore_qcc_source_content_stamp}"
         ${_qore_qcc_source_content_digests}
         "${_qore_qcc_source_symbols}"
+        "${_qore_qcc_source_symbols}.cache"
+        "${_qore_qcc_source_symbols_stamp}"
         "${_qore_qcc_direct_deps_cmake}"
         "${_qore_qcc_build_deps_cmake}"
         "${_qore_qcc_scc_cmake}"
@@ -1089,6 +1193,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             "${_qore_qcc_batch_script}"
             "${_qore_qcc_bootstrap_stamp}"
             "${_qore_qcc_bootstrap_stamp}.d")
+    endif ()
+    if (_qore_qcc_incremental_plan_stamp)
+        list(APPEND _qore_qcc_managed_files
+            "${_qore_qcc_incremental_plan_stamp}")
     endif ()
     _QORE_QCC_REGISTER_MANAGED_DIRS(
         "${_QORE_QCO_OUTPUT_DIR}"
@@ -1118,6 +1226,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     if (_QORE_QCO_COMPILE_CONTRACT_STAMPS_VAR)
         set(${_QORE_QCO_COMPILE_CONTRACT_STAMPS_VAR}
             ${_qore_qcc_compile_contract_stamps} PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_AGGREGATE_CONTRACT_STAMPS_VAR)
+        set(${_QORE_QCO_AGGREGATE_CONTRACT_STAMPS_VAR}
+            ${_qore_qcc_aggregate_contract_stamps} PARENT_SCOPE)
     endif ()
     if (_QORE_QCO_ORDER_TARGETS_VAR)
         set(${_QORE_QCO_ORDER_TARGETS_VAR} ${_qore_qcc_order_targets} PARENT_SCOPE)
@@ -1277,8 +1389,9 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     # generation is current. Keying its skip decision on object generations would
     # only stop it from adopting the fused batch-bootstrap output, with nothing
     # gained -- the qo-link path is where object generations are consumed.
-    set(multiValueArgs SOURCES INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS STUBS LOAD_MODULES
-        PARSE_DEFINES PARSE_OPTIONS MANIFEST_INPUTS DEPENDS
+    set(multiValueArgs SOURCES INPUT_CONTENT_STAMPS INPUT_AGGREGATE_CONTRACT_STAMPS
+        INPUT_ORDER_TARGETS STUBS LOAD_MODULES PARSE_DEFINES PARSE_OPTIONS
+        MANIFEST_INPUTS DEPENDS
         OBJECT_GENERATION_TARGETS)
     cmake_parse_arguments(_QORE_QSA "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -1348,6 +1461,18 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
             COMMAND ${CMAKE_COMMAND} -E rm -f ${_qore_qsa_idx})
     endif ()
 
+    # Prefer the stricter per-source aggregate contract when the object helper
+    # provides it. It describes declarations, signatures, constants, and parse
+    # context visible to a declaration-only script aggregate. Native bodies,
+    # slots, initialization, locations, and debug metadata are registered from
+    # each per-source object, so implementation-only edits can rebuild and
+    # relink that object without scheduling the whole-program aggregate. Keep
+    # content stamps as the compatibility fallback for older workflows.
+    set(_qore_qsa_input_contracts ${_QORE_QSA_INPUT_AGGREGATE_CONTRACT_STAMPS})
+    if (NOT _qore_qsa_input_contracts)
+        set(_qore_qsa_input_contracts ${_QORE_QSA_INPUT_CONTENT_STAMPS})
+    endif ()
+
     set(_qore_qsa_context_content "format=1\nkind=qcc-script-aggregate\nqcc=${_qore_qcc_command}\n")
     string(APPEND _qore_qsa_context_content "aggregate=${_QORE_QSA_AGGREGATE}\n")
     string(APPEND _qore_qsa_context_content "qore_include_dir=${_QORE_QSA_INCLUDE_DIR}\n")
@@ -1357,6 +1482,8 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content parse_define ${_QORE_QSA_PARSE_DEFINES})
     QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content parse_option ${_QORE_QSA_PARSE_OPTIONS})
     QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content input ${_QORE_QSA_SOURCES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content input_aggregate_contract
+        ${_QORE_QSA_INPUT_AGGREGATE_CONTRACT_STAMPS})
     QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content manifest_input ${_QORE_QSA_MANIFEST_INPUTS})
     QORE_WRITE_IF_CHANGED("${_qore_qsa_context}" "${_qore_qsa_context_content}")
     set(_qore_qsa_manifest_input_flags "--manifest-input=${_qore_qsa_context}")
@@ -1397,7 +1524,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
                 ${_QORE_QSA_SOURCES}
         DEPENDS
             ${_QORE_QSA_INPUT_ORDER_TARGETS}
-            ${_QORE_QSA_INPUT_CONTENT_STAMPS}
+            ${_qore_qsa_input_contracts}
             ${_QORE_QSA_OBJECT_GENERATION_TARGETS}
             ${_QORE_QSA_STUBS}
             ${_qore_qsa_context}

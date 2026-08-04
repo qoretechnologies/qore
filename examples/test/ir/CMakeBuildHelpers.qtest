@@ -121,6 +121,7 @@ qore_qcc_sidecar_paths(\"${CMAKE_BINARY_DIR}/sample.qo\"
     SUCCESS_STAMP SAMPLE_STAMP
     CONTENT_STAMP SAMPLE_CONTENT_STAMP
     COMPILE_CONTRACT_STAMP SAMPLE_COMPILE_CONTRACT_STAMP
+    AGGREGATE_CONTRACT_STAMP SAMPLE_AGGREGATE_CONTRACT_STAMP
     MANIFEST_JSON SAMPLE_MANIFEST)
 qore_qcc_sidecar_flags(SAMPLE_FLAGS \"${CMAKE_BINARY_DIR}/sample.qo\" ALL)
 file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
@@ -129,6 +130,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
     \"depfile=${SAMPLE_DEPFILE}\\n\"
     \"status=${SAMPLE_STATUS}\\n\"
     \"compile_contract_stamp=${SAMPLE_COMPILE_CONTRACT_STAMP}\\n\"
+    \"aggregate_contract_stamp=${SAMPLE_AGGREGATE_CONTRACT_STAMP}\\n\"
     \"flags=${SAMPLE_FLAGS}\\n\")
 ");
 
@@ -154,6 +156,9 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         assertTrue(vars.find("--compile-contract-stamp="
                 + build_dir + "/sample.qo.compile-contract.stamp") != -1,
             "sidecar compile-contract flag exported: " + vars);
+        assertTrue(vars.find("--aggregate-contract-stamp="
+                + build_dir + "/sample.qo.aggregate-contract.stamp") != -1,
+            "sidecar aggregate-contract flag exported: " + vars);
         assertTrue(vars.find("--depfile-compile-contract-stamps") != -1,
             "sidecar compile-contract dependency flag exported: " + vars);
         assertTrue(vars.find("--skip-if-manifest-current") != -1,
@@ -559,6 +564,7 @@ qore_qcc_compile_objects(QO_OBJECTS
     STAMPS_VAR QO_STAMPS
     CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
     COMPILE_CONTRACT_STAMPS_VAR QO_COMPILE_CONTRACT_STAMPS
+    AGGREGATE_CONTRACT_STAMPS_VAR QO_AGGREGATE_CONTRACT_STAMPS
     ORDER_TARGETS_VAR QO_ORDER_TARGETS
     CONTEXT_VAR QO_CONTEXT
     GENERATION_MAP_VAR QO_GENERATION_MAP
@@ -587,7 +593,7 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG
     AGGREGATE QORE_CMAKE_SCRIPT_SMOKE
     MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
-    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_AGGREGATE_CONTRACT_STAMPS ${QO_AGGREGATE_CONTRACT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
     OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
     LOAD_MODULES LateObjectModule LateAggregateModule
@@ -602,7 +608,7 @@ qore_qcc_script_aggregate(QO_SCRIPT_AGG_INDEXED
     AGGREGATE QORE_CMAKE_SCRIPT_INDEXED_SMOKE
     MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
-    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_AGGREGATE_CONTRACT_STAMPS ${QO_AGGREGATE_CONTRACT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
     OBJECT_GENERATION_TARGETS ${QO_GENERATION_TARGET}
     LOAD_MODULES LateAggregateModule
@@ -650,6 +656,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"stamps=${QO_STAMPS}\\n\"
     \"content_stamps=${QO_CONTENT_STAMPS}\\n\"
     \"compile_contract_stamps=${QO_COMPILE_CONTRACT_STAMPS}\\n\"
+    \"aggregate_contract_stamps=${QO_AGGREGATE_CONTRACT_STAMPS}\\n\"
     \"order_targets=${QO_ORDER_TARGETS}\\n\"
     \"context=${QO_CONTEXT}\\n\"
     \"link=${QO_LINK}\\n\"
@@ -670,6 +677,9 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(read(build_dir + "/qo-vars.txt").find(
                 ".qo.compile-contract.stamp") != -1,
             "qcc object helper exports compile-contract stamps");
+        assertTrue(read(build_dir + "/qo-vars.txt").find(
+                ".qo.aggregate-contract.stamp") != -1,
+            "qcc object helper exports aggregate-contract stamps");
 
         string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
         string build_deps = read(build_dir + "/qo-scripts/build-deps.cmake");
@@ -809,7 +819,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         write(sibling_const_consumer, read(sibling_const_consumer)
             + "# force incremental sibling const_ref resolution\n");
         string sibling_const_incremental = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertTrue(sibling_const_incremental.find("siblingconstconsumer.qc") != -1,
+        assertTrue(sibling_const_incremental.find("compiling 1 stale component(s)") != -1
+                && sibling_const_incremental.find("siblingconstconsumer_qc.qo") != -1,
             "consumer-only rebuild exercises sibling static-default const_ref resolution: "
                 + sibling_const_incremental);
         string sibling_const_static_out = run(sprintf(
@@ -822,6 +833,19 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1
                 && source_symbols.find("function\tcmakeQoCallRefFunction\t") != -1,
             "qcc object helper writes a source-symbol manifest: " + source_symbols);
+
+        # Source edits no longer force a CMake configure.  A build-time symbol
+        # barrier must nevertheless publish newly added providers before qcc
+        # selects cross-source preload inputs.
+        write(provider, read(provider)
+            + "\nstring sub cmakeQoIncrementalSymbol() { return \"incremental\"; }\n");
+        string symbol_rebuild = run(sprintf("cmake --build %s -- -j33", build_dir));
+        string updated_source_symbols = read(
+            build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(updated_source_symbols.find(
+                "function\tcmakeQoIncrementalSymbol\t") != -1,
+            "incremental source edits refresh the source-symbol manifest: "
+                + symbol_rebuild + updated_source_symbols);
 
         string link_map = read(build_dir + "/linked.qo.qolink.json");
         assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
@@ -844,12 +868,59 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(stale_adoption.find("qcc: script-context .qo") != -1,
             "existing stale object tree is batch rebuilt instead of adopted: " + stale_adoption);
 
+        # A changed group context is a shared-parse generation transition.  If
+        # the bootstrap helper accepts the source-only SCC generation here,
+        # Make runs the standalone rule once for every source in the group.
+        run(sprintf("cmake -E touch %s/qo-scripts/.qcc-context", build_dir));
+        string context_rebuild = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(context_rebuild,
+                "compiling the group in one shared parse"),
+            "a newer qcc context forces one batch generation transition: "
+                + context_rebuild);
+        assertEq(object_paths.size(),
+            occurrences(context_rebuild, "qcc: script-context .qo"),
+            "a qcc context transition compiles each source exactly once: "
+                + context_rebuild);
+
         string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(no_op.find("qcc -c:") == -1
                 && no_op.find("qcc: scanning") == -1
                 && no_op.find("qcc --link-qo:") == -1
                 && no_op.find("qcc --script-aggregate:") == -1,
             "no-op rebuild does not rerun qcc helper targets: " + no_op);
+
+        # Recreate the failure shape from a killed or partially published broad
+        # incremental build. The group planner must make one decision before any
+        # object recipes run and recover through one shared parse, rather than
+        # starting a recursive prerequisite walker for every missing generation.
+        string incremental_plan_stamp = build_dir
+            + "/qo-scripts/.qcc-incremental-plan.stamp";
+        assertTrue(is_file(incremental_plan_stamp),
+            "multi-source groups publish an incremental-plan barrier");
+        list<string> generation_records = ();
+        foreach string line in (backquote(sprintf(
+                "find %y -name '*.generation.json' -type f | sort", build_dir
+                    + "/qo/.qcc-scc")).split("\n")) {
+            if (trim(line)) {
+                push generation_records, line;
+            }
+        }
+        assertEq(object_paths.size(), generation_records.size(),
+            "the acyclic fixture publishes one generation record per source");
+        for (int index = 0; index < 8; ++index) {
+            unlink(generation_records[index]);
+        }
+        unlink(incremental_plan_stamp);
+        string broad_recovery = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(broad_recovery, "broad incremental invalidation"),
+            "a broad stale closure selects one coordinated shared parse: "
+                + broad_recovery);
+        assertEq(object_paths.size(),
+            occurrences(broad_recovery, "qcc: script-context .qo"),
+            "the coordinated batch republishes each source exactly once: "
+                + broad_recovery);
+        assertTrue(is_file(incremental_plan_stamp),
+            "the successful coordinated rebuild commits its plan stamp");
 
         string provider_depfile = read(provider_object + ".d");
         assertTrue(provider_depfile.find("/source-content/") != -1,
@@ -876,15 +947,42 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         date batch_consumer_mtime = mtime(consumer_object);
         string batch_provider_contract = read(
             provider_object + ".compile-contract.stamp");
+        string batch_provider_aggregate_contract = read(
+            provider_object + ".aggregate-contract.stamp");
+        date script_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
         write(provider, read(provider) + "# compile-contract no-op\n");
         string batch_to_single = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(batch_provider_contract,
             read(provider_object + ".compile-contract.stamp"),
             "batch and single compilation publish the same provider contract: "
                 + batch_to_single);
+        assertEq(batch_provider_aggregate_contract,
+            read(provider_object + ".aggregate-contract.stamp"),
+            "batch and single compilation publish the same aggregate contract: "
+                + batch_to_single);
+        assertEq(script_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "comment-only edit does not regenerate the script aggregate: "
+                + batch_to_single);
         assertEq(batch_consumer_mtime, mtime(consumer_object),
             "batch-to-single provider rebuild preserves the unqualified caller: "
                 + batch_to_single);
+
+        string child_object = object_paths[3];
+        string batch_child_aggregate_contract = read(
+            child_object + ".aggregate-contract.stamp");
+        date child_script_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        write(child, read(child) + "# inherited-class aggregate no-op\n");
+        string child_batch_to_single = run(sprintf(
+            "cmake --build %s -- -j33", build_dir));
+        assertEq(batch_child_aggregate_contract,
+            read(child_object + ".aggregate-contract.stamp"),
+            "batch and single compilation publish the same inherited-class "
+                "aggregate contract: " + child_batch_to_single);
+        assertEq(child_script_aggregate_mtime,
+            mtime(build_dir + "/script-aggregate.qo"),
+            "inherited-class comment edit does not regenerate the script aggregate: "
+                + child_batch_to_single);
+
         date consumer_mtime = mtime(consumer_object);
         write(provider, read(provider) + "# second compile-contract no-op\n");
         # The build unit is the provider's strongly connected component, so the
@@ -1333,6 +1431,12 @@ endif()
         mkdir(build_dir + "/qo-scripts");
         mkdir(build_dir + "/qo-scripts/LEGACY_GROUP");
         write(build_dir + "/qo-scripts/LEGACY_GROUP/qcc-single.sh", "#!/bin/sh\n");
+        write(build_dir
+            + "/qo-scripts/LEGACY_GROUP/.qcc-batch-bootstrap.stamp.lock", "12345\n");
+        write(build_dir
+            + "/qo-scripts/LEGACY_GROUP/.qcc-batch-bootstrap.stamp.lock.12345", "12345\n");
+        write(build_dir
+            + "/qo-scripts/LEGACY_GROUP/.qcc-incremental-plan.stamp", "");
 
         string qore_arg = qore_dir ? " -DQore_DIR=" + qore_dir : "";
         string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir, qore_arg));
@@ -1352,6 +1456,9 @@ endif()
             "initial build registers link aggregate sidecars");
         assertTrue(is_file(build_dir + "/qo/GROUP_A_script/A_SCRIPT.qo.script-aggregate-context"),
             "initial build registers script aggregate sidecars");
+        assertTrue(is_file(build_dir
+                + "/qo-scripts/GROUP_A/.qcc-incremental-plan.stamp"),
+            "initial multi-source build publishes its incremental-plan barrier");
 
         date retained_mtime = mtime(initial_a[0]);
         string replace_configure = run(sprintf(
@@ -1362,7 +1469,8 @@ endif()
         assertEq(initial_a[0], replacement_a[0], "replacement retains the first output identity");
         assertNeq(initial_a[1], replacement_a[1], "replacement changes the second output identity");
         foreach string suffix in ("", ".d", ".idx.json", ".status.json", ".content.stamp",
-                ".compile-contract.stamp", ".stamp", ".source.manifest.json",
+                ".compile-contract.stamp", ".aggregate-contract.stamp", ".stamp",
+                ".source.manifest.json",
                 ".source-parse-defines", ".lock") {
             assertFalse(is_file(initial_a[1] + suffix),
                 "source replacement prunes stale artifact " + suffix + ": " + replace_configure);
@@ -1378,7 +1486,8 @@ endif()
             "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single%s",
             src_dir, build_dir, qore_arg));
         foreach string suffix in ("", ".d", ".idx.json", ".status.json", ".content.stamp",
-                ".compile-contract.stamp", ".stamp", ".source.manifest.json",
+                ".compile-contract.stamp", ".aggregate-contract.stamp", ".stamp",
+                ".source.manifest.json",
                 ".source-parse-defines", ".lock") {
             assertFalse(is_file(replacement_a[1] + suffix),
                 "source removal prunes stale artifact " + suffix + ": " + single_configure);
@@ -1389,6 +1498,9 @@ endif()
             "single-source transition prunes the obsolete bootstrap stamp");
         assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp.d"),
             "single-source transition prunes the obsolete bootstrap depfile");
+        assertFalse(is_file(build_dir
+                + "/qo-scripts/GROUP_A/.qcc-incremental-plan.stamp"),
+            "single-source transition prunes the obsolete incremental-plan stamp");
         assertEq(retained_after_replace, mtime(replacement_a[0]),
             "source removal configuration preserves the retained object timestamp");
         string single_build = run(sprintf("cmake --build %s -- -j17", build_dir));

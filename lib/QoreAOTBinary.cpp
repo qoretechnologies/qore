@@ -6655,6 +6655,28 @@ static std::string aotFunctionVariantSourceFile(const AbstractQoreFunctionVarian
     return aotLocationFile(sig ? sig->getParseLocation() : nullptr);
 }
 
+static void aotSetDeclarationLocation(QoreAOTSymbolIndexRecord& rec,
+        const QoreProgramLocation* loc) {
+    if (!loc) {
+        return;
+    }
+    rec.declaration_start_line = loc->start_line;
+    rec.declaration_end_line = loc->end_line;
+}
+
+static void aotSetFunctionVariantLocation(QoreAOTSymbolIndexRecord& rec,
+        const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant
+        ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    aotSetDeclarationLocation(rec, sig ? sig->getParseLocation() : nullptr);
+    StatementBlock* sb = uvb ? uvb->getStatementBlock() : nullptr;
+    if (sb && sb->loc) {
+        rec.declaration_entry_start_line = sb->loc->start_line;
+        rec.declaration_entry_end_line = sb->loc->end_line;
+    }
+}
+
 static std::string aotFunctionVariantDeclHash(const char* kind, const std::string& key,
         const std::string& visibility, const AbstractQoreFunctionVariant* variant) {
     std::vector<std::string> parts = {
@@ -6690,10 +6712,12 @@ static std::string aotMethodVariantDeclHash(const std::string& key, const std::s
 
 static std::string aotClassDeclHash(const AOTSerializeState::ClassInfo& ci) {
     const qore_class_private* priv = ci.priv;
-    if (priv && priv->hash) {
-        return "sha1:" + aotHexBytes(reinterpret_cast<const uint8_t*>(priv->hash.getHash()), SH_SIZE);
-    }
-
+    // The resolved class hash includes inherited members and other ambient
+    // program state.  It therefore differs when the same source is projected
+    // from a full batch parse and from a standalone parse with predecessor
+    // metadata, even though the class declaration is identical.  The symbol
+    // index already carries a declaration row for every method, constant, and
+    // static variable; keep the class row limited to the surface it alone owns.
     std::vector<std::string> parts = {
         "class",
         priv ? aotStripLeadingColons(priv->path) : "",
@@ -7596,6 +7620,7 @@ static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         rec.kind = QoreAOTSymbolKind::STATIC_VAR;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = class_slot;
+        aotSetDeclarationLocation(rec, vi.second->loc);
         rec.qore_path = aotJoinPath(class_path, vi.first);
         rec.source_file = aotLocationFile(vi.second->loc);
         rec.visibility = aotVisibility(vi.second->getAccess());
@@ -7623,6 +7648,7 @@ static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         rec.dependency_class = ce->hasInitExpr()
             ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
         rec.metadata_slot = class_slot;
+        aotSetDeclarationLocation(rec, ce->loc);
         rec.qore_path = getClassConstantPath(priv, ce->getName());
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
@@ -7992,6 +8018,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.kind = QoreAOTSymbolKind::CLASS;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        aotSetDeclarationLocation(rec, ci.priv->loc);
         rec.qore_path = aotStripLeadingColons(ci.priv->path);
         rec.source_file = aotLocationFile(ci.priv->loc);
         rec.visibility = aotVisibility(ci.priv->pub);
@@ -8015,10 +8042,16 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.kind = QoreAOTSymbolKind::HASHDECL;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        const QoreProgramLocation* hashdecl_loc = hdp->getParseLocation();
+        aotSetDeclarationLocation(rec, hashdecl_loc);
         rec.qore_path = aotStripLeadingColons(hd->getNamespacePath());
         rec.source_file = aotLocationFile(hdp->getParseLocation());
         rec.visibility = aotVisibility(hd->isPublic());
-        std::vector<std::string> parts = {"hashdecl", rec.qore_path, rec.visibility};
+        std::vector<std::string> parts = {
+            "hashdecl",
+            rec.qore_path,
+            rec.visibility,
+        };
         const HashDeclMemberMap& members = hdp->getMembers();
         size_t member_i = 0;
         for (auto& mi : members.member_list) {
@@ -8059,6 +8092,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             member_rec.kind = QoreAOTSymbolKind::ENUM_MEMBER;
             member_rec.dependency_class = QoreAOTDependencyClass::QORE_VALUE;
             member_rec.metadata_slot = static_cast<uint32_t>(i);
+            const QoreProgramLocation* enum_loc = edp->getParseLocation();
+            aotSetDeclarationLocation(member_rec, enum_loc);
             member_rec.qore_path = aotJoinPath(enum_path, emi.getName());
             member_rec.source_file = aotLocationFile(edp->getParseLocation());
             member_rec.visibility = aotVisibility(ed->isPublic());
@@ -8076,6 +8111,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.kind = QoreAOTSymbolKind::ENUM;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        const QoreProgramLocation* enum_loc = edp->getParseLocation();
+        aotSetDeclarationLocation(rec, enum_loc);
         rec.qore_path = std::move(enum_path);
         rec.source_file = aotLocationFile(edp->getParseLocation());
         rec.visibility = aotVisibility(ed->isPublic());
@@ -8093,6 +8130,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.kind = QoreAOTSymbolKind::TYPEDEF;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        aotSetDeclarationLocation(rec, ti.loc);
         rec.qore_path = aotJoinPath(aotNamespacePath(state, ti.ns_idx), ti.name.c_str());
         rec.source_file = aotLocationFile(ti.loc);
         rec.visibility = aotVisibility(ti.pub);
@@ -8117,6 +8155,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.dependency_class = ce->hasInitExpr()
             ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        aotSetDeclarationLocation(rec, ce->loc);
         rec.qore_path = getNamespaceConstantPath(ns, ce->getName());
         rec.source_file = aotLocationFile(ce->loc);
         rec.visibility = aotVisibility(ce->getAccess());
@@ -8140,6 +8179,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.kind = QoreAOTSymbolKind::GLOBAL;
         rec.dependency_class = QoreAOTDependencyClass::QORE_API;
         rec.metadata_slot = static_cast<uint32_t>(i);
+        const QoreProgramLocation* global_loc = var->getParseLocation();
+        aotSetDeclarationLocation(rec, global_loc);
         rec.qore_path = aotJoinPath(aotNamespacePath(state, state.globals[i].ns_idx), var->getName());
         rec.source_file = aotLocationFile(var->getParseLocation());
         rec.visibility = aotVisibility(var->isPublic());
@@ -8181,6 +8222,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             rec.dependency_class = QoreAOTDependencyClass::QORE_API;
             rec.metadata_slot = (static_cast<uint32_t>(i) << 16)
                 | std::min<uint32_t>(variant_slot, UINT16_MAX);
+            aotSetFunctionVariantLocation(rec, v);
             rec.qore_path = key;
             rec.source_file = std::move(source_file);
             rec.visibility = aotVisibility(fi.entry->isPublic());
@@ -8244,6 +8286,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             rec.dependency_class = QoreAOTDependencyClass::QORE_API;
             rec.metadata_slot = (static_cast<uint32_t>(i) << 16)
                 | std::min<uint32_t>(variant_slot, UINT16_MAX);
+            aotSetFunctionVariantLocation(rec, v);
             rec.qore_path = key;
             rec.source_file = std::move(source_file);
             rec.visibility = aotVisibility(mvb->getAccess());
@@ -8289,6 +8332,31 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     }
     if (!aotAppendBCAImportRecords(state, imported, compile_file, compile_files, error)) {
         return false;
+    }
+
+    // Native-registration aggregates omit source bodies, but retain declaration
+    // locations. Keep those locations outside the record wire format so normal
+    // compile contracts remain location-insensitive while the aggregate-only
+    // declaration contract can detect a shifted declaration.
+    for (size_t i = 0; i < defined.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error,
+                "AOT aggregate declaration-location collection")) {
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = defined[i];
+        if (rec.declaration_start_line < 0 || rec.source_file.empty()) {
+            continue;
+        }
+        context.emplace_back("aggregate_declaration_location_v1", aotHashParts({
+            "aggregate_declaration_location_v1",
+            qoreAOTSymbolKindName(rec.kind),
+            rec.qore_path,
+            rec.source_file,
+            std::to_string(rec.declaration_start_line),
+            std::to_string(rec.declaration_end_line),
+            std::to_string(rec.declaration_entry_start_line),
+            std::to_string(rec.declaration_entry_end_line),
+        }));
     }
 
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SYMBOL_INDEX);

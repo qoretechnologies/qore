@@ -1,0 +1,143 @@
+#!/bin/sh
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Plan one AOT object group's incremental rebuild before per-object recipes run.
+#
+# A broad invalidation must not enter the build as hundreds of recursive
+# qore-qo-incremental processes: those processes traverse the same predecessor
+# closure and then occupy jobserver slots while waiting on the same component
+# locks.  This coordinator performs one group-wide currency pass first.  Small
+# stale sets retain the standalone compile path; broad sets use one shared parse
+# whose LLVM emission workers participate in the caller's jobserver.
+
+set -eu
+
+if [ "$#" -ne 8 ]; then
+    echo "usage: $0 CONTEXT PLAN_STAMP BOOTSTRAP_STAMP BATCH_SCRIPT SINGLE_SCRIPT SOURCE_ORDER_HELPER INCREMENTAL_HELPER BATCH_BOOTSTRAP_HELPER" >&2
+    exit 2
+fi
+
+context=$1
+plan_stamp=$2
+bootstrap_stamp=$3
+batch_script=$4
+single_script=$5
+source_order_tool=$6
+incremental_tool=$7
+batch_bootstrap_tool=$8
+stale_file=
+
+run_source_order() {
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        "$QORE_QCC_QORE_EXECUTABLE" "$source_order_tool" "$@"
+    else
+        "$source_order_tool" "$@"
+    fi
+}
+
+cleanup() {
+    if [ -n "$stale_file" ]; then
+        rm -f "$stale_file"
+    fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+for required in "$context" "$batch_script" "$single_script"; do
+    if [ ! -f "$required" ]; then
+        echo "$0: missing incremental-plan input: $required" >&2
+        exit 1
+    fi
+done
+for helper in "$source_order_tool" "$incremental_tool" "$batch_bootstrap_tool"; do
+    if [ ! -x "$helper" ]; then
+        echo "$0: missing incremental-plan helper: $helper" >&2
+        exit 1
+    fi
+done
+
+batch_threshold=${QORE_QCC_INCREMENTAL_BATCH_THRESHOLD:-8}
+case "$batch_threshold" in
+    ''|*[!0-9]*|0)
+        echo "$0: QORE_QCC_INCREMENTAL_BATCH_THRESHOLD must be a positive integer" >&2
+        exit 2
+        ;;
+esac
+
+mkdir -p "$(dirname "$plan_stamp")"
+stale_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-incremental-plan.XXXXXX")
+
+write_stale_plan() {
+    run_source_order --scc-source-stale --batch-stamp "$bootstrap_stamp" \
+        "$context" > "$stale_file"
+}
+
+run_group_batch() {
+    echo "$0: broad incremental invalidation; selecting the shared-parse batch"
+    QORE_QCC_FORCE_BATCH=1 \
+    QORE_QCC_REQUIRE_BATCH=1 \
+        QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
+        "$batch_bootstrap_tool" "$context" "$bootstrap_stamp" \
+            "$batch_script" "$source_order_tool"
+}
+
+# Normally one pass is enough.  The second pass handles a source that an
+# external editor replaced while a small plan was compiling; if that still does
+# not converge, the batch helper's established compare-and-rebuild protocol is
+# the single authoritative fallback.
+phase=1
+while [ "$phase" -le 2 ]; do
+    write_stale_plan
+    stale_count=$(awk 'END { print NR + 0 }' "$stale_file")
+    if [ "$stale_count" -eq 0 ]; then
+        touch "$plan_stamp"
+        exit 0
+    fi
+
+    if [ "$stale_count" -ge "$batch_threshold" ] \
+            || awk -F '\t' '$3 > 1 { found = 1 } END { exit !found }' "$stale_file"; then
+        run_group_batch
+        write_stale_plan
+        if [ -s "$stale_file" ]; then
+            echo "$0: shared-parse incremental build left stale components" >&2
+            exit 1
+        fi
+        touch "$plan_stamp"
+        exit 0
+    fi
+
+    echo "$0: compiling $stale_count stale component(s) incrementally"
+    tab=$(printf '\t')
+    while IFS="$tab" read -r component_index component_key component_size source output; do
+        [ -n "$component_index" ] || continue
+        component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
+        if ! QORE_QCC_PLANNED_STALE=1 \
+                QORE_QCC_COMPONENT_INDEX="$component_index" \
+                QORE_QCC_COMPONENT_KEY="$component_key" \
+                QORE_QCC_COMPONENT_SIZE="$component_size" \
+                QORE_QCC_COMPONENT_LOCK="$component_lock" \
+                QORE_QCC_PREREQUISITES_READY=1 \
+                QORE_QCC_BATCH_BOOTSTRAP_STAMP="$bootstrap_stamp" \
+                QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
+                QORE_QCC_SOURCE_ORDER_HELPER="$source_order_tool" \
+                QORE_QCC_BATCH_BOOTSTRAP_HELPER="$batch_bootstrap_tool" \
+                "$incremental_tool" "$output" "$source" "$single_script"; then
+            echo "$0: cannot build stale component $component_key" >&2
+            exit 1
+        fi
+    done < "$stale_file"
+    phase=$((phase + 1))
+done
+
+write_stale_plan
+if [ -s "$stale_file" ]; then
+    run_group_batch
+    write_stale_plan
+fi
+if [ -s "$stale_file" ]; then
+    echo "$0: incremental plan did not converge" >&2
+    exit 1
+fi
+touch "$plan_stamp"
