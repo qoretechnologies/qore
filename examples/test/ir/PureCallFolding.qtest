@@ -130,6 +130,25 @@ float sub p_nan() { return sqrt(-1.0); }
 float sub p_neg_zero() { return ceil(-0.5, 0); }
 # three rounds: each fold turns the next argument into a literal
 float sub p_deep() { return sqrt(sqrt(sqrt(256.0))); }
+# QCF_PURE | QCF_HOST_PORTABLE string primitives; folded only where the folding host is the
+# reading host, because a ConstString is materialized with QCS_DEFAULT
+string sub p_tolower() { return tolower("MiXeD Case"); }
+string sub p_toupper() { return toupper("MiXeD Case"); }
+string sub p_trim() { return trim("   padded   "); }
+string sub p_ltrim() { return ltrim("xxabcxx", "x"); }
+string sub p_rtrim() { return rtrim("xxabcxx", "x"); }
+string sub p_chomp() { return chomp("line\n"); }
+string sub p_string_nested() { return toupper(trim("  hi  ")); }
+# multi-byte case mapping, and bytes a std::string literal has to carry verbatim
+string sub p_utf8() { return toupper("café straße"); }
+string sub p_embedded_nul() { return toupper("a\0b"); }
+# chr() tags its result QCS_DEFAULT itself, so it carries no determinism flag
+string sub p_chr() { return chr(65); }
+# the string substr() variants take softstring: the conversion, not the body, is host-dependent
+string sub p_substr() { return substr("abcdef", 1, 3); }
+# QCF_TOTAL + QCF_HOST_PORTABLE, but a binary has no IR literal
+int sub p_binary_length() { return length(<0102030405>); }
+string sub p_string_variable(string s) { return tolower(s); }
 
 printf("abs_int=%y\n", p_abs_int());
 printf("ceil_int=%y\n", p_ceil_int());
@@ -152,6 +171,19 @@ printf("nan=%y\n", p_nan());
 # %.17g exposes the sign of a negative zero, which %y does not
 printf("neg_zero=%.17g\n", p_neg_zero());
 printf("deep=%y\n", p_deep());
+printf("tolower=%y\n", p_tolower());
+printf("toupper=%y\n", p_toupper());
+printf("trim=%y\n", p_trim());
+printf("ltrim=%y\n", p_ltrim());
+printf("rtrim=%y\n", p_rtrim());
+printf("chomp=%y\n", p_chomp());
+printf("string_nested=%y\n", p_string_nested());
+printf("utf8=%y\n", p_utf8());
+printf("embedded_nul_size=%y match=%y\n", p_embedded_nul().size(), p_embedded_nul() == "A\0B");
+printf("chr=%y\n", p_chr());
+printf("substr=%y\n", p_substr());
+printf("binary_length=%y\n", p_binary_length());
+printf("string_variable=%y\n", p_string_variable("ABC"));
 ';
     }
 
@@ -171,6 +203,9 @@ printf("deep=%y\n", p_deep());
         assertRegex("nan=.nan", folded);
         assertRegex("neg_zero=-0", folded);
         assertRegex("deep=2", folded);
+        # a std::string literal has to carry multi-byte sequences and embedded NULs verbatim
+        assertRegex("utf8=\"CAFÉ STRASSE\"", folded);
+        assertRegex("embedded_nul_size=3 match=True", folded);
 
         # the comparison above is only meaningful if the folded run really folded
         hash<string, list<int>> counts = parseFoldCounts(
@@ -193,12 +228,18 @@ printf("deep=%y\n", p_deep());
             "p_sqrt", "p_abs_float", "p_logb", "p_compare",
             "p_sin", "p_exp",
             "p_big_int", "p_neg_inf", "p_nan", "p_neg_zero",
+            "p_tolower", "p_toupper", "p_trim", "p_ltrim", "p_rtrim", "p_chomp",
+            "p_utf8", "p_embedded_nul",
         );
         # sqrt(abs(-4.0)): the inner call folds first and the outer one then sees a literal
         assertFoldCount(counts, "p_nested", 2);
         assertFoldCount(counts, "p_deep", 3);
+        assertFoldCount(counts, "p_string_nested", 2);
         # no determinism claim, no literal to produce, no literal argument, or an unwind edge
-        map assertFoldCount(counts, $1, 0), ("p_pow", "p_number", "p_variable", "p_in_try");
+        map assertFoldCount(counts, $1, 0), (
+            "p_pow", "p_number", "p_variable", "p_in_try",
+            "p_chr", "p_substr", "p_binary_length", "p_string_variable",
+        );
     }
 
     #! qcc evaluates on the build host, so only QCF_HOST_PORTABLE values may enter the image
@@ -229,6 +270,9 @@ public class PureFoldProbe {
 
     #! QCF_TOTAL + QCF_HOST_PORTABLE: exact integer arithmetic
     static int portableInt() { return abs(-7); }
+
+    #! QCF_PURE + QCF_HOST_PORTABLE, but the literal that would carry the result is not portable
+    static string portableString() { return tolower("MiXeD"); }
 }
 }
 ');
@@ -243,6 +287,9 @@ public class PureFoldProbe {
         assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_portableInt", 1);
         # the whole point of the gate: the build host's sin() must not be baked in
         assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_hostDependent", 0);
+        # and QCF_HOST_PORTABLE on the callee cannot rescue a host-derived representation: a folded
+        # string would be re-materialized with the reading host's QCS_DEFAULT
+        assertFoldCount(counts, "PureFoldProbeMod::PureFoldProbe::_static_portableString", 0);
 
         # and the compiled module must still agree with an interpreted run of the same source
         string script = tmp.path + "/run.q";
@@ -252,6 +299,7 @@ public class PureFoldProbe {
 printf("portable=%y\n", PureFoldProbeMod::PureFoldProbe::portable());
 printf("hostDependent=%y\n", PureFoldProbeMod::PureFoldProbe::hostDependent());
 printf("portableInt=%y\n", PureFoldProbeMod::PureFoldProbe::portableInt());
+printf("portableString=%y\n", PureFoldProbeMod::PureFoldProbe::portableString());
 ');
         string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
             libqore_dir, qmod_dir, qore_bin, script));
@@ -284,12 +332,15 @@ int sub o_pure() { return dbg_flags_pure(); }
 int sub o_retval_only() { return dbg_flags_retval_only(); }
 # no claims at all
 int sub o_unflagged() { return dbg_flags_unflagged(); }
+# QCF_PURE | QCF_HOST_PORTABLE, but it returns latin-1 and an IR string literal is QCS_DEFAULT
+string sub o_latin1() { return dbg_flags_pure_latin1("abc"); }
 
 printf("legacy_constant=%y\n", o_legacy_constant());
 printf("total=%y\n", o_total());
 printf("pure=%y\n", o_pure());
 printf("retval_only=%y\n", o_retval_only());
 printf("unflagged=%y\n", o_unflagged());
+printf("latin1=%y latin1_cs=%y\n", o_latin1(), o_latin1().encoding());
 ');
         string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
         hash<string, list<int>> counts = parseFoldCounts(out, "IR-OPT:");
@@ -299,10 +350,13 @@ printf("unflagged=%y\n", o_unflagged());
         assertFoldCount(counts, "o_legacy_constant", 0);
         assertFoldCount(counts, "o_retval_only", 0);
         assertFoldCount(counts, "o_unflagged", 0);
+        # a folded string literal would silently retag the result as QCS_DEFAULT
+        assertFoldCount(counts, "o_latin1", 0);
 
         assertRegex("legacy_constant=1", out);
         assertRegex("total=2", out);
         assertRegex("pure=3", out);
+        assertRegex("latin1=\"abc\" latin1_cs=\"ISO-8859-1\"", out);
     }
 
     #! QCF_PURE does not imply nothrow: a raising evaluation must abandon the fold

@@ -3013,6 +3013,22 @@ static QoreValue f_dbg_flags_effect_count(const QoreListNode* params, RuntimeCon
     The doubling is exact integer arithmetic below the overflow threshold, so the declaration also
     carries QCF_HOST_PORTABLE and the fold applies when compiling for an AOT image.
  */
+//! Debug-only: returns its argument's bytes retagged as latin-1
+/** An honest QCF_PURE | QCF_HOST_PORTABLE declaration: the bytes are copied unchanged, nothing
+    outside the call observes it, and both the bytes and the encoding tag are the same on any host.
+
+    It exists for the constant folder, which materializes a folded string as an IR literal and
+    therefore with QCS_DEFAULT.  A host-portable callee that returns some other encoding would have
+    that encoding silently replaced, so the folder checks the produced encoding and gives up - and
+    no production declaration produces a non-default encoding from flagged code, so without this
+    the check could never be shown to fire.
+ */
+static QoreValue f_dbg_flags_pure_latin1(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
+    return new QoreStringNode(str->c_str(), str->size(), QCS_ISO_8859_1);
+}
+
 static QoreValue f_dbg_flags_pure_throw(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64 value = get_param_value(params, 0).getAsBigInt();
     if (value < 0) {
@@ -3167,6 +3183,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_flags_pure_throw", f_dbg_flags_pure_throw,
         QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_flags_pure_latin1", f_dbg_flags_pure_latin1,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, stringTypeInfo, 1,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "value");
 
     // the two liars: these declare QCF_NO_DOMAIN_THROW and then raise, so that the runtime check in
     // ~CodeEvaluationHelper() can be shown to detect a violation and to exempt the carve-outs

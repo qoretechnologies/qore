@@ -4522,49 +4522,76 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     QCF_PURE also does not imply nothrow: a pure variant may still raise a domain exception.  When
     compile-time evaluation raises, the exception belongs to the hypothetical run and not to the
     program being compiled, so it is discarded and the original call is kept.
+
+    A third condition is independent of the callee's flags entirely: the IR literal that carries a
+    folded value has to mean the same thing on the host that reads it.  A string does not - a
+    ConstString is materialized with QCS_DEFAULT, which is derived from the environment of whatever
+    host runs the code (QoreStringNode(const std::string&) in the interpreter and
+    qore_rt_make_string_len() in generated code both default to it).  Folding a string is therefore
+    correct for the interpreter and the JIT, where the folding host is the running host, and wrong
+    for an image no matter how host-portable the callee is.  QCF_HOST_PORTABLE describes the body,
+    and cannot rescue a representation that is itself host-derived.
 */
 
-//! Returns the literal value defined by an IR constant instruction.
-//! Only value kinds whose compile-time and run-time materialization are identical are accepted:
-//! strings carry an encoding and dates a timezone, both of which are host state, so they are not
-//! folded here even when the callee is host-portable.
-static bool qore_ir_pure_fold_get_literal(const QoreIRInstruction* def, QoreValue& arg) {
+//! Returns the literal value defined by an IR constant instruction; the caller owns any reference.
+//! @param same_host true when the folded value is read by the host that produced it, which is what
+//! a literal with a host-derived materialization needs
+static bool qore_ir_pure_fold_get_literal(const QoreIRInstruction* def, bool same_host,
+        ValueHolder& arg) {
     if (!def) {
         return false;
     }
+    const auto* cinst = static_cast<const QoreIRConstInstruction*>(def);
     switch (def->opcode) {
         case QoreIROpcode::ConstInt:
-            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.int_value);
+            arg = QoreValue(cinst->constant.int_value);
             return true;
         case QoreIROpcode::ConstFloat:
-            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.float_value);
+            arg = QoreValue(cinst->constant.float_value);
             return true;
         case QoreIROpcode::ConstBool:
         case QoreIROpcode::ConstBoolBoxed:
-            arg = QoreValue(static_cast<const QoreIRConstInstruction*>(def)->constant.bool_value);
+            arg = QoreValue(cinst->constant.bool_value);
             return true;
+        case QoreIROpcode::ConstString:
+            // the literal materializes with QCS_DEFAULT, so the bytes only mean the same thing to
+            // the compiling and the running host when they are the same host
+            if (!same_host) {
+                return false;
+            }
+            arg = QoreValue(new QoreStringNode(cinst->constant.string_value));
+            return true;
+        // a date literal carries a timezone and there is no IR constant for a number, so neither is
+        // folded here
         default:
             return false;
     }
 }
 
-//! Returns true when passing an int, float or bool literal to this parameter cannot introduce a
-//! host-derived value.  Argument conversion happens in the call machinery and is not covered by the
-//! callee's own flags, so for example a softstring parameter is rejected: QoreString(double) applies
-//! QCS_DEFAULT, which is host state.
-static bool qore_ir_pure_fold_param_type_supported(const QoreTypeInfo* type) {
-    return type == bigIntTypeInfo || type == softBigIntTypeInfo
+//! Returns true when passing a literal to this parameter cannot introduce a host-derived value.
+/** Argument conversion happens in the call machinery and is not covered by the callee's own flags,
+    which is why the soft string types are never accepted: QoreString(double) applies QCS_DEFAULT,
+    so the converted argument varies by host even where the body is a pure function of it.  A strict
+    string parameter takes the literal unconverted and is accepted on the same host.
+*/
+static bool qore_ir_pure_fold_param_type_supported(const QoreTypeInfo* type, bool same_host) {
+    if (type == bigIntTypeInfo || type == softBigIntTypeInfo
         || type == floatTypeInfo || type == softFloatTypeInfo
         || type == boolTypeInfo || type == softBoolTypeInfo
-        || type == numberTypeInfo || type == softNumberTypeInfo;
+        || type == numberTypeInfo || type == softNumberTypeInfo
+        || type == bigIntOrNothingTypeInfo || type == floatOrNothingTypeInfo
+        || type == boolOrNothingTypeInfo || type == numberOrNothingTypeInfo) {
+        return true;
+    }
+    return same_host && (type == stringTypeInfo || type == stringOrNothingTypeInfo);
 }
 
 //! Maps a declared return type to the runtime type the fold must observe, and to the IR constant
 //! that will carry it.  The declared type is required to match the produced value so that consumers
 //! specialized on the declared type keep seeing the representation they were specialized for.
-static bool qore_ir_pure_fold_result_kind(const QoreTypeInfo* return_type, qore_type_t& expected,
-        QoreIROpcode& opcode, QoreIRConstant::Kind& kind, const QoreTypeInfo*& type_info,
-        QoreIRValueRepresentation& representation) {
+static bool qore_ir_pure_fold_result_kind(const QoreTypeInfo* return_type, bool same_host,
+        qore_type_t& expected, QoreIROpcode& opcode, QoreIRConstant::Kind& kind,
+        const QoreTypeInfo*& type_info, QoreIRValueRepresentation& representation) {
     if (return_type == bigIntTypeInfo) {
         expected = NT_INT;
         opcode = QoreIROpcode::ConstInt;
@@ -4589,21 +4616,30 @@ static bool qore_ir_pure_fold_result_kind(const QoreTypeInfo* return_type, qore_
         representation = QoreIRValueRepresentation::Boxed;
         return true;
     }
+    if (same_host && return_type == stringTypeInfo) {
+        expected = NT_STRING;
+        opcode = QoreIROpcode::ConstString;
+        kind = QoreIRConstant::Kind::String;
+        type_info = stringTypeInfo;
+        representation = QoreIRValueRepresentation::Boxed;
+        return true;
+    }
     return false;
 }
 
 //! Builds the argument list for a compile-time call from IR literal definitions.
 //! Returns false unless every operand is a literal of a kind this fold accepts.
 static bool qore_ir_pure_fold_build_args(const QoreIRCallDirectInstruction* call,
-        const std::unordered_map<uint32_t, const QoreIRInstruction*>& definitions,
+        const std::unordered_map<uint32_t, const QoreIRInstruction*>& definitions, bool same_host,
         ReferenceHolder<QoreListNode>& arg_list, ExceptionSink& xsink) {
     for (QoreIRValue operand : call->operands) {
         auto def = definitions.find(operand.id);
-        QoreValue arg;
-        if (def == definitions.end() || !qore_ir_pure_fold_get_literal(def->second, arg)) {
+        ValueHolder arg(&xsink);
+        if (def == definitions.end()
+                || !qore_ir_pure_fold_get_literal(def->second, same_host, arg)) {
             return false;
         }
-        arg_list->push(arg, &xsink);
+        arg_list->push(arg.release(), &xsink);
         if (xsink) {
             xsink.clear();
             return false;
@@ -4679,6 +4715,18 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
         case QoreIRConstant::Kind::Bool:
             constant.bool_value = result->getAsBool();
             return true;
+        case QoreIRConstant::Kind::String: {
+            const QoreStringNode* str = result->get<const QoreStringNode>();
+            // the fold is only reached on the same host, but a callee that returns a string in an
+            // encoding other than QCS_DEFAULT would still lose it in the literal
+            if (!str || str->getEncoding() != QCS_DEFAULT) {
+                return false;
+            }
+            // copy by length: a ConstString is emitted with an explicit byte count and may hold
+            // embedded NULs
+            constant.string_value.assign(str->c_str(), str->size());
+            return true;
+        }
         default:
             return false;
     }
@@ -4695,6 +4743,9 @@ struct QoreIRPureCallFold {
 static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t& check_count,
         const QoreIRFoldContext& fold_context) {
     const bool require_host_portable = fold_context.target == QoreIRFoldTarget::Image;
+    // the interpreter and the JIT read the folded value on the host that produced it, so a literal
+    // whose materialization depends on host state still means the same thing
+    const bool same_host = fold_context.target == QoreIRFoldTarget::Runtime;
     QoreProgram* current_pgm = getProgram();
     std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
     for (const auto& block : func.blocks) {
@@ -4736,7 +4787,7 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
             }
             ExceptionSink arg_xsink;
             ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &arg_xsink);
-            if (!qore_ir_pure_fold_build_args(call, definitions, args, arg_xsink)) {
+            if (!qore_ir_pure_fold_build_args(call, definitions, same_host, args, arg_xsink)) {
                 continue;
             }
             const AbstractQoreFunctionVariant* variant =
@@ -4766,7 +4817,7 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
             }
             bool supported_params = true;
             for (unsigned i = 0; i < sig->numParams(); ++i) {
-                if (!qore_ir_pure_fold_param_type_supported(sig->getParamTypeInfo(i))) {
+                if (!qore_ir_pure_fold_param_type_supported(sig->getParamTypeInfo(i), same_host)) {
                     supported_params = false;
                     break;
                 }
@@ -4777,8 +4828,8 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
             QoreIRPureCallFold fold;
             qore_type_t expected = NT_NOTHING;
             QoreIRConstant::Kind kind = QoreIRConstant::Kind::Nothing;
-            if (!qore_ir_pure_fold_result_kind(variant->getReturnTypeInfo(), expected, fold.opcode,
-                    kind, fold.type_info, fold.representation)) {
+            if (!qore_ir_pure_fold_result_kind(variant->getReturnTypeInfo(), same_host, expected,
+                    fold.opcode, kind, fold.type_info, fold.representation)) {
                 continue;
             }
             if (!qore_ir_pure_fold_evaluate(call, variant, *args, fold_context, current_pgm,
