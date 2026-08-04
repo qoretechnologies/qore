@@ -891,12 +891,16 @@ llm.chatStream(
                 "The previous forced function-call response was malformed.");
             if (retry) {
                 if (openAiResponseHasToolCall(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, True, "malformed_function_call");
+                    return attachOpenAiToolProtocolDiagnostics(
+                        attachForcedToolRetryDiagnostics(retry, rv, retry,
+                            True, True, "malformed_function_call"), body,
+                        tools, options, False);
                 }
                 if (openAiResponseHasMessageContent(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, False, "malformed_function_call");
+                    return attachOpenAiToolProtocolDiagnostics(
+                        attachForcedToolRetryDiagnostics(retry, rv, retry,
+                            True, False, "malformed_function_call"), body,
+                        tools, options, False);
                 }
                 rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
                     False, "malformed_function_call");
@@ -908,14 +912,16 @@ llm.chatStream(
             if (retry) {
                 if (openAiResponseHasToolCall(retry)
                         || openAiResponseHasMessageContent(retry)) {
-                    return retry;
+                    return attachOpenAiToolProtocolDiagnostics(retry, body,
+                        tools, options, False);
                 }
                 rv = retry;
             }
         }
         # Never return NOTHING (see chatCompletionsStream): coalesce to an
         # empty hash so the response is always well-typed for callers.
-        return rv ?? {};
+        return attachOpenAiToolProtocolDiagnostics(rv ?? {}, body, tools,
+            options, False);
     }
 
     #! Streaming OpenAI-compatible chat-completions facade
@@ -957,12 +963,16 @@ llm.chatStream(
                 "The previous forced function-call response was malformed.");
             if (retry) {
                 if (openAiResponseHasToolCall(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, True, "malformed_function_call");
+                    return attachOpenAiToolProtocolDiagnostics(
+                        attachForcedToolRetryDiagnostics(retry, rv, retry,
+                            True, True, "malformed_function_call"), body,
+                        tools, options, True);
                 }
                 if (openAiResponseHasMessageContent(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, False, "malformed_function_call");
+                    return attachOpenAiToolProtocolDiagnostics(
+                        attachForcedToolRetryDiagnostics(retry, rv, retry,
+                            True, False, "malformed_function_call"), body,
+                        tools, options, True);
                 }
                 rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
                     False, "malformed_function_call");
@@ -974,7 +984,8 @@ llm.chatStream(
             if (retry) {
                 if (openAiResponseHasToolCall(retry)
                         || openAiResponseHasMessageContent(retry)) {
-                    return retry;
+                    return attachOpenAiToolProtocolDiagnostics(retry, body,
+                        tools, options, True);
                 }
                 rv = retry;
             }
@@ -984,7 +995,8 @@ llm.chatStream(
         # hash<auto> leaves it NOTHING until this return's type check), return
         # an empty hash so callers/metadata layers get a well-typed value
         # instead of a RUNTIME-TYPE-ERROR.
-        return rv ?? {};
+        return attachOpenAiToolProtocolDiagnostics(rv ?? {}, body, tools,
+            options, True);
     }
 
     private *hash<LlmTelemetryObserver> getTelemetryObserver(
@@ -1319,6 +1331,88 @@ llm.chatStream(
         return rv;
     }
 
+    #! Attaches bounded tool-protocol diagnostics to an OpenAI-shaped response
+    /** Records only closed request codes and structural counts.  Prompt text,
+        generated content, function names, and function arguments are excluded
+        so this metadata is safe for normal telemetry and error diagnostics.
+    */
+    private static hash<auto> attachOpenAiToolProtocolDiagnostics(
+            hash<auto> response, hash<auto> request,
+            *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> options, bool streaming) {
+        hash<auto!> rv;
+        rv += response;
+        hash<auto!> provider_diagnostics;
+        if (rv.provider_diagnostics.typeCode() == NT_HASH) {
+            provider_diagnostics += cast<hash>(rv.provider_diagnostics);
+        }
+
+        hash<auto!> protocol = {
+            "contract_version": "qore.llm.tool_protocol.v1",
+            "request_tool_choice_code":
+                openAiToolChoiceDiagnosticCode(request.tool_choice),
+            "request_tool_count": tools ? tools.size() : 0,
+            "streaming": streaming,
+            "normalized_tool_call_count": openAiResponseToolCallCount(rv),
+            "normalized_content_present":
+                openAiResponseHasMessageContent(rv),
+        };
+        hash<auto> body_options = options.body_options.typeCode() == NT_HASH
+            ? cast<hash>(options.body_options) : {};
+        hash<auto> function_config =
+            body_options.toolConfig.functionCallingConfig.typeCode() == NT_HASH
+                ? cast<hash>(body_options.toolConfig.functionCallingConfig)
+                : {};
+        if (function_config.mode.typeCode() == NT_STRING
+                && function_config.mode.val()) {
+            protocol.native_function_calling_mode = function_config.mode;
+        }
+        if (function_config.allowedFunctionNames.typeCode() == NT_LIST) {
+            protocol.native_allowed_function_count =
+                function_config.allowedFunctionNames.size();
+        }
+        *string finish_reason =
+            getOpenAiResponseFirstChoiceFinishReason(rv);
+        if (finish_reason.val()) {
+            protocol.normalized_finish_reason = finish_reason;
+        }
+        provider_diagnostics.tool_protocol = protocol;
+        rv.provider_diagnostics = provider_diagnostics;
+        return rv;
+    }
+
+    #! Returns a closed diagnostic code for an OpenAI tool-choice value
+    private static string openAiToolChoiceDiagnosticCode(auto choice) {
+        if (!exists choice) {
+            return "absent";
+        }
+        if (choice.typeCode() == NT_STRING) {
+            switch (choice.toString()) {
+                case "none":
+                case "auto":
+                case "required":
+                    return choice.toString();
+                default:
+                    return "other_string";
+            }
+        }
+        if (choice.typeCode() == NT_HASH && choice.function.name.val()) {
+            return "forced_function";
+        }
+        return "other_shape";
+    }
+
+    #! Returns the normalized tool-call count in an OpenAI response
+    private static int openAiResponseToolCallCount(hash<auto> response) {
+        if (response.choices.typeCode() != NT_LIST || !response.choices) {
+            return 0;
+        }
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
+        return choice.message.tool_calls.typeCode() == NT_LIST
+            ? choice.message.tool_calls.size() : 0;
+    }
+
     private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc,
             *list<hash<ToolDefinition>> tools) {
         hash<auto> args = coerceToolArguments(tc.name, tc.arguments ?? {},
@@ -1477,9 +1571,12 @@ llm.chatStream(
 
         hash<ChatResponse> retry_response = chat(retry_messages, tools,
             options);
-        return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
+        hash<auto> retry = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
             retry_response, options.model ?? provider.getModel(), tools),
             forced_tool_name, tools);
+        return attachForcedToolRetryDiagnostics(retry, original_response,
+            retry, True, openAiResponseHasToolCall(retry),
+            "required_tool_no_output");
     }
 
     private static *hash<ToolDefinition> findToolDefinition(
@@ -1699,6 +1796,7 @@ llm.chatStream(
             "tool_calls": (),
             "finish_reason": NOTHING,
             "usage": NOTHING,
+            "provider_diagnostics": NOTHING,
         };
     }
 
@@ -1752,6 +1850,14 @@ llm.chatStream(
         if (state.usage) {
             rv.usage = state.usage;
         }
+        # Terminal chunks carry provider diagnostics; callback gateways
+        # otherwise cannot return final metadata through their streaming
+        # callback's nothing return type.  Telemetry consumers must apply
+        # their own fixed-field allowlist before recording these values.
+        if (finish_reason.val()
+                && state.provider_diagnostics.typeCode() == NT_HASH) {
+            rv.provider_diagnostics = state.provider_diagnostics;
+        }
         return rv;
     }
 
@@ -1777,6 +1883,9 @@ llm.chatStream(
         }
         if (state.model.val()) {
             rv.model = state.model;
+        }
+        if (state.provider_diagnostics.typeCode() == NT_HASH) {
+            rv.provider_diagnostics = state.provider_diagnostics;
         }
         return rv;
     }

@@ -1083,6 +1083,19 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].path);
         assertEq("lookup customer",
             gemini_handler.requests[0].body.contents[0].parts[0].text);
+        assertEq("gemini_generate_content",
+            rv.provider_diagnostics.wire_protocol,
+            "diagnostics identify the provider wire protocol");
+        assertEq(1, rv.provider_diagnostics.wire_candidate_count,
+            "diagnostics count provider candidates");
+        assertEq(1, rv.provider_diagnostics.wire_part_count,
+            "diagnostics count provider response parts");
+        assertEq(1, rv.provider_diagnostics.wire_function_call_count,
+            "diagnostics observe provider-native function calls");
+        assertTrue(rv.provider_diagnostics.wire_function_call_observed,
+            "diagnostics distinguish provider emission from normalization");
+        assertFalse(rv.provider_diagnostics.wire_text_observed,
+            "tool-only provider responses are identified without content");
     }
 
     #! Gemini 3.x rejects a replayed function call that lost its reasoning signature
@@ -1235,6 +1248,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 },
             },),
         };
+        provider.updateOpenAiStreamStateFromRaw(\state, raw_chunk);
         list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
             raw_chunk);
 
@@ -1250,6 +1264,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the accumulated stream state keeps every call's own signature");
         assertEq("lookup", state.tool_calls[0]."function".name,
             "the harvest still produces the OpenAI tool-call shape");
+        assertEq(1, state.provider_diagnostics.wire_stream_event_count,
+            "stream diagnostics count provider events");
+        assertEq(2,
+            state.provider_diagnostics.wire_function_call_count_max,
+            "stream diagnostics retain the maximum native call count");
+        assertTrue(state.provider_diagnostics.wire_function_call_observed,
+            "stream diagnostics retain native call observation");
+        assertFalse(state.provider_diagnostics.hasKey("content"),
+            "stream diagnostics do not retain generated content");
         # a part without a signature must not create the key at all
         hash<auto> plain_state = {"tool_calls": ()};
         provider.getOpenAiToolCallDeltas(\plain_state, {
@@ -2423,6 +2446,32 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "retry function arguments are serialized");
         assertEq("STOP", rv.provider_diagnostics.finish_reason,
             "OpenAI facade exposes provider finish diagnostics");
+        assertEq("qore.llm.tool_protocol.v1",
+            rv.provider_diagnostics.tool_protocol.contract_version,
+            "tool diagnostics expose a versioned content-free contract");
+        assertEq("required",
+            rv.provider_diagnostics.tool_protocol.request_tool_choice_code,
+            "tool diagnostics retain the closed request choice code");
+        assertEq(2,
+            rv.provider_diagnostics.tool_protocol.request_tool_count,
+            "tool diagnostics retain the request tool count");
+        assertEq("ANY",
+            rv.provider_diagnostics.tool_protocol.native_function_calling_mode,
+            "tool diagnostics prove the native required mode translation");
+        assertEq(1,
+            rv.provider_diagnostics.tool_protocol.normalized_tool_call_count,
+            "tool diagnostics count normalized calls");
+        assertEq(1, rv.provider_diagnostics.wire_function_call_count,
+            "provider diagnostics prove the retry emitted a native call");
+        assertTrue(rv.provider_diagnostics.wire_function_call_observed,
+            "provider diagnostics distinguish emission from normalization");
+        assertEq("required_tool_no_output",
+            rv.provider_diagnostics.forced_tool_retry.reason,
+            "multi-tool retry diagnostics retain the recovery reason");
+        assertTrue(rv.provider_diagnostics.forced_tool_retry.attempted,
+            "multi-tool retry diagnostics record the attempt");
+        assertTrue(rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
+            "multi-tool retry diagnostics record recovery");
     }
 
     geminiOpenAiSingleRequiredToolEmptyJsonRetryTest() {
@@ -2516,6 +2565,17 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(True,
             rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
             "diagnostics record successful single-tool recovery");
+        assertEq("required",
+            rv.provider_diagnostics.tool_protocol.request_tool_choice_code,
+            "single-tool diagnostics retain required request mode");
+        assertEq(1, rv.provider_diagnostics.tool_protocol.request_tool_count,
+            "single-tool diagnostics retain request tool count");
+        assertEq("ANY",
+            rv.provider_diagnostics.tool_protocol.native_function_calling_mode,
+            "single-tool diagnostics retain initial native mode");
+        assertEq(1,
+            rv.provider_diagnostics.tool_protocol.normalized_tool_call_count,
+            "single-tool JSON recovery is visible after normalization");
         hash<auto> args = parse_json(
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("revise", args.operation,
@@ -2573,6 +2633,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                         "completion_tokens": 0,
                         "total_tokens": 10,
                     },
+                    "provider_diagnostics": {
+                        "wire_protocol": "gemini_generate_content",
+                        "wire_stream_event_count": 1,
+                        "wire_function_call_count_max": 0,
+                        "wire_function_call_observed": False,
+                    },
                 });
             },
         });
@@ -2625,6 +2691,24 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("required_tool_no_output",
             rv.provider_diagnostics.forced_tool_retry.reason,
             "streaming diagnostics record required-tool retry");
+        assertTrue(rv.provider_diagnostics.tool_protocol.streaming,
+            "tool diagnostics identify the streaming path");
+        assertEq("required",
+            rv.provider_diagnostics.tool_protocol.request_tool_choice_code,
+            "stream diagnostics retain required request mode");
+        assertEq(1, rv.provider_diagnostics.tool_protocol.request_tool_count,
+            "stream diagnostics retain request tool count");
+        assertEq(1,
+            rv.provider_diagnostics.tool_protocol.normalized_tool_call_count,
+            "stream diagnostics count the recovered normalized call");
+        hash<auto> original_provider = rv.provider_diagnostics
+            .forced_tool_retry.original_provider_diagnostics;
+        assertEq("gemini_generate_content", original_provider.wire_protocol,
+            "callback streaming preserves original provider diagnostics");
+        assertEq(1, original_provider.wire_stream_event_count,
+            "callback streaming preserves original provider event counts");
+        assertFalse(original_provider.wire_function_call_observed,
+            "callback streaming preserves original native no-call evidence");
         hash<auto> args = parse_json(
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("stream JSON retry", args.reason,

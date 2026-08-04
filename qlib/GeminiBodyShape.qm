@@ -778,6 +778,39 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
 #! Extracts Gemini-specific diagnostics for provider-neutral callers
 public *hash<auto> sub providerDiagnostics(hash<auto> body, hash<auto> cand) {
     hash<auto!> rv;
+    int candidate_count = body.candidates.typeCode() == NT_LIST
+        ? body.candidates.size() : 0;
+    int part_count = cand.content.parts.typeCode() == NT_LIST
+        ? cand.content.parts.size() : 0;
+    int text_part_count = 0;
+    int function_call_count = 0;
+    int other_part_count = 0;
+    foreach auto raw_part in (cand.content.parts ?? ()) {
+        if (raw_part.typeCode() != NT_HASH) {
+            ++other_part_count;
+            continue;
+        }
+        hash<auto> part = cast<hash>(raw_part);
+        if (part.functionCall.typeCode() == NT_HASH) {
+            ++function_call_count;
+        } else if (part.text.typeCode() == NT_STRING) {
+            ++text_part_count;
+        } else {
+            ++other_part_count;
+        }
+    }
+    # These wire-shape counters deliberately contain no prompt, generated
+    # text, function names, or arguments.  They let callers distinguish a
+    # provider response with no function call from an adapter that lost one
+    # while normalizing the Gemini envelope.
+    rv.wire_protocol = "gemini_generate_content";
+    rv.wire_candidate_count = candidate_count;
+    rv.wire_part_count = part_count;
+    rv.wire_text_part_count = text_part_count;
+    rv.wire_function_call_count = function_call_count;
+    rv.wire_other_part_count = other_part_count;
+    rv.wire_text_observed = text_part_count > 0;
+    rv.wire_function_call_observed = function_call_count > 0;
     if (body.responseId.val()) {
         rv.response_id = body.responseId;
     }
@@ -1055,6 +1088,41 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         if (!raw) {
             return;
         }
+        hash<auto> cand = raw.candidates[0] ?? {};
+        hash<auto> event_diagnostics =
+            GeminiBodyShape::providerDiagnostics(raw, cand) ?? {};
+        hash<auto!> diagnostics;
+        if (state.provider_diagnostics.typeCode() == NT_HASH) {
+            diagnostics += cast<hash>(state.provider_diagnostics);
+        }
+        diagnostics.wire_protocol = "gemini_generate_content";
+        diagnostics.wire_stream_event_count =
+            (diagnostics.wire_stream_event_count ?? 0).toInt() + 1;
+        foreach string key in (("wire_candidate_count", "wire_part_count",
+                "wire_text_part_count", "wire_function_call_count",
+                "wire_other_part_count")) {
+            int observed = (event_diagnostics{key} ?? 0).toInt();
+            string max_key = key + "_max";
+            if (observed > (diagnostics{max_key} ?? 0).toInt()) {
+                diagnostics{max_key} = observed;
+            }
+        }
+        if ((event_diagnostics.wire_text_observed ?? False).toBool()) {
+            diagnostics.wire_text_observed = True;
+        }
+        if ((event_diagnostics.wire_function_call_observed ?? False).toBool()) {
+            diagnostics.wire_function_call_observed = True;
+        }
+        # Retain only provider-owned protocol metadata; generated text and
+        # tool arguments are never copied into diagnostics.
+        foreach string key in (("response_id", "prompt_feedback",
+                "usage_metadata", "finish_reason", "finish_message",
+                "safety_ratings")) {
+            if (exists event_diagnostics{key}) {
+                diagnostics{key} = event_diagnostics{key};
+            }
+        }
+        state.provider_diagnostics = diagnostics;
         if (raw.responseId.val()) {
             state.id = raw.responseId;
         } else if (raw.id.val()) {

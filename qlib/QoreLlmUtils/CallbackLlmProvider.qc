@@ -212,6 +212,10 @@ backend.chatStream(history,
             if (resp.usage) {
                 terminal_raw.usage = resp.usage;
             }
+            if (resp.provider_diagnostics.typeCode() == NT_HASH) {
+                terminal_raw.provider_diagnostics =
+                    resp.provider_diagnostics;
+            }
             callback(<ChatStreamEvent>{
                 "done": True,
                 "raw": terminal_raw,
@@ -248,6 +252,31 @@ backend.chatStream(history,
         # already emitted a terminal chunk (the common case).
         if (!saw_terminal) {
             callback(<ChatStreamEvent>{"done": True});
+        }
+    }
+
+    #! Preserve content-free diagnostics supplied by the callback gateway
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        # Preserve the default OpenAI-shaped accumulator behavior in addition
+        # to the callback gateway's provider diagnostics.
+        if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+        if (raw.provider_diagnostics.typeCode() == NT_HASH) {
+            state.provider_diagnostics = raw.provider_diagnostics;
         }
     }
 
@@ -424,6 +453,7 @@ backend.chatStream(history,
             "tool_calls": parsed_tool_calls,
             "usage": resp.usage ?? {},
             "raw": resp,
+            "provider_diagnostics": resp.provider_diagnostics,
         };
     }
 }
