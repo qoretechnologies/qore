@@ -164,9 +164,11 @@ bool sub is_owned_file_name(string path, string name) {
     if (name =~ /^\.qcc-(batch-)?bootstrap\.stamp\.lock(\.[0-9]+)?$/) {
         return True;
     }
-    # emitObjectFile() atomically publishes .qo files through this exact
-    # process-qualified temporary name. A killed qcc can leave it behind.
-    if (name =~ /\.qo\.tmp\.[0-9]+$/) {
+    # emitObjectFile() atomically publishes .qo files through a
+    # process-qualified temporary name. Split codegen derives its part objects
+    # and symbol-localization lists from that name. A killed qcc can leave any
+    # of these exact helper-owned forms behind.
+    if (name =~ /\.qo\.tmp\.[0-9]+(\.p[0-9]+\.o|\.(globals|loc)\.[0-9]+)?$/) {
         return True;
     }
     foreach string suffix in (QO_SUFFIXES) {

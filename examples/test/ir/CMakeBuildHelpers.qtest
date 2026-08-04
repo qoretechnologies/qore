@@ -1428,6 +1428,12 @@ endif()
         mkdir(build_dir + "/qo/LEGACY_GROUP");
         write(build_dir + "/qo/LEGACY_GROUP/legacy.qo", "legacy\n");
         write(build_dir + "/qo/LEGACY_GROUP/legacy.qo.tmp.12345", "interrupted qcc\n");
+        write(build_dir + "/qo/LEGACY_GROUP/legacy.qo.tmp.12345.p0.o",
+            "interrupted split codegen\n");
+        write(build_dir + "/qo/LEGACY_GROUP/legacy.qo.tmp.12345.loc.12345",
+            "interrupted ELF localization\n");
+        write(build_dir + "/qo/LEGACY_GROUP/legacy.qo.tmp.12345.globals.12345",
+            "interrupted Mach-O localization\n");
         mkdir(build_dir + "/qo-scripts");
         mkdir(build_dir + "/qo-scripts/LEGACY_GROUP");
         write(build_dir + "/qo-scripts/LEGACY_GROUP/qcc-single.sh", "#!/bin/sh\n");
