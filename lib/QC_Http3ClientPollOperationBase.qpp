@@ -46,6 +46,67 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
+// Fallback poll timeout (ms) when ngtcp2 reports no timer pending; matches
+// QUIC_NO_TIMER_POLL_MS in QuicPollOperations.cpp.
+// NOTE: plain "//" comments only in this file outside qpp declarations --
+// qpp consumes "//!" and "/** */" blocks as documentation for the next qpp
+// entity, which silently deletes a plain C++ helper's signature.
+static constexpr int64_t H3_NO_TIMER_POLL_MS = 1000;
+
+// Returns a POLLIN poll-info hash that carries the QUIC timer deadline.
+//
+// A poll-info hash WITHOUT poll_timeout_ms tells the async I/O controller to
+// arm no protocol-level wake deadline (see the poll_timeout_ms handling in
+// AsyncIoControllerPriv.cpp, which sets poll_timeout_deadline_us = 0 when the
+// key is absent).  The operation is then driven only by arriving packets.
+//
+// That is fatal while waiting for a response: a peer computing a slow reply
+// (an LLM generateContent call, for example) sends nothing for many seconds,
+// so nothing wakes the I/O thread, nothing calls ngtcp2_conn_handle_expiry(),
+// and ngtcp2's keep-alive PING is never emitted.  The local idle timer then
+// expires and the session dies with NGTCP2_ERR_IDLE_CLOSE ("before any
+// response data arrived") even though keep-alive was correctly armed by
+// QuicSession::updateKeepAliveLocked().
+//
+// Every QUIC read path in QuicPollOperations.cpp sets this key; the HTTP/3
+// client wrapper must do the same on the paths where it returns its own
+// poll-info hash rather than the inner operation's.
+static QoreHashNode* h3_set_quic_poll_timeout(QoreHashNode* sock_poll_info_hash,
+        SocketQuicClientPollOperation* inner_op, ExceptionSink* xsink) {
+    if (!sock_poll_info_hash) {
+        return sock_poll_info_hash;
+    }
+    int64_t timeout_ms = H3_NO_TIMER_POLL_MS;
+    std::shared_ptr<QuicSession> session = inner_op
+        ? inner_op->getSession()
+        : nullptr;
+    if (session) {
+        const ngtcp2_tstamp expiry = session->getExpiry();
+        if (expiry != UINT64_MAX) {
+            const ngtcp2_tstamp now = QuicSession::timestamp();
+            if (expiry > now) {
+                const ngtcp2_duration timeout_ns = expiry - now;
+                timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
+                // round up sub-millisecond durations so we never busy-spin on a
+                // 0 ms timeout, and never sleep past the deadline
+                if (timeout_ns % 1000000) {
+                    ++timeout_ms;
+                }
+                if (timeout_ms > H3_NO_TIMER_POLL_MS) {
+                    // wake at least once per second: the timer may be re-armed
+                    // earlier (e.g. keep-alive) while we are parked here
+                    timeout_ms = H3_NO_TIMER_POLL_MS;
+                }
+            } else {
+                // deadline already passed; the next poll pass handles it
+                timeout_ms = 1;
+            }
+        }
+    }
+    sock_poll_info_hash->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+    return sock_poll_info_hash;
+}
+
 // ============================================================
 // Http3ClientPollOperationPriv implementation
 // ============================================================
@@ -496,7 +557,10 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         if (last_poll_info) {
             return last_poll_info;
         }
-        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        // carry the QUIC timer deadline so ngtcp2's keep-alive still fires
+        // while we wait for the next response (see h3_set_quic_poll_timeout)
+        return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+            inner_op, xsink);
     }
 
     if (last_poll_info) {
@@ -515,7 +579,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     h3_state.store(H3State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    // The normal "request sent, waiting for the response" park.  Without the
+    // QUIC timer deadline the I/O thread sleeps until a packet arrives, and a
+    // peer that stays silent while computing a slow reply never sends one --
+    // so the keep-alive PING is never emitted and the session idle-closes.
+    return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+        inner_op, xsink);
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {

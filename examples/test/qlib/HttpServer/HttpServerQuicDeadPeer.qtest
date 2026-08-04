@@ -49,6 +49,7 @@
 %requires HttpServer
 %requires WebSocketUtil
 %requires WebSocketHandler
+%requires HttpClientIo
 
 %exec-class HttpServerQuicDeadPeerTest
 
@@ -156,6 +157,30 @@ class DeadPeerSseHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Answers only after staying completely silent for \c delay_secs
+/** Models a slow upstream (an LLM completion call, for example): the peer
+    sends NO application data at all while it computes, so nothing but the
+    QUIC keep-alive can hold the session open.
+*/
+class SilentSlowHandler inherits AbstractHttpRequestHandler {
+    public {
+        int delay_secs;
+        Queue request_started();
+    }
+
+    constructor(int n_delay_secs) : AbstractHttpRequestHandler() {
+        delay_secs = n_delay_secs;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        request_started.push("started");
+        # deliberately blocking and silent: no headers, no body, no trailers
+        sleep(delay_secs);
+        return makeResponse(200, "slow-ok", {"Content-Type": MimeTypeText});
+    }
+}
+
 class HttpServerQuicDeadPeerTest inherits Test {
     private {
         *Logger mLogger;
@@ -259,6 +284,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testH3SseDeadPeerReaped());
         addTestCase("HTTP/3 WebSocket live peer survives the idle window",
             \testH3WsLivePeerNotReaped());
+        addTestCase("HTTP/3 request survives a server silent past the idle window",
+            \testH3SlowSilentResponseNotIdleClosed());
 
         set_return_value(main());
     }
@@ -427,6 +454,77 @@ l50Xb2GWQesIt9k5jF5IOw==
             timed_out = True;
         }
         assertTrue(timed_out, "live peer's WebSocket handler was not reaped");
+    }
+
+    #! A silent slow upstream must not idle-close the caller's H3 session
+    /** An async H3 request whose peer sends NOTHING for several idle windows
+        must still complete: the QUIC keep-alive is the only thing holding the
+        session open, and an idle close here surfaces to callers as
+        @c HTTP3-IDLE-CLOSE "before any response data arrived".
+
+        @note This exercises the scenario but does NOT discriminate the
+        @c poll_timeout_ms fix in QC_Http3ClientPollOperationBase.qpp, and must
+        not be cited as proof of it.  Both peers here are Qore QUIC sessions,
+        so the SERVER's own keep-alive PINGs arrive at effective_idle/2 and
+        restart the client's idle timer regardless of whether the client is
+        driving its own timer.  Reproducing that defect needs a peer that never
+        PINGs (a real third-party endpoint does not), which no hermetic Qore
+        server can model.  What this case does guard is the reverse risk: that
+        the fix's added wake-ups break or busy-spin a healthy slow request.
+
+        The delay spans more than two idle windows.
+    */
+    testH3SlowSilentResponseNotIdleClosed() {
+        checkDeadPeerSupported();
+
+        # IdleTimeoutMs is 10s, so keep-alive fires at ~5s; stay silent well
+        # past two full idle windows
+        int delay_secs = (IdleTimeoutMs / 1000) * 5 / 2;
+        SilentSlowHandler handler(delay_secs);
+        hash<auto> setup = setupServer(handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        # The ASYNC client is the one under test: it parks the request on the
+        # async I/O controller, which only wakes on a deadline the poll-info
+        # hash asks for.  The synchronous HTTPClient drives its own poll loop
+        # and therefore cannot see this defect at all.
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                # must exceed the handler's silence, or the operation-level
+                # timeout would mask the idle close under test
+                "request_timeout": seconds(delay_secs + 60),
+                "connect_timeout": 30s,
+            },
+        );
+        on_exit {
+            try {
+                mgr.closeAll();
+            } catch () {
+            }
+        }
+
+        hash<auto> resp;
+        try {
+            resp = mgr.request("https://127.0.0.1:" + setup.port, "GET", "/slow");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP3-IDLE-CLOSE") {
+                fail(sprintf("the QUIC session idle-closed while waiting for a "
+                    "silent slow response; the keep-alive timer was not being "
+                    "driven: %s: %s", ex.err, ex.desc));
+            }
+            rethrow;
+        }
+        assertEq(200, int(resp.status_code),
+            "a response arriving after more than two idle windows of peer "
+                "silence is received");
+        assertEq("started", handler.request_started.get(1s),
+            "the slow handler actually ran");
     }
 
     #! Starts the victim WebSocket client and returns its pid file path
