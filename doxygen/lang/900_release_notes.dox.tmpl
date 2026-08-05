@@ -594,44 +594,31 @@ int echoed = child.echo(value);
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
-    @par Opt-In Structured Datasource Mutation Observer
+    @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
-    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
-    objects can now be given a structured <b>mutation observer</b> that receives deterministic
-    pre-execution and outcome boundaries for every operation, and that can admit or reject a
-    mutation before it runs.  This provides the datasource/driver boundary required by managed
-    multi-tenant storage admission; %Qore supplies mechanism only and no policy.
+    %Qore now uses one shared IR pipeline for the @ref exec_mode_ir "IR interpreter", the
+    <a href="https://llvm.org/">LLVM</a> @ref exec_mode_jit "JIT", @ref exec_mode_tiered "tiered"
+    execution, and @ref exec_mode_aot "AOT" compilation.  @ref modern "%modern" code defaults to
+    @ref exec_mode_tiered "tiered", which validates IR lowerability at parse commit, starts quickly with
+    cached IR, and promotes hot function variants to JIT; legacy non-modern code defaults to AST
+    execution for compatibility.
 
-    %Qore performs <b>no classification</b> of %SQL text, database error text, or command tags; all
-    semantic metadata is supplied by the producer with the new
-    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" scope class, which is inherited by
-    every operation issued on the object from the same thread — including operations issued far below the
-    declaration site by <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or any other layer.
-    Observers are registered per datasource or pool with
-    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
-    (there is no process-global registry), receive
-    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" hashes, and may return a
-    @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash at an
-    @ref sql_mutation_admission "admission point":
-    @code{.py}
-dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
-    if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC && over_quota(ev.info)) {
-        return <SqlMutationDecisionInfo>{"admit": False, "err": "QUOTA-EXCEEDED"};
-    }
-}, SQL_MUTATION_MASK_DEFAULT);
-    @endcode
+    The new @ref qcc_tool "qcc" compiler provides the AOT workflow: script executables, binary user
+    modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>),
+    dependency files, and artifact inspection.  Standard user modules are built and installed as
+    AOT-compiled <tt>.qmod</tt> artifacts by default (disable with \c -DQORE_BUILD_AOT_MODULES=OFF);
+    module lookup prefers compiled artifacts over the corresponding source modules, which remain
+    installed for documentation and development.  \c qcc can parallelize LLVM backend codegen and acts
+    as a GNU make jobserver client so parallel builds share one job budget; see
+    @ref qcc_parallel_codegen "Parallel Backend Codegen and the GNU make Jobserver".
 
-    Outcomes are derived from control flow, never from error text: a commit that does not demonstrably
-    succeed is reported as
-    @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS" and is
-    <b>never</b> reported as a rollback.  Every outcome event carries \c "replay_safe", true only when
-    %Qore can prove no commit was attempted, which together with the producer's stable \c "op_id" lets a
-    consumer safely replay a restartable transaction.  Datasources with no observer registered retain
-    their previous behavior at the cost of one pointer test per operation.
+    Execution modes can also be selected programmatically with the new @ref Qore::ExecMode "ExecMode"
+    enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
+    @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
 
-    See @ref sql_mutation_admission "Observer Semantics" for the full event, declaration, statement, and
-    bounded-stream model, along with the @ref sql_mutation_events, @ref sql_stmt_classes,
-    @ref sql_mutation_outcomes, @ref sql_mutation_effects, and @ref sql_mutation_masks constants.
+    LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
+    complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
+    notes.
     @endparblock
 
     @par New Required Libraries and Async Networking Stack
@@ -688,31 +675,25 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>.
     @endparblock
 
-    @par LLVM-backed Execution Modes and AOT Compilation
+    @par New Build Requirement: Rust Toolchain and tree-sitter CLI
     @parblock
-    %Qore now uses one shared IR pipeline for the @ref exec_mode_ir "IR interpreter", the
-    <a href="https://llvm.org/">LLVM</a> @ref exec_mode_jit "JIT", @ref exec_mode_tiered "tiered"
-    execution, and @ref exec_mode_aot "AOT" compilation.  @ref modern "%modern" code defaults to
-    @ref exec_mode_tiered "tiered", which validates IR lowerability at parse commit, starts quickly with
-    cached IR, and promotes hot function variants to JIT; legacy non-modern code defaults to AST
-    execution for compatibility.
+    The @ref astparserintro "astparser" module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
+    parser backend for Qore source code analysis. Building %Qore from source now requires a
+    <a href="https://rustup.rs/">Rust toolchain</a> (cargo) and the \c tree-sitter CLI tool to generate the
+    parser from the Qore grammar definition.
 
-    The new @ref qcc_tool "qcc" compiler provides the AOT workflow: script executables, binary user
-    modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>),
-    dependency files, and artifact inspection.  Standard user modules are built and installed as
-    AOT-compiled <tt>.qmod</tt> artifacts by default (disable with \c -DQORE_BUILD_AOT_MODULES=OFF);
-    module lookup prefers compiled artifacts over the corresponding source modules, which remain
-    installed for documentation and development.  \c qcc can parallelize LLVM backend codegen and acts
-    as a GNU make jobserver client so parallel builds share one job budget; see
-    @ref qcc_parallel_codegen "Parallel Backend Codegen and the GNU make Jobserver".
+    Install the Rust toolchain packages:
+    - <b>RHEL/Fedora:</b> \c rust, \c cargo
+    - <b>Debian/Ubuntu:</b> \c cargo
+    - <b>Alpine:</b> \c cargo, \c rust
 
-    Execution modes can also be selected programmatically with the new @ref Qore::ExecMode "ExecMode"
-    enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
-    @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
+    Then install the tree-sitter CLI:
+    @code
+cargo install tree-sitter-cli@0.26.5
+    @endcode
 
-    LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
-    complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
-    notes.
+    The tree-sitter C runtime library is fetched automatically by CMake via \c FetchContent; only the CLI tool
+    needs to be pre-installed.
     @endparblock
 
     @par Program-owned Module Path Directives
@@ -767,25 +748,44 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     consumer examples.
     @endparblock
 
-    @par New Build Requirement: Rust Toolchain and tree-sitter CLI
+    @par Opt-In Structured Datasource Mutation Observer
     @parblock
-    The @ref astparserintro "astparser" module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
-    parser backend for Qore source code analysis. Building %Qore from source now requires a
-    <a href="https://rustup.rs/">Rust toolchain</a> (cargo) and the \c tree-sitter CLI tool to generate the
-    parser from the Qore grammar definition.
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    objects can now be given a structured <b>mutation observer</b> that receives deterministic
+    pre-execution and outcome boundaries for every operation, and that can admit or reject a
+    mutation before it runs.  This provides the datasource/driver boundary required by managed
+    multi-tenant storage admission; %Qore supplies the mechanism only and no policy.
 
-    Install the Rust toolchain packages:
-    - <b>RHEL/Fedora:</b> \c rust, \c cargo
-    - <b>Debian/Ubuntu:</b> \c cargo
-    - <b>Alpine:</b> \c cargo, \c rust
-
-    Then install the tree-sitter CLI:
-    @code
-cargo install tree-sitter-cli@0.26.5
+    %Qore performs <b>no classification</b> of %SQL text, database error text, or command tags; all
+    semantic metadata is supplied by the producer with the new
+    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" scope class, which is inherited by
+    every operation issued on the object from the same thread — including operations issued far below the
+    declaration site by <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or any other layer.
+    Observers are registered per datasource or pool with
+    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+    (there is no process-global registry), receive
+    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" hashes, and may return a
+    @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash at an
+    @ref sql_mutation_admission "admission point":
+    @code{.py}
+dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+    if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC && over_quota(ev.info)) {
+        return <SqlMutationDecisionInfo>{"admit": False, "err": "QUOTA-EXCEEDED"};
+    }
+}, SQL_MUTATION_MASK_DEFAULT);
     @endcode
 
-    The tree-sitter C runtime library is fetched automatically by CMake via \c FetchContent; only the CLI tool
-    needs to be pre-installed.
+    Outcomes are derived from control flow, never from error text: a commit that does not demonstrably
+    succeed is reported as
+    @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS" and is
+    <b>never</b> reported as a rollback.  Every outcome event carries \c "replay_safe", true only when
+    %Qore can prove no commit was attempted, which together with the producer's stable \c "op_id" lets a
+    consumer safely replay a restartable transaction.  Datasources with no observer registered retain
+    their previous behavior at the cost of one pointer test per operation.
+
+    See @ref sql_mutation_admission "Observer Semantics" for the full event, declaration, statement, and
+    bounded-stream model, along with the @ref sql_mutation_events, @ref sql_stmt_classes,
+    @ref sql_mutation_outcomes, @ref sql_mutation_effects, and @ref sql_mutation_masks constants.
     @endparblock
 
     @par Language and Runtime
@@ -2462,13 +2462,6 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
-    - HTTP/3 and QUIC
-      - fixed a peer-initiated stream abort being invisible to the application: ngtcp2's \c stream_reset
-        callback was never registered, and a peer \c STOP_SENDING reaches the application only as a stream
-        close carrying the peer's error code, which was not reported either.  A client that abandoned a
-        long-lived response stream while keeping its connection for other requests therefore left the server
-        writing into a stream nobody read, until the whole QUIC session closed
-
     - Build
       - fixed \c libqore being unloadable with \c dlopen() on musl targets (Alpine Linux), which broke embedding
         Qore in Python (\c "import qoreloader" failed with \c "initial-exec TLS resolves to dynamic definition").
