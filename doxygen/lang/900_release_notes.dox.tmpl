@@ -17,6 +17,16 @@
     <b>Highlights:</b>
 
     <i>Performance and memory:</i>
+    - <b><a href="https://llvm.org/">LLVM</a>-backed @ref execution_modes "execution modes"</b> are the headline
+      feature of this release: one Qore intermediate-representation (IR) pipeline backs the
+      @ref exec_mode_ir "IR interpreter", @ref exec_mode_jit "JIT", @ref exec_mode_tiered "tiered" execution
+      (the default for @ref modern "%modern" code), and @ref exec_mode_aot "AOT" compilation, all sharing the
+      same semantic baseline so native paths preserve interpreter behavior exactly; the new
+      @ref qcc_tool "qcc" compiler produces standalone executables, binary user modules (<tt>.qmod</tt>),
+      relocatable objects (<tt>.qo</tt>), and archives (<tt>.qoa</tt>).  LLVM 16 or later is required for JIT
+      and AOT
+    - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt> artifacts by default
+      for faster startup and execution (see @ref exec_mode_aot "AOT Compilation")
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
@@ -29,6 +39,10 @@
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
     - regex matching skips per-call UTF-8 re-validation in PCRE2 inner loops
+    - calls to builtin functions declared deterministic and free of side effects are evaluated once at
+      compile time when every argument is a literal; @ref exec_mode_aot "AOT" additionally requires the
+      result to be host-portable, so a value that depends on the build host is never baked into a
+      compiled image
 
     <i>Language features:</i>
     - new @ref modern "%modern" parse directive, <tt>.qr</tt> file extension, and modern-by-default
@@ -60,6 +74,9 @@
       parameters can declare defaults and upper bounds; functions and methods
       can also infer method-level type arguments or accept explicit call type
       arguments such as <tt>identity&lt;string&gt;(...)</tt>
+    - @ref execution_modes "IR/JIT execution" internally specializes source @ref generic_classes "generic"
+      method and function bodies for concrete receiver and call type arguments, while
+      @ref exec_mode_aot "AOT" metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH @ref string_escape_chars "string-literal escapes"
     - new streaming operators @ref streaming_first "first", @ref streaming_any "any",
@@ -67,12 +84,13 @@
       @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and
       @ref streaming_takeuntil "takeuntil", plus the <tt>iterate</tt>
       operator, provide short-circuit and prefix/boundary processing over lists, hashes,
-      strings, binaries, integer ranges, and iterators; string iteration yields
-      @ref char "char" values
+      strings, binaries, integer ranges, and iterators; @ref execution_modes "IR/JIT/AOT" execution lowers
+      streaming operators to native iterator loops and fuses nested streaming stages; string iteration
+      yields @ref char "char" values
     - the @ref find "find" operator now supports \c first, \c last, and \c one modifiers
       for consistent first-match, last-match, and exactly-one-match context queries
     - new \c %%Y @ref string_formatting "printf format specifier" for multi-line pseudo-YAML output
-    - zero-cost \c \@\@assert / \c \@\@debug statements and the
+    - zero-cost \c \@assert / \c \@debug statements and the
       @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
 
     <i>Concurrency and threading:</i>
@@ -126,52 +144,28 @@
       @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" and the
       corresponding @ref Qore::SQL::DatasourcePool "DatasourcePool" methods expose typed DBI
       result values with runtime hashdecls and dense buffers where possible
-    - new @ref Qore::SQL::ColumnarResult "ColumnarResult" SQL result container and
-      @ref Qore::SQL::Datasource::selectColumnar() "Datasource::selectColumnar()" /
-      @ref Qore::SQL::DatasourcePool::selectColumnar() "DatasourcePool::selectColumnar()" /
-      @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" APIs expose
-      query results as ordered typed columns for DataFrame and analytics workloads; drivers without
-      native support use a libqore compatibility fallback, and @ref Qore::DataFrame::DataFrame::fromQuery() "DataFrame::fromQuery()" uses the
-      columnar API automatically when available; @ref Qore::SQL::ColumnarResult "ColumnarResult" values can now be filtered with
-      dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
-      columns; date, timestamp, and interval columns use dense \c buffer<int64> microsecond
-      storage when @ref Qore::SQL::ColumnarResult "ColumnarResult" schema or DBI metadata identifies a temporal column, while
-      row/list APIs materialize normal Qore \c date values; @ref Qore::SQL::ColumnarResult::fromColumnHash() "ColumnarResult::fromColumnHash()" and
-      @ref Qore::SQL::ColumnarResult::fromRows() "ColumnarResult::fromRows()" provide explicit
-      constructors for projected or row-compatible columnar blocks; @ref Qore::SQL::ColumnarResult::stringPredicateMask() "ColumnarResult::stringPredicateMask()"
-      builds dense masks for common string predicates without materializing row hashes
-    - C++ modules can import and export @ref Qore::SQL::ColumnarResult "ColumnarResult" values through the Arrow C Data Interface
-      with \c qore_columnar_result_export_arrow_c_data() and
-      \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
-      \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
-      compatible, including sliced record batches with non-zero top-level offsets; microsecond
-      timestamp and duration arrays also map directly to \c buffer<int64> while preserving Arrow
-      temporal schema, while string, binary, list, fixed-size-list, struct, map, and
-      dictionary-encoded values preserve schema and values through owned Arrow-compatible buffers
-      or Qore containers
-    - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
-      return @ref Qore::SQL::ColumnarResult "ColumnarResult" values from \c getShapedValue(), bulk DB writes can accept @ref Qore::SQL::ColumnarResult "ColumnarResult" and
-      hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
-      \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
-      autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c \@amount \c >= \c \@target, numeric, trim/concat/null-handling,
-      case-folding, date-part, and row-independent date arithmetic expressions, native string predicates including
-      \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
-      ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options
-      hash; DPQL/DataProvider generic expressions also support streaming-style prefix operators including
-      \c select, \c first, \c any, \c all, \c count, \c take, \c drop, \c takewhile, and \c takeuntil, with
-      DataFrame and dense-column filters preserving correctness through row-evaluation fallback where needed
+    - new @ref Qore::SQL::ColumnarResult "ColumnarResult" SQL result container with
+      @ref Qore::SQL::Datasource::selectColumnar() "Datasource::selectColumnar()",
+      @ref Qore::SQL::DatasourcePool::selectColumnar() "DatasourcePool::selectColumnar()", and
+      @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" exposes query results
+      as ordered typed columns for DataFrame and analytics workloads, filterable with dense boolean masks
+      and convertible to and from DataFrame without boxing; drivers without native support use a libqore
+      compatibility fallback
+    - C++ modules can exchange @ref Qore::SQL::ColumnarResult "ColumnarResult" values with Arrow, Flight,
+      JDBC, and other binary modules through the Arrow C Data Interface, using zero-copy \c buffer<T>
+      storage for compatible fixed-width, boolean, \c decimal128, and microsecond temporal columns
+    - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper support shaped columnar bulk blocks, and DPQL
+      gained dense filtering with scalar, expression-to-expression, string, date, list-membership, and
+      ICU-backed locale-sensitive predicates, plus streaming-style prefix operators
     - the dataframe benchmark suite shows Qore outperforming <a href="https://pandas.pydata.org/">pandas</a> for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, <a href="https://arrow.apache.org/">Arrow</a>/<a href="https://parquet.apache.org/">Parquet</a> roundtrip,
       SQL read/write, DataProvider pipeline, and ML analytics cases; the
       fastest SQL-read path requires a DBI driver with native columnar support
-    - new experimental @ref plugin_types "plugin-type" registration ABI
-      foundation for future module-defined dense data types, including
-      descriptor validation, module-init registration staging, runtime helper
-      dispatch, serialized plugin value instances, verifier diagnostics, trace
-      controls, and @ref Qore::Reflection::PluginRegistry "PluginRegistry"
-      introspection
+    - new experimental @ref plugin_types "plugin-type" registration ABI for module-defined dense data
+      types, with IR lowering pattern hooks, optional LLVM codegen extension hooks, per-operation
+      floating-point reassociation gated by the new @ref fp-fast-math "%fp-fast-math" parse directive,
+      and @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -234,7 +228,8 @@
     - integrated REPL mode in the \c qore binary with the @ref qorereplintro "QoreRepl" module
     - new @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" parse option for REPL functionality
     - new @ref prepend-module-path "%prepend-module-path" and
-      @ref append-module-path "%append-module-path" directives for per-program module search paths
+      @ref append-module-path "%append-module-path" directives for per-program module search paths,
+      including paths persisted in @ref exec_mode_aot "AOT" binaries
     - new @ref try-child-module "%try-child-module" directive letting a base module declare optional
       @ref user_module_children "child modules" that extend it, loaded automatically once the base module
       is fully published
@@ -337,40 +332,17 @@ connect(host: "example.com", timeout: 30);
 connect("example.com", port: 8443, timeout: 10);
     @endcode
 
-    Named arguments may follow positional arguments, are evaluated in source order, and use normal default-argument
-    handling for omitted parameters. Calls through untyped call references or runtime-only dispatch are rejected with
-    \c NAMED-CALL-NOT-SUPPORTED. Builtin variants accept named arguments only when they opt in with the new
-    @ref NAMED_ARGS "NAMED_ARGS" code flag; user-defined variants accept named arguments automatically when resolved
-    at parse time.
+    Named arguments are supported for functions, methods, constructors, and base constructors, may follow
+    positional arguments, are evaluated in source order, and use normal default-argument handling for
+    omitted parameters.  Calls through untyped call references or runtime-only dispatch are rejected with
+    \c NAMED-CALL-NOT-SUPPORTED.  User-defined variants accept named arguments automatically when resolved
+    at parse time; builtin variants opt in per variant with the new @ref NAMED_ARGS "NAMED_ARGS" code flag.
 
     <b>Compatibility note:</b> parameter names become part of the public calling interface for named callers.
     Renaming a public parameter can now break callers that use named arguments.
 
-    Named arguments are also supported for methods, constructors, and base constructors when the target is resolved at
-    parse time:
-
-    @code{.py}
-class Reader {
-    constructor(string path, string encoding = "UTF-8", bool strict = True) {
-    }
-}
-
-class CsvReader inherits Reader {
-    constructor(string path, string encoding = "UTF-8")
-        : Reader(path: path, encoding: encoding, strict: False) {
-    }
-}
-
-Reader r(path: "data.csv", encoding: "UTF-8");
-    @endcode
-
-    Builtin functions and methods opt in per variant with the new
-    @ref NAMED_ARGS "NAMED_ARGS" code flag, allowing examples such as:
-
-    @code{.py}
-string decoded = binary_to_string(value: body, encoding: "UTF-8");
-binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: False, fin: True);
-    @endcode
+    See @ref function_named_arguments "Named Arguments" for the complete matching rules, evaluation order,
+    and varargs behavior.
     @endparblock
 
     @par Generic Builtin Classes and Result Records
@@ -403,34 +375,17 @@ Future<string> f = p.getFuture();
 p.set(value: "complete");
 string result = f.get(timeout_ms: 1s);
 
-hash<string, int> values = {"one": 1};
-HashIterator<int> it(values);
-while (it.next()) {
-    int item = it.getValue();
-}
-
 TreeMap<code> handlers();
 handlers.put(path: "api/v1", value: \handleApiV1());
-*code handler = handlers.get(path: "api/v1/users");
-
-AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
     @endcode
 
-    Generic builtin class types are reified and runtime checked. Existing raw
-    declarations such as <tt>Queue q()</tt> and <tt>Future f</tt> remain source
-    compatible and behave as value-erased <tt>&lt;auto&gt;</tt> instances for
-    migrated classes.
+    Generic builtin class types are reified and runtime checked.  Existing raw declarations such as
+    <tt>Queue q()</tt> and <tt>Future f</tt> remain source compatible and behave as value-erased
+    <tt>&lt;auto&gt;</tt> instances for migrated classes.
 
-    Object serialization preserves specialized generic class types, reflection
-    exposes type parameters, defaults, and bounds for generic classes and
-    hashdecls, and QoreApiMetadata merges generic metadata from AST parsing and
-    reflection. QoreApiMetadata also exposes structured
-    type-use metadata for generic arguments and wildcards, including
-    unbounded, upper-bound, and lower-bound wildcard entries for parameters,
-    members, returns, and inherited class/hashdecl types. The astparser and
-    QoreCodeFormat modules
-    preserve generic class/hashdecl declarations, wildcards, defaults, bounds,
-    and parameterized inheritance.
+    Object serialization preserves specialized generic class types; reflection, QoreApiMetadata,
+    astparser, and QoreCodeFormat expose and preserve type parameters, defaults, bounds, wildcards, and
+    parameterized inheritance.  See @ref generic_classes "Generic Classes" for details.
     @endparblock
 
     @par Source-Defined Generic Classes
@@ -469,7 +424,9 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
-    Source-defined generic class types are runtime checked and invariant.
+    Source-defined generic class types are runtime checked and invariant.  @ref exec_mode_aot "AOT"
+    metadata preserves generic class parameters and parameterized base-class inheritance so compiled
+    code uses the same type substitutions as source execution.
     @endparblock
 
     @par Removal of \%strict-types Support
@@ -478,9 +435,10 @@ int echoed = child.echo(value);
     parse option have been removed. The @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES" constant remains
     defined as \c 0 for backward compatibility; code referencing it will compile but the option has no effect.
 
-    This feature enforced stricter typing and automatically initialized typed
-    variables with default values. The NaN-boxing optimization for \c QoreValue
-    made the special behavior unnecessary.
+    This feature was originally intended to prepare for @ref exec_mode_jit "JIT" compilation by enforcing
+    stricter typing and automatically initializing typed variables with default values.  The NaN-boxing
+    optimization for \c QoreValue addressed those requirements more effectively without requiring
+    behavioral changes.
 
     The @ref loose-types "%loose-types" parse directive is also removed (it was only used to disable
     @ref strict-types "%strict-types").
@@ -543,6 +501,8 @@ int echoed = child.echo(value);
     - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
       @ref Qore::Program "Program" object (AST-only)
 
+    <b>Note:</b> @ref broken-soft-types "%broken-soft-types" is AST-only and is not supported in the
+    @ref execution_modes "IR/JIT execution modes".
     @endparblock
 
     @par \%modern Is Now the Default for Non-.q Files
@@ -642,31 +602,16 @@ int echoed = child.echo(value);
     mutation before it runs.  This provides the datasource/driver boundary required by managed
     multi-tenant storage admission; %Qore supplies mechanism only and no policy.
 
-    %Qore performs <b>no classification</b> of %SQL text, database error text, or command tags.  All
-    semantic metadata about an operation is supplied by the producer with the new
-    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" scope class, which is inherited
-    by every operation issued on the object from the same thread &mdash; including operations issued
-    far below the declaration site by <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or
-    any other layer:
-    @code{.py}
-{
-    SqlMutationDeclaration decl(dsp, <SqlMutationInfo>{
-        "op_id": op_id,
-        "path_id": "orders.insert",
-        "op_code": OP_INSERT,
-        "effect": SQL_MUTATION_EFFECT_MAY_GROW,
-        "max_growth_bytes": 1048576,
-    });
-    table.insert(row);
-    dsp.commit();
-}   # the declaration is removed here
-    @endcode
-
-    An observer is registered per datasource or pool with
-    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()";
-    there is no process-global registry, and two pools in the same process are completely
-    independent.  It receives @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" hashes and
-    may return a @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash at an
+    %Qore performs <b>no classification</b> of %SQL text, database error text, or command tags; all
+    semantic metadata is supplied by the producer with the new
+    @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration" scope class, which is inherited by
+    every operation issued on the object from the same thread — including operations issued far below the
+    declaration site by <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> or any other layer.
+    Observers are registered per datasource or pool with
+    @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"
+    (there is no process-global registry), receive
+    @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo" hashes, and may return a
+    @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo" hash at an
     @ref sql_mutation_admission "admission point":
     @code{.py}
 dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
@@ -676,59 +621,29 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
 }, SQL_MUTATION_MASK_DEFAULT);
     @endcode
 
-    Outcomes are derived from control flow, never from error text.  A commit that does not
-    demonstrably succeed is reported as
-    @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS" and
-    is <b>never</b> reported as a rollback, because %Qore cannot know whether the server applied it.
-    Every outcome event carries \c "replay_safe", which is @ref True "True" only when %Qore can prove
-    that no commit was attempted; together with the producer's stable \c "op_id" this is what lets a
-    consumer replay a restartable transaction without creating a second reservation.
+    Outcomes are derived from control flow, never from error text: a commit that does not demonstrably
+    succeed is reported as
+    @ref Qore::SQL::SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS "SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS" and is
+    <b>never</b> reported as a rollback.  Every outcome event carries \c "replay_safe", true only when
+    %Qore can prove no commit was attempted, which together with the producer's stable \c "op_id" lets a
+    consumer safely replay a restartable transaction.  Datasources with no observer registered retain
+    their previous behavior at the cost of one pointer test per operation.
 
-    Prepared @ref Qore::SQL::SQLStatement "SQLStatement" executions carry the same metadata, and
-    bounded streams (\c COPY and bulk writes) report declared and consumed byte counts without the
-    payload ever being buffered; DBI drivers use the new \c Datasource::reportMutationStreamBegin(),
-    \c reportMutationStreamProgress(), and \c reportMutationStreamEnd() C++ APIs, with equivalent
-    methods available to %Qore code.
-
-    Datasources with no observer registered retain their previous behavior and cost one predictable
-    pointer test per operation; no overhead is measurable on the unmonitored path.
-
-    New API:
-    - @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"
-    - @ref Qore::SQL::SqlMutationInfo "SqlMutationInfo",
-      @ref Qore::SQL::SqlMutationEventInfo "SqlMutationEventInfo", and
-      @ref Qore::SQL::SqlMutationDecisionInfo "SqlMutationDecisionInfo"
-    - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()",
-      @ref Qore::SQL::AbstractDatasource::clearMutationObserver() "clearMutationObserver()",
-      @ref Qore::SQL::AbstractDatasource::hasMutationObserver() "hasMutationObserver()",
-      @ref Qore::SQL::AbstractDatasource::pushMutationDeclaration() "pushMutationDeclaration()",
-      @ref Qore::SQL::AbstractDatasource::popMutationDeclaration() "popMutationDeclaration()",
-      @ref Qore::SQL::AbstractDatasource::getMutationDeclaration() "getMutationDeclaration()",
-      @ref Qore::SQL::AbstractDatasource::reportMutationStreamBegin() "reportMutationStreamBegin()",
-      @ref Qore::SQL::AbstractDatasource::reportMutationStreamProgress() "reportMutationStreamProgress()", and
-      @ref Qore::SQL::AbstractDatasource::reportMutationStreamEnd() "reportMutationStreamEnd()"
-    - @ref sql_mutation_events, @ref sql_stmt_classes, @ref sql_mutation_outcomes,
-      @ref sql_mutation_effects, and @ref sql_mutation_masks constants
+    See @ref sql_mutation_admission "Observer Semantics" for the full event, declaration, statement, and
+    bounded-stream model, along with the @ref sql_mutation_events, @ref sql_stmt_classes,
+    @ref sql_mutation_outcomes, @ref sql_mutation_effects, and @ref sql_mutation_masks constants.
     @endparblock
 
     @par New Required Libraries and Async Networking Stack
     @parblock
-    The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 +
-    \c ngtcp2_crypto_ossl + \c nghttp3 (QUIC/HTTP/3), and
-    <a href="https://c-ares.org/"><tt>c-ares</tt></a> (asynchronous DNS resolution for socket I/O,
-    so hostname lookups do not block async I/O controller threads) &mdash; is now required.
-    %Qore prefers an adequate <b>system installation</b> of each; when a system package is
-    <b>missing or older than the minimum supported version</b>, %Qore automatically downloads
-    and builds the <b>latest stable release</b> from source and statically links it into
-    \c libqore, so the build always succeeds without manual intervention. Minimum versions:
-    \c nghttp2 >= 1.68.1 (CVE-2026-27135 fix), \c c-ares >= 1.19.1 (older versions reject the
-    numeric service "0"/ephemeral port with \c ARES_ESERVICE, breaking listeners that bind to
-    an ephemeral port), \c nghttp3 >= 1.14.0. The \c ngtcp2_crypto_ossl backend requires
-    OpenSSL 3.5+ (QUIC TLS API); on platforms with older OpenSSL (e.g. Ubuntu 24.04, macOS
-    Homebrew), \c ngtcp2 / \c nghttp3 are built from source. Installing the development
-    packages listed below is <b>recommended</b> (faster builds and distro security updates)
-    but not strictly required, as %Qore falls back to a source build automatically. See the
-    \c BUILDING file for details.
+    The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 + \c ngtcp2_crypto_ossl +
+    \c nghttp3 (QUIC/HTTP/3), and <a href="https://c-ares.org/"><tt>c-ares</tt></a> (asynchronous DNS
+    resolution, so hostname lookups never block async I/O controller threads) &mdash; is now required.
+    %Qore prefers an adequate system installation of each (\c nghttp2 >= 1.68.1, \c c-ares >= 1.19.1,
+    \c nghttp3 >= 1.14.0; \c ngtcp2_crypto_ossl needs OpenSSL 3.5+ for the QUIC TLS API), and otherwise
+    downloads and statically links the latest stable release automatically, so the build always succeeds
+    without manual intervention.  Installing these development packages is therefore recommended for
+    faster builds and distro security updates, but is not required.
 
     The following libraries are also required system build dependencies for %Qore and cannot be disabled at build time:
     - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
@@ -755,17 +670,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - <b>macOS (Homebrew):</b> \c eigen, \c icu4c, \c protobuf, \c krb5
     - <b>macOS (MacPorts):</b> \c eigen3, \c icu, \c protobuf3-cpp, \c kerberos5
 
-    The async networking stack development packages are <b>recommended</b> where the packaged
-    version meets the minimums above (otherwise %Qore source-builds the latest stable release
-    automatically &mdash; e.g. Debian/Ubuntu ship \c c-ares 1.18.x, below the 1.19.1 minimum,
-    so it is source-built regardless):
-    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libngtcp2-dev, \c libngtcp2-crypto-ossl-dev,
-      \c libnghttp3-dev, \c libcares-dev
-    - <b>RHEL/Fedora:</b> \c libnghttp2-devel, \c libngtcp2-devel, \c libngtcp2_crypto_ossl-devel,
-      \c libnghttp3-devel, \c c-ares-devel
-    - <b>Alpine:</b> \c nghttp2-dev, \c ngtcp2-dev, \c nghttp3-dev, \c c-ares-dev
-    - <b>macOS (Homebrew):</b> \c nghttp2, \c ngtcp2, \c nghttp3, \c c-ares
-    - <b>macOS (MacPorts):</b> \c nghttp2, \c c-ares
+    The corresponding async-stack development packages (\c nghttp2, \c ngtcp2, \c ngtcp2_crypto_ossl,
+    \c nghttp3, \c c-ares) are optional; see the \c BUILDING file for per-platform package names and
+    for which ones a given distribution ships too old to use.
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
@@ -774,24 +681,46 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2"
     - @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3"
 
-    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the @ref Qore::ML::OnnxModel "OnnxModel" class for
-    running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.
+    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the
+    @ref Qore::ML::OnnxModel "OnnxModel" class for running pre-trained ONNX models; without it, all
+    native ML algorithms are still available.  It is packaged as \c onnxruntime-dev on Alpine and
+    \c onnxruntime on Homebrew; elsewhere install from
+    <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>.
+    @endparblock
 
-    Install ONNX Runtime development packages where available:
-    - <b>RHEL/Fedora:</b> not available as a system package; install from
-      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
-    - <b>Debian/Ubuntu (24.04):</b> not available as a system package; build from
-      <a href="https://github.com/microsoft/onnxruntime">source</a> or install from
-      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
-    - <b>Alpine:</b> \c onnxruntime-dev
-    - <b>macOS (Homebrew):</b> \c onnxruntime
+    @par LLVM-backed Execution Modes and AOT Compilation
+    @parblock
+    %Qore now uses one shared IR pipeline for the @ref exec_mode_ir "IR interpreter", the
+    <a href="https://llvm.org/">LLVM</a> @ref exec_mode_jit "JIT", @ref exec_mode_tiered "tiered"
+    execution, and @ref exec_mode_aot "AOT" compilation.  @ref modern "%modern" code defaults to
+    @ref exec_mode_tiered "tiered", which validates IR lowerability at parse commit, starts quickly with
+    cached IR, and promotes hot function variants to JIT; legacy non-modern code defaults to AST
+    execution for compatibility.
+
+    The new @ref qcc_tool "qcc" compiler provides the AOT workflow: script executables, binary user
+    modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>),
+    dependency files, and artifact inspection.  Standard user modules are built and installed as
+    AOT-compiled <tt>.qmod</tt> artifacts by default (disable with \c -DQORE_BUILD_AOT_MODULES=OFF);
+    module lookup prefers compiled artifacts over the corresponding source modules, which remain
+    installed for documentation and development.  \c qcc can parallelize LLVM backend codegen and acts
+    as a GNU make jobserver client so parallel builds share one job budget; see
+    @ref qcc_parallel_codegen "Parallel Backend Codegen and the GNU make Jobserver".
+
+    Execution modes can also be selected programmatically with the new @ref Qore::ExecMode "ExecMode"
+    enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
+    @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
+
+    LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
+    complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
+    notes.
     @endparblock
 
     @par Program-owned Module Path Directives
     @parblock
     @ref prepend-module-path "%prepend-module-path" and the new quoted form of
     @ref append-module-path "%append-module-path" let programs declare their
-    own module search paths.
+    own module search paths; the expanded per-program path lists are persisted in
+    @ref exec_mode_aot "AOT" artifacts and restored before dependency modules load.
 
     See @ref prepend-module-path "%prepend-module-path",
     @ref append-module-path "%append-module-path", and
@@ -860,70 +789,36 @@ cargo install tree-sitter-cli@0.26.5
     @endparblock
 
     @par Language and Runtime
-    - new zero-cost assertion and debug statements
-      - \c @@assert(condition) and \c @@assert(condition, message) throw \c ASSERTION-ERROR when condition is false
-      - \c @@assert supports sprintf-style formatting: \c @@assert(condition, "format", arg1, arg2, ...)
-      - \c @@debug(expression) evaluates an expression for its side effects (e.g., logging)
-      - \c @@debug \c { \c ... \c } executes a block of statements only when debugging is enabled
-      - both statements are completely skipped at parse time when @ref enable-debug "%enable-debug" is not set, providing
-        zero runtime overhead
-      - use @ref enable-debug "%enable-debug" / @ref disable-debug "%disable-debug" parse directives or @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
-        (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
-    - <b>New @ref modern "%modern" parse directive and <tt>.qr</tt> file extension</b>
-      - new @ref modern "%modern" parse directive combines all recommended parse options into one:
-        @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",
-        @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
-      - files with the <tt>.qr</tt> extension automatically enable @ref modern "%modern" mode without any
-        parse directive required
-      - new @ref Qore::PO_MODERN "PO_MODERN" parse option constant
-      - this is now the recommended way to write new %Qore code
-    - new Unicode and hex escape sequences in string literals
-      - \c \\uXXXX: 4-digit Unicode codepoint (BMP), e.g. \c "\\u2500" for \c U+2500 (box-drawing horizontal)
-      - \c \\UXXXXXXXX: 8-digit Unicode codepoint (full range), e.g. \c "\\U0001F600" for emoji
-      - \c \\xXX: 1-2 digit hex byte escape, e.g. \c "\\x41" for \c A
-      - codepoints above \c U+10FFFF raise a parse error
-    - new @ref enums "enum" keyword for type-safe enumerated constants
-      - syntax: \c public \c enum \c Status \c : \c string \c { \c Active \c = \c "active", \c Inactive \c = \c "inactive" \c }
-      - supports \c int, \c string, \c float, and \c number base types
-      - enum constants are accessed with \c :: syntax: @ref Status::Active "Status::Active"
-      - strict type enforcement: base type values require explicit \c cast<enum<Name>>() to convert to enum type
-      - runtime validation: cast operations verify that the value is a valid enum member
-      - enum names can be used directly as type names: \c Status \c s or \c enum&lt;Status&gt; \c s (equivalent)
-      - or-nothing support: \c *Status, \c *enum&lt;Status&gt;, and \c cast&lt;*enum&lt;Status&gt;&gt;()
-      - namespace support: enums can be declared in namespaces
-      - reflection support via @ref Qore::Reflection::Enum "Reflection::Enum" and @ref Qore::Reflection::EnumMember "Reflection::EnumMember" classes
-      - can be disabled with @ref no-enum "%no-enum" parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
-    - new @ref typedef_keyword "typedef" keyword for type aliases
-      - syntax: \c typedef \c MyType \c = \c int; or \c typedef \c IntList \c = \c list<int>;
-      - supports all type declarations including complex types, hashdecls, and classes
-      - can be declared \c public for module exports
-      - works in namespaces with standard scoping rules
-      - can be disabled with @ref no-typedef "%no-typedef" parse directive or @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF"
-    - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
+    - new zero-cost \c \@assert / \c \@debug statements: \c \@assert(condition) and
+      \c \@assert(condition, "format", args...) throw \c ASSERTION-ERROR when the condition is false, while
+      \c \@debug(expression) and \c \@debug \c { \c ... \c } run only when debugging is enabled.  Both are
+      skipped entirely at parse time unless @ref enable-debug "%enable-debug" or
+      @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" is set, so they cost nothing at runtime
+      (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
+    - new @ref modern "%modern" parse directive bundling @ref new-style "%new-style",
+      @ref require-types "%require-types", @ref strict-args "%strict-args",
+      @ref strong-encapsulation "%strong-encapsulation", and all non-strict warnings; files with the
+      <tt>.qr</tt> extension enable it automatically, and @ref Qore::PO_MODERN "PO_MODERN" is the
+      corresponding parse option.  This is now the recommended way to write new %Qore code
+    - new @ref string_escape_chars "string-literal escapes" \c \\uXXXX (BMP codepoint),
+      \c \\UXXXXXXXX (full range), and \c \\xHH (hex byte); codepoints above \c U+10FFFF are a parse error
+    - new @ref enums "enum" keyword for type-safe enumerated constants over \c int, \c string, \c float, and
+      \c number base types, with \c :: member access, explicit \c cast<enum<Name>>() conversion from the base
+      type, namespace and or-nothing support, and reflection through @ref Qore::Reflection::Enum "Enum" /
+      @ref Qore::Reflection::EnumMember "EnumMember"; disable with @ref no-enum "%no-enum" or
+      @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
+    - new @ref typedef_keyword "typedef" keyword for type aliases over any type declaration, including complex
+      types, hashdecls, and classes; \c public typedefs are exported from modules.  Disable with
+      @ref no-typedef "%no-typedef" or @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF"
+    - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax giving parse-time
+      signature checking for closures and call references, with covariant return types, contravariant
+      parameter types, and an or-nothing variant
       (<a href="https://github.com/qoretechnologies/qore/issues/5089">issue 5089</a>)
-      - syntax: \c code<int(string)> for a callable returning int and taking a string parameter
-      - enables parse-time type checking for closures and call references
-      - covariant return types: assigned closure can return a more specific type
-      - contravariant parameter types: assigned closure can accept more general types
-      - supports or-nothing variant: \c *code<int(string)>
-      - works with complex types: \c code<list<int>(hash<string, \c int>)>
-      - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
-    - new @ref function_named_arguments "named-argument call syntax"
-      - syntax: \c connect(host: \c "example.com", \c timeout: \c 30)
-      - supported for parse-time-resolved functions, methods, constructors, and base constructors
-      - positional arguments may appear before named arguments; positional arguments after named arguments are errors
-      - duplicate, unknown, and positional-overwriting names raise concrete \c NAMED-ARG-* diagnostics
-      - builtin variants must opt in with the new @ref NAMED_ARGS "NAMED_ARGS" code flag
-    - new @ref union_type "union<...>" explicit union type syntax
-      - syntax: \c union<int, \c string> for a type accepting either int or string
-      - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
-      - works with complex types: \c list<union<int, \c string>>, \c hash<string, \c union<int, \c bool>>
-      - supports alternatives with the same outer container type, such as
-        <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt> and
-        <tt>union&lt;hash&lt;string, string&gt;, hash&lt;string, int&gt;&gt;</tt>
-      - integrates with typedef: \c typedef \c IntOrString \c = \c union<int, \c string>;
-      - supports parse-time type narrowing after type checks
-      - constraints: maximum 100 member types, at most one soft type, no soft+non-soft of same base type
+    - new @ref function_named_arguments "named-argument call syntax" for parse-time-resolved functions,
+      methods, constructors, and base constructors; builtin variants opt in with the new
+      @ref NAMED_ARGS "NAMED_ARGS" code flag
+    - new @ref union_type "union<...>" explicit union type syntax, including or-nothing and complex-type
+      alternatives, @ref typedef_keyword "typedef" integration, and parse-time narrowing after type checks
     - @ref Qore::Dir "Dir" directory-listing methods now expose stronger return types:
       - no-\c full file/directory listing calls return concrete \c list<string> values
       - \c full variants return <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>
@@ -942,192 +837,89 @@ cargo install tree-sitter-cli@0.26.5
       - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
-    - <b><a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> optimization for internal value representation</b>
+    - <b><a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> optimization for internal value
+      representation</b>: <a href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> NaN bit patterns encode
+      int, float, bool, nothing, null, and pointers to complex types in a single 64-bit word, halving
+      value-storage overhead from 16 to 8 bytes, and small-string optimization stores strings of up to
+      6 bytes inline without heap allocation.  Values now fit in one register and pack more densely into
+      cache lines; no API changes are required and existing code benefits automatically
       (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
-      - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction in value storage overhead)
-      - uses <a href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
-        and pointers to complex types) in a single 64-bit word
-      - includes small string optimization (SSO): strings up to 6 bytes are stored inline without heap
-        allocation, eliminating memory allocation overhead for common short strings (e.g., hash keys
-        like "id", "name", "type", status codes, short identifiers)
-      - improves CPU cache utilization by storing more values in the same cache line, reducing cache
-        misses during value-intensive operations
-      - faster value passing and copying since values fit in a single register
-      - particularly beneficial for code with many small values (loops, function calls, hash/list operations)
-      - no API changes required - existing code benefits automatically from the optimization
     - <b><a href="https://datatracker.ietf.org/doc/html/rfc9113">HTTP/2</a> and
       <a href="https://datatracker.ietf.org/doc/html/rfc9114">HTTP/3</a> support with full asynchronous I/O</b>
       @parblock
       %Qore 3.0 introduces end-to-end support for HTTP/2 over TLS (via
       <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> negotiation) and HTTP/3 over
       <a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC</a>, both backed by an async I/O controller
-      that drives non-blocking poll operations across HTTP/1.x, HTTP/2, and HTTP/3.  Existing
-      @ref Qore::HTTPClient "HTTPClient" code automatically benefits from HTTP/2 (via ALPN) and HTTP/3 (via
-      <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a> discovery) with no code changes;
-      the new @ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()" and
-      @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()" controls plus the
-      @ref Qore::set_global_http2_mode() "set_global_http2_mode()" /
-      @ref Qore::get_global_http2_mode() "get_global_http2_mode()" functions allow per-instance and
-      process-wide policy.  @ref Qore::Option::HAVE_HTTP2 "HAVE_HTTP2" and
-      @ref Qore::Option::HAVE_HTTP3 "HAVE_HTTP3" are both unconditionally @ref True since the underlying
-      libraries (\c nghttp2, \c ngtcp2, \c nghttp3) are always available &mdash; %Qore uses an
-      adequate system installation when present and otherwise source-builds and statically links
-      the latest stable release into \c libqore, so HTTP/2 and HTTP/3 support is never optional.
-
-      The new async I/O controller exposes a uniform poll-operation API covering TCP connect, TLS handshake,
-      QUIC handshake, request/response framing, streaming bodies, WebSocket upgrade
+      driving non-blocking poll operations across HTTP/1.x, HTTP/2, and HTTP/3: TCP connect, TLS and QUIC
+      handshakes, request/response framing, streaming bodies, WebSocket upgrade
       (<a href="https://datatracker.ietf.org/doc/html/rfc8441">RFC 8441</a> over HTTP/2,
       <a href="https://datatracker.ietf.org/doc/html/rfc9220">RFC 9220</a> over HTTP/3), Server-Sent Events
-      over all three HTTP versions,
-      <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>, and
-      QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>.
-      <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> (RFC 8305) dual-stack
-      connection racing applies to every TCP and QUIC connection with a 250 ms stagger.
+      over all three versions, <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC
+      connection migration</a>, and QUIC
+      <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>.
+      <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack connection
+      racing applies to every TCP and QUIC connection with a 250 ms stagger.
 
-      The runtime ships these new builtin classes/enums for fine-grained protocol control:
-      @ref Qore::HTTP2Mode "HTTP2Mode", @ref Qore::HTTP3Mode "HTTP3Mode", and the corresponding
-      @ref Qore::HTTPClient "HTTPClient" mode/state accessors (\c setHttp2Enabled, \c isHttp2Enabled,
-      \c isHttp2Active, \c getHttp2Settings / \c setHttp2Settings, \c getHttpVersion).  New non-blocking
-      socket primitives — @ref Qore::Socket::startPollReadHttp2Request() "startPollReadHttp2Request()",
-      @ref Qore::Socket::startPollSendHttp2Response() "startPollSendHttp2Response()",
-      @ref Qore::Socket::startPollQuicConnect() "startPollQuicConnect()",
-      @ref Qore::Socket::startPollQuicAccept() "startPollQuicAccept()",
-      @ref Qore::Socket::startPollQuicSendResponse() "startPollQuicSendResponse()",
-      @ref Qore::Socket::setAlpnProtocols() "setAlpnProtocols()",
-      @ref Qore::Socket::getAlpnProtocol() "getAlpnProtocol()",
-      @ref Qore::Socket::isHttp2() "isHttp2()" — appear in the
-      @ref qore_3_0_0_new_features "new builtin methods" listing later in this section.
+      Existing @ref Qore::HTTPClient "HTTPClient" code benefits from HTTP/2 (via ALPN) and HTTP/3 (via
+      <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a> discovery) with no code changes;
+      the new @ref Qore::HTTP2Mode "HTTP2Mode" / @ref Qore::HTTP3Mode "HTTP3Mode" enums,
+      @ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()" /
+      @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()", and
+      @ref Qore::set_global_http2_mode() "set_global_http2_mode()" give per-instance and process-wide
+      policy control.  @ref Qore::Option::HAVE_HTTP2 "HAVE_HTTP2" and
+      @ref Qore::Option::HAVE_HTTP3 "HAVE_HTTP3" are now unconditionally @ref True, since %Qore
+      source-builds \c nghttp2 / \c ngtcp2 / \c nghttp3 when the system does not supply them.
 
-      Higher-level user modules wrap the new infrastructure: @ref httpclientiointro "HttpClientIo"
-      (unified async client I/O across HTTP/1.x, HTTP/2, HTTP/3), @ref ftpclientiointro "FtpClientIo"
-      (async FTP via poll operations), @ref httputilintro "HttpUtil" (shared
-      <a href="https://datatracker.ietf.org/doc/html/rfc6265">RFC 6265</a> cookie handling), and the async
-      WebSocket / SSE / REST clients listed in @ref qore_3_0_0_updated_modules "Updated Modules" and
-      @ref qore_3_0_0_new_user_modules "New User Modules".  HttpServer support for HTTP/2 and HTTP/3 is
-      controlled by the \c http_version listener option.
-
-      For full protocol details and worked examples, see the @ref qore_3_0_0_updated_modules "Updated"
-      and @ref qore_3_0_0_new_user_modules "new user-module" sections (@ref httpclientiointro,
-      @ref restclientiointro, @ref httpserverintro, @ref websocketclientintro,
-      @ref serversenteventclientintro), the @ref Qore::HTTPClient "HTTPClient" class reference, and
-      the @ref Qore::Socket "Socket" non-blocking poll-operation methods.
+      Higher-level user modules wrap the new infrastructure: @ref httpclientiointro "HttpClientIo",
+      @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil", and the async WebSocket, SSE,
+      and REST clients in @ref qore_3_0_0_updated_modules "Updated Modules" and
+      @ref qore_3_0_0_new_user_modules "New User Modules"; @ref httpserverintro "HttpServer" selects
+      HTTP/2 and HTTP/3 with the \c http_version listener option.  See the
+      @ref Qore::HTTPClient "HTTPClient" and @ref Qore::Socket "Socket" class references for the complete
+      poll-operation API.
       @endparblock
-    - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
-      - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
-      - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
-      - <a href="https://en.wikipedia.org/wiki/Server-side_request_forgery">SSRF</a> prevention with @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" preset
-      - @ref sandbox_resources "resource limits" for memory, CPU time, wall time, threads, and recursion
-      - @ref sandbox_interrupt "safe interrupt mechanism" for stopping runaway code in loops and blocking operations
-      - I/O interruptibility: all file, stream, database, and standard I/O operations respect interrupt requests
-        (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>)
-        - uses 500ms polling interval (same as threading primitives) to check for interrupts
-        - @ref Qore::File "File" read, write, and lock operations use polling with interrupt checks
-        - @ref Qore::PipeInputStream "PipeInputStream" and @ref Qore::PipeOutputStream "PipeOutputStream" operations use polling
-        - @ref Qore::StdoutOutputStream "StdoutOutputStream" and @ref Qore::StderrOutputStream "StderrOutputStream" use polling
-        - @ref Qore::SQL::Datasource "Datasource" transaction lock acquisition is interruptible
-      - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
-        @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
-      - see @ref sandboxing "Sandboxing and Security" for full documentation
-    - <b>Cooperative thread cancellation</b>
-      - new @ref Qore::cancel_thread() "cancel_thread()" function to request cooperative cancellation of another
-        thread by TID, with an optional reason string
-      - new @ref Qore::thread_cancelled() "thread_cancelled()" function to poll the cancellation flag for the
-        current thread (lightweight atomic check, no exception)
-      - new @ref Qore::clear_thread_cancel() "clear_thread_cancel()" function to clear the cancellation flag,
-        allowing cleanup code to proceed without re-triggering cancellation
-      - cancellation is cooperative: the target thread is not forcefully terminated; instead, a
-        \c THREAD-CANCELLED exception is raised at the next cancellation check point
-      - check points are built into: language-level loops (\c while, \c for, \c foreach, \c do-while),
-        @ref Qore::sleep() "sleep()" / @ref Qore::usleep() "usleep()",
-        @ref Qore::Thread::Gate "Gate" enter,
-        @ref Qore::Thread::Mutex "Mutex" lock,
-        @ref Qore::Thread::Counter "Counter" waitForZero,
-        @ref Qore::Thread::Condition "Condition" wait,
-        @ref Qore::Thread::RWLock "RWLock" readLock/writeLock,
-        @ref Qore::Thread::AutoLock "AutoLock" / @ref Qore::Thread::AutoGate "AutoGate" /
-        @ref Qore::Thread::AutoReadLock "AutoReadLock" / @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
-        constructors,
-        @ref Qore::Thread::Queue "Queue" get/pop,
-        @ref Qore::Thread::Future "Future" get,
-        @ref Qore::Thread::WaitGroup "WaitGroup" wait,
-        @ref Qore::Thread::Semaphore "Semaphore" acquire,
-        @ref Qore::Thread::Channel "Channel" send/recv,
-        @ref Qore::channel_select() "channel_select()",
-        pipe I/O, file locking, and backquote operations
-      - integrates with the @ref Qore::SandboxManager "SandboxManager" interrupt mechanism via a unified
-        internal check (\c qore_check_cancel()) that polls for both thread-level cancellation and
-        program-level interrupt requests
-      - @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::clear_thread_cancel() "clear_thread_cancel()"
-        require the \c THREAD_CONTROL functional domain; sandboxed code
-        without this domain cannot clear the cancellation flag, making cancellation effectively unavoidable
-      - @ref Qore::thread_cancelled() "thread_cancelled()" only requires \c THREAD_INFO, so any code can poll its
-        cancellation status
-      - cancelling an already-cancelled thread updates the reason string
-      - cancelling a thread that has already exited returns @ref False
-      - attempting to cancel the current thread raises \c THREAD-CANCEL-ERROR
-      - requests from an unrestricted @ref Qore::Program "Program" — one with no
-        @ref Qore::SandboxManager "SandboxManager" governing it or any enclosing caller \c Program —
-        apply to any thread, including threads blocked inside child Programs; requests from a
-        sandboxed \c Program apply only to threads executing in it or in a call that originated in it,
-        so sandboxed code can cancel threads running its own code but cannot reach threads that never
-        entered it
-      - the scope is evaluated by the target thread at its next check point, so a @ref True return from
-        @ref Qore::cancel_thread() "cancel_thread()" means the request was delivered; an out-of-scope
-        request is dropped by the target and has no effect
-    - <b>Modern threading primitives</b>
-      - new @ref Qore::Thread::Future "Future" / @ref Qore::Thread::Promise "Promise" classes for cross-thread
-        result delivery: @ref Qore::Thread::Promise "Promise" is the producer side (set a value or error),
-        @ref Qore::Thread::Future "Future" is the consumer side (block until result is available); multiple
-        threads can call @ref Qore::Thread::Future::get() "Future::get()"; the Future is created via
-        @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()" (one Future per Promise)
-      - new @ref Qore::call_async() "call_async()" convenience function that spawns a background thread,
-        wraps the callable's result (or exception) into a @ref Qore::Thread::Promise "Promise", and returns
-        the associated @ref Qore::Thread::Future "Future" — provides a simple way to get return values from
-        background threads
-      - new @ref Qore::Thread::WaitGroup "WaitGroup" class for fork-join coordination: call
-        @ref Qore::Thread::WaitGroup::add() "add()" to register work, @ref Qore::Thread::WaitGroup::done() "done()"
-        to signal completion, and @ref Qore::Thread::WaitGroup::wait() "wait()" to block until all work
-        finishes; similar to @ref Qore::Thread::Counter "Counter" but with forward-counting semantics and
-        misuse protection
-      - new @ref Qore::Thread::Semaphore "Semaphore" class providing an N-permit concurrency limiter:
-        @ref Qore::Thread::Semaphore::acquire() "acquire()" blocks until a permit is available,
-        @ref Qore::Thread::Semaphore::release() "release()" returns permits; supports timed acquire and
-        non-blocking @ref Qore::Thread::Semaphore::tryAcquire() "tryAcquire()"
-      - new @ref Qore::Thread::AutoSemaphore "AutoSemaphore" RAII class for exception-safe permit management:
-        acquires a permit in the constructor and releases it in the destructor (like
-        @ref Qore::Thread::AutoLock "AutoLock" for @ref Qore::Thread::Mutex "Mutex")
-      - new @ref Qore::Thread::Channel "Channel" class for Go-style inter-thread communication with close
-        semantics: supports buffered (fixed capacity) and unbuffered (synchronous handoff) modes;
-        @ref Qore::Thread::Channel::send() "send()" blocks when full,
-        @ref Qore::Thread::Channel::recv() "recv()" blocks when empty;
-        @ref Qore::Thread::Channel::close() "close()" signals completion while allowing buffered values to be
-        drained; supports @ref Qore::Thread::Channel::trySend() "trySend()" /
-        @ref Qore::Thread::Channel::tryRecv() "tryRecv()" for non-blocking operations and timeout-based
-        operations; @ref Qore::Thread::Channel::send() "send()" and @ref Qore::Thread::Channel::recv() "recv()"
-        can send and receive @ref nothing "NOTHING" as a distinct value
-      - new @ref Qore::Thread::ChannelIterator "ChannelIterator" class enabling @ref foreach "foreach" iteration
-        over a @ref Qore::Thread::Channel "Channel" until it is closed and drained
-      - new @ref Qore::parallel_map() "parallel_map()" function: maps a function over a list using multiple
-        threads; preserves input order in output; propagates exceptions from worker threads; auto-detects
-        thread count from hardware concurrency; supports sequential mode with \c threads=1
-      - new @ref Qore::parallel_foreach() "parallel_foreach()" function: executes a function for each element
-        in a list using multiple threads; same semantics as @ref Qore::parallel_map() "parallel_map()" but
-        without collecting results
-      - new @ref Qore::channel_select() "channel_select()" function: waits on multiple
-        @ref Qore::Thread::Channel "Channel" objects simultaneously for the first ready send or recv operation;
-        supports random selection among ready channels for fairness; returns immediately when all channels are
-        closed; supports timeout
-      - all new threading primitives integrate with cooperative cancellation (checked at 500ms polling intervals)
-    - new @ref Qore::ParseOptions "ParseOptions" class providing an opaque container for parse option flags
-      supporting more than 64 option bits
+    - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing:
+      @ref sandbox_filesystem "filesystem access control" (roots, allow/deny lists, access modes),
+      @ref sandbox_network "network access control" (CIDR ranges, hostname patterns, port restrictions)
+      including <a href="https://en.wikipedia.org/wiki/Server-side_request_forgery">SSRF</a> prevention via
+      @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()",
+      @ref sandbox_resources "resource limits" (memory, CPU time, wall time, threads, recursion), a
+      @ref sandbox_interrupt "safe interrupt mechanism" for runaway code, and the
+      @ref Qore::SandboxManager::createLockdown() "createLockdown()" /
+      @ref Qore::SandboxManager::createWebSafe() "createWebSafe()" presets.  All file, stream, database,
+      and standard I/O operations are now interruptible
+      (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>).  See
+      @ref sandboxing "Sandboxing and Security" for full documentation
+    - <b>Cooperative thread cancellation</b> with @ref Qore::cancel_thread() "cancel_thread()" (request
+      cancellation of another thread by TID with an optional reason),
+      @ref Qore::thread_cancelled() "thread_cancelled()" (lightweight poll of the current thread's flag),
+      and @ref Qore::clear_thread_cancel() "clear_thread_cancel()".  The target is never forcefully
+      terminated; a \c THREAD-CANCELLED exception is raised at the next check point, and check points are
+      built into language-level loops, sleeps, every threading primitive, pipe I/O, file locking, and
+      backquote operations.  Cancellation shares one internal check with the
+      @ref Qore::SandboxManager "SandboxManager" interrupt mechanism, requires the \c THREAD_CONTROL
+      functional domain to request or clear (so sandboxed code cannot escape it), and is scoped by
+      @ref Qore::Program "Program": a sandboxed \c Program can cancel only threads executing in it or in a
+      call that originated in it
+    - <b>Modern threading primitives</b>: @ref Qore::Thread::Future "Future" /
+      @ref Qore::Thread::Promise "Promise" for cross-thread result delivery, with the
+      @ref Qore::call_async() "call_async()" convenience function that runs a callable in a background
+      thread and returns its \c Future; @ref Qore::Thread::WaitGroup "WaitGroup" for fork-join
+      coordination; @ref Qore::Thread::Semaphore "Semaphore" /
+      @ref Qore::Thread::AutoSemaphore "AutoSemaphore" for N-permit concurrency limiting;
+      @ref Qore::Thread::Channel "Channel" + @ref Qore::Thread::ChannelIterator "ChannelIterator" for
+      Go-style buffered or unbuffered inter-thread communication with close semantics, plus
+      @ref Qore::channel_select() "channel_select()" to wait on several channels at once; and
+      @ref Qore::parallel_map() "parallel_map()" / @ref Qore::parallel_foreach() "parallel_foreach()" for
+      parallel collection processing.  All of them honor cooperative cancellation
+    - new @ref Qore::ParseOptions "ParseOptions" class: an opaque parse-option container supporting more
+      than the 64 bits available to the legacy @ref parse_options "PO_*" integer constants, accepting
+      options by name, by constant, or by combining other \c ParseOptions objects, with corresponding
+      @ref Qore::Program "Program" constructor,
+      @ref Qore::Program::getFullParseOptions() "getFullParseOptions()",
+      @ref Qore::Program::setParseOptions() "setParseOptions()", and
+      @ref Qore::Program::disableParseOptions() "disableParseOptions()" overloads
       (<a href="https://github.com/qoretechnologies/qore/issues/5145">issue 5145</a>)
-      - overcomes the limitation of the legacy @ref parse_options "PO_*" 64-bit integer constants
-      - supports options by name (string), by integer constant, or by combining other ParseOptions objects
-      - new @ref Qore::Program "Program" constructor overload accepting a @ref Qore::ParseOptions "ParseOptions" object
-      - new @ref Qore::Program::getFullParseOptions() "Program::getFullParseOptions()" method returning
-        a @ref Qore::ParseOptions "ParseOptions" object
-      - new @ref Qore::Program::setParseOptions() "Program::setParseOptions(ParseOptions)" and
-        @ref Qore::Program::disableParseOptions() "Program::disableParseOptions(ParseOptions)" overloads
     - new extended parse options (beyond 64-bit) now enforced at parse time:
       - @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS": prevents class definitions
         (parse directive: @ref no-class-defs "%no-class-defs")
@@ -1139,37 +931,25 @@ cargo install tree-sitter-cli@0.26.5
         (parse directive: @ref no-new "%no-new")
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
-      - new @ref ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
+      - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
         fill the requested size
-    - integrated REPL mode in the \c qore binary
-      - automatically enters REPL mode when run interactively in a terminal with no script file
-      - new \c --interactive command-line option to force REPL mode
-      - new \c --no-repl command-line option to disable automatic REPL mode when stdin is a terminal
-      - uses the @ref qorereplintro "QoreRepl" module for the interactive session
-    - new parse option @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
-      - enables multiple parse/commit cycles on a @ref Qore::Program "Program" object for REPL functionality
-      - allows local variables to be declared in subsequent parse transactions (essential for REPL)
-      - parsing is blocked when threads are active in the @ref Qore::Program "Program" to ensure thread safety
-    - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
-      - returns the number of threads currently active in a @ref Qore::Program "Program" object
-      - useful for coordinating thread activity with parse operations when using @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
-    - @ref Qore::Program::parseRollback() "Program::parseRollback()" has been un-deprecated and enhanced
-      - when used with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", performs atomic rollback of only the pending parse transaction
-      - preserves all previously committed program state (variables, functions, classes, etc.)
-      - enables REPL-style interactive programming where parse errors don't destroy the @ref Qore::Program "Program" object
-    - new builtin classes for pre-compiled regular expressions with runtime strings:
-      - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
-      - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
-      - @ref Qore::RegexExtract "RegexExtract" - pre-compiled regex extraction with global mode support
-    - new builtin classes for fast text processing — see @ref fast_text_processing for an overview:
-      - @ref Qore::Scanner "Scanner" - cursor-based byte/codepoint reader for tokenizers and parsers,
-        with peek/advance/match primitives and zero-allocation byte fast paths for ASCII input
-      - @ref Qore::StringCharIterator "StringCharIterator" - codepoint iterator over a string, used
-        as the lazy iterator returned by @ref <string>::codePointIterator() "<string>::codePointIterator()" and @ref <string>::splitChars() "<string>::splitChars()"
-      - @ref Qore::StringSplitIterator "StringSplitIterator" - lazy delimiter-based string split iterator
-        backing @ref <string>::splitString() "<string>::splitString()" and @ref <string>::splitLines() "<string>::splitLines()"
-      - @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" - lazy regex-based string split
-        iterator backing @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()"
+    - integrated REPL mode in the \c qore binary, using the @ref qorereplintro "QoreRepl" module: entered
+      automatically when run interactively in a terminal with no script file, forced with \c --interactive,
+      and suppressed with \c --no-repl.  Supporting this are the new
+      @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" parse option (multiple parse/commit cycles on one
+      @ref Qore::Program "Program", with local variables declarable in later transactions and parsing
+      blocked while threads are active), the new
+      @ref Qore::Program::getThreadCount() "Program::getThreadCount()" method, and an un-deprecated
+      @ref Qore::Program::parseRollback() "Program::parseRollback()" that atomically rolls back only the
+      pending parse transaction, so parse errors no longer destroy committed program state
+    - new builtin classes for pre-compiled regular expressions with runtime strings: @ref Qore::Regex "Regex"
+      (matching and group extraction), @ref Qore::RegexSubst "RegexSubst" (substitution with
+      backreferences), and @ref Qore::RegexExtract "RegexExtract" (extraction with global mode)
+    - new builtin classes for fast text processing — @ref Qore::Scanner "Scanner" (cursor-based
+      byte/codepoint reader with zero-allocation ASCII fast paths), @ref Qore::StringCharIterator "StringCharIterator",
+      @ref Qore::StringSplitIterator "StringSplitIterator", and
+      @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator", which back the new lazy
+      <tt>&lt;string&gt;</tt> split and iteration pseudo-methods; see @ref fast_text_processing for the overview
     - new builtin methods:
       - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Thread::Queue::tryGet() "Queue::tryGet()": non-blocking get that returns a hash with a
@@ -1443,175 +1223,67 @@ cargo install tree-sitter-cli@0.26.5
 
     @par Dense Buffers and Typed DBI Results
     @parblock
-    %Qore now has a dense \c buffer<T> value type for primitive column data and typed DBI result APIs that can
-    expose query results with runtime hashdecl metadata.
-
-    The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64,
-    \c bool, \c string, and \c decimal128 values without per-element boxing.  Nullable buffers use \c buffer<*T>
-    and preserve SQL NULL / Qore NOTHING as null elements:
+    The new @ref buffer "buffer<T>" type stores \c int8, \c int16, \c int32, \c int64, \c float32,
+    \c float64, \c bool, \c string, and \c decimal128 values without per-element boxing; \c buffer<*T>
+    adds a validity bitmap so SQL NULL / @ref nothing "NOTHING" survives as a null element.  Buffers
+    support zero-copy views, elementwise arithmetic and comparisons (producing dense boolean masks), and
+    dense reductions:
     @code{.py}
 buffer<int64> ids = new buffer<int64>((10, 20, 30));
-buffer<int64> zeros = buffer<int64>::sized(1000);
-buffer<int64> retry_counts = buffer<int64>::filled(1000, 3);
-buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
-buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
-buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
-buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
-buffer<decimal128> amounts = new buffer<decimal128>((12.34n, 56.70n));
-
-buffer<int64> middle = ids.view(start: 1, count: 2);
-middle[0] = 25;     # updates ids[1]
-
+buffer<bool> high = ids * 2 > 20;          # buffer<bool>((False, True, True))
 printf("rows=%d total=%d\n", ids.size(), ids.sum());
-printf("amount=%n\n", amounts.sum());
-list<*float> boxed = scores.toList();
     @endcode
 
-    Native modules can wrap immutable external host or device storage in
-    \c buffer<T> values. Device-backed buffers expose \c deviceStorage(),
-    \c hostStorage(), and \c materialize() so Qore code can make transfer
-    points explicit when an API requires raw host memory. Writes preserve value
-    semantics by detaching provider-owned storage into an owned host buffer.
-    \c buffer<T> remains a primitive dense-vector type; nested arrays and
-    structs are carried by @ref Qore::SQL::ColumnarResult "ColumnarResult" schema metadata with list/hash values
-    and by Arrow/Parquet round-trip metadata.
+    See @ref buffer "Buffer" for construction, slicing, views, operators, reductions, and the rules for
+    module-provided external host and device storage.
 
-    Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
-    buffer of the same length or with a scalar \c int / \c float value; comparisons produce dense boolean masks and
-    nullable inputs propagate nullable result elements:
+    On the SQL side, @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" /
+    @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" (and the corresponding
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" methods) opt into typed query results with runtime
+    hashdecls and dense buffers, without changing existing \c select() / \c selectRows() behavior, while
+    @ref Qore::SQL::Datasource::selectColumnar() "selectColumnar()" returns
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks of ordered typed columns that can be mask-filtered,
+    sliced, and exchanged with the @ref dataframeintro "dataframe" module without boxing:
     @code{.py}
-buffer<int64> ids = new buffer<int64>((10, 20, 30));
-buffer<int64> offsets = new buffer<int64>((1, 2, 3));
-
-buffer<int64> adjusted = ids + offsets;    # buffer<int64>((11, 22, 33))
-buffer<int64> doubled = ids * 2;           # buffer<int64>((20, 40, 60))
-buffer<bool> high = adjusted > 20;         # buffer<bool>((False, True, True))
-
-buffer<*float64> scores = new buffer<*float64>((1.5, NOTHING, 4.25));
-buffer<*bool> passing = scores >= 2.0;     # buffer<*bool>((False, NOTHING, True))
-
-buffer<string> names = new buffer<string>(("Alice", "Bob", "Carol"));
-buffer<bool> named_bob = names == "Bob";   # buffer<bool>((False, True, False))
-    @endcode
-
-    The new @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" and
-    @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" methods, plus the corresponding
-    @ref Qore::SQL::DatasourcePool "DatasourcePool" methods, opt into typed query results without changing existing
-    \c select() / \c selectRows() behavior:
-    @code{.py}
-hash<auto> result = db.selectTyped(
-    "select customer_id, balance, customer_name from customer where status = %v",
-    "active");
-
-buffer<int64> customer_ids = result.customer_id;
-buffer<*float64> balances = result.balance;      # driver metadata can preserve SQL width/nullability
-buffer<*string> names = result.customer_name;     # text columns can remain dense through columnar paths
-    @endcode
-
-    When a driver does not yet provide native typed select support, libqore falls back to the ordinary driver result
-    and infers useful runtime types from the returned values.  That fallback preserves behavior but cannot recover
-    metadata that was not present in the values; for example unannotated integers become \c buffer<int64>.
-    Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
-    "DBI_CAP_HAS_TYPED_SELECT".
-
-    @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks also support dense mask filtering and native mask composition:
-    @code{.py}
-ColumnarResult result = db.selectColumnar(
-    "select id, score, active from customer_scores");
-
-buffer<bool> high = result.getColumn("score") >= 90.0;
-buffer<bool> active = result.getColumn("active") == True;
-ColumnarResult selected = result.filter(result.combineMasks(high, active, "&&"));
-ColumnarResult missing_scores = result.filter(result.nullMask("score"));
-ColumnarResult first_page = result.slice(offset: 0, count: 1000);
-    @endcode
-
-    The dataframe module can consume these blocks directly and preserve primitive
-    buffer-backed columns for dense access and columnar export:
-    @code{.py}
+ColumnarResult result = db.selectColumnar("select id, score, active from customer_scores");
+ColumnarResult selected = result.filter(result.getColumn("score") >= 90.0);
 DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
-buffer<int64> ids = df.getColumnBuffer("id");
-ColumnarResult again = df.toColumnarResult();
     @endcode
 
-    C++ modules can use \c QORE_HAVE_ARROW_C_DATA_INTEROP to detect libqore's
-    Arrow C Data Interface bridge for @ref Qore::SQL::ColumnarResult "ColumnarResult" and
-    \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS to detect dense temporal buffer
-    support.  The bridge allows Arrow,
-    Flight, JDBC, and other binary modules to exchange columnar blocks without
-    depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
-    and \c decimal128 top-level columns are wrapped as \c buffer<T> where
-    possible, including sliced record batches with non-zero top-level offsets;
-    microsecond timestamp and duration arrays also map directly to
-    \c buffer<int64> while preserving temporal Arrow schema; strings, binary
-    values, lists, fixed-size lists, structs, maps, and dictionary-encoded
-    Arrow arrays use owned Arrow-compatible buffers or materialized Qore
-    containers so schema and nullability are still preserved.
+    Drivers advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT "DBI_CAP_HAS_TYPED_SELECT";
+    libqore provides a behavior-preserving fallback for drivers without it, inferring runtime types from the
+    returned values.  C++ modules can exchange @ref Qore::SQL::ColumnarResult "ColumnarResult" values with
+    Arrow, Flight, JDBC, and other binary modules through libqore's Arrow C Data Interface bridge (detected
+    with \c QORE_HAVE_ARROW_C_DATA_INTEROP and \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS) without depending
+    on Arrow C++ in libqore itself.
     @endparblock
 
     @par Experimental Plugin-Type ABI
     @parblock
-    Binary modules can now register experimental plugin-type descriptors with
-    libqore. The v1 ABI covers descriptor validation, all-or-nothing
-    module-init registration, operation metadata, runtime helper dispatch,
-    persisted QORD helper references, verifier diagnostics, trace controls, and
-    reflection through @ref Qore::Reflection::PluginRegistry "PluginRegistry".
+    Binary modules can now register experimental plugin-type descriptors with libqore through
+    \c qore_register_plugin_types_v1().  The v1 ABI covers descriptor validation, all-or-nothing
+    module-init registration, operation metadata, runtime helper dispatch, persisted QORD helper
+    references, plugin value nodes serialized as \c VT_PLUGIN_INSTANCE and round-tripped through
+    \c Serializable, verifier diagnostics, trace controls, and reflection through
+    @ref Qore::Reflection::PluginRegistry "PluginRegistry".
 
-    Module authors pass the module-init plugin handle to
-    \c qore_register_plugin_types_v1():
-    @code{.cpp}
-QorePluginRegistrationContextV1 plugin_ctx{
-    .struct_size   = sizeof(plugin_ctx),
-    .flags         = 0,
-    .module_path   = module_ctx.path.c_str(),
-    .module_handle = module_ctx.plugin_module_handle,
-};
+    Dense-buffer helper dispatch has dedicated IR opcodes that validate @ref buffer "buffer<T>" operands
+    before passing raw frames to module helpers.  Modules can also supply \c QorePluginLoweringCallback
+    pattern matchers so IR lowering emits plugin-dispatch IR ahead of the generic fallback, and can opt
+    into inline LLVM lowering with the \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension, including
+    per-operation floating-point reassociation gated by the new @ref fp-fast-math "%fp-fast-math" parse
+    directive; incompatible <em>optional</em> LLVM extensions fall back to runtime-helper dispatch, while
+    <em>required</em> mismatches fail registration.
 
-if (qore_register_plugin_types_v1(&plugin_ctx, &my_plugin_registration, &xsink)) {
-    return;
-}
-    @endcode
-
-    Qore code can inspect committed registrations:
-    @code{.py}
-@ref modern "%modern"
-@ref requires "%requires" reflection
-
-PluginRegistry registry = PluginRegistry::getProcessRegistry();
-foreach string module_name in (registry.getProcessModules()) {
-    foreach hash<auto> op in (registry.getOperations(module_name)) {
-        printf("%s::%s -> %s\n",
-            module_name, op.operation_name, op.return_type);
-    }
-}
-    @endcode
-
-    <b>Tracing and diagnostics</b>: the following environment variables expose internal decisions:
-    - \c QORE_PLUGIN_REGISTER_TRACE - registration
-    - \c QORE_PLUGIN_DISPATCH_TRACE - dispatch
-    - \c QORE_PLUGIN_VERIFY_TRACE - verification
-    - \c QORE_PLUGIN_QORD_TRACE - QORD
-    - \c QORE_PLUGIN_CROSS_TYPE_TRACE - operation resolution
-
-    \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each Program's rolling fallback-site buffer used by
-    @ref Qore::Reflection::PluginRegistry::getRecentFallbackSites() "PluginRegistry::getRecentFallbackSites()".
-
-    <b>Values and serialization</b>:
-    - Plugin value nodes can be wrapped with \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in
-      QORD, and round-tripped through \c Serializable using the registered plugin serializer callbacks.
-
-    <b>References and tooling</b>: see @ref plugin_types for the complete module-author overview and current
-    limitations, along with:
-    - \c examples/plugins/sample-buffer - reference module;
-    - \c examples/plugins/qore-plugin-lint - advisory descriptor linter;
-    - \c tools/plugin-type-verify.sh - runner combining the registry smoke test,
-      descriptor linting, and optional consumer workloads;
-    - \c plugin-type-verify-dataframe - CMake target for the in-tree dataframe consumer.
+    See @ref plugin_types for the complete module-author overview, the registration and reflection
+    examples, the \c QORE_PLUGIN_*_TRACE diagnostic environment variables, current limitations, and the
+    in-tree reference module, descriptor linter, and verification tooling.
     @endparblock
 
     @par Module-Loading Lock Hierarchy
     @parblock
-    Cold runtime module loads serialize on a process-global lock while applying module commands
+    Cold runtime module loads serialize on a process-global lock while applying @ref exec_mode_aot "AOT"
+    module commands
     and running module initializers.  Because applying a module's commands can call into that
     module (for example to import Java classes), a binary module that holds a private lock while
     triggering a module load could invert the lock order and deadlock against a concurrent load.
