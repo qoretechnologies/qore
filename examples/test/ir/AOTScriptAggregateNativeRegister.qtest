@@ -30,6 +30,8 @@ class AOTScriptAggregateNativeRegisterTest inherits QUnit::Test {
             libqore_dir, libqore_dir, source_root + "/include");
 
         addTestCase("script aggregate binds per-file native bodies", \testNativeRegisterAggregate());
+        addTestCase("declaration-only aggregate reports what it emitted",
+            \testDeclarationOnlyReporting());
 
         set_return_value(main());
     }
@@ -149,5 +151,69 @@ int main(int, char**) {
             "aggregate metadata binds the per-file native closure body: " + out);
         assertTrue(out.find("42\n") != -1,
             "aggregate metadata plus per-file native registers run cross-file closure call: " + out);
+    }
+
+    # A native-register aggregate carries declarations only and delegates every body to
+    # its linked per-source .qo objects, so its code-variant count is necessarily zero.
+    # Reporting a bare "0 Qore code variants" beside a multi-megabyte declaration blob
+    # reads as a failed build, so that mode must report what it actually emitted.
+    testDeclarationOnlyReporting() {
+        TmpDir tmp("qore-aot-script-aggregate-report-");
+        string tmp_dir = tmp.path;
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+
+        string src = tmp_dir + "/report.qr";
+        write(src, "%modern
+int sub report_add(int i, int j) {
+    return i + j;
+}
+");
+        string verbose_env = "QORE_AOT_VERBOSE=1 " + env;
+
+        string decl_out = run(sprintf(
+            "%s %s -c --script-aggregate=REPORT_DECL_AGG --script-aggregate-native-registers"
+            " -o %s %s", verbose_env, qcc_bin, tmp_dir + "/decl-agg.qo", src));
+        assertTrue(decl_out.find("declaration metadata for 1 source, no Qore code variants") != -1,
+            "declaration-only aggregate reports its declaration source count: " + decl_out);
+        assertTrue(decl_out.find("bodies in the linked per-source .qo objects") != -1,
+            "declaration-only aggregate says where the bodies live: " + decl_out);
+        assertEq(-1, decl_out.find("0 Qore code variants"),
+            "declaration-only aggregate never reports a bare zero variant count: " + decl_out);
+        assertTrue(decl_out.find("compiled script aggregate .qo (-O3, declarations only)") != -1,
+            "verbose standalone aggregate summary names the declaration-only mode: " + decl_out);
+        assertEq(-1, decl_out.find("(-O3, 0 variants"),
+            "verbose standalone aggregate summary drops the zero variant count: " + decl_out);
+
+        # An aggregate that does lower bodies keeps reporting its real variant count.
+        string full_out = run(sprintf(
+            "%s %s -c --script-aggregate=REPORT_FULL_AGG -o %s %s",
+            verbose_env, qcc_bin, tmp_dir + "/full-agg.qo", src));
+        assertTrue(full_out.regex("with metadata for [1-9][0-9]* Qore code variants"),
+            "body-lowering aggregate still reports its code-variant count: " + full_out);
+        assertTrue(full_out.regex("compiled script aggregate \\.qo \\(-O3, [1-9][0-9]* variants\\)"),
+            "verbose body-lowering aggregate summary keeps its variant count: " + full_out);
+        assertEq(-1, full_out.find("declaration metadata"),
+            "body-lowering aggregate is not reported as declaration-only: " + full_out);
+
+        # The fused batch aggregate reaches the same reporting through compileScriptAggregate;
+        # batch mode requires at least two sources, which also covers the plural source count.
+        string src2 = tmp_dir + "/report2.qr";
+        write(src2, "%modern
+int sub report_sub(int i, int j) {
+    return i - j;
+}
+");
+        string fused_out = run(sprintf(
+            "%s %s -c --output-dir=%s --batch-script-aggregate=REPORT_FUSED_AGG"
+            " --batch-script-aggregate-output=%s --script-aggregate-native-registers %s %s",
+            verbose_env, qcc_bin, qo_dir, tmp_dir + "/fused-agg.qo", src, src2));
+        assertTrue(fused_out.find("declaration metadata for 2 sources, no Qore code variants") != -1,
+            "fused declaration-only aggregate reports its declaration source count: " + fused_out);
+        assertTrue(fused_out.find(
+                "compiled fused script aggregate .qo (-O3, declarations only)") != -1,
+            "verbose fused aggregate summary names the declaration-only mode: " + fused_out);
+        assertEq(-1, fused_out.find("(-O3, 0 variants"),
+            "verbose fused aggregate summary drops the zero variant count: " + fused_out);
     }
 }

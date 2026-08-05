@@ -945,6 +945,27 @@ public:
             int* script_aggregate_compiled_count_out = nullptr,
             std::vector<QoreAOTSourceFingerprint>* source_fingerprints = nullptr);
 
+    //! True when a script aggregate carries declarations only and lowers no Qore code bodies.
+    /**
+        A native-register aggregate delegates every executable body, slot map, init
+        descriptor, statement location, and debug IR to its linked per-source `.qo`
+        objects, so lowering the whole program in the aggregate would only create unused
+        external declarations. Embedding source keeps the aggregate self-describing and
+        therefore requires the full lowering pass.
+
+        Callers use this to report what such an artifact actually emitted; its
+        code-variant count is necessarily zero, which on its own reads as a failed build.
+
+        @param register_native_inputs the aggregate calls each per-file
+                `*_script_native_register` symbol
+        @param include_source source text is embedded in the aggregate metadata
+        @return true when the aggregate emits declarations only
+    */
+    DLLLOCAL static bool scriptAggregateIsDeclarationOnly(bool register_native_inputs,
+            bool include_source) {
+        return register_native_inputs && !include_source;
+    }
+
     //! Compile aggregate script metadata for a list of already-compiled
     //! script-context `.qo` objects.
     /**

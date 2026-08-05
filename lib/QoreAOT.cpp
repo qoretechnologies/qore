@@ -2194,34 +2194,42 @@ static std::string qccCompileModeSuffix(int opt_level, bool include_source) {
     return rv;
 }
 
+//! Report qcc output-artifact statistics
+/** @param declaration_only_sources when >= 0, the artifact deliberately lowers no Qore code
+        bodies and instead carries serialized declarations for that many sources. Such an
+        artifact always has a code-variant count of zero, so reporting "0 Qore code variants"
+        beside a multi-megabyte declaration blob reads as a failed build; report what was
+        actually emitted, and where the bodies live, instead.
+ */
 static void reportAOTArtifactStats(const char* label, int opt_level, bool include_source,
         int compiled_count, int total_funcs, int failed_count, const char* target_triple,
-        const std::string& output_path, bool metadata_only = false) {
+        const std::string& output_path, bool metadata_only = false,
+        int declaration_only_sources = -1) {
     std::string resolved_target = qccTargetTriple(target_triple);
     std::string mode_suffix = qccCompileModeSuffix(opt_level, include_source);
     int skipped_count = total_funcs - compiled_count - failed_count;
     int64_t output_size = qccFileSize(output_path);
-    const char* relation = metadata_only ? "with metadata for" : "for";
-    if (output_size >= 0) {
-        if (failed_count || skipped_count) {
-            printf("%s%s%s: %lld bytes %s %d/%d %s (target: %s; %d failed, %d skipped): %s\n",
-                QCC_LOG_PREFIX, label, mode_suffix.c_str(), (long long)output_size, relation,
-                compiled_count, total_funcs, QCC_CODE_BODY_DESC, resolved_target.c_str(),
-                failed_count, skipped_count, output_path.c_str());
-        } else {
-            printf("%s%s%s: %lld bytes %s %d %s (target: %s): %s\n",
-                QCC_LOG_PREFIX, label, mode_suffix.c_str(), (long long)output_size, relation,
-                compiled_count, QCC_CODE_BODY_DESC, resolved_target.c_str(), output_path.c_str());
-        }
-    } else if (failed_count || skipped_count) {
-        printf("%s%s%s: output written %s %d/%d %s (target: %s; %d failed, %d skipped): %s\n",
-            QCC_LOG_PREFIX, label, mode_suffix.c_str(), relation, compiled_count, total_funcs,
-            QCC_CODE_BODY_DESC, resolved_target.c_str(), failed_count, skipped_count,
-            output_path.c_str());
-    } else {
-        printf("%s%s%s: output written %s %d %s (target: %s): %s\n",
-            QCC_LOG_PREFIX, label, mode_suffix.c_str(), relation, compiled_count,
+    std::string size_clause = output_size >= 0
+        ? std::to_string((long long)output_size) + " bytes"
+        : std::string("output written");
+    if (declaration_only_sources >= 0) {
+        printf("%s%s%s: %s with declaration metadata for %d source%s, no %s "
+            "(bodies in the linked per-source .qo objects) (target: %s): %s\n",
+            QCC_LOG_PREFIX, label, mode_suffix.c_str(), size_clause.c_str(),
+            declaration_only_sources, declaration_only_sources == 1 ? "" : "s",
             QCC_CODE_BODY_DESC, resolved_target.c_str(), output_path.c_str());
+        return;
+    }
+    const char* relation = metadata_only ? "with metadata for" : "for";
+    if (failed_count || skipped_count) {
+        printf("%s%s%s: %s %s %d/%d %s (target: %s; %d failed, %d skipped): %s\n",
+            QCC_LOG_PREFIX, label, mode_suffix.c_str(), size_clause.c_str(), relation,
+            compiled_count, total_funcs, QCC_CODE_BODY_DESC, resolved_target.c_str(),
+            failed_count, skipped_count, output_path.c_str());
+    } else {
+        printf("%s%s%s: %s %s %d %s (target: %s): %s\n",
+            QCC_LOG_PREFIX, label, mode_suffix.c_str(), size_clause.c_str(), relation,
+            compiled_count, QCC_CODE_BODY_DESC, resolved_target.c_str(), output_path.c_str());
     }
 }
 
@@ -27686,7 +27694,8 @@ bool QoreAOT::compileScriptAggregate(
     // and debug IR to its linked per-source object. Lowering the whole program
     // merely to create unused external LLVM declarations and slot identities
     // duplicated the most expensive serial phase of a clean group build.
-    const bool declaration_only = register_native_inputs && !include_source;
+    const bool declaration_only = QoreAOT::scriptAggregateIsDeclarationOnly(
+        register_native_inputs, include_source);
     if (!declaration_only) {
         std::string fatal_lowering_error;
         compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
@@ -27944,7 +27953,8 @@ bool QoreAOT::compileScriptAggregate(
         *compiled_count_out = compiled_count;
     }
     reportAOTArtifactStats("script aggregate .qo", opt_level, include_source,
-        compiled_count, total_funcs, failed_count, target_triple, output_path, true);
+        compiled_count, total_funcs, failed_count, target_triple, output_path, true,
+        declaration_only ? (int)entries.size() : -1);
 
     return true;
 }

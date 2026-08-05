@@ -119,6 +119,17 @@ static const char* source_mode_suffix(bool include_source) {
     return include_source ? ", include-source" : "";
 }
 
+//! Describe what a script aggregate emitted.
+/** A declaration-only aggregate lowers no bodies by design, so its variant count is always
+    zero; reporting "0 variants" for it reads as a failed build.
+ */
+static std::string script_aggregate_content_clause(bool native_registers, bool include_source,
+        int compiled_count) {
+    return QoreAOT::scriptAggregateIsDeclarationOnly(native_registers, include_source)
+        ? std::string("declarations only")
+        : std::to_string(compiled_count) + " variants";
+}
+
 //! Join two path components.
 static std::string join_path(const std::string& lhs, const char* rhs) {
     if (lhs.empty()) {
@@ -9107,9 +9118,11 @@ int main(int argc, char** argv) {
             return 1;
         }
         if (qcc_output_verbose()) {
-            printf("qcc: compiled script aggregate .qo (-O%d, %d variants%s): %s\n",
-                opt_level, compiled_count, source_mode_suffix(include_source),
-                output_path);
+            printf("qcc: compiled script aggregate .qo (-O%d, %s%s): %s\n",
+                opt_level,
+                script_aggregate_content_clause(script_aggregate_native_registers,
+                    include_source, compiled_count).c_str(),
+                source_mode_suffix(include_source), output_path);
         }
         std::vector<std::string> aggregate_dep_inputs = target_files;
         aggregate_dep_inputs.insert(aggregate_dep_inputs.end(),
@@ -9430,8 +9443,10 @@ int main(int argc, char** argv) {
                 published_success_stamps.emplace_back(success_stamp_path);
             }
             if (qcc_output_verbose()) {
-                printf("qcc: compiled fused script aggregate .qo (-O%d, %d variants%s): %s\n",
-                    opt_level, aggregate_compiled_count,
+                printf("qcc: compiled fused script aggregate .qo (-O%d, %s%s): %s\n",
+                    opt_level,
+                    script_aggregate_content_clause(script_aggregate_native_registers,
+                        include_source, aggregate_compiled_count).c_str(),
                     source_mode_suffix(include_source),
                     batch_script_aggregate_output);
             }

@@ -240,7 +240,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --stub=FILE|Preload declaration-only Qore source supplied by a host
     |\c --define=NAME[=VALUE]|Set a parser define before parsing
     |\c --parse-option=NAME|OR a parse option into the compile program
-    |\c --script-aggregate-native-registers|Bind aggregate metadata to the linked per-file native bodies; valid with standalone or fused batch script aggregates
+    |\c --script-aggregate-native-registers|Bind aggregate metadata to the linked per-file native bodies; valid with standalone or fused batch script aggregates. Unless \c --include-source is given, the aggregate then carries declarations only and lowers no code bodies of its own, so it is reported as emitting declaration metadata rather than a code-variant count
     |\c --depfile=FILE|Write a Make-format dependency file
     |\c --depfile-module-deps=MODE|For module depfiles, record dependency sources (default), resolved artifact files, or none; source mode expands split modules to all \c .qm / \c .qc / \c .ql files and retains an artifact only when no source representation is available
     |\c --from-objects|Aggregate \c .qo inputs into a \c .qmod with \c -m
