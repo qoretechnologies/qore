@@ -919,6 +919,39 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "HTTPCLIENT-REQUEST-ERROR"), "wrapped request errors are not transport retry signals");
     }
 
+    #! Only an error proving the peer sent nothing may replay a non-idempotent request
+    /** Replaying a non-idempotent request is safe only when the transport
+        itself proves the request was never processed.  @c HTTP3-IDLE-CLOSE
+        carries that proof by definition: the local QUIC idle timer expired
+        before any response data arrived, and because QUIC acknowledges
+        received packets, not even an acknowledgement came back.  Every other
+        close code can follow a request the peer already processed, so none of
+        them may widen the retry policy beyond idempotent methods.
+
+        @note The end-to-end idle close cannot be reproduced between two Qore
+        QUIC peers - the server's own keep-alive PINGs restart the client's
+        idle timer - so this classification is the deterministic guard for the
+        policy; see the note on @c testH3SlowSilentResponseNotIdleClosed in
+        HttpServerQuicDeadPeer.qtest.
+    */
+    testUnprocessedTransportErrorClassification() {
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isUnprocessedTransportErrorStatic(
+            "HTTP3-IDLE-CLOSE"),
+            "a local idle close proves the peer never took delivery of the request");
+        foreach string err in ((
+                "HTTP3-PEER-CLOSE",
+                "HTTP3-LOCAL-CLOSE",
+                "HTTP3-CONNECTION-CLOSED",
+                "HTTP3-READ-ERROR",
+                "HTTP2-CONNECTION-CLOSED",
+                "HTTP1-CONNECTION-CLOSED",
+                "HTTPCLIENT-TIMEOUT")) {
+            assertFalse(HttpClientIo::HttpClientConnectionManager::isUnprocessedTransportErrorStatic(err),
+                sprintf("%s can follow a processed request and must not replay "
+                    "a non-idempotent method", err));
+        }
+    }
+
     # ---- State Tests ----
 
     testStreamStateTransitions() {

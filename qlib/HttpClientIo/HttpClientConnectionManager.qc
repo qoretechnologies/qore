@@ -744,7 +744,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # turns a single dead-server failure into a 45s+ hang.
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream)) {
+                            && canRetryRequest(method, stream, ex.err)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection (%d/%d)",
@@ -852,7 +852,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # the destructor is a final safety net
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream)) {
+                            && canRetryRequest(method, stream, ex.err)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection (%d/%d)",
@@ -948,7 +948,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             } catch (hash<ExceptionInfo> ex) {
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream)) {
+                            && canRetryRequest(method, stream, ex.err)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection (%d/%d)",
@@ -1211,7 +1211,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # see acquireAndStartStreaming for rationale.
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream)) {
+                            && canRetryRequest(method, stream, ex.err)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection (%d/%d)",
@@ -3189,10 +3189,53 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
     #! Internal: checks if a failed request may be retried safely
     /** Connection-only failures can be retried for any method.  After stream
-        submission, only idempotent methods are retried automatically.
+        submission, only idempotent methods are retried automatically, unless
+        the transport itself proves the peer never processed the request; see
+        @ref isUnprocessedOnReusedConnection().
+
+        @param method the request method
+        @param stream the failed stream handle, if any
+        @param err the transport error code that failed the request, when the
+            caller has one; omitted by callers that retry before any error
+            classification
     */
-    private bool canRetryRequest(string method, *HttpClientStreamHandle stream) {
-        return isConnectionOnlyFailure(stream) || isIdempotentMethod(method);
+    private bool canRetryRequest(string method, *HttpClientStreamHandle stream,
+            *string err) {
+        return isConnectionOnlyFailure(stream) || isIdempotentMethod(method)
+            || isUnprocessedOnReusedConnection(err, stream);
+    }
+
+    #! Internal: True when a pooled connection died before the peer processed the request
+    /** A connection taken from the pool can already have been discarded by the
+        peer: the reuse is a race the client cannot win by inspection.  When
+        such a reused connection fails with an error whose definition is "no
+        response data arrived", the request was never processed, so replaying
+        it on a fresh connection cannot duplicate a side effect and is safe for
+        any method - including non-idempotent ones, which carry the LLM and
+        other API request bodies that would otherwise fail permanently on one
+        stale pooled connection.
+
+        A fresh connection is deliberately excluded: there the same error means
+        the peer really is unreachable, and replaying a non-idempotent request
+        would add nothing but a duplicate risk.
+    */
+    private bool isUnprocessedOnReusedConnection(*string err,
+            *HttpClientStreamHandle stream) {
+        return err.val() && stream && stream.wasConnectionReused()
+            && isUnprocessedTransportErrorStatic(err);
+    }
+
+    #! Returns True for transport errors that prove the peer sent nothing at all
+    /** @c HTTP3-IDLE-CLOSE is raised only when the local QUIC idle timer
+        expired before any response data arrived.  QUIC acknowledges received
+        packets, so a local idle expiry means not even an acknowledgement came
+        back: the peer never took delivery of the request.
+
+        @param err the transport error code
+        @return True when the error proves the request was not processed
+    */
+    static bool isUnprocessedTransportErrorStatic(string err) {
+        return err == "HTTP3-IDLE-CLOSE";
     }
 
     #! Internal: checks if an error indicates a dead connection
