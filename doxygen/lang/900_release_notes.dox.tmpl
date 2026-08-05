@@ -29,10 +29,6 @@
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
     - regex matching skips per-call UTF-8 re-validation in PCRE2 inner loops
-    - calls to builtin functions declared deterministic and free of side effects are evaluated once
-      at compile time when every argument is a literal; ahead-of-time compilation additionally
-      requires the result to be host-portable, so a value that depends on the build host is never
-      baked into a compiled image
 
     <i>Language features:</i>
     - new @ref modern "%modern" parse directive, <tt>.qr</tt> file extension, and modern-by-default
@@ -816,11 +812,6 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     no longer be confused with a missing one.  Attachment status for every
     declared child is reported by get_module_hash() under the
     \c "child-modules" key.
-
-    AOT-compiled optional children now run their module initializer exactly
-    once without exporting the child's private namespace through its parent.
-    This makes extension registration and initializer error reporting
-    consistent between source and precompiled modules.
 
     See @ref try-child-module "%try-child-module" and
     @ref user_module_children "Child Modules" for details.
