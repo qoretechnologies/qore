@@ -537,6 +537,29 @@ public:
         return parse_assigned;
     }
 
+    //! Preserves the definite-assignment state the variable had when it left the parse stack.
+    /** Signature parameters are popped with the flag reset, because the same LocalVar is re-pushed
+        for the next parse of the same signature and must not inherit this one's state.  IR lowering
+        runs after that reset and asks whether an argument can be NOTHING at run time, so without
+        this the answer for every parameter is "yes" - not because the parameter can be NOTHING, but
+        because the fact was discarded.
+
+        The recorded state is still the flow-sensitive one: a parameter cleared by \c delete or
+        \c remove during the body is recorded as unassigned, exactly as a body local would be.
+    */
+    DLLLOCAL void parseFinalizeAssigned() {
+        parse_assigned_final = parse_assigned;
+    }
+
+    //! Returns whether the variable was definitely assigned at the end of the parse of its scope.
+    /** Body locals keep \c parse_assigned when they leave the stack, so it answers for them
+        directly; parameters have it reset, so the value recorded by parseFinalizeAssigned() answers
+        for those.
+    */
+    DLLLOCAL bool isAssignedAtParseEnd() const {
+        return parse_assigned || parse_assigned_final;
+    }
+
     DLLLOCAL void instantiate(const QoreParseOptions& parse_options) {
         //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
         //    QoreTypeInfo::getName(typeInfo));
@@ -975,6 +998,9 @@ private:
     std::string name;
     bool closure_use = false,
         parse_assigned = false,
+        //! \c parse_assigned as it stood when the variable left the parse stack; see
+        //! parseFinalizeAssigned()
+        parse_assigned_final = false,
         is_self = false,
         is_top_level = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)

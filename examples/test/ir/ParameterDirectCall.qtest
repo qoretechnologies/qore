@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ParameterDirectCallTest
+
+#! Checks that a function parameter used as a call argument reaches CallDirect.
+/** An overloaded call falls back from CallDirect to the generic Call opcode - which carries an AST
+    expression and keeps its argument locals AST-visible - when an argument might be NOTHING at run
+    time and the selected variant would reject that.  All lvalues are NOTHING until assigned, so
+    that question is answered by definite-assignment analysis.
+
+    A parameter is assigned by the calling convention before the body runs, and the parse marks it
+    so.  The flag was then reset when the signature's locals left the parse stack, so that the next
+    parse of the same signature starts clean - and IR lowering, which runs afterwards, read the
+    reset value and concluded that every parameter might be NOTHING.  The state is now recorded as
+    the variable leaves the stack.
+
+    The recorded state is still flow-sensitive, which is the part that must not regress: \c delete
+    and \c remove clear it, and a parameter cleared that way really can be NOTHING, so those must
+    keep falling back.  So must an optional parameter, whose declared type admits NOTHING.
+
+    A call that was not commoned produces the same value as one that was, so these assert on the
+    optimizer counters as well as on values: pure-cse= can only be non-zero for a call that reached
+    CallDirect, which makes it a direct witness for the lowering decision.
+*/
+public class ParameterDirectCallTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ParameterDirectCallTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a parameter argument reaches CallDirect", \testParameterReachesDirectCall());
+        addTestCase("a cleared parameter still falls back", \testClearedParameterFallsBack());
+        addTestCase("IR and AST agree on every shape", \testEnginesAgree());
+        addTestCase("AOT lowers parameters the same way", \testImageLowering());
+
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    private string runScript(string script_path, *hash<auto> env) {
+        string prefix = "";
+        foreach hash<auto> i in (env.pairIterator()) {
+            prefix += sprintf("%s=%s ", i.key, i.value);
+        }
+        return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1",
+            prefix, libqore_dir, qore_bin, script_path));
+    }
+
+    private hash<string, list<int>> parseCounts(string output, string prefix, string stat) {
+        # the name is anchored on the first statistic rather than on ":" because a method name
+        # contains "::", and the count is not anchored on the end of the line because further
+        # statistics are reported after it
+        string pattern = sprintf("^%s (.+): loops=.*[ =]%s=([0-9]+)", prefix, stat);
+        hash<string, list<int>> rv = {};
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = regex_extract(line, pattern);
+            if (parts.size() != 2 || !exists parts[0] || !exists parts[1]) {
+                continue;
+            }
+            string name = parts[0];
+            list<int> counts = rv{name} ?? ();
+            counts += parts[1].toInt();
+            rv{name} = counts;
+        }
+        return rv;
+    }
+
+    private assertCount(hash<string, list<int>> counts, string name, int expected, string stat) {
+        assertTrue(exists counts{name}, sprintf("%y was lowered and reported %s", name, stat));
+        foreach int count in (counts{name}) {
+            assertEq(expected, count, sprintf("%s for %y", stat, name));
+        }
+    }
+
+    private string probeCode() {
+        return '%modern
+
+# a plain parameter: assigned by the calling convention, so the call can be resolved at parse time
+float sub p_direct(float x) { return sqrt(x) + sqrt(x); }
+# delete clears it, and a cleared parameter really can be NOTHING
+float sub p_deleted(float x) { delete x; return sqrt(x) + sqrt(x); }
+# remove likewise
+float sub p_removed(float x) { remove x; return sqrt(x) + sqrt(x); }
+# an optional parameter admits NOTHING by its declared type, whatever the assignment analysis says
+float sub p_optional(*float x) { return sqrt(x) + sqrt(x); }
+# a parameter written in the body stays assigned throughout
+float sub p_written(float x) { x = x + 1.0; return sqrt(x) + sqrt(x); }
+# a body local, which never lost the flag and is the control for the whole test
+float sub p_local(float y) { float f = y; return sqrt(f) + sqrt(f); }
+
+printf("direct=%y\n", p_direct(4.0));
+try { printf("deleted=%y\n", p_deleted(4.0)); } catch (hash<ExceptionInfo> ex) { printf("deleted=%s\n", ex.err); }
+try { printf("removed=%y\n", p_removed(4.0)); } catch (hash<ExceptionInfo> ex) { printf("removed=%s\n", ex.err); }
+printf("optional=%y\n", p_optional(4.0));
+try { printf("optional_nothing=%y\n", p_optional()); } catch (hash<ExceptionInfo> ex) { printf("optional_nothing=%s\n", ex.err); }
+printf("written=%y\n", p_written(3.0));
+printf("local=%y\n", p_local(4.0));
+';
+    }
+
+    #! the counter can only move for a call that reached CallDirect
+    private testParameterReachesDirectCall() {
+        TmpDir tmp("param-direct-call-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        hash<string, list<int>> counts = parseCounts(
+            runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:", "pure-cse");
+        assertCount(counts, "p_direct", 1, "pure-cse");
+        # the control: a body local always reached CallDirect
+        assertCount(counts, "p_local", 1, "pure-cse");
+        # writing a parameter does not make it possibly-NOTHING
+        assertCount(counts, "p_written", 1, "pure-cse");
+    }
+
+    #! the recorded state stays flow-sensitive
+    private testClearedParameterFallsBack() {
+        TmpDir tmp("param-direct-call-cleared-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string out = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        hash<string, list<int>> counts = parseCounts(out, "IR-OPT:", "pure-cse");
+        # a parameter cleared in the body really can be NOTHING, so the call must be dispatched at
+        # run time; commoning it would mean it had been resolved at parse time instead
+        assertCount(counts, "p_deleted", 0, "pure-cse");
+        assertCount(counts, "p_removed", 0, "pure-cse");
+        # and an optional parameter admits NOTHING by its type
+        assertCount(counts, "p_optional", 0, "pure-cse");
+
+        # the run-time behaviour that the fallback exists to preserve
+        assertRegex("deleted=RUNTIME-OVERLOAD-ERROR", out);
+        assertRegex("removed=RUNTIME-OVERLOAD-ERROR", out);
+        assertRegex("optional_nothing=RUNTIME-OVERLOAD-ERROR", out);
+    }
+
+    #! lowering must not change any observable result
+    private testEnginesAgree() {
+        TmpDir tmp("param-direct-call-engines-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string ir = runScript(script);
+        assertEq(runScript(script, {"QORE_DISABLE_IR": "1"}), ir, "IR and AST agree");
+        assertEq(runScript(script, {"QORE_DISABLE_IR_OPT": "1"}), ir, "optimization changes nothing");
+        assertRegex("direct=4", ir);
+        assertRegex("optional=4", ir);
+        assertRegex("written=4", ir);
+        assertRegex("local=4", ir);
+    }
+
+    #! qcc lowers through the same path, and the image must agree with the interpreted source
+    private testImageLowering() {
+        TmpDir tmp("param-direct-call-aot-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/ParamDirectProbeMod.qm";
+        string qmod_path = qmod_dir + "/ParamDirectProbeMod.qmod";
+        writeFile(qm_path, '%modern
+
+module ParamDirectProbeMod {
+    version = "1.0";
+    desc = "parameter direct-call probe";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace ParamDirectProbeMod {
+public class ParamDirectProbe {
+    #! a plain parameter argument
+    static float direct(float x) { return sqrt(x) + sqrt(x); }
+
+    #! cleared in the body, so it must be dispatched at run time
+    static float deleted(float x) { delete x; return sqrt(x) + sqrt(x); }
+}
+}
+');
+        string compile_out = backquote(sprintf(
+            "QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("module compiled: %s", compile_out));
+
+        hash<string, list<int>> counts = parseCounts(compile_out, "IR-OPT-AOT:", "pure-cse");
+        assertCount(counts, "ParamDirectProbeMod::ParamDirectProbe::_static_direct", 1, "pure-cse");
+        assertCount(counts, "ParamDirectProbeMod::ParamDirectProbe::_static_deleted", 0, "pure-cse");
+
+        string script = tmp.path + "/run.q";
+        writeFile(script, '%modern
+%requires ParamDirectProbeMod
+
+printf("direct=%y\n", ParamDirectProbeMod::ParamDirectProbe::direct(4.0));
+try {
+    printf("deleted=%y\n", ParamDirectProbeMod::ParamDirectProbe::deleted(4.0));
+} catch (hash<ExceptionInfo> ex) {
+    printf("deleted=%s\n", ex.err);
+}
+');
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, qmod_dir, qore_bin, script));
+        string src_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, src_dir, qore_bin, script));
+        assertEq(src_out, aot_out, "AOT and source module agree");
+        assertRegex("direct=4", aot_out);
+        assertRegex("deleted=RUNTIME-OVERLOAD-ERROR", aot_out);
+    }
+}

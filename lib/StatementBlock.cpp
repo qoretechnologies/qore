@@ -439,8 +439,12 @@ LocalVar* pop_local_var(bool set_unassigned) {
    std::unique_ptr<VNode> vnode(getVStack());
    assert(vnode.get());
    LocalVar* rc = vnode->lvar;
-   if (set_unassigned)
+   if (set_unassigned) {
+      // record the state before discarding it: the reset exists so the next parse of the same
+      // signature starts clean, but IR lowering runs afterwards and still needs the answer
+      rc->parseFinalizeAssigned();
       rc->parseUnassigned();
+   }
    printd(5, "pop_local_var(): popping var %s\n", rc->getName());
    updateVStack(vnode->next);
    return rc;

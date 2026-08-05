@@ -3,8 +3,17 @@
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 
+//! Answers for IR lowering, which runs after the parse stack has been unwound.
+/** A body local keeps its flag when it leaves the stack, but a signature parameter has it reset so
+    the next parse of the same signature starts clean.  Asking isAssigned() here therefore reports
+    every parameter as possibly-NOTHING, and a call taking one as an argument falls back from
+    CallDirect to the generic Call opcode carrying an AST expression - which also keeps the
+    parameter AST-visible and out of ir_only_locals.  isAssignedAtParseEnd() reads the state
+    recorded as the variable left the stack, which is still flow-sensitive: a parameter cleared by
+    \c delete or \c remove is reported unassigned.
+*/
 bool QoreParseContext::isLocalDefinitelyAssigned(LocalVar* local) const {
-    return local && local->isAssigned();
+    return local && local->isAssignedAtParseEnd();
 }
 
 bool QoreParseContext::needsGuardForLocal(LocalVar* local) const {
