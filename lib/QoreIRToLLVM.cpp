@@ -1078,6 +1078,13 @@ const QoreTypeInfo* QoreIRToLLVM::specializeType(const QoreTypeInfo* ti) const {
     return current_ir_func ? current_ir_func->specializeType(ti) : ti;
 }
 
+bool QoreIRToLLVM::isSelfRecursiveVariant(const AbstractQoreFunctionVariant* variant) const {
+    if (!variant || !current_ir_func || !current_ir_func->source_variant) {
+        return false;
+    }
+    return variant == current_ir_func->source_variant;
+}
+
 llvm::Value* QoreIRToLLVM::getTypeInfoPointerArg(const QoreTypeInfo* ti) {
     ti = specializeType(ti);
     if (!ti) {
@@ -15479,10 +15486,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     bool is_self_rec = false;
                     if (!aot_self_recursive_fast_entry.empty()) {
+                        // FE identity rules out cross-namespace same-name wrappers;
+                        // variant identity rules out sibling overloads, which share
+                        // the FE but must not re-enter this body.
                         if (aot_call && aot_call->getFunctionEntry()
                                 && current_ir_func
                                 && aot_self_recursive_fe
-                                && aot_call->getFunctionEntry() == aot_self_recursive_fe) {
+                                && aot_call->getFunctionEntry() == aot_self_recursive_fe
+                                && isSelfRecursiveVariant(aot_call->getVariant())) {
                             is_self_rec = true;
                         }
                     }
@@ -18609,6 +18620,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_modify_runtime_locals = false;
                 call_effect_info = aot_approach_b_callee;
             } else if (aot_mode && direct_inst->is_self_recursive
+                    && isSelfRecursiveVariant(direct_inst->variant)
                     && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()
                     && qore_ir_fast_entry_args_need_no_binding(
@@ -18654,8 +18666,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 
                 if (direct_inst->is_self_recursive
+                        && isSelfRecursiveVariant(direct_inst->variant)
                         && isFastFunctionCallEligible(direct_inst->variant)) {
                     // Self-recursive AOT (no fast entry available): lightweight helper
+                    // re-entering this function's own body — only ever correct when the
+                    // callee is this exact variant (isSelfRecursiveVariant()).
                     if (has_arg_cleanups) {
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_call_self_recursive_aot_consume_args",

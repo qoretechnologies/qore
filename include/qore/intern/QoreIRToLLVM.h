@@ -145,6 +145,8 @@ public:
     //! self-recursion is detected by FE pointer equality rather than base
     //! name, avoiding cross-namespace mis-matches (`OMQ::foo` → `Util::foo`
     //! previously tripped the self-recursion path because base names match).
+    //! FE identity is necessary but not sufficient — see
+    //! isSelfRecursiveVariant().
     void setAOTSelfRecursiveFastEntry(const std::string& name,
             const FunctionEntry* fe = nullptr,
             const std::vector<BatchCalleeParamKind>* param_kinds = nullptr,
@@ -1056,6 +1058,17 @@ private:
     // back to the expanded cleanup path, so the estimate only affects whether
     // the compact helper path is available.
     unsigned estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const;
+
+    //! @return true if @p variant is the exact variant this function is being lowered from
+    /** Every AOT self-recursion path below re-enters the caller's own compiled body, so the
+        callee must be this exact variant.  Function identity is not enough: all overloads
+        of a function share one QoreFunction and one FunctionEntry, and a sibling overload
+        dispatched through those paths runs this body with the sibling's arguments.
+        QoreIRBuilder::createCallDirect() applies the same test when it sets
+        `is_self_recursive`; re-applying it at emission also covers the FunctionEntry-keyed
+        Invoke path, which derives self-recursion on its own, and neutralizes a stale flag
+        restored from an AOT binary written before that test compared variants. */
+    bool isSelfRecursiveVariant(const AbstractQoreFunctionVariant* variant) const;
 
     // Emit qore_rt_iterator_cleanup calls for active iterators
     void emitIteratorCleanup(llvm::Module& module);

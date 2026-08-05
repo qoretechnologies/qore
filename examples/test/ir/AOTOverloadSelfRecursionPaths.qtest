@@ -1,0 +1,260 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTOverloadSelfRecursionPathsTest
+
+#! The emitter paths behind AOT self-recursion, and what must and must not reach them.
+/** Companion to AOTOverloadSelfRecursion.qtest, which covers the reported crash as standalone
+    scripts.  This one exercises the shapes that reach the *other* self-recursion lowerings: a
+    compiled module image, a call made from inside a try block (lowered as an Invoke, whose
+    self-recursion test is keyed on the FunctionEntry rather than on the instruction flag), and
+    genuine self-recursion, which must keep the path the other cases must not take.
+
+    Self-recursion is a codegen shortcut: the emitter turns such a call into a re-entry of the
+    *caller's own* compiled body, skipping the dispatch that would otherwise select the callee.
+    That is only ever correct when the callee is the very variant being lowered.  Detection used to
+    compare the QoreFunction (and, when unset, the base name); all overloads of a function share one
+    QoreFunction - and one FunctionEntry - so a call to a sibling overload was flagged and the
+    compiled body re-entered itself with the sibling's arguments.  In Qorus that surfaced as a
+    SIGSEGV in qore_rt_resolve_global_slot_aot() from get_sql_table_system_trans(string, string),
+    which delegates to its (AbstractDatasource, string) sibling.
+
+    A delegating call only reaches the self-recursion lowering when it misses the batch fast-entry
+    path, which requires input-identical argument types - so these probes pass a *subclass* of the
+    parameter type.  A same-type argument takes the batch path instead, which is why not every
+    overload-delegating program reproduces the defect.
+
+    The three directions the detection has to keep straight, all covered here:
+    - same function, different variant: NOT self-recursion (the bug this guards);
+    - same base name, different namespace: NOT self-recursion (an older bug whose fix - comparing
+      the QoreFunction rather than the name - must not be undone);
+    - same variant: still self-recursion, and still routed to the self-recursive call helper,
+      because the AOT recursion performance work depends on that path.
+
+    The last one needs more than a value check: the recursion produces the same result either way.
+    QORE_AOT_TRACE_LINK_RELOCS reports the helper each AOT call slot actually used, so the tests
+    assert on the helper name - qore_rt_call_self_recursive_aot for genuine recursion,
+    qore_rt_call_direct_aot for a sibling overload.  (Verified non-vacuous: with the self-recursion
+    flag forced off, selfrec()'s slot reports qore_rt_call_direct_aot and the test fails.)
+*/
+class AOTOverloadSelfRecursionPathsTest inherits QUnit::Test {
+    public {
+        #! probe module: overloaded namespaced functions plus genuine self-recursion
+        const ProbeModule = '%modern
+
+module OverloadSelfRecProbe {
+    version = "1.0";
+    desc = "sibling overload self-recursion probe";
+    author = "Qore";
+    license = "MIT";
+}
+
+#! a same-named function in another namespace: calling it is not self-recursion
+public namespace OverloadSelfRecOther {
+public string sub wrap(string s) {
+    return "other:" + s;
+}
+}
+
+public namespace OverloadSelfRecProbe {
+public class Pool {
+    public {
+        string tag;
+    }
+    constructor(string t) {
+        tag = t;
+    }
+}
+
+public class SubPool inherits Pool {
+    constructor() : Pool("sub") {
+    }
+}
+
+#! delegates to the sibling overload below; the argument is a subclass of the sibling parameter
+#! type, so the call misses the batch fast-entry path and reaches the self-recursion lowering
+public string sub gsts(string ds, string t) {
+    SubPool p();
+    return gsts(p, t) + ":" + ds;
+}
+
+public string sub gsts(Pool p, string t) {
+    return "direct:" + p.tag + ":" + t;
+}
+
+#! genuine self-recursion, with a subclass argument so the recursive call misses the batch
+#! fast-entry path exactly like gsts() above - it must still take the self-recursive call helper
+public string sub selfrec(Pool p, int n) {
+    if (n <= 0) {
+        return p.tag;
+    }
+    SubPool s();
+    return selfrec(s, n - 1) + ":" + n;
+}
+
+#! self-recursive *and* delegating to a sibling from inside a try block, so the delegating call is
+#! lowered as an Invoke rather than a CallDirect; the sibling captures a local in a closure, which
+#! keeps it out of the batch fast-entry path
+public string sub mix(string ds, int n) {
+    if (n > 0) {
+        return mix(ds, n - 1);
+    }
+    try {
+        Pool p("p");
+        return mix(p, ds);
+    } catch (hash<ExceptionInfo> ex) {
+        return "err:" + ex.err;
+    }
+}
+
+public string sub mix(Pool p, string t) {
+    string acc = p.tag;
+    code c = string sub () { return acc + "/" + t; };
+    return "mix:" + c();
+}
+
+#! same base name as OverloadSelfRecOther::wrap(); the call it makes is not self-recursion
+public string sub wrap(string s) {
+    return OverloadSelfRecOther::wrap(s) + ":outer";
+}
+}
+';
+
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        TmpDir tmp;             #! holds the compiled probe module for the whole run
+        string src_dir;
+        string qmod_dir;
+    }
+
+    constructor() : QUnit::Test("AOTOverloadSelfRecursionPathsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp = new TmpDir("aot-overload-self-rec-");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/OverloadSelfRecProbe.qm", ProbeModule);
+
+        addTestCase("a sibling overload is not self-recursion", \testSiblingOverloadDelegation());
+        addTestCase("a same-named function in another namespace is not self-recursion",
+            \testCrossNamespaceWrapper());
+        addTestCase("a sibling overload called from a try block is not self-recursion",
+            \testSiblingOverloadFromTryBlock());
+        addTestCase("genuine self-recursion still uses the self-recursive call helper",
+            \testGenuineSelfRecursionKeepsFastPath());
+
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    #! compiles the probe module once, on first use
+    private compileProbeModule() {
+        string qmod_path = qmod_dir + "/OverloadSelfRecProbe.qmod";
+        if (is_file(qmod_path)) {
+            return;
+        }
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --strip-source "
+            "--output %s %s 2>&1", libqore_dir, libqore_dir, qore_bin, qmod_path,
+            src_dir + "/OverloadSelfRecProbe.qm"));
+        assertTrue(is_file(qmod_path), sprintf("probe module compiled: %s", compile_out));
+    }
+
+    #! runs \a code against the compiled image and against the module sources
+    /** @return a hash of "aot" and "src" output; \a env is applied to the image run only, because
+        the AOT diagnostics it enables have no counterpart in the interpreted run
+    */
+    private hash<string, string> run(string name, string code, *hash<string, string> env) {
+        compileProbeModule();
+        string script = tmp.path + "/" + name + ".q";
+        writeFile(script, sprintf("%%modern\n%%requires OverloadSelfRecProbe\n%s\n", code));
+
+        string prefix = "";
+        foreach hash<auto> i in (env.pairIterator()) {
+            prefix += sprintf("%s=%s ", i.key, i.value);
+        }
+        return {
+            "aot": backquote(sprintf("%sLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+                prefix, libqore_dir, qmod_dir, qore_bin, script)),
+            "src": backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+                libqore_dir, src_dir, qore_bin, script)),
+        };
+    }
+
+    private testSiblingOverloadDelegation() {
+        string code = 'printf("gsts=%y\n", OverloadSelfRecProbe::gsts("omq", "vmv"));';
+        # without the fix the delegating call re-enters its own body instead of the sibling, so the
+        # image dies with STACK-LIMIT-EXCEEDED before printing anything
+        hash<string, string> out = run("gsts", code);
+        assertEq("gsts=\"direct:sub:vmv:omq\"\n", out.aot, "the sibling overload ran, not the caller");
+        assertEq(out.src, out.aot, "image and source module agree");
+
+        hash<string, string> traced = run("gsts-traced", code,
+            {"QORE_AOT_TRACE_LINK_RELOCS": "1"});
+        assertTrue(traced.aot =~ /helper=qore_rt_call_direct_aot/,
+            "the delegating call slot used the ordinary direct-call helper");
+        assertFalse(traced.aot =~ /helper=qore_rt_call_self_recursive_aot/,
+            "no call slot in gsts() was lowered as self-recursion");
+    }
+
+    private testCrossNamespaceWrapper() {
+        string code = 'printf("wrap=%y\n", OverloadSelfRecProbe::wrap("in"));';
+        # OverloadSelfRecProbe::wrap() and OverloadSelfRecOther::wrap() share a base name only:
+        # treating the call as self-recursion re-enters the caller and never reaches "other:"
+        hash<string, string> out = run("wrap", code);
+        assertEq("wrap=\"other:in:outer\"\n", out.aot, "the other namespace's wrap() ran");
+        assertEq(out.src, out.aot, "image and source module agree");
+
+        hash<string, string> traced = run("wrap-traced", code,
+            {"QORE_AOT_TRACE_LINK_RELOCS": "1"});
+        assertFalse(traced.aot =~ /helper=qore_rt_call_self_recursive_aot/,
+            "no call slot in wrap() was lowered as self-recursion");
+    }
+
+    private testSiblingOverloadFromTryBlock() {
+        # mix() recurses on itself first - which is what makes a self-recursive fast entry available
+        # to mis-target - and then delegates to its sibling from inside a try block, where the call
+        # is lowered as an Invoke instead of a CallDirect
+        hash<string, string> out = run("mix",
+            'printf("mix=%y\n", OverloadSelfRecProbe::mix("ds", 3));');
+        assertEq("mix=\"mix:p/ds\"\n", out.aot, "the sibling overload ran, not the caller");
+        assertEq(out.src, out.aot, "image and source module agree");
+    }
+
+    private testGenuineSelfRecursionKeepsFastPath() {
+        string code = 'printf("selfrec=%y\n", OverloadSelfRecProbe::selfrec('
+            'new OverloadSelfRecProbe::Pool("top"), 3));';
+        hash<string, string> out = run("selfrec", code);
+        assertEq("selfrec=\"sub:1:2:3\"\n", out.aot, "the recursion ran to its base case");
+        assertEq(out.src, out.aot, "image and source module agree");
+
+        # requiring the callee to be the same *variant* must not cost genuine self-recursion its
+        # lightweight helper: dropping to qore_rt_call_direct_aot reinstates the thread-context and
+        # dispatch overhead the AOT recursion work removed
+        hash<string, string> traced = run("selfrec-traced", code,
+            {"QORE_AOT_TRACE_LINK_RELOCS": "1"});
+        assertTrue(traced.aot =~ /helper=qore_rt_call_self_recursive_aot/,
+            "the recursive call slot used the self-recursive helper");
+        assertFalse(traced.aot =~ /helper=qore_rt_call_direct_aot/,
+            "the recursive call slot did not fall back to the direct-call helper");
+    }
+}
