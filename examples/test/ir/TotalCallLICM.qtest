@@ -1,0 +1,324 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class TotalCallLICMTest
+
+#! Checks loop-invariant code motion for builtin calls carrying QCF_TOTAL.
+/** Hoisting a call into a loop preheader runs it speculatively: a loop with a zero-trip count never
+    called it, and the hoisted copy does.  QCF_TOTAL is exactly the flag that licenses that, and
+    QCF_PURE is not - a pure variant may still raise a domain exception, so hoisting one would raise
+    in a program that would never have made the call.  That distinction is the substance of these
+    tests: sqrt() is TOTAL and must leave the loop, round(f, 2) is PURE and must not.
+
+    A hoisted call produces the same value as an unhoisted one, so comparing values cannot tell
+    "hoisted correctly" from "not hoisted at all".  QORE_IR_OPT_STATS reports hoisted= per function,
+    and because that counts every hoisted instruction rather than only calls, the tests attribute
+    the count to the call by taking the difference against QORE_DISABLE_IR_TOTAL_CALL_LICM.
+*/
+public class TotalCallLICMTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("TotalCallLICMTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("hoisted calls produce the unhoisted values", \testHoistedValuesMatch());
+        addTestCase("QCF_TOTAL licenses the hoist and QCF_PURE does not", \testOnlyTotalCallsHoist());
+        addTestCase("a zero-trip loop does not run a pure call", \testZeroTripLoopDoesNotCall());
+        addTestCase("single-valued phis are elided", \testRedundantPhiElision());
+        addTestCase("AOT hoists the same calls", \testImageHoisting());
+
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    private string runScript(string script_path, *hash<auto> env) {
+        string prefix = "";
+        foreach hash<auto> i in (env.pairIterator()) {
+            prefix += sprintf("%s=%s ", i.key, i.value);
+        }
+        return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1",
+            prefix, libqore_dir, qore_bin, script_path));
+    }
+
+    #! extracts one per-function statistic from QORE_IR_OPT_STATS output
+    private hash<string, list<int>> parseCounts(string output, string prefix, string stat) {
+        # the name is anchored on the first statistic rather than on ":" because a method name
+        # contains "::", and the count is not anchored on the end of the line because further
+        # statistics are reported after it
+        string pattern = sprintf("^%s (.+): loops=.*[ =]%s=([0-9]+)", prefix, stat);
+        hash<string, list<int>> rv = {};
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = regex_extract(line, pattern);
+            if (parts.size() != 2 || !exists parts[0] || !exists parts[1]) {
+                continue;
+            }
+            string name = parts[0];
+            list<int> counts = rv{name} ?? ();
+            counts += parts[1].toInt();
+            rv{name} = counts;
+        }
+        return rv;
+    }
+
+    private assertCount(hash<string, list<int>> counts, string name, int expected, string stat) {
+        assertTrue(exists counts{name}, sprintf("%y was lowered and reported %s", name, stat));
+        foreach int count in (counts{name}) {
+            assertEq(expected, count, sprintf("%s for %y", stat, name));
+        }
+    }
+
+    #! how many instructions the total-call hoist itself moved out of \a name
+    private int hoistedCalls(string enabled_out, string disabled_out, string name) {
+        hash<string, list<int>> on = parseCounts(enabled_out, "IR-OPT:", "hoisted");
+        hash<string, list<int>> off = parseCounts(disabled_out, "IR-OPT:", "hoisted");
+        assertTrue(exists on{name} && exists off{name}, sprintf("%y reported hoist counts", name));
+        return on{name}[0] - off{name}[0];
+    }
+
+    #! every call result is consumed by a native scalar op, because a consuming use (a compound
+    #! lvalue assignment taking the call result directly) is refused for an unrelated reason
+    private string probeCode() {
+        return '%modern
+
+# QCF_TOTAL: no domain throw, so it may run before a loop that might not execute
+float sub h_total(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { s += sqrt(g) + i.toFloat(); } return s; }
+# QCF_PURE only: round() may raise, so hoisting it would raise in a zero-trip loop
+float sub h_pure(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { s += round(g, 2) + i.toFloat(); } return s; }
+# QCF_RET_VALUE_ONLY only: no determinism claim at all
+float sub h_unflagged(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { s += pow(g, 2.0) + i.toFloat(); } return s; }
+# the argument changes every iteration, so the call is not loop-invariant
+float sub h_variant(int n) { float s = 0.0; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += sqrt(f) + 1.0; } return s; }
+# a zero-trip loop must produce the initial value and must not have called anything
+float sub h_zero_trip(float y) { float s = 0.0; float g = y; for (int i = 0; i < 0; ++i) { s += sqrt(g) + i.toFloat(); } return s; }
+# nested loops give the invariant local one phi per header, and the inner one holds only the outer
+# one - a chain that has to be followed to the surviving value before either is erased, or a use of
+# the inner phi is left naming an erased definition
+float sub h_nested(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { for (int j = 0; j < n; ++j) { s += sqrt(g) + j.toFloat(); } } return s; }
+
+printf("total=%y\n", h_total(3, 9.0));
+printf("pure=%y\n", h_pure(3, 9.0));
+printf("unflagged=%y\n", h_unflagged(3, 9.0));
+printf("variant=%y\n", h_variant(3));
+printf("zero_trip=%y\n", h_zero_trip(9.0));
+printf("zero_n=%y\n", h_total(0, 9.0));
+printf("nested=%y\n", h_nested(3, 9.0));
+';
+    }
+
+    #! a hoisted call must produce exactly what the in-loop call produces
+    private testHoistedValuesMatch() {
+        TmpDir tmp("total-call-licm-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string hoisted = runScript(script);
+        string unhoisted = runScript(script, {"QORE_DISABLE_IR_TOTAL_CALL_LICM": "1"});
+        assertEq(unhoisted, hoisted, "hoisting does not change any result");
+        assertRegex("total=12", hoisted);
+        assertRegex("pure=30", hoisted);
+        assertRegex("variant=5.41421356", hoisted);
+        # a loop that never runs contributes nothing, hoist or no hoist
+        assertRegex("zero_trip=0", hoisted);
+        assertRegex("zero_n=0", hoisted);
+        assertRegex("nested=36", hoisted);
+
+        # the comparison above is only meaningful if the hoisted run really hoisted
+        assertEq(1, hoistedCalls(runScript(script, {"QORE_IR_OPT_STATS": "1"}),
+            runScript(script, {"QORE_IR_OPT_STATS": "1",
+                "QORE_DISABLE_IR_TOTAL_CALL_LICM": "1"}), "h_total"),
+            "the total call was hoisted out of h_total");
+    }
+
+    #! the flags decide what leaves the loop, not the shape of the call
+    private testOnlyTotalCallsHoist() {
+        TmpDir tmp("total-call-licm-flags-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        string on = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        string off = runScript(script,
+            {"QORE_IR_OPT_STATS": "1", "QORE_DISABLE_IR_TOTAL_CALL_LICM": "1"});
+
+        assertEq(1, hoistedCalls(on, off, "h_total"), "sqrt() is QCF_TOTAL and leaves the loop");
+        # QCF_PURE is not enough: round() may raise, and hoisting would raise where the loop would
+        # never have called it
+        assertEq(0, hoistedCalls(on, off, "h_pure"), "round() is QCF_PURE only and stays");
+        assertEq(0, hoistedCalls(on, off, "h_unflagged"), "pow() makes no determinism claim");
+        # h_variant still hoists its constant, so the difference rather than the count is what
+        # shows the loop-variant call itself was left alone
+        assertEq(0, hoistedCalls(on, off, "h_variant"), "a loop-variant call stays");
+        # hoisted out of the inner loop and then out of the outer one
+        assertEq(2, hoistedCalls(on, off, "h_nested"), "the call leaves both nested loops");
+    }
+
+    #! QCF_PURE makes no nothrow claim, so a pure call must not be moved ahead of a loop that
+    #! would never have executed it
+    private testZeroTripLoopDoesNotCall() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("library debugging is not available in this build");
+        }
+        TmpDir tmp("total-call-licm-zero-");
+        string script = tmp.path + "/zero.q";
+        writeFile(script, '%modern
+
+# QCF_PURE | QCF_HOST_PORTABLE; raises for a negative argument.  If this were hoisted, the zero-trip
+# loop below would raise even though it never calls it.
+int sub z_pure_throw(int n, int v) {
+    int total = 0;
+    int arg = v;
+    for (int i = 0; i < n; ++i) {
+        total += dbg_flags_pure_throw(arg) + i;
+    }
+    return total;
+}
+# the side-effecting oracle must not be hoisted either: the counter proves how often it ran
+int sub z_effects(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += dbg_flags_nodomain_with_effects() + i;
+    }
+    return total;
+}
+
+try {
+    printf("zero_trip=%y\n", z_pure_throw(0, -1));
+} catch (hash<ExceptionInfo> ex) {
+    printf("zero_trip=RAISED:%s\n", ex.err);
+}
+printf("runs=%y\n", z_pure_throw(3, 21));
+printf("effects_zero=%y effect_count=%y\n", z_effects(0), dbg_flags_effect_count());
+printf("effects_three=%y effect_count=%y\n", z_effects(3), dbg_flags_effect_count());
+');
+        string out = runScript(script);
+        # the whole point of gating on QCF_TOTAL rather than QCF_PURE
+        assertRegex("zero_trip=0", out);
+        assertFalse(out =~ /zero_trip=RAISED/, "a zero-trip loop did not raise from a pure call");
+        assertRegex("runs=129", out);
+        # a zero-trip loop must not have bumped the effect counter at all; the oracle returns the
+        # counter value after its own increment, so three iterations sum (1+0)+(2+1)+(3+2)
+        assertRegex("effects_zero=0 effect_count=0", out);
+        assertRegex("effects_three=9 effect_count=3", out);
+        assertEq(runScript(script, {"QORE_DISABLE_IR_TOTAL_CALL_LICM": "1"}), out,
+            "hoisting does not change the raising or side-effect behaviour");
+    }
+
+    #! promoting a local to native SSA leaves a phi that can only hold one value; LICM cannot see
+    #! an invariant operand through it
+    private testRedundantPhiElision() {
+        TmpDir tmp("total-call-licm-phi-");
+        string script = tmp.path + "/probe.q";
+        writeFile(script, probeCode());
+
+        assertCount(parseCounts(runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:",
+            "phi-elided"), "h_total", 1, "phi-elided");
+        # the chained case: one phi per loop header, the inner naming the outer
+        assertCount(parseCounts(runScript(script, {"QORE_IR_OPT_STATS": "1"}), "IR-OPT:",
+            "phi-elided"), "h_nested", 2, "phi-elided");
+
+        # and the hoist depends on it: with the phi in place the call's argument looks loop-variant
+        string on = runScript(script, {"QORE_IR_OPT_STATS": "1"});
+        string no_phi_elision = runScript(script,
+            {"QORE_IR_OPT_STATS": "1", "QORE_DISABLE_IR_REDUNDANT_PHI_ELISION": "1"});
+        assertCount(parseCounts(on, "IR-OPT:", "hoisted"), "h_total", 1, "hoisted");
+        assertCount(parseCounts(no_phi_elision, "IR-OPT:", "hoisted"), "h_total", 0, "hoisted");
+
+        # eliding a phi must not change a result
+        assertEq(runScript(script, {"QORE_DISABLE_IR_REDUNDANT_PHI_ELISION": "1"}),
+            runScript(script), "phi elision does not change any result");
+    }
+
+    #! the pass runs in qcc too, and the image must agree with the interpreted source
+    private testImageHoisting() {
+        TmpDir tmp("total-call-licm-aot-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/TotalLicmProbeMod.qm";
+        string qmod_path = qmod_dir + "/TotalLicmProbeMod.qmod";
+        writeFile(qm_path, '%modern
+
+module TotalLicmProbeMod {
+    version = "1.0";
+    desc = "total call loop-invariant motion probe";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace TotalLicmProbeMod {
+public class TotalLicmProbe {
+    #! QCF_TOTAL, loop-invariant argument
+    static float total(int n, float y) {
+        float s = 0.0;
+        float g = y;
+        for (int i = 0; i < n; ++i) {
+            s += sqrt(g) + i.toFloat();
+        }
+        return s;
+    }
+
+    #! QCF_PURE only, so it stays in the loop
+    static float pure(int n, float y) {
+        float s = 0.0;
+        float g = y;
+        for (int i = 0; i < n; ++i) {
+            s += round(g, 2) + i.toFloat();
+        }
+        return s;
+    }
+}
+}
+');
+        string compile_out = backquote(sprintf(
+            "QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("module compiled: %s", compile_out));
+
+        string disabled_out = backquote(sprintf(
+            "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_TOTAL_CALL_LICM=1 QORE_LIBDIR=%s "
+            "LD_LIBRARY_PATH=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, tmp.path + "/off.qmod", qm_path));
+
+        hash<string, list<int>> on = parseCounts(compile_out, "IR-OPT-AOT:", "hoisted");
+        hash<string, list<int>> off = parseCounts(disabled_out, "IR-OPT-AOT:", "hoisted");
+        string total_name = "TotalLicmProbeMod::TotalLicmProbe::_static_total";
+        string pure_name = "TotalLicmProbeMod::TotalLicmProbe::_static_pure";
+        assertTrue(exists on{total_name} && exists off{total_name}, "AOT reported hoist counts");
+        assertEq(1, on{total_name}[0] - off{total_name}[0], "AOT hoisted the total call");
+        assertEq(0, on{pure_name}[0] - off{pure_name}[0], "AOT left the pure call in the loop");
+
+        string script = tmp.path + "/run.q";
+        writeFile(script, '%modern
+%requires TotalLicmProbeMod
+
+printf("total=%y\n", TotalLicmProbeMod::TotalLicmProbe::total(3, 9.0));
+printf("pure=%y\n", TotalLicmProbeMod::TotalLicmProbe::pure(3, 9.0));
+printf("zero=%y\n", TotalLicmProbeMod::TotalLicmProbe::total(0, 9.0));
+');
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, qmod_dir, qore_bin, script));
+        string src_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, src_dir, qore_bin, script));
+        assertEq(src_out, aot_out, "AOT and source module agree");
+        assertRegex("total=12", aot_out);
+        assertRegex("zero=0", aot_out);
+    }
+}

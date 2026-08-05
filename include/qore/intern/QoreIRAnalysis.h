@@ -89,6 +89,7 @@ struct QoreIROptimizationStats {
     size_t in_place_string_appends = 0;
     size_t pure_calls_folded = 0;
     size_t pure_calls_commoned = 0;
+    size_t redundant_phis_eliminated = 0;
 };
 
 //! Where the values produced by compile-time folding are consumed.

@@ -124,8 +124,10 @@ float sub c_try(float x)    { float f = x; try { return sqrt(f) + sqrt(f); } cat
 string sub c_string(string s) { string t = s; return toupper(t) + toupper(t); }
 # the loop body is where the invalidation matters: the second load of f follows the first call
 float sub c_loop(int n)     { float s = 0.0; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += sqrt(f) + sqrt(f); } return s; }
-# no call to common here, only two loads of f separated by one pure call
-float sub c_loop_fwd(int n, float y) { float s = 0.0; float g = y; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += f * 2.0 + sqrt(g) + f * 3.0; } return s; }
+# no call to common here, only two loads of f separated by one pure call.  The call takes a
+# loop-variant argument so that loop-invariant motion cannot hoist it out from between them, which
+# would leave nothing in the loop to invalidate the cached load and make this probe prove nothing.
+float sub c_loop_fwd(int n) { float s = 0.0; for (int i = 0; i < n; ++i) { float f = i.toFloat(); float k = i.toFloat() + 1.0; s += f * 2.0 + sqrt(k) + f * 3.0; } return s; }
 
 printf("same=%y\n", c_same(2.0));
 printf("three=%y\n", c_three(2.0));
@@ -138,7 +140,7 @@ printf("block=%y\n", c_block(4.0, True));
 printf("try=%y\n", c_try(4.0));
 printf("string=%y\n", c_string("ab"));
 printf("loop=%y\n", c_loop(4));
-printf("loop_fwd=%y\n", c_loop_fwd(4, 9.0));
+printf("loop_fwd=%y\n", c_loop_fwd(4));
 ';
     }
 

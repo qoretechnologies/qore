@@ -5154,6 +5154,204 @@ static bool qore_ir_call_has_no_side_effects(const QoreIRInstruction& inst) {
     return variant->getFunctionality() == QDOM_DEFAULT;
 }
 
+//! Returns true when this call may be executed before a loop that might not execute at all.
+/** Hoisting into a preheader runs the call speculatively: a loop with a zero-trip count never
+    called it, and the hoisted copy does.  \c QCF_TOTAL is exactly the flag that licenses this, and
+    \c QCF_PURE is not - a pure variant may still raise a domain exception, and hoisting one would
+    raise in a program that would never have made the call.  \c round(f, 2) is the discriminator: it
+    is PURE and must stay in the loop, while \c sqrt(f) is TOTAL and may leave it.
+
+    The resource-exhaustion carve-out in @ref qore_code_flags still applies, as it does to any work
+    a loop-invariant motion moves, and no flag can exclude it.
+*/
+static bool qore_ir_is_hoistable_total_call(const QoreIRInstruction& inst) {
+    static const bool disabled = std::getenv("QORE_DISABLE_IR_TOTAL_CALL_LICM") != nullptr;
+    if (disabled || inst.opcode != QoreIROpcode::CallDirect || !inst.result.isValid()
+            || inst.exception_target) {
+        return false;
+    }
+    const auto& call = static_cast<const QoreIRCallDirectInstruction&>(inst);
+    if (!call.func || call.has_ref_args || call.explicit_type_param_inst) {
+        return false;
+    }
+    bool has_ref_args = true;
+    const AbstractQoreFunctionVariant* variant =
+        qore_ir_get_resolved_effect_callee(&inst, has_ref_args);
+    if (!variant || has_ref_args || variant->isUser()) {
+        return false;
+    }
+    if ((variant->getFlags() & QCF_TOTAL) != QCF_TOTAL) {
+        return false;
+    }
+    return variant->getFunctionality() == QDOM_DEFAULT;
+}
+
+//! Replaces a phi that can only ever hold one value with that value, and erases it.
+/** Promoting a local to native SSA form gives a loop-carried phi even when nothing in the loop
+    writes the local: `%13 = phi [%2, entry], [%13, for.iter]` is a self-reference plus a single
+    outside value, so it always equals %2.  Nothing downstream can see that, and it costs more than
+    a redundant instruction - an operand defined by such a phi looks loop-variant, which is what
+    stopped a loop-invariant call being hoisted out of the loop that uses it.
+
+    A phi qualifies when every incoming value is either its own result or one single value, and that
+    value's definition dominates the phi's block so the uses being rewritten stay dominated.  The
+    rewrite runs to a fixed point because eliminating one phi can leave the next one redundant.
+*/
+static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
+        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_REDUNDANT_PHI_ELISION")) {
+        return 0;
+    }
+    std::unordered_map<uint32_t, size_t> definition_blocks;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        for (const auto& inst : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR redundant phi analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definition_blocks[inst->result.id] = block_id;
+            }
+        }
+    }
+
+    size_t eliminated = 0;
+    constexpr size_t max_rounds = 8;
+    for (size_t round = 0; round < max_rounds; ++round) {
+        std::unordered_map<uint32_t, QoreIRValue> replacements;
+        std::unordered_set<const QoreIRInstruction*> removed;
+        for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+            for (const auto& inst : cfg.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR redundant phi analysis")) {
+                    return eliminated;
+                }
+                if (inst->opcode != QoreIROpcode::Phi || !inst->result.isValid()) {
+                    continue;
+                }
+                const auto& phi = static_cast<const QoreIRPhiInstruction&>(*inst);
+                QoreIRValue single;
+                bool usable = !phi.incoming.empty();
+                for (const QoreIRPhiIncoming& incoming : phi.incoming) {
+                    if (qore_ir_analysis_cancelled(check_count, "IR redundant phi analysis")) {
+                        return eliminated;
+                    }
+                    if (!incoming.value.isValid()) {
+                        usable = false;
+                        break;
+                    }
+                    if (incoming.value.id == inst->result.id) {
+                        continue;
+                    }
+                    if (single.isValid() && single.id != incoming.value.id) {
+                        usable = false;
+                        break;
+                    }
+                    single = incoming.value;
+                }
+                if (!usable || !single.isValid()) {
+                    continue;
+                }
+                // the value has to be available everywhere the phi was
+                auto def = definition_blocks.find(single.id);
+                if (def == definition_blocks.end() || !cfg.dominates(def->second, block_id)) {
+                    continue;
+                }
+                replacements.emplace(inst->result.id, single);
+                removed.insert(inst.get());
+            }
+        }
+        if (replacements.empty()) {
+            break;
+        }
+        // One round can pick up a chain - phi A holding only phi B, which holds only %2 - and the
+        // rewrite substitutes once, so a use of A would be left naming B after B was erased.
+        // Follow each chain to the value that survives before rewriting anything.
+        for (auto& [id, value] : replacements) {
+            if (qore_ir_analysis_cancelled(check_count, "IR redundant phi chain resolution")) {
+                return eliminated;
+            }
+            QoreIRValue target = value;
+            for (size_t step = 0; step <= replacements.size(); ++step) {
+                auto next = replacements.find(target.id);
+                if (next == replacements.end() || next->second.id == target.id) {
+                    break;
+                }
+                target = next->second;
+            }
+            value = target;
+        }
+        // A chain that closes on itself has no surviving value to name, so leave the round's phis
+        // in place rather than rewriting a use to something about to be erased.
+        bool resolved = true;
+        for (const auto& [id, value] : replacements) {
+            if (qore_ir_analysis_cancelled(check_count, "IR redundant phi chain validation")) {
+                return eliminated;
+            }
+            if (replacements.count(value.id)) {
+                resolved = false;
+                break;
+            }
+        }
+        if (!resolved) {
+            break;
+        }
+        for (const auto& block : func.blocks) {
+            // the decision is committed; finish the rewrite even under cancellation, so no use can
+            // reference an erased definition
+            (void)qore_ir_analysis_cancelled(check_count, "IR redundant phi elimination");
+            auto& instructions = block->instructions;
+            for (auto it = instructions.begin(); it != instructions.end();) {
+                if (removed.count(it->get())) {
+                    it = instructions.erase(it);
+                    continue;
+                }
+                (void)qore_ir_rewrite_value_operands(**it, replacements, check_count, false);
+                ++it;
+            }
+        }
+        eliminated += removed.size();
+    }
+    return eliminated;
+}
+
+//! Returns true when no temp drain inside \a loop can reach a mark taken before it.
+/** A hoisted call result is created in the preheader, and an owned result is registered on the
+    runtime cleanup vector there.  DiscardTemps drains that vector back to its matching
+    PushTempMark, so a drain inside the loop whose mark was pushed before the loop would free the
+    hoisted value on the first iteration and leave every later iteration reading freed memory - the
+    same trap the pure-call CSE closes by treating DiscardTemps as a barrier.
+
+    A drain whose mark is itself inside the loop is harmless: the mark is re-pushed on each
+    iteration, after the preheader, so the drain cannot pop below it.  Marks and drains are paired
+    by \c temp_scope_id during lowering; an unpaired zero means the pairing is unavailable (it is
+    not serialized, so restored AOT IR has none) and hoisting is refused.
+*/
+static bool qore_ir_loop_temp_scopes_are_closed(const QoreIRNaturalLoop& loop,
+        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+    std::unordered_set<uint32_t> marks;
+    for (size_t block_id : loop.blocks) {
+        for (const auto& inst : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR loop temp scope analysis")) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::PushTempMark && inst->temp_scope_id) {
+                marks.insert(inst->temp_scope_id);
+            }
+        }
+    }
+    for (size_t block_id : loop.blocks) {
+        for (const auto& inst : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR loop temp scope analysis")) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::DiscardTemps
+                    && (!inst->temp_scope_id || !marks.count(inst->temp_scope_id))) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
     switch (opcode) {
         case QoreIROpcode::NewObject:
@@ -8925,6 +9123,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         qore_ir_promote_native_local_loads(func, cfg, check_count);
     local_stats.native_local_loads_promoted = native_local_stats.loads;
     local_stats.native_local_stores_eliminated = native_local_stats.stores;
+    // must follow the promotion above, which is what produces the single-valued loop-carried phis,
+    // and precede LICM, which cannot see through one
+    local_stats.redundant_phis_eliminated =
+        qore_ir_eliminate_redundant_phis(func, cfg, check_count);
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
             if (stats) {
@@ -9059,6 +9261,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                 }
             }
         }
+        // computed once per loop: a total call may only be hoisted when no drain inside the loop
+        // can free the value the preheader would create
+        const bool temp_scopes_closed =
+            qore_ir_loop_temp_scopes_are_closed(loop, cfg, check_count);
         std::unordered_set<uint32_t> safe_repeated_values;
         bool cancelled = false;
         for (size_t block_id : loop.blocks) {
@@ -9106,7 +9312,9 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                                     func, *inst, mutated)
                                 || qore_ir_is_hoistable_read_only_query(
                                     func, *inst)))
-                        || qore_ir_is_native_scalar_pure_opcode(inst->opcode);
+                        || qore_ir_is_native_scalar_pure_opcode(inst->opcode)
+                        || (temp_scopes_closed
+                            && qore_ir_is_hoistable_total_call(*inst));
                     if (!candidate
                             || (inst->opcode == QoreIROpcode::LoadLocal && loop_may_invalidate_loads)
                             || (inst->opcode == QoreIROpcode::LoadLocal
