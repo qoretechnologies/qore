@@ -466,8 +466,9 @@ const PO_NO_DATABASE = PO_NO_DATABASE;
 const PO_NO_EMBEDDED_LOGIC = PO_NO_EMBEDDED_LOGIC;
 
 //! Prohibits any external access
-/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM | @ref PO_NO_DATABASE
-    | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM |
+    @ref PO_NO_DATABASE | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS |
+    @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-external-access "%no-external-access"
  */
@@ -504,8 +505,8 @@ const PO_NO_GLOBAL_VARS = PO_NO_GLOBAL_VARS;
 const PO_NO_GUI = PO_NO_GUI;
 
 //! Prohibits all terminal and file I/O and GUI operations
-/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK
-    | @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK |
+    @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-io "%no-io"
  */

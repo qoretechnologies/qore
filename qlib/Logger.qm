@@ -1694,21 +1694,21 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for both filename and archive parameter
 
-        | !Conversion character | !Meaning |
-        | \c %%s | Used to output the OS directory separator, i.e. "\" or "/" |
-        | \c %%c | Used to output the appender name |
-        | \c %%C | Used to output the appender class name |
-        | \c %%E | Used to output the environment variable with name given by option, e.g. \c "%E{HOME}" |
-        | \c %% | The literal percent sign. \c "%%" will print a \c "%" sign |
+        |!Conversion character|!Meaning
+        |\c %%s|Used to output the OS directory separator, i.e. "\" or "/"
+        |\c %%c|Used to output the appender name
+        |\c %%C|Used to output the appender class name
+        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+        |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for archive parameter only
 
-        | !Conversion character | !Meaning |
-        | \c %%P | Used to output the current logging path with filename |
-        | \c %%p | Used to output the current logging path |
-        | \c %%f | Used to output the current logging filename |
-        | \c %%i | Used to output the current file index from 1 to count. option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d" |
-        | \c %%n | Used to output the rotation count. Option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d" |
+        |!Conversion character|!Meaning
+        |\c %%P|Used to output the current logging path with filename
+        |\c %%p|Used to output the current logging path
+        |\c %%f|Used to output the current logging filename
+        |\c %%i|Used to output the current file index from 1 to count. option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
+        |\c %%n|Used to output the rotation count. Option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
 
         For example, the archive pattern \c "%p%f.%i" rotates log file \c "/var/run/log/MyLogger.log" to:
         \c "/var/run/log/MyLogger.log.1" \c "/var/run/log/MyLogger.log.2" \c "/var/run/log/MyLogger.log.3".
@@ -1873,14 +1873,14 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" and all other characters that you can use in your custom pattern:
 
-        | !Conversion character | !Meaning |
-        | i | Used to output the current file index from 0 to count-1. option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d" |
-        | n | Used to output the rotation count. Option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d" |
-        | c | Used to output the appender name. |
-        | C | Used to output the appender class name. |
-        | d | Used to output the date of the logging event using @ref Qore::format_date() "format_date()". Option may specify date format, e.g. \c "%d{DD.MM.YYYY HH:mm:SS}", default value is \c "YYYYMMDDHHmmSS" |
-        | E | Used to output the environment variable with name given by option, e.g. \c "%E{HOME}" |
-        | % | The literal percent sign. \c "%%" will print a \c "%" sign |
+        |!Conversion character|!Meaning
+        |i|Used to output the current file index from 0 to count-1. option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
+        |n|Used to output the rotation count. Option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
+        |c|Used to output the appender name.
+        |C|Used to output the appender class name.
+        |d|Used to output the date of the logging event using @ref Qore::format_date() "format_date()". Option may specify date format, e.g. \c "%d{DD.MM.YYYY HH:mm:SS}", default value is \c "YYYYMMDDHHmmSS"
+        |E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+        |%|The literal percent sign. \c "%%" will print a \c "%" sign
 
         For example, the pattern \c "/var/run/log/%c.log.%i{%03d}" creates the following file names:
         \c "/var/run/log/MyLogger.log.000", \c "/var/run/log/MyLogger.log.001" etc.
@@ -2036,21 +2036,21 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for both filename and archive parameter
 
-        | !Conversion character | !Meaning |
-        | \c %%s | Used to output the OS directory separator, i.e. "\" or "/" |
-        | \c %%c | Used to output the appender name |
-        | \c %%C | Used to output the appender class name |
-        | \c %%E | Used to output the environment variable with name given by option, e.g. \c "%E{HOME}" |
-        | \c %% | The literal percent sign. \c "%%" will print a \c "%" sign |
+        |!Conversion character|!Meaning
+        |\c %%s|Used to output the OS directory separator, i.e. "\" or "/"
+        |\c %%c|Used to output the appender name
+        |\c %%C|Used to output the appender class name
+        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+        |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for archive parameter only
 
-        | !Conversion character | !Meaning |
-        | \c %%P | Used to output the current logging path with filename |
-        | \c %%p | Used to output the current logging path |
-        | \c %%f | Used to output the current logging filename |
-        | \c %%d | Used to output the date of the logging event using @ref Qore::format_date() "format_date()". Option may specify date \
-            format, e.g. \c "%d{DD.MM.YYYY HH:mm:SS}", default value is \c "YYYYMMDDHHmmSS" |
+        |!Conversion character|!Meaning
+        |\c %%P|Used to output the current logging path with filename
+        |\c %%p|Used to output the current logging path
+        |\c %%f|Used to output the current logging filename
+        |\c %%d|Used to output the date of the logging event using @ref Qore::format_date() "format_date()". Option may specify date \
+            format, e.g. \c "%d{DD.MM.YYYY HH:mm:SS}", default value is \c "YYYYMMDDHHmmSS"
 
         For example, the archive pattern \c "%p/archive/%d/%f" archives log file \c "/var/run/log/MyLogger.log" to:
         \c "/var/run/log/archive/20180120102030/MyLogger.log".

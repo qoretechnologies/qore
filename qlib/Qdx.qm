@@ -1035,26 +1035,151 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
     }
 
     #! converts specially-formatted text in the input to HTML tables
+    /** A table row is a line whose first non-whitespace character is \c "|"; cells are separated by
+        \c "|", and a header cell is marked by a leading \c "!". The format and both of its
+        implementations (this class and \c get_table_cells() in \c lib/qpp.cpp) are described in
+        \c design/doc-tables.md.
+
+        Rows that do not follow the format are reported by @ref takeWarnings(); note that this class
+        converts any \c "|"-led line to a table, while \c qpp only recognizes a table whose header
+        row starts with \c "|!", so a table written without a header row renders as literal text in
+        \c .qpp and \c .dox.tmpl sources.
+     */
     public class DocumentTableHelper {
         private:internal {
             bool css = False;
             bool inTable = False;
+            #! @ref True "True" while inside a \c @code or \c @verbatim block
+            bool inCode = False;
+            #! the number of cells in the current table's header row
+            int headerCells = 0;
+            #! the name of the source being processed, used in warning text
+            *string source;
+            #! warnings accumulated since the last takeWarnings() call
+            list<string> warnings();
         }
 
         # no public members
         public {}
 
+        #! Creates the object
+        /** @param source the name of the source being processed; used in warning text
+         */
+        constructor(*string source) {
+            self.source = source;
+        }
+
+        #! Returns and clears the table format warnings accumulated so far
+        /** @return the warnings accumulated since the last call to this method
+
+            @note each warning is a self-contained message that already identifies the source and
+            line where possible
+         */
+        list<string> takeWarnings() {
+            list<string> rv = warnings;
+            warnings = ();
+            return rv;
+        }
+
+        #! Splits a table row into its cells
+        /** the rules implemented here must stay in sync with \c get_table_cells() in
+            \c lib/qpp.cpp; see \c design/doc-tables.md:
+            - a backslash escapes the following character, so \c "\|" is a literal pipe in cell text
+            - text between \c "@code" and \c "@endcode" is not scanned for delimiters
+            - text in double quotes is not scanned for delimiters
+            - any other \c "|" separates two cells
+
+            @param row the row text with the leading \c "|" already removed
+
+            @return the cell text in row order; cells are not trimmed
+         */
+        static list<string> getCells(string row) {
+            list<string> cells();
+            string cur = "";
+            bool code = False;
+            bool quote = False;
+            int len = row.length();
+            for (int i = 0; i < len;) {
+                string c = row[i];
+                if (c == "@") {
+                    if (code) {
+                        if (row.substr(i, 8) == "@endcode") {
+                            code = False;
+                            cur += "@endcode";
+                            i += 8;
+                            continue;
+                        }
+                    } else if (row.substr(i, 5) == "@code") {
+                        code = True;
+                        cur += "@code";
+                        i += 5;
+                        continue;
+                    }
+                    cur += c;
+                    ++i;
+                    continue;
+                }
+                if (!code) {
+                    if (c == "\\") {
+                        cur += row.substr(i, 2);
+                        i += 2;
+                        continue;
+                    }
+                    if (c == "\"") {
+                        quote = !quote;
+                    } else if (!quote && c == "|") {
+                        cells += cur;
+                        cur = "";
+                        ++i;
+                        continue;
+                    }
+                }
+                cur += c;
+                ++i;
+            }
+            cells += cur;
+            return cells;
+        }
+
+        #! Returns @ref True "True" if the row is a Markdown column-alignment row (ex: \c "---|---")
+        /** @param row the row text with the leading \c "|" already removed
+
+            @return @ref True "True" if the row is a Markdown column-alignment row
+         */
+        static bool isMarkdownSeparatorRow(string row) {
+            return row =~ /^[-:+| \t]*-[-:+| \t]*$/;
+        }
+
         #! accepts an input line and returns the formatted output line
         /** @param line the input line
+            @param lineno the 1-based line number of \a line in the source, if known; used in
+            warning text
 
             @return the formatted output line
          */
-        string process(string line) {
+        string process(string line, *int lineno) {
             if (line =~ /@page/) {
                 #printf("PAGE: css: %n %s", css, line);#exit(1);
                 css = False;
             }
             #printf("XXX %s", line);
+
+            # text in @code and @verbatim blocks is passed through unchanged; ASCII art there
+            # regularly uses "|" and must not be converted to a table
+            if (inCode) {
+                if (line =~ /[@\\]end(code|verbatim)\b/) {
+                    inCode = False;
+                }
+                return line;
+            }
+            if (line =~ /[@\\](code|verbatim)\b/ && line !~ /[@\\]end(code|verbatim)\b/) {
+                inCode = True;
+                if (inTable) {
+                    inTable = False;
+                    return "    </table>\n" + line;
+                }
+                return line;
+            }
 
             if (line !~ /^(\s)*\|/) {
                 if (inTable) {
@@ -1066,7 +1191,8 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
 
             string str;
 
-            if (!inTable) {
+            bool header = !inTable;
+            if (header) {
                 if (!css) {
                     str = "    @htmlonly <style><!-- td.qore { background-color: #5b9409; color: white; } --></style> @endhtmlonly\n";
                     css = True;
@@ -1080,7 +1206,11 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
 
             trim line;
             splice line, 0, 1;
-            foreach *string cell in (split("|", line)) {
+
+            list<string> cells = getCells(line);
+            checkRow(line, cells, header, lineno);
+
+            foreach string cell in (cells) {
                 trim cell;
                 if (cell =~ /^!/)
                     str += sprintf("        <td class=\"qore\"><b>%s</b></td>\n", substr(cell, 1));
@@ -1089,6 +1219,55 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             }
             str += "      </tr>\n";
             return str;
+        }
+
+        #! Reports any table format problems in the given row
+        /** @param row the row text with the leading \c "|" already removed
+            @param cells the cells parsed from \a row
+            @param header @ref True "True" if \a row is the first row of a table
+            @param lineno the 1-based line number of \a row in the source, if known
+         */
+        private:internal checkRow(string row, list<string> cells, bool header, *int lineno) {
+            if (isMarkdownSeparatorRow(row)) {
+                warn(lineno, row, "Markdown column-alignment row in a Qore table; delete it and "
+                    "mark header cells with \"|!\" instead");
+                return;
+            }
+
+            # a trailing delimiter emits a spurious empty final cell
+            if (row =~ /(^|[^\\])\|[ \t]*$/) {
+                warn(lineno, row, "row ends with \"|\"; the Qore table format has no trailing "
+                    "delimiter, so an empty final cell is emitted");
+            }
+
+            if (header) {
+                headerCells = cells.size();
+                if (!(cells[0] =~ /^!/)) {
+                    if (trim(cells[0]) =~ /^!/) {
+                        warn(lineno, row, "header cell has whitespace before \"!\"; qpp only "
+                            "recognizes a header cell when \"!\" immediately follows \"|\"");
+                    } else {
+                        warn(lineno, row, "table has no header row; qpp does not convert a table "
+                            "at all unless its header row starts with \"|!\"");
+                    }
+                }
+            } else if (cells.size() != headerCells) {
+                warn(lineno, row, sprintf("row has %d cells but the header row has %d; escape "
+                    "literal delimiters in cell text as \"\\|\"", cells.size(), headerCells));
+            }
+        }
+
+        #! Adds a table format warning
+        /** @param lineno the 1-based line number of \a row in the source, if known
+            @param row the offending row text
+            @param msg the warning text
+         */
+        private:internal warn(*int lineno, string row, string msg) {
+            string loc = source ?? "<input>";
+            if (lineno) {
+                loc += sprintf(":%d", lineno);
+            }
+            warnings += sprintf("%s: doc table: %s\n    row: |%s", loc, msg, row);
         }
     }
 
@@ -1115,12 +1294,24 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             @ref character_encoding "character encoding" from the data's and an error occurs during encoding
             conversion
 
+            @param source the name of the source being iterated; used in table format warning text
+
             @note table cell docs may span multiple lines as long as the lines end in a \c "\" character
         */
-        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = True)
+        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = True,
+                    *string source)
                 : InputStreamLineIterator(input_stream: is, encoding: encoding, line_separator: eol,
-                    trim_line: do_trim) {
+                    trim_line: do_trim), DocumentTableHelper(source) {
             self.do_trim = do_trim;
+        }
+
+        #! Returns and clears the table format warnings accumulated so far
+        /** @return the warnings accumulated since the last call to this method
+
+            @see @ref Qdx::DocumentTableHelper::takeWarnings() "DocumentTableHelper::takeWarnings()"
+         */
+        list<string> takeTableWarnings() {
+            return takeWarnings();
         }
 
         #! Returns the current line in the data or throws an \c ITERATOR-ERROR exception if the iterator is invalid
@@ -1162,6 +1353,7 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             @note table cell docs may span multiple lines as long as the lines end in a \c "\" character
         */
         string getValue() {
+            int lineno = index();
             string line = InputStreamLineIterator::getValue();
             while (line =~ /\\$/) {
                 if (!next()) {
@@ -1171,7 +1363,7 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
                 splice line, (do_trim ? -1 : -2), 1;
                 line += InputStreamLineIterator::getValue();
             }
-            return process(line);
+            return process(line, lineno);
         }
     }
 
@@ -1519,9 +1711,11 @@ string doxygen_output = proc.process();
         /** @param nodes the AST nodes from AstTree::getNodesInfo()
             @param opts processing options:
             - \c no_mainpage: convert \@mainpage to \@page
+            - \c source_name: the name of the source file; used in table format warning text
         */
         constructor(list<auto> nodes, *hash<auto> opts) {
             self.opts = opts ?? {};
+            dth = new DocumentTableHelper(self.opts.source_name);
             # Translate tree-sitter CST nodes to old AST format if needed
             if (nodes.size() > 0 && exists nodes[0].type && !exists nodes[0].nodetype) {
                 self.nodes = QoreCodeFormat::CSTTranslator::translate(
@@ -1533,6 +1727,15 @@ string doxygen_output = proc.process();
                 self.source_text = self.opts.source;
                 self.lines = self.source_text.split("\n");
             }
+        }
+
+        #! Returns and clears the documentation table format warnings accumulated so far
+        /** @return the warnings accumulated since the last call to this method
+
+            @see @ref Qdx::DocumentTableHelper::takeWarnings() "DocumentTableHelper::takeWarnings()"
+        */
+        list<string> takeTableWarnings() {
+            return dth.takeWarnings();
         }
 
         #! Processes the AST nodes and returns doxygen-compatible output
@@ -2255,12 +2458,22 @@ string doxygen_output = proc.process();
 
             # Process each line
             list<string> lines;
-            foreach string line in (comment.split("\n")) {
+            list<string> src = comment.split("\n");
+            for (int i = 0; i < src.size(); ++i) {
+                string line = src[i];
                 # Convert #! to //! (line doc comments)
                 line =~ s/^(\s*)#!/$1\/\/!/;
                 # Drop @cond/@endcond so Doxygen does not hide all members
                 if (line =~ /@cond\b/ || line =~ /@endcond\b/) {
                     continue;
+                }
+                # Join table row continuations; a table row may span multiple lines as long as each
+                # line but the last ends in a "\" character (see design/doc-tables.md)
+                if (line =~ /^\s*\|/) {
+                    while (line =~ /\\$/ && i < (src.size() - 1)) {
+                        splice line, -1, 1;
+                        line += src[++i];
+                    }
                 }
                 # Normalize @ref function references by stripping trailing ()
                 # When () is followed by ':', add display text to prevent the colon

@@ -112,17 +112,16 @@ sc.advance();                          # consume ';'
 
     @section ftp_when_to_use When to Use Which API
 
-    | Goal | Recommended API |
-    |------|-----------------|
-    | Read a single byte at a known offset | @ref <string>::getByte() "<string>::getByte()" |
-    | Hand-written tokenizer / parser | @ref Qore::Scanner "Scanner" |
-    | Iterate characters as char values | @ref <string>::iterator() "<string>::iterator()" or <tt>iterate string</tt> |
-    | Iterate codepoints as integers | @ref <string>::codePointIterator() "<string>::codePointIterator()" |
-    | Lazy delimiter split (large input or short-circuit) | @ref <string>::splitString() "<string>::splitString()" |
-    | Lazy line split | @ref <string>::splitLines() "<string>::splitLines()" |
-    | Lazy regex split | @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" |
-    | Format a binary as hex | @ref <binary>::toHexArray() "<binary>::toHexArray()" |
-    | Existing eager full-split is fine | @ref <string>::split() "<string>::split()" (unchanged) |
+    |!Goal|!Recommended API
+    |Read a single byte at a known offset|@ref <string>::getByte() "<string>::getByte()"
+    |Hand-written tokenizer / parser|@ref Qore::Scanner "Scanner"
+    |Iterate characters as char values|@ref <string>::iterator() "<string>::iterator()" or <tt>iterate string</tt>
+    |Iterate codepoints as integers|@ref <string>::codePointIterator() "<string>::codePointIterator()"
+    |Lazy delimiter split (large input or short-circuit)|@ref <string>::splitString() "<string>::splitString()"
+    |Lazy line split|@ref <string>::splitLines() "<string>::splitLines()"
+    |Lazy regex split|@ref <string>::splitLinesRegex() "<string>::splitLinesRegex()"
+    |Format a binary as hex|@ref <binary>::toHexArray() "<binary>::toHexArray()"
+    |Existing eager full-split is fine|@ref <string>::split() "<string>::split()" (unchanged)
 
     @section ftp_perf_notes Performance Notes
 

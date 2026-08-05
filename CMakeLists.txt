@@ -1535,6 +1535,10 @@ target_compile_definitions(qpp PUBLIC HAVE_UNIX_CONFIG_H)
 set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
 target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
+# malformed documentation tables are silently emitted as literal text, so they must fail the build
+# in this repo; see design/doc-tables.md
+option(QORE_DOX_TABLE_STRICT "treat malformed documentation tables as errors" ON)
+
 # libqore generators
 
 # Extend LIBQORE_QPP_SRC with optional sources BEFORE the wrap + QPP_GENERATED_FILES

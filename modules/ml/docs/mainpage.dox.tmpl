@@ -472,14 +472,13 @@ if (caps.has_onnx) {
     Device binding is configured through the @ref Qore::ML::OnnxDeviceBindingConfig
     "device_binding" field of @ref Qore::ML::OnnxSessionConfig "OnnxSessionConfig":
 
-    | Field | Meaning |
-    |-------|---------|
-    | \c enabled | Enables device-aware input/output binding. |
-    | \c default_output_device | \c "cpu", \c "provider", or an explicit \c "<provider>:<device_id>" such as \c "cuda:0". |
-    | \c allow_host_fallback | Allow host copies when a requested device path is unavailable (default \c False). |
-    | \c materialize_outputs | Force returned device outputs to host before returning (default \c False). |
-    | \c require_zero_copy_inputs | Reject device inputs that cannot be bound without a host copy. |
-    | \c require_zero_copy_outputs | Reject outputs that cannot be returned as device-backed buffers. |
+    |!Field|!Meaning
+    |\c enabled|Enables device-aware input/output binding.
+    |\c default_output_device|\c "cpu", \c "provider", or an explicit \c "<provider>:<device_id>" such as \c "cuda:0".
+    |\c allow_host_fallback|Allow host copies when a requested device path is unavailable (default \c False).
+    |\c materialize_outputs|Force returned device outputs to host before returning (default \c False).
+    |\c require_zero_copy_inputs|Reject device inputs that cannot be bound without a host copy.
+    |\c require_zero_copy_outputs|Reject outputs that cannot be returned as device-backed buffers.
 
     @subsubsection mlalgo_onnx_device_provider_classes Provider Classes
 

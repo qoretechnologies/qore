@@ -21,6 +21,7 @@ const Opts = {
     "nmp":        "N,no-mainpage",
     "post":       "p,post",
     "src_root":   "T,top-srcdir=s",
+    "strict":     "S,strict-tables",
     "tag":        "t,tag=s@",
     "tex":        "x,posttex=s@",          # use TeX syntax for "post" processing
 };
@@ -87,6 +88,7 @@ class qdx {
   -N,--no-mainpage    change @mainpage to @page
   -p,--post           post process files
   -k,--keep-dollar    keep $ signs when post-processing
+  -S,--strict-tables  treat documentation table issues as errors
   -t,--tag=ARG        tag argument for doxyfile
   -T,--top-srcdir=ARG the top source directory
   -h,--help           this help text
@@ -200,7 +202,7 @@ class qdx {
     doDox(string fn, string ofn) {
         printf("processing %y -> %y\n", fn, ofn);
 
-        DocumentTableInputStreamLineIterator i(new FileInputStream(fn), NOTHING, NOTHING, False);
+        DocumentTableInputStreamLineIterator i(new FileInputStream(fn), NOTHING, NOTHING, False, fn);
 
         StreamWriter w(new FileOutputStream(ofn));
 
@@ -211,6 +213,29 @@ class qdx {
                 line = replace(line, "{qore_version}", QoreVer);
 
             w.write(line);
+        }
+
+        reportTableWarnings(i.takeTableWarnings());
+    }
+
+    #! Reports documentation table format warnings; see design/doc-tables.md
+    /** @param warnings the warnings to report
+
+        @note exits with a non-zero status if \c --strict-tables was given and any warning was
+        reported
+    */
+    private reportTableWarnings(list<string> warnings) {
+        if (warnings.empty()) {
+            return;
+        }
+
+        string label = o.strict ? "ERROR" : "WARNING";
+        map stderr.printf("%s: %s\n", label, $1), warnings;
+
+        if (o.strict) {
+            stderr.printf("ERROR: %d documentation table issue%s found; see design/doc-tables.md\n",
+                warnings.size(), warnings.size() == 1 ? "" : "s");
+            exit(1);
         }
     }
 
@@ -227,8 +252,6 @@ class qdx {
     }
 
     postProcessIntern(string ifn, bool tex) {
-        DocumentTableInputStreamLineIterator i(new FileInputStream(ifn), NOTHING, NOTHING, False);
-
         FileInputStream inf(ifn);
         InputStreamLineIterator ins = tex
             ? new QorePostProcessingTexInputStreamLineIterator(inf)
@@ -316,12 +339,14 @@ class qdx {
         # Get AST nodes and process with AstProcessor
         list<auto> nodes = tree.getNodesInfo();
         AstProcessor proc(nodes, {"no_mainpage": o.nmp, "source": code,
-            "source_dir": dirname(fn)});
+            "source_dir": dirname(fn), "source_name": fn});
         string output = proc.process();
 
         # Write output
         File outf();
         outf.open2(nn, O_CREAT | O_WRONLY | O_TRUNC);
         outf.write(output);
+
+        reportTableWarnings(proc.takeTableWarnings());
     }
 }

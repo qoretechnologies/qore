@@ -29,11 +29,10 @@ public namespace QdrantDataProvider {
     translates @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
     calls into Qdrant REST API requests:
 
-    | AbstractVectorStore call | Qdrant endpoint |
-    |---|---|
-    | @ref upsert() | <tt>PUT /collections/{collection}/points</tt> |
-    | @ref deleteByIds() | <tt>POST /collections/{collection}/points/delete</tt> |
-    | @ref search() | <tt>POST /collections/{collection}/points/query</tt> |
+    |!AbstractVectorStore call|!Qdrant endpoint
+    |@ref upsert()|<tt>PUT /collections/{collection}/points</tt>
+    |@ref deleteByIds()|<tt>POST /collections/{collection}/points/delete</tt>
+    |@ref search()|<tt>POST /collections/{collection}/points/query</tt>
 
     @par Configuration
 

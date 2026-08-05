@@ -1586,6 +1586,9 @@ endfunction()
 #              skip stub generation entirely — most core/library callers
 #              that don't feed an AOT pipeline should leave this unset.
 #
+# Set QORE_DOX_TABLE_STRICT to make malformed documentation tables (see
+# design/doc-tables.md) fail the build instead of only emitting a warning.
+#
 # usage:
 # set(MY_QPP foo.qpp bar.qpp)
 # qore_wrap_qpp_value(MY_CPP ${MY_QPP})
@@ -1618,9 +1621,14 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
             SET(_stub_outputs ${_stubfile})
         ENDIF(_WRAP_QPP_STUBLIST)
 
+        SET(_table_arg)
+        IF(QORE_DOX_TABLE_STRICT)
+            SET(_table_arg --table-strict)
+        ENDIF(QORE_DOX_TABLE_STRICT)
+
         ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_stub_arg} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
                            DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -1718,6 +1726,9 @@ ENDMACRO (QORE_EXTRACT_QM_METADATA)
 #
 #  _dox_files : output dox filenames created in CMAKE_CURRENT_BINARY_DIR
 #
+# Set QORE_DOX_TABLE_STRICT to make malformed documentation tables (see
+# design/doc-tables.md) fail the build instead of only emitting a warning.
+#
 # usage:
 # set(MY_DOX_TMPL foo.dox.tmpl bar.dox.tmpl)
 # qore_wrap_dox(MY_DOX ${MY_DOX_TMPL})
@@ -1729,6 +1740,11 @@ MACRO (QORE_WRAP_DOX _dox_files)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+    SET(_table_arg)
+    IF(QORE_DOX_TABLE_STRICT)
+        SET(_table_arg --table-strict)
+    ENDIF(QORE_DOX_TABLE_STRICT)
+
     FOREACH (it ${_WRAP_QPP_UNPARSED_ARGUMENTS})
 
         GET_FILENAME_COMPONENT(_outfile ${it} NAME_WE)
@@ -1737,7 +1753,7 @@ MACRO (QORE_WRAP_DOX _dox_files)
 
         ADD_CUSTOM_COMMAND(OUTPUT ${_doxfile}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --table=${_infile} --output=${_doxfile}
+                           ARGS ${_table_arg} --table=${_infile} --output=${_doxfile}
                            MAIN_DEPENDENCY ${_infile}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                            VERBATIM
@@ -2531,7 +2547,13 @@ MACRO (QORE_USER_MODULE _module_file)
         else (EXTRA_FILES)
             set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE})
         endif (EXTRA_FILES)
-        set(QDX_QMDOXH_ARGS ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h)
+        # malformed documentation tables (see design/doc-tables.md) are only warnings by default so
+        # that out-of-tree modules keep building; QORE_DOX_TABLE_STRICT promotes them to errors
+        set(_qdx_table_arg)
+        if (QORE_DOX_TABLE_STRICT)
+            set(_qdx_table_arg --strict-tables)
+        endif ()
+        set(QDX_QMDOXH_ARGS ${_qdx_table_arg} ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h)
 
         # add CMake target for the documentation
         if (WIN32 AND (NOT MINGW) AND (NOT MSYS))

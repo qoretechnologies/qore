@@ -70,23 +70,23 @@ module McpServerHandler {
     \c 2026-07-28, which made the protocol stateless.
     This handler serves both shapes and selects between them per request, never per connection:
 
-    |!Aspect|!Modern (2026-07-28)|!Legacy (2025-11-25 and earlier)|
+    |!Aspect|!Modern (2026-07-28)|!Legacy (2025-11-25 and earlier)
     |handshake|none; every request carries its protocol version, client identity, and \
-        capabilities in \c _meta|\c initialize + \c notifications/initialized|
+        capabilities in \c _meta|\c initialize + \c notifications/initialized
     |sessions|none; the \c Mcp-Session-Id header is ignored and never minted|server-minted \
-        session ID, torn down with HTTP \c DELETE|
-    |discovery|\c server/discover|the \c initialize result|
+        session ID, torn down with HTTP \c DELETE
+    |discovery|\c server/discover|the \c initialize result
     |change notifications|\c subscriptions/listen, whose response is a long-lived SSE stream|\
-        a standalone \c GET SSE stream|
+        a standalone \c GET SSE stream
     |resource subscriptions|the \c resourceSubscriptions filter of \c subscriptions/listen|\
-        \c resources/subscribe / \c resources/unsubscribe|
+        \c resources/subscribe / \c resources/unsubscribe
     |server-to-client requests|Multi Round-Trip Requests: the server returns an \
         \c InputRequiredResult and the client retries|the server sends a JSON-RPC request on \
-        the event stream|
+        the event stream
     |tasks|the \c io.modelcontextprotocol/tasks extension: server-decided handles, \
         \c tasks/get polling, \c tasks/update|core \c tasks/get, \c tasks/result, \
-        \c tasks/cancel, \c tasks/list|
-    |removed methods|\c ping, \c logging/setLevel, \c tasks/result, \c tasks/list|—|
+        \c tasks/cancel, \c tasks/list
+    |removed methods|\c ping, \c logging/setLevel, \c tasks/result, \c tasks/list|—
 
     A request that carries
     \c io.modelcontextprotocol/protocolVersion in its

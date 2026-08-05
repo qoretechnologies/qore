@@ -68,7 +68,7 @@
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
     |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref Qore::ParseOptions<br><br>Since %Qore 3.0
-    |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
+    |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, <tt>\|\|</tt>, and \c () operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref include "%include" <em>file_name</em>|Starts parsing \a file_name immediately. Parsing resumes with the current input after \a file_name has been completely parsed
@@ -353,15 +353,14 @@
     hack required.
 
     @par Predefined macros:
-    | Macro | Value at parse time |
-    |-------|---------------------|
-    | <tt>${SCRIPT_DIR}</tt> | absolute directory of the file containing the directive |
-    | <tt>${SCRIPT_NAME}</tt> | basename of the file containing the directive |
-    | <tt>${SCRIPT_PATH}</tt> | absolute path of the file containing the directive |
-    | <tt>${PROGRAM_DIR}</tt> | absolute directory of the top-level program file |
-    | <tt>${QORE_VERSION}</tt> | \%Qore library version string (e.g. \c "3.0.0") |
-    | <tt>${QORE_PREFIX}</tt> | \%Qore install prefix (e.g. \c "/usr") |
-    | <tt>${QORE_MODULE_VERSION}</tt> | module API version (e.g. \c "2.0") |
+    |!Macro|!Value at parse time
+    |<tt>${SCRIPT_DIR}</tt>|absolute directory of the file containing the directive
+    |<tt>${SCRIPT_NAME}</tt>|basename of the file containing the directive
+    |<tt>${SCRIPT_PATH}</tt>|absolute path of the file containing the directive
+    |<tt>${PROGRAM_DIR}</tt>|absolute directory of the top-level program file
+    |<tt>${QORE_VERSION}</tt>|\%Qore library version string (e.g. \c "3.0.0")
+    |<tt>${QORE_PREFIX}</tt>|\%Qore install prefix (e.g. \c "/usr")
+    |<tt>${QORE_MODULE_VERSION}</tt>|module API version (e.g. \c "2.0")
 
     Anything not in this table falls through to the process environment. \c \\$ escapes
     a literal \c $. Unknown macros / unset env vars raise a parse error.

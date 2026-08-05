@@ -49,25 +49,24 @@
     Qore was faster than pandas for the paired cases in the benchmark suite.
     The following table is a representative run from 2026-05-24:
 
-    | Case | Qore median | pandas median | pandas / Qore |
-    |------|-------------|---------------|---------------|
-    | construct columns | 9.700 ms | 42.059 ms | 4.34x |
-    | construct records | 20.035 ms | 40.411 ms | 2.02x |
-    | filter mask | 1.591 ms | 1.923 ms | 1.21x |
-    | groupby aggregate | 3.089 ms | 4.763 ms | 1.54x |
-    | filter + group | 1.441 ms | 3.072 ms | 2.13x |
-    | left join | 2.222 ms | 2.901 ms | 1.31x |
-    | DataProvider filter + group | 1.985 ms | 3.072 ms | 1.55x |
-    | DataProvider pipeline filter + group | 2.000 ms | 3.072 ms | 1.54x |
-    | SQL read | 15.525 ms | 18.081 ms | 1.16x |
-    | SQL write | 16.839 ms | 64.177 ms | 3.81x |
-    | Arrow IPC roundtrip | 5.829 ms | 10.034 ms | 1.72x |
-    | Parquet roundtrip | 18.198 ms | 24.167 ms | 1.33x |
-    | value counts | 0.968 ms | 1.557 ms | 1.61x |
-    | fill/drop missing values | 3.541 ms | 8.075 ms | 2.28x |
-    | melt + pivot reshape | 15.837 ms | 41.078 ms | 2.59x |
-    | solution ETL pipeline | 5.448 ms | 7.804 ms | 1.43x |
-    | solution AI analytics | 37.218 ms | 97.824 ms | 2.63x |
+    |!Case|!Qore median|!pandas median|!pandas / Qore
+    |construct columns|9.700 ms|42.059 ms|4.34x
+    |construct records|20.035 ms|40.411 ms|2.02x
+    |filter mask|1.591 ms|1.923 ms|1.21x
+    |groupby aggregate|3.089 ms|4.763 ms|1.54x
+    |filter + group|1.441 ms|3.072 ms|2.13x
+    |left join|2.222 ms|2.901 ms|1.31x
+    |DataProvider filter + group|1.985 ms|3.072 ms|1.55x
+    |DataProvider pipeline filter + group|2.000 ms|3.072 ms|1.54x
+    |SQL read|15.525 ms|18.081 ms|1.16x
+    |SQL write|16.839 ms|64.177 ms|3.81x
+    |Arrow IPC roundtrip|5.829 ms|10.034 ms|1.72x
+    |Parquet roundtrip|18.198 ms|24.167 ms|1.33x
+    |value counts|0.968 ms|1.557 ms|1.61x
+    |fill/drop missing values|3.541 ms|8.075 ms|2.28x
+    |melt + pivot reshape|15.837 ms|41.078 ms|2.59x
+    |solution ETL pipeline|5.448 ms|7.804 ms|1.43x
+    |solution AI analytics|37.218 ms|97.824 ms|2.63x
 
     The benchmark suite is in the source tree under \c bench/ and can be rerun
     against a local build. Absolute timings depend on hardware, database driver,
@@ -393,15 +392,14 @@ salary.writeParquet("employees-filtered.parquet", write_options);
     that references external immutable storage detaches that column before
     writing.
 
-    | Data shape | Import/export behavior |
-    |------------|------------------------|
-    | Fixed-width primitive columns | Preserved as dense buffers and can be zero-copy when host storage is compatible. |
-    | Boolean columns | Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage. |
-    | Fixed-scale decimal columns | Preserved as \c buffer<decimal128>; Arrow IPC and Parquet import/export can reuse the fixed-width buffer when precision and scale metadata match. |
-    | String and binary columns | Preserve values and schema; variable-width buffers may be copied into Qore-owned storage. |
-    | Date, timestamp, and duration columns | Preserve logical values and use \c buffer<int64> microsecond storage when represented as ColumnarResult/DataFrame dense columns; microsecond timestamp and duration Arrow arrays can be imported and exported without copying the value buffer. |
-    | List, fixed-size-list, struct, map, and dictionary-compatible columns | Preserve recursive schema metadata and lossless Qore values in \c auto columns. |
-    | Unsupported physical layouts | Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings. |
+    |!Data shape|!Import/export behavior
+    |Fixed-width primitive columns|Preserved as dense buffers and can be zero-copy when host storage is compatible.
+    |Boolean columns|Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage.
+    |Fixed-scale decimal columns|Preserved as \c buffer<decimal128>; Arrow IPC and Parquet import/export can reuse the fixed-width buffer when precision and scale metadata match.
+    |String and binary columns|Preserve values and schema; variable-width buffers may be copied into Qore-owned storage.
+    |Date, timestamp, and duration columns|Preserve logical values and use \c buffer<int64> microsecond storage when represented as ColumnarResult/DataFrame dense columns; microsecond timestamp and duration Arrow arrays can be imported and exported without copying the value buffer.
+    |List, fixed-size-list, struct, map, and dictionary-compatible columns|Preserve recursive schema metadata and lossless Qore values in \c auto columns.
+    |Unsupported physical layouts|Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings.
 
     A DataFrame itself is intentionally not generic. Operations such as
     select(), groupBy(), join(), pivot(), and melt() can change the row shape

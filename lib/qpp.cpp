@@ -72,7 +72,8 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
-    " -v, --verbose          increases verbosity level\n";
+    " -v, --verbose          increases verbosity level\n"
+    " -T, --table-strict     treat documentation table issues as errors\n";
 
 static const option pgm_opts[] = {
     {"define", required_argument, nullptr, 'D'},
@@ -83,6 +84,7 @@ static const option pgm_opts[] = {
     {"output", required_argument, nullptr, 'o'},
     {"stub-output", required_argument, nullptr, 's'},
     {"table", required_argument, nullptr, 't'},
+    {"table-strict", no_argument, nullptr, 'T'},
     {"unit", required_argument, nullptr, 'u'},
     {"verbose", optional_argument, nullptr, 'v'},
     {nullptr, 0, nullptr, 0}
@@ -105,6 +107,8 @@ static struct qpp_opts {
     std::string stub_fn;
     std::string table_fn;
     int verbose;
+    // treat documentation table issues as errors
+    bool table_strict = false;
 
     qpp_opts() : verbose(LL_INFO) {
     }
@@ -2888,6 +2892,208 @@ static void flags_output_cpp(FILE* fp, const strlist_t& flags, bool uses_extra_a
         fputs("|QCF_USES_EXTRA_ARGS", fp);
 }
 
+// source file currently being processed; used for documentation table diagnostics
+static const char* table_diag_file = nullptr;
+// line number in table_diag_file of the first line of the buffer being processed; 0 if unknown
+static unsigned table_diag_base_line = 0;
+// number of documentation table issues found
+static unsigned table_issues = 0;
+
+// reports a documentation table issue; see design/doc-tables.md
+/** @param line the 1-based line offset of the offending line in the buffer being processed, or 0 if
+    unknown
+    @param row the text of the offending row (reported when no line number is available)
+*/
+static void table_issue(size_t line, const std::string& row, const char* fmt, ...) {
+    std::string buf;
+    va_list args;
+
+    while (true) {
+        va_start(args, fmt);
+        int rc = my_vsprintf(buf, fmt, args);
+        va_end(args);
+        if (!rc) {
+            break;
+        }
+    }
+
+    ++table_issues;
+
+    std::string loc = table_diag_file ? table_diag_file : "<doc comment>";
+    if (table_diag_base_line && line) {
+        loc += ":" + std::to_string(table_diag_base_line + line - 1);
+    }
+
+    if (opts.table_strict) {
+        error("%s: doc table: %s\n", loc.c_str(), buf.c_str());
+    } else {
+        warning("%s: doc table: %s\n", loc.c_str(), buf.c_str());
+    }
+    if (!table_diag_base_line || !line) {
+        fprintf(stderr, "    row: |%s\n", row.c_str());
+    }
+}
+
+// splits a documentation table row into cells
+/** the rules implemented here must stay in sync with Qdx::DocumentTableHelper::getCells() in
+    qlib/Qdx.qm; see design/doc-tables.md:
+    - a backslash escapes the following character, so \c "\\|" is a literal pipe in cell text
+    - text between \c "@code" and \c "@endcode" is not scanned for delimiters
+    - text in double quotes is not scanned for delimiters
+    - any other \c "|" separates two cells
+*/
+static void get_table_cells(strlist_t& l, const std::string& str) {
+    size_t start = 0, p = 0;
+    bool quote = false;
+    bool code = false;
+
+    while (p < str.size()) {
+        int c = str[p++];
+
+        if (c == '@') {
+            if (code) {
+                if (!str.compare(p, 7, "endcode")) {
+                    code = false;
+                    p += 7;
+                }
+                continue;
+            }
+            if (!str.compare(p, 4, "code")) {
+                code = true;
+                p += 4;
+            }
+            continue;
+        }
+        if (code) {
+            continue;
+        }
+
+        if (c == '\\') {
+            ++p;
+            continue;
+        }
+
+        if (c == '"') {
+            quote = !quote;
+            continue;
+        }
+        if (quote) {
+            continue;
+        }
+
+        if (c == '|') {
+            l.push_back(std::string(str, start, p - start - 1));
+            start = p;
+        }
+    }
+    l.push_back(std::string(str, start));
+}
+
+// returns true if the row is a Markdown column-alignment row (ex: "---|---")
+static bool is_markdown_separator_row(const std::string& row) {
+    bool has_dash = false;
+    for (size_t i = 0, e = row.size(); i < e; ++i) {
+        char c = row[i];
+        if (c == '-') {
+            has_dash = true;
+            continue;
+        }
+        if (c != '|' && c != ':' && c != '+' && c != ' ' && c != '\t' && c != '\r') {
+            return false;
+        }
+    }
+    return has_dash;
+}
+
+// validates all documentation tables in the given buffer
+/** run before any table is converted, so that reported line numbers refer to the source text; the
+    table recognition implemented here mirrors process_comment() exactly: a table starts at a line
+    whose first non-whitespace text is \c "|!" and continues for as long as lines start with
+    \c "|"
+
+    @param buf the unmodified comment or file text
+*/
+static void check_tables(const std::string& buf) {
+    bool code = false;
+    bool in_table = false;
+    size_t header_cells = 0;
+    size_t line = 1;
+
+    for (size_t i = 0; i < buf.size();) {
+        // read one logical line, joining '\' line continuations as the converter does
+        std::string l;
+        size_t first_line = line;
+        while (true) {
+            size_t eol = buf.find('\n', i);
+            std::string phys(buf, i, eol == std::string::npos ? std::string::npos : eol - i);
+            i = eol == std::string::npos ? buf.size() : eol + 1;
+            ++line;
+            if (!phys.empty() && phys[phys.size() - 1] == '\\') {
+                phys.erase(phys.size() - 1);
+                l += phys;
+                if (eol == std::string::npos) {
+                    break;
+                }
+                continue;
+            }
+            l += phys;
+            break;
+        }
+
+        if (l.find("@code") != std::string::npos || l.find("@verbatim") != std::string::npos) {
+            code = true;
+        }
+        if (l.find("@endcode") != std::string::npos || l.find("@endverbatim") != std::string::npos) {
+            code = false;
+            continue;
+        }
+        if (code) {
+            continue;
+        }
+
+        // strip the leading whitespace and any C-comment continuation marker
+        size_t p = l.find_first_not_of(" \t*");
+        if (p == std::string::npos || l[p] != '|') {
+            in_table = false;
+            continue;
+        }
+
+        bool header = l[p + 1] == '!';
+        std::string row(l, p + 1);
+
+        if (header) {
+            in_table = true;
+        } else if (!in_table) {
+            table_issue(first_line, row, "line starts with '|' but is not part of a table; a "
+                "Qore table is only recognized when its header row starts with '|!'");
+            continue;
+        }
+
+        if (is_markdown_separator_row(row)) {
+            table_issue(first_line, row, "Markdown column-alignment row in a Qore table; delete "
+                "it and mark header cells with '|!' instead");
+            continue;
+        }
+
+        // a trailing delimiter emits a spurious empty final cell
+        size_t end = row.find_last_not_of(" \t\r");
+        if (end != std::string::npos && row[end] == '|' && (!end || row[end - 1] != '\\')) {
+            table_issue(first_line, row, "row ends with '|'; the Qore table format has no "
+                "trailing delimiter, so an empty final cell is emitted");
+        }
+
+        strlist_t sl;
+        get_table_cells(sl, row);
+        if (header) {
+            header_cells = sl.size();
+        } else if (sl.size() != header_cells) {
+            table_issue(first_line, row, "row has %lu cells but the header row has %lu; escape "
+                "literal delimiters in cell text as \"\\|\"", (unsigned long)sl.size(),
+                (unsigned long)header_cells);
+        }
+    }
+}
+
 static void doRow(strlist_t& sl, std::string& tstr) {
     tstr += "    <tr>\n";
     for (unsigned k = 0; k < sl.size(); ++k) {
@@ -2965,6 +3171,9 @@ static size_t find_start(std::string& str) {
 }
 
 static void process_comment(std::string& buf) {
+    // validate tables before any conversion, so diagnostics can refer to the source text
+    check_tables(buf);
+
     size_t start = 0;
 
     // edit references to pseudo-methods
@@ -3033,16 +3242,16 @@ static void process_comment(std::string& buf) {
 
         while (true) {
             strlist_t sl;
-            get_string_list2(sl, str, '|');
+            get_table_cells(sl, str);
 
             doRow(sl, tstr);
             if (!get_line()) {
                 break;
             }
 
-            // find start of next row, if any
-            size_t k = str.find('|');
-            if (k == std::string::npos) {
+            // find start of next row, if any; rows must start with '|' after optional whitespace
+            size_t k = str.find_first_not_of(" \t");
+            if (k == std::string::npos || str[k] != '|') {
                 break;
             }
 
@@ -7883,6 +8092,11 @@ public:
     Code(const char* fn, bool cpp_append = false, bool dox_append = false) : fileName(fn),
         cpp_open_flag(cpp_append ? "a" : "w"),
         dox_open_flag(dox_append ? "a" : "w"), lineNumber(0), valid(true), has_class(false) {
+        // doc comments are processed as isolated buffers, so only the file name is available for
+        // documentation table diagnostics
+        table_diag_file = fn;
+        table_diag_base_line = 0;
+
         std::string base;
         std::string dir;
 
@@ -8206,8 +8420,21 @@ int do_table_file() {
     }
     fclose(ifp);
 
+    // the whole file is processed as one buffer, so table diagnostics can report exact line numbers
+    table_diag_file = opts.table_fn.c_str();
+    table_diag_base_line = 1;
+
     serialize_dox_comment(ofp, buf);
     fclose(ofp);
+
+    table_diag_file = nullptr;
+    table_diag_base_line = 0;
+
+    // remove the output in strict mode; otherwise the stale file is newer than its input and the
+    // next build would silently accept the broken documentation
+    if (opts.table_strict && table_issues) {
+        unlink(opts.output_fn.c_str());
+    }
 
     return 0;
 }
@@ -8450,7 +8677,7 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:u:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:Tu:v:V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -8485,6 +8712,10 @@ void process_command_line(int& argc, char**& argv) {
 
             case 't':
                 opts.table_fn = optarg;
+                break;
+
+            case 'T':
+                opts.table_strict = true;
                 break;
 
             case 'u':
@@ -8555,6 +8786,12 @@ int main(int argc, char* argv[]) {
 
     if (!opts.table_fn.empty())
         do_table_file();
+
+    if (opts.table_strict && table_issues) {
+        error("%u documentation table issue%s found; see design/doc-tables.md\n", table_issues,
+            table_issues == 1 ? "" : "s");
+        return 1;
+    }
 
     return 0;
 }

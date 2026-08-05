@@ -1,0 +1,336 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DocumentTable.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# tests the Qore documentation table format; see design/doc-tables.md
+
+%modern
+%exec-class DocumentTableTests
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Qdx
+%requires FsUtil
+%requires Util
+%requires QUnit
+
+public class DocumentTableTests inherits QUnit::Test {
+    private {
+        #! the qpp binary implementing the same format, if it can be located
+        *string qpp;
+    }
+
+    constructor() : Test("DocumentTableTests", "1.0") {
+        addTestCase("cell splitting", \testCellSplitting());
+        addTestCase("escaping", \testEscaping());
+        addTestCase("conversion", \testConversion());
+        addTestCase("separator row detection", \testSeparatorRow());
+        addTestCase("warning: no header row", \testWarnNoHeader());
+        addTestCase("warning: markdown table", \testWarnMarkdownTable());
+        addTestCase("warning: trailing delimiter", \testWarnTrailingDelimiter());
+        addTestCase("warning: ragged row", \testWarnRaggedRow());
+        addTestCase("warning: space before bang", \testWarnSpaceBeforeBang());
+        addTestCase("well-formed tables warn nothing", \testNoWarnings());
+        addTestCase("iterator conversion and line numbers", \testIterator());
+        addTestCase("qpp agrees with Qdx", \testQppAgreement());
+        addTestCase("qpp strict mode rejects a Markdown table", \testQppStrictMode());
+
+        qpp = findQpp();
+
+        set_return_value(main());
+    }
+
+    #! Returns the path to a built qpp binary, or @ref nothing if none can be found
+    private *string findQpp() {
+        foreach string dir in (("build", "build-debug")) {
+            string path = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qpp");
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    testCellSplitting() {
+        assertEq(("!Type", "!Description"), DocumentTableHelper::getCells("!Type|!Description"));
+        assertEq(("int", "a 64-bit signed integer"),
+            DocumentTableHelper::getCells("int|a 64-bit signed integer"));
+        # a single-cell row has no delimiter at all
+        assertEq(("only",), DocumentTableHelper::getCells("only"));
+        # a trailing delimiter produces an empty final cell, which is why it is a warning
+        assertEq(("a", "b", ""), DocumentTableHelper::getCells("a|b|"));
+        # an empty row yields one empty cell
+        assertEq(("",), DocumentTableHelper::getCells(""));
+    }
+
+    testEscaping() {
+        # a backslash escapes the delimiter and stays in the cell text
+        assertEq(("a \\| b", "c"), DocumentTableHelper::getCells("a \\| b|c"));
+        # text between @code and @endcode is not scanned
+        assertEq(("@code{.py} a | 0xff@endcode", "bitwise or"),
+            DocumentTableHelper::getCells("@code{.py} a | 0xff@endcode|bitwise or"));
+        # a delimiter after @endcode still separates cells
+        assertEq(("@code a|b@endcode", "x", "y"),
+            DocumentTableHelper::getCells("@code a|b@endcode|x|y"));
+        # text in double quotes is not scanned
+        assertEq(("@ref bitwise_or_operator \"|\"", "17"),
+            DocumentTableHelper::getCells("@ref bitwise_or_operator \"|\"|17"));
+        # single quotes are NOT protection characters: an apostrophe in prose must not merge cells
+        assertEq(("the branch's value", "see the union section"),
+            DocumentTableHelper::getCells("the branch's value|see the union section"));
+        # an escaped backslash at the end of a cell does not escape the delimiter
+        assertEq(("a\\\\", "b"), DocumentTableHelper::getCells("a\\\\|b"));
+    }
+
+    testConversion() {
+        DocumentTableHelper dth();
+        string out = dth.process("    |!Type|!Description\n");
+        assertRegex("<table>", out);
+        assertRegex("<td class=\"qore\"><b>Type</b></td>", out);
+        assertRegex("<td class=\"qore\"><b>Description</b></td>", out);
+        assertRegex("td.qore", out, "the header style block is emitted once per page");
+
+        out = dth.process("    |int|a 64-bit signed integer\n");
+        assertRegex("<td>int</td>", out);
+        assertRegex("<td>a 64-bit signed integer</td>", out);
+        assertFalse(out =~ /<table>/, "the table is only opened once");
+
+        # a non-row line closes the table
+        out = dth.process("    text after the table\n");
+        assertRegex("</table>", out);
+        assertRegex("text after the table", out);
+
+        assertEq((), dth.takeWarnings());
+    }
+
+    testSeparatorRow() {
+        assertTrue(DocumentTableHelper::isMarkdownSeparatorRow("---|---"));
+        assertTrue(DocumentTableHelper::isMarkdownSeparatorRow("------|-----------------|"));
+        assertTrue(DocumentTableHelper::isMarkdownSeparatorRow(" :---: | ---: "));
+        assertFalse(DocumentTableHelper::isMarkdownSeparatorRow("!Type|!Description"));
+        assertFalse(DocumentTableHelper::isMarkdownSeparatorRow("a - b|c"));
+        assertFalse(DocumentTableHelper::isMarkdownSeparatorRow(""));
+    }
+
+    testWarnNoHeader() {
+        DocumentTableHelper dth("test.qm");
+        dth.process("    |Escape|Description\n", 12);
+        list<string> warnings = dth.takeWarnings();
+        assertEq(1, warnings.size());
+        assertRegex("test\\.qm:12", warnings[0]);
+        assertRegex("no header row", warnings[0]);
+        assertEq((), dth.takeWarnings(), "warnings are cleared when taken");
+    }
+
+    testWarnMarkdownTable() {
+        DocumentTableHelper dth("test.dox");
+        # a full Markdown table: no header row on the first line, then an alignment row
+        dth.process("    | Goal | Recommended API |\n", 5);
+        dth.process("    |------|-----------------|\n", 6);
+        dth.process("    | Read a byte | getByte() |\n", 7);
+
+        list<string> warnings = dth.takeWarnings();
+        assertGt(2, warnings.size());
+
+        *string no_header = (select warnings, $1 =~ /no header row/)[0];
+        assertRegex("test\\.dox:5", no_header);
+
+        *string md = (select warnings, $1 =~ /Markdown column-alignment row/)[0];
+        assertRegex("test\\.dox:6", md);
+
+        assertTrue(exists (select warnings, $1 =~ /no trailing delimiter/)[0],
+            "the trailing delimiter is reported too");
+    }
+
+    testWarnTrailingDelimiter() {
+        DocumentTableHelper dth("test.qm");
+        dth.process("    |!Aspect|!Modern|!Legacy|\n", 73);
+        list<string> warnings = dth.takeWarnings();
+        assertEq(1, warnings.size());
+        assertRegex("test\\.qm:73", warnings[0]);
+        assertRegex("no trailing delimiter", warnings[0]);
+
+        # an escaped delimiter at the end of a row is cell text, not a trailing delimiter
+        DocumentTableHelper dth2("test.qm");
+        dth2.process("    |!Operator|!Symbol\n");
+        dth2.process("    |bitwise or|\\|\n");
+        assertEq((), dth2.takeWarnings());
+    }
+
+    testWarnRaggedRow() {
+        DocumentTableHelper dth("test.qm");
+        dth.process("    |!Option|!Description\n", 768);
+        dth.process("    |\\c --format \\c yaml|json|Export format\n", 770);
+        list<string> warnings = dth.takeWarnings();
+        assertEq(1, warnings.size());
+        assertRegex("test\\.qm:770", warnings[0]);
+        assertRegex("3 cells but the header row has 2", warnings[0]);
+
+        # the same row with the delimiter escaped is well-formed
+        DocumentTableHelper dth2("test.qm");
+        dth2.process("    |!Option|!Description\n");
+        dth2.process("    |\\c --format \\c yaml\\|json|Export format\n");
+        assertEq((), dth2.takeWarnings());
+    }
+
+    testWarnSpaceBeforeBang() {
+        DocumentTableHelper dth("test.qm");
+        dth.process("    | !Conversion character | !Meaning\n", 1697);
+        list<string> warnings = dth.takeWarnings();
+        assertEq(1, warnings.size());
+        assertRegex("whitespace before", warnings[0]);
+        assertRegex("test\\.qm:1697", warnings[0]);
+    }
+
+    testNoWarnings() {
+        DocumentTableHelper dth("test.qm");
+        dth.process("    |!Type|!Module|!Description\n");
+        dth.process("    |user|Util|utility functions\n");
+        dth.process("    |binary|astparser|a language parser API\n");
+        dth.process("\n");
+        assertEq((), dth.takeWarnings());
+    }
+
+    testIterator() {
+        TmpFile tmp("doc-table-", ".dox");
+        {
+            File f();
+            f.open2(tmp.path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("@page test Test\n");
+            f.write("\n");
+            f.write("    |!Type|!Description\n");
+            f.write("    |int|a 64-bit \\\n");
+            f.write("        signed integer\n");
+            f.write("    | Goal | API |\n");
+            f.write("\n");
+        }
+
+        DocumentTableInputStreamLineIterator i(new FileInputStream(tmp.path), NOTHING, NOTHING,
+            False, tmp.path);
+        string out;
+        while (i.next()) {
+            out += i.getValue();
+        }
+
+        assertRegex("<td class=\"qore\"><b>Type</b></td>", out);
+        assertRegex("<td>a 64-bit\\s+signed integer</td>", out,
+            "line continuations are joined into a single cell before the row is split");
+        assertRegex("</table>", out);
+        assertRegex("<td></td>", out, "the trailing delimiter emits an empty final cell");
+
+        list<string> warnings = i.takeTableWarnings();
+        assertEq(2, warnings.size());
+
+        *string trailing = (select warnings, $1 =~ /no trailing delimiter/)[0];
+        assertRegex(":6", trailing, "the warning carries the source line number");
+
+        assertTrue(exists (select warnings, $1 =~ /3 cells but the header row has 2/)[0],
+            "the empty final cell makes the row ragged");
+    }
+
+    #! Asserts that qpp produces the same cells as Qdx for the shared format
+    testQppAgreement() {
+        if (!qpp) {
+            testSkip("no built qpp binary found");
+        }
+
+        # rows exercising every splitting rule shared by both implementations
+        list<string> rows = (
+            "!Type|!Description",
+            "int|a 64-bit signed integer",
+            "a \\| b|c",
+            "@code{.py} a | 0xff@endcode|bitwise or",
+            "@ref bitwise_or_operator \"|\"|17",
+            "the branch's value|see the union section",
+        );
+
+        TmpDir tmpdir();
+        string infn = tmpdir.path + "/in.dox.tmpl";
+        string outfn = tmpdir.path + "/out.dox";
+        {
+            File f();
+            f.open2(infn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("@page test Test\n\n");
+            map f.write("    |" + $1 + "\n"), rows;
+            f.write("\n");
+        }
+
+        string log = tmpdir.path + "/qpp.log";
+        int rc = system(sprintf("%s --table-strict --table=%s --output=%s >%s 2>&1", qpp, infn,
+            outfn, log));
+        assertEq(0, rc, ReadOnlyFile::readTextFile(log));
+
+        list<string> qpp_cells = ();
+        foreach string line in (ReadOnlyFile::readTextFile(outfn).split("\n")) {
+            *string cell = (line =~ x/<td(?: class="qore")?>(.*)<\/td>/)[0];
+            if (exists cell) {
+                # header cells are emitted in bold
+                cell =~ s/^<b>(.*)<\/b>$/$1/;
+                qpp_cells += cell;
+            }
+        }
+
+        list<string> qdx_cells = ();
+        foreach string row in (rows) {
+            foreach string cell in (DocumentTableHelper::getCells(row)) {
+                trim cell;
+                qdx_cells += cell =~ /^!/ ? substr(cell, 1) : cell;
+            }
+        }
+
+        assertEq(qdx_cells, qpp_cells,
+            "qpp and Qdx must split documentation table rows identically");
+    }
+
+    #! Asserts that a Markdown table fails the build in strict mode and is not silently emitted
+    testQppStrictMode() {
+        if (!qpp) {
+            testSkip("no built qpp binary found");
+        }
+
+        TmpDir tmpdir();
+        string infn = tmpdir.path + "/in.dox.tmpl";
+        string outfn = tmpdir.path + "/out.dox";
+        string log = tmpdir.path + "/qpp.log";
+        {
+            File f();
+            f.open2(infn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("@page test Test\n\n");
+            f.write("    | Goal | Recommended API |\n");
+            f.write("    |------|-----------------|\n");
+            f.write("    | Read a byte | getByte() |\n");
+            f.write("\n");
+        }
+
+        # without strict mode the file is converted as-is and the Markdown table stays literal
+        assertEq(0, system(sprintf("%s --table=%s --output=%s >%s 2>&1", qpp, infn, outfn, log)));
+        string out = ReadOnlyFile::readTextFile(outfn);
+        assertRegex("\\| Goal \\| Recommended API \\|", out,
+            "a Markdown table is emitted literally, which is exactly the defect being detected");
+        assertRegex("line starts with .\\|. but is not part of a table",
+            ReadOnlyFile::readTextFile(log));
+
+        # in strict mode the run fails and the output is removed so the next build cannot use it
+        assertNeq(0, system(sprintf("%s --table-strict --table=%s --output=%s >%s 2>&1", qpp, infn,
+            outfn, log)));
+        assertFalse(is_file(outfn), "the stale output must not survive a strict-mode failure");
+    }
+}

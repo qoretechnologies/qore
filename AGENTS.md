@@ -32,6 +32,10 @@
 - Qore sources typically opt into `%new-style`; many files set `indent-tabs-mode: nil`.
 - File naming is consistent by type: `.cpp`/`.h` for C++, `.q`/`.qm`/`.qc` for Qore, `.qtest` for tests.
 - No formatter is mandated; keep changes minimal and match local conventions.
+- **Documentation tables use the Qore pipe format, never Markdown** — `|!Header|!Header` then
+  `|cell|cell`, no trailing `|`, no `|---|---|` alignment row, literal pipes escaped as `\|`.
+  A Markdown table renders as literal text in the generated HTML. See `design/doc-tables.md`;
+  malformed tables fail the build (`QORE_DOX_TABLE_STRICT`, on by default in this repo).
 
 ## Testing Guidelines
 - Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix.
