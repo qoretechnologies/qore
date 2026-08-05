@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+    "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+trim timeout_cmd;
+
+string root = "/tmp/qore-aot-overload-self-recursion-" + string(getpid());
+mkdir(root);
+on_exit {
+    foreach string name in (("direct.qr", "global-method.qr", "direct-aot", "global-method-aot")) {
+        string path = root + "/" + name;
+        if (is_file(path)) {
+            unlink(path);
+        }
+    }
+    rmdir(root);
+}
+
+string sub shellQuote(string value) {
+    return "'" + replace(value, "'", "'\"'\"'") + "'";
+}
+
+string sub runCommand(string cmd) {
+    string prefix = timeout_cmd.val() ? timeout_cmd + " 20s " : "";
+    return backquote(prefix + cmd + " 2>&1; echo EXIT=$?");
+}
+
+string sub writeScript(string name, string code) {
+    string path = root + "/" + name;
+    File f();
+    f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+    f.write(code);
+    f.close();
+    return path;
+}
+
+sub requireTrue(bool condition, string message) {
+    if (!condition) {
+        throw "TEST-ERROR", message;
+    }
+}
+
+sub assertCleanRun(string expected, string output, string label) {
+    requireTrue(!output.regex("STACK-LIMIT-EXCEEDED"),
+        label + " used the recursive path: " + output);
+    requireTrue(!output.regex("Segmentation fault|SIGSEGV"),
+        label + " crashed: " + output);
+    requireTrue(!output.regex("EXIT=124"),
+        label + " timed out: " + output);
+    requireTrue(output == expected + "EXIT=0\n",
+        label + " output mismatch; expected " + expected + "EXIT=0\\n; got " + output);
+}
+
+sub assertInterpretedAndAot(string name, string code, string expected, string label) {
+    string script = writeScript(name + ".qr", code);
+    string interpreted = runCommand(sprintf("env LD_LIBRARY_PATH=%s %s --enable-debug %s",
+        shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(script)));
+    assertCleanRun(expected, interpreted, label + " interpreted");
+
+    string exe = root + "/" + name + "-aot";
+    string compile_out = runCommand(sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --enable-debug "
+        "--compile --strip-source --output %s %s",
+        shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
+        shellQuote(exe), shellQuote(script)));
+    requireTrue(compile_out.regex("EXIT=0"), label + " AOT compile failed: " + compile_out);
+    requireTrue(is_file(exe), label + " AOT executable was not created");
+
+    string aot = runCommand(sprintf("env LD_LIBRARY_PATH=%s %s",
+        shellQuote(libqore_dir), shellQuote(exe)));
+    assertCleanRun(expected, aot, label + " AOT");
+}
+
+string direct_overload_code = "%modern
+
+class ValueHolder {
+}
+
+string sub resolve_value(string name) {
+    ValueHolder holder();
+    return resolve_value(holder, name);
+}
+
+string sub resolve_value(ValueHolder holder, string name) {
+    return \"ok:\" + name;
+}
+
+printf(\"%s\\n\", resolve_value(\"test\"));
+";
+
+string global_method_overload_code = "%modern
+
+our string prefix = \"ok\";
+
+class ValueHolder {
+}
+
+class GlobalState {
+    ValueHolder getPool(string name) {
+        ValueHolder holder();
+        return holder;
+    }
+}
+
+our GlobalState Global();
+
+string sub resolve_value(string name) {
+    return resolve_value(Global.getPool(name), name);
+}
+
+string sub resolve_value(ValueHolder holder, string name) {
+    return prefix + \":\" + name;
+}
+
+printf(\"%s\\n\", resolve_value(\"test\"));
+";
+
+assertInterpretedAndAot("direct", direct_overload_code, "ok:test\n",
+    "direct overload-to-overload call");
+assertInterpretedAndAot("global-method", global_method_overload_code, "ok:test\n",
+    "Qorus-shaped overload-to-overload call");
+
+printf("AOT overload self-recursion regression OK\n");

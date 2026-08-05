@@ -2261,7 +2261,7 @@ public:
     QoreValue expr;                         //!< Original AST expression (for AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
-    bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
+    bool is_self_recursive = false;         //!< True if this calls the exact source variant
     //! Direct projection from a fresh fixed aggregate returned by this call.
     AOTAggregateProjectionKind aot_aggregate_projection =
         AOTAggregateProjectionKind::None;
@@ -2968,14 +2968,13 @@ public:
 
     std::string name;
     std::string display_name;
-    //! Source QoreFunction this IR was lowered from — used by
-    //! createCallDirect to identify self-recursion by pointer equality
-    //! rather than base-name comparison.  Without this, a caller in
-    //! namespace `OMQ` that invokes `Util::foo` was misidentified as
-    //! self-recursion because both `current_func->getName()` and
-    //! `callee->getName()` equal `"foo"`; the LLVM emitter then issued
-    //! a direct call to its own fast entry and infinite-recursed.
+    //! Source QoreFunction this IR was lowered from.
     const QoreFunction* source_qf = nullptr;
+    //! Exact source variant this IR was lowered from. Direct-call
+    //! self-recursion detection must compare this value, not only
+    //! source_qf, because overloads in the same QoreFunction family
+    //! share source_qf but are different callable targets.
+    const AbstractQoreFunctionVariant* source_variant = nullptr;
     //! The top-level StatementBlock this IR was lowered from (issue #5352).
     //! Baked into the JIT debug-step hook as the `blockStatement` context passed
     //! to the debugger onStep callback.  Only valid/used for in-process JIT

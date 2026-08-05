@@ -2443,15 +2443,11 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     ir_func = new QoreIRFunction(name);
-    // Set source_qf BEFORE QoreIRBuilder lowers statements — the
-    // createCallDirect() check relies on it to identify self-recursion
-    // by pointer identity rather than base-name string compare (the
-    // latter collides across namespaces — `OMQ::foo` and `Util::foo`
-    // both have base name `foo`, so bare-name comparison mis-flags
-    // cross-namespace calls as self-recursion and the LLVM emitter
-    // then issues a direct call to own fast entry → infinite
-    // C++-level recursion).
+    // Set source identity before QoreIRBuilder lowers statements; direct-call
+    // self-recursion detection requires exact variant identity because
+    // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
+    ir_func->source_variant = uvb->getAbstractFunctionVariant();
     ir_func->return_type_info = qore_substitute_type_params_if_needed(
         uvb->getUserSignature()->getReturnTypeInfo(),
         specialization_receiver_type_info,

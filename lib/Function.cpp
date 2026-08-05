@@ -5382,6 +5382,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
     func->source_qf = source_qf;
+    func->source_variant = getAbstractFunctionVariant();
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and

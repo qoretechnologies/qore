@@ -8971,6 +8971,7 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     // Re-lower to IR (fresh AST from re-parsed source → same IR → same walk order)
     QoreIRFunction* ir_func = new QoreIRFunction(name);
+    ir_func->source_variant = uvb->getAbstractFunctionVariant();
 
     // Record pre-instantiated locals from signature
     UserSignature* sig = uvb->getUserSignature();

@@ -967,6 +967,8 @@ public:
             RetTypeInfo* rv, bool synced);
     DLLLOCAL virtual ~UserVariantBase();
 
+    DLLLOCAL virtual const AbstractQoreFunctionVariant* getAbstractFunctionVariant() const = 0;
+
     /** Install serialized closure IR during single-threaded AOT registration, before publication.
         @param lazy_ir immutable metadata required to reconstruct the fallback IR
     */
@@ -1211,6 +1213,7 @@ public:
     }\
     using AbstractQoreFunctionVariant::getUserVariantBase; \
     DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
+    DLLLOCAL virtual const AbstractQoreFunctionVariant* getAbstractFunctionVariant() const override { return this; } \
     DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
     DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
     DLLLOCAL virtual void setRecheck() { recheck = true; } \
