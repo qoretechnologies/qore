@@ -1025,7 +1025,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "cmake --build %s -- -j33; rc=$?; wait $watcher || rc=$?; exit $rc",
             validation_marker, validation_marker, replacement, provider,
             validation_marker, provider, build_dir));
-        assertTrue(contract_change.find("provider.qc") != -1,
+        # The planner announces the per-component path itself.  Matching the source name instead
+        # does not test this: that name reaches the output from the separate qo-objects target's
+        # "qcc -c:" recipe, which only echoes when that target happens to have work to do, so the
+        # assertion passed while the plan fell back to the shared-parse batch and failed where
+        # qo-objects was already up to date.
+        assertTrue(contract_change.find("stale component(s) incrementally") != -1,
             "provider body change runs the precise incremental path: "
                 + contract_change);
         assertTrue(contract_change.find(
