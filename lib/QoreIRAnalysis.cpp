@@ -1981,10 +1981,52 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
     return true;
 }
 
+//! Returns true when a call cannot consume \a value, so passing it as an argument is a plain read.
+/** A call takes its own reference to a node-valued argument rather than taking the caller's: the
+    interpreter's buildArgListFromIROperands() refSelf()s each one into the argument list, and
+    generated code registers an argument for release only when it appears in invoke_alloca_map,
+    which trackResultForCleanup() populates for call and invoke results.  So the one operand a call
+    does consume is an owned temporary produced by another call.
+
+    This asks the question structurally rather than through the ownership facts, which are only
+    approximate here - a native float carries QoreIRValueOwnership::Unknown rather than an answer -
+    and getting it wrong means releasing a value another consumer still holds.  A LoadLocal result
+    is never tracked for cleanup, so it is the case that can be admitted without any of that
+    reasoning, and it is the one that matters: it is what stops a loop-invariant call whose argument
+    is a local or a parameter from leaving the loop.
+*/
+static bool qore_ir_call_cannot_consume_operand(
+        const std::unordered_map<uint32_t, QoreIRInstruction*>* definitions, QoreIRValue value) {
+    if (!definitions || !value.isValid()) {
+        return false;
+    }
+    auto def = definitions->find(value.id);
+    return def != definitions->end() && def->second
+        && def->second->opcode == QoreIROpcode::LoadLocal;
+}
+
+static bool qore_ir_is_call_opcode_for_operand_read(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool qore_ir_is_nonconsuming_scalar_use(const QoreIRFunction& func,
-        const QoreIRInstruction& inst, bool allow_ir_only_store) {
+        const QoreIRInstruction& inst, bool allow_ir_only_store,
+        const std::unordered_map<uint32_t, QoreIRInstruction*>* definitions = nullptr,
+        QoreIRValue value = QoreIRValue()) {
     if (qore_ir_is_native_scalar_pure_opcode(inst.opcode)
             || qore_ir_is_hoistable_read_only_query(func, inst)) {
+        return true;
+    }
+    if (qore_ir_is_call_opcode_for_operand_read(inst.opcode)
+            && qore_ir_call_cannot_consume_operand(definitions, value)) {
         return true;
     }
     switch (inst.opcode) {
@@ -2019,10 +2061,14 @@ static bool qore_ir_is_nonconsuming_scalar_use(const QoreIRFunction& func,
     }
 }
 
+//! \a definitions is optional; passing it lets a call count as a plain read of \a result - see
+//! qore_ir_call_cannot_consume_operand().  Callers that cannot supply it keep the older, narrower
+//! answer, in which any call disqualifies the value.
 static bool qore_ir_has_only_nonconsuming_scalar_uses(const QoreIRFunction& func,
         QoreIRValue result, const QoreIRScalarUses& uses, bool allow_ir_only_store,
         size_t& check_count, bool& cancelled, bool allow_phi = false,
-        const std::unordered_set<size_t>* required_blocks = nullptr) {
+        const std::unordered_set<size_t>* required_blocks = nullptr,
+        const std::unordered_map<uint32_t, QoreIRInstruction*>* definitions = nullptr) {
     auto use_it = uses.find(result.id);
     if (use_it == uses.end() || use_it->second.empty()) {
         return false;
@@ -2034,7 +2080,7 @@ static bool qore_ir_has_only_nonconsuming_scalar_uses(const QoreIRFunction& func
         }
         if (!use.inst || (required_blocks && !required_blocks->count(use.block_id))
                 || (!qore_ir_is_nonconsuming_scalar_use(
-                        func, *use.inst, allow_ir_only_store)
+                        func, *use.inst, allow_ir_only_store, definitions, result)
                     && (!allow_phi
                         || use.inst->opcode != QoreIROpcode::Phi))) {
             return false;
@@ -9277,7 +9323,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                 }
                 if (inst->result.isValid()
                         && qore_ir_has_only_nonconsuming_scalar_uses(func, inst->result, uses, false,
-                            check_count, cancelled, false, &loop_blocks)) {
+                            check_count, cancelled, false, &loop_blocks, &definitions)) {
                     safe_repeated_values.insert(inst->result.id);
                 }
                 if (cancelled) {

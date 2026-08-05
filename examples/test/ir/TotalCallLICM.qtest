@@ -107,6 +107,9 @@ float sub h_unflagged(int n, float y) { float s = 0.0; float g = y; for (int i =
 float sub h_variant(int n) { float s = 0.0; for (int i = 0; i < n; ++i) { float f = i.toFloat(); s += sqrt(f) + 1.0; } return s; }
 # a zero-trip loop must produce the initial value and must not have called anything
 float sub h_zero_trip(float y) { float s = 0.0; float g = y; for (int i = 0; i < 0; ++i) { s += sqrt(g) + i.toFloat(); } return s; }
+# the argument is a parameter rather than a body local, so the load inside the loop has to be
+# hoistable too - which needs a call to count as a plain read of its operand
+float sub h_param(int n, float y) { float s = 0.0; for (int i = 0; i < n; ++i) { s += sqrt(y) + i.toFloat(); } return s; }
 # nested loops give the invariant local one phi per header, and the inner one holds only the outer
 # one - a chain that has to be followed to the surviving value before either is erased, or a use of
 # the inner phi is left naming an erased definition
@@ -119,6 +122,7 @@ printf("variant=%y\n", h_variant(3));
 printf("zero_trip=%y\n", h_zero_trip(9.0));
 printf("zero_n=%y\n", h_total(0, 9.0));
 printf("nested=%y\n", h_nested(3, 9.0));
+printf("param=%y\n", h_param(3, 9.0));
 ';
     }
 
@@ -138,6 +142,7 @@ printf("nested=%y\n", h_nested(3, 9.0));
         assertRegex("zero_trip=0", hoisted);
         assertRegex("zero_n=0", hoisted);
         assertRegex("nested=36", hoisted);
+        assertRegex("param=12", hoisted);
 
         # the comparison above is only meaningful if the hoisted run really hoisted
         assertEq(1, hoistedCalls(runScript(script, {"QORE_IR_OPT_STATS": "1"}),
@@ -166,6 +171,8 @@ printf("nested=%y\n", h_nested(3, 9.0));
         assertEq(0, hoistedCalls(on, off, "h_variant"), "a loop-variant call stays");
         # hoisted out of the inner loop and then out of the outer one
         assertEq(2, hoistedCalls(on, off, "h_nested"), "the call leaves both nested loops");
+        # a parameter argument, which needs the load of the parameter to be hoistable as well
+        assertEq(1, hoistedCalls(on, off, "h_param"), "a parameter argument does not block the hoist");
     }
 
     #! QCF_PURE makes no nothrow claim, so a pure call must not be moved ahead of a loop that
