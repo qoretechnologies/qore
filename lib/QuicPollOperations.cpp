@@ -53,7 +53,7 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 
 //! Maximum poll timeout (ms) when no QUIC timer is pending.
 /** Fallback poll timeout (ms) when ngtcp2 reports no timer pending
-    (ngtcp2_conn_get_expiry() == UINT64_MAX).  Per RFC 9002, ACK-only packets
+    (ngtcp2_conn_get_expiry2() == UINT64_MAX).  Per RFC 9002, ACK-only packets
     are not loss-detected, so the peer's retransmission timer drives recovery.
     1 second is a reasonable fallback for this rare edge case.
 */

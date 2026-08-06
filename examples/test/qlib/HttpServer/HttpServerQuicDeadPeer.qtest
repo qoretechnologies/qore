@@ -462,20 +462,25 @@ l50Xb2GWQesIt9k5jF5IOw==
         session open, and an idle close here surfaces to callers as
         @c HTTP3-IDLE-CLOSE "before any response data arrived".
 
-        @note This exercises the scenario but does NOT discriminate the
-        @c poll_timeout_ms fix in QC_Http3ClientPollOperationBase.qpp, and must
-        not be cited as proof of it.  Both peers here are Qore QUIC sessions,
-        so the SERVER's own keep-alive PINGs arrive at effective_idle/2 and
-        restart the client's idle timer regardless of whether the client is
-        driving its own timer.  Reproducing that defect needs a peer that never
-        PINGs (a real third-party endpoint does not), which no hermetic Qore
-        server can model.  What this case does guard is the reverse risk: that
-        the fix's added wake-ups break or busy-spin a healthy slow request.
+        In a DEBUG build, the test-only
+        @c QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE switch disables keep-alive
+        only on the Qore SERVER.  This models a third-party peer which does not
+        originate keep-alive traffic independently and makes the case
+        discriminate the client timer path: only client PINGs and the server's
+        replies to them can keep the connection alive.  In a non-DEBUG build
+        the switch is ignored, so the case remains useful as a slow-response
+        smoke test but does not discriminate which peer drove the keep-alive.
 
         The delay spans more than two idle windows.
     */
     testH3SlowSilentResponseNotIdleClosed() {
         checkDeadPeerSupported();
+
+        # Model a peer which ACKs client traffic but does not originate its own
+        # keep-alive traffic.
+        # This hook is intentionally server-only so the client remains under test.
+        setenv("QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE", "1");
+        on_exit unsetenv("QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE");
 
         # IdleTimeoutMs is 10s, so keep-alive fires at ~5s; stay silent well
         # past two full idle windows

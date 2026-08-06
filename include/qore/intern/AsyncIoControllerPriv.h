@@ -65,6 +65,15 @@ class SocketPollOperationBase;
 // in non-SCU builds.
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+//! Converts an absolute microsecond deadline to the millisecond timeout expected by the OS poll API
+/** @param deadline_us the absolute deadline in microseconds
+    @param now_us the current absolute time in microseconds
+    @return 0 if the deadline has elapsed; otherwise the positive interval rounded up to milliseconds and clamped to INT_MAX
+
+    Positive sub-millisecond intervals are rounded up so the controller sleeps instead of spinning.
+*/
+DLLLOCAL int qore_async_io_deadline_to_poll_timeout_ms(int64 deadline_us, int64 now_us);
+
 //! Lightweight async dispatcher for executing user callbacks and Qore abort() off the I/O thread
 /** Manages a small pool of Qore worker threads (with full interpreter stack) that
     execute user callbacks and Qore-language abort() calls on behalf of the I/O thread
