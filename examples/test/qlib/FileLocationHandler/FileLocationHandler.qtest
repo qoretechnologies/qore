@@ -262,6 +262,28 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         }
 
         doTests(sftp_loc);
+
+        # SFTP locations can also be read with non-blocking I/O
+        string random_content = get_random_string(512);
+        FileLocationHandler::writeFileToLocation(sftp_loc, random_content);
+        assertEq(random_content.toBinary(),
+            runPoller(FileLocationHandler::getIoPollerForLocation(sftp_loc)));
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    private auto runPoller(AbstractPollOperation op, timeout to = 30s) {
+        date start = now_us();
+        while (!op.goalReached()) {
+            if ((now_us() - start) > to) {
+                throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y", op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                break;
+            }
+            Socket::poll((pi,), 5s);
+        }
+        return op.getOutput();
     }
 
     private doTests(string url, *bool no_write_stream) {

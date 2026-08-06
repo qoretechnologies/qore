@@ -91,10 +91,26 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         @param opts read options
 
         @return an I/O poller to retrieve the file's data
+
+        @throw UNIMPLEMENTED the \c ssh2 module available does not support non-blocking SFTP reads;
+        @ref Qore::SSH2::SFTPClient::startPollGetFile() "SFTPClient::startPollGetFile()" was added in
+        \c ssh2 2.0
+
+        @note the remote path is used as given; unlike the blocking methods, the remote working
+        directory is not changed first, as that would require a blocking operation here
     */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", "retrieving SFTP file data with non-blocking operations is not yet supported";
+        string file;
+        object sftp = getSftpClient(scheme, location, opts, \file, False);
+        # the ssh2 module is loaded dynamically, so the module available at runtime may predate
+        # non-blocking SFTP support; report that rather than failing with METHOD-DOES-NOT-EXIST
+        if (!sftp.hasCallableMethod("startPollGetFile")) {
+            throw "UNIMPLEMENTED", sprintf("retrieving SFTP file data with non-blocking operations requires "
+                "SFTPClient::startPollGetFile(), which the ssh2 module loaded (version %y) does not provide; "
+                "ssh2 2.0+ is required", get_module_hash().ssh2.version);
+        }
+        return sftp.startPollGetFile(file);
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -232,7 +248,8 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
     /*
         @note This method can throw any exception related to making an SFTP connection
     */
-    private object getSftpClient(string scheme, string location, *hash<auto> opts, reference<string> file) {
+    private object getSftpClient(string scheme, string location, *hash<auto> opts, reference<string> file,
+            bool change_dir = True) {
         location = scheme + "://" + location;
 
         hash<UrlInfo> url_info = parse_url(location);
@@ -253,9 +270,15 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         if (opts.ssh2_private_key) {
             sftp.setKeys(opts.ssh2_private_key, opts.ssh2_public_key);
         }
-        string dir = dirname(url_info.path);
-        if (dir) {
-            sftp.chdir(dir);
+        if (change_dir) {
+            string dir = dirname(url_info.path);
+            if (dir) {
+                sftp.chdir(dir);
+            }
+        } else {
+            # no blocking operation may be performed for a non-blocking I/O poller, so the full
+            # remote path is used instead of changing the remote working directory
+            file = url_info.path;
         }
         return sftp;
     }

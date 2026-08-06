@@ -127,6 +127,11 @@ string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/outb
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
     - implemented support for non-blocking I/O from file handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
+    - \c "sftp://" locations (and \c conn:// locations resolving to them) support non-blocking reads with
+      @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
+      "getIoPollerForLocation()"; requires the \c ssh2 module with
+      \c SFTPClient::startPollGetFile() (ssh2 2.0+)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added support for \c conn:// and \c connection:// locations naming a connection and a path
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added @ref FileLocationHandler::AbstractFileLocationHandler::selfValidatesOptions()
