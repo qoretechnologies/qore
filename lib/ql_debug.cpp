@@ -62,6 +62,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -355,6 +356,26 @@ static void ut_asyncio_construction(UnitTestCounters& c) {
     UT_ASSERT(c, ctrl->getAutostop(), "autostop defaults to true");
     ctrl->deref(&xsink);
     UT_ASSERT(c, !xsink, "cleanup succeeds without exception");
+}
+
+static void ut_asyncio_poll_timeout_rounding(UnitTestCounters& c) {
+    UT_ASSERT_EQ(c, 0, qore_async_io_deadline_to_poll_timeout_ms(1000, 1000),
+        "an elapsed poll deadline is immediate");
+    UT_ASSERT_EQ(c, 0, qore_async_io_deadline_to_poll_timeout_ms(999, 1000),
+        "an expired poll deadline is immediate");
+    UT_ASSERT_EQ(c, 1, qore_async_io_deadline_to_poll_timeout_ms(1001, 1000),
+        "a positive sub-millisecond poll interval rounds up");
+    UT_ASSERT_EQ(c, 1, qore_async_io_deadline_to_poll_timeout_ms(2000, 1000),
+        "an exact millisecond poll interval is unchanged");
+    UT_ASSERT_EQ(c, 2, qore_async_io_deadline_to_poll_timeout_ms(2001, 1000),
+        "a fractional millisecond poll interval rounds up");
+    UT_ASSERT_EQ(c, std::numeric_limits<int>::max(),
+        qore_async_io_deadline_to_poll_timeout_ms(std::numeric_limits<int64>::max(), 0),
+        "a poll interval larger than the OS API range is clamped");
+    UT_ASSERT_EQ(c, std::numeric_limits<int>::max(),
+        qore_async_io_deadline_to_poll_timeout_ms(
+            std::numeric_limits<int64>::max(), std::numeric_limits<int64>::min()),
+        "the full signed input range is handled without overflow");
 }
 
 class ForeignThreadDebugProgram : public QoreDebugProgram {
@@ -3097,6 +3118,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
+    ut_asyncio_poll_timeout_rounding(c);
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
     ut_asyncio_get_info(c);

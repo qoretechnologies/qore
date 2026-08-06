@@ -46,6 +46,8 @@
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cstdarg>
+#include <cstdint>
+#include <limits>
 #include <memory>
 
 extern qore_classid_t CID_QUEUE;
@@ -78,6 +80,20 @@ static int qore_socket_poll_events_from_controller_events(int events) {
         rv |= SOCK_POLLERR;
     }
     return rv;
+}
+
+int qore_async_io_deadline_to_poll_timeout_ms(int64 deadline_us, int64 now_us) {
+    if (deadline_us <= now_us) {
+        return 0;
+    }
+
+    // Unsigned subtraction avoids signed overflow for the full int64 input
+    // range while preserving the mathematical difference after deadline > now.
+    uint64_t remaining_us = static_cast<uint64_t>(deadline_us) - static_cast<uint64_t>(now_us);
+    uint64_t timeout_ms = remaining_us / 1000 + (remaining_us % 1000 != 0);
+    return timeout_ms > static_cast<uint64_t>(std::numeric_limits<int>::max())
+        ? std::numeric_limits<int>::max()
+        : static_cast<int>(timeout_ms);
 }
 
 // --- Global singleton state ---
@@ -5038,16 +5054,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             timeout_ms = 0;
         } else if (poll_deadline_us > 0) {
             int64 now_us = get_epoch_us();
-            int64 remaining_us = poll_deadline_us - now_us;
-            if (remaining_us <= 0) {
-                timeout_ms = 0;
-            } else {
-                timeout_ms = (int)(remaining_us / 1000);
-                // When remaining_us < 1000, timeout_ms truncates to 0.
-                // This is correct: the deadline is sub-millisecond away,
-                // so poll immediately rather than oversleeping by up to 1ms.
-                // Not a busy loop — only triggers with a real pending deadline.
-            }
+            timeout_ms = qore_async_io_deadline_to_poll_timeout_ms(poll_deadline_us, now_us);
         }
 
         // Catch up t.processed_seq before blocking in poll.  Worker-thread

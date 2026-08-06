@@ -99,6 +99,18 @@ static ngtcp2_duration get_configured_quic_idle_timeout_ns() {
     return static_cast<ngtcp2_duration>(ms * NS_PER_MS);
 }
 
+#ifdef DEBUG
+// Test-only switch used by HttpServerQuicDeadPeer.qtest to model a third-party
+// server which does not originate keep-alive PINGs independently.  It still
+// ACKs client PINGs and may make those ACK packets ack-eliciting.  Read on every
+// update because the test scopes the environment change to one case in a shared
+// test process.
+static bool quic_server_keep_alive_disabled_for_test() {
+    const char* v = getenv("QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE");
+    return v && *v && strcmp(v, "0") != 0;
+}
+#endif
+
 static void quic_ngtcp2_log_printf(void* /*user_data*/, const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -1586,7 +1598,7 @@ ngtcp2_tstamp QuicSession::getExpiryLocked() const {
     if (!conn_) {
         return UINT64_MAX;
     }
-    return ngtcp2_conn_get_expiry(conn_);
+    return ngtcp2_conn_get_expiry2(conn_);
 }
 
 ngtcp2_tstamp QuicSession::getExpiry() const {
@@ -1614,8 +1626,22 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
             idle_closed_.store(true, std::memory_order_release);
             printd(5, "QuicSession::handleExpiry(): idle timeout (session %lld)\n",
                 (long long)session_id_);
-            ASYNC_IO_TRACE("QuicSession::handleExpiry IDLE_CLOSE session=%lld streams=%zu\n",
-                (long long)session_id_, streams_.size());
+#if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
+            ngtcp2_conn_info cinfo;
+            ngtcp2_conn_get_conn_info(conn_, &cinfo);
+            const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params2(conn_);
+            ASYNC_IO_TRACE("QuicSession::handleExpiry IDLE_CLOSE session=%lld streams=%zu "
+                "local_idle_ns=%llu peer_max_idle_ns=%llu pkt_sent=%llu pkt_recv=%llu "
+                "pkt_lost=%llu ping_recv=%llu bytes_in_flight=%llu\n",
+                static_cast<long long>(session_id_), streams_.size(),
+                static_cast<unsigned long long>(local_idle_timeout_ns_),
+                static_cast<unsigned long long>(rp ? rp->max_idle_timeout : 0),
+                static_cast<unsigned long long>(cinfo.pkt_sent),
+                static_cast<unsigned long long>(cinfo.pkt_recv),
+                static_cast<unsigned long long>(cinfo.pkt_lost),
+                static_cast<unsigned long long>(cinfo.ping_recv),
+                static_cast<unsigned long long>(cinfo.bytes_in_flight));
+#endif
             // An idle close is a real close: it must have the same observable
             // effects as an explicit teardown, or threads parked on this session
             // never wake.  idle_closed_ alone only feeds getCloseReason(); the
@@ -3620,7 +3646,16 @@ void QuicSession::updateKeepAliveLocked() {
     if (!conn_) {
         return;
     }
-    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn_);
+#ifdef DEBUG
+    if (is_server_ && quic_server_keep_alive_disabled_for_test()) {
+        ASYNC_IO_TRACE("QuicSession::updateKeepAlive TEST_SERVER_DISABLED session=%lld\n",
+            static_cast<long long>(session_id_));
+        ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+        keepalive_cooldown_until_ = 0;
+        return;
+    }
+#endif
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params2(conn_);
 
     // Compute the EFFECTIVE idle timeout per RFC 9000 §10.1.2:
     //   "Each endpoint advertises a max_idle_timeout, but the effective value
@@ -3697,7 +3732,7 @@ void QuicSession::armKeepAliveCooldownLocked() {
     if (!conn_) {
         return;
     }
-    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn_);
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params2(conn_);
     if (!rp || !rp->max_idle_timeout) {
         return;
     }
@@ -5108,7 +5143,7 @@ int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t l
 
     // Check remote support
     const ngtcp2_transport_params* remote_params =
-        ngtcp2_conn_get_remote_transport_params(conn_);
+        ngtcp2_conn_get_remote_transport_params2(conn_);
     if (!remote_params || remote_params->max_datagram_frame_size == 0) {
         xsink->raiseException("QUIC-DATAGRAM-NOT-SUPPORTED",
             "remote peer does not support QUIC datagrams (max_datagram_frame_size=0)");
@@ -5180,7 +5215,7 @@ size_t QuicSession::getMaxDatagramPayloadSize(int64_t stream_id) const {
     }
 
     const ngtcp2_transport_params* remote_params =
-        ngtcp2_conn_get_remote_transport_params(conn_);
+        ngtcp2_conn_get_remote_transport_params2(conn_);
     if (!remote_params || remote_params->max_datagram_frame_size == 0) {
         return 0;
     }
@@ -5206,6 +5241,6 @@ bool QuicSession::isDatagramSupported() const {
         return false;
     }
     const ngtcp2_transport_params* remote_params =
-        ngtcp2_conn_get_remote_transport_params(conn_);
+        ngtcp2_conn_get_remote_transport_params2(conn_);
     return remote_params && remote_params->max_datagram_frame_size > 0;
 }

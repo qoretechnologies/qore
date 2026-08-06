@@ -1070,15 +1070,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-# HTTP/2 support via nghttp2 (required, >= 1.68.1).
-# Prefer an adequate system install; fall back to building the latest stable
-# release from source via FetchContent (statically linked) when the system
-# package is missing or older than the minimum.
+# HTTP/2 support via nghttp2.  Require the latest stable release supported by
+# this source tree; fall back to building that release via FetchContent
+# (statically linked) when the system package is missing or older.
 #
-# Minimum 1.68.1: v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS
-# via assertion failure in nghttp2_session_terminate_session[2] when extension
-# frames (ALTSVC, PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
-# Encoded as NGHTTP2_VERSION_NUM 0x014401 (1.68.1).
+# This also incorporates the v1.68.1 fix for CVE-2026-27135
+# (GHSA-6933-cjhr-5qg6), a DoS via assertion failure in
+# nghttp2_session_terminate_session[2] when extension frames (ALTSVC,
+# PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
 #
 # IMPORTANT: consume the pkg-config IMPORTED_TARGET (PkgConfig::NGHTTP2_PKG),
 # NOT the bare ${NGHTTP2_PKG_LIBRARIES} name. The imported target carries the
@@ -1087,9 +1086,9 @@ endif()
 # previously produced "undefined reference to nghttp2_session_mem_send2"
 # (Http2Session.cpp selects the API by the compile-time NGHTTP2_VERSION_NUM,
 # so a header/library skew only surfaced at link time).
-set(NGHTTP2_VERSION "1.69.0")  # latest stable; FetchContent fallback pin
+set(NGHTTP2_VERSION "1.70.0")
 set(NGHTTP2_FOUND_SYSTEM FALSE)
-pkg_check_modules(NGHTTP2_PKG QUIET IMPORTED_TARGET libnghttp2>=1.68.1)
+pkg_check_modules(NGHTTP2_PKG QUIET IMPORTED_TARGET "libnghttp2>=${NGHTTP2_VERSION}")
 if (NGHTTP2_PKG_FOUND)
     message(STATUS "Found system nghttp2: ${NGHTTP2_PKG_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::NGHTTP2_PKG)
@@ -1103,14 +1102,13 @@ else()
     if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY
             AND EXISTS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h")
         file(STRINGS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h" _nghttp2_ver
-             REGEX "^#define NGHTTP2_VERSION_NUM 0x")
-        if (_nghttp2_ver MATCHES "0x([0-9a-fA-F]+)")
-            math(EXPR _nghttp2_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
-            # 0x014401 = 82945 decimal (v1.68.1)
-            if (_nghttp2_ver_num LESS 82945)
-                message(STATUS "system nghttp2 too old (need >= 1.68.1 for CVE-2026-27135); will build from source")
+             REGEX "^#define[ \t]+NGHTTP2_VERSION[ \t]+\"")
+        if (_nghttp2_ver MATCHES "\"([0-9]+\\.[0-9]+\\.[0-9]+)\"")
+            set(_nghttp2_system_version "${CMAKE_MATCH_1}")
+            if (_nghttp2_system_version VERSION_LESS NGHTTP2_VERSION)
+                message(STATUS "system nghttp2 too old (need >= ${NGHTTP2_VERSION}); will build from source")
             else()
-                message(STATUS "Found system nghttp2: ${NGHTTP2_LIBRARY}")
+                message(STATUS "Found system nghttp2 ${_nghttp2_system_version}: ${NGHTTP2_LIBRARY}")
                 list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
                 list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
                 set(NGHTTP2_FOUND_SYSTEM TRUE)
@@ -1158,7 +1156,7 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
 
     FetchContent_Declare(nghttp2
         URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
-        URL_HASH SHA256=1fb324b6ec2c56f6bde0658f4139ffd8209fa9e77ce98fd7a5f63af8d0e508ad
+        URL_HASH SHA256=e05cb1388eaca3830aded4ccf20044b6e1ac1a61411dcca11b0437c4285c8bc2
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         # Patch out the unconditional 'check' target to avoid duplicate-target
         # errors when ngtcp2/nghttp3 are also fetched.
@@ -1228,23 +1226,33 @@ endif()
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
-set(NGTCP2_VERSION "1.23.0")
-set(NGHTTP3_VERSION "1.16.0")
+set(NGTCP2_VERSION "1.25.0")
+set(NGHTTP3_VERSION "1.18.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
 # Consume the pkg-config IMPORTED_TARGETs (PkgConfig::*), NOT the bare
 # ${*_PKG_LIBRARIES} names: the imported targets carry full resolved library
 # paths plus include dirs, so the linker cannot silently pick a different/
 # older libngtcp2/libnghttp3 earlier in its default search path.
-pkg_check_modules(NGTCP2_PKG QUIET IMPORTED_TARGET libngtcp2)
-pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET IMPORTED_TARGET libngtcp2_crypto_ossl)
-pkg_check_modules(NGHTTP3_PKG QUIET IMPORTED_TARGET libnghttp3>=1.14.0)
-if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND AND NGHTTP3_PKG_FOUND)
+pkg_check_modules(NGTCP2_PKG QUIET IMPORTED_TARGET "libngtcp2>=${NGTCP2_VERSION}")
+pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET IMPORTED_TARGET
+    "libngtcp2_crypto_ossl>=${NGTCP2_VERSION}")
+pkg_check_modules(NGHTTP3_PKG QUIET IMPORTED_TARGET "libnghttp3>=${NGHTTP3_VERSION}")
+set(_ngtcp2_pkg_versions_match TRUE)
+if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND
+        AND NOT NGTCP2_PKG_VERSION STREQUAL NGTCP2_CRYPTO_OSSL_PKG_VERSION)
+    set(_ngtcp2_pkg_versions_match FALSE)
+endif()
+if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND AND NGHTTP3_PKG_FOUND
+        AND _ngtcp2_pkg_versions_match)
     message(STATUS "Found system ngtcp2: ${NGTCP2_PKG_VERSION}")
     message(STATUS "Found system ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_PKG_VERSION}")
     message(STATUS "Found system nghttp3: ${NGHTTP3_PKG_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::NGTCP2_PKG PkgConfig::NGTCP2_CRYPTO_OSSL_PKG PkgConfig::NGHTTP3_PKG)
     set(QUIC_FOUND_SYSTEM TRUE)
+elseif (NOT _ngtcp2_pkg_versions_match)
+    message(STATUS "system ngtcp2 core/crypto version mismatch "
+        "(${NGTCP2_PKG_VERSION} vs ${NGTCP2_CRYPTO_OSSL_PKG_VERSION}); will build from source")
 else()
     # Try to find ngtcp2/nghttp3 without pkg-config
     find_path(NGTCP2_INCLUDE_DIR ngtcp2/ngtcp2.h)
@@ -1253,24 +1261,41 @@ else()
     find_path(NGHTTP3_INCLUDE_DIR nghttp3/nghttp3.h)
     find_library(NGHTTP3_LIBRARY NAMES nghttp3)
     if (NGTCP2_INCLUDE_DIR AND NGTCP2_LIBRARY AND NGTCP2_CRYPTO_OSSL_LIBRARY AND NGHTTP3_INCLUDE_DIR AND NGHTTP3_LIBRARY
+            AND EXISTS "${NGTCP2_INCLUDE_DIR}/ngtcp2/version.h"
             AND EXISTS "${NGHTTP3_INCLUDE_DIR}/nghttp3/version.h")
-        # Verify nghttp3 >= 1.14.0 (0x010e00): v1.13.x has a bug where the
-        # client-side SETTINGS decoder skips enable_connect_protocol
+        # Apply the same version gates when pkg-config is unavailable.  The
+        # ngtcp2 crypto backend is built and released with ngtcp2 and must be
+        # kept at the same version.
+        file(STRINGS "${NGTCP2_INCLUDE_DIR}/ngtcp2/version.h" _ngtcp2_ver
+             REGEX "^#define[ \t]+NGTCP2_VERSION[ \t]+\"")
         file(STRINGS "${NGHTTP3_INCLUDE_DIR}/nghttp3/version.h" _nghttp3_ver
-             REGEX "^#define NGHTTP3_VERSION_NUM 0x")
-        if (_nghttp3_ver MATCHES "0x([0-9a-fA-F]+)")
-            math(EXPR _nghttp3_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
-            # 0x010e00 = 69120 decimal (v1.14.0)
-            if (_nghttp3_ver_num LESS 69120)
-                message(STATUS "nghttp3 version too old (need >= 1.14.0); will build from source")
-            else()
-                message(STATUS "Found ngtcp2: ${NGTCP2_LIBRARY}")
-                message(STATUS "Found ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_LIBRARY}")
-                message(STATUS "Found nghttp3: ${NGHTTP3_LIBRARY}")
-                list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_INCLUDE_DIR} ${NGHTTP3_INCLUDE_DIR})
-                list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_LIBRARY} ${NGTCP2_CRYPTO_OSSL_LIBRARY} ${NGHTTP3_LIBRARY})
-                set(QUIC_FOUND_SYSTEM TRUE)
+             REGEX "^#define[ \t]+NGHTTP3_VERSION[ \t]+\"")
+        set(_quic_versions_current TRUE)
+        if (_ngtcp2_ver MATCHES "\"([0-9]+\\.[0-9]+\\.[0-9]+)\"")
+            set(_ngtcp2_system_version "${CMAKE_MATCH_1}")
+            if (_ngtcp2_system_version VERSION_LESS NGTCP2_VERSION)
+                message(STATUS "ngtcp2 version too old (need >= ${NGTCP2_VERSION}); will build from source")
+                set(_quic_versions_current FALSE)
             endif()
+        else()
+            set(_quic_versions_current FALSE)
+        endif()
+        if (_nghttp3_ver MATCHES "\"([0-9]+\\.[0-9]+\\.[0-9]+)\"")
+            set(_nghttp3_system_version "${CMAKE_MATCH_1}")
+            if (_nghttp3_system_version VERSION_LESS NGHTTP3_VERSION)
+                message(STATUS "nghttp3 version too old (need >= ${NGHTTP3_VERSION}); will build from source")
+                set(_quic_versions_current FALSE)
+            endif()
+        else()
+            set(_quic_versions_current FALSE)
+        endif()
+        if (_quic_versions_current)
+            message(STATUS "Found ngtcp2 ${_ngtcp2_system_version}: ${NGTCP2_LIBRARY}")
+            message(STATUS "Found ngtcp2_crypto_ossl ${_ngtcp2_system_version}: ${NGTCP2_CRYPTO_OSSL_LIBRARY}")
+            message(STATUS "Found nghttp3 ${_nghttp3_system_version}: ${NGHTTP3_LIBRARY}")
+            list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_INCLUDE_DIR} ${NGHTTP3_INCLUDE_DIR})
+            list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_LIBRARY} ${NGTCP2_CRYPTO_OSSL_LIBRARY} ${NGHTTP3_LIBRARY})
+            set(QUIC_FOUND_SYSTEM TRUE)
         endif()
     endif()
 endif()
@@ -1308,7 +1333,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=776f59a99905c9a348846807b2e5ac9bb3485fc0f8c0250ba803018d5238a16e
+        URL_HASH SHA256=aad782c23d3f01bd4bb52c8bac7a553b631ef8115fd1612703df6183449fef19
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
@@ -1320,7 +1345,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
-        URL_HASH SHA256=59d5b4211e96970f2d3d5e6876f73dce03414800ba04aa56835b132fce8de730
+        URL_HASH SHA256=2a34d2484ba17847a5d11965704e9dd0fac4c6d8efc75ffe1ec7de66d8c6b6fb
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
