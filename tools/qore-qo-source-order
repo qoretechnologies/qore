@@ -2638,16 +2638,29 @@ class SourceOrderEngine {
         return external;
     }
 
+    #! The group context's modification time, or NOTHING when it does not exist.
+    /** The context is a configure-time artifact rewritten only when its content
+        changes, so its modification time is the group's build-input generation.
+        It is deliberately not part of the source token -- it carries no source
+        content -- and qcc fingerprints it by content rather than recording it as
+        a depfile input, so neither the token comparison nor externalDepfileInputs()
+        can observe a transition.  This is the one comparison that does.
+    */
+    private *date contextGenerationTime(string context_path) {
+        return hstat(context_path).mtime;
+    }
+
     #! True when the published generation of \a component matches its sources.
     /** One token comparison validates the component's entire transitive source
         closure, because the token is a Merkle digest over that closure. The
-        remaining checks confirm the publication is complete and that no
-        external build input has moved since it was published.
+        remaining checks confirm the publication is complete, that the group
+        context has not moved since publication, and that no external build input
+        has moved since it was published.
     */
     private bool generationCurrentImpl(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
             *string bootstrap_stamp, reference<*hash<string, bool>> covered,
-            bool check_external_dependencies) {
+            bool check_external_dependencies, *date context_time) {
         try {
             *hash<auto> record = readGenerationRecord(
                 generationRecordPath(context_info, context_path, components, component));
@@ -2676,6 +2689,17 @@ class SourceOrderEngine {
                 if (exists bootstrap_info && bootstrap_info.mtime > stamp_time) {
                     return False;
                 }
+                # A context newer than the publication is a generation transition
+                # that the whole group has to cross together.  Comparing it here
+                # keeps the decision at full timestamp resolution and in one
+                # authority; the bootstrap helper used to ask the shell for it
+                # with "-nt", which busybox ash answers from st_mtime alone, so a
+                # transition published inside the same second as the tree it
+                # supersedes was invisible on Alpine and Make ran the standalone
+                # rule once per source.
+                if (exists context_time && context_time > stamp_time) {
+                    return False;
+                }
                 if (check_external_dependencies) {
                     foreach string dependency in (externalDepfileInputs(output,
                             context_info, \covered)) {
@@ -2697,7 +2721,7 @@ class SourceOrderEngine {
             *string bootstrap_stamp) {
         *hash<string, bool> covered;
         return generationCurrentImpl(context_info, context_path, components, component,
-            bootstrap_stamp, \covered, True);
+            bootstrap_stamp, \covered, True, contextGenerationTime(context_path));
     }
 
     #! True when every component is current, sharing the group-wide covered-path index.
@@ -2708,9 +2732,10 @@ class SourceOrderEngine {
             string context_path, hash<SourceOrderComponents> components,
             *string bootstrap_stamp) {
         *hash<string, bool> covered;
+        *date context_time = contextGenerationTime(context_path);
         for (int component = 0; component < components.members.size(); ++component) {
             if (!generationCurrentImpl(context_info, context_path, components,
-                    component, bootstrap_stamp, \covered, True)) {
+                    component, bootstrap_stamp, \covered, True, context_time)) {
                 return False;
             }
         }
@@ -2730,11 +2755,12 @@ class SourceOrderEngine {
             string context_path, hash<SourceOrderComponents> components,
             *string bootstrap_stamp, bool check_external_dependencies) {
         *hash<string, bool> covered;
+        *date context_time = contextGenerationTime(context_path);
         list<int> stale = ();
         foreach int component in (components.topological_order) {
             if (!generationCurrentImpl(context_info, context_path, components,
                     component, bootstrap_stamp, \covered,
-                    check_external_dependencies)) {
+                    check_external_dependencies, context_time)) {
                 push stale, component;
             }
         }

@@ -146,24 +146,25 @@ touch_member_stamps() {
 # token comparison covers a component's entire transitive source closure.  A
 # follower that waited on the lock re-evaluates it here, so a stale marker can
 # never hide a crashed or incomplete bootstrap.
+#
+# The currency helper also owns the group-context generation transition, which a
+# `[ "$context" -nt "$bootstrap_stamp" ]` test used to decide here.  Do not move
+# that comparison back into the shell: POSIX only requires test(1) to compare
+# st_mtime, so busybox ash -- /bin/sh on Alpine -- compares whole seconds, while
+# dash and bash compare the nanosecond fields.  Both timestamps are produced by
+# this build and are usually less than a second apart, so on busybox the
+# transition was invisible whenever the machine was fast enough to publish both
+# inside one second, and Make then ran the standalone qcc rule once for every
+# source in the group.  The helper compares the same timestamps at full
+# resolution on every platform.
 current=false
-context_changed=false
 if [ "$force_batch" != 1 ] || [ "$lock_waited" = true ]; then
-    if [ -f "$bootstrap_stamp" ] && [ "$context" -nt "$bootstrap_stamp" ]; then
-        # The context is written only when an effective qcc input changes.  Its
-        # custom command is shared by every member target, so allowing an existing
-        # generation marker to hide this transition makes Make start one standalone
-        # qcc process per source.  Large groups must cross a context generation with
-        # one shared parse instead.
-        context_changed=true
-    fi
-    if [ "$context_changed" = false ] && [ -f "$bootstrap_stamp" ]; then
+    if [ -f "$bootstrap_stamp" ]; then
         if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
                 "$context"; then
             current=true
         fi
-    elif [ "$context_changed" = false ] \
-            && run_source_order --scc-current-all "$context"; then
+    elif run_source_order --scc-current-all "$context"; then
         current=true
     fi
 fi
