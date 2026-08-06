@@ -954,6 +954,14 @@ AwsRestClient rest({
         # get AWS date value
         string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
         hdr."X-Amz-Date" = aws_date;
+        # S3 requires the payload hash to be sent in a header as well as included in the canonical request, and
+        # rejects any request without it: "InvalidRequest: Missing required header for this request:
+        # x-amz-content-sha256".  It is set here, before the canonical headers are built, so that it is signed
+        # as well as sent; setting it afterwards would produce a signature that does not cover it and AWS would
+        # reject the request as a signature mismatch instead
+        if (aws_s3) {
+            hdr."X-Amz-Content-Sha256" = digest(QoreDigest, body ?? "").toHex();
+        }
         string csig = getCanonicalSignature(http_method, path, hdr, body, \signed_headers);
 
         string msg = AwsSignatureAlgorithm + "\n"
@@ -1371,6 +1379,13 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
         hdr."x-amz-date" = aws_date;
 
+        # S3 requires the payload hash in a header as well as in the canonical request; see the note in
+        # AwsRestClient::getRequestString().  It must be set before the canonical headers are built so that it
+        # is signed as well as sent
+        if (aws_s3) {
+            hdr."x-amz-content-sha256" = digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
+        }
+
         # Build canonical signature
         string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
 
@@ -1635,7 +1650,13 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
         };
 
         #! The URL used when no region is set
-        const DefaultUrl = "https://s3.amazonaws.com";
+        /** @note carries the \c "s3" connection scheme rather than \c "https".  A connection stores this URL and
+            is rebuilt from it, and the scheme is what identifies the connection class; storing \c "https" would
+            make every reload resolve to the generic HTTP connection instead, which then rejects every AWS
+            option as unknown.  @ref ConnectionProvider::AbstractConnection::getRealUrl() "getRealUrl()" maps it
+            back to \c "https" for the client through @ref ConnectionScheme's \c base_scheme_map
+        */
+        const DefaultUrl = "s3://s3.amazonaws.com";
     }
 
     #! creates the AwsS3RestConnection object
@@ -1691,7 +1712,7 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
     */
     static string getRegionUrl(*string region) {
         return region.val()
-            ? sprintf("https://s3.%s.amazonaws.com", region)
+            ? sprintf("s3://s3.%s.amazonaws.com", region)
             : DefaultUrl;
     }
 
@@ -1722,11 +1743,15 @@ public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
                 "Use an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from "
                 "the region and needs no URL at all",
             "cls": Class::forName("AwsS3CompatibleRestConnection"),
+            # both a TLS and a non-TLS scheme, since an S3-compatible service is often reached over plain HTTP
+            # on an internal network; the connection scheme is what a stored connection is rebuilt from
             "schemes": {
                 "s3compatible": True,
+                "s3compatibles": True,
             },
             "base_scheme_map": {
-                "https": "s3compatible",
+                "http": "s3compatible",
+                "https": "s3compatibles",
             },
             "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
                 "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
@@ -1763,7 +1788,8 @@ public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
     */
     constructor(string name, string description, string url, hash<auto> attributes = {},
             hash<auto> options = {})
-            : AwsS3RestConnectionBase(name, description, url, attributes, options) {
+            : AwsS3RestConnectionBase(name, description,
+                AwsS3CompatibleRestConnection::getStorageUrl(url), attributes, options) {
     }
 
     #! creates the AwsS3CompatibleRestConnection object
@@ -1772,12 +1798,35 @@ public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
-    constructor(hash<auto> config, *hash<auto> attr) : AwsS3RestConnectionBase(config, attr) {
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsS3RestConnectionBase(config + (config.url.val()
+                ? {"url": AwsS3CompatibleRestConnection::getStorageUrl(config.url)}
+                : NOTHING), attr) {
     }
 
     #! returns \c "s3compatible"
     string getType() {
         return "s3compatible";
+    }
+
+    #! Returns the URL to store for the given URL, carrying this connection's own scheme
+    /** A connection is rebuilt from the URL it stores, and the URL's scheme is what identifies the connection
+        class.  A URL stored as \c "https://..." would therefore be rebuilt as the generic HTTP connection,
+        which then rejects every AWS option as unknown; an \c http(s) URL supplied by the caller is mapped to
+        the matching connection scheme here so that it survives a reload.
+
+        @param url the URL supplied by the caller
+
+        @return the URL with this connection's scheme, preserving whether TLS is used
+    */
+    static string getStorageUrl(string url) {
+        if (url =~ /^https:\/\//) {
+            return regex_subst(url, "^https", "s3compatibles");
+        }
+        if (url =~ /^http:\/\//) {
+            return regex_subst(url, "^http", "s3compatible");
+        }
+        return url;
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

@@ -164,7 +164,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Parses an S3 XML response body into a hash
-    /** @param body the response body
+    /** @param body the response body; either the raw document or a hash the REST client already deserialized
 
         @return the parsed document, or @ref nothing if the body is empty
 
@@ -173,10 +173,19 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         Every code path in this module that has to read an S3 response body goes through this method, so that the
         missing-module case produces one clear, actionable error rather than an obscure failure at the point of
         use.
+
+        @note The REST client deserializes a response according to its content type, so an S3 response arrives
+        already parsed whenever the \c xml module is present - which is exactly when this module works at all.
+        The raw form is still handled, since a response can also arrive as a string or as bytes depending on the
+        content type the server sets.
     */
-    static *hash<auto> parseXml(*data body) {
+    static *hash<auto> parseXml(auto body) {
         if (!body.val()) {
             return;
+        }
+        if (body.typeCode() == NT_HASH) {
+            # already deserialized by the REST client
+            return body;
         }
 %ifdef NoXml
         throw "S3-XML-UNAVAILABLE", "the Amazon S3 API returns XML, so this module requires the 'xml' module, "

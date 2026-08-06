@@ -44,6 +44,14 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         #! the action the framework injects into every app served by a REST connection
         const FrameworkAction = "make-api-call";
 
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 22;
+
         #! connection options sufficient to construct a connection without contacting Google
         const TestConnOptions = {
             "oauth2_client_id": "test-id",
@@ -54,10 +62,11 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         };
     }
 
-    constructor() : Test("GoogleDriveDataProvider Test", "1.0") {
+    constructor() : Test("GoogleDriveDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("connection", \connectionTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
+        addTestCase("live connection", \liveConnectionTest());
 
         set_return_value(main());
     }
@@ -155,5 +164,45 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             "the write data option exists on the write action");
         # write_path_is_parent requires the file format, since no other format carries a filename
         assertEq(DPFW_FILE, fapi.write_data_format);
+    }
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
+    }
+
+    #! Returns the connection named on the command line, or skips the test
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn ?? ENV.GOOGLE_DRIVE_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set GOOGLE_DRIVE_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() != "gdrive") {
+            throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"gdrive\"", conn_name,
+                conn.getType());
+        }
+        return conn;
+    }
+
+    #! Exercises the connection against the live service
+    liveConnectionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+
+        hash<auto> ping = conn.ping(True);
+        assertEq(True, ping.ok, sprintf("ping succeeded: %s", ping.info));
+
+        AbstractDataProvider dp = conn.getDataProvider().getChildProvider("list-files");
+        hash<auto> resp = dp.doRequest({});
+        assertEq(NT_LIST, resp.files.typeCode(), "list-files returned a list");
+        if (m_options.verbose > 0) {
+            printf("list-files: %d files\n", resp.files.size());
+            foreach auto e in (resp.files) {
+                printf("  %y\n", e.name);
+            }
+        }
     }
 }

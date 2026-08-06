@@ -43,6 +43,14 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         #! the action the framework injects into every app served by a REST connection
         const FrameworkAction = "make-api-call";
 
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Width of the option column in the usage text
+        const OptionColumn = 22;
+
         #! connection options sufficient to construct a connection without contacting AWS
         const TestConnOptions = {
             "aws_keyid": "AKIAIOSFODNN7EXAMPLE",
@@ -51,12 +59,13 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         };
     }
 
-    constructor() : Test("AwsS3DataProvider Test", "1.0") {
+    constructor() : Test("AwsS3DataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("connection construction", \connectionConstructionTest());
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("S3-compatible connection", \compatibleConnectionTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
+        addTestCase("live connection", \liveConnectionTest());
 
         set_return_value(main());
     }
@@ -77,17 +86,21 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq("s3", conn.getType());
         assertEq(App, conn.getAppName());
         assertEq(True, conn.hasDataProvider());
-        assertEq("https://s3.eu-central-1.amazonaws.com", conn.getSafeUrl(),
+        # the stored URL carries the "s3" connection scheme: it is what the connection is rebuilt from, and a
+        # URL stored as "https://" would be rebuilt as the generic HTTP connection instead
+        assertEq("s3://s3.eu-central-1.amazonaws.com", conn.getSafeUrl(),
             "the endpoint is derived from the region");
+        assertEq("https://s3.eu-central-1.amazonaws.com", conn.real_url,
+            "the client still targets the real https endpoint");
 
         # the other constructor form ignores the URL it is given for the same reason
         AwsS3RestConnection conn2("s3-test-2", "test connection", "https://wrong.example.com", {},
             TestConnOptions);
-        assertEq("https://s3.eu-central-1.amazonaws.com", conn2.getSafeUrl());
+        assertEq("s3://s3.eu-central-1.amazonaws.com", conn2.getSafeUrl());
 
         # the regional endpoint is used rather than the global one, which answers a request for a bucket in
         # another region with a redirect that has to be re-signed
-        assertEq("https://s3.us-east-1.amazonaws.com", AwsS3RestConnection::getRegionUrl("us-east-1"));
+        assertEq("s3://s3.us-east-1.amazonaws.com", AwsS3RestConnection::getRegionUrl("us-east-1"));
         assertEq(AwsS3RestConnection::DefaultUrl, AwsS3RestConnection::getRegionUrl(NOTHING));
 
         # neither option may appear in the connection's own options, since neither is a user-settable option
@@ -164,7 +177,13 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             "aws_secret": "minioadmin",
         });
         assertEq("s3compatible", conn.getType());
-        assertRegex("minio\\.example\\.com", conn.getSafeUrl(), "the URL given is used as-is");
+        # an http(s) URL is stored under this connection's own scheme so that it survives a reload, while
+        # still reaching the same host over the same protocol
+        assertEq("s3compatibles://minio.example.com:9000", conn.getSafeUrl());
+        assertEq("https://minio.example.com:9000", conn.real_url);
+        assertEq("s3compatible://minio.example.com:9000",
+            AwsS3CompatibleRestConnection::getStorageUrl("http://minio.example.com:9000"),
+            "a plain-HTTP service keeps plain HTTP");
         # it serves the same application and the same actions as an Amazon S3 connection
         assertEq(App, conn.getAppName());
         assertEq(True, conn.hasDataProvider());
@@ -239,6 +258,46 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             if (fapi.write_container_option.val()) {
                 assertTrue(exists write.options{fapi.write_container_option},
                     "the write container option exists on the write action");
+            }
+        }
+    }
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
+    }
+
+    #! Returns the connection named on the command line, or skips the test
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn ?? ENV.AWS_S3_CONNECTION;
+        if (!conn_name.val()) {
+            testSkip("no connection specified; use -c,--connection=ARG or set AWS_S3_CONNECTION");
+            return;
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        if (conn.getType() != "s3") {
+            throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"s3\"", conn_name,
+                conn.getType());
+        }
+        return conn;
+    }
+
+    #! Exercises the connection against the live service
+    liveConnectionTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+
+        hash<auto> ping = conn.ping(True);
+        assertEq(True, ping.ok, sprintf("ping succeeded: %s", ping.info));
+
+        AbstractDataProvider dp = conn.getDataProvider().getChildProvider("list-buckets");
+        hash<auto> resp = dp.doRequest({});
+        assertEq(NT_LIST, resp.buckets.typeCode(), "list-buckets returned a list");
+        if (m_options.verbose > 0) {
+            printf("list-buckets: %d buckets\n", resp.buckets.size());
+            foreach auto e in (resp.buckets) {
+                printf("  %y\n", e.name);
             }
         }
     }
