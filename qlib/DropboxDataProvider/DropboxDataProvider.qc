@@ -62,6 +62,8 @@ public class DropboxDataProvider inherits DropboxDataProviderBase {
             "create-shared-link": Class::forName("DropboxDataProvider::DropboxCreateSharedLinkDataProvider"),
             "list-shared-links": Class::forName("DropboxDataProvider::DropboxListSharedLinksDataProvider"),
             "revoke-shared-link": Class::forName("DropboxDataProvider::DropboxRevokeSharedLinkDataProvider"),
+            "get-account-info": Class::forName("DropboxDataProvider::DropboxGetAccountInfoDataProvider"),
+            "get-space-usage": Class::forName("DropboxDataProvider::DropboxGetSpaceUsageDataProvider"),
         };
     }
 

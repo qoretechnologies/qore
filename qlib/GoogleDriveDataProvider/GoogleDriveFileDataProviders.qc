@@ -66,6 +66,7 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
         if (req.page_token.val()) {
             path += "&pageToken=" + encode_url(req.page_token, True);
         }
+        path += GoogleDriveListFilesDataProvider::getSharedDriveQuery(req);
 
         hash<auto> resp = doRestCommand("GET", path);
         list<auto> files = ();
@@ -76,6 +77,43 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
             "files": files,
             "next_page_token": resp.body.nextPageToken,
         };
+    }
+
+    #! Builds the shared-drive query arguments for a list request
+    /** \c supportsAllDrives alone only lets an operation address shared-drive content that it was given the ID
+        of; a *listing* additionally needs \c includeItemsFromAllDrives before shared-drive content appears in
+        the results at all, and \c corpora to say which collection to search.
+
+        Drive rejects \c corpora=drive without a \c driveId, so naming a shared drive selects that collection
+        automatically unless the caller asked for a different one.
+
+        @param req the request
+
+        @return the query arguments, with a leading \c "&", or an empty string when none apply
+    */
+    static string getSharedDriveQuery(hash<auto> req) {
+        string rv = "";
+        # NOTE: "supportsAllDrives" is added centrally by
+        # GoogleDriveDataProviderBase::addSharedDriveSupport(); setting it here as well would produce it twice
+        if (req.include_shared_drives ?? True) {
+            rv += "&includeItemsFromAllDrives=true";
+        }
+        if (req.drive_id.val()) {
+            rv += "&driveId=" + encode_url(req.drive_id, True);
+        }
+        *string corpora = req.corpora;
+        if (!corpora.val() && req.drive_id.val()) {
+            corpora = "drive";
+        }
+        if (corpora.val()) {
+            if (corpora == "drive" && !req.drive_id.val()) {
+                throw "GOOGLE-DRIVE-ERROR", "'corpora' is set to 'drive', which searches one shared drive, but "
+                    "'drive_id' names no shared drive to search; either set 'drive_id' or use 'allDrives' to "
+                    "search every shared drive the user can reach";
+            }
+            rv += "&corpora=" + encode_url(corpora, True);
+        }
+        return rv;
     }
 
     #! Builds the Drive query expression for a list request

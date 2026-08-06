@@ -423,6 +423,40 @@ module DropboxDataProvider {
                 },
             ),
         });
+
+        # --- Account actions ---
+
+        # NOTE: neither of these actions takes any options: the endpoints they call accept no arguments, and
+        # both describe the account the connection itself authenticates as
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-account-info",
+            "action": "get-account-info",
+            "display_name": "Get Account Info",
+            "short_desc": "Get information about the connected Dropbox account",
+            "desc": "Returns information about the Dropbox account the connection authenticates as: who it "
+                "belongs to, the email address it is registered under, and what kind of account it is.\n\n"
+                "The account type matters for several other actions: a shared link cannot be "
+                "password-protected on a `basic` account, and `team_only` link visibility needs a `business` "
+                "account.",
+            "action_code": DPAT_API,
+            "groups": ("Account",),
+            "output_type": DropboxAccountInfoDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-space-usage",
+            "action": "get-space-usage",
+            "display_name": "Get Space Usage",
+            "short_desc": "Get how much of the account's storage is in use",
+            "desc": "Returns how much of the account's storage is in use, and how much is available.\n\n"
+                "Useful before a large upload: Dropbox rejects an upload that would exceed the quota, and "
+                "reports it as an ordinary write failure rather than as a capacity problem.",
+            "action_code": DPAT_API,
+            "groups": ("Account",),
+            "output_type": DropboxSpaceUsageDataType,
+        });
     };
 }
 

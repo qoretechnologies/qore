@@ -141,6 +141,51 @@ public class GoogleDriveMoveFileDataProvider inherits GoogleDriveDataProviderBas
     }
 }
 
+#! Renames a file, keeping its ID, location, and sharing settings
+/** Drive addresses a file by an immutable ID rather than by path, so a rename is an ordinary metadata update and
+    leaves every link to the file working.  Neither \c move-file nor \c replace-file can change a name -- the
+    first only changes the file's parents and the second only its content -- so without this action there is no
+    way to rename a file at all.
+*/
+public class GoogleDriveRenameFileDataProvider inherits GoogleDriveDataProviderBase {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "rename-file",
+            "type": "GoogleDriveRenameFileDataProvider",
+            "constructor_options": ConstructorOptions,
+            "supports_request": True,
+        };
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
+        const RequestType = GoogleDriveRenameFileRequestDataType;
+        const ResponseType = GoogleDriveFileDataType;
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : GoogleDriveDataProviderBase(rest) {}
+    constructor(*hash<auto> options) : GoogleDriveDataProviderBase(options) {}
+
+    string getName() { return ProviderInfo.name; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # NOTE: declared "hash<auto!>"; a "hash<auto>" literal with a single string value narrows to
+        # hash<string, string> at runtime, and adding a value of any other type then throws RUNTIME-TYPE-ERROR
+        hash<auto!> body = {
+            "name": req.name,
+        };
+        if (exists req.description) {
+            body.description = req.description;
+        }
+        hash<auto> resp = doRestCommand("PATCH", sprintf("/drive/v3/files/%s?fields=%s",
+            encode_url(req.file_id, True),
+            encode_url(GoogleDriveDataProviderBase::getFileFields(), True)), body);
+        return GoogleDriveDataProviderBase::getFileInfo(resp.body);
+    }
+}
+
 #! Deletes a file, or moves it to the trash
 public class GoogleDriveDeleteFileDataProvider inherits GoogleDriveDataProviderBase {
     public {

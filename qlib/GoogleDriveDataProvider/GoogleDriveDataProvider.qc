@@ -55,6 +55,7 @@ public class GoogleDriveDataProvider inherits GoogleDriveDataProviderBase {
             "create-folder": Class::forName("GoogleDriveDataProvider::GoogleDriveCreateFolderDataProvider"),
             "copy-file": Class::forName("GoogleDriveDataProvider::GoogleDriveCopyFileDataProvider"),
             "move-file": Class::forName("GoogleDriveDataProvider::GoogleDriveMoveFileDataProvider"),
+            "rename-file": Class::forName("GoogleDriveDataProvider::GoogleDriveRenameFileDataProvider"),
             "delete-file": Class::forName("GoogleDriveDataProvider::GoogleDriveDeleteFileDataProvider"),
             "share-file": Class::forName("GoogleDriveDataProvider::GoogleDriveShareFileDataProvider"),
         };

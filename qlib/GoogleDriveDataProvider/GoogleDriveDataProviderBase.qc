@@ -118,6 +118,7 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         return {
             "folders": True,
             "files": True,
+            "shared_drives": True,
         };
     }
 
@@ -126,7 +127,36 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         switch (type) {
             case "folders": return getReferenceItems(True);
             case "files": return getReferenceItems(False);
+            case "shared_drives": return getSharedDriveReferenceData();
         }
+    }
+
+    #! Returns the shared drives the user can reach as reference values
+    /** @return the reference values, or an empty list if they cannot be retrieved
+
+        @note Errors are logged and swallowed: reference data populates a UI picker, and a personal account -
+        which has no shared drives at all - must degrade to an empty list rather than break the form
+    */
+    private *list<hash<AllowedValueInfo>> getSharedDriveReferenceData() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> resp = doRestCommand("GET", sprintf("/drive/v3/drives?pageSize=%d&fields=%s", MaxDrivePageSize,
+                encode_url("drives(id,name)", True)));
+            foreach hash<auto> d in (resp.body.drives) {
+                if (!d.id.val()) {
+                    continue;
+                }
+                rv += <AllowedValueInfo>{
+                    "display_name": d.name ?? d.id,
+                    "short_desc": d.name ?? d.id,
+                    "desc": d.name ?? d.id,
+                    "value": d.id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getSharedDriveReferenceData(): %s: %s", ex.err, ex.desc);
+        }
+        return rv;
     }
 
     #! Returns reference data for files or folders
@@ -171,10 +201,52 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         response carried them
     */
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
+        return doRestCommandIntern(method, path, body, hdr, False);
+    }
+
+    #! Makes a REST call with a body that must reach the server exactly as given; retries transient I/O errors
+    /** The REST client serializes a request body into its configured data format, so a \c binary body is
+        base64-encoded into a JSON or YAML document and a \c Content-Type set by the caller has \c ";charset="
+        appended to it.  For a Drive upload that is fatal twice over: the server receives a quoted base64 string
+        rather than the bytes, and the \c multipart/related boundary parameter is corrupted -- which is exactly
+        what Drive reports as <tt>Invalid multipart request with 0 mime parts</tt>.
+
+        This sends the body through unchanged and leaves \c Content-Type to the caller.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the already-serialized request body
+        @param hdr the request headers; the caller sets \c Content-Type
+
+        @return the response
+
+        @throw GOOGLE-DRIVE-ERROR the request failed; the Drive error reason and message are included when the
+        response carried them
+    */
+    private hash<auto> doRawRestCommand(string method, string path, *data body, *hash<auto> hdr) {
+        return doRestCommandIntern(method, path, body, hdr, True);
+    }
+
+    #! Common request path for @ref doRestCommand() and @ref doRawRestCommand()
+    /** @param method the HTTP method
+        @param path the URI path
+        @param body the request body, if any
+        @param hdr any additional request headers
+        @param raw if the body is already serialized and must be sent unchanged
+
+        @return the response
+
+        @throw GOOGLE-DRIVE-ERROR the request failed
+    */
+    private hash<auto> doRestCommandIntern(string method, string path, auto body, *hash<auto> hdr, bool raw) {
+        path = GoogleDriveDataProviderBase::addSharedDriveSupport(path);
         int retries = 0;
         while (True) {
             try {
                 debug("Google Drive %s %y", method, path);
+                if (raw) {
+                    return rest.restDoRawRequest(method.upr(), path, body, hdr);
+                }
                 switch (method.upr()) {
                     case "GET":    return rest.restGet(path, hdr);
                     case "POST":   return rest.restPost(path, body, hdr);
@@ -205,13 +277,63 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param path the URI path
     */
     private nothing throwDriveError(hash<ExceptionInfo> ex, string method, string path) {
-        *hash<auto> err = ex.arg."response-body".error ?? ex.arg.body.error;
+        *hash<auto> arg = GoogleDriveDataProviderBase::getErrorArg(ex.arg);
+        *hash<auto> err = arg."response-body".error ?? arg.body.error;
         if (err.message.val()) {
             *string reason = err.errors[0].reason ?? err.status;
             throw "GOOGLE-DRIVE-ERROR", sprintf("%s %s failed: %s%s", method, path,
                 reason.val() ? reason + ": " : "", err.message), ex.arg;
         }
         throw "GOOGLE-DRIVE-ERROR", sprintf("%s %s failed: %s: %s", method, path, ex.err, ex.desc), ex.arg;
+    }
+
+    #! Returns an exception argument as a plain hash, so that keys it may not carry can be probed
+    /** The REST client raises its errors with a \c hash<RestResponseInfo> argument, and reading a member a
+        hashdecl does not declare throws \c INVALID-MEMBER rather than returning @ref nothing.  Probing for the
+        response body therefore replaced every failed request's real error -- the Drive reason and message this
+        method exists to surface -- with an unrelated \c INVALID-MEMBER from the error path itself.
+
+        Adding an empty hash widens the value to a plain hash, after which an undeclared key simply reads as
+        @ref nothing.
+
+        @param arg the exception argument
+
+        @return the argument as a plain hash, or @ref nothing if it is not a hash
+    */
+    static *hash<auto> getErrorArg(auto arg) {
+        if (arg.typeCode() != NT_HASH) {
+            return;
+        }
+        return arg + {};
+    }
+
+    #! Adds shared drive support to a Drive API request path
+    /** Every Drive endpoint addressing a file, a permission, a revision, or a change accepts
+        \c supportsAllDrives.  Without it a business account cannot reach any content held on a shared drive
+        (formerly a "Team Drive") at all: the API answers as though the item did not exist, so the failure looks
+        like a missing file rather than a missing capability.
+
+        Google's guidance is that an application supporting shared drives sends the parameter on every such
+        request, so it is added centrally here rather than at each call site, where a newly added action would
+        silently omit it and reintroduce the gap.
+
+        The parameter is added only to this module's own API paths, and never when the caller has already set it
+        (which is how @ref GoogleDriveListFilesDataProvider passes the rest of the shared-drive parameters).
+
+        @param path the URI path
+
+        @return the path with the parameter added, or unchanged when it does not apply
+    */
+    static string addSharedDriveSupport(string path) {
+        # NOTE: "/drive/v3/drives" is deliberately not matched; the shared-drive collection endpoint itself takes
+        # no such parameter, and it is the one endpoint that is always about shared drives
+        if (!(path =~ /^\/(upload\/)?drive\/v3\/(files|permissions|changes)/)) {
+            return path;
+        }
+        if (path.find("supportsAllDrives=") != -1) {
+            return path;
+        }
+        return path + (path.find("?") == -1 ? "?" : "&") + "supportsAllDrives=true";
     }
 
     #! Retrieves a file's metadata resource
@@ -268,7 +390,10 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         body += content;
         body += binary(sprintf("\r\n--%s--\r\n", boundary));
 
-        return doRestCommand(method, path + "?uploadType=multipart&fields="
+        # NOTE: the raw path is required.  A body sent through the ordinary path is serialized into the client's
+        # data format - so these bytes would arrive as a base64 string inside a JSON document - and the
+        # Content-Type set here would have ";charset=UTF-8" appended to it, corrupting the boundary parameter
+        return doRawRestCommand(method, path + "?uploadType=multipart&fields="
             + encode_url(GoogleDriveDataProviderBase::getFileFields(), True), body, {
             "Content-Type": "multipart/related; boundary=" + boundary,
         });
@@ -310,7 +435,7 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
     */
     static string getFileFields() {
         return "id,name,mimeType,size,createdTime,modifiedTime,parents,webViewLink,webContentLink,trashed,"
-            "description,md5Checksum,shortcutDetails";
+            "description,md5Checksum,shortcutDetails,driveId";
     }
 
     #! Converts a Drive file resource into this module's file representation
@@ -333,7 +458,12 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
             "trashed": f.trashed ?? False,
             "description": f.description,
             "md5": f.md5Checksum,
+            # absent for an item in the user's own "My Drive"; present only for shared-drive content
+            "drive_id": f.driveId,
+            "shortcut_target_id": f.shortcutDetails.targetId,
+            "shortcut_target_mime_type": f.shortcutDetails.targetMimeType,
             "is_folder": f.mimeType == FolderMimeType,
+            "is_shortcut": f.mimeType == ShortcutMimeType,
             "is_google_doc": f.mimeType =~ /^application\/vnd\.google-apps\./
                 && f.mimeType != FolderMimeType,
         };

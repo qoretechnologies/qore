@@ -826,4 +826,189 @@ public class DropboxSuccessResponseDataType inherits HashDataType {
 }
 
 public const DropboxSuccessResponseDataType = new DropboxSuccessResponseDataType();
+
+#! Request type for an action that takes no arguments
+/** A @ref DPAT_API action still has to declare a request type: without one the framework raises
+    \c UNIMPLEMENTED from @ref DataProvider::AbstractDataProvider::getRequestType() "getRequestType()" before
+    \c doRequestImpl() is ever reached, so an argument-less action would appear in the catalog and fail on use.
+    Having no fields is what keeps the action from advertising options it does not accept.
+*/
+public class DropboxEmptyRequestDataType inherits HashDataType {
+    public {
+        const Fields = {};
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxEmptyRequestDataType = new DropboxEmptyRequestDataType();
+
+#! Response type describing the account the connection authenticates as
+public class DropboxAccountInfoDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "account_id": {
+                "display_name": "Account ID",
+                "short_desc": "The Dropbox account ID",
+                "desc": "The Dropbox identifier of the account, in the form `dbid:...`",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "display_name": {
+                "display_name": "Display Name",
+                "short_desc": "The account holder's full name",
+                "desc": "The account holder's full name as Dropbox displays it",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "given_name": {
+                "display_name": "Given Name",
+                "short_desc": "The account holder's given name",
+                "desc": "The account holder's given name",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "surname": {
+                "display_name": "Surname",
+                "short_desc": "The account holder's surname",
+                "desc": "The account holder's surname",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "email": {
+                "display_name": "Email Address",
+                "short_desc": "The account's email address",
+                "desc": "The email address the account is registered under",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "email_verified": {
+                "display_name": "Email Verified",
+                "short_desc": "The email address has been verified",
+                "desc": "`True` if the account's email address has been verified",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "disabled": {
+                "display_name": "Disabled",
+                "short_desc": "The account has been disabled",
+                "desc": "`True` if the account has been disabled",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "account_type": {
+                "display_name": "Account Type",
+                "short_desc": "The kind of Dropbox account",
+                "desc": "The kind of Dropbox account: `basic`, `pro`, or `business`.\n\n"
+                    "Several capabilities depend on this; a shared link cannot be password-protected on a "
+                    "`basic` account, and `team_only` link visibility needs a `business` account",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "country": {
+                "display_name": "Country",
+                "short_desc": "The account's country as an ISO 3166-1 code",
+                "desc": "The account's country as a two-letter ISO 3166-1 code",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "locale": {
+                "display_name": "Locale",
+                "short_desc": "The account's language as an IETF language tag",
+                "desc": "The account's language as an IETF language tag",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "is_paired": {
+                "display_name": "Is Paired",
+                "short_desc": "The account is paired with a team account",
+                "desc": "`True` if the user has both a personal and a work account linked together",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "team_name": {
+                "display_name": "Team Name",
+                "short_desc": "The name of the team the account belongs to",
+                "desc": "The name of the Dropbox Business team the account belongs to; absent for an account "
+                    "that is not part of a team",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "team_member_id": {
+                "display_name": "Team Member ID",
+                "short_desc": "The account's ID within its team",
+                "desc": "The account's member identifier within its Dropbox Business team; absent for an "
+                    "account that is not part of a team",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "root_namespace_id": {
+                "display_name": "Root Namespace ID",
+                "short_desc": "The namespace paths are resolved against",
+                "desc": "The identifier of the namespace that paths in this account are resolved against; for a "
+                    "team member this is the team space rather than the personal folder",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "home_namespace_id": {
+                "display_name": "Home Namespace ID",
+                "short_desc": "The account's own namespace",
+                "desc": "The identifier of the account's own namespace",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "profile_photo_url": {
+                "display_name": "Profile Photo URL",
+                "short_desc": "A link to the account's profile photo",
+                "desc": "A link to the account's profile photo; absent when no photo has been set",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "referral_link": {
+                "display_name": "Referral Link",
+                "short_desc": "The account's Dropbox referral link",
+                "desc": "The account's Dropbox referral link",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxAccountInfoDataType = new DropboxAccountInfoDataType();
+
+#! Response type describing how much of the account's storage is in use
+public class DropboxSpaceUsageDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "used": {
+                "display_name": "Used",
+                "short_desc": "The bytes of storage in use",
+                "desc": "The number of bytes of storage currently in use",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "allocated": {
+                "display_name": "Allocated",
+                "short_desc": "The bytes of storage available",
+                "desc": "The number of bytes of storage available to the account; absent when the account's "
+                    "allocation is not expressed as a fixed quota",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "allocation_type": {
+                "display_name": "Allocation Type",
+                "short_desc": "Whether the quota is personal or shared with a team",
+                "desc": "Whether the quota is the account's own (`individual`) or shared with a Dropbox "
+                    "Business team (`team`)",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "used_percent": {
+                "display_name": "Used Percent",
+                "short_desc": "The proportion of the quota in use, as a percentage",
+                "desc": "The proportion of the allocated storage currently in use, as a percentage; absent "
+                    "when no fixed quota is reported",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "team_used": {
+                "display_name": "Team Used",
+                "short_desc": "The bytes of the team quota in use by the whole team",
+                "desc": "The number of bytes of the team's shared quota in use across the whole team; present "
+                    "only for a team allocation",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "team_allocated": {
+                "display_name": "Team Allocated",
+                "short_desc": "The bytes of storage available to the whole team",
+                "desc": "The number of bytes of storage available to the whole team; present only for a team "
+                    "allocation",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxSpaceUsageDataType = new DropboxSpaceUsageDataType();
 }

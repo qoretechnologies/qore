@@ -292,6 +292,29 @@ module GoogleDriveDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GoogleDriveDataProvider::AppName,
+            "path": "/rename-file",
+            "action": "rename-file",
+            "display_name": "Rename File",
+            "short_desc": "Change a file's name",
+            "desc": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\n"
+                "Drive addresses files by an immutable ID rather than by path, so renaming a file leaves every "
+                "link to it working.  Drive does not require names to be unique either, so a name already used "
+                "in the same folder is accepted.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRenameFileRequestDataType::Fields{"file_id", "name"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRenameFileRequestDataType::Fields - ("file_id", "name")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
             "path": "/delete-file",
             "action": "delete-file",
             "display_name": "Delete File",

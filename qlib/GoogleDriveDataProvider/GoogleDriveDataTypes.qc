@@ -45,6 +45,16 @@ const FolderIdField = {
     "ref_data": "folders",
 };
 
+#! Common field describing a Drive shared drive ID
+const SharedDriveIdField = {
+    "display_name": "Shared Drive ID",
+    "short_desc": "The ID of a shared drive",
+    "desc": "The identifier of a shared drive (formerly a \"Team Drive\"); if not set, the user's own `My "
+        "Drive` is used",
+    "type": AbstractDataProviderTypeMap."*string",
+    "ref_data": "shared_drives",
+};
+
 #! Response type describing a Drive file
 public class GoogleDriveFileDataType inherits HashDataType {
     private {
@@ -122,10 +132,37 @@ public class GoogleDriveFileDataType inherits HashDataType {
                 "desc": "The MD5 checksum of the file content; absent for folders and Google-native documents",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "drive_id": {
+                "display_name": "Shared Drive ID",
+                "short_desc": "The shared drive holding the file",
+                "desc": "The identifier of the shared drive holding the file; absent for a file in the user's "
+                    "own `My Drive`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "shortcut_target_id": {
+                "display_name": "Shortcut Target ID",
+                "short_desc": "The file a shortcut points at",
+                "desc": "The Drive identifier of the file a shortcut points at; set only when `is_shortcut` is "
+                    "`True`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "shortcut_target_mime_type": {
+                "display_name": "Shortcut Target MIME Type",
+                "short_desc": "The MIME type of the file a shortcut points at",
+                "desc": "The MIME type of the file a shortcut points at; set only when `is_shortcut` is `True`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "is_folder": {
                 "display_name": "Is Folder",
                 "short_desc": "The item is a folder",
                 "desc": "`True` if the item is a folder rather than a file",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "is_shortcut": {
+                "display_name": "Is Shortcut",
+                "short_desc": "The item is a shortcut to another file",
+                "desc": "`True` if the item is a shortcut pointing at another file rather than a file itself; "
+                    "the target is named in `shortcut_target_id`",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
             "is_google_doc": {
@@ -186,6 +223,30 @@ public class GoogleDriveListFilesRequestDataType inherits HashDataType {
                 "desc": "The sort order for results, as a Drive `orderBy` expression",
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "modifiedTime desc",
+            },
+            "drive_id": SharedDriveIdField + {
+                "short_desc": "List only files held on this shared drive",
+                "desc": "List only files held on this shared drive (formerly a \"Team Drive\").\n\n"
+                    "Setting this selects the `drive` collection unless `corpora` says otherwise, so the "
+                    "listing covers that shared drive rather than the user's own `My Drive`",
+            },
+            "corpora": {
+                "display_name": "Collection",
+                "short_desc": "The collection of files to search",
+                "desc": "The collection of files to search.\n\n"
+                    "If not set, `drive` is used when `drive_id` is set, and otherwise the collection Drive "
+                    "selects by default for the request",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": CorporaValues,
+            },
+            "include_shared_drives": {
+                "display_name": "Include Shared Drives",
+                "short_desc": "Include files held on shared drives in the results",
+                "desc": "Include files held on shared drives (formerly \"Team Drives\") in the results.\n\n"
+                    "Without this a listing covers only the user's own `My Drive`, so shared-drive content is "
+                    "invisible even to an account that has access to it",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": True,
             },
             "page_size": {
                 "display_name": "Page Size",
@@ -480,6 +541,38 @@ public class GoogleDriveMoveFileRequestDataType inherits HashDataType {
 }
 
 public const GoogleDriveMoveFileRequestDataType = new GoogleDriveMoveFileRequestDataType();
+
+#! Request type for renaming a file
+public class GoogleDriveRenameFileRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file to rename; the file keeps its ID, its location, and "
+                    "its sharing settings",
+            },
+            "name": {
+                "display_name": "New Name",
+                "short_desc": "The new name for the file",
+                "desc": "The new name for the file.\n\n"
+                    "Drive does not require names to be unique, so renaming a file to a name already used in "
+                    "the same folder succeeds and leaves two files sharing a name",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "quarterly-report.pdf",
+            },
+            "description": {
+                "display_name": "Description",
+                "short_desc": "A new description to store with the file",
+                "desc": "A new description to store with the file; the existing description is left unchanged "
+                    "when this is not set",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveRenameFileRequestDataType = new GoogleDriveRenameFileRequestDataType();
 
 #! Request type for deleting a file
 public class GoogleDriveDeleteFileRequestDataType inherits HashDataType {

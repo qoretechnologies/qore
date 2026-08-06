@@ -198,8 +198,10 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("native file location handler", \nativeHandlerTest());
         addTestCase("native streaming upload", \nativeStreamUploadTest());
+        addTestCase("account actions", \accountActionsTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live list folder", \liveListFolderTest());
+        addTestCase("live account info", \liveAccountInfoTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
 
         set_return_value(main());
@@ -224,12 +226,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         *list<string> children = prov.getChildProviderNames();
         # the framework injects a "__call__" child alongside the module's own, to serve its generic
         # make-api-call action
-        assertEq(17, children.size(), "all actions are children of the root provider");
+        assertEq(19, children.size(), "all actions are children of the root provider");
         assertTrue(inlist("__call__", children), "the framework generic-call child is present");
         foreach string name in (("list-folder", "search", "get-metadata", "download-file", "upload-file",
                 "create-text-file", "get-file-link", "create-folder", "delete-file", "copy-file", "move-file",
                 "list-file-revisions", "restore-file-revision", "create-shared-link", "list-shared-links",
-                "revoke-shared-link")) {
+                "revoke-shared-link", "get-account-info", "get-space-usage")) {
             assertTrue(inlist(name, children), sprintf("has %y child", name));
             assertTrue(prov.getChildProvider(name) instanceof AbstractDataProvider,
                 sprintf("%y child provider can be created", name));
@@ -238,7 +240,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # the summary info of every child must be retrievable; a child whose ProviderSummaryInfo constant is
         # missing or misnamed breaks the app browser rather than the action
-        assertEq(16, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
+        assertEq(18, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
     }
 
     actionCatalogTest() {
@@ -253,6 +255,11 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         assertTrue(app.logo.val(), "the logo was loaded from its file");
         # the checklist requires square icons; the source asset was 1200x800
         assertRegex("width=\"300\" height=\"300\"", app.logo, "the logo is square");
+
+        # the root provider is built from a fake client, so that every action's own request type can be compared
+        # against the options the catalog advertises for it
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider root = getProvider(\rest);
 
         hash<string, bool> children = map {$1: True},
             keys DropboxDataProvider::DropboxDataProvider::DefaultChildMap;
@@ -272,12 +279,20 @@ public class DropboxDataProviderTest inherits QUnit::Test {
                 action.action, action.path));
             assertEq(DPAT_API, action.action_code, sprintf("action %y is an API action", action.action));
             assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
-            assertTrue(action.options.size() > 0, sprintf("action %y has options", action.action));
+            # an action whose request type has fields must advertise options for them, or it renders with no
+            # form fields and cannot be used; the account actions call endpoints that take no arguments at all
+            *AbstractDataProvider adp = root.getChildProvider(path);
+            assertTrue(exists adp, sprintf("action %y has a child provider", action.action));
+            *AbstractDataProviderType art = adp.getRequestType();
+            int nfields = art ? art.getFields().size() : 0;
+            assertEq(nfields > 0, action.options.size() > 0,
+                sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
+                    "%d options)", action.action, nfields, action.options.size()));
             assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
                 action.action));
             assertTrue(action.groups.size() > 0, sprintf("action %y has a group", action.action));
         }
-        assertEq(16, actions, "every action is registered");
+        assertEq(18, actions, "every action is registered");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
     }
 
@@ -1109,6 +1124,91 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         assertEq(0, DropboxFileLocationHandler::readExactly(is, 100).size(), "reading past the end yields nothing");
     }
 
+    #! The connection asks for the account_info.read scope, so something must use it
+    /** The consent screen asked the user to grant access to their account profile, and nothing in the module
+        could read it -- a scope requested and never exercised.
+    */
+    accountActionsTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        rest.setResponse({
+            "account_id": "dbid:AAA",
+            "name": {
+                "given_name": "David",
+                "surname": "Nichols",
+                "display_name": "David Nichols",
+                "abbreviated_name": "DN",
+            },
+            "email": "test@example.com",
+            "email_verified": True,
+            "disabled": False,
+            "account_type": {".tag": "basic"},
+            "country": "CZ",
+            "locale": "en",
+            "is_paired": False,
+            "referral_link": "https://www.dropbox.com/referrals/AAA",
+            "root_info": {
+                ".tag": "user",
+                "home_namespace_id": "1234",
+                "root_namespace_id": "1234",
+            },
+        });
+        hash<auto> acct = prov.getChildProvider("get-account-info").doRequest({});
+        assertEq("/2/users/get_current_account", rest.last().path);
+        # the endpoint takes no arguments and Dropbox rejects a request that sends any
+        assertEq(NOTHING, rest.last().body, "no request body is sent");
+        assertEq("dbid:AAA", acct.account_id);
+        # the name arrives as a nested structure and the account type as a tagged union; both are flattened,
+        # since a caller mapping fields should not have to know Dropbox's union encoding
+        assertEq("David Nichols", acct.display_name);
+        assertEq("David", acct.given_name);
+        assertEq("Nichols", acct.surname);
+        assertEq("basic", acct.account_type);
+        assertEq("1234", acct.root_namespace_id);
+        assertEq("test@example.com", acct.email);
+        assertEq(True, acct.email_verified);
+
+        # an individual allocation reports only its own quota
+        rest.setResponse({
+            "used": 23651,
+            "allocation": {
+                ".tag": "individual",
+                "allocated": 2147483648,
+            },
+        });
+        hash<auto> usage = prov.getChildProvider("get-space-usage").doRequest({});
+        assertEq("/2/users/get_space_usage", rest.last().path);
+        assertEq(NOTHING, rest.last().body, "no request body is sent");
+        assertEq(23651, usage.used);
+        assertEq(2147483648, usage.allocated);
+        assertEq("individual", usage.allocation_type);
+        assertTrue(usage.used_percent > 0.0 && usage.used_percent < 1.0,
+            sprintf("the proportion in use is computed: %y", usage.used_percent));
+        assertEq(NOTHING, usage.team_used, "no team figures for an individual allocation");
+
+        # a team member reports the team totals as well as their own position within them
+        rest.setResponse({
+            "used": 100,
+            "allocation": {
+                ".tag": "team",
+                "used": 900,
+                "allocated": 1000,
+            },
+        });
+        usage = prov.getChildProvider("get-space-usage").doRequest({});
+        assertEq("team", usage.allocation_type);
+        assertEq(900, usage.team_used);
+        assertEq(1000, usage.team_allocated);
+
+        # an allocation with no fixed quota must not produce a division by zero
+        rest.setResponse({"used": 5, "allocation": {".tag": "other"}});
+        usage = prov.getChildProvider("get-space-usage").doRequest({});
+        assertEq(5, usage.used);
+        assertEq(NOTHING, usage.allocated);
+        assertEq(NOTHING, usage.used_percent, "no proportion is reported without a quota");
+    }
+
     # --- live tests (require -c <connection>) ---
 
     private *AbstractConnection getConnection() {
@@ -1146,6 +1246,32 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             foreach hash<auto> e in (resp.entries) {
                 printf("%s %y (%d bytes)\n", e.is_folder ? "dir " : "file", e.path, e.size ?? 0);
             }
+        }
+    }
+
+    liveAccountInfoTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        hash<auto> acct = prov.getChildProvider("get-account-info").doRequest({});
+        assertRegex("^dbid:", acct.account_id, "the account ID has the Dropbox form");
+        assertTrue(acct.email.val(), "the account has an email address");
+        assertTrue(inlist(acct.account_type, ("basic", "pro", "business")),
+            sprintf("the account type is a known value: %y", acct.account_type));
+
+        hash<auto> usage = prov.getChildProvider("get-space-usage").doRequest({});
+        assertEq(NT_INT, usage.used.typeCode(), "the storage in use is reported as a number");
+        assertTrue(usage.used >= 0, "the storage in use is not negative");
+        if (exists usage.allocated) {
+            assertTrue(usage.allocated > 0, "the quota is positive when reported");
+            assertTrue(usage.used_percent >= 0.0, "the proportion in use is reported alongside a quota");
+        }
+        if (m_options.verbose > 0) {
+            printf("account: %y (%y, %y)\n", acct.display_name, acct.email, acct.account_type);
+            printf("usage: %d of %y bytes (%y%%)\n", usage.used, usage.allocated, usage.used_percent);
         }
     }
 

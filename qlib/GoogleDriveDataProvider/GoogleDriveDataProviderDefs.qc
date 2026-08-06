@@ -45,6 +45,11 @@ public const DefaultPageSize = 100;
 #! Maximum page size accepted by the Drive API
 public const MaxPageSize = 1000;
 
+#! Maximum page size accepted by the Drive shared-drive collection endpoint
+/** The \c drives.list endpoint caps its page size at `100`, unlike \c files.list
+*/
+public const MaxDrivePageSize = 100;
+
 #! The size above which an upload is sent as a resumable upload
 /** Google recommends resumable uploads above 5 MB; a single-request upload of a large file has to be retried
     from the beginning if the connection drops
@@ -91,6 +96,39 @@ public const ExportFormatValues = (
         "display_name": "Plain Text",
         "short_desc": "Plain text",
         "desc": "Plain text; available for Docs",
+    },
+);
+
+#! Collections searched when listing files
+/** A listing normally covers only the files the user has access to in their own `My Drive`; reaching content
+    held on a shared drive requires naming the collection to search explicitly
+*/
+public const CorporaValues = (
+    <AllowedValueInfo>{
+        "value": "user",
+        "display_name": "My Drive",
+        "short_desc": "Files in the user's own My Drive",
+        "desc": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+    },
+    <AllowedValueInfo>{
+        "value": "drive",
+        "display_name": "One Shared Drive",
+        "short_desc": "Files on the shared drive named in drive_id",
+        "desc": "Files held on the shared drive named in `drive_id`, which must be set",
+    },
+    <AllowedValueInfo>{
+        "value": "allDrives",
+        "display_name": "My Drive and All Shared Drives",
+        "short_desc": "Files in My Drive and on every shared drive the user can reach",
+        "desc": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n"
+            "**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the "
+            "collection to search is known",
+    },
+    <AllowedValueInfo>{
+        "value": "domain",
+        "display_name": "Domain",
+        "short_desc": "Files shared with the user's whole domain",
+        "desc": "Files shared with the user's whole domain; requires a Google Workspace account",
     },
 );
 

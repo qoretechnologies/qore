@@ -247,16 +247,37 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
         @throw DROPBOX-ERROR always
     */
     private nothing throwDropboxError(hash<ExceptionInfo> ex, string path) {
-        auto resp = ex.arg."response-body" ?? ex.arg.body;
+        *hash<auto> arg = DropboxDataProviderBase::getErrorArg(ex.arg);
+        auto resp = arg."response-body" ?? arg.body;
         *string summary = DropboxDataProviderBase::getErrorSummary(resp);
         if (summary.val()) {
             # a rate-limited request names how long to wait before retrying; it is reported rather than waited
             # out here, so that the caller decides whether the delay is acceptable
-            *int retry_after = ex.arg.hdr."retry-after" ?? ex.arg.headers."retry-after";
+            *int retry_after = arg.hdr."retry-after" ?? arg.headers."retry-after";
             throw "DROPBOX-ERROR", sprintf("%s failed: %s%s", path, summary,
                 retry_after ? sprintf(" (retry after %d seconds)", retry_after) : ""), ex.arg;
         }
         throw "DROPBOX-ERROR", sprintf("%s failed: %s: %s", path, ex.err, ex.desc), ex.arg;
+    }
+
+    #! Returns an exception argument as a plain hash, so that keys it may not carry can be probed
+    /** The REST client raises its errors with a \c hash<RestResponseInfo> argument, and reading a member a
+        hashdecl does not declare throws \c INVALID-MEMBER rather than returning @ref nothing.  Probing for the
+        response body therefore replaced every failed request's real error -- the Dropbox error summary this
+        method exists to surface -- with an unrelated \c INVALID-MEMBER raised by the error path itself.
+
+        Adding an empty hash widens the value to a plain hash, after which an undeclared key simply reads as
+        @ref nothing.
+
+        @param arg the exception argument
+
+        @return the argument as a plain hash, or @ref nothing if it is not a hash
+    */
+    static *hash<auto> getErrorArg(auto arg) {
+        if (arg.typeCode() != NT_HASH) {
+            return;
+        }
+        return arg + {};
     }
 
     #! Returns the Dropbox error summary from a response body, if it holds one

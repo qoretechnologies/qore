@@ -359,7 +359,11 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     private nothing rethrowS3Error(hash<ExceptionInfo> ex, string method, *string bucket, *string key) {
         *hash<auto> err;
         try {
-            err = AwsS3DataProviderBase::parseXml(ex.arg."response-body" ?? ex.arg.body).Error;
+            # NOTE: widened with "+ {}" first; a REST client raises its errors with a hashdecl argument in some
+            # configurations, and reading a member a hashdecl does not declare throws INVALID-MEMBER, which the
+            # catch below would then swallow along with the S3 error code this exists to report
+            *hash<auto> arg = ex.arg.typeCode() == NT_HASH ? ex.arg + {} : NOTHING;
+            err = AwsS3DataProviderBase::parseXml(arg."response-body" ?? arg.body).Error;
         } catch (hash<ExceptionInfo> ignored) {
             # the body was absent or not XML; fall through and report the original error unchanged
         }

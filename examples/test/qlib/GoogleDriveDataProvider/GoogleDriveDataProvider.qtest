@@ -66,7 +66,10 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("connection", \connectionTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
+        addTestCase("shared drive support", \sharedDriveTest());
         addTestCase("live connection", \liveConnectionTest());
+        addTestCase("live shared drives", \liveSharedDriveTest());
+        addTestCase("live file lifecycle", \liveFileLifecycleTest());
 
         set_return_value(main());
     }
@@ -165,6 +168,67 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         # write_path_is_parent requires the file format, since no other format carries a filename
         assertEq(DPFW_FILE, fapi.write_data_format);
     }
+    #! Shared-drive (Team Drive) support must reach every request that addresses a file
+    /** Without \c supportsAllDrives a business account cannot see shared-drive content at all, and the API
+        answers as though the item did not exist -- so the failure is indistinguishable from a missing file.
+        The parameter is therefore added centrally rather than at each call site, and this checks that the
+        central rule covers the endpoints it must and leaves the others alone.
+    */
+    sharedDriveTest() {
+        # every Drive endpoint that addresses a file, a permission, or a change carries the parameter
+        foreach string path in (("/drive/v3/files", "/drive/v3/files/abc",
+                "/drive/v3/files/abc/permissions", "/drive/v3/changes", "/upload/drive/v3/files")) {
+            assertRegex("supportsAllDrives=true",
+                GoogleDriveDataProviderBase::addSharedDriveSupport(path),
+                sprintf("%y carries shared drive support", path));
+        }
+        # the existing query string is preserved rather than replaced
+        assertEq("/drive/v3/files?fields=id&supportsAllDrives=true",
+            GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/files?fields=id"));
+        # a caller that set the parameter itself is left alone, rather than having it sent twice
+        assertEq("/drive/v3/files?supportsAllDrives=false",
+            GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/files?supportsAllDrives=false"));
+        # the shared-drive collection endpoint itself takes no such parameter
+        assertEq("/drive/v3/drives", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/drives"));
+        assertEq("/drive/v3/about", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/about"));
+
+        # a listing needs more than "supportsAllDrives": without "includeItemsFromAllDrives" shared-drive
+        # content never appears in the results, whatever the account can reach
+        assertEq("&includeItemsFromAllDrives=true", GoogleDriveListFilesDataProvider::getSharedDriveQuery({}));
+        assertEq("", GoogleDriveListFilesDataProvider::getSharedDriveQuery({"include_shared_drives": False}));
+        # naming a shared drive selects that collection, since Drive rejects "corpora=drive" without a "driveId"
+        assertEq("&includeItemsFromAllDrives=true&driveId=d1&corpora=drive",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({"drive_id": "d1"}));
+        assertEq("&includeItemsFromAllDrives=true&corpora=allDrives",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({"corpora": "allDrives"}));
+        # ... and an explicit collection is not overridden by the presence of a drive ID
+        assertEq("&includeItemsFromAllDrives=true&driveId=d1&corpora=allDrives",
+            GoogleDriveListFilesDataProvider::getSharedDriveQuery({
+                "drive_id": "d1",
+                "corpora": "allDrives",
+            }));
+        # asking for one shared drive without saying which one is reported here rather than as an API error
+        assertThrows("GOOGLE-DRIVE-ERROR", "drive_id",
+            \GoogleDriveListFilesDataProvider::getSharedDriveQuery(), ({"corpora": "drive"},));
+
+        # the shared drive picker must be offered, or a business user has no way to choose one
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+        assertEq(True, root.getSupportedReferenceData().shared_drives);
+        hash<DataProviderActionInfo> list = DataProviderActionCatalog::getAppActionEx(App, "list-files");
+        assertEq("shared_drives", list.options.drive_id.ref_data);
+        assertTrue(list.options.corpora.allowed_values.size() > 0,
+            "the collections to search are declared as allowed values rather than described in prose");
+
+        # renaming had no action at all: move-file only changes a file's parents and replace-file only its
+        # content, so a name could not be changed through this module
+        hash<DataProviderActionInfo> rename = DataProviderActionCatalog::getAppActionEx(App, "rename-file");
+        assertEq(DPAT_API, rename.action_code);
+        assertEq(True, rename.options.name.required);
+        assertEq("files", rename.options.file_id.ref_data);
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
@@ -204,5 +268,93 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
                 printf("  %y\n", e.name);
             }
         }
+    }
+
+    #! Exercises shared-drive addressing against the live service
+    /** The account under test may own no shared drives at all, which is the normal case for a personal
+        account; the point of the test is that the shared-drive parameters are accepted and that the picker
+        resolves, not that any particular drive exists.
+    */
+    liveSharedDriveTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # the picker must resolve rather than raising; an account with no shared drives yields an empty list
+        *list<hash<AllowedValueInfo>> drives = prov.getReferenceData("shared_drives");
+        assertEq(NT_LIST, drives.typeCode(), "the shared drive picker resolves");
+        if (m_options.verbose > 0) {
+            printf("shared drives: %d\n", drives.size());
+            foreach hash<AllowedValueInfo> d in (drives) {
+                printf("  %y (%y)\n", d.display_name, d.value);
+            }
+        }
+
+        # Drive must accept the whole shared-drive parameter set; a rejected parameter is a 400, which is how
+        # this would fail if the combination were wrong
+        AbstractDataProvider dp = prov.getChildProvider("list-files");
+        hash<auto> resp = dp.doRequest({
+            "corpora": "allDrives",
+            "include_shared_drives": True,
+            "page_size": 5,
+        });
+        assertEq(NT_LIST, resp.files.typeCode(), "a listing across every drive is accepted");
+
+        # each named shared drive must actually be listable through the same action
+        foreach hash<AllowedValueInfo> d in (drives) {
+            hash<auto> dresp = dp.doRequest({
+                "drive_id": d.value,
+                "page_size": 5,
+            });
+            assertEq(NT_LIST, dresp.files.typeCode(), sprintf("shared drive %y is listable", d.display_name));
+        }
+    }
+
+    #! Creates, renames, reads back, and removes a file on the live service
+    /** This writes to the account under test; exclude it with \c --exclude="live file lifecycle" when that is
+        not wanted.  The file is created in the trash-recoverable state and removed outright on exit.
+    */
+    liveFileLifecycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string name = sprintf("qore-test-%d.txt", now_us().durationMicroseconds());
+        string content = "created by the Qore GoogleDriveDataProvider test suite";
+
+        hash<auto> created = prov.getChildProvider("create-text-file").doRequest({
+            "name": name,
+            "content": content,
+        });
+        assertEq(name, created.name, "the file was created with the requested name");
+        assertTrue(created.id.val(), "the new file has an ID");
+        on_exit {
+            prov.getChildProvider("delete-file").doRequest({
+                "file_id": created.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # renaming is the gap this closes: neither move-file nor replace-file can change a name
+        string new_name = name + ".renamed";
+        hash<auto> renamed = prov.getChildProvider("rename-file").doRequest({
+            "file_id": created.id,
+            "name": new_name,
+            "description": "renamed by the Qore test suite",
+        });
+        assertEq(new_name, renamed.name, "rename-file returned the new name");
+        assertEq(created.id, renamed.id, "the file keeps its ID across a rename");
+
+        # ... and the new name must be what the service actually holds, not just what the response echoed
+        hash<auto> meta = prov.getChildProvider("get-file").doRequest({"file_id": created.id});
+        assertEq(new_name, meta.name, "the new name is persisted");
+        assertEq("renamed by the Qore test suite", meta.description, "the new description is persisted");
+
+        hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"file_id": created.id});
+        assertEq(content, parse_base64_string(downloaded.content).toString(),
+            "the content read back matches the content written");
     }
 }
