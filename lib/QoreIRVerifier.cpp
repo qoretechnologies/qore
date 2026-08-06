@@ -1294,6 +1294,18 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CreateParseRef:
             return &static_cast<const QoreIRCreateParseRefInstruction*>(inst)->expr;
 
+        // RefForeachInit evaluates its ParseReferenceNode through the AST reference evaluator
+        // (qore_rt_ref_foreach_init() -> ParseReferenceNode::evalToRef()), which resolves the
+        // lvalue's subscripts by reading the variables from the runtime local stack.  Any local
+        // used only inside that expression - typically the key or index, as in
+        // "foreach hash<auto> i in (\h{key}.member)" - must therefore stay AST-visible.  Without
+        // this case the expression tree is never walked, the local is classified as IR-only and
+        // never materialized on the runtime stack, so the subscript evaluates to NOTHING: the
+        // reference silently addresses the empty-string key and every write through the loop
+        // variable is discarded.
+        case QoreIROpcode::RefForeachInit:
+            return &static_cast<const QoreIRRefForeachInitInstruction*>(inst)->expr;
+
         // Container construction opcodes with expr fields
         case QoreIROpcode::NewHashDecl:
             return &static_cast<const QoreIRNewHashDeclInstruction*>(inst)->expr;
