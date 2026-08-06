@@ -36,6 +36,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         const App = "メール";
         const Action = "送信";
         const Option = "宛先";
+        const PathVar = "アカウント";
         const AllowedValue = "doručit";
         const Domain = "test.data-provider.presentation";
     }
@@ -226,7 +227,17 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     sourceCatalogTest() {
+        hash<DataProviderPathVarInfo> path_var =
+            <DataProviderPathVarInfo>{
+                "display_name": "Účet",
+                "short_desc": "Cílový účet",
+                "desc": "Technický identifikátor cílového účtu.",
+                "example_value": "primary",
+            };
         hash<auto> source_action = action() + {
+            "path_vars": {
+                PathVar: path_var,
+            },
             "options": {
                 Option: option() + {
                     "allowed_values": ({
@@ -260,6 +271,11 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 DataProviderPresentation::optionMessageId(App, Action,
                     Option, "display_name")}.source,
             "the root catalog preserves option source text");
+        assertEq("Účet",
+            source_messages{
+                DataProviderPresentation::optionMessageId(App, Action,
+                    PathVar, "display_name")}.source,
+            "typed path variables contribute presentation without requiring action-option members");
         assertEq("Doručit",
             source_messages{
                 DataProviderPresentation::allowedValueMessageId(App,

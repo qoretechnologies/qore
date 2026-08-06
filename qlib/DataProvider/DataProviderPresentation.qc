@@ -309,7 +309,16 @@ public class DataProviderPresentation {
                 continue;
             }
             string option_name = option_entry.key;
-            hash<auto> option = option_entry.value;
+            # Erase a provider-owned option hashdecl into an open hash before
+            # probing optional presentation members.  Path variables and
+            # action options use different hashdecls, and direct dynamic
+            # access to a member absent from either declaration raises
+            # INVALID-MEMBER.
+            hash<auto!> option = {};
+            foreach hash<auto> field in (
+                    option_entry.value.pairIterator()) {
+                option{field.key} = field.value;
+            }
             addRecordMessages(\messages, option,
                 *string sub (string field) {
                     return optionMessageId(app.name, action.action,
@@ -340,16 +349,23 @@ public class DataProviderPresentation {
 
     private static addRecordMessages(reference<hash<auto>> messages,
             hash<auto> record, code<*string(string)> id_builder) {
+        # Keep optional presentation-field discovery independent of the
+        # producer's hashdecl.  Some valid records intentionally declare only
+        # a subset of these fields.
+        hash<auto!> presentation = {};
+        foreach hash<auto> entry in (record.pairIterator()) {
+            presentation{entry.key} = entry.value;
+        }
         foreach string field in (("display_name", "short_desc", "desc")) {
-            if (record{field}.typeCode() != NT_STRING
-                    || !record{field}.toString().val()) {
+            if (presentation{field}.typeCode() != NT_STRING
+                    || !presentation{field}.toString().val()) {
                 continue;
             }
             *string id = id_builder(field);
             if (!id) {
                 continue;
             }
-            string source = record{field}.toString();
+            string source = presentation{field}.toString();
             if (exists messages{id}) {
                 string existing = messages{id}.source.toString();
                 if (existing != source) {
