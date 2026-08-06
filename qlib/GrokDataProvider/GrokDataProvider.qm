@@ -125,7 +125,7 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType.getFields(){"input", "model"}, {
+                GrokResponseCreateRequestType.getFields(){"input",}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -159,7 +159,7 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType.getFields(){"input", "model"}, {
+                GrokResponseCreateRequestType.getFields(){"input",}, {
                     "preselected": True,
                     "required": True,
                 }

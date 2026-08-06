@@ -199,6 +199,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_EVENT, action.action_code);
         assertEq(GrokDataProvider::EVENT_GROK_RESPONSE_STREAM, action.action_val);
         assertEq(GrokResponseStreamEventDataType, action.output_type);
+        assertTrue(exists action.path_vars.model);
+        assertFalse(exists action.options.model,
+            "a path variable must not also appear as a request option");
+        assertTrue(exists action.options.input);
 
         # verify multi-chat action
         action = DataProviderActionCatalog::getAppAction(
@@ -220,6 +224,10 @@ public class GrokDataProviderTest inherits QUnit::Test {
         );
         assertEq("/models/{model}/create-response", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertTrue(exists action.path_vars.model);
+        assertFalse(exists action.options.model,
+            "a path variable must not also appear as a request option");
+        assertTrue(exists action.options.input);
 
         # verify create-response-direct action
         action = DataProviderActionCatalog::getAppAction(
