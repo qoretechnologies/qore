@@ -119,6 +119,28 @@ class InvalidJsonSseHandler inherits ServerSentEventHandler {
     }
 }
 
+#! Observable whose destructor widens the object teardown window
+/** %Qore destroys an object's members only after its destructor returns, and
+    entering a method is still allowed in that window — so a slow destructor
+    gives the async I/O thread many chances to enter the dying observable and
+    take its Mutex while the member cleanup is about to delete it.
+*/
+class SlowTeardownObservable inherits HttpClientStreamingIo::SseObservable {
+    public {
+        int teardown_ms;
+    }
+
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, string url, string method,
+            string path, *hash<auto> headers, *data body, *hash<auto> opts, int teardown_ms)
+            : HttpClientStreamingIo::SseObservable(mgr, url, method, path, headers, body, opts) {
+        self.teardown_ms = teardown_ms;
+    }
+
+    destructor() {
+        usleep(milliseconds(teardown_ms));
+    }
+}
+
 class TestObserver inherits DataProvider::Observer {
     public {
         list<hash<auto>> events = ();
@@ -189,6 +211,8 @@ class SseObservableTest inherits Test {
         addTestCase("SseObservable suppresses heartbeat when emit_heartbeat=False",
             \testHeartbeatSuppressed());
         addTestCase("SseObservable closes on idle timeout", \testIdleTimeoutFires());
+        addTestCase("SseObservable teardown with a live stream is safe",
+            \testTeardownWhileStreamActive());
         addTestCase("SseObservable heartbeats prevent idle timeout",
             \testHeartbeatPreventsIdleTimeout());
         addTestCase("SseObservable validates AsyncAPI events", \testAsyncApiValidatedEvents());
@@ -562,6 +586,52 @@ class SseObservableTest inherits Test {
         );
         assertEq(1, closed.size(), "one closed event");
         assertEq("idle-timeout", closed[0].data.reason, "closed reason");
+
+        # quiesce the notifier poll operation before the locals holding the
+        # observable and its observer go out of scope
+        obs.stopEvents();
+    }
+
+    #! Dropping an SseObservable while its poll operation is still live must be safe
+    /** The notifier poll operation reaches the observable through weak method call
+        references, so the object is destroyed as soon as its owner drops the last
+        strong reference — while the async I/O thread may be inside it.  %Qore
+        destroys members only after the destructor returns, so without the lock pin
+        in SseObservable the I/O thread is holding the observable's Mutex when that
+        cleanup deletes it, and the dropping thread gets "LOCK-ERROR: TID N deleted
+        Mutex object while TID M was holding the lock".
+
+        SlowTeardownObservable widens that window to 250ms so each iteration gives
+        the I/O thread many chances to enter the dying object; the observable is
+        dropped with the stream still live and no stopEvents() call.
+    */
+    testTeardownWhileStreamActive() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        for (int i = 0; i < 10; ++i) {
+            TestObserver observer(2);
+            {
+                HttpClientIo::HttpClientConnectionManager mgr();
+                # short idle timeout: the poll operation keeps ticking (and so
+                # keeps re-entering the observable) throughout the teardown window
+                SlowTeardownObservable obs(mgr, url, "GET", "/sse", NOTHING, NOTHING,
+                    {"idle_timeout": 100ms}, 250);
+                obs.registerObserver(observer);
+                obs.observersReady();
+                # connected + greeting
+                assertEq(True, observer.waitForCount(2, 10s),
+                    sprintf("iteration %d: stream delivered events", i));
+                # obs is dropped here with the poll operation still active
+            }
+        }
+
+        # the module is still usable after the teardown races above
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        assertEq(True, observer.waitForCount(2, 10s), "stream works after teardown races");
+        obs.stopEvents();
     }
 
     testHeartbeatPreventsIdleTimeout() {

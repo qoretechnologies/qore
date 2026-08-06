@@ -409,7 +409,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             return withRetry(hash<auto> sub () {
                 return rest_client.restPost(path, body);
-            });
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
                 sprintf("Bedrock Converse request to %y failed: %s",

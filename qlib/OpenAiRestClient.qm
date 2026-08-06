@@ -790,7 +790,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             resp = withRetry(hash<auto> sub () {
                 return rest_client.restPost(getChatCompletionsPath(), body,
                     buildAuthHeader());
-            });
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("HTTP completion request failed: %s",
                 ex.desc), ex;
@@ -815,7 +815,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             resp = withRetry(hash<auto> sub () {
                 return rest_client.restPost(getChatCompletionsPath(), body,
                     buildAuthHeader());
-            });
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("chat request failed: %s",
                 ex.desc), ex;

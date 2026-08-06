@@ -231,6 +231,10 @@ public hashdecl LlmRequestOptions {
     *bool disable_reasoning;
     #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
     *float temperature;
+    #! Maximum retry attempts for transient errors on this call
+    /** Overrides @ref LlmBackendConfig::max_retries. A value of zero disables
+        transport retries while preserving the initial request. */
+    *int max_retries;
     #! JSON schema to request structured output when the backend supports it
     *hash<auto> output_schema;
     #! Provider-specific request body fields merged into the generated body
@@ -856,6 +860,16 @@ public class AbstractLlmProvider {
         return opts.temperature ?? config_h.temperature;
     }
 
+    #! Resolves the transient-error retry budget for a single call
+    /** @param opts optional per-call request overrides
+
+        @return per-call retry count when supplied, otherwise the backend
+            configuration default
+    */
+    int getRequestMaxRetries(*hash<LlmRequestOptions> opts) {
+        return opts.max_retries ?? config_h.max_retries;
+    }
+
     #! Merges provider-specific body options after generic fields
     /** Default semantics: keys in \a opts.body_options overwrite top-level
         keys in \a body verbatim.  Providers that need recursive / nested
@@ -876,19 +890,22 @@ public class AbstractLlmProvider {
 
     #! Retries the given call with exponential backoff on transient errors
     /** Retries on HTTP 429 (rate limit) and 5xx (server error) responses up
-        to @ref LlmBackendConfig::max_retries times.  Initial delay is
+        to @ref LlmRequestOptions::max_retries when supplied, otherwise
+        @ref LlmBackendConfig::max_retries. Initial delay is
         @ref LlmBackendConfig::retry_delay_ms and doubles on each attempt;
         respects \c Retry-After when present on 429 responses.
 
         @param call a callable that performs the request and returns the response
+        @param opts optional per-call request overrides
 
         @return the response from the successful call
 
         @throw any non-retryable exception is rethrown; a retryable exception
         is rethrown after retries are exhausted
     */
-    auto withRetry(code call) {
+    auto withRetry(code call, *hash<LlmRequestOptions> opts = NOTHING) {
         int attempt = 0;
+        int max_retries = getRequestMaxRetries(opts);
         while (True) {
             try {
                 return call();
@@ -901,7 +918,7 @@ public class AbstractLlmProvider {
                     }
                 }
 
-                if (!retryable || attempt >= config_h.max_retries) {
+                if (!retryable || attempt >= max_retries) {
                     rethrow;
                 }
 

@@ -60,6 +60,17 @@ SseObservable obs(mgr, "https://api.example.com", "POST", "/stream",
 obs.registerObserver(my_observer);
 obs.observersReady();
     @endcode
+
+    @par Object lifetime
+    The notifier poll operation submitted to the async I/O controller holds only
+    weak call references to this object, so the controller does not extend the
+    object's lifetime: dropping the last reference tears the object down while
+    the I/O thread may still be running the stream, and the stream is then closed
+    from the I/O thread when it notices that the observable is gone.  That is safe
+    (see @ref sse_lock_pin), but the teardown point is not under the caller's
+    control; call @ref HttpClientStreamingIo::SseObservable::stopEvents() "stopEvents()"
+    when the stream is no longer needed so the stream is cancelled and the poll
+    operation completes deterministically first.
 */
 
 namespace Priv {
@@ -191,6 +202,36 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         bool stop = False;
 
         #! Mutex for thread safety
+        /** @anchor sse_lock_pin
+            Every method that locks this mutex pins it in a local first:
+            @code
+            Mutex m_pin = m;
+            @endcode
+
+            @ref startNotifierPoll() hands \c \\drainNotifierEvents() and
+            \c \\notifierDone() to the async I/O controller, and a method call
+            reference created inside a method holds only a @b weak reference to
+            the object — so the controller does @b not keep this object alive.
+            When the last strong reference is dropped (typically by the thread
+            that owns the observable), %Qore runs the destructor and destroys
+            the members only @b after it returns; entering a method is still
+            allowed in that window, so the I/O thread can be inside
+            @ref notifierDone() or the \c on_exit block of
+            @ref drainNotifierEvents() holding this mutex exactly when member
+            cleanup deletes it.  @ref Qore::Thread::AutoLock "AutoLock"
+            references only the lock's private data, not the
+            @ref Qore::Thread::Mutex "Mutex" object, so without the pin that
+            cleanup fires \c "LOCK-ERROR: TID N deleted Mutex object while TID
+            M was holding the lock" in the dropping thread.
+
+            The pin is a local-only reference: member cleanup then finds the
+            object still referenced and defers its destructor until the pin
+            goes out of scope, by which time the
+            @ref Qore::Thread::AutoLock "AutoLock" has released the lock, so
+            the deferred destructor runs cleanly.  This is the same idiom used
+            for @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"'s
+            \c pool_lock.
+        */
         Mutex m();
 
         #! Signals notifier poll operation state changes
@@ -318,6 +359,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         the notifier poll operation to the AsyncIoController.
     */
     observersReady() {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         {
             AutoLock al(m);
             stop = False;
@@ -393,6 +436,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     */
     activateStartedStream(HttpClientIo::HttpClientStreamHandle started_stream,
             Queue started_queue, EventNotifier started_notifier) {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         bool stopped_before_activation;
         {
             AutoLock al(m);
@@ -419,6 +464,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     /** @param ex startup exception information
     */
     startupFailed(hash<ExceptionInfo> ex) {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         bool stopped;
         {
             AutoLock al(m);
@@ -436,6 +483,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
     #! Starts the notifier poll operation after the SSE stream is active
     private startNotifierPoll() {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
         bool stopped_reentrantly;
@@ -498,6 +547,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
     #! Stops the SSE event stream
     stopEvents() {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         *HttpClientIo::HttpClientStreamHandle local_stream;
         *Queue local_sse_queue;
         *EventNotifier local_notifier;
@@ -555,6 +606,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
     #! Returns True if the stream is stopped
     bool isStopped() {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         AutoLock al(m);
         return stop;
     }
@@ -568,6 +621,11 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         streams and close the loop when \c idle_timeout_ms > 0.
     */
     private bool drainNotifierEvents() {
+        # Pin @c m across this method: see @ref sse_lock_pin.  This is the hot path
+        # for the failure the pin prevents — the poll operation reaches this
+        # method through a weak call reference, so the object can be torn down
+        # by its owner thread while this method is running.
+        Mutex m_pin = m;
         {
             AutoLock al(m);
             tid = gettid();
@@ -618,8 +676,11 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 if (idle_timeout_ms > 0 && last_event_us > 0
                         && (clock_getmicros() - last_event_us) / 1000
                             >= idle_timeout_ms) {
-                    notifyObservers(EVENT_SSE_CLOSED,
-                        {"reason": "idle-timeout"});
+                    # through notifyClosed() so the @ref closed guard is set;
+                    # a direct notifyObservers() call here would leave the
+                    # guard clear and let a later teardown deliver a second
+                    # EVENT_SSE_CLOSED for the same stream
+                    notifyClosed({"reason": "idle-timeout"});
                     terminate = True;
                     return True;
                 }
@@ -694,6 +755,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     }
 
     private notifyClosed(*hash<auto> data) {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         bool do_notify = False;
         {
             AutoLock al(m);
@@ -708,6 +771,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     }
 
     private notifierDone() {
+        # Pin @c m across this method: see @ref sse_lock_pin
+        Mutex m_pin = m;
         {
             AutoLock al(m);
             notifier_active = False;

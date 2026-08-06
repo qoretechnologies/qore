@@ -740,7 +740,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             resp = withRetry(hash<auto> sub () {
                 return rest_client.restPost("/v1/messages", body,
                     buildAuthHeaders());
-            });
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
                 sprintf("Anthropic completion request failed: %s", ex.desc), ex;
@@ -777,7 +777,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             resp = withRetry(hash<auto> sub () {
                 return rest_client.restPost("/v1/messages", body,
                     buildAuthHeaders());
-            });
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
                 sprintf("Anthropic chat request failed: %s", ex.desc), ex;

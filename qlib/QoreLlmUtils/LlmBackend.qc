@@ -870,6 +870,10 @@ llm.chatStream(
 
         @param body OpenAI-compatible chat-completions request
 
+        @note The optional \c max_retries field is a provider-neutral Qore
+            facade extension. It is consumed as a per-call transport retry
+            override and is never forwarded in the provider-native wire body.
+
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed
@@ -1095,6 +1099,9 @@ llm.chatStream(
         }
         if (exists body.temperature) {
             options_h.temperature = body.temperature;
+        }
+        if (exists body.max_retries) {
+            options_h.max_retries = body.max_retries;
         }
 
         hash<auto!> body_options;
