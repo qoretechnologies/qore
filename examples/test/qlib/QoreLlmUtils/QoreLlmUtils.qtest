@@ -182,7 +182,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "tool text", \geminiOpenAiForcedToolJsonTextTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
             "tool calls as JSON", \geminiOpenAiMalformedForcedToolRetryTest());
-        addTestCase("LlmBackend OpenAI chat facade returns useful malformed "
+        addTestCase("LlmBackend OpenAI chat facade rejects truncated malformed "
             "forced-tool retry content",
             \geminiOpenAiMalformedForcedToolRetryContentTest());
         addTestCase("LlmBackend OpenAI chat facade retries required empty "
@@ -193,6 +193,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend OpenAI streaming facade retries single "
             "required empty tool responses as JSON",
             \callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest());
+        addTestCase("LlmBackend OpenAI streaming facade rejects truncated "
+            "malformed forced-tool retry content",
+            \callbackOpenAiStreamMalformedForcedToolRetryContentTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed "
             "required tool responses", \geminiOpenAiRequiredToolMalformedRetryTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
@@ -2274,15 +2277,19 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                         "body": {
                             "responseId": "gemini-malformed-tool-plain-retry-1",
                             "candidates": ({
-                                "finishReason": "STOP",
+                                "finishReason": "MAX_TOKENS",
                                 "content": {
                                     "parts": ({
-                                        "text": "Which payment system should "
-                                            "provide settlement status?",
+                                        "text": "{\"question\":\"決済",
                                     },),
                                 },
                             },),
-                            "usageMetadata": {"totalTokenCount": 9},
+                            "usageMetadata": {
+                                "promptTokenCount": 736,
+                                "thoughtsTokenCount": 242,
+                                "candidatesTokenCount": 10,
+                                "totalTokenCount": 988,
+                            },
                         },
                     },
                 ),
@@ -2315,28 +2322,49 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 "type": "function",
                 "function": {"name": "first_question"},
             },
+            "max_output_tokens": 256,
+            "reasoning_token_budget": 128,
+            "generationConfig": {
+                "maxOutputTokens": 128,
+                "thinkingConfig": {"thinkingBudget": 64},
+            },
         });
 
         assertEq(2, gemini_handler.requests.size(),
-            "malformed forced tool call with plain retry content is retried");
-        assertEq("Which payment system should provide settlement status?",
-            rv.choices[0].message.content,
-            "plain retry content is returned instead of the original null "
-            "malformed response");
-        assertEq("stop", rv.choices[0].finish_reason,
-            "plain retry response keeps its finish reason");
+            "malformed forced tool call with truncated retry content is retried");
+        assertEq(128,
+            gemini_handler.requests[0].body.generationConfig.maxOutputTokens,
+            "the initial request preserves the explicit provider budget");
+        assertEq(64, gemini_handler.requests[0].body.generationConfig
+                .thinkingConfig.thinkingBudget,
+            "the initial request preserves the explicit thinking budget");
+        assertEq(2048,
+            gemini_handler.requests[1].body.generationConfig.maxOutputTokens,
+            "the schema retry receives an independent visible-output floor");
+        assertEq(0, gemini_handler.requests[1].body.generationConfig
+                .thinkingConfig.thinkingBudget,
+            "the schema retry disables hidden reasoning");
+        assertFalse(rv.choices[0].message.content.val(),
+            "truncated retry content is not returned as a successful response");
+        assertEq(NT_NOTHING, rv.choices[0].message.tool_calls.typeCode(),
+            "a failed schema retry does not fabricate a tool call");
+        assertEq("MALFORMED_FUNCTION_CALL", rv.choices[0].finish_reason,
+            "the original protocol failure remains explicit");
         assertEq(False,
             rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
-            "plain retry diagnostics record that no tool call was recovered");
-        assertEq(True,
+            "truncated retry diagnostics record that no call was recovered");
+        assertEq(False,
             rv.provider_diagnostics.forced_tool_retry.returned_retry_response,
-            "plain retry diagnostics record that the retry response was returned");
+            "truncated retry diagnostics record that it was not returned");
         assertEq("MALFORMED_FUNCTION_CALL",
             rv.provider_diagnostics.forced_tool_retry.original_finish_reason,
-            "plain retry diagnostics preserve original malformed finish reason");
-        assertEq("stop",
+            "truncated retry diagnostics preserve the original finish reason");
+        assertEq("length",
             rv.provider_diagnostics.forced_tool_retry.retry_finish_reason,
-            "plain retry diagnostics preserve retry finish reason");
+            "truncated retry diagnostics preserve the normalized finish reason");
+        assertEq("MAX_TOKENS", rv.provider_diagnostics.forced_tool_retry
+                .retry_provider_diagnostics.finish_reason,
+            "truncated retry diagnostics preserve the native finish reason");
     }
 
     geminiOpenAiRequiredToolEmptyRetryTest() {
@@ -2713,6 +2741,129 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("stream JSON retry", args.reason,
             "streaming JSON retry arguments are serialized");
+    }
+
+    callbackOpenAiStreamMalformedForcedToolRetryContentTest() {
+        int stream_calls = 0;
+        int sync_calls = 0;
+        list<hash<auto>> stream_bodies = ();
+        list<hash<auto>> sync_bodies = ();
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "callback-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                ++sync_calls;
+                push sync_bodies, body;
+                return {
+                    "id": "callback-malformed-retry-1",
+                    "model": "callback-model",
+                    "choices": ({
+                        "message": {
+                            "role": "assistant",
+                            "content": "{\"question\":\"質問",
+                        },
+                        "finish_reason": "length",
+                    },),
+                    "usage": {
+                        "prompt_tokens": 736,
+                        "completion_tokens": 10,
+                        "reasoning_tokens": 242,
+                        "total_tokens": 988,
+                    },
+                };
+            },
+            "api_stream_callback": sub (string m, string p, hash<auto> body,
+                    code<nothing(hash<auto>)> dcb) {
+                ++stream_calls;
+                push stream_bodies, body;
+                dcb({
+                    "id": "callback-malformed-stream-1",
+                    "object": "chat.completion.chunk",
+                    "model": "callback-model",
+                    "choices": ({
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "MALFORMED_FUNCTION_CALL",
+                    },),
+                    "usage": {
+                        "prompt_tokens": 80,
+                        "completion_tokens": 0,
+                        "total_tokens": 80,
+                    },
+                    "provider_diagnostics": {
+                        "wire_protocol": "gemini_generate_content",
+                        "wire_stream_event_count": 1,
+                        "wire_function_call_count_max": 0,
+                        "wire_function_call_observed": False,
+                    },
+                });
+            },
+        });
+
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream({
+            "model": "callback-model",
+            "messages": (
+                {"role": "system", "content": "Call the supplied tool."},
+                {"role": "user", "content": "Ask one clarification."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "first_question",
+                    "description": "Return the first clarification question",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                        },
+                        "required": ("question",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "first_question"},
+            },
+            "max_tokens": 256,
+            "reasoning_token_budget": 128,
+        }, sub (hash<auto> chunk) {
+            push chunks, chunk;
+        });
+
+        assertEq(1, stream_calls,
+            "the malformed response uses the streaming callback first");
+        assertEq(1, sync_calls,
+            "the malformed streaming response receives one JSON retry");
+        assertEq(256, stream_bodies[0].max_tokens,
+            "the original stream preserves its output budget");
+        assertEq(128, stream_bodies[0].reasoning_token_budget,
+            "the original stream preserves its reasoning budget");
+        assertEq(2048, sync_bodies[0].max_tokens,
+            "the streaming schema retry receives the output floor");
+        assertEq(0, sync_bodies[0].reasoning_token_budget,
+            "the streaming schema retry disables hidden reasoning");
+        assertEq(1, chunks.size(),
+            "only the original terminal streaming chunk is forwarded");
+        assertFalse(rv.choices[0].message.content.val(),
+            "truncated streaming retry text is not returned as success");
+        assertEq(NT_NOTHING, rv.choices[0].message.tool_calls.typeCode(),
+            "a failed streaming retry does not fabricate a tool call");
+        assertEq("MALFORMED_FUNCTION_CALL", rv.choices[0].finish_reason,
+            "the original streaming protocol failure remains explicit");
+        assertFalse(rv.provider_diagnostics.forced_tool_retry
+                .returned_retry_response,
+            "stream diagnostics record that the failed retry was not returned");
+        assertFalse(rv.provider_diagnostics.forced_tool_retry
+                .recovered_tool_call,
+            "stream diagnostics record that no tool call was recovered");
+        assertEq("length", rv.provider_diagnostics.forced_tool_retry
+                .retry_finish_reason,
+            "stream diagnostics preserve the failed retry finish reason");
+        assertTrue(rv.provider_diagnostics.tool_protocol.streaming,
+            "tool diagnostics identify the streaming path");
     }
 
     geminiOpenAiRequiredToolMalformedRetryTest() {
