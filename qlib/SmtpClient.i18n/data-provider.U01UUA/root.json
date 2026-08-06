@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.U01UUA.display_name": {
+          "source": "SMTP Server",
+          "message": "SMTP Server"
+        },
+        "app.U01UUA.short_desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Generic SMTP server for sending emails"
+        },
+        "app.U01UUA.desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Generic SMTP server for sending emails"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send an Email With SMTP",
+          "message": "Send an Email With SMTP"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Send an email through a generic SMTP server"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Send an email through a generic SMTP server"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Sender"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "The sender's address for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "The sender's address for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "To"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Message recipient addresses"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "One or more `To:` addresses for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Subject"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "The subject for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "The subject for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Message Body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "The message body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "The message body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Attachments"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Message attachments"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Any attachments for the message"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Blind carbon copy addresses"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "One or more `Bcc:` addresses for the email"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Body Encoding"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the body",
+          "message": "The encoding to use for the body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the message body",
+          "message": "The encoding to use for the message body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` for string data, `base64` for binary data"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "No content encoding (not recommended)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Quoted printable encoding",
+          "message": "Quoted printable encoding"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Base64 encoding",
+          "message": "Base64 encoding"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "Body Mime Type"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "The MIME type of the message body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "The MIME type of the message body"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Carbon copy addresses"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "One or more `Cc:` addresses for the email"
+        }
+      }
+    }
+  }
+}

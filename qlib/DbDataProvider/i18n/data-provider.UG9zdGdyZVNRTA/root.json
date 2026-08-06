@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.UG9zdGdyZVNRTA.display_name": {
+          "source": "PostgreSQL",
+          "message": "PostgreSQL"
+        },
+        "app.UG9zdGdyZVNRTA.short_desc": {
+          "source": "PostgreSQL database server",
+          "message": "PostgreSQL database server"
+        },
+        "app.UG9zdGdyZVNRTA.desc": {
+          "source": "Create and manage connections to a PostgreSQL database server",
+          "message": "Create and manage connections to a PostgreSQL database server"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.VmVydGV4QUk.display_name": {
+          "source": "Google Vertex AI",
+          "message": "Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.short_desc": {
+          "source": "Google Vertex AI generative-model platform",
+          "message": "Google Vertex AI generative-model platform"
+        },
+        "app.VmVydGV4QUk.desc": {
+          "source": "**Google Vertex AI** is Google Cloud's managed platform for generative model access, exposing the Gemini family + publisher partner models (Claude on Vertex, Llama on Vertex) and Google's Gecko text-embedding models through a single regional REST API.\n\n- **Gemini :generateContent** — same body shape as the native Gemini REST API but routed through `{region}-aiplatform.googleapis.com` with GCP auth\n- **Gecko :predict embeddings** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` via the batch-capable `:predict` endpoint\n- **Vertex Context Caching** — major cost reduction for repeated system prompts (referenced via `cachedContent`)\n- **Application Default Credentials** — explicit service-account JSON, `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud` user creds, or the GCE/GKE/Cloud-Run metadata server are all honored\n- **Per-region endpoints** — pick `us-central1`, `europe-west4`, `asia-east1`, etc. for data residency\n\nTokens are cached and refreshed transparently by `GcpAuth`.\n\nProject: <https://cloud.google.com/vertex-ai>",
+          "message": "**Google Vertex AI** is Google Cloud's managed platform for generative model access, exposing the Gemini family + publisher partner models (Claude on Vertex, Llama on Vertex) and Google's Gecko text-embedding models through a single regional REST API.\n\n- **Gemini :generateContent** — same body shape as the native Gemini REST API but routed through `{region}-aiplatform.googleapis.com` with GCP auth\n- **Gecko :predict embeddings** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` via the batch-capable `:predict` endpoint\n- **Vertex Context Caching** — major cost reduction for repeated system prompts (referenced via `cachedContent`)\n- **Application Default Credentials** — explicit service-account JSON, `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud` user creds, or the GCE/GKE/Cloud-Run metadata server are all honored\n- **Per-region endpoints** — pick `us-central1`, `europe-west4`, `asia-east1`, etc. for data residency\n\nTokens are cached and refreshed transparently by `GcpAuth`.\n\nProject: <https://cloud.google.com/vertex-ai>"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Vertex AI",
+          "message": "Make a custom API call to Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Vertex AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Google Vertex AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Generate Content"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate a Gemini response via Vertex AI",
+          "message": "Generate a Gemini response via Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate a Gemini response via Vertex AI's regional `:generateContent` endpoint. The model name in the request is resolved into the URL path (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); the body is otherwise identical to the native Gemini `:generateContent` shape — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`.",
+          "message": "Generate a Gemini response via Vertex AI's regional `:generateContent` endpoint. The model name in the request is resolved into the URL path (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); the body is otherwise identical to the native Gemini `:generateContent` shape — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`."
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "Gemini publisher model name",
+          "message": "Gemini publisher model name"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The Gemini publisher model name (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); becomes the `{model}` segment in the Vertex URL path",
+          "message": "The Gemini publisher model name (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); becomes the `{model}` segment in the Vertex URL path"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Contents"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "Gemini conversation contents",
+          "message": "Gemini conversation contents"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "Gemini conversation history; each entry is a hash with `role` (`user` / `model`) and `parts` (list of `{text: \"...\"}`, `{inlineData: {mimeType, data}}`, or `{functionCall: ...}` / `{functionResponse: ...}` parts)",
+          "message": "Gemini conversation history; each entry is a hash with `role` (`user` / `model`) and `parts` (list of `{text: \"...\"}`, `{inlineData: {mimeType, data}}`, or `{functionCall: ...}` / `{functionResponse: ...}` parts)"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "System Instruction"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "Optional system-instruction block",
+          "message": "Optional system-instruction block"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system-instruction block: `{parts: ({text: \"...\"},)}`",
+          "message": "Optional system-instruction block: `{parts: ({text: \"...\"},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Generation Config"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Generation knobs",
+          "message": "Generation knobs"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
+          "message": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Tools"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.short_desc": {
+          "source": "Tool / function-calling definitions",
+          "message": "Tool / function-calling definitions"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.desc": {
+          "source": "Function-calling tools: list of `{functionDeclarations: ({name, description, parameters},)}`",
+          "message": "Function-calling tools: list of `{functionDeclarations: ({name, description, parameters},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "Tool Config"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool-selection policy",
+          "message": "Tool-selection policy"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool selection policy: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`",
+          "message": "Tool selection policy: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Safety Settings"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety-filter thresholds",
+          "message": "Safety-filter thresholds"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "Per-category safety-filter thresholds; list of `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`",
+          "message": "Per-category safety-filter thresholds; list of `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Cached Content"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "Vertex context-caching reference",
+          "message": "Vertex context-caching reference"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "Reference to a previously-created cached-content resource (e.g. `projects/{project}/locations/{region}/cachedContents/{id}`); major cost reduction for repeated system prompts",
+          "message": "Reference to a previously-created cached-content resource (e.g. `projects/{project}/locations/{region}/cachedContents/{id}`); major cost reduction for repeated system prompts"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "Embed Text"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via Vertex AI :predict",
+          "message": "Generate text embeddings via Vertex AI :predict"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings via Vertex AI's regional `:predict` endpoint on a Gecko / Text-Embedding publisher model. Accepts a batch of `{content: \"...\"}` instances in a single request; supports the `outputDimensionality` parameter on `text-embedding-005` for shorter vectors.",
+          "message": "Generate dense vector embeddings via Vertex AI's regional `:predict` endpoint on a Gecko / Text-Embedding publisher model. Accepts a batch of `{content: \"...\"}` instances in a single request; supports the `outputDimensionality` parameter on `text-embedding-005` for shorter vectors."
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Vertex AI embedding publisher model",
+          "message": "Vertex AI embedding publisher model"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Vertex AI embedding publisher model (e.g. `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)",
+          "message": "Vertex AI embedding publisher model (e.g. `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.display_name": {
+          "source": "Instances",
+          "message": "Instances"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.short_desc": {
+          "source": "Texts to embed",
+          "message": "Texts to embed"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.desc": {
+          "source": "List of `{content: \"<text>\"}` hashes; one instance per text to embed (Vertex predict accepts batches)",
+          "message": "List of `{content: \"<text>\"}` hashes; one instance per text to embed (Vertex predict accepts batches)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Parameters",
+          "message": "Parameters"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Model-specific parameters",
+          "message": "Model-specific parameters"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.desc": {
+          "source": "Model-specific parameters: `autoTruncate` (bool), `outputDimensionality` (int)",
+          "message": "Model-specific parameters: `autoTruncate` (bool), `outputDimensionality` (int)"
+        }
+      }
+    }
+  }
+}

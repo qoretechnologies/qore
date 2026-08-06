@@ -1,0 +1,633 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.TWlzdHJhbEFp.display_name": {
+          "source": "Mistral AI",
+          "message": "Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.short_desc": {
+          "source": "Mistral AI chat, embeddings, and document OCR",
+          "message": "Mistral AI chat, embeddings, and document OCR"
+        },
+        "app.TWlzdHJhbEFp.desc": {
+          "source": "Provides access to [Mistral AI](https://mistral.ai) — frontier and open-weight chat models, embeddings, and best-in-class document OCR.\n\n**Common use cases**:\n- **Frontier chat** with mistral-large-latest, mistral-small-latest\n- **Code-tuned chat** with codestral-latest\n- **RAG embeddings** with mistral-embed\n- **Document OCR** — extract structured markdown from PDFs and images using `mistral-ocr-latest`",
+          "message": "Provides access to [Mistral AI](https://mistral.ai) — frontier and open-weight chat models, embeddings, and best-in-class document OCR.\n\n**Common use cases**:\n- **Frontier chat** with mistral-large-latest, mistral-small-latest\n- **Code-tuned chat** with codestral-latest\n- **RAG embeddings** with mistral-embed\n- **Document OCR** — extract structured markdown from PDFs and images using `mistral-ocr-latest`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mistral AI",
+          "message": "Make a custom API call to Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mistral AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Mistral AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Chat Completion"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Mistral AI model",
+          "message": "Generate a chat completion from a Mistral AI model"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Mistral AI model via the OpenAI-compatible `/v1/chat/completions` endpoint.",
+          "message": "Sends a list of chat messages to a Mistral AI model via the OpenAI-compatible `/v1/chat/completions` endpoint."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messages"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "List of chat messages forming the conversation"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history.",
+          "message": "The conversation history."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Mistral model name",
+          "message": "Mistral model name"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Mistral model identifier, e.g. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`.",
+          "message": "Mistral model identifier, e.g. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperature"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1.5)",
+          "message": "Sampling temperature (0-1.5)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness.  Mistral recommends `0.3` as a default.",
+          "message": "Controls randomness.  Mistral recommends `0.3` as a default."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Max Tokens"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Maximum tokens to emit"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Maximum number of tokens to generate."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff",
+          "message": "Nucleus sampling cutoff"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff (0-1).",
+          "message": "Nucleus sampling cutoff (0-1)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as SSE",
+          "message": "Stream partial completions as SSE"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "When `True`, the server streams partial completions as SSE."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Tools"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "OpenAI-style tool definitions the model may call"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.",
+          "message": "List of tool definitions."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Tool Choice"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Tool invocation mode"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `any` (Mistral's equivalent of `required`).",
+          "message": "Tool invocation mode: `none`, `auto`, or `any` (Mistral's equivalent of `required`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - never call a tool"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - model decides"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmFueQ.display_name": {
+          "source": "Any - must call a tool",
+          "message": "Any - must call a tool"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Response Format"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Force structured output (e.g. JSON)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}`.",
+          "message": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.display_name": {
+          "source": "Safe Prompt",
+          "message": "Safe Prompt"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.short_desc": {
+          "source": "Inject Mistral's safety preamble",
+          "message": "Inject Mistral's safety preamble"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.desc": {
+          "source": "When `True`, Mistral injects its safety preamble.",
+          "message": "When `True`, Mistral injects its safety preamble."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.display_name": {
+          "source": "Random Seed",
+          "message": "Random Seed"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Deterministic sampling seed"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Integer seed for deterministic sampling."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Create Embeddings"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Mistral AI embedding model",
+          "message": "Generate embedding vectors from a Mistral AI embedding model"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors via the OpenAI-compatible `/v1/embeddings` endpoint using `mistral-embed`.",
+          "message": "Converts text inputs into embedding vectors via the OpenAI-compatible `/v1/embeddings` endpoint using `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Input"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Text(s) to embed"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.",
+          "message": "Text input(s) to convert to embedding vectors."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Mistral embedding model",
+          "message": "Mistral embedding model"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Mistral embedding model identifier, currently `mistral-embed`.",
+          "message": "Mistral embedding model identifier, currently `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Encoding Format"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for vectors",
+          "message": "Wire format for vectors"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float` (default) or `base64`."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.display_name": {
+          "source": "Document OCR",
+          "message": "Document OCR"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.short_desc": {
+          "source": "Extract structured markdown from PDF or image documents",
+          "message": "Extract structured markdown from PDF or image documents"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.desc": {
+          "source": "Converts a PDF or image document into structured markdown using Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page markdown, layout-preserved tables, and inline image references.\n\nSupply a document URL via `document.document_url` (preferred for large PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) for small inputs.\n\n**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" engine abstraction is planned for a follow-up release; this action is the direct REST surface in the meantime.",
+          "message": "Converts a PDF or image document into structured markdown using Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page markdown, layout-preserved tables, and inline image references.\n\nSupply a document URL via `document.document_url` (preferred for large PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) for small inputs.\n\n**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" engine abstraction is planned for a follow-up release; this action is the direct REST surface in the meantime."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "Document"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.short_desc": {
+          "source": "Document to OCR (URL or base64 data URI)",
+          "message": "Document to OCR (URL or base64 data URI)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.desc": {
+          "source": "Hash describing the document.  One of:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — remote PDF URL (preferred for large documents)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — inline base64-encoded image (small inputs only)",
+          "message": "Hash describing the document.  One of:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — remote PDF URL (preferred for large documents)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — inline base64-encoded image (small inputs only)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.short_desc": {
+          "source": "Mistral OCR model",
+          "message": "Mistral OCR model"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.desc": {
+          "source": "Mistral OCR model identifier, e.g. `mistral-ocr-latest`.",
+          "message": "Mistral OCR model identifier, e.g. `mistral-ocr-latest`."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.short_desc": {
+          "source": "Specific pages to OCR (0-indexed list)",
+          "message": "Specific pages to OCR (0-indexed list)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.desc": {
+          "source": "Optional list of 0-indexed page numbers to OCR.  Defaults to all pages.",
+          "message": "Optional list of 0-indexed page numbers to OCR.  Defaults to all pages."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.display_name": {
+          "source": "Include Image Base64",
+          "message": "Include Image Base64"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.short_desc": {
+          "source": "Embed images inline as base64 in the response",
+          "message": "Embed images inline as base64 in the response"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.desc": {
+          "source": "When `True`, embedded images are returned as base64 in the response.  When `False` (default), images are referenced by URL.",
+          "message": "When `True`, embedded images are returned as base64 in the response.  When `False` (default), images are referenced by URL."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.display_name": {
+          "source": "Image Limit",
+          "message": "Image Limit"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.short_desc": {
+          "source": "Maximum number of images to extract",
+          "message": "Maximum number of images to extract"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.desc": {
+          "source": "Cap on the number of images extracted from the document.",
+          "message": "Cap on the number of images extracted from the document."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.display_name": {
+          "source": "Image Min Size",
+          "message": "Image Min Size"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.short_desc": {
+          "source": "Minimum image size (pixels) to extract",
+          "message": "Minimum image size (pixels) to extract"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.desc": {
+          "source": "Skip images smaller than this size in pixels.",
+          "message": "Skip images smaller than this size in pixels."
+        }
+      }
+    }
+  }
+}

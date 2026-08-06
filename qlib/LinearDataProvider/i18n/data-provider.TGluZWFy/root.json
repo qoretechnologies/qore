@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.TGluZWFy.display_name": {
+          "source": "Linear",
+          "message": "Linear"
+        },
+        "app.TGluZWFy.short_desc": {
+          "source": "Linear issue tracking and project management",
+          "message": "Linear issue tracking and project management"
+        },
+        "app.TGluZWFy.desc": {
+          "source": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API.",
+          "message": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Linear",
+          "message": "Make a custom API call to Linear"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
+          "source": "Create Issue",
+          "message": "Create Issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
+          "source": "Create a new issue in Linear",
+          "message": "Create a new issue in Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.desc": {
+          "source": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+          "message": "Create a new issue in a Linear team with title, description, priority, and other attributes"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the issue in",
+          "message": "The team to create the issue in"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.desc": {
+          "source": "The team to create the issue in",
+          "message": "The team to create the issue in"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Title"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The issue title",
+          "message": "The issue title"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The title of the issue",
+          "message": "The title of the issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The issue description",
+          "message": "The issue description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the issue in markdown format",
+          "message": "The description of the issue in markdown format"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The issue priority",
+          "message": "The issue priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The priority of the issue",
+          "message": "The priority of the issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "No Priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "No priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Urgent"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Urgent priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "High"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "High priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normal"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Normal priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Low priority"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Estimate"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The issue estimate",
+          "message": "The issue estimate"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The estimated complexity/effort",
+          "message": "The estimated complexity/effort"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Assignee"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The user to assign the issue to",
+          "message": "The user to assign the issue to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The user to assign the issue to",
+          "message": "The user to assign the issue to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The workflow state",
+          "message": "The workflow state"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The workflow state to set on the issue",
+          "message": "The workflow state to set on the issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project",
+          "message": "The project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to add the issue to",
+          "message": "The project to add the issue to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cycle"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle/sprint",
+          "message": "The cycle/sprint"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to add the issue to",
+          "message": "The cycle (sprint) to add the issue to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Labels"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels",
+          "message": "The labels"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to attach to the issue",
+          "message": "Labels to attach to the issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Parent Issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "The parent issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue for creating a sub-issue",
+          "message": "The parent issue for creating a sub-issue"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
+          "source": "Search Issues",
+          "message": "Search Issues"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
+          "source": "Search for issues in Linear",
+          "message": "Search for issues in Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.desc": {
+          "source": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+          "message": "Search for issues with optional filters for team, project, cycle, assignee, and state"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filter by team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.desc": {
+          "source": "Filter issues by team",
+          "message": "Filter issues by team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Project"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.short_desc": {
+          "source": "Filter by project",
+          "message": "Filter by project"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.desc": {
+          "source": "Filter issues by project",
+          "message": "Filter issues by project"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cycle"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.short_desc": {
+          "source": "Filter by cycle",
+          "message": "Filter by cycle"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.desc": {
+          "source": "Filter issues by cycle (sprint)",
+          "message": "Filter issues by cycle (sprint)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Assignee"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "Filter by assignee",
+          "message": "Filter by assignee"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.desc": {
+          "source": "Filter issues by assignee",
+          "message": "Filter issues by assignee"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.short_desc": {
+          "source": "Filter by workflow state",
+          "message": "Filter by workflow state"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.desc": {
+          "source": "Filter issues by workflow state",
+          "message": "Filter issues by workflow state"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priority"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.short_desc": {
+          "source": "Filter by priority",
+          "message": "Filter by priority"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.desc": {
+          "source": "Filter issues by priority level",
+          "message": "Filter issues by priority level"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "No Priority"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Urgent"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "High"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normal"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximum number of results"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
+          "source": "Get Issue",
+          "message": "Get Issue"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
+          "source": "Get a specific issue from Linear",
+          "message": "Get a specific issue from Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.desc": {
+          "source": "Retrieve a specific issue by its ID",
+          "message": "Retrieve a specific issue by its ID"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Issue"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to retrieve",
+          "message": "The issue to retrieve"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to retrieve",
+          "message": "The issue to retrieve"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
+          "source": "Update Issue",
+          "message": "Update Issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
+          "source": "Update an existing Linear issue",
+          "message": "Update an existing Linear issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.desc": {
+          "source": "Update the properties of an existing Linear issue",
+          "message": "Update the properties of an existing Linear issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to update",
+          "message": "The issue to update"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to update",
+          "message": "The issue to update"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Title"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The new issue title",
+          "message": "The new issue title"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The new title of the issue",
+          "message": "The new title of the issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new issue description",
+          "message": "The new issue description"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the issue (supports markdown)",
+          "message": "The new description of the issue (supports markdown)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The new issue priority",
+          "message": "The new issue priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority of the issue",
+          "message": "The new priority of the issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "No Priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "No priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Urgent"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Urgent priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "High"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "High priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normal"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Normal priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Low priority"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Estimate"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The new issue estimate",
+          "message": "The new issue estimate"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The new estimated complexity/effort",
+          "message": "The new estimated complexity/effort"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Assignee"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The new assignee",
+          "message": "The new assignee"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The new user to assign the issue to",
+          "message": "The new user to assign the issue to"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The new workflow state",
+          "message": "The new workflow state"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The new workflow state for the issue",
+          "message": "The new workflow state for the issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Project"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project to move the issue to",
+          "message": "The project to move the issue to"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to move the issue to",
+          "message": "The project to move the issue to"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cycle"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle to move the issue to",
+          "message": "The cycle to move the issue to"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to move the issue to",
+          "message": "The cycle (sprint) to move the issue to"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Labels"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels to set",
+          "message": "The labels to set"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to set on the issue (replaces existing labels)",
+          "message": "Labels to set on the issue (replaces existing labels)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Parent Issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "The parent issue"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue ID (to make this a sub-issue)",
+          "message": "The parent issue ID (to make this a sub-issue)"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
+          "source": "Archive Issue",
+          "message": "Archive Issue"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
+          "source": "Archive a Linear issue",
+          "message": "Archive a Linear issue"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.desc": {
+          "source": "Archive (soft delete) a Linear issue",
+          "message": "Archive (soft delete) a Linear issue"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Issue"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.short_desc": {
+          "source": "The issue to archive",
+          "message": "The issue to archive"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.desc": {
+          "source": "The issue to archive",
+          "message": "The issue to archive"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create Comment",
+          "message": "Create Comment"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Add a comment to a Linear issue",
+          "message": "Add a comment to a Linear issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Create a new comment on an existing Linear issue",
+          "message": "Create a new comment on an existing Linear issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.display_name": {
+          "source": "Issue",
+          "message": "Issue"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.short_desc": {
+          "source": "The issue to add the comment to",
+          "message": "The issue to add the comment to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.desc": {
+          "source": "The issue to add the comment to",
+          "message": "The issue to add the comment to"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "The comment body",
+          "message": "The comment body"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body/content of the comment in markdown format",
+          "message": "The body/content of the comment in markdown format"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create Project",
+          "message": "Create Project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project in Linear",
+          "message": "Create a new project in Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project for organizing related issues",
+          "message": "Create a new project for organizing related issues"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The project name",
+          "message": "The project name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project",
+          "message": "The name of the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "The project description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the project",
+          "message": "The description of the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.display_name": {
+          "source": "Teams",
+          "message": "Teams"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.short_desc": {
+          "source": "The teams to associate with the project",
+          "message": "The teams to associate with the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.desc": {
+          "source": "The teams to associate with the project",
+          "message": "The teams to associate with the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.display_name": {
+          "source": "Lead",
+          "message": "Lead"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.short_desc": {
+          "source": "The project lead",
+          "message": "The project lead"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.desc": {
+          "source": "The user leading the project",
+          "message": "The user leading the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.short_desc": {
+          "source": "The project state",
+          "message": "The project state"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.desc": {
+          "source": "The initial state of the project",
+          "message": "The initial state of the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Planned"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned project",
+          "message": "Planned project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Started"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started project",
+          "message": "Started project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Paused"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused project",
+          "message": "Paused project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Completed"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed project",
+          "message": "Completed project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Canceled"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled project",
+          "message": "Canceled project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.short_desc": {
+          "source": "The project start date",
+          "message": "The project start date"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.desc": {
+          "source": "The planned start date of the project",
+          "message": "The planned start date of the project"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.display_name": {
+          "source": "Target Date",
+          "message": "Target Date"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.short_desc": {
+          "source": "The project target date",
+          "message": "The project target date"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.desc": {
+          "source": "The target completion date of the project",
+          "message": "The target completion date of the project"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "Search Projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects in Linear",
+          "message": "Search for projects in Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects with optional state filter",
+          "message": "Search for projects with optional state filter"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "State"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.short_desc": {
+          "source": "Filter by project state",
+          "message": "Filter by project state"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.desc": {
+          "source": "Filter projects by state",
+          "message": "Filter projects by state"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Planned"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned projects",
+          "message": "Planned projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Started"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started projects",
+          "message": "Started projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Paused"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused projects",
+          "message": "Paused projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Completed"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed projects",
+          "message": "Completed projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Canceled"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled projects",
+          "message": "Canceled projects"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximum number of results"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
+          "source": "Create Cycle",
+          "message": "Create Cycle"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
+          "source": "Create a new cycle (sprint) in Linear",
+          "message": "Create a new cycle (sprint) in Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.desc": {
+          "source": "Create a new cycle for time-boxed work",
+          "message": "Create a new cycle for time-boxed work"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the cycle in",
+          "message": "The team to create the cycle in"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.desc": {
+          "source": "The team to create the cycle in",
+          "message": "The team to create the cycle in"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.short_desc": {
+          "source": "The cycle name",
+          "message": "The cycle name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.desc": {
+          "source": "The name of the cycle",
+          "message": "The name of the cycle"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.display_name": {
+          "source": "Starts At",
+          "message": "Starts At"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.short_desc": {
+          "source": "When the cycle starts",
+          "message": "When the cycle starts"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.desc": {
+          "source": "The start date of the cycle",
+          "message": "The start date of the cycle"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.display_name": {
+          "source": "Ends At",
+          "message": "Ends At"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.short_desc": {
+          "source": "When the cycle ends",
+          "message": "When the cycle ends"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.desc": {
+          "source": "The end date of the cycle",
+          "message": "The end date of the cycle"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
+          "source": "Search Cycles",
+          "message": "Search Cycles"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
+          "source": "Search for cycles in Linear",
+          "message": "Search for cycles in Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.desc": {
+          "source": "Search for cycles with optional team filter",
+          "message": "Search for cycles with optional team filter"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filter by team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.desc": {
+          "source": "Filter cycles by team",
+          "message": "Filter cycles by team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximum number of results"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "Create Label"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label in Linear",
+          "message": "Create a new label in Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label for categorizing issues",
+          "message": "Create a new label for categorizing issues"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The label name",
+          "message": "The label name"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The name of the label",
+          "message": "The name of the label"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The label description",
+          "message": "The label description"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the label",
+          "message": "The description of the label"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Color"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.short_desc": {
+          "source": "The label color",
+          "message": "The label color"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.desc": {
+          "source": "The color of the label in hex format",
+          "message": "The color of the label in hex format"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the label in",
+          "message": "The team to create the label in"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.desc": {
+          "source": "The team to create the label in (leave empty for workspace labels)",
+          "message": "The team to create the label in (leave empty for workspace labels)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
+          "source": "Search Labels",
+          "message": "Search Labels"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
+          "source": "Search for labels in Linear",
+          "message": "Search for labels in Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.desc": {
+          "source": "Search for labels with optional team filter",
+          "message": "Search for labels with optional team filter"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filter by team"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.desc": {
+          "source": "Filter labels by team (`NOTHING` for workspace labels)",
+          "message": "Filter labels by team (`NOTHING` for workspace labels)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximum number of results"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
+          "source": "Search Teams",
+          "message": "Search Teams"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
+          "source": "List teams in Linear",
+          "message": "List teams in Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.desc": {
+          "source": "List all teams accessible to the authenticated user",
+          "message": "List all teams accessible to the authenticated user"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximum number of results"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
+          "source": "Get Team",
+          "message": "Get Team"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
+          "source": "Get a specific team from Linear",
+          "message": "Get a specific team from Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.desc": {
+          "source": "Retrieve a specific team by its ID",
+          "message": "Retrieve a specific team by its ID"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.short_desc": {
+          "source": "The team to retrieve",
+          "message": "The team to retrieve"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.desc": {
+          "source": "The team to retrieve",
+          "message": "The team to retrieve"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
+          "source": "Issue Created",
+          "message": "Issue Created"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new issue is created",
+          "message": "Trigger when a new issue is created"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+          "message": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications."
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Filter to issues from a specific team"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues created in this team (optional)",
+          "message": "Only trigger for issues created in this team (optional)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
+          "source": "Issue Updated",
+          "message": "Issue Updated"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an issue is updated",
+          "message": "Trigger when an issue is updated"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.desc": {
+          "source": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+          "message": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications."
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Team"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Filter to issues from a specific team"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues updated in this team (optional)",
+          "message": "Only trigger for issues updated in this team (optional)"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
+          "source": "Comment Created",
+          "message": "Comment Created"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new comment is created",
+          "message": "Trigger when a new comment is created"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+          "message": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications."
+        }
+      }
+    }
+  }
+}

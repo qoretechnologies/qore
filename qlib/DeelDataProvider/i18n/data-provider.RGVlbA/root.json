@@ -1,0 +1,2437 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.RGVlbA.display_name": {
+          "source": "Deel",
+          "message": "Deel"
+        },
+        "app.RGVlbA.short_desc": {
+          "source": "Deel global workforce management platform",
+          "message": "Deel global workforce management platform"
+        },
+        "app.RGVlbA.desc": {
+          "source": "Deel is a global workforce management and HR platform for hiring, managing, and paying contractors and full-time employees worldwide.\n\nThis integration supports contracts, timesheets, invoice adjustments, workers, time-off requests, legal entities, invoices, and polling-based event triggers.",
+          "message": "Deel is a global workforce management and HR platform for hiring, managing, and paying contractors and full-time employees worldwide.\n\nThis integration supports contracts, timesheets, invoice adjustments, workers, time-off requests, legal entities, invoices, and polling-based event triggers."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deel",
+          "message": "Make a custom API call to Deel"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Deel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Create a Contract",
+          "message": "Create a Contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Create a new contract in Deel",
+          "message": "Create a new contract in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.desc": {
+          "source": "Create a new contractor or employee contract in Deel",
+          "message": "Create a new contractor or employee contract in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Contract Type"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.short_desc": {
+          "source": "The type of contract",
+          "message": "The type of contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.desc": {
+          "source": "The type of contract to create",
+          "message": "The type of contract to create"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contract",
+          "message": "Pay-as-you-go time-based contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contract",
+          "message": "Fixed-rate contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contract",
+          "message": "Milestone-based contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contract",
+          "message": "Employee contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "The contract title",
+          "message": "The contract title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A descriptive title for the contract",
+          "message": "A descriptive title for the contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.display_name": {
+          "source": "Worker Email",
+          "message": "Worker Email"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.short_desc": {
+          "source": "The worker's email address",
+          "message": "The worker's email address"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.desc": {
+          "source": "The email address of the contractor or employee",
+          "message": "The email address of the contractor or employee"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The contract start date",
+          "message": "The contract start date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The date the contract starts (YYYY-MM-DD format)",
+          "message": "The date the contract starts (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Currency"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.short_desc": {
+          "source": "The contract currency",
+          "message": "The contract currency"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)",
+          "message": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Amount"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "The contract amount",
+          "message": "The contract amount"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The monetary amount for the contract (rate or fixed amount)",
+          "message": "The monetary amount for the contract (rate or fixed amount)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.display_name": {
+          "source": "Payment Cycle",
+          "message": "Payment Cycle"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.short_desc": {
+          "source": "How often payments are made",
+          "message": "How often payments are made"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.desc": {
+          "source": "The payment cycle for this contract",
+          "message": "The payment cycle for this contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly payments",
+          "message": "Monthly payments"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOndlZWtseQ.desc": {
+          "source": "Weekly payments",
+          "message": "Weekly payments"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOmJpd2Vla2x5.desc": {
+          "source": "Biweekly (every two weeks) payments",
+          "message": "Biweekly (every two weeks) payments"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Scope of Work"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Description of the work",
+          "message": "Description of the work"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "A description of the work to be performed under this contract",
+          "message": "A description of the work to be performed under this contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Country"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.short_desc": {
+          "source": "The worker's country",
+          "message": "The worker's country"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "The ISO 3166-1 alpha-2 country code for the worker's location"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Job Title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "The worker's job title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the contractor or employee",
+          "message": "The job title of the contractor or employee"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "End Date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The contract end date",
+          "message": "The contract end date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.desc": {
+          "source": "The date the contract ends (YYYY-MM-DD format), if applicable",
+          "message": "The date the contract ends (YYYY-MM-DD format), if applicable"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Terminate a Contract",
+          "message": "Terminate a Contract"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Terminate an existing contract",
+          "message": "Terminate an existing contract"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.desc": {
+          "source": "Terminate an existing contractor or employee contract in Deel",
+          "message": "Terminate an existing contractor or employee contract in Deel"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to terminate",
+          "message": "The contract to terminate"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to terminate",
+          "message": "The unique identifier of the contract to terminate"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.display_name": {
+          "source": "Termination Reason",
+          "message": "Termination Reason"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.short_desc": {
+          "source": "The reason for termination",
+          "message": "The reason for termination"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.desc": {
+          "source": "The reason for terminating the contract",
+          "message": "The reason for terminating the contract"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.display_name": {
+          "source": "Last Day of Work",
+          "message": "Last Day of Work"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.short_desc": {
+          "source": "The worker's last working day",
+          "message": "The worker's last working day"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.desc": {
+          "source": "The last day the worker will be active (YYYY-MM-DD format)",
+          "message": "The last day the worker will be active (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
+          "source": "Sign a Contract",
+          "message": "Sign a Contract"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
+          "source": "Sign a contract in Deel",
+          "message": "Sign a contract in Deel"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.desc": {
+          "source": "Sign a contract in Deel on behalf of the organization",
+          "message": "Sign a contract in Deel on behalf of the organization"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to sign",
+          "message": "The contract to sign"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to sign",
+          "message": "The unique identifier of the contract to sign"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
+          "source": "Search Contracts",
+          "message": "Search Contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
+          "source": "Search for contracts in Deel",
+          "message": "Search for contracts in Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.desc": {
+          "source": "List and search contracts in Deel with optional filtering",
+          "message": "List and search contracts in Deel with optional filtering"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract ID",
+          "message": "Filter by contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Get a specific contract by its ID",
+          "message": "Get a specific contract by its ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contract status",
+          "message": "Filter by contract status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contracts by status",
+          "message": "Filter contracts by status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending contracts",
+          "message": "Pending contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contracts",
+          "message": "Active contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended contracts",
+          "message": "Ended contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlcm1pbmF0ZWQ.desc": {
+          "source": "Terminated contracts",
+          "message": "Terminated contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Contract Type"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.short_desc": {
+          "source": "Filter by contract type",
+          "message": "Filter by contract type"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.desc": {
+          "source": "Filter contracts by type",
+          "message": "Filter contracts by type"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contracts",
+          "message": "Pay-as-you-go time-based contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contracts",
+          "message": "Fixed-rate contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contracts",
+          "message": "Milestone-based contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contracts",
+          "message": "Employee contracts"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
+          "source": "Get a Contract",
+          "message": "Get a Contract"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
+          "source": "Get a single contract by ID",
+          "message": "Get a single contract by ID"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.desc": {
+          "source": "Retrieve a single contract by ID from Deel",
+          "message": "Retrieve a single contract by ID from Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract ID",
+          "message": "The contract ID"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract",
+          "message": "The unique identifier of the contract"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Update a Contract",
+          "message": "Update a Contract"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Update an existing contract",
+          "message": "Update an existing contract"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.desc": {
+          "source": "Update the details of an existing contract in Deel",
+          "message": "Update the details of an existing contract in Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to update",
+          "message": "The contract to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to update",
+          "message": "The unique identifier of the contract to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "Updated contract title",
+          "message": "Updated contract title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A new descriptive title for the contract",
+          "message": "A new descriptive title for the contract"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Amount"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "Updated contract amount",
+          "message": "Updated contract amount"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The updated monetary amount for the contract",
+          "message": "The updated monetary amount for the contract"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Scope of Work"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Updated scope of work",
+          "message": "Updated scope of work"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "Updated description of the work to be performed",
+          "message": "Updated description of the work to be performed"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Job Title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "Updated job title",
+          "message": "Updated job title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title for the contract",
+          "message": "The updated job title for the contract"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
+          "source": "Submit a Timesheet",
+          "message": "Submit a Timesheet"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
+          "source": "Submit a timesheet entry in Deel",
+          "message": "Submit a timesheet entry in Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.desc": {
+          "source": "Submit a new timesheet entry for a contract in Deel",
+          "message": "Submit a new timesheet entry for a contract in Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "The associated contract"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this timesheet belongs to",
+          "message": "The unique identifier of the contract this timesheet belongs to"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Date Submitted"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The timesheet date",
+          "message": "The timesheet date"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this timesheet entry (YYYY-MM-DD format)",
+          "message": "The date for this timesheet entry (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Hours (Quantity)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The number of hours worked",
+          "message": "The number of hours worked"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The number of hours worked for this timesheet entry",
+          "message": "The number of hours worked for this timesheet entry"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Work description",
+          "message": "Work description"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the work performed",
+          "message": "A description of the work performed"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Update a Timesheet",
+          "message": "Update a Timesheet"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Update an existing timesheet entry",
+          "message": "Update an existing timesheet entry"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.desc": {
+          "source": "Update an existing timesheet entry in Deel",
+          "message": "Update an existing timesheet entry in Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to update",
+          "message": "The timesheet to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to update",
+          "message": "The unique identifier of the timesheet entry to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Hours (Quantity)"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The updated number of hours",
+          "message": "The updated number of hours"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The new number of hours worked",
+          "message": "The new number of hours worked"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated work description",
+          "message": "Updated work description"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated description of the work performed",
+          "message": "The updated description of the work performed"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
+          "source": "Approve a Timesheet",
+          "message": "Approve a Timesheet"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
+          "source": "Approve a timesheet entry",
+          "message": "Approve a timesheet entry"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.desc": {
+          "source": "Approve a timesheet entry in Deel",
+          "message": "Approve a timesheet entry in Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to approve",
+          "message": "The timesheet to approve"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to approve",
+          "message": "The unique identifier of the timesheet entry to approve"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
+          "source": "Reject a Timesheet",
+          "message": "Reject a Timesheet"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
+          "source": "Reject a timesheet entry",
+          "message": "Reject a timesheet entry"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.desc": {
+          "source": "Reject a timesheet entry in Deel with an optional rejection reason",
+          "message": "Reject a timesheet entry in Deel with an optional rejection reason"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to reject",
+          "message": "The timesheet to reject"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to reject",
+          "message": "The unique identifier of the timesheet entry to reject"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Rejection Reason"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "The reason for rejection"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the timesheet entry was rejected",
+          "message": "An explanation for why the timesheet entry was rejected"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
+          "source": "Search Timesheets",
+          "message": "Search Timesheets"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
+          "source": "Search for timesheets in Deel",
+          "message": "Search for timesheets in Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.desc": {
+          "source": "List and search timesheet entries in Deel with optional filtering",
+          "message": "List and search timesheet entries in Deel with optional filtering"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "Filter by timesheet ID",
+          "message": "Filter by timesheet ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "Get a specific timesheet by its ID",
+          "message": "Get a specific timesheet by its ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filter by contract"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter timesheets by associated contract ID",
+          "message": "Filter timesheets by associated contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by timesheet status",
+          "message": "Filter by timesheet status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.desc": {
+          "source": "Filter timesheets by status",
+          "message": "Filter timesheets by status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending timesheets",
+          "message": "Pending timesheets"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved timesheets",
+          "message": "Approved timesheets"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.desc": {
+          "source": "Rejected timesheets",
+          "message": "Rejected timesheets"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Date From"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Start of date range"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter timesheets from this date (YYYY-MM-DD format)",
+          "message": "Filter timesheets from this date (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Date To"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "End of date range"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.desc": {
+          "source": "Filter timesheets up to this date (YYYY-MM-DD format)",
+          "message": "Filter timesheets up to this date (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
+          "source": "Get a Timesheet",
+          "message": "Get a Timesheet"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
+          "source": "Get a single timesheet by ID",
+          "message": "Get a single timesheet by ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.desc": {
+          "source": "Retrieve a single timesheet entry by ID from Deel",
+          "message": "Retrieve a single timesheet entry by ID from Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet ID",
+          "message": "The timesheet ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry",
+          "message": "The unique identifier of the timesheet entry"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Delete a Timesheet",
+          "message": "Delete a Timesheet"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Delete a timesheet entry",
+          "message": "Delete a timesheet entry"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.desc": {
+          "source": "Delete a timesheet entry in Deel",
+          "message": "Delete a timesheet entry in Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Timesheet ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to delete",
+          "message": "The timesheet to delete"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to delete",
+          "message": "The unique identifier of the timesheet entry to delete"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Create an Invoice Adjustment",
+          "message": "Create an Invoice Adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new invoice adjustment",
+          "message": "Create a new invoice adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel",
+          "message": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "The associated contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this adjustment belongs to",
+          "message": "The unique identifier of the contract this adjustment belongs to"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Amount"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The adjustment amount",
+          "message": "The adjustment amount"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The monetary amount for this invoice adjustment",
+          "message": "The monetary amount for this invoice adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Currency"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.short_desc": {
+          "source": "The adjustment currency",
+          "message": "The adjustment currency"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code (e.g., `USD`, `EUR`)",
+          "message": "The ISO 4217 currency code (e.g., `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Date Submitted"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The adjustment date",
+          "message": "The adjustment date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this adjustment entry (YYYY-MM-DD format)",
+          "message": "The date for this adjustment entry (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.display_name": {
+          "source": "Adjustment Type",
+          "message": "Adjustment Type"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.short_desc": {
+          "source": "The type of adjustment",
+          "message": "The type of adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.desc": {
+          "source": "The type of invoice adjustment",
+          "message": "The type of invoice adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmJvbnVz.desc": {
+          "source": "Bonus payment",
+          "message": "Bonus payment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlaW1idXJzZW1lbnQ.desc": {
+          "source": "Expense reimbursement",
+          "message": "Expense reimbursement"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmRlZHVjdGlvbg.desc": {
+          "source": "Payment deduction",
+          "message": "Payment deduction"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The reason for the adjustment",
+          "message": "The reason for the adjustment"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An explanation for why this invoice adjustment is being created",
+          "message": "An explanation for why this invoice adjustment is being created"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Update an Invoice Adjustment",
+          "message": "Update an Invoice Adjustment"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Update an existing invoice adjustment",
+          "message": "Update an existing invoice adjustment"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Update an existing invoice adjustment in Deel",
+          "message": "Update an existing invoice adjustment in Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Adjustment ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to update",
+          "message": "The adjustment to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to update",
+          "message": "The unique identifier of the invoice adjustment to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Amount"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The updated adjustment amount",
+          "message": "The updated adjustment amount"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The new monetary amount for this invoice adjustment",
+          "message": "The new monetary amount for this invoice adjustment"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The updated description",
+          "message": "The updated description"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated explanation for this invoice adjustment",
+          "message": "The updated explanation for this invoice adjustment"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Review an Invoice Adjustment",
+          "message": "Review an Invoice Adjustment"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Approve or decline an invoice adjustment",
+          "message": "Approve or decline an invoice adjustment"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Approve or decline an invoice adjustment in Deel",
+          "message": "Approve or decline an invoice adjustment in Deel"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Adjustment ID"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to review",
+          "message": "The adjustment to review"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to review",
+          "message": "The unique identifier of the invoice adjustment to review"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.display_name": {
+          "source": "Review Status",
+          "message": "Review Status"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.short_desc": {
+          "source": "The review decision",
+          "message": "The review decision"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.desc": {
+          "source": "The review decision for the invoice adjustment",
+          "message": "The review decision for the invoice adjustment"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approve the adjustment",
+          "message": "Approve the adjustment"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Decline the adjustment",
+          "message": "Decline the adjustment"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
+          "source": "Search Invoice Adjustments",
+          "message": "Search Invoice Adjustments"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
+          "source": "Search for invoice adjustments",
+          "message": "Search for invoice adjustments"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.desc": {
+          "source": "List and search invoice adjustments in Deel with optional filtering",
+          "message": "List and search invoice adjustments in Deel with optional filtering"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Adjustment ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "Filter by adjustment ID",
+          "message": "Filter by adjustment ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "Get a specific adjustment by its ID",
+          "message": "Get a specific adjustment by its ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filter by contract"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter adjustments by associated contract ID",
+          "message": "Filter adjustments by associated contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by adjustment status",
+          "message": "Filter by adjustment status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.desc": {
+          "source": "Filter adjustments by status",
+          "message": "Filter adjustments by status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending adjustments",
+          "message": "Pending adjustments"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved adjustments",
+          "message": "Approved adjustments"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Declined adjustments",
+          "message": "Declined adjustments"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Get an Invoice Adjustment",
+          "message": "Get an Invoice Adjustment"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Get a single invoice adjustment by ID",
+          "message": "Get a single invoice adjustment by ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve a single invoice adjustment by ID from Deel",
+          "message": "Retrieve a single invoice adjustment by ID from Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Adjustment ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment ID",
+          "message": "The adjustment ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment",
+          "message": "The unique identifier of the invoice adjustment"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Delete an Invoice Adjustment",
+          "message": "Delete an Invoice Adjustment"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an invoice adjustment",
+          "message": "Delete an invoice adjustment"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Delete an invoice adjustment in Deel",
+          "message": "Delete an invoice adjustment in Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Adjustment ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to delete",
+          "message": "The adjustment to delete"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to delete",
+          "message": "The unique identifier of the invoice adjustment to delete"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
+          "source": "Create a Worker",
+          "message": "Create a Worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
+          "source": "Create a new worker/person in Deel",
+          "message": "Create a new worker/person in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.desc": {
+          "source": "Create a new worker or person record in Deel",
+          "message": "Create a new worker or person record in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "First Name"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "The worker's first name"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The given (first) name of the worker",
+          "message": "The given (first) name of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Last Name"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "The worker's last name"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The family (last) name of the worker",
+          "message": "The family (last) name of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Email"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.short_desc": {
+          "source": "The worker's email address",
+          "message": "The worker's email address"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the worker",
+          "message": "The email address of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Country Code"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "The worker's country",
+          "message": "The worker's country"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "The ISO 3166-1 alpha-2 country code for the worker's location"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Job Title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "The worker's job title"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the worker",
+          "message": "The job title of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Seniority"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "The worker's seniority level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The seniority level of the worker",
+          "message": "The seniority level of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Junior level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Mid level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Senior level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Lead level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Phone"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.short_desc": {
+          "source": "The worker's phone number",
+          "message": "The worker's phone number"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.desc": {
+          "source": "The worker's phone number in international format",
+          "message": "The worker's phone number in international format"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
+          "source": "Update a Worker",
+          "message": "Update a Worker"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
+          "source": "Update an existing worker's information",
+          "message": "Update an existing worker's information"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.desc": {
+          "source": "Update an existing worker or person record in Deel",
+          "message": "Update an existing worker or person record in Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Worker ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker to update",
+          "message": "The worker to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker to update",
+          "message": "The unique identifier of the worker to update"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "First Name"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "The worker's first name"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The updated given (first) name of the worker",
+          "message": "The updated given (first) name of the worker"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Last Name"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "The worker's last name"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The updated family (last) name of the worker",
+          "message": "The updated family (last) name of the worker"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Job Title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "The worker's job title"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title of the worker",
+          "message": "The updated job title of the worker"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Seniority"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "The worker's seniority level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The updated seniority level of the worker",
+          "message": "The updated seniority level of the worker"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Junior level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Mid level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Senior level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Lead level"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
+          "source": "Search Workers",
+          "message": "Search Workers"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
+          "source": "Search for workers in Deel",
+          "message": "Search for workers in Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.desc": {
+          "source": "List and search workers/people in Deel with optional filtering",
+          "message": "List and search workers/people in Deel with optional filtering"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Worker ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.short_desc": {
+          "source": "Filter by worker ID",
+          "message": "Filter by worker ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.desc": {
+          "source": "Get a specific worker by their ID",
+          "message": "Get a specific worker by their ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Country Code"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Filter by country",
+          "message": "Filter by country"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "Filter workers by country code (ISO 3166-1 alpha-2)",
+          "message": "Filter workers by country code (ISO 3166-1 alpha-2)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.display_name": {
+          "source": "Employment Status",
+          "message": "Employment Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.short_desc": {
+          "source": "Filter by employment status",
+          "message": "Filter by employment status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.desc": {
+          "source": "Filter workers by employment status",
+          "message": "Filter workers by employment status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active workers",
+          "message": "Active workers"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive workers",
+          "message": "Inactive workers"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending workers",
+          "message": "Pending workers"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
+          "source": "Get a Worker",
+          "message": "Get a Worker"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
+          "source": "Get a single worker by ID",
+          "message": "Get a single worker by ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.desc": {
+          "source": "Retrieve a single worker or person record by ID from Deel",
+          "message": "Retrieve a single worker or person record by ID from Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Worker ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker ID",
+          "message": "The worker ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker",
+          "message": "The unique identifier of the worker"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Create a Time-Off Request",
+          "message": "Create a Time-Off Request"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Create a new time-off request",
+          "message": "Create a new time-off request"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Create a new time-off request for a worker in Deel",
+          "message": "Create a new time-off request for a worker in Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "The associated contract"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract for this time-off request",
+          "message": "The unique identifier of the contract for this time-off request"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.display_name": {
+          "source": "Time-Off Type ID",
+          "message": "Time-Off Type ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.short_desc": {
+          "source": "The time-off type",
+          "message": "The time-off type"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.desc": {
+          "source": "The ID of the time-off type (entitlement) to use for this request",
+          "message": "The ID of the time-off type (entitlement) to use for this request"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The time-off start date",
+          "message": "The time-off start date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The first day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "The first day of the requested time-off period (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "End Date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The time-off end date",
+          "message": "The time-off end date"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.desc": {
+          "source": "The last day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "The last day of the requested time-off period (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the request",
+          "message": "Notes about the request"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.desc": {
+          "source": "Optional notes or reason for the time-off request",
+          "message": "Optional notes or reason for the time-off request"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
+          "source": "Search Time-Off Types",
+          "message": "Search Time-Off Types"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
+          "source": "List available time-off types/entitlements",
+          "message": "List available time-off types/entitlements"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.desc": {
+          "source": "List available time-off types and entitlements in Deel",
+          "message": "List available time-off types and entitlements in Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filter by contract"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter time-off types by associated contract ID",
+          "message": "Filter time-off types by associated contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
+          "source": "List Legal Entities",
+          "message": "List Legal Entities"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
+          "source": "List legal entities in Deel",
+          "message": "List legal entities in Deel"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.desc": {
+          "source": "List all legal entities (companies) registered in Deel",
+          "message": "List all legal entities (companies) registered in Deel"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Search Invoices"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Deel",
+          "message": "Search for invoices in Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "List and search invoices in Deel with optional filtering",
+          "message": "List and search invoices in Deel with optional filtering"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Invoice ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Filter by invoice ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.desc": {
+          "source": "Get a specific invoice by its ID",
+          "message": "Get a specific invoice by its ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filter by contract"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter invoices by associated contract ID",
+          "message": "Filter invoices by associated contract ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filter by invoice status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Filter invoices by status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending invoices",
+          "message": "Pending invoices"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Paid invoices"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled invoices",
+          "message": "Cancelled invoices"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Date From"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Start of date range"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter invoices from this date (YYYY-MM-DD format)",
+          "message": "Filter invoices from this date (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Date To"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "End of date range"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.desc": {
+          "source": "Filter invoices up to this date (YYYY-MM-DD format)",
+          "message": "Filter invoices up to this date (YYYY-MM-DD format)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximum number of results to return"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Results offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Number of results to skip (for manual pagination)"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Get an Invoice"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Get a single invoice by ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Deel",
+          "message": "Retrieve a single invoice by ID from Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Invoice ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "The invoice ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The unique identifier of the invoice",
+          "message": "The unique identifier of the invoice"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
+          "source": "Approve a Time-Off Request",
+          "message": "Approve a Time-Off Request"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
+          "source": "Approve a time-off request",
+          "message": "Approve a time-off request"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.desc": {
+          "source": "Approve a pending time-off request for a worker in Deel",
+          "message": "Approve a pending time-off request for a worker in Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "Request ID"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to approve",
+          "message": "The time-off request to approve"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to approve",
+          "message": "The unique identifier of the time-off request to approve"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Reject a Time-Off Request",
+          "message": "Reject a Time-Off Request"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Reject a time-off request",
+          "message": "Reject a time-off request"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Reject a pending time-off request for a worker in Deel",
+          "message": "Reject a pending time-off request for a worker in Deel"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "Request ID"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to reject",
+          "message": "The time-off request to reject"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to reject",
+          "message": "The unique identifier of the time-off request to reject"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Rejection Reason"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "The reason for rejection"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the time-off request was rejected",
+          "message": "An explanation for why the time-off request was rejected"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
+          "source": "Contract Created",
+          "message": "Contract Created"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new contract is created",
+          "message": "Trigger when a new contract is created"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.desc": {
+          "source": "Fires when a new contract is created in Deel. Uses polling to detect new records.",
+          "message": "Fires when a new contract is created in Deel. Uses polling to detect new records."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Contract Status Updated",
+          "message": "Contract Status Updated"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a contract's status changes",
+          "message": "Trigger when a contract's status changes"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a contract's status is updated in Deel. Uses polling to detect changes.",
+          "message": "Fires when a contract's status is updated in Deel. Uses polling to detect changes."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
+          "source": "Contract Terminated",
+          "message": "Contract Terminated"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
+          "source": "Trigger when a contract is terminated",
+          "message": "Trigger when a contract is terminated"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.desc": {
+          "source": "Fires when a contract is terminated in Deel. Uses polling to detect terminated contracts.",
+          "message": "Fires when a contract is terminated in Deel. Uses polling to detect terminated contracts."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
+          "source": "Invoice Adjustment Created",
+          "message": "Invoice Adjustment Created"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new invoice adjustment is created",
+          "message": "Trigger when a new invoice adjustment is created"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new invoice adjustment is created in Deel. Uses polling to detect new records.",
+          "message": "Fires when a new invoice adjustment is created in Deel. Uses polling to detect new records."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
+          "source": "Invoice Adjustment Reviewed",
+          "message": "Invoice Adjustment Reviewed"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when an invoice adjustment is reviewed",
+          "message": "Trigger when an invoice adjustment is reviewed"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.desc": {
+          "source": "Fires when an invoice adjustment is approved or declined in Deel. Uses polling to detect changes.",
+          "message": "Fires when an invoice adjustment is approved or declined in Deel. Uses polling to detect changes."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
+          "source": "Timesheet Submitted",
+          "message": "Timesheet Submitted"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new timesheet is submitted",
+          "message": "Trigger when a new timesheet is submitted"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new timesheet entry is submitted in Deel. Uses polling to detect new records.",
+          "message": "Fires when a new timesheet entry is submitted in Deel. Uses polling to detect new records."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
+          "source": "Timesheet Reviewed",
+          "message": "Timesheet Reviewed"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when a timesheet is approved or rejected",
+          "message": "Trigger when a timesheet is approved or rejected"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.desc": {
+          "source": "Fires when a timesheet entry is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Fires when a timesheet entry is approved or rejected in Deel. Uses polling to detect changes."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
+          "source": "Time-Off Request Created",
+          "message": "Time-Off Request Created"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new time-off request is created",
+          "message": "Trigger when a new time-off request is created"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.desc": {
+          "source": "Fires when a new time-off request is created in Deel. Uses polling to detect new records.",
+          "message": "Fires when a new time-off request is created in Deel. Uses polling to detect new records."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
+          "source": "Time-Off Request Updated",
+          "message": "Time-Off Request Updated"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a time-off request is updated",
+          "message": "Trigger when a time-off request is updated"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.desc": {
+          "source": "Fires when a time-off request is updated in Deel. Uses polling to detect changes.",
+          "message": "Fires when a time-off request is updated in Deel. Uses polling to detect changes."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
+          "source": "Time-Off Request Reviewed",
+          "message": "Time-Off Request Reviewed"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {
+          "source": "Trigger when a time-off request is approved or rejected",
+          "message": "Trigger when a time-off request is approved or rejected"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.desc": {
+          "source": "Fires when a time-off request is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Fires when a time-off request is approved or rejected in Deel. Uses polling to detect changes."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Polling interval in seconds"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "How often to check for new records (minimum 30 seconds)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Start Date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Only detect events after this date"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
+        }
+      }
+    }
+  }
+}

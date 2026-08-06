@@ -1,0 +1,573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.U3RhYmlsaXR5QWk.display_name": {
+          "source": "Stability AI",
+          "message": "Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.short_desc": {
+          "source": "Stability AI text-to-image generation (Stable Diffusion)",
+          "message": "Stability AI text-to-image generation (Stable Diffusion)"
+        },
+        "app.U3RhYmlsaXR5QWk.desc": {
+          "source": "Provides access to [Stability AI](https://stability.ai) — the company behind Stable Diffusion.  Three model tiers:\n\n- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for marketing artwork, photo-real images, and brand visuals\n- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default balanced quality / speed model\n- **Core** (`core`): faster + cheaper model with preset-driven style transfer for prototyping and bulk work",
+          "message": "Provides access to [Stability AI](https://stability.ai) — the company behind Stable Diffusion.  Three model tiers:\n\n- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for marketing artwork, photo-real images, and brand visuals\n- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default balanced quality / speed model\n- **Core** (`core`): faster + cheaper model with preset-driven style transfer for prototyping and bulk work"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Stability AI",
+          "message": "Make a custom API call to Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Stability AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Stability AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generate Image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt",
+          "message": "Generate an image from a text prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via Stability AI's v2beta `/stable-image/generate/*` endpoints.  The `model` option selects the endpoint (`ultra` / `sd3` / `core`).\n\nReturns raw image bytes — `image` holds the bytes, `content_type` the MIME type, and `finish_reason` flags content-safety blocks (`CONTENT_FILTERED`).",
+          "message": "Generates an image from a text prompt via Stability AI's v2beta `/stable-image/generate/*` endpoints.  The `model` option selects the endpoint (`ultra` / `sd3` / `core`).\n\nReturns raw image bytes — `image` holds the bytes, `content_type` the MIME type, and `finish_reason` flags content-safety blocks (`CONTENT_FILTERED`)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "Text prompt describing the image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
+          "message": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "Stability AI model identifier",
+          "message": "Stability AI model identifier"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Stability AI model identifier — `ultra` for highest quality (SD3 Ultra), `sd3` for Stable Diffusion 3 / 3.5, or `core` for the faster / cheaper model.",
+          "message": "Stability AI model identifier — `ultra` for highest quality (SD3 Ultra), `sd3` for Stable Diffusion 3 / 3.5, or `core` for the faster / cheaper model."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnVsdHJh.display_name": {
+          "source": "Ultra (highest quality)",
+          "message": "Ultra (highest quality)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnNkMw.display_name": {
+          "source": "Stable Diffusion 3 / 3.5",
+          "message": "Stable Diffusion 3 / 3.5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmNvcmU.display_name": {
+          "source": "Core (faster, cheaper)",
+          "message": "Core (faster, cheaper)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Output Format"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "Output image format",
+          "message": "Output image format"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "Output image format.",
+          "message": "Output image format."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "Aspect Ratio"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "Output aspect ratio"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.  Common values: `1:1` (square), `16:9` (landscape video), `9:16` (portrait video), `4:3`, `3:4`, `21:9` (cinemascope).",
+          "message": "Output aspect ratio.  Common values: `1:1` (square), `16:9` (landscape video), `9:16` (portrait video), `4:3`, `3:4`, `21:9` (cinemascope)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE6MQ.display_name": {
+          "source": "1:1 (Square)",
+          "message": "1:1 (Square)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE2Ojk.display_name": {
+          "source": "16:9 (Landscape Video)",
+          "message": "16:9 (Landscape Video)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MTY.display_name": {
+          "source": "9:16 (Portrait Video)",
+          "message": "9:16 (Portrait Video)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6Mw.display_name": {
+          "source": "4:3 (Standard)",
+          "message": "4:3 (Standard)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6NA.display_name": {
+          "source": "3:4 (Portrait)",
+          "message": "3:4 (Portrait)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjIxOjk.display_name": {
+          "source": "21:9 (Cinemascope)",
+          "message": "21:9 (Cinemascope)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MjE.display_name": {
+          "source": "9:21 (Tall Cinemascope)",
+          "message": "9:21 (Tall Cinemascope)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjI6Mw.display_name": {
+          "source": "2:3 (Tall Portrait)",
+          "message": "2:3 (Tall Portrait)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6Mg.display_name": {
+          "source": "3:2 (Wide Landscape)",
+          "message": "3:2 (Wide Landscape)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjU6NA.display_name": {
+          "source": "5:4",
+          "message": "5:4"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6NQ.display_name": {
+          "source": "4:5",
+          "message": "4:5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Negative Prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What you don't want in the image",
+          "message": "What you don't want in the image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image — e.g. `blurry, low quality, text, watermark`.",
+          "message": "Text describing what to avoid in the image — e.g. `blurry, low quality, text, watermark`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility (0–4294967294)",
+          "message": "Random seed for reproducibility (0–4294967294)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed used for generation — passing the same seed + prompt should produce the same image.  `0` (default) uses a random seed.",
+          "message": "Random seed used for generation — passing the same seed + prompt should produce the same image.  `0` (default) uses a random seed."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.display_name": {
+          "source": "Style Preset",
+          "message": "Style Preset"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
+          "source": "Pre-baked style preset (`core` model only)",
+          "message": "Pre-baked style preset (`core` model only)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.desc": {
+          "source": "Pre-baked style preset.  Only honoured by the `core` model; ignored by `sd3` and `ultra`.",
+          "message": "Pre-baked style preset.  Only honoured by the `core` model; ignored by `sd3` and `ultra`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBob3RvZ3JhcGhpYw.display_name": {
+          "source": "Photographic",
+          "message": "Photographic"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNpbmVtYXRpYw.display_name": {
+          "source": "Cinematic",
+          "message": "Cinematic"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmRpZ2l0YWwtYXJ0.display_name": {
+          "source": "Digital Art",
+          "message": "Digital Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuaW1l.display_name": {
+          "source": "Anime",
+          "message": "Anime"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNvbWljLWJvb2s.display_name": {
+          "source": "Comic Book",
+          "message": "Comic Book"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmZhbnRhc3ktYXJ0.display_name": {
+          "source": "Fantasy Art",
+          "message": "Fantasy Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxpbmUtYXJ0.display_name": {
+          "source": "Line Art",
+          "message": "Line Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuYWxvZy1maWxt.display_name": {
+          "source": "Analog Film",
+          "message": "Analog Film"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm5lb24tcHVuaw.display_name": {
+          "source": "Neon Punk",
+          "message": "Neon Punk"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmlzb21ldHJpYw.display_name": {
+          "source": "Isometric",
+          "message": "Isometric"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxvdy1wb2x5.display_name": {
+          "source": "Low Poly",
+          "message": "Low Poly"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm9yaWdhbWk.display_name": {
+          "source": "Origami",
+          "message": "Origami"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm1vZGVsaW5nLWNvbXBvdW5k.display_name": {
+          "source": "Modeling Compound",
+          "message": "Modeling Compound"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOjNkLW1vZGVs.display_name": {
+          "source": "3D Model",
+          "message": "3D Model"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBpeGVsLWFydA.display_name": {
+          "source": "Pixel Art",
+          "message": "Pixel Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnRpbGUtdGV4dHVyZQ.display_name": {
+          "source": "Tile Texture",
+          "message": "Tile Texture"
+        }
+      }
+    }
+  }
+}

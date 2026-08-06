@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "Server Filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "Access to the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "Access to the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
+          "source": "Copy File",
+          "message": "Copy File"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Copy a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Copy a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Source"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "The source file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "The source file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Target"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "The target file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "The target file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Overwrite"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Should existing target files be overwritten?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Should existing target files be overwritten?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
+          "source": "Follow Symlinks",
+          "message": "Follow Symlinks"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "Should symbolic links be followed?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "Should symbolic links be followed?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
+          "source": "Create File",
+          "message": "Create File"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Create a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Create a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Data"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.short_desc": {
+          "source": "The string or binary data for the file",
+          "message": "The string or binary data for the file"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.desc": {
+          "source": "The string or binary data for the file",
+          "message": "The string or binary data for the file"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Mode"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0664')",
+          "message": "The mode for the new file (default '0664')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0664`)",
+          "message": "The mode for the new file (default `0664`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
+          "source": "Delete File",
+          "message": "Delete File"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Delete a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Delete a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
+          "source": "Get File",
+          "message": "Get File"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Get a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Get a file on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.short_desc": {
+          "source": "The path to the file",
+          "message": "The path to the file"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.desc": {
+          "source": "The path to the file",
+          "message": "The path to the file"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "If 'True' the file will be returned as a string, 'False' (the default) as binary data"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "If `True` the file will be returned as a string, `False` (the default) as binary data"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Encoding"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "The string encoding to use if `text` = `True` (default: `UTF-8`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
+          "source": "Max Len",
+          "message": "Max Len"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "The maximum length of the data returned in bytes"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "The maximum length of the data returned in bytes"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
+          "source": "List Files",
+          "message": "List Files"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "List files and subdirectories in a folder on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "List files and subdirectories in a folder on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
+          "source": "Create Directory",
+          "message": "Create Directory"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Create a directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Create a directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Mode"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0775')",
+          "message": "The mode for the new file (default '0775')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0775`)",
+          "message": "The mode for the new file (default `0775`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
+          "source": "Move File",
+          "message": "Move File"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Move a file or directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Move a file or directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Source"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "The source file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "The source file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Target"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "The target file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "The target file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Overwrite"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Should existing target files be overwritten?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Should existing target files be overwritten?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
+          "source": "Get Info",
+          "message": "Get Info"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Get details about a file or directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Get details about a file or directory on the server filesystem"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "The file path"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
+          "source": "Symlink",
+          "message": "Symlink"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
+          "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
+          "source": "New File Created",
+          "message": "New File Created"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
+          "source": "A file is created in a server directory",
+          "message": "A file is created in a server directory"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
+          "source": "React to files created in a server directory",
+          "message": "React to files created in a server directory"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
+          "source": "Polling Mask",
+          "message": "Polling Mask"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
+          "source": "The polling mask to use to match files to poll",
+          "message": "The polling mask to use to match files to poll"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.desc": {
+          "source": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask",
+          "message": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Poll Interval"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "The poll interval in seconds"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "The interval in seconds between polling for files"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "Regular Expression Match"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "If true then the 'mask' argument is treated as a regular expression"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "If `true` then `mask` is treated as a regular expression instead of a glob pattern"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "Regular Expression Options"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "A bitfield of regular expression options"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "Minimum Polling Age"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "The minimum age of files to poll in seconds"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "Sort Descending"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "Sort files in descending order"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "Sort Type"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "Field to sort files on"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "Either `name` or `date` for the data to use for sorting"
+        }
+      }
+    }
+  }
+}

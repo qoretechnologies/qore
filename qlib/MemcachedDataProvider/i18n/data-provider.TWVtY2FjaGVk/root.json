@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.TWVtY2FjaGVk.display_name": {
+          "source": "Memcached Server",
+          "message": "Memcached Server"
+        },
+        "app.TWVtY2FjaGVk.short_desc": {
+          "source": "Memcached caching server",
+          "message": "Memcached caching server"
+        },
+        "app.TWVtY2FjaGVk.desc": {
+          "source": "Memcached distributed memory object caching system",
+          "message": "Memcached distributed memory object caching system"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.display_name": {
+          "source": "Set Value",
+          "message": "Set Value"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
+          "source": "Store a value in the cache",
+          "message": "Store a value in the cache"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.desc": {
+          "source": "Store a key-value pair in memcached, overwriting any existing value",
+          "message": "Store a key-value pair in memcached, overwriting any existing value"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.display_name": {
+          "source": "Add Value",
+          "message": "Add Value"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
+          "source": "Store a value only if key doesn't exist",
+          "message": "Store a value only if key doesn't exist"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.desc": {
+          "source": "Store a key-value pair in memcached only if the key doesn't already exist",
+          "message": "Store a key-value pair in memcached only if the key doesn't already exist"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
+          "source": "Replace Value",
+          "message": "Replace Value"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
+          "source": "Replace an existing value",
+          "message": "Replace an existing value"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.desc": {
+          "source": "Replace a value in memcached only if the key already exists",
+          "message": "Replace a value in memcached only if the key already exists"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
+          "source": "Compare and Swap",
+          "message": "Compare and Swap"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
+          "source": "Update value with optimistic locking",
+          "message": "Update value with optimistic locking"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.desc": {
+          "source": "Update a value only if its CAS token matches (optimistic locking)",
+          "message": "Update a value only if its CAS token matches (optimistic locking)"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
+          "source": "Get Value",
+          "message": "Get Value"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
+          "source": "Retrieve a value from the cache",
+          "message": "Retrieve a value from the cache"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.desc": {
+          "source": "Retrieve a cached value by key",
+          "message": "Retrieve a cached value by key"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.display_name": {
+          "source": "Get with CAS",
+          "message": "Get with CAS"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.short_desc": {
+          "source": "Retrieve a value with CAS token",
+          "message": "Retrieve a value with CAS token"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.desc": {
+          "source": "Retrieve a cached value with its CAS token for optimistic locking",
+          "message": "Retrieve a cached value with its CAS token for optimistic locking"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
+          "source": "Multi-Get",
+          "message": "Multi-Get"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
+          "source": "Retrieve multiple values",
+          "message": "Retrieve multiple values"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.desc": {
+          "source": "Retrieve multiple cached values in a single batch request",
+          "message": "Retrieve multiple cached values in a single batch request"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.display_name": {
+          "source": "Delete",
+          "message": "Delete"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a key from the cache",
+          "message": "Delete a key from the cache"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.desc": {
+          "source": "Remove a key and its value from the cache",
+          "message": "Remove a key and its value from the cache"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.display_name": {
+          "source": "Increment",
+          "message": "Increment"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.short_desc": {
+          "source": "Increment a numeric value",
+          "message": "Increment a numeric value"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.desc": {
+          "source": "Atomically increment a numeric value in the cache",
+          "message": "Atomically increment a numeric value in the cache"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.display_name": {
+          "source": "Decrement",
+          "message": "Decrement"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.short_desc": {
+          "source": "Decrement a numeric value",
+          "message": "Decrement a numeric value"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.desc": {
+          "source": "Atomically decrement a numeric value in the cache",
+          "message": "Atomically decrement a numeric value in the cache"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.display_name": {
+          "source": "Touch",
+          "message": "Touch"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.short_desc": {
+          "source": "Update expiration time",
+          "message": "Update expiration time"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.desc": {
+          "source": "Update the expiration time of an existing key",
+          "message": "Update the expiration time of an existing key"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.display_name": {
+          "source": "Statistics",
+          "message": "Statistics"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.short_desc": {
+          "source": "Get server statistics",
+          "message": "Get server statistics"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.desc": {
+          "source": "Retrieve general server statistics and metrics",
+          "message": "Retrieve general server statistics and metrics"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.short_desc": {
+          "source": "Get server version",
+          "message": "Get server version"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.desc": {
+          "source": "Retrieve the memcached server version",
+          "message": "Retrieve the memcached server version"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
+          "source": "Flush All",
+          "message": "Flush All"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {
+          "source": "Clear all cached data",
+          "message": "Clear all cached data"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.desc": {
+          "source": "Invalidate all items in the cache",
+          "message": "Invalidate all items in the cache"
+        }
+      }
+    }
+  }
+}

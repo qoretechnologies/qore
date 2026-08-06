@@ -1,0 +1,605 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.QXNzZW1ibHlBSQ.display_name": {
+          "source": "AssemblyAI",
+          "message": "AssemblyAI"
+        },
+        "app.QXNzZW1ibHlBSQ.short_desc": {
+          "source": "AssemblyAI speech-to-text with rich analytics",
+          "message": "AssemblyAI speech-to-text with rich analytics"
+        },
+        "app.QXNzZW1ibHlBSQ.desc": {
+          "source": "Provides access to [AssemblyAI](https://www.assemblyai.com) — a speech AI platform offering high-accuracy transcription with the Universal-2 and Slam-1 model families plus an extensive analytics layer.\n\n**Common use cases**:\n- **Recorded transcription**: convert podcasts, meeting recordings, voicemails, and customer-service calls into searchable text\n- **Conversation intelligence**: speaker diarization, sentiment analysis, topic detection, and entity extraction from multi-party recordings\n- **Compliance and moderation**: content-safety classification for flagging sensitive material in recorded audio\n- **Automatic summarization**: generate `bullets`, `gist`, `headline`, or `paragraph` summaries alongside the transcript",
+          "message": "Provides access to [AssemblyAI](https://www.assemblyai.com) — a speech AI platform offering high-accuracy transcription with the Universal-2 and Slam-1 model families plus an extensive analytics layer.\n\n**Common use cases**:\n- **Recorded transcription**: convert podcasts, meeting recordings, voicemails, and customer-service calls into searchable text\n- **Conversation intelligence**: speaker diarization, sentiment analysis, topic detection, and entity extraction from multi-party recordings\n- **Compliance and moderation**: content-safety classification for flagging sensitive material in recorded audio\n- **Automatic summarization**: generate `bullets`, `gist`, `headline`, or `paragraph` summaries alongside the transcript"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AssemblyAI",
+          "message": "Make a custom API call to AssemblyAI"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AssemblyAI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **AssemblyAI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.display_name": {
+          "source": "Transcribe Audio",
+          "message": "Transcribe Audio"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.short_desc": {
+          "source": "Transcribe an audio URL via AssemblyAI (async)",
+          "message": "Transcribe an audio URL via AssemblyAI (async)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.desc": {
+          "source": "Submits a public audio URL to AssemblyAI's `/v2/transcript` endpoint and waits for the transcript to complete.  Internally drives the upload → poll → fetch lifecycle via @ref QoreAsyncJobUtils::AsyncJobPoller \"AsyncJobPoller\".\n\nAll analytics are opt-in — `speaker_labels`, `summarization`, `sentiment_analysis`, `entity_detection`, `iab_categories`, and `content_safety` add corresponding fields to the response when set to `True`.",
+          "message": "Submits a public audio URL to AssemblyAI's `/v2/transcript` endpoint and waits for the transcript to complete.  Internally drives the upload → poll → fetch lifecycle via @ref QoreAsyncJobUtils::AsyncJobPoller \"AsyncJobPoller\".\n\nAll analytics are opt-in — `speaker_labels`, `summarization`, `sentiment_analysis`, `entity_detection`, `iab_categories`, and `content_safety` add corresponding fields to the response when set to `True`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.display_name": {
+          "source": "Audio URL",
+          "message": "Audio URL"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.short_desc": {
+          "source": "Public URL of the audio file to transcribe",
+          "message": "Public URL of the audio file to transcribe"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.desc": {
+          "source": "Public URL of the audio file to transcribe.  AssemblyAI fetches the file from this URL; it must be reachable from the public internet.  Supports `mp3`, `mp4`, `wav`, `flac`, `ogg`, `webm`, `m4a`, and more.",
+          "message": "Public URL of the audio file to transcribe.  AssemblyAI fetches the file from this URL; it must be reachable from the public internet.  Supports `mp3`, `mp4`, `wav`, `flac`, `ogg`, `webm`, `m4a`, and more."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.display_name": {
+          "source": "Speech Model",
+          "message": "Speech Model"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.short_desc": {
+          "source": "AssemblyAI transcription model",
+          "message": "AssemblyAI transcription model"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.desc": {
+          "source": "AssemblyAI transcription model — `universal` (latest general-purpose), `slam-1` (smaller / faster), or `nano` (supports the broadest set of languages but lower accuracy).",
+          "message": "AssemblyAI transcription model — `universal` (latest general-purpose), `slam-1` (smaller / faster), or `nano` (supports the broadest set of languages but lower accuracy)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbA.display_name": {
+          "source": "Universal (latest)",
+          "message": "Universal (latest)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnNsYW0tMQ.display_name": {
+          "source": "Slam 1",
+          "message": "Slam 1"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOm5hbm8.display_name": {
+          "source": "Nano (broadest language support)",
+          "message": "Nano (broadest language support)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Language Code"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)",
+          "message": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (BCP-47 or ISO-639-1, depending on model).  Omit to enable automatic detection (see `language_detection`).",
+          "message": "Language code (BCP-47 or ISO-639-1, depending on model).  Omit to enable automatic detection (see `language_detection`)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
+          "source": "Speaker Labels (Diarization)",
+          "message": "Speaker Labels (Diarization)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
+          "source": "Identify distinct speakers in the audio",
+          "message": "Identify distinct speakers in the audio"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.desc": {
+          "source": "When `True`, attempts speaker diarization — labels each utterance with `speaker: \"A\"`, `\"B\"`, etc.",
+          "message": "When `True`, attempts speaker diarization — labels each utterance with `speaker: \"A\"`, `\"B\"`, etc."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.display_name": {
+          "source": "Summarization",
+          "message": "Summarization"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.short_desc": {
+          "source": "Generate a summary of the transcript",
+          "message": "Generate a summary of the transcript"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.desc": {
+          "source": "When `True`, returns a summary of the transcript in addition to the words.  Combine with `summary_model` and `summary_type` for fine-grained control.",
+          "message": "When `True`, returns a summary of the transcript in addition to the words.  Combine with `summary_model` and `summary_type` for fine-grained control."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
+          "source": "Auto-Detect Language",
+          "message": "Auto-Detect Language"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
+          "source": "Auto-detect the spoken language",
+          "message": "Auto-detect the spoken language"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.desc": {
+          "source": "When `True`, AssemblyAI auto-detects the spoken language and ignores `language_code`.",
+          "message": "When `True`, AssemblyAI auto-detects the spoken language and ignores `language_code`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.display_name": {
+          "source": "Punctuate",
+          "message": "Punctuate"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.short_desc": {
+          "source": "Add punctuation to the transcript",
+          "message": "Add punctuation to the transcript"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.desc": {
+          "source": "Add punctuation to the transcript.",
+          "message": "Add punctuation to the transcript."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.display_name": {
+          "source": "Format Text",
+          "message": "Format Text"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.short_desc": {
+          "source": "Apply text formatting (capitalization, numbers, etc.)",
+          "message": "Apply text formatting (capitalization, numbers, etc.)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.desc": {
+          "source": "Apply text formatting — capitalization, written-form numbers, dates, currency.",
+          "message": "Apply text formatting — capitalization, written-form numbers, dates, currency."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
+          "source": "Summary Model",
+          "message": "Summary Model"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
+          "source": "Summarization model (used with `summarization`)",
+          "message": "Summarization model (used with `summarization`)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.desc": {
+          "source": "Summarization model name when `summarization` is `True`.",
+          "message": "Summarization model name when `summarization` is `True`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmluZm9ybWF0aXZl.display_name": {
+          "source": "Informative",
+          "message": "Informative"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmNvbnZlcnNhdGlvbmFs.display_name": {
+          "source": "Conversational",
+          "message": "Conversational"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmNhdGNoeQ.display_name": {
+          "source": "Catchy",
+          "message": "Catchy"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.display_name": {
+          "source": "Summary Type",
+          "message": "Summary Type"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.short_desc": {
+          "source": "Summary output style",
+          "message": "Summary output style"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.desc": {
+          "source": "Summary output style — `bullets`, `bullets_verbose`, `gist`, `headline`, or `paragraph`.",
+          "message": "Summary output style — `bullets`, `bullets_verbose`, `gist`, `headline`, or `paragraph`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
+          "source": "Bullets",
+          "message": "Bullets"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHNfdmVyYm9zZQ.display_name": {
+          "source": "Bullets (Verbose)",
+          "message": "Bullets (Verbose)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmdpc3Q.display_name": {
+          "source": "Gist",
+          "message": "Gist"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmhlYWRsaW5l.display_name": {
+          "source": "Headline",
+          "message": "Headline"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
+          "source": "Paragraph",
+          "message": "Paragraph"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
+          "source": "Sentiment Analysis",
+          "message": "Sentiment Analysis"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
+          "source": "Analyze sentiment per sentence/utterance",
+          "message": "Analyze sentiment per sentence/utterance"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.desc": {
+          "source": "When `True`, AssemblyAI returns per-utterance sentiment (positive / negative / neutral).",
+          "message": "When `True`, AssemblyAI returns per-utterance sentiment (positive / negative / neutral)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
+          "source": "Entity Detection",
+          "message": "Entity Detection"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
+          "source": "Detect entities (people, places, organizations, etc.)",
+          "message": "Detect entities (people, places, organizations, etc.)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.desc": {
+          "source": "When `True`, AssemblyAI returns detected entities with type labels (PERSON_NAME, ORG, LOCATION, EVENT, etc.).",
+          "message": "When `True`, AssemblyAI returns detected entities with type labels (PERSON_NAME, ORG, LOCATION, EVENT, etc.)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
+          "source": "IAB Categories (Topic Detection)",
+          "message": "IAB Categories (Topic Detection)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
+          "source": "Classify content into IAB topic categories",
+          "message": "Classify content into IAB topic categories"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.desc": {
+          "source": "When `True`, AssemblyAI classifies the transcript into IAB Tech Lab topic categories.",
+          "message": "When `True`, AssemblyAI classifies the transcript into IAB Tech Lab topic categories."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.display_name": {
+          "source": "Content Safety",
+          "message": "Content Safety"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.short_desc": {
+          "source": "Flag sensitive content categories",
+          "message": "Flag sensitive content categories"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.desc": {
+          "source": "When `True`, AssemblyAI flags potentially sensitive content (profanity, violence, hate-speech, etc.).",
+          "message": "When `True`, AssemblyAI flags potentially sensitive content (profanity, violence, hate-speech, etc.)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.display_name": {
+          "source": "Webhook URL",
+          "message": "Webhook URL"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.short_desc": {
+          "source": "Optional webhook for job-completion notification",
+          "message": "Optional webhook for job-completion notification"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.desc": {
+          "source": "When provided, AssemblyAI POSTs to this URL once the transcript reaches a terminal state — useful for fire-and-forget submission.",
+          "message": "When provided, AssemblyAI POSTs to this URL once the transcript reaches a terminal state — useful for fire-and-forget submission."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Polling Interval",
+          "message": "Polling Interval"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Time between transcript status polls",
+          "message": "Time between transcript status polls"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Interval between job-status polls.  Defaults to `3s`.  Lower values fetch results sooner at the cost of more API calls.",
+          "message": "Interval between job-status polls.  Defaults to `3s`.  Lower values fetch results sooner at the cost of more API calls."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.display_name": {
+          "source": "Overall Transcription Timeout",
+          "message": "Overall Transcription Timeout"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.short_desc": {
+          "source": "Maximum total wait time for the polling loop",
+          "message": "Maximum total wait time for the polling loop"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.desc": {
+          "source": "Maximum total wait time for the polling loop.  Defaults to `30m`.  When exceeded, the action raises `ASSEMBLYAI-ERROR`.",
+          "message": "Maximum total wait time for the polling loop.  Defaults to `30m`.  When exceeded, the action raises `ASSEMBLYAI-ERROR`."
+        }
+      }
+    }
+  }
+}

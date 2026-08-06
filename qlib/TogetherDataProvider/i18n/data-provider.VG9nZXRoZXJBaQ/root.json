@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.VG9nZXRoZXJBaQ.display_name": {
+          "source": "Together AI",
+          "message": "Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.short_desc": {
+          "source": "Together AI hosted open-weight LLMs, embeddings, and image generation",
+          "message": "Together AI hosted open-weight LLMs, embeddings, and image generation"
+        },
+        "app.VG9nZXRoZXJBaQ.desc": {
+          "source": "Provides access to [Together AI](https://www.together.ai) — a managed inference platform for open-weight LLMs (Llama, Qwen, DeepSeek, Mixtral), embedding models (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image generation (FLUX, Stable Diffusion XL).\n\nTogether exposes an OpenAI-compatible chat-completions API plus its own `/v1/images/generations` endpoint for text-to-image diffusion.\n\n**Common use cases**:\n- **OSS chat at production scale** without owning GPU infrastructure\n- **RAG embeddings** with open-weight embedders for cost control\n- **Text-to-image generation** via FLUX.1 (schnell + dev) and SDXL\n- **Tool-calling and structured output** via the OpenAI-compatible surface",
+          "message": "Provides access to [Together AI](https://www.together.ai) — a managed inference platform for open-weight LLMs (Llama, Qwen, DeepSeek, Mixtral), embedding models (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image generation (FLUX, Stable Diffusion XL).\n\nTogether exposes an OpenAI-compatible chat-completions API plus its own `/v1/images/generations` endpoint for text-to-image diffusion.\n\n**Common use cases**:\n- **OSS chat at production scale** without owning GPU infrastructure\n- **RAG embeddings** with open-weight embedders for cost control\n- **Text-to-image generation** via FLUX.1 (schnell + dev) and SDXL\n- **Tool-calling and structured output** via the OpenAI-compatible surface"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Together AI",
+          "message": "Make a custom API call to Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Together AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Together AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Chat Completion"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Together AI hosted model",
+          "message": "Generate a chat completion from a Together AI hosted model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Together AI hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.",
+          "message": "Sends a list of chat messages to a Together AI hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messages"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "List of chat messages forming the conversation"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "The conversation history as a list of message objects."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted model to use",
+          "message": "The Together-hosted model to use"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Together model identifier, e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V3`.\n\nConsult the [Together AI models list](https://docs.together.ai/docs/inference-models) for the currently-served set.",
+          "message": "Together model identifier, e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V3`.\n\nConsult the [Together AI models list](https://docs.together.ai/docs/inference-models) for the currently-served set."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperature"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Sampling temperature (0-2)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.",
+          "message": "Controls randomness of the output.  Range `0.0` to `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Max Tokens"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "Maximum tokens to emit in the completion"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Maximum number of tokens to generate."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Nucleus sampling cutoff (0-1)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff.  Range `0.0` to `1.0`.",
+          "message": "Nucleus sampling cutoff.  Range `0.0` to `1.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Sample only from the K most likely next tokens"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  Together-specific extension to the OpenAI chat API.",
+          "message": "Restrict sampling to the K most likely next tokens.  Together-specific extension to the OpenAI chat API."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.display_name": {
+          "source": "Repetition Penalty",
+          "message": "Repetition Penalty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.short_desc": {
+          "source": "Together's repetition penalty (separate from frequency_penalty)",
+          "message": "Together's repetition penalty (separate from frequency_penalty)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.desc": {
+          "source": "Penalize repeated tokens.  Together-specific extension.  Values above `1.0` discourage repetition; values below `1.0` encourage it.",
+          "message": "Penalize repeated tokens.  Together-specific extension.  Values above `1.0` discourage repetition; values below `1.0` encourage it."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Frequency Penalty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "OpenAI-style frequency penalty",
+          "message": "OpenAI-style frequency penalty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens by frequency.  Range `-2.0` to `2.0`.",
+          "message": "Penalizes tokens by frequency.  Range `-2.0` to `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Presence Penalty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "OpenAI-style presence penalty",
+          "message": "OpenAI-style presence penalty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared.  Range `-2.0` to `2.0`.",
+          "message": "Penalizes tokens that have already appeared.  Range `-2.0` to `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Stop Sequences"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "String or list of strings; generation halts when emitted"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.",
+          "message": "One or more stop sequences."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as Server-Sent Events",
+          "message": "Stream partial completions as Server-Sent Events"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "When `True`, the server streams partial completions as SSE."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Tools"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "OpenAI-style tool definitions the model may call"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.",
+          "message": "List of tool definitions the model may invoke."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Tool Choice"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "Whether and which tool the model must invoke"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Tool invocation mode: `none`, `auto`, or `required`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - never call a tool"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - model decides"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required - must call a tool"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Response Format"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Force structured output (e.g. JSON)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`.",
+          "message": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Deterministic sampling seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Integer seed for deterministic sampling."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Create Embeddings"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Together AI hosted model",
+          "message": "Generate embedding vectors from a Together AI hosted model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using a Together-hosted embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible `/v1/embeddings` endpoint.",
+          "message": "Converts text inputs into embedding vectors using a Together-hosted embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible `/v1/embeddings` endpoint."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Input"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed — single string or list of strings",
+          "message": "Text(s) to embed — single string or list of strings"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
+          "message": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted embedding model to use",
+          "message": "The Together-hosted embedding model to use"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`.",
+          "message": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Encoding Format"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for the returned vectors",
+          "message": "Wire format for the returned vectors"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) returns each vector as a JSON list of floats; `base64` returns base64-encoded little-endian float32 buffers (smaller wire size).",
+          "message": "`float` (default) returns each vector as a JSON list of floats; `base64` returns base64-encoded little-endian float32 buffers (smaller wire size)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - JSON list of floats",
+          "message": "Float - JSON list of floats"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded float32 buffer",
+          "message": "Base64 - encoded float32 buffer"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generate Image"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt using FLUX or Stable Diffusion",
+          "message": "Generate an image from a text prompt using FLUX or Stable Diffusion"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates one or more images from a text prompt using a Together-hosted diffusion model (`black-forest-labs/FLUX.1-schnell-Free`, `stabilityai/stable-diffusion-xl-base-1.0`, etc.) via the `/v1/images/generations` endpoint.\n\nReturns image URLs by default; set `response_format` to `b64_json` to receive base64-encoded image bytes inline.",
+          "message": "Generates one or more images from a text prompt using a Together-hosted diffusion model (`black-forest-labs/FLUX.1-schnell-Free`, `stabilityai/stable-diffusion-xl-base-1.0`, etc.) via the `/v1/images/generations` endpoint.\n\nReturns image URLs by default; set `response_format` to `b64_json` to receive base64-encoded image bytes inline."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text description of the image to generate",
+          "message": "Text description of the image to generate"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Free-form text describing the image to generate.  Diffusion models are sensitive to wording — be specific about subject, lighting, style, and composition for best results.",
+          "message": "Free-form text describing the image to generate.  Diffusion models are sensitive to wording — be specific about subject, lighting, style, and composition for best results."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted image-generation model",
+          "message": "The Together-hosted image-generation model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Together image model identifier.  Examples:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — fast FLUX.1 (free tier)\n- `black-forest-labs/FLUX.1-schnell` — fast FLUX.1\n- `black-forest-labs/FLUX.1-dev` — quality FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0",
+          "message": "Together image model identifier.  Examples:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — fast FLUX.1 (free tier)\n- `black-forest-labs/FLUX.1-schnell` — fast FLUX.1\n- `black-forest-labs/FLUX.1-dev` — quality FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Width"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Image width in pixels",
+          "message": "Image width in pixels"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Image width in pixels.  Must match a resolution the chosen model supports — typically multiples of 64 in the 256-1792 range.",
+          "message": "Image width in pixels.  Must match a resolution the chosen model supports — typically multiples of 64 in the 256-1792 range."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Height"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Image height in pixels",
+          "message": "Image height in pixels"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Image height in pixels.  See `width` for resolution constraints.",
+          "message": "Image height in pixels.  See `width` for resolution constraints."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.display_name": {
+          "source": "Steps",
+          "message": "Steps"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.short_desc": {
+          "source": "Number of diffusion steps",
+          "message": "Number of diffusion steps"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.desc": {
+          "source": "Number of denoising steps.  Higher values improve quality at the cost of latency.  FLUX schnell is tuned for 1-4 steps; SDXL typically uses 20-50.",
+          "message": "Number of denoising steps.  Higher values improve quality at the cost of latency.  FLUX schnell is tuned for 1-4 steps; SDXL typically uses 20-50."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.display_name": {
+          "source": "Number of Images",
+          "message": "Number of Images"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.short_desc": {
+          "source": "How many images to generate",
+          "message": "How many images to generate"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.desc": {
+          "source": "Number of images to generate from the prompt.",
+          "message": "Number of images to generate from the prompt."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Response Format"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Whether to return URLs or base64-encoded image bytes",
+          "message": "Whether to return URLs or base64-encoded image bytes"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "`url` (default) returns hosted image URLs.  `b64_json` returns the image bytes inline as base64-encoded JSON.",
+          "message": "`url` (default) returns hosted image URLs.  `b64_json` returns the image bytes inline as base64-encoded JSON."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnVybA.display_name": {
+          "source": "URL - hosted image URL",
+          "message": "URL - hosted image URL"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmI2NF9qc29u.display_name": {
+          "source": "Base64 - inline image bytes",
+          "message": "Base64 - inline image bytes"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Deterministic generation seed",
+          "message": "Deterministic generation seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Integer seed.  With a fixed seed, prompt, and model, generation is reproducible.",
+          "message": "Integer seed.  With a fixed seed, prompt, and model, generation is reproducible."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Negative Prompt"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What the image should NOT contain",
+          "message": "What the image should NOT contain"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Optional negative prompt — features the model should suppress in the output (e.g. `\"blurry, low quality, watermark\"`).",
+          "message": "Optional negative prompt — features the model should suppress in the output (e.g. `\"blurry, low quality, watermark\"`)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.display_name": {
+          "source": "Guidance Scale",
+          "message": "Guidance Scale"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.short_desc": {
+          "source": "Prompt adherence (CFG scale)",
+          "message": "Prompt adherence (CFG scale)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.desc": {
+          "source": "Classifier-free guidance scale.  Higher values force the output to follow the prompt more closely at the cost of diversity.",
+          "message": "Classifier-free guidance scale.  Higher values force the output to follow the prompt more closely at the cost of diversity."
+        }
+      }
+    }
+  }
+}

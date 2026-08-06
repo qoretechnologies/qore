@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "app.Q2lyY2xl.display_name": {
+          "source": "Circle",
+          "message": "Circle"
+        },
+        "app.Q2lyY2xl.short_desc": {
+          "source": "Circle community platform",
+          "message": "Circle community platform"
+        },
+        "app.Q2lyY2xl.desc": {
+          "source": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging.",
+          "message": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Make an API call"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Circle",
+          "message": "Make a custom API call to Circle"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "The HTTP method to use for the request"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI Path"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body Type"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "How the body is serialized and what Content-Type is sent"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor — selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; use connection serialization and let the REST client decide"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serialize body as JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serialize body as application/x-www-form-urlencoded form fields"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Upload a file using multipart/form-data"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Send body as XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Send body as YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Send body as text/plain"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Raw Binary"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Send body as raw bytes"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "The request body"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Path Variables"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Values for {name} placeholders in path"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Query Arguments"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Query string parameters"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Custom Headers"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Extra request headers"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Expected Status Codes"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Response status codes treated as success"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Return Errors as Data"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Return non-2xx responses normally instead of throwing"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data — e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Include Debug Info"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Include request/timing/size debug info in the response"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "List Posts"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List posts in the community",
+          "message": "List posts in the community"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.desc": {
+          "source": "List posts in the community with optional filtering by space and status",
+          "message": "List posts in the community with optional filtering by space and status"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.short_desc": {
+          "source": "Get a specific post",
+          "message": "Get a specific post"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Filter by space",
+          "message": "Filter by space"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filter by status"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Published"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Draft"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Scheduled"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get a Post",
+          "message": "Get a Post"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a specific post",
+          "message": "Retrieve a specific post"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieve a single post by its ID",
+          "message": "Retrieve a single post by its ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.short_desc": {
+          "source": "The post ID",
+          "message": "The post ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
+          "source": "Create a Post",
+          "message": "Create a Post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
+          "source": "Create a new post",
+          "message": "Create a new post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.desc": {
+          "source": "Creates a new post in a Circle space",
+          "message": "Creates a new post in a Circle space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to create the post in",
+          "message": "Space to create the post in"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to create the post in",
+          "message": "The ID of the space to create the post in"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Post title"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "The title of the post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Post content"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Post status"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "The publication status of the post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Published"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Draft"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Scheduled"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Is Pinned"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Pin post to top of space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Whether to pin the post to the top of its space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Comments Enabled"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Enable comments on the post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post. Default: `True`",
+          "message": "Whether to enable comments on the post. Default: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "Liking Enabled"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Enable liking on the post"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post. Default: `True`",
+          "message": "Whether to enable liking on the post. Default: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Published At"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date for scheduling",
+          "message": "Publication date for scheduling"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`",
+          "message": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Skip Notifications"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Skip sending notifications"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent to members about this post",
+          "message": "If `True`, no notifications will be sent to members about this post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update a Post",
+          "message": "Update a Post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Update an existing post",
+          "message": "Update an existing post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Updates an existing post in Circle",
+          "message": "Updates an existing post in Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to update",
+          "message": "ID of the post to update"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to update",
+          "message": "The unique identifier of the post to update"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Post title"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "The title of the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Post content"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Post status"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "The publication status of the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Published"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Draft"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Scheduled"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Is Pinned"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Pin post to top of space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Whether to pin the post to the top of its space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Comments Enabled"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Enable comments on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post",
+          "message": "Whether to enable comments on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.display_name": {
+          "source": "Comments Closed",
+          "message": "Comments Closed"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.short_desc": {
+          "source": "Close comments on the post",
+          "message": "Close comments on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.desc": {
+          "source": "Whether to close comments on the post",
+          "message": "Whether to close comments on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "Liking Enabled"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Enable liking on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post",
+          "message": "Whether to enable liking on the post"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Published At"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date",
+          "message": "Publication date"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`",
+          "message": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Skip Notifications"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Skip sending notifications"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent about this update",
+          "message": "If `True`, no notifications will be sent about this update"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete a Post",
+          "message": "Delete a Post"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a specific post",
+          "message": "Delete a specific post"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Permanently deletes a post from Circle",
+          "message": "Permanently deletes a post from Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to delete",
+          "message": "ID of the post to delete"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to delete",
+          "message": "The unique identifier of the post to delete"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "List Comments"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List comments in the community",
+          "message": "List comments in the community"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "List comments with optional filtering by post",
+          "message": "List comments with optional filtering by post"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "Comment ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific comment",
+          "message": "Get a specific comment"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.short_desc": {
+          "source": "Filter by post",
+          "message": "Filter by post"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
+          "source": "Get a Comment",
+          "message": "Get a Comment"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
+          "source": "Retrieve a specific comment",
+          "message": "Retrieve a specific comment"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.desc": {
+          "source": "Retrieve a single comment by its ID",
+          "message": "Retrieve a single comment by its ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "Comment ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "The comment ID",
+          "message": "The comment ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create a Comment",
+          "message": "Create a Comment"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Create a new comment",
+          "message": "Create a new comment"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Creates a new comment on a post in Circle",
+          "message": "Creates a new comment on a post in Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "Post ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.short_desc": {
+          "source": "Post to comment on",
+          "message": "Post to comment on"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.desc": {
+          "source": "The ID of the post to add the comment to",
+          "message": "The ID of the post to add the comment to"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "Comment content",
+          "message": "Comment content"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`",
+          "message": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
+          "source": "Delete a Comment",
+          "message": "Delete a Comment"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Delete a specific comment",
+          "message": "Delete a specific comment"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.desc": {
+          "source": "Permanently deletes a comment from Circle",
+          "message": "Permanently deletes a comment from Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "Comment ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "ID of the comment to delete",
+          "message": "ID of the comment to delete"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the comment to delete",
+          "message": "The unique identifier of the comment to delete"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
+          "source": "List Members",
+          "message": "List Members"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
+          "source": "List community members",
+          "message": "List community members"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.desc": {
+          "source": "List community members with optional filtering by email",
+          "message": "List community members with optional filtering by email"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.short_desc": {
+          "source": "Get a specific member",
+          "message": "Get a specific member"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Email"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filter by email"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by member status",
+          "message": "Filter by member status"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "All"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.display_name": {
+          "source": "Inactive",
+          "message": "Inactive"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
+          "source": "Invite a Member",
+          "message": "Invite a Member"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
+          "source": "Invite a member to the community",
+          "message": "Invite a member to the community"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.desc": {
+          "source": "Invites a member to a Circle community by email",
+          "message": "Invites a member to a Circle community by email"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Email"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.short_desc": {
+          "source": "Email address to invite",
+          "message": "Email address to invite"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the person to invite to the community",
+          "message": "The email address of the person to invite to the community"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.short_desc": {
+          "source": "Member name",
+          "message": "Member name"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.desc": {
+          "source": "The name of the person being invited",
+          "message": "The name of the person being invited"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.display_name": {
+          "source": "Headline",
+          "message": "Headline"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.short_desc": {
+          "source": "Member headline",
+          "message": "Member headline"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.desc": {
+          "source": "The headline or tagline for the member's profile",
+          "message": "The headline or tagline for the member's profile"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.display_name": {
+          "source": "Skip Invitation",
+          "message": "Skip Invitation"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.short_desc": {
+          "source": "Skip sending the invitation email",
+          "message": "Skip sending the invitation email"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.desc": {
+          "source": "If `True`, the member will be added without sending an invitation email",
+          "message": "If `True`, the member will be added without sending an invitation email"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.display_name": {
+          "source": "Space IDs",
+          "message": "Space IDs"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.short_desc": {
+          "source": "Spaces to add the member to",
+          "message": "Spaces to add the member to"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.desc": {
+          "source": "List of space IDs to add the member to upon invitation",
+          "message": "List of space IDs to add the member to upon invitation"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
+          "source": "Remove a Member",
+          "message": "Remove a Member"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
+          "source": "Remove a member from the community",
+          "message": "Remove a member from the community"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.desc": {
+          "source": "Removes a member from a Circle community",
+          "message": "Removes a member from a Circle community"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to remove",
+          "message": "ID of the member to remove"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to remove",
+          "message": "The unique identifier of the community member to remove"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
+          "source": "Tag a Member",
+          "message": "Tag a Member"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
+          "source": "Tag a specific member",
+          "message": "Tag a specific member"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.desc": {
+          "source": "Tags a specific community member in Circle",
+          "message": "Tags a specific community member in Circle"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to tag",
+          "message": "ID of the member to tag"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to tag",
+          "message": "The unique identifier of the community member to tag"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.short_desc": {
+          "source": "Tag name",
+          "message": "Tag name"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.desc": {
+          "source": "The tag to apply to the member",
+          "message": "The tag to apply to the member"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
+          "source": "Untag a Member",
+          "message": "Untag a Member"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
+          "source": "Untag a specific member",
+          "message": "Untag a specific member"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.desc": {
+          "source": "Removes a tag from a specific community member in Circle",
+          "message": "Removes a tag from a specific community member in Circle"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.short_desc": {
+          "source": "ID of the member to untag",
+          "message": "ID of the member to untag"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to untag",
+          "message": "The unique identifier of the community member to untag"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.short_desc": {
+          "source": "ID of the tag to remove",
+          "message": "ID of the tag to remove"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to remove from the member",
+          "message": "The ID of the tag to remove from the member"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "List Spaces"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List spaces in the community",
+          "message": "List spaces in the community"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List spaces in the community with optional sorting",
+          "message": "List spaces in the community with optional sorting"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.short_desc": {
+          "source": "Get a specific space",
+          "message": "Get a specific space"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort Order",
+          "message": "Sort Order"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Sort order for spaces",
+          "message": "Sort order for spaces"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Active"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOm9sZGVzdA.display_name": {
+          "source": "Oldest",
+          "message": "Oldest"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFscGhhYmV0aWNhbA.display_name": {
+          "source": "Alphabetical",
+          "message": "Alphabetical"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhdGVzdF91cGRhdGVk.display_name": {
+          "source": "Latest Updated",
+          "message": "Latest Updated"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get a Space",
+          "message": "Get a Space"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Retrieve a specific space",
+          "message": "Retrieve a specific space"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve a single space by its ID",
+          "message": "Retrieve a single space by its ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.short_desc": {
+          "source": "The space ID",
+          "message": "The space ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create a Space",
+          "message": "Create a Space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new space",
+          "message": "Create a new space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Creates a new space in a Circle community",
+          "message": "Creates a new space in a Circle community"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Space name"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "The name of the space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Is Private"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Whether the space is private"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private. Default: `False`",
+          "message": "Whether the space should be private. Default: `False`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Hidden from Non-Members"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Whether the space is hidden from non-members"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Whether the space is hidden from users who are not members of it"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Is Hidden"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Whether the space is hidden"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Whether the space is completely hidden"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Space emoji icon"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "An emoji to use as the space icon"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "Space Type"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Type of space",
+          "message": "Type of space"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "The type of space to create",
+          "message": "The type of space to create"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Basic"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmV2ZW50.display_name": {
+          "source": "Event",
+          "message": "Event"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvdXJzZQ.display_name": {
+          "source": "Course",
+          "message": "Course"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOm1lbWJlcnM.display_name": {
+          "source": "Members",
+          "message": "Members"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmltYWdl.display_name": {
+          "source": "Image",
+          "message": "Image"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Posts Disabled"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Whether posting is disabled"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Whether member posting is disabled in this space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update a Space",
+          "message": "Update a Space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update an existing space",
+          "message": "Update an existing space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Updates an existing space in Circle",
+          "message": "Updates an existing space in Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to update",
+          "message": "ID of the space to update"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to update",
+          "message": "The unique identifier of the space to update"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Space name"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "The name of the space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Is Private"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Whether the space is private"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private",
+          "message": "Whether the space should be private"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Hidden from Non-Members"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Whether the space is hidden from non-members"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Whether the space is hidden from users who are not members of it"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Is Hidden"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Whether the space is hidden"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Whether the space is completely hidden"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Space emoji icon"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "An emoji to use as the space icon"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Posts Disabled"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Whether posting is disabled"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Whether member posting is disabled in this space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.display_name": {
+          "source": "Hide Post Settings",
+          "message": "Hide Post Settings"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.short_desc": {
+          "source": "Whether post settings are hidden",
+          "message": "Whether post settings are hidden"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.desc": {
+          "source": "Whether to hide post settings in this space",
+          "message": "Whether to hide post settings in this space"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.display_name": {
+          "source": "Hide from Featured Areas",
+          "message": "Hide from Featured Areas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.short_desc": {
+          "source": "Whether to hide from featured areas",
+          "message": "Whether to hide from featured areas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.desc": {
+          "source": "Whether to hide this space from featured areas in the community",
+          "message": "Whether to hide this space from featured areas in the community"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete a Space",
+          "message": "Delete a Space"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a specific space",
+          "message": "Delete a specific space"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Permanently deletes a space from Circle",
+          "message": "Permanently deletes a space from Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to delete",
+          "message": "ID of the space to delete"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to delete",
+          "message": "The unique identifier of the space to delete"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
+          "source": "Add a Member to a Space",
+          "message": "Add a Member to a Space"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
+          "source": "Add a member to a certain space",
+          "message": "Add a member to a certain space"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.desc": {
+          "source": "Adds a member to a certain space in Circle",
+          "message": "Adds a member to a certain space in Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to add the member to",
+          "message": "Space to add the member to"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to add the member to",
+          "message": "The ID of the space to add the member to"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Email"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "Member email address"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space",
+          "message": "The email address of the member to add to the space"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
+          "source": "Remove a Member from a Space",
+          "message": "Remove a Member from a Space"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
+          "source": "Remove a member from a space",
+          "message": "Remove a member from a space"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.desc": {
+          "source": "Removes a member from a space in Circle",
+          "message": "Removes a member from a space in Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "Space ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to remove the member from",
+          "message": "Space to remove the member from"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to remove the member from",
+          "message": "The ID of the space to remove the member from"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Member to remove"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space",
+          "message": "The ID of the community member to remove from the space"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
+          "source": "Add a Member to a Space Group",
+          "message": "Add a Member to a Space Group"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
+          "source": "Add a member to a specific space group",
+          "message": "Add a member to a specific space group"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.desc": {
+          "source": "Adds a member to a specific space group in Circle",
+          "message": "Adds a member to a specific space group in Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "Space Group ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to add the member to",
+          "message": "Space group to add the member to"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to add the member to",
+          "message": "The ID of the space group to add the member to"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Email"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "Member email address"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space group",
+          "message": "The email address of the member to add to the space group"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
+          "source": "Remove a Member from a Space Group",
+          "message": "Remove a Member from a Space Group"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
+          "source": "Remove a member from a space group",
+          "message": "Remove a member from a space group"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.desc": {
+          "source": "Removes a member from a space group in Circle",
+          "message": "Removes a member from a space group in Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "Space Group ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to remove the member from",
+          "message": "Space group to remove the member from"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to remove the member from",
+          "message": "The ID of the space group to remove the member from"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "Member ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Member to remove"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space group",
+          "message": "The ID of the community member to remove from the space group"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "List Communities"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities in the account",
+          "message": "List communities in the account"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities accessible to the current API token",
+          "message": "List communities accessible to the current API token"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "Community ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "Get a specific community"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximum results"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
+          "source": "Get a Community",
+          "message": "Get a Community"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
+          "source": "Retrieve a specific community",
+          "message": "Retrieve a specific community"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.desc": {
+          "source": "Retrieve a single community by its ID",
+          "message": "Retrieve a single community by its ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "Community ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.short_desc": {
+          "source": "The community ID",
+          "message": "The community ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "Send a Message"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to a specific user",
+          "message": "Send a message to a specific user"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Sends a message to a specific user on behalf of the current user in Circle",
+          "message": "Sends a message to a specific user on behalf of the current user in Circle"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.display_name": {
+          "source": "Recipient ID",
+          "message": "Recipient ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.short_desc": {
+          "source": "ID of the message recipient",
+          "message": "ID of the message recipient"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.desc": {
+          "source": "The ID of the community member to send the message to",
+          "message": "The ID of the community member to send the message to"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "Message content",
+          "message": "Message content"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The body content of the message",
+          "message": "The body content of the message"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
+          "source": "New Comment",
+          "message": "New Comment"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
+          "source": "Trigger when new comments are posted",
+          "message": "Trigger when new comments are posted"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.desc": {
+          "source": "Fires when new comments are posted in the Circle community",
+          "message": "Fires when new comments are posted in the Circle community"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
+          "source": "New Community",
+          "message": "New Community"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
+          "source": "Trigger when new communities are created",
+          "message": "Trigger when new communities are created"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.desc": {
+          "source": "Fires when new communities are created in Circle",
+          "message": "Fires when new communities are created in Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
+          "source": "Member Accepted an Invitation",
+          "message": "Member Accepted an Invitation"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
+          "source": "Trigger when a member accepts an invitation",
+          "message": "Trigger when a member accepts an invitation"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.desc": {
+          "source": "Fires when a member accepts an invitation to the Circle community",
+          "message": "Fires when a member accepts an invitation to the Circle community"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "New Post"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Trigger when new posts are created",
+          "message": "Trigger when new posts are created"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when new posts are created in the Circle community",
+          "message": "Fires when new posts are created in the Circle community"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
+          "source": "New Space",
+          "message": "New Space"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
+          "source": "Trigger when new spaces are created",
+          "message": "Trigger when new spaces are created"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.desc": {
+          "source": "Fires when new spaces are created in the Circle community",
+          "message": "Fires when new spaces are created in the Circle community"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
+          "source": "Member Tagged",
+          "message": "Member Tagged"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
+          "source": "Trigger when a member is tagged",
+          "message": "Trigger when a member is tagged"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.desc": {
+          "source": "Fires when a member is tagged in the Circle community",
+          "message": "Fires when a member is tagged in the Circle community"
+        }
+      }
+    }
+  }
+}
