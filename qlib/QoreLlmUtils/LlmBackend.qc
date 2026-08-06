@@ -605,6 +605,8 @@ printf("Response: %s\n", result.content);
 */
 public class LlmBackend {
     private {
+        #! Minimum visible-output budget for a schema-constrained forced-tool retry
+        const ForcedToolJsonRetryMinOutputTokens = 2048;
         #! The backend mode string (matches @ref LlmBackendConfig::mode)
         string mode;
         #! Backend configuration, retained for telemetry observer defaults
@@ -896,12 +898,6 @@ llm.chatStream(
                             True, True, "malformed_function_call"), body,
                         tools, options, False);
                 }
-                if (openAiResponseHasMessageContent(retry)) {
-                    return attachOpenAiToolProtocolDiagnostics(
-                        attachForcedToolRetryDiagnostics(retry, rv, retry,
-                            True, False, "malformed_function_call"), body,
-                        tools, options, False);
-                }
                 rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
                     False, "malformed_function_call");
             }
@@ -966,12 +962,6 @@ llm.chatStream(
                     return attachOpenAiToolProtocolDiagnostics(
                         attachForcedToolRetryDiagnostics(retry, rv, retry,
                             True, True, "malformed_function_call"), body,
-                        tools, options, True);
-                }
-                if (openAiResponseHasMessageContent(retry)) {
-                    return attachOpenAiToolProtocolDiagnostics(
-                        attachForcedToolRetryDiagnostics(retry, rv, retry,
-                            True, False, "malformed_function_call"), body,
                         tools, options, True);
                 }
                 rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
@@ -1550,11 +1540,6 @@ llm.chatStream(
                         original_response, retry, True, True,
                         "required_tool_no_output");
                 }
-                if (openAiResponseHasMessageContent(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry,
-                        original_response, retry, True, False,
-                        "required_tool_no_output");
-                }
                 return attachForcedToolRetryDiagnostics(original_response,
                     original_response, retry, False, False,
                     "required_tool_no_output");
@@ -1603,18 +1588,25 @@ llm.chatStream(
         return result.valid ? cast<hash>(result.value) : args;
     }
 
-    private static hash<LlmRequestOptions> makeForcedToolJsonRetryOptions(
+    private hash<LlmRequestOptions> makeForcedToolJsonRetryOptions(
             hash<LlmRequestOptions> options, hash<auto> output_schema) {
         hash<LlmRequestOptions> retry_options = <LlmRequestOptions>{};
-        foreach string key in (("model", "max_tokens",
-                "max_output_tokens", "reasoning_token_budget",
-                "temperature", "telemetry_observer",
-                "telemetry_context")) {
+        foreach string key in (("model", "temperature",
+                "telemetry_observer", "telemetry_context")) {
             if (exists options{key}
                     && options{key}.typeCode() != NT_NOTHING) {
                 retry_options{key} = options{key};
             }
         }
+        int resolved_output_tokens =
+            provider.getRequestMaxOutputTokens(options);
+        retry_options.max_output_tokens = resolved_output_tokens
+            < ForcedToolJsonRetryMinOutputTokens
+            ? ForcedToolJsonRetryMinOutputTokens : resolved_output_tokens;
+        # This retry only has to produce one schema-constrained JSON object.
+        # Hidden reasoning competes with the visible JSON for the same output
+        # budget on Gemini-family providers and can otherwise consume it all.
+        retry_options.reasoning_token_budget = 0;
         retry_options.output_schema = output_schema;
         *hash<auto> retry_body_options = stripForcedToolBodyOptions(
             options.body_options);
@@ -1633,6 +1625,19 @@ llm.chatStream(
         rv += body_options;
         remove rv.tool_choice;
         remove rv.toolConfig;
+        if (rv.generationConfig.typeCode() == NT_HASH) {
+            hash<auto!> generation_config;
+            generation_config += cast<hash>(rv.generationConfig);
+            remove generation_config.maxOutputTokens;
+            remove generation_config.thinkingConfig;
+            remove generation_config.responseMimeType;
+            remove generation_config.responseSchema;
+            if (generation_config) {
+                rv.generationConfig = generation_config;
+            } else {
+                remove rv.generationConfig;
+            }
+        }
         return rv ? rv : NOTHING;
     }
 
@@ -1654,6 +1659,7 @@ llm.chatStream(
         if (!isOpenAiToolChoiceRequired(request.tool_choice)
                 || !tools
                 || openAiResponseHasToolCall(response)
+                || response.provider_diagnostics.forced_tool_retry.attempted
                 || response.choices.typeCode() != NT_LIST
                 || !response.choices) {
             return False;
