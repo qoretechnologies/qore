@@ -1,0 +1,635 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DropboxRestClient.qm Qore user module for calling Dropbox REST services
+
+/*  DropboxRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires json
+
+module DropboxRestClient {
+    version = "1.0";
+    desc = "user module for calling Dropbox REST API services";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("dropbox", DropboxRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage DropboxRestClient Module
+
+    @tableofcontents
+
+    @section dropboxrestclientintro DropboxRestClient Introduction
+
+    The %DropboxRestClient module provides an API for calling
+    <a href="https://www.dropbox.com">Dropbox</a> REST API services.
+
+    To use this module, use \c "%requires DropboxRestClient" in your code.
+
+    All the public symbols in the module are defined in the DropboxRestClient namespace.
+
+    The main classes are:
+    - @ref DropboxRestClient::DropboxRestClient "DropboxRestClient":
+      this class provides the REST client API for communication with the Dropbox REST API; it also
+      automates authentication and authorization to the target
+    - @ref DropboxRestClient::DropboxRestClientIo "DropboxRestClientIo":
+      as @ref DropboxRestClient::DropboxRestClient "DropboxRestClient", but using multiplexed,
+      non-blocking I/O
+    - @ref DropboxRestClient::DropboxRestConnection "DropboxRestConnection":
+      provides a REST connection object to Dropbox (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section dropboxrestclient_two_hosts The Two Dropbox Hosts
+
+    Dropbox splits its API across two hosts with two different calling conventions:
+
+    |!Property|!RPC endpoints|!Content endpoints
+    |Host|\c api.dropboxapi.com|\c content.dropboxapi.com
+    |Used by|metadata, listing, move, copy, sharing|\c upload, \c download, upload sessions
+    |Arguments|JSON request body|JSON in the \c Dropbox-API-Arg request header
+    |Body|JSON|the raw file content
+
+    Passing an absolute URL as the path argument of a REST request does **not** retarget the request:
+    the client sends to its configured host and the absolute URI travels as a literal path.  The two
+    hosts therefore need two client objects, which is handled here rather than by the caller:
+    @ref DropboxRestClient::DropboxRestClient::getContentClient() "getContentClient()" returns a
+    sibling client for the content host, created on first use from this client's own configuration
+    and sharing its OAuth2 token, so a token acquired or refreshed on either host is used by both.
+
+    Content requests are issued with
+    @ref DropboxRestClient::DropboxRestClient::contentRequest() "contentRequest()", which places the
+    JSON arguments in the \c Dropbox-API-Arg header, sends the body unserialized, and returns the
+    operation metadata that content responses carry in the \c Dropbox-API-Result header.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires DropboxRestClient
+
+hash<auto> opts = {
+    "oauth2_client_id": client_id,
+    "oauth2_client_secret": client_secret,
+};
+
+DropboxRestClient rest(opts);
+hash<auto> ans = rest.post("/2/files/list_folder", {"path": ""});
+printf("%Y\n", ans.body);
+    @endcode
+
+    @section dropboxrestclientrelnotes Release Notes
+
+    @subsection dropboxrestclientv1_0 DropboxRestClient v1.0
+    - the initial version of the %DropboxRestClient module
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+*/
+
+#! the DropboxRestClient namespace contains all the objects in the DropboxRestClient module
+public namespace DropboxRestClient {
+#! Common base class for DropboxRestClient functionality
+public class DropboxRestClientBase {
+    public {
+        #! Default Dropbox RPC API URL
+        const DefaultUrl = "https://api.dropboxapi.com";
+
+        #! Dropbox content API URL
+        /** Content endpoints (\c upload, \c download, and upload sessions) are served by a different host
+            from the RPC endpoints; see @ref dropboxrestclient_two_hosts
+        */
+        const ContentUrl = "https://content.dropboxapi.com";
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default OAuth2 auth URL
+        const DefaultAuthUrl = "https://www.dropbox.com/oauth2/authorize";
+
+        #! Default OAuth2 token URL
+        const DefaultTokenUrl = "https://api.dropboxapi.com/oauth2/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        const DefaultOAuth2Scopes = (
+            "files.metadata.write",
+            "files.metadata.read",
+            "files.content.write",
+            "files.content.read",
+            "sharing.write",
+            "sharing.read",
+            "account_info.read",
+        );
+
+        #! Default OAuth2 auth args
+        /** @note Dropbox issues a refresh token only when \c token_access_type is \c "offline"; without it
+            the access token expires after four hours and cannot be renewed without user interaction
+        */
+        const DefaultAuthArgs = {
+            "token_access_type": "offline",
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "POST";
+
+        #! Default ping path
+        /** \c /2/check/user echoes its \c query argument back; it requires a valid token but touches no user
+            data and needs no scope beyond authentication
+        */
+        const DefaultPingPath = "/2/check/user";
+
+        #! Default ping body
+        const DefaultPingBody = {
+            "query": "ping",
+        };
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! The request header carrying JSON arguments to a content endpoint
+        const ApiArgHeader = "Dropbox-API-Arg";
+
+        #! The response header carrying operation metadata from a content endpoint
+        /** Content responses put the file bytes in the body, so the metadata for the operation - the file name,
+            size, revision, and so on - arrives in this header instead
+        */
+        const ApiResultHeader = "Dropbox-API-Result";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "oauth2_auth_args": DefaultAuthArgs,
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": DefaultOAuth2Scopes,
+            "oauth2_token_url": DefaultTokenUrl,
+            "url": DefaultUrl,
+        };
+    }
+
+    #! Returns options for the DropboxRestClient constructors
+    /** @param opts0 the options supplied by the caller
+
+        @return the options with defaults applied for any option not already set
+    */
+    static hash<auto> getOptions(hash<auto> opts0) {
+        hash<auto> opts += opts0;
+        # set defaults for options not already set
+        map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
+        return opts;
+    }
+
+    #! Returns @ref True if the given URL addresses the Dropbox content host
+    /** @param url the URL to check
+
+        @return @ref True if the given URL addresses the Dropbox content host
+    */
+    static bool isContentUrl(string url) {
+        return parse_url(url).host == parse_url(ContentUrl).host;
+    }
+
+    #! Encodes arguments for the \c Dropbox-API-Arg request header
+    /** HTTP header values are limited to ASCII, but a Dropbox path may hold any Unicode character, so every
+        non-ASCII character is escaped with the JSON \c \\uXXXX form.  Without this, a path holding an accented
+        or non-Latin character produces a header the server rejects, or - worse - silently addresses a
+        different file.
+
+        @param arg the arguments to encode
+
+        @return the JSON encoding of \a arg, using only ASCII characters
+    */
+    static string makeApiArg(auto arg) {
+        string json = make_json(arg);
+        string rv = "";
+        int len = json.length();
+        for (int i = 0; i < len; ++i) {
+            int cp = json.getUnicode(i);
+            if (cp < 128) {
+                rv += json[i];
+            } else if (cp > 0xFFFF) {
+                # characters outside the basic multilingual plane are escaped as a UTF-16 surrogate pair
+                int v = cp - 0x10000;
+                rv += sprintf("\\u%04x\\u%04x", 0xD800 + (v >> 10), 0xDC00 + (v & 0x3FF));
+            } else {
+                rv += sprintf("\\u%04x", cp);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the operation metadata carried in the \c Dropbox-API-Result response header
+    /** @param hdr the response headers
+
+        @return the decoded metadata, or @ref nothing if the response carried none
+
+        @throw DROPBOX-RESPONSE-ERROR the header could not be parsed as JSON
+    */
+    static *hash<auto> getApiResult(*hash<auto> hdr) {
+        # response header keys are normalized to lower case
+        *string str = hdr{ApiResultHeader.lwr()} ?? hdr{ApiResultHeader};
+        if (!str.val()) {
+            return;
+        }
+        try {
+            return parse_json(str);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "DROPBOX-RESPONSE-ERROR", sprintf("the %s response header could not be parsed as JSON: %s: %s",
+                ApiResultHeader, ex.err, ex.desc);
+        }
+    }
+
+    #! Returns the headers for a content-endpoint request
+    /** @param arg the arguments for the operation
+        @param content_type the request body's content type, if the request carries a body
+
+        @return the request headers
+
+        @note Dropbox rejects a download request that carries a \c Content-Type header, since such a request must
+        have an empty body; the header is therefore only set when there is a body to describe
+    */
+    static hash<auto> getContentHeaders(auto arg, *string content_type) {
+        hash<auto> rv = {
+            ApiArgHeader: DropboxRestClientBase::makeApiArg(arg),
+            # content endpoints answer with the file bytes, not with the client's preferred serialization
+            "Accept": "*/*",
+        };
+        if (content_type.val()) {
+            rv."Content-Type" = content_type;
+        }
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Dropbox
+/** This class requires the following options for Dropbox authentication and authorization:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    @note Content endpoints are served by a different host; see @ref dropboxrestclient_two_hosts and
+    @ref contentRequest()
+*/
+public class DropboxRestClient inherits RestClient::RestClient, DropboxRestClientBase {
+    private:internal {
+        #! The client for the content host, created on first use
+        *DropboxRestClient content;
+
+        #! Serializes creation of the content client
+        Mutex content_lock();
+
+        #! @ref True if this client addresses the content host itself
+        bool content_host;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts valid options are the same as @ref RestClient::RestClient "RestClient" with the following
+        differences:
+        - \c data: see @ref RestClient::RestClient::DataSerializationOptions "DataSerializationOptions" for
+          possible values; the default is \c "json"
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(DropboxRestClientBase::getOptions(opts), True) {
+        content_host = DropboxRestClientBase::isContentUrl(opts.url ?? DefaultUrl);
+
+        if (!do_not_connect) {
+            if (!token) {
+                loginIntern();
+            } else {
+                connect();
+            }
+        }
+    }
+
+    #! Returns the client for the Dropbox content host
+    /** The content client is created on first use from this client's own configuration and inherits its OAuth2
+        token and refresh token, so it does not perform a second login.  Calling this on a client that already
+        addresses the content host returns that client.
+
+        @return the client for the Dropbox content host
+
+        @see @ref dropboxrestclient_two_hosts
+    */
+    DropboxRestClient getContentClient() {
+        if (content_host) {
+            return self;
+        }
+        content_lock.lock();
+        on_exit content_lock.unlock();
+        if (!content) {
+            content = cast<DropboxRestClient>(copyWithUrl(ContentUrl));
+        }
+        return content;
+    }
+
+    #! Sends a request to a Dropbox content endpoint
+    /** The operation arguments travel in the \c Dropbox-API-Arg header rather than in the body, the body is sent
+        unserialized, and any operation metadata returned in the \c Dropbox-API-Result header is decoded into the
+        \c api_result key of the return value.
+
+        @param path the content endpoint path, e.g. \c "/2/files/download"
+        @param arg the operation arguments, encoded into the \c Dropbox-API-Arg header
+        @param body the request body, if any
+        @param content_type the content type of \a body; only used when \a body is present
+
+        @return a @ref RestClient::RestResponseInfo "RestResponseInfo" hash with an additional \c api_result key
+        holding the decoded \c Dropbox-API-Result header, if the response carried one
+
+        @throw DROPBOX-RESPONSE-ERROR the \c Dropbox-API-Result response header could not be parsed as JSON
+    */
+    hash<auto> contentRequest(string path, auto arg, *binary body, *string content_type) {
+        DropboxRestClient client = getContentClient();
+        hash<RestResponseInfo> resp = client.restDoRawRequest("POST", path, body,
+            DropboxRestClientBase::getContentHeaders(arg, body ? (content_type ?? MimeTypeOctetStream) : NOTHING));
+        return resp + {"api_result": DropboxRestClientBase::getApiResult(resp.headers)};
+    }
+}
+
+#! REST client for Dropbox using multiplexed HTTP connections
+/** @see DropboxRestClient for more information
+*/
+public class DropboxRestClientIo inherits RestClientIo::RestClientIo, DropboxRestClientBase {
+    private:internal {
+        #! The client for the content host, created on first use
+        *DropboxRestClientIo content;
+
+        #! Serializes creation of the content client
+        Mutex content_lock();
+
+        #! @ref True if this client addresses the content host itself
+        bool content_host;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(DropboxRestClientBase::getOptions(opts), shared_mgr) {
+        content_host = DropboxRestClientBase::isContentUrl(opts.url ?? DefaultUrl);
+    }
+
+    #! Returns the client for the Dropbox content host
+    /** The content client is created on first use from this client's own configuration; it inherits this
+        client's OAuth2 token and refresh token and shares its connection manager.  Calling this on a client that
+        already addresses the content host returns that client.
+
+        @return the client for the Dropbox content host
+
+        @see @ref dropboxrestclient_two_hosts
+    */
+    DropboxRestClientIo getContentClient() {
+        if (content_host) {
+            return self;
+        }
+        content_lock.lock();
+        on_exit content_lock.unlock();
+        if (!content) {
+            content = cast<DropboxRestClientIo>(copyWithUrl(ContentUrl));
+        }
+        return content;
+    }
+
+    #! Sends a request to a Dropbox content endpoint
+    /** @param path the content endpoint path, e.g. \c "/2/files/download"
+        @param arg the operation arguments, encoded into the \c Dropbox-API-Arg header
+        @param body the request body, if any
+        @param content_type the content type of \a body; only used when \a body is present
+
+        @return a @ref RestClient::RestResponseInfo "RestResponseInfo" hash with an additional \c api_result key
+        holding the decoded \c Dropbox-API-Result header, if the response carried one
+
+        @throw DROPBOX-RESPONSE-ERROR the \c Dropbox-API-Result response header could not be parsed as JSON
+
+        @see @ref DropboxRestClient::DropboxRestClient::contentRequest() "DropboxRestClient::contentRequest()"
+    */
+    hash<auto> contentRequest(string path, auto arg, *binary body, *string content_type) {
+        DropboxRestClientIo client = getContentClient();
+        hash<RestClient::RestResponseInfo> resp = client.restDoRawRequest("POST", path, body,
+            DropboxRestClientBase::getContentHeaders(arg, body ? (content_type ?? MimeTypeOctetStream) : NOTHING));
+        return resp + {"api_result": DropboxRestClientBase::getApiResult(resp.headers)};
+    }
+}
+
+#! Class for Dropbox REST connections; returns @ref DropboxRestClient objects
+/** Supports all @ref RestClient::RestConnection "RestConnection" options; the Dropbox OAuth2 URLs, scopes, and
+    ping are supplied as defaults.
+
+    @see @ref DropboxRestClient::DropboxRestClient "DropboxRestClient"
+*/
+public class DropboxRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Dropbox REST API URL
+        const DefaultUrl = "dropbox://api.dropboxapi.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Dropbox",
+            "short_desc": "A connection to the Dropbox REST API",
+            "desc": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage "
+                "and sharing.\n\n"
+                "Requires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a "
+                "[Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` "
+                "URL scheme.\n\n"
+                "The app must be granted the scopes this connection requests, and `token_access_type` must "
+                "remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working "
+                "four hours after it is authorized",
+            "cls": Class::forName("DropboxRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "dropbox": True,
+            },
+            "base_scheme_map": {
+                "https": "dropbox",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultData,
+                },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                        + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultAuthArgs,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                        + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                        + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultOAuth2Scopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                        + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultTokenUrl,
+                },
+                "ping_body": RestConnection::ConnectionScheme.options.ping_body + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultPingBody,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": DropboxRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+
+        #! Options required to support the OAuth2 authorization code grant flow
+        const OAuth2AuthRequestOptions = (
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_auth_url",
+            "oauth2_token_url",
+            "oauth2_redirect_url",
+        );
+    }
+
+    #! Creates the DropboxRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the DropboxRestConnection object
+    /** @param config the connection configuration hash
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(DropboxRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns config with the correct URL
+    /** Dropbox is a single-tenant SaaS API reached at one fixed host, so a URL is neither required from the user
+        nor useful to vary; anything else would produce requests that cannot be signed or served
+
+        @param config the configuration supplied by the caller
+
+        @return the configuration with the Dropbox URL applied
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        if (!config.url || config.url != DefaultUrl) {
+            config.url = DefaultUrl;
+        }
+        return config;
+    }
+
+    #! Returns \c "dropbox"
+    string getType() {
+        return "dropbox";
+    }
+
+    #! Returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "Dropbox";
+    }
+
+    #! Returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a DropboxDataProvider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, the data provider module is loaded and the object created dynamically
+        load_module("DropboxDataProvider");
+        return create_object("DropboxDataProvider", getAsync());
+    }
+
+    #! Returns @ref True if the response was related to an authorization token error
+    /** Any 401 from the Dropbox API indicates an expired or invalid token that should trigger a refresh
+    */
+    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
+            auto body) {
+        return status_code == 401;
+    }
+
+    #! Sets the auth code feature if supported
+    private checkAuthCodeFeature() {
+        if (opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
+            features{RCF_OAUTH2_AUTH_CODE} = True;
+        }
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+        children_can_support_records = True;
+        children_can_support_observers = True;
+    }
+
+    #! Returns a @ref DropboxRestClient object
+    private DropboxRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DropboxRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DropboxRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

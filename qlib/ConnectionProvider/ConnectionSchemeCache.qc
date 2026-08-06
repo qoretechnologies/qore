@@ -142,6 +142,8 @@ public class ConnectionSchemeCache {
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
 
+            "dropbox": "DropboxRestClient",
+
             "elevenlabs": "ElevenLabsRestClient",
 
             "ds": "DataStreamClient",

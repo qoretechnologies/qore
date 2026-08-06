@@ -1,0 +1,469 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DropboxDataProvider.qm Qore user module providing a data provider API for Dropbox
+
+/*  DropboxDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires DropboxRestClient
+%requires RestClientIo
+%requires json
+
+module DropboxDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Dropbox";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new DropboxDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DropboxDataProvider::AppName,
+            "display_name": "Dropbox",
+            "short_desc": "Dropbox cloud file storage",
+            "desc": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and "
+                "sharing.\n\n"
+                "Files are addressed by path from the account root, and paths are case-insensitive; the "
+                "account root itself is the empty string rather than `/`.\n\n"
+                "**Common use cases**:\n"
+                "- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n"
+                "- **Content distribution**: create shared links, with or without an expiry or a password\n"
+                "- **Backup and recovery**: list a file's revisions and restore an earlier one\n"
+                "- **Organization**: create folders, and copy, move, and remove files\n\n"
+                "Dropbox is a trademark of Dropbox, Inc.",
+            "scheme": "dropbox",
+            "logo": DropboxLogo,
+            "logo_file_name": "dropbox-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        # declare how these actions map onto single-file read and write operations, so that "conn://" file
+        # locations can read and write files through a Dropbox connection
+        DataProviderActionCatalog::registerAppFileApi(DropboxDataProvider::AppName,
+            <DataProviderFileApiInfo>{
+                "read_action": "download-file",
+                "read_path_option": "path",
+                "read_mode": DPFR_DATA,
+                "read_data_field": "content",
+                "read_data_encoding": "base64",
+                "write_action": "upload-file",
+                "write_path_option": "path",
+                "write_data_option": "file",
+                "write_data_format": DPFW_FILE,
+                # writing to a location that already exists must replace it, as it does for every other file
+                # location scheme; the action's own default is "add", which fails instead
+                "options_add": {
+                    "mode": "overwrite",
+                },
+            });
+
+        # --- File actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/list-folder",
+            "action": "list-folder",
+            "display_name": "List Folder",
+            "short_desc": "List the contents of a folder",
+            "desc": "Lists the files and folders in a folder.\n\n"
+                "Results are paginated; when `has_more` is returned, pass the returned `cursor` back in "
+                "`cursor` to retrieve the following page.  A cursor already carries the folder and the "
+                "recursion flag, so the other options are ignored when one is supplied.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxListFolderResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListFolderRequestDataType::Fields
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Search",
+            "short_desc": "Search for files and folders",
+            "desc": "Searches for files and folders by name and, for supported file types, by content.\n\n"
+                "Dropbox indexes content asynchronously, so a file uploaded moments earlier may not be found "
+                "yet; use `list-folder` when the result has to reflect the current state exactly.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxSearchResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxSearchRequestDataType::Fields{"query",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxSearchRequestDataType::Fields - "query"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-metadata",
+            "action": "get-metadata",
+            "display_name": "Get File Info",
+            "short_desc": "Get the metadata of a file or folder",
+            "desc": "Retrieves the metadata of a file or folder: its name, size, revision, timestamps, and "
+                "content hash.\n\n"
+                "Use `download-file` to retrieve the content itself.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxGetMetadataRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/download-file",
+            "action": "download-file",
+            "display_name": "Download File",
+            "short_desc": "Download a file's content",
+            "desc": "Downloads a file's content.\n\n"
+                "The content is returned base64-encoded, along with the file's metadata.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxContentResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxDownloadFileRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file to Dropbox",
+            "desc": "Uploads a file to Dropbox.\n\n"
+                "If `path` is not set, the file's own name is used and the file is stored in the account "
+                "root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` "
+                "or `autorename` to change that.\n\n"
+                "Large files are uploaded in chunks through a Dropbox upload session, so an interrupted "
+                "transfer does not have to start again from the beginning.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxUploadFileRequestDataType::Fields{"file",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxUploadFileRequestDataType::Fields - "file"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/create-text-file",
+            "action": "create-text-file",
+            "display_name": "Create Text File",
+            "short_desc": "Create a file from text content",
+            "desc": "Creates a file directly from text content, without needing a file.\n\n"
+                "Useful for writing generated reports, manifests, and notes.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateTextFileRequestDataType::Fields{"path", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateTextFileRequestDataType::Fields - ("path", "content")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-file-link",
+            "action": "get-file-link",
+            "display_name": "Get Temporary Link",
+            "short_desc": "Get a temporary direct download link for a file",
+            "desc": "Returns a direct download link for a file, valid for four hours and usable without "
+                "signing in.\n\n"
+                "Use this to hand a file to a system that cannot authenticate to Dropbox; use "
+                "`create-shared-link` for a link that lasts.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxFileLinkResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxGetFileLinkRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        # --- Organization actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/create-folder",
+            "action": "create-folder",
+            "display_name": "Create Folder",
+            "short_desc": "Create a folder",
+            "desc": "Creates a folder, creating any parent folders that do not yet exist.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateFolderRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateFolderRequestDataType::Fields - "path"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/delete-file",
+            "action": "delete-file",
+            "display_name": "Delete File or Folder",
+            "short_desc": "Delete a file or folder",
+            "desc": "Deletes a file or folder.\n\n"
+                "**Deleting a folder deletes everything in it.**  Dropbox keeps deleted files for a period "
+                "that depends on the account, so a deletion can usually be undone from the Dropbox web "
+                "interface, but not through this API.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxDeleteRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/copy-file",
+            "action": "copy-file",
+            "display_name": "Copy File or Folder",
+            "short_desc": "Copy a file or folder",
+            "desc": "Copies a file or folder to a new path; copying a folder copies everything in it.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCopyRequestDataType::Fields{"from_path", "to_path"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCopyRequestDataType::Fields - ("from_path", "to_path")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/move-file",
+            "action": "move-file",
+            "display_name": "Move or Rename File or Folder",
+            "short_desc": "Move or rename a file or folder",
+            "desc": "Moves a file or folder to a new path.\n\n"
+                "A move to a different name in the same folder renames it.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxMoveRequestDataType::Fields{"from_path", "to_path"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxMoveRequestDataType::Fields - ("from_path", "to_path")
+            ),
+        });
+
+        # --- Revision actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/list-file-revisions",
+            "action": "list-file-revisions",
+            "display_name": "List File Revisions",
+            "short_desc": "List the earlier revisions of a file",
+            "desc": "Lists the earlier revisions of a file, newest first.\n\n"
+                "How long revisions are kept depends on the account.",
+            "action_code": DPAT_API,
+            "groups": ("Revisions",),
+            "output_type": DropboxListRevisionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListRevisionsRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListRevisionsRequestDataType::Fields - "path"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/restore-file-revision",
+            "action": "restore-file-revision",
+            "display_name": "Restore File Revision",
+            "short_desc": "Restore a file to an earlier revision",
+            "desc": "Restores a file to an earlier revision, listed by `list-file-revisions`.\n\n"
+                "The current content becomes a revision in its turn, so a restore can itself be undone.",
+            "action_code": DPAT_API,
+            "groups": ("Revisions",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRestoreRevisionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        # --- Sharing actions ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/create-shared-link",
+            "action": "create-shared-link",
+            "display_name": "Create Shared Link",
+            "short_desc": "Create a link granting access to a file or folder",
+            "desc": "Creates a link granting access to a file or folder.\n\n"
+                "**A `public` link makes the file reachable by anyone who has it, without signing in.**  "
+                "`team_only`, a password, and an expiry all require a paid Dropbox account; where the account "
+                "does not support the visibility requested, Dropbox narrows it silently, so the visibility "
+                "Dropbox actually applied is returned in `visibility`.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": DropboxSharedLinkDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateSharedLinkRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCreateSharedLinkRequestDataType::Fields - "path"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/list-shared-links",
+            "action": "list-shared-links",
+            "display_name": "List Shared Links",
+            "short_desc": "List the shared links in the account",
+            "desc": "Lists the shared links in the account, or the links granting access to one file or "
+                "folder.\n\n"
+                "By default a link to a parent folder is listed as well, since it also grants access; set "
+                "`direct_only` to list only links created for the path itself.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": DropboxListSharedLinksResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListSharedLinksRequestDataType::Fields
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/revoke-shared-link",
+            "action": "revoke-shared-link",
+            "display_name": "Revoke Shared Link",
+            "short_desc": "Withdraw a shared link",
+            "desc": "Withdraws a shared link, so that it no longer grants access.\n\n"
+                "The file itself is not changed, and other links to it keep working.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": DropboxSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRevokeSharedLinkRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+    };
+}
+
+/** @mainpage DropboxDataProvider Module
+
+    @tableofcontents
+
+    @section dropboxdataproviderintro DropboxDataProvider Module Introduction
+
+    The %DropboxDataProvider module provides a @ref dataproviderintro "data provider" API for
+    <a href="https://www.dropbox.com">Dropbox</a>.
+
+    Connections use the \c dropbox scheme and are served by \c DropboxRestClient::DropboxRestConnection.
+
+    @section dropboxdataprovider_paths Files Are Addressed by Path
+
+    Dropbox addresses files by their path from the account root.  Paths are case-insensitive, and the account
+    root is the empty string rather than \c "/" - Dropbox rejects \c "/" as a malformed path.  Every action here
+    normalizes the path it is given, so either form may be supplied.
+
+    @section dropboxdataprovider_upload Large Uploads
+
+    A single-request upload has to start again from the beginning if the connection drops, and Dropbox rejects
+    one above 150 MB outright.  Content above
+    @ref DropboxDataProvider::UploadSessionThreshold "UploadSessionThreshold" is therefore sent through a Dropbox
+    upload session, which commits each chunk as it arrives.  This is transparent to the caller: \c upload-file
+    and \c create-text-file choose the transfer method from the size of the content.
+
+    @section dropboxdataprovider_hosts The Two Dropbox Hosts
+
+    Dropbox serves file content from a different host than its metadata API, with a different calling
+    convention.  This is handled by
+    @ref DropboxRestClient::DropboxRestClient "DropboxRestClient"; see
+    @ref dropboxrestclient_two_hosts for the details.
+
+    @section dropboxdataprovider_relnotes Release Notes
+
+    @subsection dropboxdataprovider_v1_0 DropboxDataProvider v1.0
+    - initial release of the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+*/
+
+#! contains all public definitions in the DropboxDataProvider module
+public namespace DropboxDataProvider {
+}

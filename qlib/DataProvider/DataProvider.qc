@@ -127,6 +127,7 @@ public class DataProvider {
             "deepseek": "DeepSeekDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
+            "dropbox": "DropboxDataProvider",
             "easypost": "EasyPostDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
             "elevenlabs": "ElevenLabsDataProvider",

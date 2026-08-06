@@ -1,0 +1,1029 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** DropboxDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires DropboxRestClient
+%requires DropboxDataProvider
+
+%requires json
+
+%exec-class DropboxDataProviderTest
+
+#! Records one request made through the fake client
+hashdecl DropboxRequestInfo {
+    #! the HTTP method
+    string method;
+    #! the request path
+    string path;
+    #! the request body
+    auto body;
+    #! the request headers
+    *hash<auto> hdr;
+    #! @ref True if the request went to a content endpoint
+    bool content = False;
+}
+
+#! A DropboxRestClientIo that answers from a scripted queue instead of the network
+/** The content client is this object itself, so both the RPC and the content calling conventions are recorded
+    here; \c getContentClient() is overridden rather than letting \c copyWithUrl() run, which would build a real
+    client bound to \c content.dropboxapi.com
+*/
+class FakeDropboxRestClientIo inherits DropboxRestClient::DropboxRestClientIo {
+    public {
+        #! every request made, oldest first
+        list<hash<DropboxRequestInfo>> requests = ();
+
+        #! response bodies to return, in order; the last one is reused once the list is exhausted
+        list<auto> response_bodies = ({},);
+
+        #! response headers to return, in order; the last one is reused once the list is exhausted
+        list<hash<auto>> response_headers = ({},);
+
+        #! an exception to throw instead of answering, if set
+        *hash<auto> throw_error;
+
+        #! the number of responses already handed out
+        int served = 0;
+    }
+
+    constructor() : DropboxRestClientIo(DropboxDataProviderTest::TestClientOptions) {
+    }
+
+    #! Returns this object, so that content requests are recorded here rather than sent to the content host
+    DropboxRestClient::DropboxRestClientIo getContentClient() {
+        return self;
+    }
+
+    #! Returns the last request made
+    hash<DropboxRequestInfo> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no request was made";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    #! Sets a single response body
+    setResponse(auto body, *hash<auto> hdr) {
+        response_bodies = (body,);
+        response_headers = (hdr ?? {},);
+        served = 0;
+    }
+
+    #! Sets a sequence of response bodies
+    setResponses(list<auto> bodies, *list<hash<auto>> hdrs) {
+        response_bodies = bodies;
+        response_headers = hdrs ?? ({},);
+        served = 0;
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body, *hash<auto> hdr,
+            bool content) {
+        requests += <DropboxRequestInfo>{
+            "method": method,
+            "path": path,
+            "body": body,
+            "hdr": hdr,
+            "content": content,
+        };
+        if (throw_error) {
+            throw throw_error.err, throw_error.desc, throw_error.arg;
+        }
+        int i = served < response_bodies.size() ? served : response_bodies.size() - 1;
+        int j = served < response_headers.size() ? served : response_headers.size() - 1;
+        ++served;
+        return <RestClient::RestResponseInfo>{
+            "body": response_bodies[i],
+            "headers": response_headers[j] ?? {},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return record(method, path, body, hdr, False);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        return record(method, path, body, hdr, True);
+    }
+}
+
+public class DropboxDataProviderTest inherits QUnit::Test {
+    public {
+        #! command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! the application name
+        const App = DropboxDataProvider::AppName;
+
+        #! the action the framework injects into every app served by a REST connection
+        const FrameworkAction = "make-api-call";
+
+        #! client options sufficient to construct a client without contacting Dropbox
+        /** The \c authorization_code grant requires a redirect URL, and a client with no token tries to acquire
+            one on first use - which that grant cannot do without a browser.  Both are supplied here, as an
+            authorized connection would supply them.
+        */
+        const TestClientOptions = {
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+            "oauth2_redirect_url": "https://localhost:8011/oauth2-callback",
+            "token": "test-token",
+            "token_type": "Bearer",
+        };
+    }
+
+    constructor() : Test("DropboxDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("action options", \actionOptionsTest());
+        addTestCase("file API registration", \fileApiTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("path normalization", \pathNormalizationTest());
+        addTestCase("API arg encoding", \apiArgTest());
+        addTestCase("content client", \contentClientTest());
+        addTestCase("list folder", \listFolderTest());
+        addTestCase("search", \searchTest());
+        addTestCase("get metadata", \getMetadataTest());
+        addTestCase("download file", \downloadFileTest());
+        addTestCase("upload file", \uploadFileTest());
+        addTestCase("upload session", \uploadSessionTest());
+        addTestCase("create text file", \createTextFileTest());
+        addTestCase("create folder", \createFolderTest());
+        addTestCase("delete file", \deleteFileTest());
+        addTestCase("copy and move", \copyMoveTest());
+        addTestCase("revisions", \revisionsTest());
+        addTestCase("sharing", \sharingTest());
+        addTestCase("error reporting", \errorReportingTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live list folder", \liveListFolderTest());
+        addTestCase("live file lifecycle", \liveFileLifecycleTest());
+
+        set_return_value(main());
+    }
+
+    #! Returns a root provider backed by a fake client
+    private DropboxDataProvider::DropboxDataProvider getProvider(reference<FakeDropboxRestClientIo> rest) {
+        rest = new FakeDropboxRestClientIo();
+        return new DropboxDataProvider::DropboxDataProvider(rest);
+    }
+
+    sanityTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        assertEq("dropbox", prov.getName());
+
+        *list<string> children = prov.getChildProviderNames();
+        # the framework injects a "__call__" child alongside the module's own, to serve its generic
+        # make-api-call action
+        assertEq(17, children.size(), "all actions are children of the root provider");
+        assertTrue(inlist("__call__", children), "the framework generic-call child is present");
+        foreach string name in (("list-folder", "search", "get-metadata", "download-file", "upload-file",
+                "create-text-file", "get-file-link", "create-folder", "delete-file", "copy-file", "move-file",
+                "list-file-revisions", "restore-file-revision", "create-shared-link", "list-shared-links",
+                "revoke-shared-link")) {
+            assertTrue(inlist(name, children), sprintf("has %y child", name));
+            assertTrue(prov.getChildProvider(name) instanceof AbstractDataProvider,
+                sprintf("%y child provider can be created", name));
+        }
+        assertEq(NOTHING, prov.getChildProvider("no-such-action"), "unknown child returns nothing");
+
+        # the summary info of every child must be retrievable; a child whose ProviderSummaryInfo constant is
+        # missing or misnamed breaks the app browser rather than the action
+        assertEq(16, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
+    }
+
+    actionCatalogTest() {
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
+        assertEq("Dropbox", app.name);
+        assertEq("dropbox", app.scheme);
+        # the group must come from the enum, not from a raw string that no picker would match
+        assertEq(1, app.groups.size());
+        assertEq(DataProvider::AppGroup::CloudStorage.toString(), app.groups[0]);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+        assertEq("dropbox-logo.svg", app.logo_file_name);
+        assertTrue(app.logo.val(), "the logo was loaded from its file");
+        # the checklist requires square icons; the source asset was 1200x800
+        assertRegex("width=\"300\" height=\"300\"", app.logo, "the logo is square");
+
+        hash<string, bool> children = map {$1: True},
+            keys DropboxDataProvider::DropboxDataProvider::DefaultChildMap;
+        hash<string, bool> seen;
+        int actions = 0;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(App)) {
+            if (action.action == FrameworkAction) {
+                continue;
+            }
+            ++actions;
+            string path = action.path;
+            path =~ s/^\///;
+            seen{path} = True;
+            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
+            # reference data returns nothing and doRequest() is never reached, with no error anywhere
+            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+                action.action, action.path));
+            assertEq(DPAT_API, action.action_code, sprintf("action %y is an API action", action.action));
+            assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
+            assertTrue(action.options.size() > 0, sprintf("action %y has options", action.action));
+            assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
+                action.action));
+            assertTrue(action.groups.size() > 0, sprintf("action %y has a group", action.action));
+        }
+        assertEq(16, actions, "every action is registered");
+        assertEq((), keys (children - (keys seen)), "every child has a registered action");
+    }
+
+    actionOptionsTest() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(App, "upload-file");
+        assertEq(True, action.options.file.required, "upload-file requires the file");
+        assertEq(True, action.options.file.preselected, "upload-file preselects the file");
+        assertEq(False, action.options.path.required ?? False, "upload-file path is optional");
+        assertEq(("add", "overwrite"), (map $1.value, action.options.mode.allowed_values),
+            "the write modes are declared as allowed values, not described in prose");
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "download-file");
+        assertEq(True, action.options.path.required, "download-file requires the path");
+        assertEq("files", action.options.path.ref_data, "download-file path offers file reference data");
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "list-folder");
+        assertEq("folders", action.options.path.ref_data, "list-folder path offers folder reference data");
+        assertEq(RootPath, action.options.path.default_value, "list-folder defaults to the account root");
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "search");
+        assertEq(True, action.options.query.required, "search requires a query");
+        assertEq(("relevance", "last_modified_time"), (map $1.value, action.options.order_by.allowed_values));
+        assertEq(("active", "deleted"), (map $1.value, action.options.file_status.allowed_values));
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "copy-file");
+        assertEq(True, action.options.from_path.required, "copy-file requires a source");
+        assertEq(True, action.options.to_path.required, "copy-file requires a destination");
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "create-shared-link");
+        assertEq(True, action.options.link_password.sensitive, "the link password is marked sensitive");
+        assertEq(("public", "team_only", "password"),
+            (map $1.value, action.options.requested_visibility.allowed_values));
+
+        action = DataProviderActionCatalog::getAppActionEx(App, "list-file-revisions");
+        assertEq(("path", "id"), (map $1.value, action.options.mode.allowed_values));
+    }
+
+    fileApiTest() {
+        *hash<DataProviderFileApiInfo> fapi = DataProviderActionCatalog::getAppFileApi(App);
+        assertTrue(exists fapi, "the app registers a file API for conn:// locations");
+        assertEq("download-file", fapi.read_action);
+        assertEq("path", fapi.read_path_option);
+        assertEq(DPFR_DATA, fapi.read_mode);
+        assertEq("content", fapi.read_data_field);
+        assertEq("base64", fapi.read_data_encoding);
+        assertEq("upload-file", fapi.write_action);
+        assertEq("path", fapi.write_path_option);
+        assertEq("file", fapi.write_data_option);
+        assertEq(DPFW_FILE, fapi.write_data_format);
+        # Dropbox addresses files by path, not by an opaque ID, and takes the whole path rather than a parent
+        assertEq(False, fapi.path_is_id);
+        assertEq(False, fapi.write_path_is_parent);
+        # writing to an existing location must replace it, as it does for every other file location scheme
+        assertEq("overwrite", fapi.options_add.mode);
+
+        # the declared actions and options must exist, or the file API silently fails at use time
+        hash<DataProviderActionInfo> read = DataProviderActionCatalog::getAppActionEx(App, fapi.read_action);
+        assertTrue(exists read.options{fapi.read_path_option}, "the read path option exists on the read action");
+        hash<DataProviderActionInfo> write = DataProviderActionCatalog::getAppActionEx(App, fapi.write_action);
+        assertTrue(exists write.options{fapi.write_path_option},
+            "the write path option exists on the write action");
+        assertTrue(exists write.options{fapi.write_data_option},
+            "the write data option exists on the write action");
+        assertTrue(exists write.options{keys fapi.options_add},
+            "every fixed option exists on the write action");
+    }
+
+    dataTypesTest() {
+        hash<string, AbstractDataField> fields = DropboxFileDataType.getFields();
+        foreach string name in (("id", "name", "path", "path_lower", "is_folder", "size", "rev", "modified",
+                "client_modified", "content_hash")) {
+            assertTrue(fields.hasKey(name), sprintf("the file type has a %y field", name));
+        }
+        # timestamps must be dates regardless of the wire format
+        assertEq(NT_DATE, fields.modified.getType().getBaseTypeCode(), "modified is a date");
+        assertEq(NT_DATE, fields.client_modified.getType().getBaseTypeCode(), "client_modified is a date");
+
+        fields = DropboxContentResponseDataType.getFields();
+        foreach string name in (("id", "name", "path", "content", "size", "rev")) {
+            assertTrue(fields.hasKey(name), sprintf("the content type has a %y field", name));
+        }
+
+        fields = DropboxSharedLinkDataType.getFields();
+        foreach string name in (("url", "id", "name", "path", "visibility", "expires")) {
+            assertTrue(fields.hasKey(name), sprintf("the shared link type has a %y field", name));
+        }
+        assertEq(NT_DATE, fields.expires.getType().getBaseTypeCode(), "the link expiry is a date");
+
+        assertTrue(DropboxListFolderResponseDataType.getFields().hasKey("entries"));
+        assertTrue(DropboxSearchResponseDataType.getFields().hasKey("matches"));
+        assertTrue(DropboxListRevisionsResponseDataType.getFields().hasKey("entries"));
+        assertTrue(DropboxListSharedLinksResponseDataType.getFields().hasKey("links"));
+        assertTrue(DropboxSuccessResponseDataType.getFields().hasKey("success"));
+        assertTrue(DropboxFileLinkResponseDataType.getFields().hasKey("link"));
+    }
+
+    pathNormalizationTest() {
+        # Dropbox addresses the root as the empty string and rejects "/" as malformed
+        assertEq("", DropboxDataProviderBase::normalizePath("/"));
+        assertEq("", DropboxDataProviderBase::normalizePath(""));
+        assertEq("", DropboxDataProviderBase::normalizePath("///"));
+        assertEq("/a/b.txt", DropboxDataProviderBase::normalizePath("/a/b.txt"));
+        assertEq("/a/b.txt", DropboxDataProviderBase::normalizePath("a/b.txt"));
+        assertEq("/a/b", DropboxDataProviderBase::normalizePath("/a/b/"));
+        assertEq("/a/b", DropboxDataProviderBase::normalizePath("a/b//"));
+        # a multi-byte name must not be truncated by byte-versus-character confusion
+        assertEq("/ünïcode/日本語.txt", DropboxDataProviderBase::normalizePath("/ünïcode/日本語.txt/"));
+    }
+
+    apiArgTest() {
+        # HTTP header values are ASCII only, so a non-ASCII path has to be escaped or the request is rejected
+        assertEq("{\"path\":\"/a/b.txt\"}",
+            DropboxRestClientBase::makeApiArg({"path": "/a/b.txt"}));
+        string arg = DropboxRestClientBase::makeApiArg({"path": "/Ünïcode/日本語.txt"});
+        assertEq("{\"path\":\"/\\u00dcn\\u00efcode/\\u65e5\\u672c\\u8a9e.txt\"}", arg);
+        foreach int i in (xrange(0, arg.length() - 1)) {
+            assertTrue(arg.getUnicode(i) < 128, "every character of the header value is ASCII");
+        }
+        # the escaped form must still decode to the original path
+        assertEq("/Ünïcode/日本語.txt", parse_json(arg).path);
+
+        # characters outside the basic multilingual plane need a surrogate pair
+        arg = DropboxRestClientBase::makeApiArg({"path": "/x/🚀.bin"});
+        assertRegex("\\\\ud83d\\\\ude80", arg, "an astral character is escaped as a surrogate pair");
+        assertEq("/x/🚀.bin", parse_json(arg).path);
+
+        # a download request must carry no Content-Type, since Dropbox requires its body to be empty
+        hash<auto> hdr = DropboxRestClientBase::getContentHeaders({"path": "/x"}, NOTHING);
+        assertEq("*/*", hdr."Accept");
+        assertEq(False, hdr.hasKey("Content-Type"), "no Content-Type is set when there is no body");
+        hdr = DropboxRestClientBase::getContentHeaders({"path": "/x"}, MimeTypeOctetStream);
+        assertEq(MimeTypeOctetStream, hdr."Content-Type");
+
+        # operation metadata comes back in a response header when the body is the file content
+        assertEq("x.txt", DropboxRestClientBase::getApiResult({"dropbox-api-result": "{\"name\":\"x.txt\"}"}).name);
+        assertEq(NOTHING, DropboxRestClientBase::getApiResult({}));
+        assertThrows("DROPBOX-RESPONSE-ERROR", sub () {
+            DropboxRestClientBase::getApiResult({"dropbox-api-result": "not json"});
+        });
+    }
+
+    contentClientTest() {
+        # the two hosts need two client objects: an absolute URL passed as a path does not retarget a request
+        assertTrue(DropboxRestClientBase::isContentUrl(DropboxRestClientBase::ContentUrl));
+        assertEq(False, DropboxRestClientBase::isContentUrl(DropboxRestClientBase::DefaultUrl));
+
+        DropboxRestClient::DropboxRestClientIo rpc(TestClientOptions);
+        on_exit rpc.close();
+        assertRegex("api\\.dropboxapi\\.com", rpc.getSafeUrl(), "the RPC client targets the API host");
+
+        DropboxRestClient::DropboxRestClientIo content = rpc.getContentClient();
+        on_exit content.close();
+        assertRegex("content\\.dropboxapi\\.com", content.getSafeUrl(), "the content client targets the "
+            "content host");
+        assertTrue(content instanceof DropboxRestClient::DropboxRestClientIo,
+            "the content client is a Dropbox client, not a downgraded generic one");
+        # the content client must be created once and reused
+        assertEq(content.uniqueHash(), rpc.getContentClient().uniqueHash(), "the content client is cached");
+        # and asking a content client for its content client must not recurse
+        assertEq(content.uniqueHash(), content.getContentClient().uniqueHash());
+    }
+
+    listFolderTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("list-folder");
+
+        rest.setResponse({
+            "entries": (
+                {".tag": "file", "id": "id:1", "name": "a.txt", "path_display": "/a.txt",
+                    "path_lower": "/a.txt", "size": 12, "rev": "0157", "server_modified": "2026-01-02T03:04:05Z",
+                    "client_modified": "2026-01-01T00:00:00Z", "content_hash": "abc"},
+                {".tag": "folder", "id": "id:2", "name": "sub", "path_display": "/sub", "path_lower": "/sub"},
+            ),
+            "cursor": "CURSOR1",
+            "has_more": True,
+        });
+        hash<auto> resp = dp.doRequest({"path": "/", "recursive": True, "limit": 50});
+        assertEq("POST", rest.last().method, "every Dropbox RPC endpoint is a POST");
+        assertEq("/2/files/list_folder", rest.last().path);
+        assertEq("", rest.last().body.path, "the root is sent as the empty string");
+        assertEq(True, rest.last().body.recursive);
+        assertEq(50, rest.last().body.limit);
+
+        assertEq(2, resp.entries.size());
+        assertEq("id:1", resp.entries[0].id);
+        assertEq("/a.txt", resp.entries[0].path);
+        assertEq(False, resp.entries[0].is_folder);
+        assertEq(12, resp.entries[0].size);
+        assertEq(2026-01-02T03:04:05Z, resp.entries[0].modified, "the wire timestamp is converted to a date");
+        assertEq(True, resp.entries[1].is_folder);
+        assertEq(NOTHING, resp.entries[1].size, "a folder has no size");
+        assertEq("CURSOR1", resp.cursor);
+        assertEq(True, resp.has_more);
+
+        # a page size above the API maximum is clamped rather than rejected by the server
+        dp.doRequest({"limit": MaxPageSize * 10});
+        assertEq(MaxPageSize, rest.last().body.limit);
+
+        # a continuation must use the continue endpoint and send only the cursor
+        rest.setResponse({"entries": (), "cursor": "CURSOR2", "has_more": False});
+        resp = dp.doRequest({"path": "/other", "recursive": True, "cursor": "CURSOR1"});
+        assertEq("/2/files/list_folder/continue", rest.last().path);
+        assertEq({"cursor": "CURSOR1"}, rest.last().body,
+            "a continuation carries the cursor alone; repeating the other arguments is rejected");
+        assertEq(False, resp.has_more);
+        assertEq((), resp.entries);
+    }
+
+    searchTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("search");
+
+        rest.setResponse({
+            "matches": (
+                {"match_type": {".tag": "filename"},
+                    "metadata": {".tag": "metadata", "metadata": {".tag": "file", "id": "id:9",
+                        "name": "q1.pdf", "path_display": "/reports/q1.pdf", "size": 99}}},
+                # a match whose metadata union carries nothing usable must be skipped, not turned into an
+                # entry of nulls
+                {"match_type": {".tag": "filename"}, "metadata": {".tag": "metadata"}},
+            ),
+            "has_more": False,
+        });
+        hash<auto> resp = dp.doRequest({
+            "query": "quarterly",
+            "path": "/reports",
+            "max_results": 25,
+            "order_by": "last_modified_time",
+            "file_status": "deleted",
+            "filename_only": True,
+            "file_extensions": "pdf, csv ,",
+        });
+        assertEq("/2/files/search_v2", rest.last().path);
+        assertEq("quarterly", rest.last().body.query);
+        assertEq("/reports", rest.last().body.options.path);
+        assertEq(25, rest.last().body.options.max_results);
+        assertEq(True, rest.last().body.options.filename_only);
+        assertEq("deleted", rest.last().body.options.file_status);
+        # a Dropbox union is encoded as an object with a ".tag" key, not as a bare string
+        assertEq({".tag": "last_modified_time"}, rest.last().body.options.order_by);
+        assertEq(("pdf", "csv"), rest.last().body.options.file_extensions,
+            "extensions are split and trimmed, and empty entries dropped");
+
+        assertEq(1, resp.matches.size(), "a match with no metadata is skipped");
+        assertEq("id:9", resp.matches[0].id);
+        assertEq("/reports/q1.pdf", resp.matches[0].path);
+        assertEq(False, resp.has_more);
+    }
+
+    getMetadataTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-metadata");
+
+        rest.setResponse({".tag": "file", "id": "id:3", "name": "b.txt", "path_display": "/d/b.txt",
+            "size": 7, "rev": "01ab"});
+        hash<auto> resp = dp.doRequest({"path": "d/b.txt"});
+        assertEq("/2/files/get_metadata", rest.last().path);
+        assertEq("/d/b.txt", rest.last().body.path, "a path without a leading slash is normalized");
+        assertEq("id:3", resp.id);
+        assertEq(7, resp.size);
+
+        # the account root has no metadata resource; the request is refused before it reaches the server
+        int before = rest.requests.size();
+        assertThrows("DROPBOX-ERROR", "root", sub () { dp.doRequest({"path": "/"}); });
+        assertEq(before, rest.requests.size(), "no request is made for the account root");
+    }
+
+    downloadFileTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("download-file");
+
+        binary content = <cafebabe0102030405>;
+        rest.setResponse(content, {
+            "dropbox-api-result": make_json({"id": "id:4", "name": "x.bin", "path_display": "/d/x.bin",
+                "rev": "01cd", "size": content.size()}),
+        });
+        hash<auto> resp = dp.doRequest({"path": "/d/x.bin"});
+
+        hash<DropboxRequestInfo> req = rest.last();
+        assertEq(True, req.content, "the download goes to a content endpoint");
+        assertEq("POST", req.method);
+        assertEq("/2/files/download", req.path);
+        assertEq(NOTHING, req.body, "a download request carries no body");
+        # the arguments travel in a header, JSON-encoded, since the body is reserved for the file content
+        assertEq("{\"path\":\"/d/x.bin\"}", req.hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("*/*", req.hdr."Accept");
+
+        assertEq("id:4", resp.id);
+        assertEq("x.bin", resp.name);
+        assertEq("/d/x.bin", resp.path);
+        assertEq("01cd", resp.rev);
+        assertEq(content.size(), resp.size);
+        assertEq(content, parse_base64_string(resp.content), "the content round-trips through base64");
+
+        # the transport may hand back a string for a body that is in fact bytes; both forms must work
+        rest.setResponse("plain text", {"dropbox-api-result": make_json({"name": "t.txt"})});
+        resp = dp.doRequest({"path": "/t.txt"});
+        assertEq("plain text", parse_base64_string(resp.content).toString());
+    }
+
+    uploadFileTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("upload-file");
+
+        binary content = binary("hello world");
+        rest.setResponse({".tag": "file", "id": "id:5", "name": "hello.txt", "path_display": "/hello.txt",
+            "size": content.size(), "rev": "01ef"});
+        hash<auto> resp = dp.doRequest({
+            "file": {"name": "hello.txt", "content": make_base64_string(content), "mime_type": "text/plain"},
+        });
+
+        hash<DropboxRequestInfo> req = rest.last();
+        assertEq(True, req.content, "the upload goes to a content endpoint");
+        assertEq("/2/files/upload", req.path);
+        assertEq(content, req.body, "the content is sent as raw bytes, not base64 or JSON");
+        assertEq(MimeTypeOctetStream, req.hdr."Content-Type");
+        hash<auto> arg = parse_json(req.hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("/hello.txt", arg.path, "with no path given, the file is stored under its own name in the root");
+        assertEq("add", arg.mode);
+        assertEq(False, arg.autorename);
+        assertEq(False, arg.mute);
+        assertEq("id:5", resp.id);
+
+        # an explicit path and write mode must be carried through
+        dp.doRequest({
+            "file": {"name": "hello.txt", "content": content},
+            "path": "docs/greeting.txt",
+            "mode": "overwrite",
+            "autorename": True,
+            "mute": True,
+        });
+        arg = parse_json(rest.last().hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("/docs/greeting.txt", arg.path);
+        assertEq("overwrite", arg.mode);
+        assertEq(True, arg.autorename);
+        assertEq(True, arg.mute);
+
+        # with no path and an empty file name there is no destination to write to; without this check the
+        # upload would silently address the account root, which Dropbox rejects as a malformed path.
+        # (a file value with no "name" key at all is refused earlier, by the file type itself)
+        assertThrows("DROPBOX-ERROR", "cannot be determined", sub () {
+            dp.doRequest({"file": {"name": "", "content": content}});
+        });
+    }
+
+    uploadSessionTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("upload-file");
+
+        # content above the threshold has to be chunked; a single-request upload of a large file starts again
+        # from the beginning if the connection drops, and Dropbox refuses one above 150 MB outright
+        int size = UploadSessionThreshold + 1000;
+        binary content = binary(strmul("a", size));
+        assertEq(size, content.size());
+
+        rest.setResponses((
+            {"session_id": "SESSION1"},
+            {".tag": "file", "id": "id:6", "name": "big.bin", "path_display": "/big.bin", "size": size},
+        ));
+        hash<auto> resp = dp.doRequest({
+            "file": {"name": "big.bin", "content": content},
+            "path": "/big.bin",
+        });
+
+        assertEq(2, rest.requests.size(), "the session is opened with the first chunk and closed with the last");
+        assertEq("/2/files/upload_session/start", rest.requests[0].path);
+        assertEq(UploadChunkSize, rest.requests[0].body.size(), "the first chunk is a full chunk");
+        assertEq(False, parse_json(rest.requests[0].hdr{DropboxRestClientBase::ApiArgHeader}).close);
+
+        assertEq("/2/files/upload_session/finish", rest.requests[1].path);
+        assertEq(size - UploadChunkSize, rest.requests[1].body.size(), "the last chunk is the remainder");
+        hash<auto> arg = parse_json(rest.requests[1].hdr{DropboxRestClientBase::ApiArgHeader});
+        assertEq("SESSION1", arg.cursor.session_id);
+        assertEq(UploadChunkSize, arg.cursor.offset, "the commit offset is where the last chunk starts");
+        assertEq("/big.bin", arg.commit.path);
+        assertEq("add", arg.commit.mode);
+        assertEq("id:6", resp.id);
+
+        # every byte must be accounted for exactly once
+        assertEq(size, rest.requests[0].body.size() + rest.requests[1].body.size());
+
+        # a server that opens no session must be reported rather than producing an unusable cursor
+        rest.setResponse({});
+        assertThrows("DROPBOX-ERROR", "session ID", sub () {
+            dp.doRequest({"file": {"name": "big.bin", "content": content}, "path": "/big.bin"});
+        });
+    }
+
+    createTextFileTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-text-file");
+
+        rest.setResponse({".tag": "file", "id": "id:7", "name": "notes.txt", "path_display": "/notes.txt"});
+        hash<auto> resp = dp.doRequest({"path": "/notes.txt", "content": "line one\nline two"});
+        assertEq("/2/files/upload", rest.last().path);
+        assertEq(binary("line one\nline two"), rest.last().body);
+        assertEq("/notes.txt", parse_json(rest.last().hdr{DropboxRestClientBase::ApiArgHeader}).path);
+        assertEq("id:7", resp.id);
+
+        assertThrows("DROPBOX-ERROR", "account root", sub () {
+            dp.doRequest({"path": "/", "content": "x"});
+        });
+    }
+
+    createFolderTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-folder");
+
+        # the v2 endpoints wrap their result in a "metadata" key and do not tag it
+        rest.setResponse({"metadata": {"id": "id:8", "name": "2026", "path_display": "/reports/2026",
+            "path_lower": "/reports/2026"}});
+        hash<auto> resp = dp.doRequest({"path": "reports/2026", "autorename": True});
+        assertEq("/2/files/create_folder_v2", rest.last().path);
+        assertEq("/reports/2026", rest.last().body.path);
+        assertEq(True, rest.last().body.autorename);
+        assertEq("id:8", resp.id);
+        assertEq(True, resp.is_folder, "the created entry is reported as a folder");
+
+        assertThrows("DROPBOX-ERROR", "always exists", sub () { dp.doRequest({"path": "/"}); });
+    }
+
+    deleteFileTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-file");
+
+        rest.setResponse({"metadata": {".tag": "file", "id": "id:10", "name": "old.txt",
+            "path_display": "/old.txt"}});
+        hash<auto> resp = dp.doRequest({"path": "/old.txt"});
+        assertEq("/2/files/delete_v2", rest.last().path);
+        assertEq("/old.txt", rest.last().body.path);
+        assertEq("id:10", resp.id);
+
+        int before = rest.requests.size();
+        assertThrows("DROPBOX-ERROR", "cannot be", sub () { dp.doRequest({"path": "/"}); });
+        assertEq(before, rest.requests.size(), "deleting the account root is refused before any request");
+    }
+
+    copyMoveTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        rest.setResponse({"metadata": {".tag": "file", "id": "id:11", "name": "copy.txt",
+            "path_display": "/archive/copy.txt"}});
+        hash<auto> resp = prov.getChildProvider("copy-file").doRequest({
+            "from_path": "a.txt",
+            "to_path": "archive/copy.txt",
+            "autorename": True,
+        });
+        assertEq("/2/files/copy_v2", rest.last().path);
+        assertEq("/a.txt", rest.last().body.from_path);
+        assertEq("/archive/copy.txt", rest.last().body.to_path);
+        assertEq(True, rest.last().body.autorename);
+        assertEq("/archive/copy.txt", resp.path);
+
+        rest.setResponse({"metadata": {".tag": "file", "id": "id:12", "name": "moved.txt",
+            "path_display": "/moved.txt"}});
+        resp = prov.getChildProvider("move-file").doRequest({"from_path": "/a.txt", "to_path": "/moved.txt"});
+        assertEq("/2/files/move_v2", rest.last().path);
+        assertEq("/a.txt", rest.last().body.from_path);
+        assertEq("/moved.txt", rest.last().body.to_path);
+        assertEq(False, rest.last().body.autorename);
+        assertEq("id:12", resp.id);
+    }
+
+    revisionsTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        rest.setResponse({
+            "is_deleted": False,
+            "entries": (
+                {"id": "id:13", "name": "a.txt", "path_display": "/a.txt", "rev": "0102",
+                    "server_modified": "2026-02-01T10:00:00Z", "size": 20},
+                {"id": "id:13", "name": "a.txt", "path_display": "/a.txt", "rev": "0101",
+                    "server_modified": "2026-01-01T10:00:00Z", "size": 10},
+            ),
+        });
+        hash<auto> resp = prov.getChildProvider("list-file-revisions").doRequest({
+            "path": "/a.txt",
+            "mode": "id",
+            "limit": 5,
+        });
+        assertEq("/2/files/list_revisions", rest.last().path);
+        assertEq("/a.txt", rest.last().body.path);
+        assertEq({".tag": "id"}, rest.last().body.mode, "the mode is sent as a union, not as a bare string");
+        assertEq(5, rest.last().body.limit);
+        assertEq(2, resp.entries.size());
+        assertEq("0102", resp.entries[0].rev);
+        assertEq(False, resp.entries[0].is_folder, "a revision is a file, not a folder");
+        assertEq(2026-02-01T10:00:00Z, resp.entries[0].modified);
+        assertEq(False, resp.is_deleted);
+
+        rest.setResponse({".tag": "file", "id": "id:13", "name": "a.txt", "path_display": "/a.txt",
+            "rev": "0103"});
+        resp = prov.getChildProvider("restore-file-revision").doRequest({"path": "/a.txt", "rev": "0101"});
+        assertEq("/2/files/restore", rest.last().path);
+        assertEq("0101", rest.last().body.rev);
+        assertEq("0103", resp.rev, "restoring produces a new revision");
+    }
+
+    sharingTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        rest.setResponse({
+            ".tag": "file",
+            "url": "https://www.dropbox.com/s/abc/a.txt?dl=0",
+            "id": "id:14",
+            "name": "a.txt",
+            "path_lower": "/a.txt",
+            "expires": "2026-12-31T23:59:59Z",
+            # Dropbox narrows a visibility the account does not support, and reports what it actually applied
+            "link_permissions": {
+                "requested_visibility": {".tag": "password"},
+                "resolved_visibility": {".tag": "public"},
+            },
+        });
+        hash<auto> resp = prov.getChildProvider("create-shared-link").doRequest({
+            "path": "/a.txt",
+            "requested_visibility": "password",
+            "link_password": "hunter2",
+            "expires": 2026-12-31T23:59:59Z,
+        });
+        assertEq("/2/sharing/create_shared_link_with_settings", rest.last().path);
+        assertEq("/a.txt", rest.last().body.path);
+        assertEq({".tag": "password"}, rest.last().body.settings.requested_visibility);
+        assertEq("hunter2", rest.last().body.settings.link_password);
+        assertEq("2026-12-31T23:59:59Z", rest.last().body.settings.expires,
+            "the expiry is sent in the UTC form Dropbox accepts");
+        assertEq("https://www.dropbox.com/s/abc/a.txt?dl=0", resp.url);
+        assertEq("public", resp.visibility, "the visibility Dropbox applied is reported, not the one asked for");
+        assertEq(2026-12-31T23:59:59Z, resp.expires);
+
+        # with no settings at all the key must be omitted rather than sent empty
+        rest.setResponse({"url": "https://www.dropbox.com/s/def/b.txt?dl=0", "name": "b.txt",
+            "path_lower": "/b.txt"});
+        resp = prov.getChildProvider("create-shared-link").doRequest({"path": "/b.txt"});
+        assertEq(False, rest.last().body.hasKey("settings"));
+        assertEq(NOTHING, resp.visibility);
+        assertEq(NOTHING, resp.expires);
+
+        rest.setResponse({
+            "links": (
+                {"url": "https://www.dropbox.com/s/abc/a.txt?dl=0", "name": "a.txt", "path_lower": "/a.txt",
+                    "link_permissions": {"resolved_visibility": {".tag": "team_only"}}},
+            ),
+            "has_more": False,
+        });
+        resp = prov.getChildProvider("list-shared-links").doRequest({"path": "/a.txt", "direct_only": True});
+        assertEq("/2/sharing/list_shared_links", rest.last().path);
+        assertEq("/a.txt", rest.last().body.path);
+        assertEq(True, rest.last().body.direct_only);
+        assertEq(1, resp.links.size());
+        assertEq("team_only", resp.links[0].visibility);
+
+        # Dropbox rejects a listing that names the account root, so an unset path must be omitted entirely
+        resp = prov.getChildProvider("list-shared-links").doRequest({"path": "/"});
+        assertEq(False, rest.last().body.hasKey("path"));
+        resp = prov.getChildProvider("list-shared-links").doRequest({});
+        assertEq(False, rest.last().body.hasKey("path"));
+
+        # revoking answers with an empty body, so the outcome is all there is to report
+        rest.setResponse(NOTHING);
+        resp = prov.getChildProvider("revoke-shared-link").doRequest({
+            "url": "https://www.dropbox.com/s/abc/a.txt?dl=0",
+        });
+        assertEq("/2/sharing/revoke_shared_link", rest.last().path);
+        assertEq("https://www.dropbox.com/s/abc/a.txt?dl=0", rest.last().body.url);
+        assertEq(True, resp.success);
+    }
+
+    errorReportingTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-metadata");
+
+        # an endpoint-specific failure arrives as a 409 with the reason in error_summary; without unpacking it
+        # the caller sees only that something did not fit the state of the account
+        rest.throw_error = {
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP status 409 received",
+            "arg": {
+                "response-body": {
+                    "error_summary": "path/not_found/...",
+                    "error": {".tag": "path", "path": {".tag": "not_found"}},
+                },
+            },
+        };
+        assertThrows("DROPBOX-ERROR", "path/not_found", sub () { dp.doRequest({"path": "/gone.txt"}); });
+
+        # a rate-limited request names how long to wait; that has to reach the caller, who decides
+        rest.throw_error = {
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP status 429 received",
+            "arg": {
+                "response-body": {"error_summary": "too_many_requests/..."},
+                "headers": {"retry-after": 12},
+            },
+        };
+        assertThrows("DROPBOX-ERROR", "retry after 12 seconds", sub () { dp.doRequest({"path": "/a.txt"}); });
+
+        # content endpoints answer with a bare error document rather than a JSON object
+        rest.throw_error = {
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP status 409 received",
+            "arg": {"response-body": "Error in call to API function \"files/download\": path/not_found/"},
+        };
+        assertThrows("DROPBOX-ERROR", "files/download", sub () { dp.doRequest({"path": "/a.txt"}); });
+
+        # a failure with nothing to unpack must still say what happened rather than being swallowed
+        rest.throw_error = {"err": "SOCKET-CONNECT-ERROR", "desc": "connection refused", "arg": {}};
+        assertThrows("DROPBOX-ERROR", "connection refused", sub () { dp.doRequest({"path": "/a.txt"}); });
+
+        # getErrorSummary() must not mistake an unrelated body for an error report
+        assertEq(NOTHING, DropboxDataProviderBase::getErrorSummary({"id": "x"}));
+        assertEq(NOTHING, DropboxDataProviderBase::getErrorSummary(NOTHING));
+        assertEq("a/b/", DropboxDataProviderBase::getErrorSummary({"error_summary": "a/b/"}));
+        assertEq("a/b/", DropboxDataProviderBase::getErrorSummary("{\"error_summary\":\"a/b/\"}"));
+    }
+
+    referenceDataTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        *hash<string, bool> types = prov.getSupportedReferenceData();
+        assertTrue(types.files, "file reference data is offered");
+        assertTrue(types.folders, "folder reference data is offered");
+
+        rest.setResponse({
+            "entries": (
+                {".tag": "file", "name": "a.txt", "path_display": "/a.txt", "path_lower": "/a.txt"},
+                {".tag": "folder", "name": "sub", "path_display": "/sub", "path_lower": "/sub"},
+                {".tag": "file", "name": "b.txt", "path_display": "/sub/b.txt", "path_lower": "/sub/b.txt"},
+            ),
+            "has_more": False,
+        });
+        *list<hash<AllowedValueInfo>> files = prov.getReferenceData("files");
+        assertEq(2, files.size(), "only files are offered as file reference data");
+        assertEq("/a.txt", files[0].value);
+        assertEq("/sub/b.txt", files[1].value);
+        assertEq("b.txt", files[1].short_desc);
+
+        *list<hash<AllowedValueInfo>> folders = prov.getReferenceData("folders");
+        assertEq(1, folders.size(), "only folders are offered as folder reference data");
+        assertEq("/sub", folders[0].value);
+
+        assertEq(NOTHING, prov.getReferenceData("nonexistent"), "an unknown reference type yields nothing");
+
+        # reference data fills a UI picker, so a failure must degrade to an empty list rather than break the
+        # form the user is filling in
+        rest.throw_error = {"err": "REST-RESPONSE-ERROR", "desc": "HTTP status 401 received", "arg": {}};
+        assertEq((), prov.getReferenceData("files"), "a failure yields an empty list, not an exception");
+    }
+
+    connectionSchemeTest() {
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("dropbox");
+        assertTrue(exists scheme, "the dropbox scheme is registered");
+        assertEq("Dropbox", scheme.display_name);
+        assertEq("oauth2_client_id,oauth2_client_secret", scheme.required_options);
+        # a refresh token is only issued with an offline access type; without one the connection stops working
+        # four hours after it is authorized
+        assertEq("offline", scheme.options.oauth2_auth_args.default_value.token_access_type);
+        assertEq("authorization_code", scheme.options.oauth2_grant_type.default_value);
+        assertEq("https://www.dropbox.com/oauth2/authorize", scheme.options.oauth2_auth_url.default_value);
+        assertEq("https://api.dropboxapi.com/oauth2/token", scheme.options.oauth2_token_url.default_value);
+        assertEq("POST", scheme.options.ping_method.default_value);
+        assertEq("/2/check/user", scheme.options.ping_path.default_value);
+        foreach string scope in (("files.content.read", "files.content.write", "files.metadata.read",
+                "files.metadata.write", "sharing.read", "sharing.write", "account_info.read")) {
+            assertTrue(inlist(scope, scheme.options.oauth2_scopes.default_value),
+                sprintf("the %y scope is requested", scope));
+        }
+
+        DropboxRestClient::DropboxRestConnection conn("dropbox-test", "test connection",
+            DropboxRestClient::DropboxRestConnection::DefaultUrl, {}, {
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+            });
+        assertEq("dropbox", conn.getType());
+        # the application name is preserved from the v8 catalog so that existing OAuth2 configuration still
+        # resolves to this implementation
+        assertEq(App, conn.getAppName());
+        assertEq(True, conn.hasDataProvider());
+        assertRegex("api\\.dropboxapi\\.com", conn.getSafeUrl());
+        assertEq(False, conn.getSafeUrl().regex("secret"), "the connection URL carries no credentials");
+
+        # the factory registered for the scheme must be the one this module provides
+        assertEq("dropbox", (new DropboxDataProviderFactory()).getName());
+    }
+
+    # --- live tests (require -c <connection>) ---
+
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn;
+        if (!conn_name) {
+            testSkip("no connection specified; use -c <connection_name>");
+            return;
+        }
+        return get_connection(conn_name);
+    }
+
+    liveConnectionPingTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        hash<auto> info = conn.ping(True);
+        assertEq(True, info.ok, "ping succeeded");
+    }
+
+    liveListFolderTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider dp = conn.getDataProvider().getChildProvider("list-folder");
+        hash<auto> resp = dp.doRequest({"path": RootPath, "limit": 10});
+        assertTrue(resp.entries.typeCode() == NT_LIST, "the root folder listing returned entries");
+        if (m_options.verbose > 0) {
+            foreach hash<auto> e in (resp.entries) {
+                printf("%s %y (%d bytes)\n", e.is_folder ? "dir " : "file", e.path, e.size ?? 0);
+            }
+        }
+    }
+
+    liveFileLifecycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string path = sprintf("/qore-test-%d.txt", now_us().durationMicroseconds());
+        string content = "created by the Qore DropboxDataProvider test suite";
+
+        hash<auto> created = prov.getChildProvider("create-text-file").doRequest({
+            "path": path,
+            "content": content,
+        });
+        assertEq(path.lwr(), created.path_lower, "the file was created at the requested path");
+        on_exit {
+            prov.getChildProvider("delete-file").doRequest({"path": path});
+        }
+
+        hash<auto> meta = prov.getChildProvider("get-metadata").doRequest({"path": path});
+        assertEq(content.size(), meta.size, "the stored size matches the content written");
+
+        hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"path": path});
+        assertEq(content, parse_base64_string(downloaded.content).toString(),
+            "the content read back matches the content written");
+    }
+}
