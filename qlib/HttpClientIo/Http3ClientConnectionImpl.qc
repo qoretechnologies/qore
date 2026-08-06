@@ -264,7 +264,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -312,7 +312,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -348,7 +348,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -386,7 +386,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -431,7 +431,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 

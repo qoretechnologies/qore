@@ -156,7 +156,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -230,7 +230,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -267,7 +267,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 

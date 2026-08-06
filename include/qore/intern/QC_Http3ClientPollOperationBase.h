@@ -258,7 +258,18 @@ public:
         return error_info;
     }
 
+    //! Returns the number of active streams
+    /** Read under @c stream_lock: every write happens under that lock, so an
+        unlocked read is a data race that can return a stale count on a
+        weakly-ordered host.  The connection manager's checkout reads this value
+        twice — once unlocked via isConnectionAlive(), once under the Qore
+        connection Mutex via tryReserveStream() — and a stale non-zero followed by a
+        true zero makes an expired pooled connection look busy to the eviction check
+        and free to the capacity check.  Matches
+        Http2ClientPollOperationPriv::getActiveStreamCount().
+    */
     DLLLOCAL int getActiveStreamCount() const {
+        AutoLocker al(stream_lock);
         return active_stream_count;
     }
 
