@@ -27,12 +27,30 @@ Rules:
 - The `.qm` file must live inside the module directory.
 - Do not place a second `.qm` for the same module at `qlib/<ModuleName>.qm`.
 - Register the module once in `CMakeLists.txt` using the directory path (no `.qm`
-  suffix); the second argument is the semicolon-separated list of module
-  dependencies:
-  - `qore_user_module("qlib/<ModuleName>" "Dep1;Dep2")`
+  suffix):
+  - `qore_user_module("qlib/<ModuleName>")`
+- **Any arguments after the module path are extra resource files, not
+  dependencies.** They are passed to `qdx` as `--extra-files` so the
+  documentation build knows about assets that are not `.qm`/`.qc` sources —
+  logo SVGs, AsyncAPI YAMLs, and the like:
+  - `qore_user_module("qlib/<ModuleName>" "<modulename>-logo.svg")`
+- Multiple extra files are separated by semicolons, and each is resolved
+  relative to the module's own source directory (`qdx` is invoked with
+  `--extra-prefix <module_src_dir>/`), so a `../..`-relative path reaches
+  assets outside `qlib/`:
+  - `qore_user_module("qlib/FileDataProvider" "file-logo-white.svg;file-logo-black.svg")`
+  - `qore_user_module("qlib/SqlUtil" "../../doxygen/SqlUtil-Full.svg")`
+- **Module dependencies are never declared here.** Build-order and doc-target
+  edges are derived automatically from each module's own `%requires` directives
+  by `QORE_FINALIZE_USER_MODULE_DEPENDENCIES()`, which runs after every module
+  target exists. `%requires` in the `.qm` is the single source of truth, so a
+  module may `%requires` a sibling declared later in `CMakeLists.txt` with no
+  ordering concern.
 - That single call is all that is required. `qore_user_module()` automatically:
-  - installs every `*.qm`, `*.qc`, `*.yaml`, and `*.svg` file under the module
-    directory into the installed module subdirectory on `make install`, and
+  - installs every `*.qm`, `*.qc`, `*.yaml`, `*.svg`, and `*.proto` file under
+    the module directory into the installed module subdirectory on
+    `make install` — this is a glob over the directory and is independent of the
+    extra-files arguments, which affect documentation only, and
   - creates the `docs-<ModuleName>` documentation target, wires it into the
     top-level `docs` target, and registers the module in `QORE_USER_MODULE_NAMES`
     for cross-reference tag files.
@@ -40,7 +58,7 @@ Rules:
   this CMake build. The autotools-era `DOX_SRC_SPLIT_MODULES` / `DOX_SPLIT_MODULES`
   lists and `dist_<ModuleName>_modver_DATA = $(wildcard ...)` rules do not exist
   here and must not be added. If a module ships asset types other than
-  `*.qm`/`*.qc`/`*.yaml`/`*.svg`, extend the install glob in the
+  `*.qm`/`*.qc`/`*.yaml`/`*.svg`/`*.proto`, extend the install glob in the
   `QORE_USER_MODULE` macro in `cmake/QoreMacros.cmake`.
   With `QORE_BUILD_AOT_MODULES=ON` (the default) the same macro also AOT-compiles the
   module to a `.qmod` via `qcc`. Projects that drive `qcc` compilation/linking directly
@@ -60,11 +78,12 @@ Layout:
 Rules:
 
 - Register once in `CMakeLists.txt` with the full file path **including** the `.qm`
-  suffix, followed by the semicolon-separated dependency list:
-  - `qore_user_module("qlib/<ModuleName>.qm" "Dep1;Dep2")`
+  suffix:
+  - `qore_user_module("qlib/<ModuleName>.qm")`
 - As with directory modules, this single call handles installation and
   documentation automatically; there are no doc-list or packaging variables to
-  update.
+  update, and dependencies are derived from the module's own `%requires`
+  directives rather than declared in `CMakeLists.txt`.
 
 ## Documentation and Dependencies
 
@@ -449,7 +468,8 @@ Current usages to migrate:
 - [ ] `.qm` location matches layout
 - [ ] all parse directives in the main .qm file for separated modules
 - [ ] `%modern` used / redundant parse directives (`%new-style`, `%require-types`, `%strict-args`, `%enable-all-warnings`) removed
-- [ ] `CMakeLists.txt` module registered with a single `qore_user_module()` call (directory path for directory modules, `.qm` path for single-file modules) — no separate doc-list or packaging variables
+- [ ] `CMakeLists.txt` module registered with a single `qore_user_module()` call (directory path for directory modules, `.qm` path for single-file modules) — no separate doc-list or packaging variables, and no dependency list (dependencies come from `%requires`)
+- [ ] any non-source assets the docs need (logo SVGs, YAMLs) passed as extra-file arguments to `qore_user_module()`
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module

@@ -2475,13 +2475,31 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 #
 # NOTE: this macro is for the library only
 #
-# Param #1: path to the module; e.g. "qlib/RestHandler.qm"
-# Param #2: list of module dependencies separated by semicolon; e.g. "HttpServerUtil;Mime;Util"
+# Param #1: path to the module; either a single .qm file (e.g. "qlib/RestHandler.qm")
+#           or a module directory with no suffix (e.g. "qlib/OneDriveDataProvider")
+# Param #2+ (optional): extra resource files for the documentation build, separated by
+#           semicolons; these are non-source assets the module ships (logo SVGs, AsyncAPI
+#           YAMLs, ...) and are passed to qdx as --extra-files.  Each is resolved relative
+#           to the module's own source directory (qdx is invoked with
+#           --extra-prefix <module_src_dir>/), so a "../.."-relative path can reach assets
+#           outside qlib/.
 #
-# Example:
-#     qore_user_module("qlib/RestHandler.qm" "HttpServerUtil;Mime;Util")
+#           These arguments are NOT module dependencies.  Build-order and doc-target edges
+#           are derived automatically from each module's own %requires directives by
+#           QORE_FINALIZE_USER_MODULE_DEPENDENCIES() -- %requires in the .qm is the single
+#           source of truth -- so a module may %requires a sibling declared later in
+#           CMakeLists.txt with no ordering concern.
 #
-# The module will be installed automatically in 'make install' target.
+# Examples:
+#     qore_user_module("qlib/RestHandler.qm")
+#     qore_user_module("qlib/OneDriveDataProvider" "onedrive-logo.svg")
+#     qore_user_module("qlib/FileDataProvider" "file-logo-white.svg;file-logo-black.svg")
+#     qore_user_module("qlib/SqlUtil" "../../doxygen/SqlUtil-Full.svg")
+#
+# The module will be installed automatically in the 'make install' target.  For directory
+# modules every *.qm, *.qc, *.yaml, *.svg, and *.proto file under the module directory is
+# installed via a glob -- installation is independent of the extra-file arguments above,
+# which affect the documentation build only.
 MACRO (QORE_USER_MODULE _module_file)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
