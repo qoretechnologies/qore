@@ -164,6 +164,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiStreamedToolCallThoughtSignatureTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
+        addTestCase("LlmBackend OpenAI facade honors per-call retry budget",
+            \providerPerCallRetryBudgetTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
             "composition", \geminiSchemaCompositionSanitizerTest());
         addTestCase("LlmBackend Gemini schema sanitizer strips dialect "
@@ -1048,6 +1050,74 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].body.generationConfig.thinkingConfig.thinkingBudget);
         assertEq("lookup",
             gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name);
+    }
+
+    providerPerCallRetryBudgetTest() {
+        checkGeminiModule();
+        hash<auto> success = {
+            "code": 200,
+            "body": {
+                "responseId": "gemini-retry-budget",
+                "candidates": ({
+                    "finishReason": "STOP",
+                    "content": {"parts": ({"text": "retried"},)},
+                },),
+                "usageMetadata": {"totalTokenCount": 3},
+            },
+        };
+        hash<auto> unavailable = {
+            "code": 503,
+            "body": {
+                "error": {
+                    "status": "UNAVAILABLE",
+                    "message": "retry test",
+                },
+            },
+        };
+        hash<auto> request = {
+            "messages": ({"role": "user", "content": "test retries"},),
+        };
+
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (unavailable, success)},
+        });
+        LlmBackend no_retry = makeGeminiBackend();
+        assertThrows("LLM-ERROR", "request to", sub () {
+            no_retry.chatCompletions(request + {"max_retries": 0});
+        });
+        assertEq(1, gemini_handler.requests.size(),
+            "zero retries makes only the initial provider request");
+        assertFalse(gemini_handler.requests[0].body.hasKey("max_retries"),
+            "the facade retry extension is not sent in the native body");
+
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (unavailable, success)},
+        });
+        LlmBackend one_retry = makeGeminiBackend();
+        hash<auto> recovered = one_retry.chatCompletions(
+            request + {"max_retries": 1});
+        assertEq(2, gemini_handler.requests.size(),
+            "one retry permits exactly two provider requests");
+        assertEq("retried", recovered.choices[0].message.content,
+            "the per-call retry returns the successful second response");
+
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (unavailable, success)},
+        });
+        LlmBackend configured_default(<LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_retries": 1,
+            "retry_delay_ms": 1,
+        });
+        configured_default.chatCompletions(request);
+        assertEq(2, gemini_handler.requests.size(),
+            "omitting the override retains the backend retry default");
     }
 
     geminiToolCallResponseTest() {
