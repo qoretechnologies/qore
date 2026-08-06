@@ -63,6 +63,24 @@ module OneDriveDataProvider {
             "groups": (DataProvider::AppGroup::CloudStorage,),
         });
 
+        # declare how this application's actions map onto single-file read and write operations, so that
+        # "conn://" file locations can read and write files through a OneDrive connection.  OneDrive addresses
+        # items by immutable ID rather than by path, and its download action returns a short-lived
+        # pre-authenticated URL rather than the file content, so the read is a two-step operation
+        DataProviderActionCatalog::registerAppFileApi(OneDriveDataProvider::AppName, <DataProviderFileApiInfo>{
+            "read_action": "download-file",
+            "read_path_option": "id",
+            "read_mode": DPFR_URL,
+            "read_data_field": "download_url",
+            "read_mime_type_field": "content_type",
+            "write_action": "upload-file",
+            "write_path_option": "parent_id",
+            "write_data_option": "file",
+            "write_data_format": DPFW_FILE,
+            "write_path_is_parent": True,
+            "path_is_id": True,
+        });
+
         # --- Drive Actions ---
 
         # get-drive-info

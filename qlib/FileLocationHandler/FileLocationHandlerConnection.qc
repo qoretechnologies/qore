@@ -270,9 +270,43 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
             };
         }
 
+        # tier 2: the connection's application declares a file API in the data provider action catalog
+        *string app = conn.getAppName();
+        if (app.val()) {
+            *hash<auto> file_api = getAppFileApi(app);
+            if (file_api) {
+                return <ResolvedLocation>{
+                    "handler": new FileLocationHandlerDataProvider(conn, conn_name, app, file_api),
+                    "scheme": scheme,
+                    "location": path,
+                    "opts": opts,
+                };
+            }
+        }
+
         throw "LOCATION-ERROR", sprintf("connection %y (type %y%s) does not support file locations; the connection "
-            "provides neither a location redirect nor a native file location handler", conn_name, conn.getType(),
-            (*string app = conn.getAppName()).val() ? sprintf(", app %y", app) : "");
+            "provides no location redirect, no native file location handler, and %s", conn_name, conn.getType(),
+            app.val() ? sprintf(", app %y", app) : "",
+            app.val()
+                ? sprintf("application %y has not registered a data provider file API", app)
+                : "the connection serves no data provider application");
+    }
+
+    #! Returns the file API registered for the given application, if any
+    /** The \c DataProvider module is loaded dynamically, as this module declares no dependency on it
+
+        @param app the application name
+
+        @return the file API registered for the application, if any
+    */
+    private *hash<auto> getAppFileApi(string app) {
+        try {
+            load_module("DataProvider");
+        } catch (hash<ExceptionInfo> ex) {
+            # the DataProvider module is unavailable, so no application can have registered a file API
+            return;
+        }
+        return call_static_method("DataProvider::DataProviderActionCatalog", "getAppFileApi", app);
     }
 
     #! Splits a connection location into the connection name and the path

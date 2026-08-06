@@ -6,8 +6,13 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+# the test connection provider module also defines the in-memory application used for tier 2 resolution; the test
+# needs the same module instance the connection provider uses, so it is resolved by name from this directory
+%prepend-module-path "${SCRIPT_DIR}"
 
 %requires FileLocationHandler
+%requires DataProvider
+%requires FileLocationTestConnectionProvider
 %requires FsUtil
 %requires Util
 %requires QUnit
@@ -39,6 +44,9 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         addTestCase("credential hygiene", \credentialHygieneTest());
         addTestCase("connection filter", \connectionFilterTest());
         addTestCase("redirect construction", \redirectConstructionTest());
+        addTestCase("tier 2 data provider read", \tier2ReadTest());
+        addTestCase("tier 2 data provider write", \tier2WriteTest());
+        addTestCase("tier 2 negative", \tier2NegativeTest());
         addTestCase("negative", \negativeTest());
 
         setupConnectionProvider();
@@ -363,6 +371,185 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
             ("redirect", "ConnectionProvider::HttpConnection", {
                 "name": "http2", "desc": "d", "url": "https://www.example.com/api",
             }, "../../escape.txt", False));
+    }
+
+    #! Registers a file API for the test application, replacing any previous registration
+    private setFileApi(hash<auto> extra) {
+        # the stub provider has no view of the registered mapping, so mirror the one flag that changes how it
+        # must interpret the request
+        TestStore::write_path_is_parent = extra.write_path_is_parent ?? False;
+        DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        DataProviderActionCatalog::registerAppFileApi(TestAppName, cast<hash<DataProviderFileApiInfo>>(
+            <DataProviderFileApiInfo>{
+                "read_action": "read-file",
+                "read_path_option": "path",
+                "read_data_field": "content",
+                "write_action": "write-file",
+                "write_path_option": "path",
+                "write_data_option": "data",
+                "write_data_format": DPFW_RAW,
+            } + extra));
+    }
+
+    #! Reads through the application's declared file API
+    tier2ReadTest() {
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+        TestStore::files."docs/report.txt" = FileContents;
+
+        # base64-encoded data, the default encoding
+        setFileApi({});
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://testapp/docs/report.txt"));
+        assertEq(binary(FileContents),
+            FileLocationHandler::getBinaryFileFromLocation("conn://testapp/docs/report.txt"));
+        # the declared path option carried the location path
+        assertEq("docs/report.txt", TestStore::last_request.path);
+        assertEq("read-file", TestStore::last_action);
+
+        # raw (already-decoded) data
+        setFileApi({"read_data_field": "raw", "read_data_encoding": "raw"});
+        assertEq(FileContents, FileLocationHandler::getTextFileFromLocation("conn://testapp/docs/report.txt"));
+
+        # a container option is forwarded when declared and supplied
+        TestStore::files."bucket1:k.txt" = "in-bucket\n";
+        setFileApi({"read_container_option": "bucket"});
+        assertEq("in-bucket\n",
+            FileLocationHandler::getTextFileFromLocation("conn://testapp/k.txt{container=bucket1}"));
+        assertEq("bucket1", TestStore::last_request.bucket);
+
+        # streams are synthesized over the request/response action
+        setFileApi({});
+        assertEq(FileContents, FileLocationHandler::getStreamReaderFromLocation(
+            "conn://testapp/docs/report.txt").readString());
+        assertEq(binary(FileContents), (new StreamReader(FileLocationHandler::getBinaryStreamFromLocation(
+            "conn://testapp/docs/report.txt"))).readBinary());
+
+        # a non-blocking poller is not available for a request/response application
+        assertThrows("UNIMPLEMENTED", "non-blocking I/O is not supported",
+            \FileLocationHandler::getIoPollerForLocation(), "conn://testapp/docs/report.txt");
+    }
+
+    #! Reads where the application returns a URL rather than content, and writes
+    tier2WriteTest() {
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+
+        # DPFR_URL: the returned URL is retrieved unless follow_url is disabled
+        TmpFile tmp("flh-url-", ".txt");
+        {
+            File f();
+            f.open2(tmp.path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("VIA URL\n");
+        }
+        TestStore::read_url = "file://" + tmp.path;
+        setFileApi({"read_mode": DPFR_URL, "read_data_field": "url"});
+        assertEq("VIA URL\n", FileLocationHandler::getTextFileFromLocation("conn://testapp/anything"));
+        # with follow_url disabled the URL itself is returned
+        assertEq("file://" + tmp.path,
+            FileLocationHandler::getTextFileFromLocation("conn://testapp/anything{follow_url=false}"));
+        remove TestStore::read_url;
+
+        # raw writes
+        setFileApi({});
+        FileLocationHandler::writeFileToLocation("conn://testapp/out.txt", FileContents);
+        assertEq(FileContents, TestStore::files."out.txt");
+        assertEq("write-file", TestStore::last_action);
+
+        # base64 writes: the application receives base64 and decodes it itself, so the store holds the encoded
+        # form; decoding it here proves the handler encoded the right bytes
+        setFileApi({"write_data_format": DPFW_BASE64});
+        FileLocationHandler::writeFileToLocation("conn://testapp/b64.txt", FileContents);
+        assertEq(FileContents, parse_base64_string(TestStore::files."b64.txt").toString());
+
+        # FileDataType writes carry the filename
+        setFileApi({"write_data_option": "file", "write_data_format": DPFW_FILE});
+        FileLocationHandler::writeFileToLocation("conn://testapp/dir/file.txt", FileContents);
+        assertEq(FileContents, TestStore::files."dir/file.txt".toString());
+        assertEq("file.txt", TestStore::last_request.file.name);
+
+        # write_path_is_parent: the last path segment becomes the filename, the rest the parent
+        setFileApi({
+            "write_data_option": "file",
+            "write_data_format": DPFW_FILE,
+            "write_path_is_parent": True,
+        });
+        FileLocationHandler::writeFileToLocation("conn://testapp/parent-id/report.pdf", FileContents);
+        assertEq("parent-id", TestStore::last_request.path, "the parent must be passed in the path option");
+        assertEq("report.pdf", TestStore::last_request.file.name);
+        assertEq(FileContents, TestStore::files."parent-id/report.pdf".toString());
+
+        # the output stream writes on close and waitForIo() reports success
+        setFileApi({});
+        OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation("conn://testapp/streamed.txt");
+        os.write(binary(FileContents));
+        os.close();
+        os.waitForIo();
+        assertEq(binary(FileContents), TestStore::files."streamed.txt");
+    }
+
+    #! Negative cases for the declared file API
+    tier2NegativeTest() {
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+
+        # a read action that returns no data field
+        setFileApi({});
+        TestStore::omit_data_field = True;
+        assertThrows("LOCATION-ERROR", "returned no .* field", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://testapp/x.txt");
+        TestStore::omit_data_field = False;
+
+        # a read-only application must reject writes with a clear error
+        DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        DataProviderActionCatalog::registerAppFileApi(TestAppName, <DataProviderFileApiInfo>{
+            "read_action": "read-file",
+            "read_path_option": "path",
+            "read_data_field": "content",
+        });
+        assertThrows("LOCATION-ERROR", "read-only", \FileLocationHandler::writeFileToLocation(),
+            ("conn://testapp/x.txt", "data"));
+
+        # a declared action that is not registered in the catalog
+        setFileApi({"read_action": "no-such-action"});
+        assertThrows("LOCATION-ERROR", "not registered", \FileLocationHandler::getTextFileFromLocation(),
+            "conn://testapp/x.txt");
+
+        # registration validation
+        DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        assertThrows("FILE-API-ERROR", "read_mode",
+            \DataProviderActionCatalog::registerAppFileApi(), (TestAppName, <DataProviderFileApiInfo>{
+                "read_action": "r", "read_path_option": "p", "read_data_field": "d", "read_mode": "bogus",
+            }));
+        assertThrows("FILE-API-ERROR", "read_data_encoding",
+            \DataProviderActionCatalog::registerAppFileApi(), (TestAppName, <DataProviderFileApiInfo>{
+                "read_action": "r", "read_path_option": "p", "read_data_field": "d",
+                "read_data_encoding": "bogus",
+            }));
+        assertThrows("FILE-API-ERROR", "without a write_data_option",
+            \DataProviderActionCatalog::registerAppFileApi(), (TestAppName, <DataProviderFileApiInfo>{
+                "read_action": "r", "read_path_option": "p", "read_data_field": "d",
+                "write_action": "w", "write_path_option": "p",
+            }));
+        assertThrows("FILE-API-ERROR", "write_path_is_parent requires",
+            \DataProviderActionCatalog::registerAppFileApi(), (TestAppName, <DataProviderFileApiInfo>{
+                "read_action": "r", "read_path_option": "p", "read_data_field": "d",
+                "write_action": "w", "write_path_option": "p", "write_data_option": "d",
+                "write_data_format": DPFW_RAW, "write_path_is_parent": True,
+            }));
+
+        # duplicate registration is rejected
+        setFileApi({});
+        assertThrows("FILE-API-ERROR", "already been registered",
+            \DataProviderActionCatalog::registerAppFileApi(), (TestAppName, <DataProviderFileApiInfo>{
+                "read_action": "r", "read_path_option": "p", "read_data_field": "d",
+            }));
+
+        # an application with no registered file API falls through to the tier 3 error
+        DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        hash<ExceptionInfo> ex = getError(\FileLocationHandler::getTextFileFromLocation(),
+            ("conn://testapp/x.txt",));
+        assertEq("LOCATION-ERROR", ex.err);
+        assertRegex("has not registered a data provider file API", ex.desc);
     }
 
     negativeTest() {

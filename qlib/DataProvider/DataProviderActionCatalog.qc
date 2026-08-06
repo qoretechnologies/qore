@@ -381,7 +381,7 @@ public const string DPAD_PASS_THROUGH = "pass-through";
     "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
     pipeline state.
 
-    @since %DataProvider 3.4
+    @since %DataProvider 3.6
 */
 public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 #/@}
@@ -514,6 +514,107 @@ public hashdecl DataProviderActionInfo {
     int processor_capabilities = 0;
 }
 
+/** @defgroup DataProviderFileReadModes Data Provider File API Read Modes
+*/
+#/@{
+#! File API read mode: the response field named by \c read_data_field holds the file data
+public const string DPFR_DATA = "data";
+
+#! File API read mode: the response field named by \c read_data_field holds a URL to retrieve the file data from
+/** Used by applications that return a short-lived pre-authenticated download URL rather than the file content
+    itself; \c OneDrive is one such application
+*/
+public const string DPFR_URL = "url";
+#/@}
+
+/** @defgroup DataProviderFileWriteFormats Data Provider File API Write Formats
+*/
+#/@{
+#! File API write format: the option takes a @ref DataProvider::FileDataType "FileDataType" hash
+public const string DPFW_FILE = "file";
+
+#! File API write format: the option takes base64-encoded data
+public const string DPFW_BASE64 = "base64";
+
+#! File API write format: the option takes raw string or binary data
+public const string DPFW_RAW = "raw";
+#/@}
+
+#! Describes how an application's data provider actions map onto single-file read and write operations
+/** Applications expose file operations under their own names -- \c get, \c get-file, \c download-file, and
+    \c download_file all appear in the catalog for the same operation -- with option and response fields that
+    differ as well.  This hash declares the mapping once per application so that generic consumers, notably the
+    \c "conn://" scheme in the \c FileLocationHandler module, can read and write a file through any registered
+    application without knowing its vocabulary.
+
+    Register with @ref DataProviderActionCatalog::registerAppFileApi().
+
+    @since %DataProvider 3.6
+*/
+public hashdecl DataProviderFileApiInfo {
+    #! The name of the action that reads (downloads) a file
+    string read_action;
+
+    #! The option in the read action that takes the file path, object key, or ID
+    string read_path_option;
+
+    #! The option in the read action that takes a container (bucket, drive, or parent folder), if any
+    *string read_container_option;
+
+    #! How the read action returns the file data
+    /** @see @ref DataProviderFileReadModes for valid values
+    */
+    string read_mode = DPFR_DATA;
+
+    #! The response field holding the data (@ref DPFR_DATA) or the URL to retrieve it from (@ref DPFR_URL)
+    string read_data_field;
+
+    #! The encoding of \c read_data_field when \c read_mode is @ref DPFR_DATA
+    /** Either \c "base64" or \c "raw"
+    */
+    string read_data_encoding = "base64";
+
+    #! The response field holding the MIME type of the data, if any
+    *string read_mime_type_field;
+
+    #! The name of the action that writes (uploads) a file; if not set, the application is read-only
+    *string write_action;
+
+    #! The option in the write action that takes the file path, object key, or ID
+    *string write_path_option;
+
+    #! The option in the write action that takes a container (bucket, drive, or parent folder), if any
+    *string write_container_option;
+
+    #! The option in the write action that takes the file data
+    *string write_data_option;
+
+    #! The shape of the value passed in \c write_data_option
+    /** @see @ref DataProviderFileWriteFormats for valid values
+    */
+    string write_data_format = DPFW_FILE;
+
+    #! If \c write_path_option receives the parent directory rather than the whole path
+    /** Some applications address a new file by a parent folder plus a name carried in the file value itself
+        rather than by a single path; \c OneDrive, which takes a \c parent_id and a
+        @ref DataProvider::FileDataType "FileDataType" holding the name, is one such application.
+
+        When set, the last segment of the location path is taken as the filename and everything before it is
+        passed in \c write_path_option.  This requires \c write_data_format to be @ref DPFW_FILE, as no other
+        format carries a filename.
+    */
+    bool write_path_is_parent = False;
+
+    #! If paths are opaque IDs rather than hierarchical paths
+    /** Applications that address files by an immutable identifier rather than by name set this flag; consumers
+        must not attempt to interpret, split, or normalize the value
+    */
+    bool path_is_id = False;
+
+    #! Fixed options added to every read and write call
+    *hash<auto> options_add;
+}
+
 #! DataProvider action and application catalog class
 public class DataProviderActionCatalog {
     public {
@@ -620,6 +721,20 @@ public class DataProviderActionCatalog {
 
         #! Maps apps to the modules that define them: app -> module path -> True
         static hash<string, hash<string, bool>> appmodmap;
+
+        #! File API map: app -> file API info
+        static hash<string, hash<DataProviderFileApiInfo>> app_fileapimap;
+
+        #! Valid file API write formats
+        /** @see @ref DataProviderFileWriteFormats
+
+            @since %DataProvider 3.6
+        */
+        const hash<string, bool> ValidWriteFormats = {
+            DPFW_FILE: True,
+            DPFW_BASE64: True,
+            DPFW_RAW: True,
+        };
 
         #! Default description
         const string DefaultDescription = "";
@@ -1752,6 +1867,123 @@ public class DataProviderActionCatalog {
         }
         throw "ACTION-ERROR", sprintf("application %y has no action %y (known actions: %y)", app, action,
             keys actionmap);
+    }
+
+    #! Registers the single-file read/write mapping for an application
+    /** @param app the application name; the application does not have to be registered yet
+        @param info the mapping from this application's actions onto file read and write operations
+
+        Lets generic consumers read and write a file through the application without knowing its action and
+        option names; see @ref DataProviderFileApiInfo.
+
+        The registration is undone automatically if the module registering it fails to load.
+
+        @throw FILE-API-ERROR a file API has already been registered for the application; \c read_mode or
+        \c write_data_format is invalid; \c write_action is set without \c write_path_option or
+        \c write_data_option
+
+        @since %DataProvider 3.6
+
+        @see getAppFileApi()
+    */
+    static registerAppFileApi(string app, hash<DataProviderFileApiInfo> info) {
+        if (info.read_mode != DPFR_DATA && info.read_mode != DPFR_URL) {
+            throw "FILE-API-ERROR", sprintf("application %y: read_mode %y is invalid; expecting %y or %y", app,
+                info.read_mode, DPFR_DATA, DPFR_URL);
+        }
+        if (info.read_data_encoding != "base64" && info.read_data_encoding != "raw") {
+            throw "FILE-API-ERROR", sprintf("application %y: read_data_encoding %y is invalid; expecting \"base64\" "
+                "or \"raw\"", app, info.read_data_encoding);
+        }
+        if (info.write_action.val()) {
+            if (!info.write_path_option.val()) {
+                throw "FILE-API-ERROR", sprintf("application %y: write_action %y is set without a "
+                    "write_path_option", app, info.write_action);
+            }
+            if (!info.write_data_option.val()) {
+                throw "FILE-API-ERROR", sprintf("application %y: write_action %y is set without a "
+                    "write_data_option", app, info.write_action);
+            }
+            if (!DataProviderActionCatalog::ValidWriteFormats{info.write_data_format}) {
+                throw "FILE-API-ERROR", sprintf("application %y: write_data_format %y is invalid; expecting one "
+                    "of: %y", app, info.write_data_format, keys DataProviderActionCatalog::ValidWriteFormats);
+            }
+            if (info.write_path_is_parent && info.write_data_format != DPFW_FILE) {
+                throw "FILE-API-ERROR", sprintf("application %y: write_path_is_parent requires write_data_format "
+                    "%y, as no other format carries a filename; got %y", app, DPFW_FILE, info.write_data_format);
+            }
+        }
+
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (app_fileapimap{app}) {
+            throw "FILE-API-ERROR", sprintf("a file API has already been registered for application %y", app);
+        }
+        app_fileapimap{app} = info;
+        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterAppFileApi(app); });
+    }
+
+    #! Returns the single-file read/write mapping for an application, if any
+    /** @param app the application name
+
+        @return the mapping for the application, or @ref nothing if the application has not registered one
+
+        @since %DataProvider 3.6
+
+        @see registerAppFileApi()
+    */
+    static *hash<DataProviderFileApiInfo> getAppFileApi(string app) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        return app_fileapimap{app};
+    }
+
+    #! Removes the file API registration for an application
+    /** @param app the application name
+
+        @return the mapping that was removed, if any
+
+        @since %DataProvider 3.6
+    */
+    static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        return remove app_fileapimap{app};
+    }
+
+    #! Returns the names of all applications that have registered a file API
+    /** @return the names of all applications that have registered a file API
+
+        @since %DataProvider 3.6
+    */
+    static *list<string> getAppFileApiNames() {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        return keys app_fileapimap;
     }
 
     #! Returns a data provider option for the given action and options

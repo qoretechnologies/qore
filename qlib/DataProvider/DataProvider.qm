@@ -1350,6 +1350,16 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_6 DataProvider v3.6
+    - added a declarative single-file read/write mapping so that generic consumers can read and write a file
+      through any application without knowing its action and option names, which differ from application to
+      application; used by the \c "conn://" scheme in the \c FileLocationHandler module:
+      - @ref DataProvider::DataProviderFileApiInfo "DataProviderFileApiInfo"
+      - @ref DataProvider::DataProviderActionCatalog::registerAppFileApi()
+        "DataProviderActionCatalog::registerAppFileApi()"
+      - @ref DataProvider::DataProviderActionCatalog::getAppFileApi()
+        "DataProviderActionCatalog::getAppFileApi()"
+      \n
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - the generic data provider APIs now preserve the exception they wrap: the provider-specific exception is
       reported under the \c "ex" key of the wrapping exception's argument, so a caller catching a generic error
       such as \c SEND-MESSAGE-ERROR can recover the original error code and any machine-readable detail the
