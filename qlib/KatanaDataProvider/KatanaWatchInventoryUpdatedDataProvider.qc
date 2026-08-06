@@ -54,7 +54,7 @@ public class KatanaWatchInventoryUpdatedDataProvider inherits KatanaWatchDataPro
             }
             return out;
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching inventory updates: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching inventory updates: %s: %s", ex.err, ex.desc));
             return ();
         }
     }

@@ -106,8 +106,8 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
         try {
             return fetchRecordsUpdatedAfter(getEndpoint(), since, extra);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching %s for %s: %s: %s", getEndpoint(),
-                getEventName(), ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching %s for %s: %s: %s", getEndpoint(), getEventName(),
+                ex.err, ex.desc));
             return ();
         }
     }

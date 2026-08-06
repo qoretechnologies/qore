@@ -948,7 +948,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             # execute alignment
             string sql;
             on_error {
-                error("DbTableDataProvider %y DDL: %s: %s: SQL: %s", table.getName(), $1.err, $1.desc, sql);
+                LoggerWrapper::error(sprintf("DbTableDataProvider %y DDL: %s: %s: SQL: %s", table.getName(),
+                    $1.err, $1.desc, sql));
             }
             map ds.execRaw(sql = $1), sqll;
             table.clear();

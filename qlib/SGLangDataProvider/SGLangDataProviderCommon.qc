@@ -168,7 +168,7 @@ public class SGLangDataProviderCommon inherits DataProvider::AbstractDataProvide
         # retry on I/O errors
         if (RetrySet{ex.err}) {
             if (++retries == MaxIoRetries) {
-                error("Maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;
             }
             warn("Technical error making REST call: %s: %s; retrying", ex.err, ex.desc);
@@ -177,7 +177,7 @@ public class SGLangDataProviderCommon inherits DataProvider::AbstractDataProvide
         # retry on rate limit (429)
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
             if (++retries == MaxIoRetries) {
-                error("Maximum retries exceeded (%d)", retries);
+                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;
             }
             *string retry_after = ex.arg.headers."retry-after";

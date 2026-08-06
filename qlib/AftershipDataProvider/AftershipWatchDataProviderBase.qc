@@ -80,7 +80,7 @@ public class AftershipWatchDataProviderBase inherits AftershipDataProviderBase,
 
     #! Logs an error raised during a polling cycle
     private logPollError(hash<ExceptionInfo> ex) {
-        error("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc);
+        LoggerWrapper::error(sprintf("Error polling for %s events: %s: %s", getEventName(), ex.err, ex.desc));
     }
 
     #! Logs an informational message about a polling cycle

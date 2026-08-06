@@ -38,7 +38,7 @@ public class KatanaWatchNewProductsDataProvider inherits KatanaWatchDataProvider
         try {
             return doGetList(getEndpoint(), params);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching new products: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching new products: %s: %s", ex.err, ex.desc));
             return ();
         }
     }

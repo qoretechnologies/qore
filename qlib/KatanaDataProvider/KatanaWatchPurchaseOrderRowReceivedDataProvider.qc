@@ -53,7 +53,7 @@ public class KatanaWatchPurchaseOrderRowReceivedDataProvider
             }
             return received;
         } catch (hash<ExceptionInfo> ex) {
-            error("Error fetching received purchase-order rows: %s: %s", ex.err, ex.desc);
+            LoggerWrapper::error(sprintf("Error fetching received purchase-order rows: %s: %s", ex.err, ex.desc));
             return ();
         }
     }
