@@ -50,7 +50,9 @@ public class GoogleDriveCreateFolderDataProvider inherits GoogleDriveDataProvide
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # a folder is an ordinary file resource distinguished only by its MIME type
-        hash<auto> body = {
+        # NOTE: "hash<auto!>"; an all-string literal narrows to hash<string, string>, and "parents" is a
+        # list, so creating a folder inside another folder raised RUNTIME-TYPE-ERROR
+        hash<auto!> body = {
             "name": req.name,
             "mimeType": FolderMimeType,
         };

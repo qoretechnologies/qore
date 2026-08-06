@@ -35,6 +35,72 @@
 
 %exec-class AwsS3DataProviderTest
 
+#! One event delivered to an observer
+hashdecl RecordedEvent {
+    #! the event ID the source raised
+    string id;
+    #! the event data
+    hash<auto> data;
+}
+
+#! Records every event raised, so that a watch cycle can be asserted against
+class RecordingObserver inherits DataProvider::Observer {
+    public {
+        #! every event raised, oldest first
+        list<hash<RecordedEvent>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += <RecordedEvent>{"id": event_id, "data": data_};
+    }
+}
+
+#! Answers S3 requests from a script of XML documents rather than reaching Amazon
+class FakeAwsRestClient inherits AwsRestClient::AwsRestClient {
+    public {
+        #! response bodies to return, in order; the last one is reused once the list is exhausted
+        list<string> bodies = ("",);
+
+        #! every request path made, oldest first
+        list<string> paths = ();
+
+        #! the number of responses already handed out
+        int served = 0;
+    }
+
+    constructor() : AwsRestClient(AwsS3DataProviderTest::TestConnOptions + {
+        "url": "https://s3.eu-central-1.amazonaws.com",
+        "aws_service": "s3",
+        "aws_s3": True,
+        "data": "bin",
+    }, True) {
+    }
+
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        paths += path;
+        int i = served < bodies.size() ? served : bodies.size() - 1;
+        ++served;
+        return {"body": bodies[i], "hdr": {}};
+    }
+}
+
+/** The watch providers run their cycle on a background thread on a timer, which is neither fast nor
+    deterministic to test through. \c pollOnce() is the cycle itself, and is \c private -- which in %Qore means
+    accessible to a subclass -- so this exposes it and drives one cycle at a time from the test.
+*/
+class TestObjectWatch inherits AwsS3DataProvider::AwsS3WatchObjectsDataProvider {
+    constructor(*hash<auto> options) : AwsS3WatchObjectsDataProvider(options) {}
+    #! Runs one polling cycle
+    poll() { pollOnce(); }
+}
+
+class TestBucketWatch inherits AwsS3DataProvider::AwsS3WatchNewBucketDataProvider {
+    constructor(*hash<auto> options) : AwsS3WatchNewBucketDataProvider(options) {}
+    #! Runs one polling cycle
+    poll() { pollOnce(); }
+}
+
 public class AwsS3DataProviderTest inherits QUnit::Test {
     public {
         #! the application name
@@ -66,6 +132,8 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("reference data", \referenceDataTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("watch cycle", \watchCycleTest());
         addTestCase("live connection", \liveConnectionTest());
 
         set_return_value(main());
@@ -216,27 +284,112 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             ++actions;
             string path = action.path;
             path =~ s/^\///;
-            seen{path} = True;
-            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
-            # reference data returns nothing and doRequest() is never reached, with no error anywhere
-            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+            # the first segment must name a root child; an action path that does not resolve leaves the
+            # action's provider null: reference data returns nothing and doRequest() is never reached, with no
+            # error anywhere
+            string root_child = (path =~ x/^([^\/]+)/)[0];
+            seen{root_child} = True;
+            assertTrue(children{root_child}, sprintf("action %y path %y resolves through the root ChildMap",
                 action.action, action.path));
             assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
             assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
                 action.action));
 
+            # ... and the whole path must resolve, not just its first segment: an event action addresses a
+            # provider nested under the events container
+            *AbstractDataProvider dp = root.getChildProviderPath(path);
+            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
+
+            if (action.action_code == DPAT_EVENT) {
+                # the event name the action advertises must be one the provider actually raises, or a trigger
+                # configured from the catalog waits for an event that never arrives
+                assertTrue(dp.getInfo().supports_observable,
+                    sprintf("event action %y has an observable provider", action.action));
+                assertTrue(exists dp.getEventTypes(){action.action_val},
+                    sprintf("event action %y action_val %y is an event the provider raises", action.action,
+                        action.action_val));
+                continue;
+            }
+
             # an action whose request type has fields must advertise options for them, or it renders with no
             # form fields and cannot be used; an action that genuinely takes no input needs none
-            *AbstractDataProvider dp = root.getChildProvider(path);
-            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
             *AbstractDataProviderType rt = dp.getRequestType();
             int fields = rt ? rt.getFields().size() : 0;
             assertEq(fields > 0, action.options.size() > 0,
                 sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
                     "%d options)", action.action, fields, action.options.size()));
         }
-        assertEq(children.size(), actions, "every child has a registered action and vice versa");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
+    }
+
+    #! The module must offer triggers, not only actions
+    /** The TypeScript application being replaced had triggers for new buckets and new or updated files; a
+        module that is 100% DPAT_API is a functional regression against it however complete its action list is.
+    */
+    eventProviderTest() {
+        AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
+            TestConnOptions);
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+
+        AbstractDataProvider events = root.getChildProviderEx("events");
+        assertEq("events", events.getName());
+        assertTrue(events.getInfo().children_can_support_observers,
+            "the events container advertises observable children");
+        assertEq(("new-bucket", "new-or-updated-file"), events.getChildProviderNames());
+        assertEq(2, events.getChildProviderSummaryInfo().size(), "every event child has summary info");
+
+        # the object watch has to be told which bucket to watch; the bucket watch covers the whole account
+        hash<string, AbstractDataProvider> configured = {
+            "new-bucket": new AwsS3WatchNewBucketDataProvider({"restclient": conn.get(False)}),
+            "new-or-updated-file": new AwsS3WatchObjectsDataProvider({
+                "restclient": conn.get(False),
+                "bucket": "test-bucket",
+            }),
+        };
+
+        foreach string name in (("new-bucket", "new-or-updated-file")) {
+            AbstractDataProvider w = events.getChildProviderEx(name);
+            assertEq(name, w.getName());
+            assertTrue(w.getInfo().supports_observable, sprintf("%y is observable", name));
+            hash<string, hash<DataProviderMessageInfo>> types = w.getEventTypes();
+            assertEq((name,), keys types, sprintf("%y raises the event it is named for", name));
+            assertTrue(types{name}.desc.val(), sprintf("%y describes its event", name));
+            assertTrue(exists types{name}.type, sprintf("%y declares an event type", name));
+
+            # example data must be produced without a working connection: the form that shows a trigger's
+            # output fields is rendered before any credentials are exercised
+            auto ex = configured{name}.getExampleEventData(name);
+            assertEq(NT_HASH, ex.typeCode(), sprintf("%y provides example event data", name));
+            # ... and it must match the declared type, or the field list the user maps against is wrong
+            hash<string, AbstractDataField> fields = types{name}.type.getFields();
+            foreach string f in (keys fields) {
+                assertTrue(exists ex{f}, sprintf("%y example data has the declared field %y", name, f));
+            }
+        }
+
+        # the object watch is scoped by bucket and prefix, so a change to either defines a different feed and
+        # must not resume the previous cursor against a different set of objects
+        AwsS3WatchObjectsDataProvider w1({"restclient": conn.get(False), "bucket": "a", "prefix": "p/"});
+        AwsS3WatchObjectsDataProvider w2({"restclient": conn.get(False), "bucket": "b", "prefix": "p/"});
+        assertNeq(w1.getWatchStreamIdentity(), w2.getWatchStreamIdentity(),
+            "watching a different bucket is a different feed");
+        # ... while the poll interval only changes how often the same feed is checked
+        AwsS3WatchObjectsDataProvider w3({
+            "restclient": conn.get(False),
+            "bucket": "a",
+            "prefix": "p/",
+            "poll_interval": 300,
+        });
+        assertEq(w1.getWatchStreamIdentity(), w3.getWatchStreamIdentity(),
+            "tuning the poll interval does not discard the cursor");
+        assertEq(300, w3.getPollIntervalSeconds());
+        # the minimum interval is enforced, since S3 charges per request
+        AwsS3WatchObjectsDataProvider w4({"restclient": conn.get(False), "bucket": "a", "poll_interval": 1});
+        assertEq(MinPollInterval, w4.getPollIntervalSeconds());
+
+        # a watch with no bucket names the option to set rather than failing obscurely at the API
+        AwsS3WatchObjectsDataProvider w5({"restclient": conn.get(False)});
+        assertThrows("S3-WATCH-ERROR", "bucket", sub () { w5.getExampleEventData("new-or-updated-file"); });
     }
 
     fileApiTest() {
@@ -291,6 +444,100 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
         # an unknown type yields nothing rather than raising
         assertEq(NOTHING, root.getReferenceData("no-such-reference-data"));
+    }
+
+    #! Drives the watch cycle itself, since a cycle that silently delivers nothing looks exactly like quiet
+    /** A watch swallows and logs whatever its cycle raises, so a defect inside it produces no events and no
+        error -- indistinguishable from a bucket in which nothing has changed.  The only way to tell the two
+        apart is to run a cycle and assert on what was delivered.
+    */
+    watchCycleTest() {
+        FakeAwsRestClient rest();
+        RecordingObserver obs();
+        TestObjectWatch w({"restclient": rest, "bucket": "b", "start_date": 2026-01-01Z});
+        w.registerObserver(obs);
+
+        # two objects, one older than the cursor and one newer
+        rest.bodies = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<ListBucketResult><IsTruncated>false</IsTruncated>'
+            '<Contents><Key>old.txt</Key><Size>10</Size>'
+            '<LastModified>2025-06-01T00:00:00.000Z</LastModified>'
+            '<ETag>&quot;aaa&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents>'
+            '<Contents><Key>new.txt</Key><Size>20</Size>'
+            '<LastModified>2026-06-01T00:00:00.000Z</LastModified>'
+            '<ETag>&quot;bbb&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents>'
+            '</ListBucketResult>',
+        );
+
+        w.poll();
+        assertEq(1, obs.events.size(), "only the object modified after the start date is reported");
+        assertEq("new-or-updated-file", obs.events[0].id);
+        assertEq("new.txt", obs.events[0].data.key);
+        assertEq("b", obs.events[0].data.bucket);
+        assertEq(20, obs.events[0].data.size);
+        # the quotes S3 wraps an ETag in must be stripped, or every consumer has to do it
+        assertEq("bbb", obs.events[0].data.etag);
+        assertRegex("list-type=2", rest.paths[0], "the listing uses ListObjectsV2");
+        assertRegex("^/b", rest.paths[0], "the bucket is addressed in the path");
+
+        # the cursor advanced past the object delivered, so polling again reports nothing new
+        w.poll();
+        assertEq(1, obs.events.size(), "an object already delivered is not delivered again");
+
+        # ... but an object modified after it is
+        rest.bodies = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<ListBucketResult><IsTruncated>false</IsTruncated>'
+            '<Contents><Key>newer.txt</Key><Size>30</Size>'
+            '<LastModified>2026-07-01T00:00:00.000Z</LastModified>'
+            '<ETag>&quot;ccc&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents>'
+            '</ListBucketResult>',
+        );
+        rest.served = 0;
+        w.poll();
+        assertEq(2, obs.events.size(), "an object modified after the cursor is reported");
+        assertEq("newer.txt", obs.events[1].data.key);
+
+        # the prefix is applied by S3 rather than after the listing arrives, so it must reach the request
+        FakeAwsRestClient rest2();
+        rest2.bodies = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>',);
+        TestObjectWatch wp({"restclient": rest2, "bucket": "b", "prefix": "incoming/"});
+        wp.poll();
+        assertRegex("prefix=incoming", rest2.paths[0], "the prefix is sent to S3");
+
+        # a bucket watch reports each bucket created after the start date
+        FakeAwsRestClient rest3();
+        rest3.bodies = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<ListAllMyBucketsResult><Owner><ID>oid</ID><DisplayName>me</DisplayName></Owner><Buckets>'
+            '<Bucket><Name>old-bucket</Name><CreationDate>2025-01-01T00:00:00.000Z</CreationDate></Bucket>'
+            '<Bucket><Name>new-bucket</Name><CreationDate>2026-06-01T00:00:00.000Z</CreationDate></Bucket>'
+            '</Buckets></ListAllMyBucketsResult>',);
+        RecordingObserver bobs();
+        TestBucketWatch bw({"restclient": rest3, "start_date": 2026-01-01Z});
+        bw.registerObserver(bobs);
+        bw.poll();
+        assertEq(1, bobs.events.size(), "only the bucket created after the start date is reported");
+        assertEq("new-bucket", bobs.events[0].id);
+        assertEq("new-bucket", bobs.events[0].data.name);
+        assertEq("oid", bobs.events[0].data.owner_id);
+        assertEq("/", rest3.paths[0], "the bucket listing addresses the service root");
+
+        # a single-element XML document must not be special-cased by callers: the parser returns one repeated
+        # element as a hash and several as a list, which is exactly the shape a test with one object produces
+        # and a production bucket does not
+        FakeAwsRestClient rest4();
+        rest4.bodies = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<ListBucketResult><IsTruncated>false</IsTruncated>'
+            '<Contents><Key>only.txt</Key><Size>1</Size>'
+            '<LastModified>2026-06-01T00:00:00.000Z</LastModified></Contents></ListBucketResult>',);
+        RecordingObserver sobs();
+        TestObjectWatch ws({"restclient": rest4, "bucket": "b", "start_date": 2026-01-01Z});
+        ws.registerObserver(sobs);
+        ws.poll();
+        assertEq(1, sobs.events.size(), "a listing holding one object is handled like any other");
+        assertEq("only.txt", sobs.events[0].data.key);
     }
 
     private usageIntern() {

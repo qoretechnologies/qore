@@ -457,6 +457,73 @@ module DropboxDataProvider {
             "groups": ("Account",),
             "output_type": DropboxSpaceUsageDataType,
         });
+
+        # --- Event actions ---
+
+        # NOTE: all three read Dropbox's delta feed rather than re-listing the folder, so the cost of a poll
+        # follows what has changed rather than how much the folder holds
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FILE,
+            "action": EVENT_NEW_FILE,
+            "display_name": "New File",
+            "short_desc": "React to a file being created in a folder",
+            "desc": "Fires when a file is created in the folder being watched.\n\n"
+                "Uses Dropbox's delta feed, so the cost of a poll follows what has changed rather than how "
+                "much the folder holds.\n\n"
+                "A file that was already there and has since been edited is reported by `file-modified` "
+                "instead.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FILE,
+            "groups": ("Events",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxWatchNewFileDataProvider::WatchOptions
+                    - (keys DropboxDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FOLDER,
+            "action": EVENT_NEW_FOLDER,
+            "display_name": "New Folder",
+            "short_desc": "React to a folder being created",
+            "desc": "Fires when a folder is created in the folder being watched.\n\n"
+                "A folder that was already there and has since been renamed or moved is **not** reported.  "
+                "Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FOLDER,
+            "groups": ("Events",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxWatchNewFolderDataProvider::WatchOptions
+                    - (keys DropboxDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/events/" + EVENT_FILE_MODIFIED,
+            "action": EVENT_FILE_MODIFIED,
+            "display_name": "File Modified",
+            "short_desc": "React to a change to an existing file",
+            "desc": "Fires when a file that was already in the folder being watched is changed.\n\n"
+                "A file appearing for the first time is reported by `new-file` instead.  A file moved into "
+                "the watched folder keeps its Dropbox identity, so it arrives here rather than as a new "
+                "file.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_FILE_MODIFIED,
+            "groups": ("Events",),
+            "output_type": DropboxFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxWatchFileModifiedDataProvider::WatchOptions
+                    - (keys DropboxDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
     };
 }
 

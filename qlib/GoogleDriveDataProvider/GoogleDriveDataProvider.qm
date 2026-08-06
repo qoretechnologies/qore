@@ -356,6 +356,57 @@ module GoogleDriveDataProvider {
                 GoogleDriveShareFileRequestDataType::Fields - ("file_id", "role", "type")
             ),
         });
+
+        # --- Event actions ---
+
+        # NOTE: both watches read Drive's own change feed rather than polling a listing, so the cost does not
+        # grow with the size of the drive, and a change to a file in a folder the watch was never told about
+        # is still seen
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FILE,
+            "action": EVENT_NEW_FILE,
+            "display_name": "New File",
+            "short_desc": "React to a file being created in Drive",
+            "desc": "Fires when a file is created in the drive being watched.\n\n"
+                "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "
+                "drive.\n\n"
+                "A file that already existed and has merely been edited is **not** reported, and neither is a "
+                "folder; use `new-folder` for those.  Set `folder_id` to report only files created directly "
+                "in one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FILE,
+            "groups": ("Events",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveWatchNewFileDataProvider::WatchOptions
+                    - (keys GoogleDriveDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_FOLDER,
+            "action": EVENT_NEW_FOLDER,
+            "display_name": "New Folder",
+            "short_desc": "React to a folder being created in Drive",
+            "desc": "Fires when a folder is created in the drive being watched.\n\n"
+                "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "
+                "drive.\n\n"
+                "A folder that already existed and has merely been renamed or moved is **not** reported.  Set "
+                "`folder_id` to report only folders created directly inside one folder, or `drive_id` to "
+                "watch a shared drive instead of `My Drive`.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_FOLDER,
+            "groups": ("Events",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveWatchNewFolderDataProvider::WatchOptions
+                    - (keys GoogleDriveDataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
     };
 }
 

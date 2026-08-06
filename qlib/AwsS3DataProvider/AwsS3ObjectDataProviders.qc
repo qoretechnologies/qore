@@ -58,7 +58,11 @@ public class AwsS3ListObjectsDataProvider inherits AwsS3DataProviderBase {
         if (max_keys > MaxKeys) {
             max_keys = MaxKeys;
         }
-        hash<auto> query = {
+        # NOTE: "hash<auto!>", not "hash<auto>": a literal whose values are all integers narrows to
+        # hash<string, int> at runtime, and every option added below is a string -- so setting any of them
+        # raised RUNTIME-TYPE-ERROR and no listing with a prefix, delimiter, start_after, or continuation
+        # token could succeed
+        hash<auto!> query = {
             "list-type": 2,
             "max-keys": max_keys,
         };

@@ -52,6 +52,15 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         #! Width of the option column in the usage text
         const OptionColumn = 22;
 
+        #! How many times the live change-feed test looks for its change before giving up
+        /** Drive's change feed is eventually consistent, so a change is not guaranteed to be visible the
+            instant the write that caused it returns
+        */
+        const LiveChangeFeedAttempts = 10;
+
+        #! How long the live change-feed test waits between attempts
+        const LiveChangeFeedInterval = 2s;
+
         #! connection options sufficient to construct a connection without contacting Google
         const TestConnOptions = {
             "oauth2_client_id": "test-id",
@@ -67,9 +76,13 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("shared drive support", \sharedDriveTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("change classification", \changeClassificationTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live shared drives", \liveSharedDriveTest());
+        addTestCase("live change feed", \liveChangeFeedTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
+        addTestCase("live folder operations", \liveFolderOperationsTest());
 
         set_return_value(main());
     }
@@ -119,26 +132,41 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             ++actions;
             string path = action.path;
             path =~ s/^\///;
-            seen{path} = True;
-            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
-            # reference data returns nothing and doRequest() is never reached, with no error anywhere
-            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+            # the first segment must name a root child; an action path that does not resolve leaves the
+            # action's provider null: reference data returns nothing and doRequest() is never reached, with no
+            # error anywhere
+            string root_child = (path =~ x/^([^\/]+)/)[0];
+            seen{root_child} = True;
+            assertTrue(children{root_child}, sprintf("action %y path %y resolves through the root ChildMap",
                 action.action, action.path));
             assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
             assertTrue(action.short_desc.length() < 80, sprintf("action %y short_desc is under 80 chars",
                 action.action));
 
+            # ... and the whole path must resolve, not just its first segment: an event action addresses a
+            # provider nested under the events container
+            *AbstractDataProvider dp = root.getChildProviderPath(path);
+            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
+
+            if (action.action_code == DPAT_EVENT) {
+                # the event name the action advertises must be one the provider actually raises, or a trigger
+                # configured from the catalog waits for an event that never arrives
+                assertTrue(dp.getInfo().supports_observable,
+                    sprintf("event action %y has an observable provider", action.action));
+                assertTrue(exists dp.getEventTypes(){action.action_val},
+                    sprintf("event action %y action_val %y is an event the provider raises", action.action,
+                        action.action_val));
+                continue;
+            }
+
             # an action whose request type has fields must advertise options for them, or it renders with no
             # form fields and cannot be used
-            *AbstractDataProvider dp = root.getChildProvider(path);
-            assertTrue(exists dp, sprintf("action %y has a child provider", action.action));
             *AbstractDataProviderType rt = dp.getRequestType();
             int fields = rt ? rt.getFields().size() : 0;
             assertEq(fields > 0, action.options.size() > 0,
                 sprintf("action %y advertises options if and only if its request type has fields (%d fields, "
                     "%d options)", action.action, fields, action.options.size()));
         }
-        assertEq(children.size(), actions, "every child has a registered action and vice versa");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
 
         # download-file and export-file close the gap that made Drive unusable as a file location: the
@@ -229,6 +257,139 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         assertEq("files", rename.options.file_id.ref_data);
     }
 
+    #! The module must offer triggers, not only actions
+    /** The TypeScript application being replaced had triggers for new files and new folders; a module that is
+        100% DPAT_API is a functional regression against it however complete its action list is.
+    */
+    eventProviderTest() {
+        GoogleRestClientIo client(TestConnOptions + {"api_profile": "drive"});
+        on_exit client.close();
+        GoogleDriveDataProvider::GoogleDriveDataProvider root(client);
+
+        AbstractDataProvider events = root.getChildProviderEx("events");
+        assertEq("events", events.getName());
+        assertTrue(events.getInfo().children_can_support_observers,
+            "the events container advertises observable children");
+        assertEq(("new-file", "new-folder"), events.getChildProviderNames());
+        assertEq(2, events.getChildProviderSummaryInfo().size(), "every event child has summary info");
+
+        foreach string name in (("new-file", "new-folder")) {
+            AbstractDataProvider w = events.getChildProviderEx(name);
+            assertEq(name, w.getName());
+            assertTrue(w.getInfo().supports_observable, sprintf("%y is observable", name));
+            hash<string, hash<DataProviderMessageInfo>> types = w.getEventTypes();
+            assertEq((name,), keys types, sprintf("%y raises the event it is named for", name));
+            assertTrue(types{name}.desc.val(), sprintf("%y describes its event", name));
+
+            # example data must be produced without a working connection: the form that shows a trigger's
+            # output fields is rendered before any credentials are exercised
+            auto ex = w.getExampleEventData(name);
+            assertEq(NT_HASH, ex.typeCode(), sprintf("%y provides example event data", name));
+            # ... and it must match the declared type, or the field list the user maps against is wrong
+            foreach string f in (keys types{name}.type.getFields()) {
+                assertTrue(ex.hasKey(f), sprintf("%y example data has the declared field %y", name, f));
+            }
+            # the two watches must not produce the same example, or the folder trigger shows a file
+            assertEq(name == "new-folder", ex.is_folder,
+                sprintf("%y example data is %sa folder", name, name == "new-folder" ? "" : "not "));
+        }
+
+        # a shared drive keeps its own change feed, so the drive selects the feed and a change to it must
+        # start a new cursor rather than resume against a different drive
+        GoogleDriveWatchNewFileDataProvider w1(client, {});
+        GoogleDriveWatchNewFileDataProvider w2(client, {"drive_id": "d1"});
+        assertNeq(w1.getWatchStreamIdentity(), w2.getWatchStreamIdentity(),
+            "watching a shared drive is a different feed");
+        # ... and so must a folder filter, since a cursor established under one has already passed over what
+        # the other would have wanted
+        GoogleDriveWatchNewFileDataProvider w3(client, {"folder_id": "f1"});
+        assertNeq(w1.getWatchStreamIdentity(), w3.getWatchStreamIdentity(),
+            "filtering to a folder is a different feed");
+        # ... while the poll interval only changes how often the same feed is read
+        GoogleDriveWatchNewFileDataProvider w4(client, {"poll_interval": 300});
+        assertEq(w1.getWatchStreamIdentity(), w4.getWatchStreamIdentity(),
+            "tuning the poll interval does not discard the cursor");
+        assertEq(300, w4.getPollIntervalSeconds());
+        assertEq(MinPollInterval, (new GoogleDriveWatchNewFileDataProvider(client,
+            {"poll_interval": 1})).getPollIntervalSeconds());
+
+        # the file and folder watches read the same feed, so their cursors must not be shared
+        GoogleDriveWatchNewFolderDataProvider wf(client, {});
+        assertNeq(w1.getWatchStreamIdentity(), wf.getWatchStreamIdentity(),
+            "the file and folder watches keep separate cursors");
+    }
+
+    #! Telling a creation from a modification is the whole difficulty of a "new file" trigger on a change feed
+    /** Drive's `changes.list` reports creations and modifications alike, and a change entry carries nothing
+        that says which it is.  Against the live feed an ordinary working day produces changes to files
+        created years earlier, so without this rule `new-file` would fire on every edit in the drive.
+    */
+    changeClassificationTest() {
+        date cursor = 2026-06-01T00:00:00Z;
+
+        hash<auto> new_file = {
+            "fileId": "f1",
+            "removed": False,
+            "file": {
+                "id": "f1",
+                "name": "new.txt",
+                "mimeType": "text/plain",
+                "createdTime": "2026-06-02T10:00:00Z",
+                "parents": ("folder1",),
+                "trashed": False,
+            },
+        };
+        # a file created after the cursor was established is new
+        *hash<auto> m = GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor);
+        assertTrue(exists m, "a file created after the cursor is reported");
+        assertEq("new.txt", m.name);
+        assertEq(False, m.is_folder);
+
+        # ... but the same change seen by the folder watch is not a folder
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(new_file, True, cursor),
+            "a file is not reported as a new folder");
+
+        # a file created before the cursor and merely edited since is a modification, not a creation; this is
+        # the case that dominates a real change feed
+        hash<auto> edited = new_file;
+        edited.file.createdTime = "2024-02-07T14:54:18Z";
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(edited, False, cursor),
+            "an edit to a pre-existing file is not reported as a new file");
+
+        # a removal carries no file resource at all
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange({
+            "fileId": "f1",
+            "removed": True,
+        }, False, cursor), "a removal is not reported");
+
+        # a trashed file is a deletion as far as a user is concerned
+        hash<auto> trashed = new_file;
+        trashed.file.trashed = True;
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(trashed, False, cursor),
+            "a trashed file is not reported as new");
+
+        # a new folder is reported by the folder watch and not by the file watch
+        hash<auto> new_folder = new_file;
+        new_folder.file.mimeType = FolderMimeType;
+        new_folder.file.name = "New Folder";
+        m = GoogleDriveWatchDataProviderBase::matchChange(new_folder, True, cursor);
+        assertTrue(exists m, "a folder created after the cursor is reported by the folder watch");
+        assertEq(True, m.is_folder);
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange(new_folder, False, cursor),
+            "a folder is not reported as a new file");
+
+        # the folder filter is applied here, since Drive cannot narrow the change feed at the server
+        assertTrue(exists GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor, "folder1"),
+            "an item in the watched folder is reported");
+        assertEq(NOTHING,
+            GoogleDriveWatchDataProviderBase::matchChange(new_file, False, cursor, "other-folder"),
+            "an item outside the watched folder is not reported");
+
+        # before the cursor is established nothing is filtered out by age, since there is no age to compare to
+        assertTrue(exists GoogleDriveWatchDataProviderBase::matchChange(edited, False),
+            "with no cursor yet, age does not exclude an item");
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
@@ -316,6 +477,90 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
     /** This writes to the account under test; exclude it with \c --exclude="live file lifecycle" when that is
         not wanted.  The file is created in the trash-recoverable state and removed outright on exit.
     */
+    #! Proves the change feed end to end: a file created now is seen, and classified as new
+    /** The offline test covers the classification rule against constructed entries; this covers the part that
+        only the live service can answer -- that a file created through this module actually turns up in
+        `changes.list` after the token taken just before it, carrying the `createdTime` the rule depends on.
+
+        This writes to the account under test; exclude it with `--exclude="live change feed"`.
+
+        @note The retry is not a poll for convenience: Drive's change feed is eventually consistent, so a
+        change is not guaranteed to be visible the instant the write returns.  There is no deterministic
+        signal to wait on, so the budget is bounded and exceeding it fails the test rather than passing it
+        quietly.
+    */
+    liveChangeFeedTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider call = prov.getChildProviderEx("__call__");
+
+        # take the cursor first, so the file created below is unambiguously after it
+        date cursor = now_us();
+        hash<auto> start = call.doRequest({
+            "method": "GET",
+            "path": "/drive/v3/changes/startPageToken?supportsAllDrives=true",
+        });
+        string token = start.body.startPageToken;
+        assertTrue(token.val(), "the change feed supplied a start page token");
+
+        string name = sprintf("qore-watch-test-%d.txt", now_us().durationMicroseconds());
+        hash<auto> created = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": name,
+            "content": "created by the Qore GoogleDriveDataProvider watch test",
+        });
+        assertEq(name, created.name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": created.id,
+                "permanently_delete": True,
+            });
+        }
+
+        string fields = "nextPageToken,newStartPageToken,changes(fileId,removed,time,changeType,file("
+            + GoogleDriveDataProviderBase::getFileFields() + "))";
+        *hash<auto> found;
+        int attempts;
+        while (!found && ++attempts <= LiveChangeFeedAttempts) {
+            string page = token;
+            while (True) {
+                hash<auto> resp = call.doRequest({
+                    "method": "GET",
+                    "path": sprintf("/drive/v3/changes?pageToken=%s&pageSize=100&includeRemoved=true"
+                        "&includeItemsFromAllDrives=true&supportsAllDrives=true&fields=%s",
+                        encode_url(page, True), encode_url(fields, True)),
+                });
+                foreach hash<auto> change in (resp.body.changes) {
+                    if (change.fileId != created.id) {
+                        continue;
+                    }
+                    # the classification rule must call this new: it was created after the cursor
+                    found = GoogleDriveWatchDataProviderBase::matchChange(change, False, cursor);
+                }
+                if (!resp.body.nextPageToken.val()) {
+                    break;
+                }
+                page = resp.body.nextPageToken;
+            }
+            if (!found && attempts < LiveChangeFeedAttempts) {
+                usleep(LiveChangeFeedInterval);
+            }
+        }
+
+        assertTrue(exists found, sprintf("the newly created file appeared in the change feed and was "
+            "classified as new (after %d attempt%s)", attempts, attempts == 1 ? "" : "s"));
+        assertEq(name, found.name, "the change carries the file created");
+        assertEq(False, found.is_folder, "the change is classified as a file rather than a folder");
+        # the folder watch must not claim the same change
+        assertEq(NOTHING, GoogleDriveWatchDataProviderBase::matchChange({
+            "fileId": created.id,
+            "removed": False,
+            "file": {"id": created.id, "name": name, "mimeType": "text/plain", "trashed": False},
+        }, True, cursor), "the folder watch does not claim a new file");
+    }
+
     liveFileLifecycleTest() {
         *AbstractConnection conn = getConnection();
         if (!conn) {
@@ -356,5 +601,70 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"file_id": created.id});
         assertEq(content, parse_base64_string(downloaded.content).toString(),
             "the content read back matches the content written");
+    }
+
+    #! Exercises the folder-scoped operations, which a type-narrowing defect had made unusable
+    /** Regression: `create-folder`, `upload-file`, and `create-text-file` each built their request body as a
+        `hash<auto>` literal whose values were all strings, which narrows to `hash<string, string>` at
+        runtime -- so assigning the `parents` list raised `RUNTIME-TYPE-ERROR` and **every one of these
+        operations failed whenever a folder was named**.  Only the no-folder path had been exercised.
+
+        This writes to the account under test; exclude it with `--exclude="live folder operations"`.
+    */
+    liveFolderOperationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+
+        hash<auto> parent = prov.getChildProviderEx("create-folder").doRequest({
+            "name": "qore-test-parent-" + stamp,
+        });
+        assertTrue(parent.id.val(), "the parent folder was created");
+        on_exit {
+            # removing the parent removes everything created inside it
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": parent.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # a folder created inside another folder: the "parents" list is what used to fail
+        hash<auto> child = prov.getChildProviderEx("create-folder").doRequest({
+            "name": "qore-test-child-" + stamp,
+            "parent_folder_id": parent.id,
+        });
+        assertEq(True, child.is_folder, "the child is a folder");
+        assertTrue(inlist(parent.id, child.parents), "the child folder is held by the parent");
+
+        # a text file created inside a folder
+        hash<auto> text = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": "in-folder-" + stamp + ".txt",
+            "content": "written into a folder by the Qore test suite",
+            "folder_id": parent.id,
+        });
+        assertTrue(inlist(parent.id, text.parents), "the text file is held by the folder it named");
+
+        # an uploaded file inside a folder, with a description as well
+        hash<auto> uploaded = prov.getChildProviderEx("upload-file").doRequest({
+            "file": {
+                "name": "uploaded-" + stamp + ".txt",
+                "content": make_base64_string(binary("uploaded into a folder by the Qore test suite")),
+                "mime_type": "text/plain",
+            },
+            "folder_id": parent.id,
+            "description": "uploaded by the Qore test suite",
+        });
+        assertTrue(inlist(parent.id, uploaded.parents), "the uploaded file is held by the folder it named");
+        assertEq("uploaded by the Qore test suite", uploaded.description);
+
+        # ... and the folder really holds what was put in it
+        hash<auto> listing = prov.getChildProviderEx("list-files").doRequest({"folder_id": parent.id});
+        hash<string, bool> names = map {$1.name: True}, listing.files;
+        assertTrue(names{"qore-test-child-" + stamp}, "the listing shows the child folder");
+        assertTrue(names{"in-folder-" + stamp + ".txt"}, "the listing shows the text file");
+        assertTrue(names{"uploaded-" + stamp + ".txt"}, "the listing shows the uploaded file");
     }
 }

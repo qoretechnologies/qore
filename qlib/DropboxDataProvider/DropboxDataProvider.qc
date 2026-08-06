@@ -36,6 +36,7 @@ public class DropboxDataProvider inherits DropboxDataProviderBase {
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
+            "children_can_support_observers": True,
         };
 
         #! Provider summary info
@@ -64,6 +65,7 @@ public class DropboxDataProvider inherits DropboxDataProviderBase {
             "revoke-shared-link": Class::forName("DropboxDataProvider::DropboxRevokeSharedLinkDataProvider"),
             "get-account-info": Class::forName("DropboxDataProvider::DropboxGetAccountInfoDataProvider"),
             "get-space-usage": Class::forName("DropboxDataProvider::DropboxGetSpaceUsageDataProvider"),
+            "events": Class::forName("DropboxDataProvider::DropboxEventsDataProvider"),
         };
     }
 

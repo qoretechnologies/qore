@@ -498,4 +498,100 @@ public class AwsS3DownloadFileRequestDataType inherits HashDataType {
 }
 
 public const AwsS3DownloadFileRequestDataType = new AwsS3DownloadFileRequestDataType();
+
+#! Event type raised when a bucket is created
+public class AwsS3NewBucketEventDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "id": {
+                "display_name": "Event ID",
+                "short_desc": "The identity of the bucket in the event feed",
+                "desc": "The identity of the bucket in the event feed, which is its name",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "name": {
+                "display_name": "Bucket Name",
+                "short_desc": "The name of the bucket created",
+                "desc": "The name of the bucket that was created",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "creation_date": {
+                "display_name": "Creation Date",
+                "short_desc": "When the bucket was created",
+                "desc": "When the bucket was created",
+                "type": AbstractDataProviderTypeMap."date",
+            },
+            "owner_id": {
+                "display_name": "Owner ID",
+                "short_desc": "The canonical ID of the account owning the bucket",
+                "desc": "The canonical identifier of the account that owns the bucket",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "owner_name": {
+                "display_name": "Owner Name",
+                "short_desc": "The display name of the account owning the bucket",
+                "desc": "The display name of the account that owns the bucket",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3NewBucketEventDataType = new AwsS3NewBucketEventDataType();
+
+#! Event type raised when an object is created or updated
+public class AwsS3ObjectEventDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "id": {
+                "display_name": "Event ID",
+                "short_desc": "The identity of the object in the event feed",
+                "desc": "The identity of the object in the event feed, which is its key",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "bucket": {
+                "display_name": "Bucket",
+                "short_desc": "The bucket holding the object",
+                "desc": "The bucket holding the object",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "key": {
+                "display_name": "Object Key",
+                "short_desc": "The key of the object created or updated",
+                "desc": "The key of the object that was created or updated",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "The object size in bytes",
+                "desc": "The size of the object in bytes",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "last_modified": {
+                "display_name": "Last Modified",
+                "short_desc": "When the object was last modified",
+                "desc": "When the object was last modified",
+                "type": AbstractDataProviderTypeMap."date",
+            },
+            "etag": {
+                "display_name": "ETag",
+                "short_desc": "The entity tag of the object content",
+                "desc": "The entity tag of the object content, without the quotes Amazon S3 wraps it in.\n\n"
+                    "For an object uploaded in one request this is the MD5 of the content; for one uploaded as "
+                    "a multipart upload it is not, and carries a `-<parts>` suffix instead",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "storage_class": {
+                "display_name": "Storage Class",
+                "short_desc": "The storage class of the object",
+                "desc": "The storage class the object is stored under",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3ObjectEventDataType = new AwsS3ObjectEventDataType();
 }

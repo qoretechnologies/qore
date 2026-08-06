@@ -36,6 +36,7 @@ public class GoogleDriveDataProvider inherits GoogleDriveDataProviderBase {
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
+            "children_can_support_observers": True,
         };
 
         #! Provider summary info
@@ -58,6 +59,7 @@ public class GoogleDriveDataProvider inherits GoogleDriveDataProviderBase {
             "rename-file": Class::forName("GoogleDriveDataProvider::GoogleDriveRenameFileDataProvider"),
             "delete-file": Class::forName("GoogleDriveDataProvider::GoogleDriveDeleteFileDataProvider"),
             "share-file": Class::forName("GoogleDriveDataProvider::GoogleDriveShareFileDataProvider"),
+            "events": Class::forName("GoogleDriveDataProvider::GoogleDriveEventsDataProvider"),
         };
     }
 

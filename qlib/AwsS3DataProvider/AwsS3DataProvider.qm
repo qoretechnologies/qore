@@ -285,6 +285,64 @@ module AwsS3DataProvider {
                 AwsS3CopyObjectRequestDataType::Fields - ("source_bucket", "source_key", "bucket", "object_key")
             ),
         });
+
+        # --- Event actions ---
+
+        # NOTE: Amazon S3 has no push notification a client can subscribe to -- bucket notifications are
+        # configured on the bucket itself and deliver to SNS, SQS, or Lambda -- so both of these are polls
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_BUCKET,
+            "action": EVENT_NEW_BUCKET,
+            "display_name": "New Bucket",
+            "short_desc": "React to a bucket being created in the account",
+            "desc": "Fires when a bucket is created in the account.\n\n"
+                "Amazon S3 offers no change feed, so this checks the account's bucket list at each poll "
+                "interval; a bucket created and removed between two polls is not reported.\n\n"
+                "One request covers the whole account, so this costs the same whatever the account holds.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_BUCKET,
+            "groups": ("Events",),
+            "output_type": AwsS3NewBucketEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchNewBucketDataProvider::WatchOptions
+                    - (keys AwsS3DataProviderBase::ConstructorOptions),
+                {"loc": "constructor"},
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_OR_UPDATED_FILE,
+            "action": EVENT_NEW_OR_UPDATED_FILE,
+            "display_name": "New or Updated File",
+            "short_desc": "React to an object being created or updated in a bucket",
+            "desc": "Fires when an object is created or updated in the bucket being watched.\n\n"
+                "Amazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and "
+                "compares their modification times.  Two consequences are worth knowing before pointing this "
+                "at a production bucket:\n"
+                "- **Set `prefix`** whenever the objects of interest share one.  It is applied by S3 rather "
+                "than after the listing arrives, so it reduces what each poll transfers and costs.\n"
+                "- **A poll examines at most `max_scan_keys` keys**, and logs a warning when it reaches that "
+                "bound rather than stopping silently.\n\n"
+                "**Deletions are not reported**: a listing shows what is present, so an object that has gone "
+                "leaves nothing to report.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_OR_UPDATED_FILE,
+            "groups": ("Events",),
+            "output_type": AwsS3ObjectEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchObjectsDataProvider::WatchOptions{"bucket",}, {
+                    "loc": "constructor",
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3WatchObjectsDataProvider::WatchOptions
+                    - (keys AwsS3DataProviderBase::ConstructorOptions) - "bucket",
+                {"loc": "constructor"},
+            ),
+        });
     };
 }
 

@@ -39,6 +39,18 @@ public const FolderMimeType = "application/vnd.google-apps.folder";
 #! The MIME type identifying a Drive shortcut
 public const ShortcutMimeType = "application/vnd.google-apps.shortcut";
 
+#! Event name for new files
+public const EVENT_NEW_FILE = "new-file";
+
+#! Event name for new folders
+public const EVENT_NEW_FOLDER = "new-folder";
+
+#! Default polling interval in seconds for watch providers
+public const DefaultPollInterval = 60;
+
+#! Minimum polling interval in seconds for watch providers
+public const MinPollInterval = 30;
+
 #! Default page size for listings
 public const DefaultPageSize = 100;
 

@@ -86,8 +86,14 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object from constructor options
-    constructor(*hash<auto> options) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+    /** @param options the constructor options
+        @param con_opts the option set to validate \a options against; a watch provider passes its own larger
+        set, since @ref checkOptions() rejects any option the given set does not declare and a watch provider
+        takes options (the poll interval, the folder to watch) that an action provider does not
+    */
+    constructor(*hash<auto> options,
+            hash<string, hash<DataProviderOptionInfo>> con_opts = ConstructorOptions) {
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", con_opts, options);
         if (copts.restclient) {
             rest = copts.restclient;
         } else {

@@ -56,6 +56,7 @@ public class AwsS3DataProvider inherits AwsS3DataProviderBase {
             "create-text-file": Class::forName("AwsS3DataProvider::AwsS3CreateTextFileDataProvider"),
             "delete-object": Class::forName("AwsS3DataProvider::AwsS3DeleteObjectDataProvider"),
             "copy-object": Class::forName("AwsS3DataProvider::AwsS3CopyObjectDataProvider"),
+            "events": Class::forName("AwsS3DataProvider::AwsS3EventsDataProvider"),
         };
     }
 

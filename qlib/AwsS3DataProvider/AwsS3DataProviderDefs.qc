@@ -51,7 +51,7 @@ public const MultipartThreshold = 8 * 1024 * 1024;
 public const MultipartPartSize = 8 * 1024 * 1024;
 
 #! Event name for new or updated objects
-public const EVENT_OBJECT_CHANGE = "object-change";
+public const EVENT_NEW_OR_UPDATED_FILE = "new-or-updated-file";
 
 #! Event name for new buckets
 public const EVENT_NEW_BUCKET = "new-bucket";
@@ -61,6 +61,14 @@ public const DefaultPollInterval = 60;
 
 #! Minimum polling interval in seconds for watch providers
 public const MinPollInterval = 30;
+
+#! Default maximum number of keys a single object-watch poll scans
+/** Amazon S3 has no server-side "modified since" filter on a listing, so an object watch has to list keys and
+    compare their timestamps itself.  A bucket holding millions of keys would therefore make every poll scan the
+    whole bucket, so a scan is bounded; reaching the bound is logged as a warning naming the options that
+    narrow it, never silently.
+*/
+public const DefaultMaxScanKeys = 10000;
 
 #! Storage classes accepted by Amazon S3
 public const StorageClassValues = (

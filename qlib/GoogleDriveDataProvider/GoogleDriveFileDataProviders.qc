@@ -310,7 +310,9 @@ public class GoogleDriveUploadFileDataProvider inherits GoogleDriveDataProviderB
                 "cannot be determined";
         }
 
-        hash<auto> metadata = {"name": name};
+        # NOTE: "hash<auto!>", not "hash<auto>": a single-string literal narrows to hash<string, string> at
+        # runtime, and "parents" is a list -- so uploading into a named folder raised RUNTIME-TYPE-ERROR
+        hash<auto!> metadata = {"name": name};
         if (req.folder_id.val()) {
             metadata.parents = (req.folder_id,);
         }
@@ -350,7 +352,9 @@ public class GoogleDriveCreateTextFileDataProvider inherits GoogleDriveDataProvi
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> metadata = {"name": req.name};
+        # NOTE: "hash<auto!>"; a single-string literal narrows to hash<string, string>, and "parents" is a
+        # list, so creating a file inside a named folder raised RUNTIME-TYPE-ERROR
+        hash<auto!> metadata = {"name": req.name};
         if (req.folder_id.val()) {
             metadata.parents = (req.folder_id,);
         }

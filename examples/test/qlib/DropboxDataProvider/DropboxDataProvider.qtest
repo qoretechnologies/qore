@@ -60,6 +60,55 @@ hashdecl DropboxRequestInfo {
     here; \c getContentClient() is overridden rather than letting \c copyWithUrl() run, which would build a real
     client bound to \c content.dropboxapi.com
 */
+#! One event delivered to an observer
+hashdecl RecordedEvent {
+    #! the event ID the source raised
+    string id;
+    #! the event data
+    hash<auto> data;
+}
+
+#! Records every event raised, so that a watch cycle can be asserted against
+class RecordingObserver inherits DataProvider::Observer {
+    public {
+        #! every event raised, oldest first
+        list<hash<RecordedEvent>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += <RecordedEvent>{"id": event_id, "data": data_};
+    }
+}
+
+/** The watch providers run their cycle on a background thread on a timer, which is neither fast nor
+    deterministic to test through. \c pollOnce() is the cycle itself, and is \c private -- which in %Qore means
+    accessible to a subclass -- so these expose it and drive one cycle at a time from the test. Nothing
+    test-only is added to the module itself.
+*/
+class TestNewFileWatch inherits DropboxDataProvider::DropboxWatchNewFileDataProvider {
+    constructor(DropboxRestClient::DropboxRestClientIo rest, *hash<auto> options)
+            : DropboxWatchNewFileDataProvider(rest, options) {
+    }
+    #! Runs one polling cycle
+    poll() { pollOnce(); }
+}
+
+class TestNewFolderWatch inherits DropboxDataProvider::DropboxWatchNewFolderDataProvider {
+    constructor(DropboxRestClient::DropboxRestClientIo rest, *hash<auto> options)
+            : DropboxWatchNewFolderDataProvider(rest, options) {
+    }
+    #! Runs one polling cycle
+    poll() { pollOnce(); }
+}
+
+class TestFileModifiedWatch inherits DropboxDataProvider::DropboxWatchFileModifiedDataProvider {
+    constructor(DropboxRestClient::DropboxRestClientIo rest, *hash<auto> options)
+            : DropboxWatchFileModifiedDataProvider(rest, options) {
+    }
+    #! Runs one polling cycle
+    poll() { pollOnce(); }
+}
+
 class FakeDropboxRestClientIo inherits DropboxRestClient::DropboxRestClientIo {
     public {
         #! every request made, oldest first
@@ -158,6 +207,15 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         #! Width of the option column in the usage text
         const OptionColumn = 22;
 
+        #! How many cycles the live watch test runs before giving up on a change
+        /** Dropbox's delta feed is not guaranteed to show a change the instant the write that caused it
+            returns
+        */
+        const LiveWatchAttempts = 10;
+
+        #! How long the live watch test waits between cycles
+        const LiveWatchInterval = 2s;
+
         #! client options sufficient to construct a client without contacting Dropbox
         /** The \c authorization_code grant requires a redirect URL, and a client with no token tries to acquire
             one on first use - which that grant cannot do without a browser.  Both are supplied here, as an
@@ -199,9 +257,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         addTestCase("native file location handler", \nativeHandlerTest());
         addTestCase("native streaming upload", \nativeStreamUploadTest());
         addTestCase("account actions", \accountActionsTest());
+        addTestCase("event providers", \eventProviderTest());
+        addTestCase("watch delta feed", \watchDeltaTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live list folder", \liveListFolderTest());
         addTestCase("live account info", \liveAccountInfoTest());
+        addTestCase("live watch cycle", \liveWatchCycleTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
 
         set_return_value(main());
@@ -226,12 +287,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         *list<string> children = prov.getChildProviderNames();
         # the framework injects a "__call__" child alongside the module's own, to serve its generic
         # make-api-call action
-        assertEq(19, children.size(), "all actions are children of the root provider");
+        assertEq(20, children.size(), "all actions are children of the root provider");
         assertTrue(inlist("__call__", children), "the framework generic-call child is present");
         foreach string name in (("list-folder", "search", "get-metadata", "download-file", "upload-file",
                 "create-text-file", "get-file-link", "create-folder", "delete-file", "copy-file", "move-file",
                 "list-file-revisions", "restore-file-revision", "create-shared-link", "list-shared-links",
-                "revoke-shared-link", "get-account-info", "get-space-usage")) {
+                "revoke-shared-link", "get-account-info", "get-space-usage", "events")) {
             assertTrue(inlist(name, children), sprintf("has %y child", name));
             assertTrue(prov.getChildProvider(name) instanceof AbstractDataProvider,
                 sprintf("%y child provider can be created", name));
@@ -240,7 +301,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # the summary info of every child must be retrievable; a child whose ProviderSummaryInfo constant is
         # missing or misnamed breaks the app browser rather than the action
-        assertEq(18, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
+        assertEq(19, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
     }
 
     actionCatalogTest() {
@@ -272,17 +333,34 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             ++actions;
             string path = action.path;
             path =~ s/^\///;
-            seen{path} = True;
-            # an action path that does not resolve through the root ChildMap leaves the action's provider null:
-            # reference data returns nothing and doRequest() is never reached, with no error anywhere
-            assertTrue(children{path}, sprintf("action %y path %y resolves through the root ChildMap",
+            # the first segment must name a root child; an action path that does not resolve leaves the
+            # action's provider null: reference data returns nothing and doRequest() is never reached, with no
+            # error anywhere
+            string root_child = (path =~ x/^([^\/]+)/)[0];
+            seen{root_child} = True;
+            assertTrue(children{root_child}, sprintf("action %y path %y resolves through the root ChildMap",
                 action.action, action.path));
-            assertEq(DPAT_API, action.action_code, sprintf("action %y is an API action", action.action));
             assertTrue(exists action.output_type, sprintf("action %y has an output type", action.action));
+
+            # ... and the whole path must resolve, not just its first segment: an event action addresses a
+            # provider nested under the events container
+            *AbstractDataProvider adp = root.getChildProviderPath(path);
+            assertTrue(exists adp, sprintf("action %y has a child provider", action.action));
+
+            if (action.action_code == DPAT_EVENT) {
+                # the event name the action advertises must be one the provider actually raises, or a trigger
+                # configured from the catalog waits for an event that never arrives
+                assertTrue(adp.getInfo().supports_observable,
+                    sprintf("event action %y has an observable provider", action.action));
+                assertTrue(exists adp.getEventTypes(){action.action_val},
+                    sprintf("event action %y action_val %y is an event the provider raises", action.action,
+                        action.action_val));
+                continue;
+            }
+            assertEq(DPAT_API, action.action_code, sprintf("action %y is an API action", action.action));
+
             # an action whose request type has fields must advertise options for them, or it renders with no
             # form fields and cannot be used; the account actions call endpoints that take no arguments at all
-            *AbstractDataProvider adp = root.getChildProvider(path);
-            assertTrue(exists adp, sprintf("action %y has a child provider", action.action));
             *AbstractDataProviderType art = adp.getRequestType();
             int nfields = art ? art.getFields().size() : 0;
             assertEq(nfields > 0, action.options.size() > 0,
@@ -292,7 +370,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
                 action.action));
             assertTrue(action.groups.size() > 0, sprintf("action %y has a group", action.action));
         }
-        assertEq(18, actions, "every action is registered");
+        assertEq(21, actions, "every action is registered");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
     }
 
@@ -1209,6 +1287,232 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         assertEq(NOTHING, usage.used_percent, "no proportion is reported without a quota");
     }
 
+    #! The module must offer triggers, not only actions
+    /** The TypeScript application being replaced had triggers for new files, new folders, and modified files;
+        a module that is 100% DPAT_API is a functional regression against it however complete its actions are.
+    */
+    eventProviderTest() {
+        FakeDropboxRestClientIo rest;
+        DropboxDataProvider::DropboxDataProvider root = getProvider(\rest);
+
+        AbstractDataProvider events = root.getChildProviderEx("events");
+        assertEq("events", events.getName());
+        assertTrue(events.getInfo().children_can_support_observers,
+            "the events container advertises observable children");
+        assertEq(("new-file", "new-folder", "file-modified"), events.getChildProviderNames());
+        assertEq(3, events.getChildProviderSummaryInfo().size(), "every event child has summary info");
+
+        foreach string name in (("new-file", "new-folder", "file-modified")) {
+            AbstractDataProvider w = events.getChildProviderEx(name);
+            assertEq(name, w.getName());
+            assertTrue(w.getInfo().supports_observable, sprintf("%y is observable", name));
+            hash<string, hash<DataProviderMessageInfo>> types = w.getEventTypes();
+            assertEq((name,), keys types, sprintf("%y raises the event it is named for", name));
+            assertTrue(types{name}.desc.val(), sprintf("%y describes its event", name));
+
+            # example data must be produced even when the account cannot be reached: the form showing a
+            # trigger's output fields is rendered before any credentials are exercised
+            rest.throw_error = {"err": "SOCKET-CLOSED", "desc": "test"};
+            auto ex = w.getExampleEventData(name);
+            rest.throw_error = NOTHING;
+            assertEq(NT_HASH, ex.typeCode(), sprintf("%y provides example event data", name));
+            foreach string f in (keys types{name}.type.getFields()) {
+                assertTrue(ex.hasKey(f), sprintf("%y example data has the declared field %y", name, f));
+            }
+            # a folder trigger must not show a file, and vice versa
+            assertEq(name == "new-folder", ex.is_folder,
+                sprintf("%y example data is %sa folder", name, name == "new-folder" ? "" : "not "));
+        }
+
+        # the folder and its recursion select what the feed covers, so each defines a different feed and must
+        # not resume a cursor established under the other
+        DropboxWatchNewFileDataProvider w1(rest, {"path": "/a"});
+        DropboxWatchNewFileDataProvider w2(rest, {"path": "/b"});
+        assertNeq(w1.getWatchStreamIdentity(), w2.getWatchStreamIdentity(),
+            "watching a different folder is a different feed");
+        DropboxWatchNewFileDataProvider w3(rest, {"path": "/a", "recursive": False});
+        assertNeq(w1.getWatchStreamIdentity(), w3.getWatchStreamIdentity(),
+            "dropping recursion is a different feed");
+        # ... while the poll interval only changes how often the same feed is read
+        DropboxWatchNewFileDataProvider w4(rest, {"path": "/a", "poll_interval": 300});
+        assertEq(w1.getWatchStreamIdentity(), w4.getWatchStreamIdentity(),
+            "tuning the poll interval does not discard the cursor");
+        assertEq(300, w4.getPollIntervalSeconds());
+        assertEq(MinPollInterval,
+            (new DropboxWatchNewFileDataProvider(rest, {"poll_interval": 1})).getPollIntervalSeconds());
+
+        # the three watches read the same feed, so their cursors must not be shared
+        DropboxWatchNewFolderDataProvider wfolder(rest, {"path": "/a"});
+        DropboxWatchFileModifiedDataProvider wmod(rest, {"path": "/a"});
+        assertNeq(w1.getWatchStreamIdentity(), wfolder.getWatchStreamIdentity(),
+            "the file and folder watches keep separate cursors");
+        assertNeq(w1.getWatchStreamIdentity(), wmod.getWatchStreamIdentity(),
+            "the new-file and file-modified watches keep separate cursors");
+
+        # a trailing separator must not make a different feed out of the same folder
+        assertEq(w1.getWatchStreamIdentity(),
+            (new DropboxWatchNewFileDataProvider(rest, {"path": "/a/"})).getWatchStreamIdentity(),
+            "the watched path is normalized before it identifies the feed");
+    }
+
+    #! Telling a creation from a modification is the whole difficulty of these triggers
+    /** Dropbox reports a created file and a modified file identically -- both are just an entry that has
+        changed -- and a file's metadata carries no creation time.  The difference can only come from an index
+        of what the watch has already seen, which is seeded by walking the folder when the cursor is first
+        established.  Without that seeding, the first edit to any pre-existing file would fire `new-file`.
+    */
+    watchDeltaTest() {
+        FakeDropboxRestClientIo rest();
+
+        # --- seeding: the folder's existing contents are recorded and nothing is reported ---
+        rest.setResponses((
+            # the initial listing that establishes the index
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:existing", "name": "old.txt", "path_display": "/w/old.txt"},
+                    {".tag": "folder", "id": "id:oldfolder", "name": "sub", "path_display": "/w/sub"},
+                ),
+                "cursor": "cursor-0",
+                "has_more": False,
+            },
+            # the first real poll: one brand new file, and an edit to the file that was already there
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:new", "name": "new.txt", "path_display": "/w/new.txt",
+                        "size": 12, "rev": "01", "server_modified": "2026-04-09T12:00:00Z"},
+                    {".tag": "file", "id": "id:existing", "name": "old.txt", "path_display": "/w/old.txt",
+                        "size": 34, "rev": "02", "server_modified": "2026-04-09T12:01:00Z"},
+                    {".tag": "folder", "id": "id:newfolder", "name": "fresh", "path_display": "/w/fresh"},
+                ),
+                "cursor": "cursor-1",
+                "has_more": False,
+            },
+        ));
+
+        # a watch delivers through observers, so a recording observer stands in for a consumer
+        RecordingObserver obs();
+        TestNewFileWatch w(rest, {"path": "/w"});
+        w.registerObserver(obs);
+
+        # the first cycle only establishes the cursor: an existing folder must not produce a flood of events
+        w.poll();
+        assertEq((), obs.events, "seeding the cursor reports nothing");
+        assertEq("/2/files/list_folder", rest.requests[0].path, "seeding walks the folder");
+        assertEq("/w", rest.requests[0].body.path);
+
+        # the second cycle reports the new file only: the edited one was already in the index, and the new
+        # folder belongs to a different trigger
+        w.poll();
+        assertEq("/2/files/list_folder/continue", rest.last().path, "the delta feed is read with the cursor");
+        assertEq(1, obs.events.size(), "only the new file is reported");
+        assertEq("new-file", obs.events[0].id);
+        assertEq("new.txt", obs.events[0].data.name);
+        assertEq(False, obs.events[0].data.is_folder);
+
+        # the same feed seen by the file-modified watch reports the edited file rather than the new one
+        rest.setResponses((
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:existing", "name": "old.txt", "path_display": "/w/old.txt"},
+                ),
+                "cursor": "cursor-0",
+                "has_more": False,
+            },
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:new", "name": "new.txt", "path_display": "/w/new.txt"},
+                    {".tag": "file", "id": "id:existing", "name": "old.txt", "path_display": "/w/old.txt"},
+                ),
+                "cursor": "cursor-1",
+                "has_more": False,
+            },
+        ));
+        RecordingObserver obs2();
+        TestFileModifiedWatch wm(rest, {"path": "/w"});
+        wm.registerObserver(obs2);
+        wm.poll();
+        wm.poll();
+        assertEq(1, obs2.events.size(), "only the file that was already there is reported as modified");
+        assertEq("file-modified", obs2.events[0].id);
+        assertEq("old.txt", obs2.events[0].data.name);
+
+        # ... and the folder watch reports the new folder only
+        rest.setResponses((
+            {"entries": (), "cursor": "cursor-0", "has_more": False},
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:new", "name": "new.txt", "path_display": "/w/new.txt"},
+                    {".tag": "folder", "id": "id:newfolder", "name": "fresh", "path_display": "/w/fresh"},
+                ),
+                "cursor": "cursor-1",
+                "has_more": False,
+            },
+        ));
+        RecordingObserver obs3();
+        TestNewFolderWatch wf(rest, {"path": "/w"});
+        wf.registerObserver(obs3);
+        wf.poll();
+        wf.poll();
+        assertEq(1, obs3.events.size(), "only the new folder is reported");
+        assertEq("fresh", obs3.events[0].data.name);
+        assertEq(True, obs3.events[0].data.is_folder);
+
+        # a deletion stops the identity being tracked, so a file recreated at the same path is new again
+        # rather than a modification
+        rest.setResponses((
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:x", "name": "x.txt", "path_display": "/w/x.txt"},
+                ),
+                "cursor": "cursor-0",
+                "has_more": False,
+            },
+            {
+                "entries": ({".tag": "deleted", "id": "id:x", "name": "x.txt", "path_display": "/w/x.txt"},),
+                "cursor": "cursor-1",
+                "has_more": False,
+            },
+            {
+                "entries": (
+                    {".tag": "file", "id": "id:x", "name": "x.txt", "path_display": "/w/x.txt"},
+                ),
+                "cursor": "cursor-2",
+                "has_more": False,
+            },
+        ));
+        RecordingObserver obs4();
+        TestNewFileWatch wd(rest, {"path": "/w"});
+        wd.registerObserver(obs4);
+        wd.poll();
+        wd.poll();
+        assertEq((), obs4.events, "a deletion reports nothing to a new-file watch");
+        wd.poll();
+        assertEq(1, obs4.events.size(), "a file recreated after a deletion is new again");
+        assertEq("x.txt", obs4.events[0].data.name);
+
+        # a delta spread over several pages is read to the end before anything is delivered
+        rest.setResponses((
+            {"entries": (), "cursor": "cursor-0", "has_more": False},
+            {
+                "entries": ({".tag": "file", "id": "id:p1", "name": "p1.txt", "path_display": "/w/p1.txt"},),
+                "cursor": "cursor-1",
+                "has_more": True,
+            },
+            {
+                "entries": ({".tag": "file", "id": "id:p2", "name": "p2.txt", "path_display": "/w/p2.txt"},),
+                "cursor": "cursor-2",
+                "has_more": False,
+            },
+        ));
+        RecordingObserver obs5();
+        TestNewFileWatch wp(rest, {"path": "/w"});
+        wp.registerObserver(obs5);
+        wp.poll();
+        wp.poll();
+        assertEq(2, obs5.events.size(), "every page of the delta is delivered");
+        assertEq(("p1.txt", "p2.txt"), (map $1.data.name, obs5.events));
+    }
+
     # --- live tests (require -c <connection>) ---
 
     private *AbstractConnection getConnection() {
@@ -1273,6 +1577,95 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             printf("account: %y (%y, %y)\n", acct.display_name, acct.email, acct.account_type);
             printf("usage: %d of %y bytes (%y%%)\n", usage.used, usage.allocated, usage.used_percent);
         }
+    }
+
+    #! Drives a real watch cycle against the live service
+    /** The offline test covers the cycle against a fake client; this covers what only the service can answer
+        -- that a folder created now seeds an empty index, that a file written into it afterwards arrives in
+        the delta feed, and that it is classified as new rather than modified.
+
+        This writes to the account under test; exclude it with `--exclude="live watch cycle"`.
+    */
+    liveWatchCycleTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        # NOTE: the client comes from the provider, not from conn.get(): a connection hands out the blocking
+        # DropboxRestClient, while the data providers -- and therefore the watches -- run on the async
+        # DropboxRestClientIo
+        DropboxRestClient::DropboxRestClientIo client =
+            cast<DropboxDataProvider::DropboxDataProvider>(prov).getRestClient();
+
+        # a folder of its own keeps the watch off the rest of the account, and makes the seeded index empty
+        string folder = sprintf("/qore-watch-test-%d", now_us().durationMicroseconds());
+        prov.getChildProviderEx("create-folder").doRequest({"path": folder});
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"path": folder});
+        }
+
+        RecordingObserver obs();
+        TestNewFileWatch w(client, {"path": folder});
+        w.registerObserver(obs);
+
+        # the first cycle establishes the cursor over an empty folder and reports nothing
+        w.poll();
+        assertEq((), obs.events, "seeding an empty folder reports nothing");
+
+        string path = folder + "/watched.txt";
+        prov.getChildProviderEx("create-text-file").doRequest({
+            "path": path,
+            "content": "written to be noticed by the Qore DropboxDataProvider watch test",
+        });
+
+        # Dropbox's delta feed is not guaranteed to show a change the instant the write returns, so the
+        # attempts are bounded and running out fails the test rather than passing it quietly
+        int attempts;
+        while (!obs.events && ++attempts <= LiveWatchAttempts) {
+            w.poll();
+            if (!obs.events && attempts < LiveWatchAttempts) {
+                usleep(LiveWatchInterval);
+            }
+        }
+        assertEq(1, obs.events.size(), sprintf("the new file was delivered (after %d attempt%s)", attempts,
+            attempts == 1 ? "" : "s"));
+        assertEq("new-file", obs.events[0].id);
+        assertEq("watched.txt", obs.events[0].data.name);
+        assertEq(path.lwr(), obs.events[0].data.path_lower);
+        assertEq(False, obs.events[0].data.is_folder);
+
+        # ... and the same file changing again is a modification, not another creation
+        prov.getChildProviderEx("create-text-file").doRequest({
+            "path": path,
+            "content": "changed",
+            "mode": "overwrite",
+        });
+        int before = obs.events.size();
+        attempts = 0;
+        RecordingObserver mod_obs();
+        TestFileModifiedWatch wm(client, {"path": folder});
+        wm.registerObserver(mod_obs);
+        # the modified watch seeds with the file already present, so its next cycle sees a modification
+        wm.poll();
+        prov.getChildProviderEx("create-text-file").doRequest({
+            "path": path,
+            "content": "changed again",
+            "mode": "overwrite",
+        });
+        while (!mod_obs.events && ++attempts <= LiveWatchAttempts) {
+            wm.poll();
+            if (!mod_obs.events && attempts < LiveWatchAttempts) {
+                usleep(LiveWatchInterval);
+            }
+        }
+        assertEq(1, mod_obs.events.size(), "the change to the existing file was delivered");
+        assertEq("file-modified", mod_obs.events[0].id);
+        assertEq("watched.txt", mod_obs.events[0].data.name);
+
+        # the new-file watch must not report the same change again: it already knows the file
+        w.poll();
+        assertEq(before, obs.events.size(), "a change to a known file is not reported as a new file");
     }
 
     liveFileLifecycleTest() {

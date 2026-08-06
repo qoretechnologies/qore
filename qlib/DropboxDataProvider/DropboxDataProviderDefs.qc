@@ -33,6 +33,29 @@ public const AppName = "Dropbox";
 #! The application logo
 const DropboxLogo = File::readTextFile(get_script_dir() + "/dropbox-logo.svg");
 
+#! Event name for new files
+public const EVENT_NEW_FILE = "new-file";
+
+#! Event name for new folders
+public const EVENT_NEW_FOLDER = "new-folder";
+
+#! Event name for modified files
+public const EVENT_FILE_MODIFIED = "file-modified";
+
+#! Default polling interval in seconds for watch providers
+public const DefaultPollInterval = 60;
+
+#! Minimum polling interval in seconds for watch providers
+public const MinPollInterval = 30;
+
+#! Default maximum number of entry identities a watch tracks
+/** Dropbox's delta feed reports a created file and a modified file identically: both are simply an entry that
+    has changed since the cursor.  Telling them apart therefore needs an index of what the watch has already
+    seen, and that index is bounded here.  Reaching the bound is logged as a warning naming the options that
+    narrow the watch, never passed over in silence.
+*/
+public const DefaultMaxTrackedEntries = 100000;
+
 #! Default page size for listings
 public const DefaultPageSize = 100;
 
