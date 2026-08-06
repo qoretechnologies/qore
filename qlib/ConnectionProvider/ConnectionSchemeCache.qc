@@ -81,6 +81,7 @@ public class ConnectionSchemeCache {
             "assemblyai": "AssemblyAiRestClient",
 
             "awsrests": "AwsRestClient",
+            "s3": "AwsRestClient",
 
             "aws-textract": "AwsTextractRestClient",
 

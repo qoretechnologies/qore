@@ -853,6 +853,27 @@ AwsRestClient rest({
         }
     }
 
+    #! Returns the AWS region this client signs requests for
+    /** @return the AWS region this client signs requests for
+
+        Callers that must include the region in a request payload rather than in the signature need this; the
+        S3 \c CreateBucket operation carries the region in its body, for example.
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsRegion() {
+        return aws_region;
+    }
+
+    #! Returns the AWS service this client signs requests for
+    /** @return the AWS service this client signs requests for
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsService() {
+        return aws_service;
+    }
+
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
             *softbool decode_errors, *string assume_content_type, *string shdr, *code signer) {
         # get request time
@@ -1410,6 +1431,143 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         cstr += digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
 
         return digest(AwsRestClientBase::QoreDigest, cstr).toHex();
+    }
+}
+
+#! Class for AWS S3 connections; returns @ref AwsRestClient objects configured for S3
+/** This class pins the AWS service to \c s3 and enables the S3 request-encoding mode, so that a connection can be
+    created without the caller having to know which AWS options S3 requires.
+
+    S3 signs requests differently from every other AWS service: request URIs are URI-encoded once rather than
+    twice and paths are not normalized.  @ref AwsRestClient implements that rule; it is selected by the
+    \c aws_s3 option, which this class sets and does not allow to be overridden.
+
+    @since AwsRestClient 1.3
+*/
+public class AwsS3RestConnection inherits AwsRestConnection {
+    public {
+        #! The AWS service name for S3
+        const AwsService = "s3";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Amazon S3 Connection",
+            "short_desc": "A connection to Amazon S3 object storage",
+            "desc": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
+                "Requires an AWS access key ID and secret access key with permission for the buckets to be "
+                "used, plus the region the buckets live in.  The AWS service and S3 request-encoding options "
+                "are set automatically and cannot be overridden.",
+            "cls": Class::forName("AwsS3RestConnection"),
+            "schemes": {
+                "s3": True,
+            },
+            "base_scheme_map": {
+                "https": "s3",
+            },
+            "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
+                "path_style": <ConnectionOptionInfo>{
+                    "display_name": "Path-Style Addressing",
+                    "short_desc": "Address buckets in the URI path rather than in the hostname",
+                    "type": "bool",
+                    "desc": "Address buckets in the URI path (`https://s3.<region>.amazonaws.com/<bucket>/<key>`) "
+                        "rather than in the hostname (`https://<bucket>.s3.<region>.amazonaws.com/<key>`).\n\n"
+                        "Set to `True` for S3-compatible services such as MinIO and Ceph, which generally require "
+                        "path-style addressing.  Amazon S3 accepts both for existing buckets but prefers "
+                        "virtual-host style",
+                    "default_value": False,
+                },
+            },
+            "required_options": "aws_keyid,aws_secret,aws_region",
+        };
+
+        #! The default URL when none is supplied
+        const DefaultUrl = "https://s3.amazonaws.com";
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : AwsRestConnection(name, description, url.val() ? url : DefaultUrl, attributes,
+                AwsS3RestConnection::getS3Options(options)) {
+    }
+
+    #! creates the AwsS3RestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : AwsRestConnection(config + {
+                "url": config.url.val() ? config.url : DefaultUrl,
+                "opts": AwsS3RestConnection::getS3Options(config.opts),
+            }, attr) {
+    }
+
+    #! returns \c "s3"
+    string getType() {
+        return "s3";
+    }
+
+    #! Returns the data provider application name this connection serves
+    *string getAppName() {
+        return "AmazonS3";
+    }
+
+    #! returns @ref True, as this connection returns a data provider
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns an AwsS3DataProvider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return an AwsS3DataProvider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, the data provider module is loaded and the object created dynamically
+        load_module("AwsS3DataProvider");
+        return create_object("AwsS3DataProvider", {
+            "restclient": get(),
+            "path_style": opts.path_style ?? False,
+        } + constructor_options);
+    }
+
+    #! Pins the AWS service and S3 encoding options
+    /** @param options the options supplied by the caller
+
+        @return the options with the S3-specific values applied
+
+        @note \c aws_service and \c aws_s3 are set unconditionally; a connection of this type is by definition an
+        S3 connection, and allowing either to be overridden would produce requests signed for the wrong service
+        or with the wrong URI encoding, which fail with an opaque signature mismatch
+    */
+    static hash<auto> getS3Options(*hash<auto> options) {
+        return (options ?? {}) + {
+            "aws_service": AwsService,
+            "aws_s3": True,
+        };
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
     }
 }
 }
