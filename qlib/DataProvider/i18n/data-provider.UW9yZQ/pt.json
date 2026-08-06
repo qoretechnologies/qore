@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pt": {
+      "messages": {
+        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
+          "source": "Count Value Ranges",
+          "message": "Contar intervalos de valores"
+        }
+      }
+    }
+  }
+}

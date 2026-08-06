@@ -40,6 +40,7 @@ module ExaDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ExaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Exa",
             "short_desc": "Exa (Metaphor) neural web search for semantic retrieval",
             "desc": "Provides access to [Exa](https://exa.ai) (formerly Metaphor) — "

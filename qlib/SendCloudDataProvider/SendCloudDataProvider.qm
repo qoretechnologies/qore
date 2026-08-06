@@ -44,6 +44,7 @@ module SendCloudDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SendCloudDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "SendCloud",
             "short_desc": "SendCloud shipping automation platform",
             "desc": "SendCloud is a European shipping automation platform that helps eCommerce merchants "

@@ -47,6 +47,7 @@ module WooCommerceDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": WooCommerceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "WooCommerce",
             "short_desc": "WooCommerce e-commerce platform",
             "desc": "WooCommerce is the most popular open-source e-commerce platform built on WordPress. "

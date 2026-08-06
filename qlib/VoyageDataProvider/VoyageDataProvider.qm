@@ -44,6 +44,7 @@ module VoyageDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VoyageDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Voyage AI",
             "short_desc": "Voyage AI text embedding and search reranking services",
             "desc": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into "

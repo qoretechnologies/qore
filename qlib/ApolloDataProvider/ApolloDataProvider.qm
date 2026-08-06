@@ -50,6 +50,7 @@ module ApolloDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ApolloDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Apollo",
             "short_desc": "Apollo B2B sales intelligence and engagement platform",
             "desc": "Apollo is a B2B sales intelligence and engagement platform providing "

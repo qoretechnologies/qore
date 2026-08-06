@@ -53,6 +53,7 @@ module DataProviderML {
         # register the ML Analytics app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MLApp::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ML Analytics",
             "short_desc": "Analyze data with machine learning algorithms",
             "desc": "Catch fraud, forecast sales, segment customers, and simplify complex "

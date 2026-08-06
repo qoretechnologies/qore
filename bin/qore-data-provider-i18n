@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file qore-data-provider-i18n extracts source-owned provider presentation catalogs
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires DataProvider
+%requires FsUtil
+%requires i18n
+%requires json
+%requires Util
+
+%exec-class QoreDataProviderI18nCmd
+
+class QoreDataProviderI18nCmd {
+    public {
+        const Version = "0.1";
+        const Opts = {
+            "output":  "o,output=s",
+            "module":  "m,module=s@",
+            "app":     "a,app=s@",
+            "check":   "check",
+            "verbose": "v,verbose:i+",
+            "help":    "h,help",
+        };
+    }
+
+    private {
+        Util::TerminalColor color;
+    }
+
+    constructor() {
+        bool no_color = removeNoColorOption();
+        color = new Util::TerminalColor(!no_color);
+        GetOpt g(Opts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            usage();
+            return;
+        }
+        if (ARGV) {
+            fail("unexpected positional arguments: " + ARGV.join(" "));
+        }
+        if (!opt.output.val()) {
+            fail("--output is required");
+        }
+
+        try {
+            run(opt);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s %s: %s\n", color.error("ERROR:"), ex.err,
+                ex.desc);
+            exit(1);
+        }
+    }
+
+    private run(hash<auto> opt) {
+        foreach string module_name in (cast<list<string>>(opt.module ?? ())) {
+            if (opt.verbose) {
+                printf("loading provider module %s\n", color.key(module_name));
+            }
+            load_module(module_name);
+        }
+
+        hash<string, hash<auto>> app_map = {};
+        foreach hash<auto> app in (
+                DataProviderActionCatalog::getAllApps()) {
+            app_map{app.name} = app;
+        }
+        list<string> app_names = opt.app
+            ? cast<list<string>>(opt.app) : sort(keys app_map);
+        if (!app_names) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                "no provider applications are registered";
+        }
+
+        hash<string, hash<auto>> catalogs = {};
+        foreach string app_name in (app_names) {
+            if (!exists app_map{app_name}) {
+                throw "DATA-PROVIDER-I18N-ERROR",
+                    sprintf("provider application %y is not registered",
+                        app_name);
+            }
+            hash<auto> app = app_map{app_name};
+            list<hash<auto>> actions =
+                DataProviderActionCatalog::getActions(app_name, False);
+            mergeCatalogs(\catalogs,
+                DataProviderPresentation::buildSourceCatalogs(app,
+                    actions));
+        }
+
+        int stale;
+        foreach string domain in (sort(keys catalogs)) {
+            # Reuse the native validation boundary before treating a domain as
+            # a directory name. An empty search path performs no file access.
+            list<string> validated_catalog_files = I18n::discover_catalog_files(domain,
+                DataProviderPresentation::RootLocale,
+                {"search_path": ()});
+            string path = join_paths(opt.output, domain, "root.json");
+            string data = make_json(catalogs{domain}, JGF_ADD_FORMATTING)
+                + "\n";
+            if (opt.check) {
+                if (!is_readable(path)
+                        || parse_json(ReadOnlyFile::readTextFile(path))
+                            != catalogs{domain}) {
+                    ++stale;
+                    stderr.printf("%s %s\n", color.error("STALE:"), path);
+                }
+                continue;
+            }
+            mkdir_ex(dirname(path), 0755, True);
+            writeFile(path, data);
+            if (opt.verbose) {
+                printf("wrote %s (%d messages)\n", color.key(path),
+                    catalogs{domain}.locales.root.messages.size());
+            }
+        }
+        if (stale) {
+            exit(2);
+        }
+        printf("%s %d app(s), %d catalog domain(s)\n",
+            opt.check ? "verified" : "extracted", app_names.size(),
+            catalogs.size());
+    }
+
+    private mergeCatalogs(reference<hash<string, hash<auto>>> target,
+            hash<string, hash<auto>> source) {
+        foreach hash<auto> catalog_entry in (source.pairIterator()) {
+            string domain = catalog_entry.key;
+            hash<auto> source_messages =
+                catalog_entry.value.locales.root.messages;
+            if (!exists target{domain}) {
+                target{domain} = catalog_entry.value;
+                continue;
+            }
+            foreach hash<auto> message in (
+                    source_messages.pairIterator()) {
+                if (exists target{domain}.locales.root.messages{message.key}
+                        && target{domain}.locales.root.messages{message.key}
+                            != message.value) {
+                    throw "DATA-PROVIDER-I18N-ERROR",
+                        sprintf("catalog domain %y has conflicting message "
+                            "id %y", domain, message.key);
+                }
+                target{domain}.locales.root.messages{message.key} =
+                    message.value;
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File file();
+        file.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write(data);
+        file.close();
+    }
+
+    private bool removeNoColorOption() {
+        bool no_color = False;
+        list<string> args = ();
+        foreach string arg in (ARGV) {
+            if (arg == "-C" || arg == "--no-color") {
+                no_color = True;
+            } else {
+                args += arg;
+            }
+        }
+        ARGV = args;
+        return no_color;
+    }
+
+    private fail(string message) {
+        stderr.printf("%s %s\n\n", color.error("ERROR:"), message);
+        usage();
+        exit(1);
+    }
+
+    private usage() {
+        printf("%s v%s - Extract source-owned data-provider i18n catalogs\n\n",
+            color.bold("qore-data-provider-i18n"), Version);
+        printf("%s\n", color.bold("USAGE"));
+        printf("  qore-data-provider-i18n [options]\n\n");
+        printf("%s\n", color.bold("OPTIONS"));
+        printf("  -o, --output=DIR   Root output directory (required)\n");
+        printf("  -m, --module=MOD   Load provider module; repeatable\n");
+        printf("  -a, --app=APP      Extract exact app identifier; repeatable\n");
+        printf("      --check        Exit 2 if any generated root catalog is stale\n");
+        printf("  -v, --verbose      Show loaded modules and written files\n");
+        printf("  -C, --no-color     Disable colored output\n");
+        printf("  -h, --help         Show this help\n");
+    }
+}

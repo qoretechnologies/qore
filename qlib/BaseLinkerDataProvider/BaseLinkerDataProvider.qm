@@ -48,6 +48,7 @@ module BaseLinkerDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BaseLinkerDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": BaseLinkerDataProvider::AppDisplayName,
             "short_desc": "BaseLinker multichannel e-commerce integration",
             "desc": "BaseLinker is a Polish multichannel e-commerce platform that unifies orders, "

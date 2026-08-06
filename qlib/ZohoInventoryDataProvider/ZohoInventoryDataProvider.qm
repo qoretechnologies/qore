@@ -47,6 +47,7 @@ module ZohoInventoryDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ZohoInventoryDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Zoho Inventory",
             "short_desc": "Zoho Inventory management software",
             "desc": "Zoho Inventory is an online inventory management software that helps "

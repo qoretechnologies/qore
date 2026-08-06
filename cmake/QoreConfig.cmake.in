@@ -17,6 +17,7 @@
 # QORE_QCC_PRUNE_HELPER - helper for configure-time managed .qo output pruning
 # QORE_AOT_MODULES_DIR - install location for AOT-compiled user module .qmod artifacts
 # QORE_CMAKE_DIR - directory containing exported Qore CMake helper files
+# QORE_CATALOG_DIR - install location for native Qore i18n catalogs
 
 
 if (CMAKE_VERSION VERSION_LESS 2.8.3)
@@ -109,6 +110,9 @@ set(QORE_LLVM_PACKAGE_VERSION "@LLVM_PACKAGE_VERSION@")
 set(QORE_LLVM_MAJOR_VERSION @QORE_LLVM_MAJOR_VERSION@)
 set(QORE_LLVM_INCLUDE_DIRS "@LLVM_INCLUDE_DIRS@")
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE @CMAKE_INSTALL_FULL_DATADIR@/qore/Doxyfile.in)
+if(NOT DEFINED QORE_CATALOG_DIR)
+    set(QORE_CATALOG_DIR "@QORE_CATALOG_DIR@")
+endif()
 
 option(QORE_BUILD_AOT_MODULES
        "Build AOT-compiled .qmod artifacts for user modules via qcc"

@@ -41,6 +41,7 @@ module FilePoller {
         # NOTE: this application is also registed in the FileDataProvider module
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FilePoller::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Server Filesystem",
             "short_desc": "Access to the server filesystem",
             "desc": "Access to the server filesystem",

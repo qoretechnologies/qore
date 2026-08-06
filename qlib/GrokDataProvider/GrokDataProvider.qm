@@ -49,6 +49,7 @@ module GrokDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GrokDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Grok AI Services",
             "short_desc": "xAI Grok AI services",
             "desc": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n"

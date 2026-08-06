@@ -40,6 +40,7 @@ module ChromaDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ChromaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Chroma",
             "short_desc": "Chroma local-first vector database for self-hosted RAG",
             "desc": "Provides access to [Chroma](https://www.trychroma.com) — a lightweight, "

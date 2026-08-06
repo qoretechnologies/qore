@@ -40,6 +40,7 @@ module WeaviateDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": WeaviateDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Weaviate",
             "short_desc": "Weaviate open-source vector database with hybrid search",
             "desc": "Provides access to [Weaviate](https://weaviate.io) — an open-source "

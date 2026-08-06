@@ -40,6 +40,7 @@ module TavilyDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": TavilyDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Tavily",
             "short_desc": "Tavily real-time web search for AI agents",
             "desc": "Provides access to [Tavily](https://www.tavily.com) — the "

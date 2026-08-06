@@ -44,6 +44,7 @@ module AzureOpenAiDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AzureOpenAiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Azure OpenAI",
             "short_desc": "Microsoft Azure OpenAI Service",
             "desc": "**Azure OpenAI Service** is Microsoft's enterprise-hosted "

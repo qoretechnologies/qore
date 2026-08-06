@@ -46,6 +46,7 @@ module CloseDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CloseDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Close",
             "short_desc": "Close CRM for sales teams",
             "desc": "Close is a CRM platform built for sales teams, offering lead management, "

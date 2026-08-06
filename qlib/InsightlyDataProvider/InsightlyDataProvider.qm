@@ -44,6 +44,7 @@ module InsightlyDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": InsightlyDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Insightly",
             "short_desc": "Insightly CRM integration",
             "desc": "Insightly is a CRM platform for managing contacts, organisations, leads, "

@@ -76,6 +76,7 @@ add_custom_target(I18N_QPP_GENERATED_FILES DEPENDS qpp ${I18N_QPP_SOURCES})
 set(i18n_module_name "i18n")
 
 add_library(${i18n_module_name} MODULE ${I18N_CPP_SRC} ${I18N_QPP_SOURCES})
+target_compile_definitions(${i18n_module_name} PRIVATE QORE_CATALOG_DIR="${QORE_CATALOG_DIR}")
 target_include_directories(${i18n_module_name} PRIVATE ${ICU_INCLUDE_DIRS})
 if (ICU_LIBRARY_DIRS)
     target_link_directories(${i18n_module_name} PRIVATE ${ICU_LIBRARY_DIRS})

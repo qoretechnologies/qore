@@ -47,6 +47,7 @@ module ChargebeeDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ChargebeeDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Chargebee",
             "short_desc": "Chargebee subscription billing and revenue management platform",
             "desc": "Chargebee is a subscription billing and revenue management platform that helps businesses "

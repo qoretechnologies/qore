@@ -44,6 +44,7 @@ module AftershipDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AftershipDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Aftership",
             "short_desc": "Aftership package tracking and returns",
             "desc": "Aftership package tracking and returns management services providing access to tracking, "

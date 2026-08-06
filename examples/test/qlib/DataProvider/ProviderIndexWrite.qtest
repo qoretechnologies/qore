@@ -190,6 +190,8 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": app,
+            "presentation_catalog_domain": "qore-test.index-recovery",
+            "presentation_source_locale": "cs-CZ",
             "display_name": "Index Recovery App",
             "short_desc": "Index recovery app",
             "desc": "Index recovery app",
@@ -213,6 +215,12 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
 
         assertGt(0, DataProviderActionCatalog::cacheAllRegisteredApps(), "registered apps are cached");
         assertEq(app, ProviderIndexUtil::tryGetAppInfo(app).name, "the registered app is visible in the cache");
+        assertEq("qore-test.index-recovery",
+            ProviderIndexUtil::tryGetAppInfo(app).presentation_catalog_domain,
+            "the cached app preserves its presentation catalog domain");
+        assertEq("cs-CZ",
+            ProviderIndexUtil::tryGetAppInfo(app).presentation_source_locale,
+            "the cached app preserves its explicit presentation source locale");
         assertEq(action, ProviderIndexUtil::tryGetApproximateAppAction(app, action).action,
             "the registered action is visible in the cache");
     }

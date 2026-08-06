@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
+          "source": "Count Value Ranges",
+          "message": "値の範囲を集計"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
+          "source": "Groups values into ranges and counts how many fall in each",
+          "message": "値を範囲ごとにグループ化し、各範囲の件数を数えます"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.desc": {
+          "source": "Creates a frequency distribution by dividing the range of values into bins and counting how many values fall in each bin. Supports `uniform` (equal-width) and `quantile` (equal-count) binning.\n\nFor example, for response times it can show that 80% of requests complete in 0-100ms, 15% in 100-200ms, and 5% take over 200ms.",
+          "message": "値の範囲をビンに分割し、各ビンに含まれる値の数を数えて度数分布を作成します。`uniform`（等幅）と `quantile`（等頻度）のビン分割をサポートします。\n\nたとえば応答時間について、リクエストの 80% が 0～100ms、15% が 100～200ms で完了し、5% が 200ms を超えることを示せます。"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.display_name": {
+          "source": "Number of Bins",
+          "message": "ビン数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.short_desc": {
+          "source": "Number of histogram bins",
+          "message": "ヒストグラムのビン数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.desc": {
+          "source": "The number of bins to divide the value range into; more bins show finer detail but need more data to be meaningful; default: `10`",
+          "message": "値の範囲を分割するビンの数。ビンを増やすと詳細になりますが、意味のある結果を得るにはより多くのデータが必要です。デフォルト: `10`"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.display_name": {
+          "source": "Binning Method",
+          "message": "ビン分割方法"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.short_desc": {
+          "source": "Method used to determine bin boundaries",
+          "message": "ビン境界の決定に使用する方法"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.desc": {
+          "source": "How to determine bin boundaries: `uniform` (equal-width) or `quantile` (equal-count)",
+          "message": "ビン境界の決定方法: `uniform`（等幅）または `quantile`（等頻度）"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnVuaWZvcm0.display_name": {
+          "source": "Uniform (equal-width bins)",
+          "message": "均等（等幅ビン）"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnF1YW50aWxl.display_name": {
+          "source": "Quantile (equal-count bins)",
+          "message": "分位（等頻度ビン）"
+        }
+      }
+    }
+  }
+}

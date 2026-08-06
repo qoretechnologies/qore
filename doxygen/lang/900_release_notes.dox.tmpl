@@ -1367,6 +1367,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref dataproviderintro "DataProvider" module
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,
         parser, serializer, and IDE completion provider, plus \c qdp CLI integration
+      - application, action, option, and allowed-value presentation metadata can now be localized through
+        source-owned native catalogs while exact technical identifiers remain unchanged; the
+        \c qore-data-provider-i18n tool generates and verifies provider source catalogs
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
@@ -1631,6 +1634,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new builtin module providing ICU-backed internationalization and localization primitives
       - schema-versioned message catalogs with locale fallback, CLDR plural APIs, and automatic bidi
         isolation; BCP 47 locale negotiation and \c Accept-Language parsing
+      - configurable system catalog discovery and per-message locale introspection allow applications to
+        distinguish translated messages from source-language fallback
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool
 

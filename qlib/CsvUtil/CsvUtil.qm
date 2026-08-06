@@ -51,6 +51,7 @@ module CsvUtil {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CsvUtil::AppName,
+            "presentation_source_locale": "en",
             "display_name": "CSV Files",
             "short_desc": "Read and write CSV file data",
             "desc": "Read and write CSV file data",

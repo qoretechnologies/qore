@@ -40,6 +40,7 @@ module PineconeDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": PineconeDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Pinecone",
             "short_desc": "Pinecone managed vector database",
             "desc": "Provides access to [Pinecone](https://www.pinecone.io) — a fully "

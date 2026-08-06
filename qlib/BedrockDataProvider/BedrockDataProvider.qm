@@ -45,6 +45,7 @@ module BedrockDataProvider {
         # register the application in the action catalog
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BedrockDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "AWS Bedrock",
             "short_desc": "Generative AI on AWS Bedrock",
             "desc": "**AWS Bedrock** provides serverless access to a curated catalog "

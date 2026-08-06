@@ -40,6 +40,7 @@ module JinaDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JinaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Jina AI",
             "short_desc": "Jina AI embeddings and reranking for multilingual semantic search",
             "desc": "Provides access to [Jina AI](https://jina.ai) embedding and reranking "

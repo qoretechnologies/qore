@@ -46,6 +46,7 @@ module EdifactUtil {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": EdifactUtil::AppName,
+            "presentation_source_locale": "en",
             "display_name": "EDIFACT Messages",
             "short_desc": "Read and write UN/EDIFACT EDI messages",
             "desc": "Read and write UN/EDIFACT electronic data interchange messages",

@@ -44,6 +44,7 @@ module Pop3ClientDataProvider {
         /*
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": Pop3ClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "POP3",
             "short_desc": "POP3 email receiving services",
             "desc": "POP3 email receiving services",

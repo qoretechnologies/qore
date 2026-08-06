@@ -46,8 +46,8 @@ public class QoreAnomalyDetectionProcessor inherits AbstractAnalyticsProcessor {
                     "count as anomalous (this is called a *z-score*); for example, a "
                     "threshold of `3.0` means a value must be more than 3 standard deviations "
                     "away from the average to be flagged.\n\n"
-                    "**Typical values**: `2.0` (sensitive \u2014 flags ~5%% of random data), "
-                    "`3.0` (standard \u2014 flags ~0.3%%), `4.0` (conservative \u2014 only extreme "
+                    "**Typical values**: `2.0` (sensitive \u2014 flags ~5% of random data), "
+                    "`3.0` (standard \u2014 flags ~0.3%), `4.0` (conservative \u2014 only extreme "
                     "outliers); must be greater than `0`; default: `3.0`",
                 "type": AbstractDataProviderTypeMap."*float",
                 "example_value": 3.0,

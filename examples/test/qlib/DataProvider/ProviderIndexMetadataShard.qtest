@@ -137,6 +137,8 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
             "appinfomap": {
                 requested_app: {
                     "name": requested_app,
+                    "presentation_catalog_domain": "qore-test.requested",
+                    "presentation_source_locale": "ja",
                 },
                 other_app: {
                     "name": other_app,
@@ -173,6 +175,12 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
 
         assertEq(requested_app, ProviderIndexUtil::tryGetAppInfo(requested_app).name,
             "requested app loads without reading an unrelated corrupt chunk");
+        assertEq("qore-test.requested",
+            ProviderIndexUtil::tryGetAppInfo(requested_app).presentation_catalog_domain,
+            "the metadata shard preserves the app's presentation catalog domain");
+        assertEq("ja",
+            ProviderIndexUtil::tryGetAppInfo(requested_app).presentation_source_locale,
+            "the metadata shard preserves the app's presentation source locale");
         assertEq(requested_action,
             ProviderIndexUtil::tryGetApproximateAppAction(requested_app, requested_action).action,
             "requested action loads without reading an unrelated corrupt chunk");

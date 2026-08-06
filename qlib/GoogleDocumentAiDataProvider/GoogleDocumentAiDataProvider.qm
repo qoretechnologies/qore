@@ -41,6 +41,7 @@ module GoogleDocumentAiDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GoogleDocumentAiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Google Document AI",
             "short_desc": "Google Document AI managed document extraction",
             "desc": "Provides access to [Google Document AI](https://cloud.google.com/document-ai) "

@@ -48,6 +48,7 @@ module PerplexityDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": PerplexityDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Perplexity AI",
             "short_desc": "Perplexity AI services",
             "desc": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n"

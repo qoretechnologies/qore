@@ -40,6 +40,7 @@ module CohereDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CohereDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Cohere",
             "short_desc": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
             "desc": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat "

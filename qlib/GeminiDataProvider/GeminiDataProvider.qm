@@ -48,6 +48,7 @@ module GeminiDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GeminiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Google Gemini",
             "short_desc": "Google Gemini AI services",
             "desc": "Google Gemini generative AI services including text generation, embeddings, streaming, "

@@ -1,0 +1,67 @@
+.\" qore-data-provider-i18n.1 - man page for qore-data-provider-i18n
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE-DATA-PROVIDER-I18N 1 "2026 August 6" "Qore 3.0" "Qore Programming Language"
+.SH NAME
+qore\-data\-provider\-i18n \- extract source-owned data-provider presentation catalogs
+.SH SYNOPSIS
+.B qore\-data\-provider\-i18n
+.BR \-o " " \fIdirectory\fP
+[\fIoptions\fP]
+.SH DESCRIPTION
+\fBqore\-data\-provider\-i18n\fR extracts application, action, option, and
+allowed-value presentation metadata registered by data-provider modules.  It
+writes Qore native root catalogs whose message identifiers derive only from
+exact technical identities.  The generated catalogs can therefore be
+translated without changing provider application, action, option, or value
+identifiers.
+.PP
+One file is written for each catalog domain as
+\fIdirectory/domain/root.json\fR.  Existing files are replaced unless
+\fB\-\-check\fR is used.
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-output =\fIdirectory\fP
+Root catalog output directory.  This option is required.
+.TP
+.BR \-m ", " \-\-module =\fImodule\fP
+Load a provider module before extraction.  Repeat for multiple modules.
+.TP
+.BR \-a ", " \-\-app =\fIapp\fP
+Extract an exact registered application identifier.  Repeat for multiple
+applications.  If omitted, all applications registered by the loaded modules
+are extracted.
+.TP
+.BR \-\-check
+Do not write files.  Exit with status 2 if a generated root catalog is missing
+or differs semantically from the checked-in file.
+.TP
+.BR \-v ", " \-\-verbose
+Show loaded modules and written files.
+.TP
+.BR \-C ", " \-\-no\-color
+Disable colored output.
+.TP
+.BR \-h ", " \-\-help
+Show help and exit.
+.SH EXAMPLES
+Extract the built-in Qore provider catalog:
+.RS
+.B qore\-data\-provider\-i18n \-o qlib/DataProvider/i18n \-a Qore
+.RE
+.PP
+Verify a module's checked-in catalogs:
+.RS
+.B qore\-data\-provider\-i18n \-\-check \-o i18n \-m json
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qore\-i18n (1),
+.BR qdp (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

@@ -47,6 +47,7 @@ module TallyDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": TallyDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Tally",
             "short_desc": "Tally.so form builder and management",
             "desc": "Provides access to [Tally.so](https://tally.so/) for programmatic form creation, "

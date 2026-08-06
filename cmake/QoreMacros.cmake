@@ -2498,8 +2498,10 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 #
 # The module will be installed automatically in the 'make install' target.  For directory
 # modules every *.qm, *.qc, *.yaml, *.svg, and *.proto file under the module directory is
-# installed via a glob -- installation is independent of the extra-file arguments above,
-# which affect the documentation build only.
+# installed via a glob.  If a directory module contains an i18n/ directory, its native JSON
+# catalogs are installed under QORE_CATALOG_DIR with their domain/locale layout preserved.
+# Installation is independent of the extra-file arguments above, which affect the documentation
+# build only.
 MACRO (QORE_USER_MODULE _module_file)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
@@ -2672,6 +2674,15 @@ MACRO (QORE_USER_MODULE _module_file)
     install(FILES ${_mod_targets}
         DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
         COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f}/i18n)
+        if (NOT QORE_CATALOG_DIR)
+            message(FATAL_ERROR "QORE_CATALOG_DIR is required to install i18n catalogs for ${f}")
+        endif()
+        install(DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f}/i18n/
+            DESTINATION ${QORE_CATALOG_DIR}
+            COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT}
+            FILES_MATCHING PATTERN "*.json")
+    endif()
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 1)
     else()

@@ -47,6 +47,7 @@ module ZohoBooksDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ZohoBooksDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Zoho Books",
             "short_desc": "Zoho Books online accounting software",
             "desc": "Zoho Books is online accounting software that manages your finances, "

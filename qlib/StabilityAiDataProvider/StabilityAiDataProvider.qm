@@ -40,6 +40,7 @@ module StabilityAiDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": StabilityAiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Stability AI",
             "short_desc": "Stability AI text-to-image generation (Stable Diffusion)",
             "desc": "Provides access to [Stability AI](https://stability.ai) "

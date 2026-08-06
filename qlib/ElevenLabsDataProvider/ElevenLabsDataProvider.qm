@@ -46,6 +46,7 @@ module ElevenLabsDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ElevenLabsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ElevenLabs",
             "short_desc": "ElevenLabs AI voice synthesis services",
             "desc": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice "

@@ -44,6 +44,7 @@ module GorgiasDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": GorgiasDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Gorgias",
             "short_desc": "Gorgias customer support and helpdesk platform",
             "desc": "Gorgias is a customer support and helpdesk platform for e-commerce "

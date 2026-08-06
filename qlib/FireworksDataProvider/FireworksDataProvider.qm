@@ -40,6 +40,7 @@ module FireworksDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FireworksDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Fireworks AI",
             "short_desc": "Fireworks AI hosted open-weight LLMs and embeddings",
             "desc": "Provides access to [Fireworks AI](https://fireworks.ai) — a managed "

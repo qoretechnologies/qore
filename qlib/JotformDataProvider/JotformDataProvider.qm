@@ -47,6 +47,7 @@ module JotformDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JotformDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "JotForm",
             "short_desc": "JotForm online form builder and data collection",
             "desc": "JotForm is an online form builder that enables creating forms, collecting submissions, "

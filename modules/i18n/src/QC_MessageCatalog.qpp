@@ -666,6 +666,68 @@ public:
         return new QoreStringNode("root", QCS_UTF8);
     }
 
+    DLLLOCAL QoreStringNode* getMessageLocale(const QoreStringNode* id_arg, const QoreStringNode* locale_arg,
+            ExceptionSink* xsink) const {
+        std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+            return nullptr;
+        }
+
+        for (const std::string& entry : fallbackChain(locale, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
+            auto li = locales.find(entry);
+            if (li == locales.end()) {
+                continue;
+            }
+            auto mi = li->second.find(id);
+            if (mi != li->second.end()
+                    && (use_unreviewed || mi->second.state == "translated")) {
+                return new QoreStringNode(entry, QCS_UTF8);
+            }
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL QoreStringNode* getMessageSource(const QoreStringNode* id_arg, const QoreStringNode* locale_arg,
+            ExceptionSink* xsink) const {
+        std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+            return nullptr;
+        }
+
+        for (const std::string& entry : fallbackChain(locale, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
+            auto li = locales.find(entry);
+            if (li == locales.end()) {
+                continue;
+            }
+            auto mi = li->second.find(id);
+            if (mi != li->second.end()
+                    && (use_unreviewed || mi->second.state == "translated")) {
+                return new QoreStringNode(mi->second.source, QCS_UTF8);
+            }
+        }
+        return nullptr;
+    }
+
     DLLLOCAL QoreListNode* availableLocales(ExceptionSink* xsink) const {
         ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
         std::vector<std::string> names;
@@ -1420,6 +1482,40 @@ list<string> MessageCatalog::getFallbackChain(string locale) [flags=RET_VALUE_ON
 */
 string MessageCatalog::getEffectiveLocale(string locale) [flags=RET_VALUE_ONLY] {
     return catalog->getEffectiveLocale(locale, xsink);
+}
+
+//! Returns the locale supplying a runtime-usable message.
+/** Unlike @ref getEffectiveLocale(), this method resolves one message id and therefore distinguishes a locale that
+    is present in the catalog from a message that is actually translated in that locale. Runtime state policy is
+    honored: unreviewed entries are omitted unless the catalog was constructed with \c use_unreviewed.
+
+    @param id message id
+    @param locale requested locale
+    @return the selected message locale, including \c root for a source fallback, or @ref nothing when the message is
+        absent from the full fallback chain
+
+    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8 or the locale exceeds the catalog bound
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+*string MessageCatalog::getMessageLocale(string id, string locale) [flags=RET_VALUE_ONLY] {
+    return catalog->getMessageLocale(id, locale, xsink);
+}
+
+//! Returns the source text recorded by the runtime-usable message selected for a locale.
+/** This method lets source-owning applications reject a translation after its producer text changes instead of
+    silently presenting a translation made from superseded content. Runtime state policy and locale fallback are the
+    same as for @ref getMessageLocale().
+
+    @param id message id
+    @param locale requested locale
+    @return the selected message's recorded source text, or @ref nothing when the message is absent from the full
+        fallback chain
+
+    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8 or the locale exceeds the catalog bound
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+*string MessageCatalog::getMessageSource(string id, string locale) [flags=RET_VALUE_ONLY] {
+    return catalog->getMessageSource(id, locale, xsink);
 }
 
 //! Returns available catalog locale names.

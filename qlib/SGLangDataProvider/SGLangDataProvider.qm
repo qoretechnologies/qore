@@ -44,6 +44,7 @@ module SGLangDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SGLangDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "SGLang",
             "short_desc": "SGLang model server for local LLM inference with constrained decoding",
             "desc": "Provides access to [SGLang](https://github.com/sgl-project/sglang) — a fast serving "

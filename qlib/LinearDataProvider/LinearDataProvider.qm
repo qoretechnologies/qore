@@ -46,6 +46,7 @@ module LinearDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": LinearDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Linear",
             "short_desc": "Linear issue tracking and project management",
             "desc": "Linear is a modern issue tracking and project management tool for software teams. "

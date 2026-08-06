@@ -93,6 +93,7 @@ namespace Priv {
         # Register the app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": A2aClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "A2A Agent",
             "short_desc": "Agent-to-Agent protocol",
             "desc": "Connect to A2A agents for agent-to-agent collaboration",

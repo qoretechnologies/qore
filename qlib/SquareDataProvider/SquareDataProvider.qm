@@ -50,6 +50,7 @@ module SquareDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": SquareDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Square",
             "short_desc": "Square payments and commerce platform",
             "desc": "Square is a comprehensive commerce platform for payments, online stores, "

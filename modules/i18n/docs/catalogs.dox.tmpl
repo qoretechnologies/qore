@@ -57,8 +57,9 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
 
     @section i18ncatalogsdiscovery Discovery
 
-    Discovery uses \c QORE_CATALOG_DIR by default and can be overridden explicitly. Returned files are already ordered
-    for deterministic composition: lower precedence first, with \c root before more-specific locale files.
+    Discovery uses the configured system catalog directory by default.  \c QORE_CATALOG_DIR replaces that default,
+    and an explicit \c search_path option replaces both. Returned files are already ordered for deterministic
+    composition: lower precedence first, with \c root before more-specific locale files.
 
     @code{.py}
 list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {

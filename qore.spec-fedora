@@ -79,6 +79,7 @@ modules.
 %files stdlib
 %{user_module_dir}
 %{module_dir}
+%{_datadir}/qore/i18n
 %license COPYING.MIT README-LICENSE
 
 %package doc
@@ -160,7 +161,7 @@ This package contains tools for working with:
  - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
  - Language Server (qls)
  - File Downloads (qget)
- - Translation Catalogs (qore-i18n)
+ - Translation Catalogs (qore-i18n, qore-data-provider-i18n)
 
 %files misc-tools
 %{_bindir}/qdiff
@@ -171,6 +172,7 @@ This package contains tools for working with:
 %{_bindir}/qls
 %{_bindir}/qore-asyncapi-gen
 %{_bindir}/qore-extract-qm-metadata
+%{_bindir}/qore-data-provider-i18n
 %{_bindir}/qore-i18n
 %{_bindir}/qore-openapi3-gen
 %{_bindir}/qpatch
@@ -188,6 +190,7 @@ This package contains tools for working with:
 %{_mandir}/man1/qls.1.*
 %{_mandir}/man1/qore-asyncapi-gen.1.*
 %{_mandir}/man1/qore-extract-qm-metadata.1.*
+%{_mandir}/man1/qore-data-provider-i18n.1.*
 %{_mandir}/man1/qore-i18n.1.*
 %{_mandir}/man1/qore-openapi3-gen.1.*
 %{_mandir}/man1/qpatch.1.*

@@ -46,6 +46,7 @@ module BigCommerceDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BigCommerceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "BigCommerce",
             "short_desc": "BigCommerce e-commerce platform",
             "desc": "BigCommerce is a leading e-commerce platform for online stores.\n\n"

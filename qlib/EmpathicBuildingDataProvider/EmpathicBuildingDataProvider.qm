@@ -55,6 +55,7 @@ module EmpathicBuildingDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": EmpathicBuildingDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Haltian Empathic Building",
             "short_desc": "Haltian Empathic Building server",
             "desc": "Haltian Empathic Building server",

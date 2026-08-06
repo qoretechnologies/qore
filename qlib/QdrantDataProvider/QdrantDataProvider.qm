@@ -54,6 +54,7 @@ module QdrantDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": QdrantDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Qdrant Vector Database",
             "short_desc": "Qdrant vector database for similarity search and RAG",
             "desc": "Qdrant vector database providing similarity search, hybrid search, "

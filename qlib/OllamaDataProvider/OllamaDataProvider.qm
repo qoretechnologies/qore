@@ -40,6 +40,7 @@ module OllamaDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OllamaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Ollama",
             "short_desc": "Ollama local-first runtime for open-weight LLMs",
             "desc": "Provides access to [Ollama](https://ollama.com) — a local-first runtime "

@@ -64,6 +64,7 @@ module ServerSentEventClient {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ServerSentEventClient::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Server Sent Events (SSE)",
             "short_desc": "Receive Server Sent Events",
             "desc": "Receive Server Sent Events",

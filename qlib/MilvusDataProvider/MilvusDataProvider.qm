@@ -40,6 +40,7 @@ module MilvusDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MilvusDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Milvus",
             "short_desc": "Milvus / Zilliz Cloud open-source vector database",
             "desc": "Provides access to [Milvus](https://milvus.io) and "

@@ -56,6 +56,7 @@ module MongoDbDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MongoDbDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "MongoDB Server",
             "short_desc": "MongoDB NoSQL database",
             "desc": "MongoDB is a document-oriented NoSQL database for high volume data storage",

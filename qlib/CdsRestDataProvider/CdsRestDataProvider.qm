@@ -46,6 +46,7 @@ module CdsRestDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CdsRestDataProvider::DynamicsAppName,
+            "presentation_source_locale": "en",
             "display_name": "Microsoft Dynamics 365",
             "short_desc": "Microsoft Dynamics 365® enterprise application",
             "desc": "Microsoft Dynamics 365 access enables Qorus to easily access and manipulate data in Microsoft "
@@ -161,6 +162,7 @@ module CdsRestDataProvider {
         # Register Business Central app and actions
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CdsRestDataProvider::BusinessCentralAppName,
+            "presentation_source_locale": "en",
             "display_name": "Microsoft Dynamics 365 Business Central",
             "short_desc": "Microsoft Dynamics 365 Business Central ERP",
             "desc": "Microsoft Dynamics 365 Business Central is a cloud-based business management solution for small "

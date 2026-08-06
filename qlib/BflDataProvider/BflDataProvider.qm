@@ -40,6 +40,7 @@ module BflDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BflDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Black Forest Labs",
             "short_desc": "Black Forest Labs FLUX text-to-image generation",
             "desc": "Provides access to [Black Forest Labs](https://bfl.ai) — "

@@ -44,6 +44,7 @@ module HuggingFaceDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": HuggingFaceDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Hugging Face",
             "short_desc": "Hugging Face Hub and Inference API services",
             "desc": "Hugging Face Hub and Inference API integration providing:\n"

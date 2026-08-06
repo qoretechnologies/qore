@@ -47,6 +47,7 @@ module ConstantContactDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ConstantContactDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Constant Contact",
             "short_desc": "Constant Contact email marketing platform",
             "desc": "Constant Contact is an email marketing platform for creating campaigns, "

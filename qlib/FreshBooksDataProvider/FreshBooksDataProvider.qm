@@ -47,6 +47,7 @@ module FreshBooksDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FreshBooksDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "FreshBooks",
             "short_desc": "FreshBooks cloud accounting software",
             "desc": "FreshBooks is cloud-based accounting software designed for small businesses "

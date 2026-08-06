@@ -47,6 +47,7 @@ module LemlistDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": LemlistDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Lemlist",
             "short_desc": "Lemlist sales outreach and email automation platform",
             "desc": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with "

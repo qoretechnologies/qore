@@ -45,6 +45,7 @@ module FixedLengthUtil {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FixedLengthUtil::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Fixed-Length Files",
             "short_desc": "Read and write fixed-length file data",
             "desc": "Read and write fixed-length file data",

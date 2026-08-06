@@ -44,6 +44,7 @@ module BitlyDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BitlyDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Bitly",
             "short_desc": "Bitly URL shortening and link management",
             "desc": "Bitly is a URL shortening and link management platform for creating "

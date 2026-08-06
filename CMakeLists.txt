@@ -424,6 +424,7 @@ set(QORE_BIN_FILES
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
     bin/qore-i18n
+    bin/qore-data-provider-i18n
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
     bin/qore-onnx
@@ -3225,6 +3226,8 @@ set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 # this source tree, silently disabling metadata for the whole build on any mismatch -- a
 # bootstrap cycle that made a from-scratch build unable to produce metadata at all.
 set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+set(QORE_CATALOG_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore/i18n CACHE PATH
+    "Install directory for native Qore i18n catalogs")
 
 # An installed qore is still used below to probe *external* binary modules whose availability
 # changes qlib AOT output; that probe degrades gracefully when qore is not installed yet.

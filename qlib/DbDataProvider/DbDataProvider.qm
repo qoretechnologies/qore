@@ -58,6 +58,7 @@ module DbDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": DbDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "DB",
             "short_desc": "DB operations on connected datasources",
             "desc": "DB operations on connected datasources.",
@@ -690,6 +691,7 @@ public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
     # register the app
     DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
         "name": app_name,
+        "presentation_source_locale": "en",
         "display_name": vendor.display_name,
         "short_desc": vendor.short_desc,
         "desc": "Create and manage connections to a " + vendor.short_desc,

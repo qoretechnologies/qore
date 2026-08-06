@@ -44,6 +44,7 @@ module BgeM3FastApiDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BgeM3FastApiDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "BGE-M3 FastAPI",
             "short_desc": "BGE-M3 multilingual embeddings via the FastAPI sidecar",
             "desc": "Provides integration with the [BGE-M3](https://huggingface.co/BAAI/bge-m3) "

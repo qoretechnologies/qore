@@ -190,6 +190,7 @@ module RestClientDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": RestClientDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "REST Server",
             "short_desc": "Generic REST server",
             "desc": "Generic REST server",

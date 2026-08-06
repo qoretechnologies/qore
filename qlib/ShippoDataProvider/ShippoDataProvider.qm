@@ -47,6 +47,7 @@ module ShippoDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ShippoDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Shippo",
             "short_desc": "Shippo shipping platform",
             "desc": "Shippo is a multi-carrier shipping API and web application that simplifies the shipping process "

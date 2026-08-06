@@ -47,6 +47,7 @@ module Cin7CoreDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": Cin7CoreDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Cin7Core",
             "short_desc": "Cin7Core inventory management platform",
             "desc": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform "

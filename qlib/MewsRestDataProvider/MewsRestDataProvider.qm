@@ -48,6 +48,7 @@ module MewsRestDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MewsRestDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Mews Server",
             "short_desc": "Mews server",
             "desc": "Mews server",

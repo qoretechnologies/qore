@@ -50,6 +50,7 @@ module MemcachedDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MemcachedDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Memcached Server",
             "short_desc": "Memcached caching server",
             "desc": "Memcached distributed memory object caching system",

@@ -44,6 +44,7 @@ module FreshsalesDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FreshsalesDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Freshsales",
             "short_desc": "Freshsales CRM integration",
             "desc": "Freshsales is a CRM platform by Freshworks for managing contacts, "

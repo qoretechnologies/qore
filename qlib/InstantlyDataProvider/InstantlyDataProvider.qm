@@ -47,6 +47,7 @@ module InstantlyDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": InstantlyDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Instantly",
             "short_desc": "Instantly email outreach and sales automation",
             "desc": "Instantly.ai is a comprehensive platform for cold email outreach and sales automation. "

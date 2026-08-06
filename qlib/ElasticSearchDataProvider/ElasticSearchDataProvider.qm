@@ -58,6 +58,7 @@ module ElasticSearchDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ElasticSearchDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ElasticSearch Server",
             "short_desc": "ElasticSearch server",
             "desc": "ElasticSearch server",

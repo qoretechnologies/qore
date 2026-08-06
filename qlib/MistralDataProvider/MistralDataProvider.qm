@@ -40,6 +40,7 @@ module MistralDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MistralDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Mistral AI",
             "short_desc": "Mistral AI chat, embeddings, and document OCR",
             "desc": "Provides access to [Mistral AI](https://mistral.ai) — frontier and "

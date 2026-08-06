@@ -343,6 +343,14 @@ class I18nTest inherits QUnit::Test {
         assertEq("Nazdar, Eva", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
         assertEq("Bonjour, Jean", catalog.t("Hello, {name}", "fr-CA", {"name": "Jean"}));
         assertEq("Hello, Sam", catalog.t("Hello, {name}", "de", {"name": "Sam"}));
+        assertEq("cs", catalog.getMessageLocale("workflow.greeting", "cs-CZ"));
+        assertEq("root", catalog.getMessageLocale("workflow.greeting", "de"));
+        assertEq(NOTHING, catalog.getMessageLocale("missing", "cs"));
+        assertEq("Hello, {name}",
+            catalog.getMessageSource("workflow.greeting", "cs-CZ"));
+        assertEq("Hello, {name}",
+            catalog.getMessageSource("workflow.greeting", "de"));
+        assertEq(NOTHING, catalog.getMessageSource("missing", "cs"));
 
         assertEq(("cs-CZ", "cs", "root"), catalog.getFallbackChain("cs-CZ-u-nu-latn"));
         assertEq("cs", catalog.getEffectiveLocale("cs-CZ"));
@@ -391,6 +399,10 @@ class I18nTest inherits QUnit::Test {
 
         assertEq("Hello", strict.t("Hello", "cs"));
         assertEq("Ahoj", preview.t("Hello", "cs"));
+        assertEq("root", strict.getMessageLocale("Hello", "cs"));
+        assertEq("cs", preview.getMessageLocale("Hello", "cs"));
+        assertEq("Hello", strict.getMessageSource("Hello", "cs"));
+        assertEq("Hello", preview.getMessageSource("Hello", "cs"));
 
         hash<auto> strict_stats = strict.getStats("cs");
         hash<auto> preview_stats = preview.getStats("cs");

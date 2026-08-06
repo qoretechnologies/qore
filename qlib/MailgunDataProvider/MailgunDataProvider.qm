@@ -47,6 +47,7 @@ module MailgunDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MailgunDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Mailgun",
             "short_desc": "Mailgun email delivery and management service",
             "desc": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. "

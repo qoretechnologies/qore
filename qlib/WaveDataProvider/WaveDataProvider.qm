@@ -46,6 +46,7 @@ module WaveDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": WaveDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Wave",
             "short_desc": "Wave accounting and invoicing",
             "desc": "Wave is a free accounting, invoicing, and receipt scanning software for small businesses. "

@@ -47,6 +47,7 @@ module PdfCoDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": PdfCoDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "PDF.co",
             "short_desc": "PDF.co document processing platform",
             "desc": "PDF.co provides APIs for document processing including PDF conversion, "

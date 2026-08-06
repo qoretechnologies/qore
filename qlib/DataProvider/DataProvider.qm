@@ -36,6 +36,7 @@
 %requires(reexport) Mime
 %requires(reexport) Logger
 %requires(reexport) ProviderIndexUtil
+%requires i18n
 
 %try-module yaml
 %define NoYaml
@@ -48,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.6";
+    version = "3.7";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -76,6 +77,7 @@ module DataProvider {
         # register the Qore processors app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": QoreApp::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Qore",
             "short_desc": "Built-in data pipeline processors",
             "desc": "Built-in Qore data pipeline processors for filtering, transforming, "
@@ -372,8 +374,8 @@ module DataProvider {
                 "percentiles (median, quartiles, and custom values), interquartile range "
                 "(`iqr`), skewness (whether the data leans left or right), and kurtosis "
                 "(whether values cluster tightly or spread out).\n\n"
-                "For example, for transaction amounts it can show that 50%% are under "
-                "$100, 90%% are under $500, and the spread between the 25th and 75th "
+                "For example, for transaction amounts it can show that 50% are under "
+                "$100, 90% are under $500, and the spread between the 25th and 75th "
                 "percentile is $200.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
@@ -458,8 +460,8 @@ module DataProvider {
             "desc": "Creates a frequency distribution by dividing the range of values into "
                 "bins and counting how many values fall in each bin. Supports `uniform` "
                 "(equal-width) and `quantile` (equal-count) binning.\n\n"
-                "For example, for response times it can show that 80%% of requests complete "
-                "in 0-100ms, 15%% in 100-200ms, and 5%% take over 200ms.",
+                "For example, for response times it can show that 80% of requests complete "
+                "in 0-100ms, 15% in 100-200ms, and 5% take over 200ms.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreHistogramProcessor",
@@ -1348,6 +1350,10 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_7 DataProvider v3.7
+    - added source-owned native i18n catalog metadata and deterministic message identities for localized application,
+      action, and option presentation without changing technical identities
 
     @subsection dataprovider_v3_6 DataProvider v3.6
     - the generic data provider APIs now preserve the exception they wrap: the provider-specific exception is

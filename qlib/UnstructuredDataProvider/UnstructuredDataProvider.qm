@@ -40,6 +40,7 @@ module UnstructuredDataProvider {
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": UnstructuredDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Unstructured.io",
             "short_desc": "Unstructured.io document partitioning (element-tree extraction)",
             "desc": "Provides access to [Unstructured.io](https://unstructured.io) — "

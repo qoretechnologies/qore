@@ -43,6 +43,7 @@ module ClickFunnelsDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ClickFunnelsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ClickFunnels",
             "short_desc": "ClickFunnels 2.0 marketing and sales funnel platform",
             "desc": "ClickFunnels 2.0 is a marketing and sales funnel platform for managing "

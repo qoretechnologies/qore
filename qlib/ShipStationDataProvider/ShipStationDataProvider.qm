@@ -47,6 +47,7 @@ module ShipStationDataProvider {
         # Register the application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ShipStationDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ShipStation",
             "short_desc": "ShipStation shipping and logistics platform",
             "desc": "ShipStation is a leading shipping software that helps eCommerce retailers import, organize, "
