@@ -159,6 +159,11 @@ class DataProviderPresentationTest inherits QUnit::Test {
             DataProviderPresentation::allowedValueMessageId(App, Action,
                 Option, "1", "display_name"),
             "allowed-value identities include the exact scalar type");
+        assertNeq(DataProviderPresentation::allowedValueMessageId(App,
+                Action, Option, "GET", "display_name"),
+            DataProviderPresentation::allowedValueMessageId(App, Action,
+                Option, "PUT", "display_name"),
+            "distinct allowed values cannot share a catalog identity");
         assertEq(NOTHING,
             DataProviderPresentation::allowedValueMessageId(App, Action,
                 Option, {"complex": True}, "display_name"),

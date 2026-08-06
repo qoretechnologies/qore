@@ -75,9 +75,9 @@ public class RestClientCallWithMethodRequestDataType inherits RestClientCallRequ
                     },
                     <AllowedValueInfo>{
                         "display_name": "PUT",
-                        "short_desc": "HTTP GET method",
-                        "desc": "HTTP `GET` method",
-                        "value": "GET",
+                        "short_desc": "HTTP PUT method",
+                        "desc": "HTTP `PUT` method",
+                        "value": "PUT",
                     },
                     <AllowedValueInfo>{
                         "display_name": "TRACE",
