@@ -521,7 +521,8 @@ FTP and SFTP handlers — **including the error-propagation discipline**:
 `on_exit io_counter.done()` **outside** the `try`, so `waitForIo()` observes a
 recorded error before the wait group drains
 (`FileLocationHandlerSftp.qc:199-212`). `getIoPollerForLocation()` throws
-`UNIMPLEMENTED` for tier 2, matching the SFTP precedent.
+`UNIMPLEMENTED`, with a message saying why, for a tier-2 application that
+cannot support it.
 
 ### D.3 Registrations
 
@@ -816,6 +817,66 @@ naming `export_mime_type` makes it a single request.  S3 signs the polled
 request with the same code that signs every other request the module makes, so
 a polled read and a blocking read put an identical signature on the wire.
 
+### Non-blocking reads over FTP
+
+`FileLocationHandlerFtp::getIoPollerForLocationImpl()` no longer throws
+`UNIMPLEMENTED`.  It returns a `FileLocationHandlerFtpPollOperation`, which
+adapts the phase-at-a-time composite `FtpClientIo::FtpClientPollOperation` to
+the single `AbstractPollOperation` the handlers expose and takes the same route
+as the blocking read: log in, `CWD` to the file's directory, then retrieve it by
+name.  Nothing is sent until the poller is driven, and a location naming no file
+raises `LOCATION-ERROR` before any I/O.
+
+The composite operations had **never worked** — `FtpClientIo`'s suite covered
+only the two primitive poll operations, never a composite transfer, which is how
+the state machine shipped broken.  Three defects had to be fixed:
+
+1. **The data connection was opened after the transfer command.**  A server has
+   nothing to say until the connection it just advertised is accepted, so
+   sending `RETR`/`STOR`/`LIST` first deadlocks.  All three now connect first.
+2. **The data connection is not established until the operation is polled** —
+   `FtpDataPollOperation` issues its connect on the first `continuePoll()`, not
+   in its constructor — so it must be *driven*, not merely created.  "Connected"
+   is not a goal it ever reports, so `FtpClientPollOperation::currentOpReady()`
+   supplies the missing milestone.  Drivers must consult it instead of
+   `goalReached()`, and must do so *before* waiting on the `SocketPollInfo` the
+   current operation returned: the cycle that completes the data connection also
+   starts the transfer, so it hands back a descriptor that nothing will arrive
+   on until the transfer command has been sent.
+3. **Polling a data operation closed an unrelated socket.**  Not an FTP defect
+   at all, but a core one: `SocketPollSocketOperationBase::abortLocked()` reset
+   `poll_state` *before* calling `abortNeedsClose()`, and every override that
+   distinguishes a recoverable abort from an unrecoverable one decides by asking
+   the poll state how many bytes it already consumed — reporting "close" when
+   there is no poll state at all.  Every abort therefore closed the socket, so
+   an ordinary `Socket::recv(count, timeout)` that timed out with no data
+   available tore down a healthy connection and the caller that caught
+   `SOCKET-TIMEOUT` and retried got `SOCKET-NOT-OPEN`.  That is what made the
+   FTP test server's control connection die 250 ms into any idle period; it was
+   never about FTP.  Fixed in `lib/QoreSocket.cpp`.
+
+Composite GET, PUT and LIST are now covered in `FtpClientIo.qtest` against the
+test `FtpServer` — an empty file, a file large enough to span several data
+reads, a missing file that must report the server's error rather than hang, a
+round-trip upload, and both listing forms.  Two paths that the default
+configuration never reaches are covered explicitly:
+
+- **FTPS**, over both channels: `AUTH TLS` + `PBSZ 0` + `PROT P` on the control
+  channel and the data-channel TLS upgrade `FtpDataPollOperation` performs right
+  after connecting.  `FileLocationHandler.qtest` reads the same file over
+  `ftps://` and compares it against the plaintext read.
+- **The PASV fallback**, which only runs when a server refuses EPSV — so
+  without a server that does, the branch that re-enters the same phase with a
+  different command is never executed.
+
+The fake grew the fidelity all of this needs: it answers `LIST` as well as
+`NLST`; a filesystem-backed server refuses a file it cannot open with `550`
+before the transfer starts, instead of silently serving canned data for any
+name; it speaks FTPS (`AUTH`/`PBSZ`/`PROT`, and TLS on `PROT P` data
+connections), which needs no switch because a plaintext client simply never
+sends those commands; and `setNoEpsv()` makes it answer EPSV with a `502` the
+way a server predating RFC 2428 does.
+
 ---
 
 ## Sequencing
@@ -844,17 +905,13 @@ but running A first means D lands against a settled framework.
 - **`ts-toolkit` `files: {...}` key** for the ~80 apps staying in TypeScript.
 - **Directory listing through a connection** (`FilePoller`-style). `conn://`
   covers read and write of a single file only.
-- **Non-blocking reads for `ftp://` and `sftp://`.**  Both tier-1a handlers
-  still throw `UNIMPLEMENTED` from `getIoPollerForLocationImpl()`, and neither
-  can be fixed in the handler: SFTP has no async API at all in `module-ssh2`,
-  and FTP's composite `FtpClientIo::FtpClientPollOperation` does not work —
-  its suite covers only the two primitive poll operations, never a composite
-  GET, so the state machine shipped broken.  One defect in it is fixed here
-  (the data connection is now opened before the transfer command, since a
-  server will not answer `RETR` until the connection it advertised is
-  accepted); at least one more remains.  Written up as
-  `/tmp/qore-5386-ftp-poller-prompt.md` and
-  `/tmp/qore-5386-sftp-poller-prompt.md`.
+- ~~**Non-blocking reads for `ftp://` and `sftp://`.**~~  Done; no tier-1a
+  handler throws `UNIMPLEMENTED` from `getIoPollerForLocationImpl()` any more.
+  See *Non-blocking reads over FTP* below for the FTP half; the SFTP half is
+  `FileLocationHandlerSftp` on `SFTPClient::startPollGetFile()`, which still
+  raises `UNIMPLEMENTED` — with an actionable message rather than
+  `METHOD-DOES-NOT-EXIST` — when the `ssh2` module present at runtime predates
+  that method.
 - **Migrating the other Amazon apps** (`ses`, `sns`, `sqs`, `lambda`,
   `cloudfront`, `cloudwatch`, `ec2`) onto `AwsRestClient`. If that is ever
   wanted it argues for building `AwsS3DataProvider` on shared AWS base classes

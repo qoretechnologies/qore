@@ -18,6 +18,13 @@ class FtpClientIoTest inherits QUnit::Test {
     private {
         int port;
         FtpServer ftpServer;
+        string serverDir;
+
+        #! a payload large enough that the data channel needs several reads to drain it
+        const BigFileSize = 100000;
+        const EmptyFile = "empty.txt";
+        const BigFile = "big.txt";
+        const MissingFile = "no-such-file.txt";
     }
 
     constructor() : QUnit::Test("FtpClientIo", "1.0") {
@@ -25,13 +32,42 @@ class FtpClientIoTest inherits QUnit::Test {
         addTestCase("FtpControlPollOperation login", \testControlPollOperationLogin());
         addTestCase("FtpControlPollOperation command", \testControlPollOperationCommand());
         addTestCase("FtpDataPollOperation basic", \testDataPollOperationBasic());
+        addTestCase("FtpClientPollOperation get", \testCompositeGet());
+        addTestCase("FtpClientPollOperation get empty file", \testCompositeGetEmptyFile());
+        addTestCase("FtpClientPollOperation get missing file", \testCompositeGetMissingFile());
+        addTestCase("FtpClientPollOperation put", \testCompositePut());
+        addTestCase("FtpClientPollOperation list", \testCompositeList());
+        addTestCase("FtpClientPollOperation PASV fallback", \testCompositePasvFallback());
+        addTestCase("FtpClientPollOperation FTPS", \testCompositeFtps());
 
         ftpServer = new FtpServer(0, m_options.verbose);
         port = ftpServer.getPort();
+        ftpServer.setFs();
+        serverDir = ftpServer.getLocalDir();
+        # list the server's own directory so the listing tests see known entries
+        ftpServer.setPwd(serverDir);
+        writeServerFile(EmptyFile, "");
+        writeServerFile(BigFile, getBigFileContent());
 
         set_return_value(main());
 
         ftpServer.shutdown();
+    }
+
+    #! Returns the big-file fixture content
+    /** @note no assertions here: this runs from the constructor, where QUnit has no current test case
+    */
+    private string getBigFileContent() {
+        return strmul("abcdefghij0123456789", BigFileSize / 20);
+    }
+
+    private writeServerFile(string name, string content) {
+        File f();
+        f.open2(serverDir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        if (content.val()) {
+            f.write(content);
+        }
+        f.close();
     }
 
     #! Drive a poll operation to completion using continuePoll + Socket::poll
@@ -48,6 +84,211 @@ class FtpClientIoTest inherits QUnit::Test {
                 Socket::poll(poll_list, remaining);
             }
         }
+    }
+
+    #! Drives a composite FTP operation to completion
+    /** @note currentOpReady() has to be consulted *before* the SocketPollInfo the current operation
+        returned is waited on.  The poll cycle that finishes establishing the data connection also starts
+        the transfer, so it returns a descriptor to wait on -- and nothing will ever arrive on it, because
+        the transfer command has not been sent yet.  Waiting on it first deadlocks until the test's own
+        timeout fires.
+    */
+    private driveComposite(FtpClientIo::FtpClientPollOperation op, timeout tmout = 30s) {
+        int deadline = clock_getmicros_monotonic() + (tmout * 1000);
+        while (True) {
+            AbstractPollOperation cur = op.getCurrentPollOp();
+            *hash<SocketPollInfo> pi = cur.continuePoll();
+            if (op.currentOpReady()) {
+                if (op.advancePhase()) {
+                    return;
+                }
+                continue;
+            }
+            if (pi) {
+                int remaining_ms = (deadline - clock_getmicros_monotonic()) / 1000;
+                if (remaining_ms <= 0) {
+                    throw "TIMEOUT", sprintf("composite operation timed out in state %y", cur.getState());
+                }
+                list<hash<SocketPollInfo>> poll_list = (pi,);
+                Socket::poll(poll_list, remaining_ms);
+            }
+        }
+    }
+
+    #! Returns a logged-in composite operation
+    private FtpClientIo::FtpClientPollOperation loginComposite() {
+        FtpClientIo::FtpClientPollOperation op("localhost", port, False, False, "user", "pass");
+        assertFalse(op.isLoggedIn(), "should not be logged in before being driven");
+        driveComposite(op);
+        assertTrue(op.isLoggedIn(), "should be logged in after the login operation completes");
+        return op;
+    }
+
+    testCompositeGet() {
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        op.submitGet(BigFile);
+        driveComposite(op);
+
+        string content = getBigFileContent();
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "GET should complete with 226");
+        assertEq(BigFileSize, content.size(), "the big-file fixture must span several data reads");
+        assertEq(content.size(), r.data.size(), "the whole file must be received across multiple data reads");
+        assertEq(binary(content), r.data, "received data must match the file on the server");
+
+        # the control channel must survive the transfer and stay usable
+        op.submitCommand("PWD");
+        driveComposite(op);
+        assertEq(257, op.getCommandResult().code, "control channel must still work after a transfer");
+
+        # a second transfer on the same connection must work as well
+        op.submitGet(BigFile);
+        driveComposite(op);
+        assertEq(BigFileSize, op.getTransferResult().data.size(), "a second GET on the same connection");
+    }
+
+    testCompositeGetEmptyFile() {
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        op.submitGet(EmptyFile);
+        driveComposite(op);
+
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "GET of an empty file should still complete with 226");
+        assertEq(0, r.data.size() ?? 0, "an empty file must yield no data");
+
+        # an empty transfer must leave the control channel usable
+        op.submitCommand("PWD");
+        driveComposite(op);
+        assertEq(257, op.getCommandResult().code, "control channel must still work after an empty transfer");
+    }
+
+    testCompositeGetMissingFile() {
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        # the server refuses the transfer; this must surface as an error rather than hanging waiting for
+        # data that will never come
+        op.submitGet(MissingFile);
+        # the server's own refusal must be reported, code and message both
+        assertThrows("FTP-GET-ERROR", "550.*" + MissingFile, \driveComposite(), op);
+
+        # the refusal must not poison the control channel
+        op.submitCommand("PWD");
+        driveComposite(op);
+        assertEq(257, op.getCommandResult().code, "control channel must survive a refused transfer");
+
+        # and a subsequent valid transfer must still work
+        op.submitGet(EmptyFile);
+        driveComposite(op);
+        assertEq(226, op.getTransferResult().code, "a GET after a refused GET must succeed");
+    }
+
+    testCompositePut() {
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        string name = "uploaded-" + get_random_string(8) + ".txt";
+        binary payload = binary(strmul("qore-ftp-put-payload ", 500));
+
+        op.submitPut(name, payload);
+        driveComposite(op);
+
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "PUT should complete with 226");
+
+        # the server writes uploads into its own directory: verify the bytes actually arrived
+        string path = serverDir + DirSep + name;
+        assertTrue(is_file(path), sprintf("server should have stored %y", path));
+        assertEq(payload, File::readBinaryFile(path), "stored file must match the uploaded payload");
+
+        # read it back over FTP as well
+        op.submitGet(name);
+        driveComposite(op);
+        assertEq(payload, op.getTransferResult().data, "uploaded file must read back identically");
+    }
+
+    testCompositeList() {
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        # long listing (LIST)
+        op.submitList(NOTHING, True);
+        driveComposite(op);
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "LIST should complete with 226");
+        string listing = r.data.toString();
+        assertRegex(BigFile, listing, "LIST output should name the big file");
+        assertRegex(EmptyFile, listing, "LIST output should name the empty file");
+        assertRegex("^[-d][rwx-]{9} ", listing, "LIST output should be a long listing");
+
+        # name-only listing (NLST)
+        op.submitList(NOTHING, False);
+        driveComposite(op);
+        r = op.getTransferResult();
+        assertEq(226, r.code, "NLST should complete with 226");
+        list<string> names = r.data.toString().split("\r\n");
+        assertTrue(inlist(BigFile, names), "NLST output should list the big file by bare name");
+        assertTrue(inlist(EmptyFile, names), "NLST output should list the empty file by bare name");
+    }
+
+    #! Tests that a server refusing EPSV makes the client fall back to PASV
+    /** The composite operation prefers EPSV and only tries PASV when EPSV is refused, so without a
+        server that refuses it the fallback -- which re-enters the same phase with a different command --
+        is never executed.
+    */
+    testCompositePasvFallback() {
+        ftpServer.setNoEpsv(True);
+        on_exit ftpServer.setNoEpsv(False);
+
+        FtpClientIo::FtpClientPollOperation op = loginComposite();
+
+        op.submitGet(BigFile);
+        driveComposite(op);
+
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "a GET over a PASV data connection should complete with 226");
+        assertEq(getBigFileContent().size(), r.data.size(), "the whole file must arrive over PASV as well");
+        assertEq(binary(getBigFileContent()), r.data, "PASV-transferred data must match the file");
+
+        # a listing over the fallback path too, since it parses the same response
+        op.submitList(NOTHING, False);
+        driveComposite(op);
+        assertEq(226, op.getTransferResult().code, "NLST over a PASV data connection");
+        assertTrue(inlist(BigFile, op.getTransferResult().data.toString().split("\r\n")),
+            "the PASV listing should name the big file");
+    }
+
+    #! Tests a composite transfer over FTPS: TLS control channel and TLS data channel
+    /** Covers AUTH TLS + PBSZ 0 + PROT P on the control channel and the data channel TLS upgrade that
+        FtpDataPollOperation performs immediately after connecting.
+    */
+    testCompositeFtps() {
+        # secure control channel and secure data channel
+        FtpClientIo::FtpClientPollOperation op("localhost", port, True, True, "user", "pass");
+        driveComposite(op);
+        assertTrue(op.isLoggedIn(), "FTPS login should complete over the TLS control channel");
+        assertTrue(op.getControlOp().isSecure(), "the control channel should be TLS");
+        assertTrue(op.getControlOp().isSecureData(), "PROT P should have been negotiated");
+
+        op.submitGet(BigFile);
+        driveComposite(op);
+
+        *hash<FtpClientIo::FtpTransferResult> r = op.getTransferResult();
+        assertEq(226, r.code, "a GET over FTPS should complete with 226");
+        assertEq(binary(getBigFileContent()), r.data, "data received over a TLS data channel must match");
+
+        # the encrypted control channel must remain usable afterwards
+        op.submitCommand("PWD");
+        driveComposite(op);
+        assertEq(257, op.getCommandResult().code, "the TLS control channel must survive a transfer");
+
+        # and an upload over the encrypted data channel must arrive intact
+        string name = "ftps-" + get_random_string(8) + ".txt";
+        binary payload = binary(strmul("ftps-payload ", 400));
+        op.submitPut(name, payload);
+        driveComposite(op);
+        assertEq(226, op.getTransferResult().code, "a PUT over FTPS should complete with 226");
+        assertEq(payload, File::readBinaryFile(serverDir + DirSep + name),
+            "the file stored by the server must match what was uploaded over TLS");
     }
 
     testControlPollOperationBasic() {

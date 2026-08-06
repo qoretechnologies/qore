@@ -156,6 +156,11 @@ public class FtpClientPollOperation {
         the transfer command has been sent, and the transfer command cannot be answered until the data
         connection is up.  Waiting on \c goalReached() there deadlocks.
 
+        @note Drivers must check this *before* acting on the @ref Qore::SocketPollInfo "SocketPollInfo"
+        returned by the current operation's \c continuePoll(), not after.  The poll cycle that completes the
+        data connection also starts the transfer and therefore returns a read/write descriptor to wait on;
+        waiting on it blocks until data arrives, and no data arrives until the transfer command is sent.
+
         @return @ref True if the current phase may advance
     */
     bool currentOpReady() {
@@ -331,6 +336,9 @@ public class FtpClientPollOperation {
                 # RETR 150 response → read the data connection established above
                 hash<auto> resp = ctrl.getOutput();
                 if ((resp.code / 100) != 1) {
+                    # the server refused the transfer (550 for a file it cannot open, for example); the data
+                    # connection opened for it will never be used, so tear it down rather than leaking it
+                    discardDataOp();
                     throw "FTP-GET-ERROR", sprintf("RETR failed: %s", resp.message);
                 }
                 current_poll_op = data_op;
@@ -375,24 +383,35 @@ public class FtpClientPollOperation {
                 return False;
             }
             case 1: {
-                # EPSV/PASV response → parse data port, send STOR
+                # EPSV/PASV response → establish the data connection *before* sending STOR
+                /* see the note in advanceGetPhase(): the server has nothing to say about STOR until the
+                   data connection it just advertised has been accepted, and the connection is not opened
+                   until the data operation is driven */
                 if (!parseDataModeResponse()) {
                     return False;
                 }
+                startDataSend();
+                awaiting_data_connect = True;
+                return False;
+            }
+            case 2: {
+                # data connection up → send STOR on the control channel
+                awaiting_data_connect = False;
                 ctrl.submitCommand(command: "STOR", argument: op_remote_path);
                 current_poll_op = ctrl;
                 return False;
             }
-            case 2: {
-                # STOR 150 response → start data transfer
+            case 3: {
+                # STOR 150 response → send the payload on the data connection established above
                 hash<auto> resp = ctrl.getOutput();
                 if ((resp.code / 100) != 1) {
+                    discardDataOp();
                     throw "FTP-PUT-ERROR", sprintf("STOR failed: %s", resp.message);
                 }
-                startDataSend();
+                current_poll_op = data_op;
                 return False;
             }
-            case 3: {
+            case 4: {
                 # Data send complete → read 226 on control channel
                 remove data_op;
                 remove op_send_data;
@@ -400,7 +419,7 @@ public class FtpClientPollOperation {
                 current_poll_op = ctrl;
                 return False;
             }
-            case 4: {
+            case 5: {
                 # 226 completion response received
                 hash<auto> resp = ctrl.getOutput();
                 transfer_result = <FtpTransferResult>{
@@ -428,22 +447,32 @@ public class FtpClientPollOperation {
                 return False;
             }
             case 1: {
-                # EPSV/PASV response → open the data connection, then send LIST/NLST
-                /* see the note in advanceGetPhase(): the data connection is opened before the command */
+                # EPSV/PASV response → establish the data connection *before* sending LIST/NLST
+                /* see the note in advanceGetPhase(): the data connection is opened *and driven* before the
+                   command, because it is not connected until it is polled */
                 if (!parseDataModeResponse()) {
                     return False;
                 }
-                createDataReceiveOp();
+                startDataReceive();
+                awaiting_data_connect = True;
+                return False;
+            }
+            case 2: {
+                # data connection up → send LIST/NLST on the control channel
+                awaiting_data_connect = False;
                 ctrl.submitCommand(op_long_list ? "LIST" : "NLST",
                     op_remote_path ? op_remote_path : NOTHING);
                 current_poll_op = ctrl;
                 return False;
             }
-            case 2: {
-                # LIST 150 response → start data transfer
+            case 3: {
+                # LIST 150 response → read the data connection established above
                 hash<auto> resp = ctrl.getOutput();
-                if ((resp.code / 100) == 5) {
-                    # 5xx = file not found / empty
+                if (resp.code == 550) {
+                    # the directory does not exist or has nothing to list: a complete answer, not an error.
+                    # Only 550 means that; any other 5xx (500 for a command the server does not implement,
+                    # for instance) is a real failure and must not be reported as an empty listing.
+                    discardDataOp();
                     transfer_result = <FtpTransferResult>{
                         "code": resp.code,
                         "message": resp.message,
@@ -451,12 +480,13 @@ public class FtpClientPollOperation {
                     return True;
                 }
                 if ((resp.code / 100) != 1) {
+                    discardDataOp();
                     throw "FTP-LIST-ERROR", sprintf("LIST failed: %s", resp.message);
                 }
                 current_poll_op = data_op;
                 return False;
             }
-            case 3: {
+            case 4: {
                 # Data transfer complete → save data, read 226 on control channel
                 *binary recv = data_op.getOutput();
                 remove data_op;
@@ -465,7 +495,7 @@ public class FtpClientPollOperation {
                 current_poll_op = ctrl;
                 return False;
             }
-            case 4: {
+            case 5: {
                 # 226 completion response received
                 hash<auto> resp = ctrl.getOutput();
                 transfer_result = <FtpTransferResult>{
@@ -544,6 +574,19 @@ public class FtpClientPollOperation {
     private startDataSend() {
         data_op = new FtpDataPollOperation(data_host, data_port, op_send_data, secure_data);
         current_poll_op = data_op;
+    }
+
+    #! Tears down a data connection that was opened for a transfer the server then refused
+    /** The data connection is opened before the transfer command is sent, so a command the server rejects
+        leaves a connected socket behind with nothing to carry.  It must be closed rather than left to the
+        garbage collector, or the server's data-accept thread waits for a transfer that never comes.
+    */
+    private discardDataOp() {
+        if (data_op) {
+            data_op.abort();
+            remove data_op;
+        }
+        current_poll_op = ctrl;
     }
 }
 

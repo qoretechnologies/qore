@@ -30,6 +30,8 @@
 # enable all warnings
 
 %requires Util
+# for non-blocking FTP retrieval; FtpClientIo requires nothing from this module, so there is no cycle
+%requires FtpClientIo
 
 module FileLocationHandler {
     version = "3.0";

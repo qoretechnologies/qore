@@ -222,6 +222,35 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         string url = "ftp://user:pass@127.0.0.1:" + port + "/" + file_name;
 
         doTests(url);
+
+        # FTP locations can also be read with non-blocking I/O; use a payload large enough that the data
+        # channel needs several reads to drain it
+        string random_content = strmul(get_random_string(512), 200);
+        FileLocationHandler::writeFileToLocation(url, random_content);
+        assertEq(random_content.toBinary(), FileLocationHandler::getBinaryFileFromLocation(url),
+            "blocking read of the FTP fixture");
+        assertEq(random_content.toBinary(), runPoller(FileLocationHandler::getIoPollerForLocation(url)),
+            "the polled bytes must equal what the blocking read returns");
+
+        # the same file over ftps:// drives the poller through AUTH TLS, PBSZ 0 and PROT P, and reads the
+        # data channel over TLS as well
+        string ftps_url = "ftps://user:pass@127.0.0.1:" + port + "/" + file_name;
+        assertEq(random_content.toBinary(), runPoller(FileLocationHandler::getIoPollerForLocation(ftps_url)),
+            "an ftps:// poller must return the same bytes as the plaintext read");
+
+        # a location naming no file is rejected before any I/O happens
+        assertThrows("LOCATION-ERROR", "missing file path", \FileLocationHandler::getIoPollerForLocation(),
+            "ftp://user:pass@127.0.0.1:" + port + "/");
+
+        # the poller opens no connection until it is driven: one built against a bound-but-unlistening
+        # port constructs without error, and only reports the connection failure once polled.  The bind
+        # reserves the port, so the refusal is deterministic.
+        Socket reserved();
+        reserved.bindINET("127.0.0.1", 0, True);
+        string dead_url = sprintf("ftp://user:pass@127.0.0.1:%d/%s", reserved.getSocketInfo().port, file_name);
+        AbstractPollOperation dead = FileLocationHandler::getIoPollerForLocation(dead_url);
+        assertFalse(dead.goalReached(), "a poller that has not been driven cannot have reached its goal");
+        assertThrows("SOCKET-CONNECT-ERROR", \runPoller(), dead);
     }
 
     private httpTests() {
