@@ -36,6 +36,82 @@
 
 %exec-class GoogleDriveDataProviderTest
 
+#! Answers Drive requests from a script rather than reaching Google
+class FakeGoogleRestClientIo inherits GoogleRestClient::GoogleRestClientIo {
+    public {
+        #! response bodies to return, in order; the last one is reused once the list is exhausted
+        list<auto> bodies = ({},);
+
+        #! response headers to return, in order; the last one is reused once the list is exhausted
+        /** NOTE: not "headers"; RestClient already declares a private member of that name, and a subclass
+            may not redeclare it
+        */
+        list<hash<auto>> resp_headers = ({},);
+
+        #! every request made, oldest first
+        list<hash<auto>> requests = ();
+
+        #! the number of responses already handed out
+        int served = 0;
+
+        #! response status codes to return, in order; the last one is reused once the list is exhausted
+        /** A status \>= 300 is **thrown** as \c REST-RESPONSE-ERROR carrying the response, exactly as the
+            real client does.  A resumable upload depends on that behaviour: Drive answers every chunk but the
+            last with \c 308, so a fake that answers \c 200 tests a conversation that never happens
+        */
+        list<int> statuses = (200,);
+    }
+
+    constructor() : GoogleRestClientIo(GoogleDriveDataProviderTest::TestConnOptions
+        + {"api_profile": "drive"}) {
+    }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body, *hash<auto> hdr) {
+        requests += {"method": method, "path": path, "body": body, "hdr": hdr};
+        int i = served < bodies.size() ? served : bodies.size() - 1;
+        int j = served < resp_headers.size() ? served : resp_headers.size() - 1;
+        ++served;
+        int k = served <= statuses.size() ? served - 1 : statuses.size() - 1;
+        hash<RestClient::RestResponseInfo> resp = <RestClient::RestResponseInfo>{
+            "status_code": statuses[k],
+            "body": bodies[i],
+            "headers": resp_headers[j] ?? {},
+        };
+        if (resp.status_code >= 300) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.status_code), resp;
+        }
+        return resp;
+    }
+
+    #! Returns the last request made
+    hash<auto> last() {
+        if (!requests) {
+            throw "TEST-ERROR", "no request was made";
+        }
+        return requests[requests.size() - 1];
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return record("GET", path, NOTHING, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return record("POST", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return record("PUT", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return record("PATCH", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return record("DELETE", path, body, hdr);
+    }
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr);
+    }
+}
+
 public class GoogleDriveDataProviderTest inherits QUnit::Test {
     public {
         #! the application name
@@ -78,6 +154,8 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("shared drive support", \sharedDriveTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("change classification", \changeClassificationTest());
+        addTestCase("resumable upload", \resumableUploadTest());
+        addTestCase("native file location handler", \nativeHandlerTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live shared drives", \liveSharedDriveTest());
         addTestCase("live change feed", \liveChangeFeedTest());
@@ -85,6 +163,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("live folder operations", \liveFolderOperationsTest());
         addTestCase("live extended operations", \liveExtendedOperationsTest());
         addTestCase("live record iterator", \liveRecordIteratorTest());
+        addTestCase("live native handler", \liveNativeHandlerTest());
 
         set_return_value(main());
     }
@@ -102,10 +181,12 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         assertEq("gdrive", conn.getType());
         assertEq(App, conn.getAppName());
         assertEq(True, conn.hasDataProvider());
-        # an application connection leaves file locations to its application's file API rather than claiming
-        # native support: Drive addresses a file by an opaque ID and needs "?alt=media", which a bare GET on the
-        # location path would not produce
-        assertEq(False, conn.supportsFileLocations());
+        # tier 1b: Drive transfers files natively for "conn://" locations rather than leaving them to the
+        # application file API, because it can do better -- a resumable upload driven from an output stream,
+        # and a download that arrives as the response body rather than base64-encoded into a JSON field
+        assertEq(True, conn.supportsFileLocations(), "Drive connections transfer files natively");
+        object handler = conn.getFileLocationHandler();
+        assertTrue(handler instanceof GoogleDriveFileLocationHandler, "the native Drive handler is returned");
 
         assertEq("gdrive", (new GoogleDriveDataProviderFactory()).getName());
     }
@@ -238,6 +319,10 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         # the shared-drive collection endpoint itself takes no such parameter
         assertEq("/drive/v3/drives", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/drives"));
         assertEq("/drive/v3/about", GoogleDriveDataProviderBase::addSharedDriveSupport("/drive/v3/about"));
+        # ... and neither is a resumable upload session URI, which the server generated
+        assertEq("/upload/drive/v3/files?uploadType=resumable&upload_id=U1",
+            GoogleDriveDataProviderBase::addSharedDriveSupport(
+                "/upload/drive/v3/files?uploadType=resumable&upload_id=U1"));
 
         # a listing needs more than "supportsAllDrives": without "includeItemsFromAllDrives" shared-drive
         # content never appears in the results, whatever the account can reach
@@ -409,12 +494,274 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             "with no cursor yet, age does not exclude an item");
     }
 
+    #! A large file is sent as a resumable upload rather than as one request
+    /** A single-request upload of a large file has to be retried from the beginning if the connection drops.
+        The threshold constant had been defined and never used, so every upload was a single request whatever
+        its size.
+    */
+    resumableUploadTest() {
+        FakeGoogleRestClientIo rest();
+        GoogleDriveFileTransferProvider prov(rest);
+
+        # below the threshold: one multipart request, no session
+        rest.bodies = ({"id": "f1", "name": "small.txt"},);
+        prov.put("small.txt", NOTHING, binary("small"), "text/plain");
+        assertEq(1, rest.requests.size(), "a small file is stored in a single request");
+        assertRegex("uploadType=multipart", rest.last().path);
+
+        # above it: open a session, then send the content in chunks against the session URI
+        FakeGoogleRestClientIo rest2();
+        int chunks = 2;
+        rest2.bodies = ({}, {}, {"id": "f2", "name": "big.bin"});
+        # Drive answers every chunk but the last with "308 Resume Incomplete" and a Range header reporting
+        # what it holds; the last one gets a 2xx carrying the file metadata
+        rest2.statuses = (200, 308, 200);
+        rest2.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U1"},
+            {"range": sprintf("bytes=0-%d", ResumableChunkSize - 1)},
+            {},
+        );
+        GoogleDriveFileTransferProvider prov2(rest2);
+        prov2.put("big.bin", "folder1", binary(strmul("y", ResumableChunkSize * chunks)),
+            MimeTypeOctetStream);
+
+        assertEq(1 + chunks, rest2.requests.size(), "the session plus one request per chunk");
+        assertRegex("uploadType=resumable", rest2.requests[0].path, "the session is opened first");
+        assertEq("POST", rest2.requests[0].method);
+        assertEq(("folder1",), rest2.requests[0].body.parents, "the metadata names the folder");
+        assertEq(MimeTypeOctetStream, rest2.requests[0].hdr."X-Upload-Content-Type");
+
+        # only the path of the absolute session URI is used, since the client already targets that host --
+        # and it is used exactly as the server gave it, with nothing appended: the shared drive was settled
+        # when the session was opened, so the central shared-drive rewrite must leave a session URI alone
+        assertEq("/upload/drive/v3/files?uploadType=resumable&upload_id=U1", rest2.requests[1].path);
+        assertEq("PUT", rest2.requests[1].method);
+        # each chunk declares the byte range it carries; the last one declares the total
+        assertEq(sprintf("bytes 0-%d/*", ResumableChunkSize - 1), rest2.requests[1].hdr."Content-Range");
+        assertEq(sprintf("bytes %d-%d/%d", ResumableChunkSize, ResumableChunkSize * 2 - 1,
+            ResumableChunkSize * 2), rest2.requests[2].hdr."Content-Range");
+
+        # Drive is authoritative about what it holds.  When it acknowledges less than was sent, the rest of
+        # that chunk -- which is still in hand -- has to be sent again rather than skipped: continuing from
+        # our own byte count would leave a gap, and the upload would then complete into a file of exactly the
+        # right length holding the wrong bytes.
+        FakeGoogleRestClientIo rest2b();
+        rest2b.bodies = ({}, {}, {}, {"id": "f2b", "name": "partial.bin"});
+        rest2b.statuses = (200, 308, 308, 200);
+        int half = ResumableChunkSize / 2;
+        rest2b.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U2"},
+            {"range": sprintf("bytes=0-%d", half - 1)},
+            {"range": sprintf("bytes=0-%d", ResumableChunkSize - 1)},
+            {},
+        );
+        GoogleDriveFileTransferProvider prov2b(rest2b);
+        prov2b.put("partial.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)), MimeTypeOctetStream);
+
+        assertEq(4, rest2b.requests.size(), "the unacknowledged tail of the chunk is sent again");
+        assertEq(sprintf("bytes %d-%d/*", half, ResumableChunkSize - 1),
+            rest2b.requests[2].hdr."Content-Range", "the resend covers exactly what was not acknowledged");
+        assertEq(ResumableChunkSize - half, rest2b.requests[2].body.size(),
+            "the resend carries only the bytes Drive did not acknowledge");
+        assertEq(sprintf("bytes %d-%d/%d", ResumableChunkSize, ResumableChunkSize * 2 - 1,
+            ResumableChunkSize * 2), rest2b.requests[3].hdr."Content-Range",
+            "the chunk after it still declares the real total");
+
+        # ... and a chunk Drive acknowledges nothing of must fail rather than be retried forever
+        FakeGoogleRestClientIo rest2c();
+        rest2c.bodies = ({}, {}, {});
+        rest2c.statuses = (200, 308, 308);
+        rest2c.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U3"},
+            {}, {},
+        );
+        GoogleDriveFileTransferProvider prov2c(rest2c);
+        assertThrows("GOOGLE-DRIVE-ERROR", "stalled", sub () {
+            prov2c.put("stalled.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)),
+                MimeTypeOctetStream);
+        });
+
+        # an intermediate chunk answered with a 2xx cannot be taken for progress: Drive was told the total is
+        # unknown, so it cannot have completed the upload, and continuing would drop the rest of the content
+        FakeGoogleRestClientIo rest2d();
+        rest2d.bodies = ({}, {"id": "early"}, {});
+        rest2d.statuses = (200, 200, 200);
+        rest2d.resp_headers = (
+            {"location": "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=U4"},
+            {}, {},
+        );
+        GoogleDriveFileTransferProvider prov2d(rest2d);
+        assertThrows("GOOGLE-DRIVE-ERROR", "rather than 308", sub () {
+            prov2d.put("early.bin", NOTHING, binary(strmul("z", ResumableChunkSize * 2)),
+                MimeTypeOctetStream);
+        });
+
+        # a stream that ends within the first chunk is sent as a single request, saving the session round
+        # trips -- the same choice S3 and Dropbox make, and what keeps an empty stream from producing a
+        # meaningless byte range
+        FakeGoogleRestClientIo rest3();
+        rest3.bodies = ({"id": "f3"},);
+        GoogleDriveFileTransferProvider prov3(rest3);
+        prov3.putStream("s.bin", NOTHING, new BinaryInputStream(binary("abc")), MimeTypeOctetStream);
+        assertEq(1, rest3.requests.size(), "a short stream is stored in a single request");
+        assertRegex("uploadType=multipart", rest3.last().path);
+
+        # ... including an empty one, which has no byte range to declare at all
+        FakeGoogleRestClientIo rest3b();
+        rest3b.bodies = ({"id": "f3b"},);
+        GoogleDriveFileTransferProvider prov3b(rest3b);
+        prov3b.putStream("empty.bin", NOTHING, new BinaryInputStream(binary()), MimeTypeOctetStream);
+        assertEq(1, rest3b.requests.size(), "an empty stream is stored in a single request");
+
+        # a session URI is required; without one there is nothing to send the content to
+        FakeGoogleRestClientIo rest4();
+        rest4.bodies = ({},);
+        rest4.resp_headers = ({},);
+        GoogleDriveFileTransferProvider prov4(rest4);
+        assertThrows("GOOGLE-DRIVE-ERROR", "session URI", sub () {
+            prov4.putStream("x.bin", NOTHING,
+                new BinaryInputStream(binary(strmul("q", ResumableChunkSize + 1))), MimeTypeOctetStream);
+        });
+
+        assertEq("/upload/x?upload_id=U2",
+            GoogleDriveDataProviderBase::getSessionPath("https://www.googleapis.com/upload/x?upload_id=U2"));
+    }
+
+    #! The native file location handler transfers files through Drive rather than through the actions
+    nativeHandlerTest() {
+        FakeGoogleRestClientIo rest();
+        GoogleDriveFileLocationHandler handler(rest);
+
+        assertEq(("container", "content_type", "encoding", "export_mime_type"),
+            sort(keys handler.getReadOptions()));
+
+        # Drive addresses a file by an immutable ID, so a read location is an ID
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("native content"));
+        assertEq(binary("native content"), handler.getBinaryFile("conn", "f1", {}));
+        assertRegex("alt=media", rest.last().path, "the content is read directly rather than as metadata");
+
+        # a Google-native document has no byte content, and says so rather than failing obscurely
+        FakeGoogleRestClientIo rest2();
+        rest2.bodies = ({"id": "d1", "name": "Doc", "mimeType": "application/vnd.google-apps.document"},);
+        GoogleDriveFileLocationHandler h2(rest2);
+        assertThrows("GOOGLE-DRIVE-ERROR", "export_mime_type", sub () {
+            h2.getBinaryFile("conn", "d1", {});
+        });
+        # ... and with a format it is exported instead
+        rest2.bodies = (binary("exported"),);
+        rest2.served = 0;
+        assertEq(binary("exported"),
+            h2.getBinaryFile("conn", "d1", {"export_mime_type": "application/pdf"}));
+        assertRegex("/export\\?mimeType=", rest2.last().path);
+
+        # a write location is a name, since the file being written does not exist yet
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("f.txt"));
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("/f.txt"));
+        assertEq("f.txt", GoogleDriveFileLocationHandler::getName("ignored/dirs/f.txt"));
+        assertThrows("LOCATION-ERROR", "must name a file", sub () {
+            GoogleDriveFileLocationHandler::getName("/");
+        });
+
+        FakeGoogleRestClientIo rest3();
+        rest3.bodies = ({"id": "n1", "name": "w.txt"},);
+        GoogleDriveFileLocationHandler h3(rest3);
+        h3.writeFile("conn", "w.txt", "written", {"container": "folder9"});
+        assertEq("w.txt", rest3.last().body.name ?? parseMultipartName(rest3.last().body));
+
+        # non-blocking I/O is not available, and says so
+        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
+            handler.getIoPollerForLocation("conn", "f1", {});
+        });
+    }
+
+    #! Returns the file name from a Drive multipart upload body
+    private *string parseMultipartName(auto body) {
+        *string s = body.typeCode() == NT_BINARY ? body.toString() : body;
+        return s ? (s =~ x/"name":"([^"]+)"/)[0] : NOTHING;
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
     }
 
     #! Returns the connection named on the command line, or skips the test
+    #! Drives the native file location handler and a real resumable upload against the live service
+    /** The offline tests drive both against a fake client; this covers what only Google can answer -- that a
+        resumable upload actually assembles into the file it claims, and that the native handler reads back
+        exactly what it wrote.
+
+        The stream write is deliberately larger than @ref GoogleDriveDataProvider::ResumableChunkSize, so that
+        more than one chunk is sent.  That is where this can go wrong quietly: each chunk carries a
+        \c Content-Range naming its own byte range and the total, and ranges that are individually well-formed
+        but collectively wrong yield a file of the right size holding the wrong bytes.
+
+        This writes to the account under test; exclude it with `--exclude="live native handler"`.
+    */
+    liveNativeHandlerTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        assertEq(True, conn.supportsFileLocations(), "the live connection transfers files natively");
+        GoogleDriveFileLocationHandler handler =
+            cast<GoogleDriveFileLocationHandler>(conn.getFileLocationHandler());
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string name = sprintf("qore-native-%s.txt", stamp);
+        string content = "written through the native Google Drive file location handler";
+
+        # a write location is a name: the file does not exist yet, so it has no ID to be addressed by
+        handler.writeFile("conn", name, content, {});
+        string id = findFileId(prov, name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"file_id": id, "permanently_delete": True});
+        }
+
+        # ... while a read location is the ID Drive assigned it
+        assertEq(content, handler.getTextFile("conn", id, {}), "the handler reads back exactly what it wrote");
+        assertEq(binary(content), handler.getBinaryFile("conn", id, {}));
+
+        # the write must also have carried the MIME type inferred from the name, rather than a generic one
+        assertEq("text/plain", prov.getChildProviderEx("get-file").doRequest({"file_id": id}).mime_type,
+            "the MIME type was inferred from the file name");
+
+        # a stream larger than one chunk exercises the real resumable path: session, chunks, completion
+        string big_name = sprintf("qore-native-%s.bin", stamp);
+        int size = ResumableChunkSize + 1024;
+        binary payload = binary(strmul("Q", size));
+
+        OutputStreamWrapper os = handler.getOutputStream("conn", big_name, {});
+        os.write(payload);
+        os.close();
+        os.waitForIo();
+        string big_id = findFileId(prov, big_name);
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"file_id": big_id, "permanently_delete": True});
+        }
+
+        binary read_back = handler.getBinaryFile("conn", big_id, {});
+        assertEq(size, read_back.size(), "the resumable upload stored every byte");
+        assertEq(payload, read_back, "the chunks were assembled in order");
+
+        # ... and Drive agrees on the size, which is written when the upload is completed
+        assertEq(size, prov.getChildProviderEx("get-file").doRequest({"file_id": big_id}).size,
+            "Drive reports the size that the stream wrote");
+    }
+
+    #! Returns the ID of a file the native handler created
+    /** The handler addresses a file by name on write, because a new file has no ID until Drive assigns one.
+    */
+    private string findFileId(AbstractDataProvider prov, string name) {
+        hash<auto> found = prov.getChildProviderEx("list-files").doRequest({"name": name});
+        if (found.files.size() != 1) {
+            throw "TEST-ERROR", sprintf("expecting exactly one file named %y; got %d", name,
+                found.files.size());
+        }
+        return found.files[0].id;
+    }
+
     private *AbstractConnection getConnection() {
         *string conn_name = m_options.conn ?? ENV.GOOGLE_DRIVE_CONNECTION;
         if (!conn_name.val()) {

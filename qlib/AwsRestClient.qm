@@ -182,6 +182,12 @@ public class AwsRestClientBase {
 
         #! The longest lifetime AWS accepts for a presigned URL, in seconds (7 days)
         const MaxPresignedUrlSeconds = 604800;
+
+        #! The content type assumed for an S3 response body that arrives without one
+        /** S3 answers some operations with XML and no \c Content-Type header; it never returns anything else
+            in that position
+        */
+        const AssumedS3ContentType = "text/xml";
     }
 
     static private string trimall(string str) {
@@ -886,6 +892,33 @@ AwsRestClient rest({
         }
     }
 
+    #! Sends a request, assuming an XML response body when the server sends one with no content type
+    /** Amazon S3 answers several operations -- \c CreateMultipartUpload and \c CompleteMultipartUpload among
+        them -- with an XML document and **no \c Content-Type header at all**.  The REST client will not
+        deserialize a body whose type it has not been told, so such a response fails with
+        \c DESERIALIZATION-ERROR even though it is a perfectly good `200`.
+
+        S3 only ever returns XML in that position, so it is assumed here.  A response that does carry a
+        content type is unaffected: the assumption is applied only when the header is absent, so an object
+        download still arrives as whatever type it was stored with.
+
+        @param m the HTTP method
+        @param path the URI path
+        @param body the request body, if any
+        @param info an optional reference to request and response information
+        @param decode_errors decode the response body on an error status
+        @param hdr any additional request headers
+
+        @return the response
+
+        @since AwsRestClient 1.3
+    */
+    hash<auto> doRequestAssumingXml(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        checkLogin(\info);
+        return doRequestIntern(m, path, body, \info, decode_errors, hdr, AssumedS3ContentType);
+    }
+
     #! Returns the AWS region this client signs requests for
     /** @return the AWS region this client signs requests for
 
@@ -932,6 +965,12 @@ AwsRestClient rest({
 
         @note The URL is only valid while the credentials that signed it are; one signed with temporary
         session credentials stops working when they expire, whatever lifetime was asked for here.
+
+        @note **Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.**  By
+        default the HTTP client percent-encodes the URI path of a request, and the credential scope in a
+        presigned URL contains \c %%2F separators that AWS re-encodes when it verifies the signature; encoding
+        them a second time produces \c %%252F on the wire, which AWS rejects as a malformed credential rather
+        than as a bad signature.  Any client that sends the target verbatim works unchanged.
 
         @since AwsRestClient 1.3
     */
@@ -1558,11 +1597,14 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
         string uri = uri_info.method ?? "/";
 
+        # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here; see the same
+        # decision in AwsRestClient::getCanonicalSignature().  An S3 caller builds an already-encoded path,
+        # and encoding it again would sign "%2520" where the wire carried "%20", which AWS reports as
+        # SignatureDoesNotMatch.  Other services keep the previous behavior: their callers pass unencoded
+        # paths, which are normalized and then encoded twice
         if (!aws_s3) {
             uri = normalize_dir_unix(uri, "/");
-        }
-        uri = encode_url(uri, False);
-        if (!aws_s3) {
+            uri = encode_url(uri, False);
             uri = encode_url(uri, False);
         }
         cstr += uri + "\n";
@@ -1677,6 +1719,33 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
             "aws_s3": True,
             "data": "bin",
         };
+    }
+
+    #! Returns @ref True; Amazon S3 connections transfer objects natively
+    /** Overrides the base class, which leaves file locations to the application's file API for a connection
+        that serves an application.  S3 can do better than that API: an upload can be driven straight from an
+        output stream through a multipart upload, without holding the object in memory, and a download arrives
+        as the response body rather than base64-encoded into a JSON field.
+
+        @see @ref getFileLocationHandlerImpl()
+
+        @since AwsRestClient 1.3
+    */
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    #! Returns a file location handler transferring objects through Amazon S3 directly
+    /** @return an \c AwsS3DataProvider::AwsS3FileLocationHandler object bound to this connection's client
+
+        @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
+        @ref getDataProvider() does
+
+        @since AwsRestClient 1.3
+    */
+    private object getFileLocationHandlerImpl() {
+        load_module("AwsS3DataProvider");
+        return create_object("AwsS3DataProvider::AwsS3FileLocationHandler", get(False), True);
     }
 }
 

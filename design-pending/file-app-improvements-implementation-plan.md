@@ -590,7 +590,7 @@ registration; tests as in C.4.
 
 ## Phase F — tier 1b native handlers
 
-**Status: partially done.** What landed, and what is left, in order:
+**Status: done.** What landed, in order:
 
 **Done — client injection.** `FileLocationHandlerHttp` and
 `FileLocationHandlerRest` each take an optional already-authenticated client. A
@@ -633,8 +633,9 @@ larger than memory can be written; content that ends within the first chunk is
 sent in a single request instead, saving two round trips. Reads take the bytes
 from the response body rather than base64-encoded into a JSON field.
 
-**Remaining — S3 and Google Drive native handlers.** Both are the same shape as
-the Dropbox one and the same size:
+**Done — S3 and Google Drive native handlers.** Both are the same shape as the
+Dropbox one, and both are reached through their connection's
+`supportsFileLocations()` / `getFileLocationHandler()`:
 
 - `AwsS3RestConnection`: a `GET` on `/{bucket}/{key}` for reads, and a multipart
   upload (`CreateMultipartUpload` / `UploadPart` / `CompleteMultipartUpload`)
@@ -646,9 +647,12 @@ the Dropbox one and the same size:
   (`POST ?uploadType=resumable`, then `PUT` with `Content-Range`) driven from an
   input stream for writes.
 
-Both need `supportsFileLocationsImpl()` overridden to `True` on their
-connections, since the base class leaves an application connection to its
-application's file API.
+Both override `supportsFileLocationsImpl()` to `True` on their connections,
+since the base class leaves an application connection to its application's file
+API.  The streaming upload each one drives is also what the actions now use
+above their size thresholds, closing design §5.3 — those thresholds had been
+defined and never used, so every upload had been a single request whatever its
+size.
 
 **Done — event providers for all three modules.** `DPAT_EVENT` watch providers
 replacing the TypeScript triggers now exist: S3 `new-bucket` /
@@ -686,6 +690,14 @@ scope the connection had been requesting for nothing.
 
 **Tranche 2 — event providers.** See phase F above.
 
+**Tranche 5 — the rest of the plan.** The tier 1b native handlers for S3 and
+Drive (phase F), the streaming uploads they are built on (§5.3), and a
+repo-wide fix for `AbstractDataProvider::error()`, which throws rather than
+logs and wins overload resolution: 62 call sites across 26 modules reported
+failures by raising an exception from the code meant to record them, destroying
+the real error on every retry-exhausted request and stopping four modules'
+watch providers permanently on the first transient error.
+
 **Tranche 3 — API surface.** S3 `presigned-url` (SigV4 query-string signing,
 added to `AwsRestClient` where the credentials live), `delete-objects`,
 `delete-bucket`, `move-object`, object tagging, `list-object-versions`, and
@@ -714,20 +726,35 @@ Every one of these passed a full offline suite first:
 | `data` was applied as an override rather than a default | **every object written to S3 was stored as a quoted base64 string** |
 | the request target is percent-encoded again on the way out | S3 pagination and any key needing encoding failed as `SignatureDoesNotMatch` |
 | Dropbox names the `search_v2` continuation `/2/files/search/continue_v2` | the continuation answered with an HTML 404 page |
+| S3 answers `CreateMultipartUpload` with XML and no `Content-Type` | the REST client refused to deserialize it, so no multipart upload could be opened |
+| the REST client returns response headers at the **top level**, not under `hdr` | every header the S3 module read was `NOTHING`: an object's MIME type, size, ETag, modification time and version ID, and the ETag and version ID of every write. Nothing failed visibly, because `NOTHING` is valid for each — only the multipart upload noticed, being the one place that checks |
+| Drive answers an intermediate resumable chunk with `308 Resume Incomplete`, which is `>= 300` | **no Drive upload larger than one chunk could complete**: the chunk was stored and then reported as a failure |
+
+Two of these were only reachable because the offline suite was itself wrong: the
+S3 fake overrode `doRequest()` but not `doRequestAssumingXml()`, so the
+"offline" suite was silently making real requests against Amazon, and the Drive
+fake answered an intermediate chunk with a `200` and no `Range` header — a
+response Drive never sends. Both fakes now answer as the services do.
 
 ### Still outstanding
 
-- **Tier 1b native handlers for S3 and Google Drive** (phase F).  Both are the
-  same shape and size as the Dropbox one that landed: an S3 multipart upload
-  driven from an input stream, and a Drive resumable upload.
-- **`AbstractDataProvider::error()` elsewhere.**  The same
-  throws-instead-of-logs call is in Aftership, SendCloud, Tally, Katana, and
-  others; only the cloud-storage modules and OneDrive were corrected here, and
-  a repo-wide sweep deserves its own change.
-- **Qore `HTTPClient` re-encodes the request target.**  A path that is already
-  percent-encoded is encoded again, so a presigned URL cannot be fetched
-  through `HTTPClient` and an AWS request needs `pre_encoded_urls`.  Worth
-  raising separately.
+- **`AwsS3DataProvider` still uses the blocking client** (design §5.5, which
+  requires `RestClientIo` throughout so non-blocking pollers work).  Drive and
+  Dropbox comply; S3 does not.  `AwsRestClientIo` already exists and already
+  implements S3 SigV4.  The move is 25 constructors and duplicating or hoisting
+  `getPresignedUrl()` — hoisting is blocked by the `private:internal` credential
+  storage in each client class.  The response shape is no longer part of it:
+  every request already passes through `AwsS3DataProviderBase::doS3Request()`,
+  which normalizes the response into `body` / `status_code` / `hdr` in one
+  place, so the two clients' differing shapes are reconciled there rather than
+  at each reader.  It still needs live re-verification that SigV4 verifies over
+  HTTP/2 and HTTP/3, which is the part no offline test can answer.
+- ~~**Qore `HTTPClient` re-encodes the request target.**~~  Resolved: this is
+  documented behavior, not a defect.  `HTTPClient` percent-encodes a request's
+  URI path by default, and `pre_encoded_urls` is the documented opt-out for a
+  caller that supplies an already-encoded path.  S3 sets it, and
+  `AwsRestClient::getPresignedUrl()` documents that a client fetching a
+  presigned URL needs it too.
 
 ---
 

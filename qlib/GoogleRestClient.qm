@@ -663,6 +663,34 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
         return create_object("GoogleDriveDataProvider", getAsync());
     }
 
+    #! Returns @ref True; Google Drive connections transfer files natively
+    /** Overrides the base class, which leaves file locations to the application's file API for a connection
+        that serves an application.  Drive can do better than that API: an upload can be driven straight from
+        an output stream through a resumable upload, without holding the file in memory, and a download
+        arrives as the response body rather than base64-encoded into a JSON field.
+
+        @see @ref getFileLocationHandlerImpl()
+
+        @since %GoogleRestClient 2.1
+    */
+    private bool supportsFileLocationsImpl() {
+        return True;
+    }
+
+    #! Returns a file location handler transferring files through Google Drive directly
+    /** @return a \c GoogleDriveDataProvider::GoogleDriveFileLocationHandler object bound to this connection's
+        client
+
+        @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
+        @ref getDataProvider() does
+
+        @since %GoogleRestClient 2.1
+    */
+    private object getFileLocationHandlerImpl() {
+        load_module("GoogleDriveDataProvider");
+        return create_object("GoogleDriveDataProvider::GoogleDriveFileLocationHandler", getAsync());
+    }
+
     #! Applies the Drive API profile, defaulting it when the caller did not choose one
     /** @param options the options supplied by the caller
 

@@ -341,7 +341,11 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
             try {
                 hash<auto> info;
                 debug("S3 %s %y", method, path);
-                return rest.doRequest(method, path, body, \info, True, hdr);
+                # NOTE: "doRequestAssumingXml()", not "doRequest()".  S3 answers CreateMultipartUpload and
+                # CompleteMultipartUpload with XML and no Content-Type header at all, which the REST client
+                # refuses to deserialize; S3 only ever returns XML in that position
+                return AwsS3DataProviderBase::normalizeResponse(
+                    rest.doRequestAssumingXml(method, path, body, \info, True, hdr));
             } catch (hash<ExceptionInfo> ex) {
                 if (RetrySet{ex.err} && retries < MaxIoRetries) {
                     ++retries;
@@ -351,6 +355,191 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
                 rethrowS3Error(ex, method, bucket, key);
             }
         }
+    }
+
+    #! Uploads content to S3, using a multipart upload when the content is large
+    /** Amazon S3 rejects a single-request upload above 5 GB, and a large one has to start again from the
+        beginning if the connection drops.  Above @ref MultipartThreshold the content is therefore sent as a
+        multipart upload, which commits each part as it arrives.
+
+        @param bucket the bucket to write to
+        @param key the object key
+        @param content the content to store
+        @param hdr the request headers, which carry the content type and any storage class or encryption
+
+        @return a hash with the \c etag and \c version_id of the stored object
+
+        @since AwsS3DataProvider 1.0
+    */
+    private hash<auto> uploadContent(string bucket, string key, binary content, hash<auto> hdr) {
+        if (content.size() <= MultipartThreshold) {
+            hash<auto> resp = doS3Request("PUT", bucket, key, NOTHING, content, hdr);
+            return {
+                "etag": AwsS3ListObjectsDataProvider::stripEtag(resp.hdr.etag),
+                "version_id": resp.hdr."x-amz-version-id",
+            };
+        }
+        return uploadMultipart(bucket, key, new BinaryInputStream(content), hdr);
+    }
+
+    #! Uploads the content of an input stream, sending each part as it is read
+    /** The total size is not known in advance, so the first part decides the transfer method: content that
+        ends within it is sent in a single request, and anything larger opens a multipart upload.  Only one
+        part is held in memory at a time, so a file larger than memory can be written.
+
+        Each part is a separate signed request with a known body, so SigV4 needs no streaming-signature work.
+
+        @param bucket the bucket to write to
+        @param key the object key
+        @param is the stream to read the content from
+        @param hdr the request headers
+
+        @return a hash with the \c etag and \c version_id of the stored object
+
+        @throw S3-UPLOAD-ERROR the server opened an upload without giving it an ID
+
+        @note A multipart upload that is abandoned leaves its parts stored and billed until a lifecycle rule
+        removes them, so a failure part-way through aborts the upload rather than leaving it open.
+
+        @since AwsS3DataProvider 1.0
+    */
+    private hash<auto> uploadMultipart(string bucket, string key, Qore::InputStream is, hash<auto> hdr) {
+        binary buf = AwsS3DataProviderBase::readExactly(is, MultipartPartSize);
+        if (buf.size() < MultipartPartSize) {
+            # the whole object arrived within the first part; a multipart upload would cost two extra requests
+            hash<auto> resp = doS3Request("PUT", bucket, key, NOTHING, buf, hdr);
+            return {
+                "etag": AwsS3ListObjectsDataProvider::stripEtag(resp.hdr.etag),
+                "version_id": resp.hdr."x-amz-version-id",
+            };
+        }
+
+        # the create request carries the metadata headers; the part requests carry none of them
+        hash<auto> start = doS3Request("POST", bucket, key, {"uploads": True}, NOTHING, hdr);
+        *string upload_id = AwsS3DataProviderBase::parseXml(start.body).InitiateMultipartUploadResult.UploadId;
+        if (!upload_id.val()) {
+            throw "S3-UPLOAD-ERROR", sprintf("the multipart upload of %s/%s was not given an upload ID by the "
+                "server", bucket, key);
+        }
+        debug("S3 multipart upload %y for %s/%s", upload_id, bucket, key);
+
+        list<hash<auto>> parts = ();
+        try {
+            int part_number = 1;
+            while (True) {
+                hash<auto> resp = doS3Request("PUT", bucket, key, {
+                    "partNumber": part_number,
+                    "uploadId": upload_id,
+                }, buf);
+                *string etag = AwsS3ListObjectsDataProvider::stripEtag(resp.hdr.etag);
+                if (!etag.val()) {
+                    throw "S3-UPLOAD-ERROR", sprintf("part %d of the multipart upload of %s/%s was stored "
+                        "without an entity tag, so the upload cannot be completed", part_number, bucket, key);
+                }
+                parts += {"number": part_number, "etag": etag};
+
+                buf = AwsS3DataProviderBase::readExactly(is, MultipartPartSize);
+                if (!buf.size()) {
+                    break;
+                }
+                ++part_number;
+            }
+
+            string body = AwsS3DataProviderBase::getCompleteBody(parts);
+            hash<auto> resp = doS3Request("POST", bucket, key, {"uploadId": upload_id}, body, {
+                "Content-Type": MimeTypeXml,
+            });
+            # completion can fail with a 200 status and an error document in the body, so the result has to be
+            # inspected rather than trusted
+            *hash<auto> doc = AwsS3DataProviderBase::parseXml(resp.body);
+            if (doc.Error.Code.val()) {
+                throw "S3-API-ERROR", sprintf("completing the multipart upload of %s/%s failed: %s: %s",
+                    bucket, key, doc.Error.Code, doc.Error.Message);
+            }
+            # NOTE: a multipart upload reports its entity tag in the completion document rather than in a
+            # header, and that tag is not the MD5 of the content: it carries a "-<parts>" suffix instead
+            return {
+                "etag": AwsS3ListObjectsDataProvider::stripEtag(doc.CompleteMultipartUploadResult.ETag),
+                "version_id": resp.hdr."x-amz-version-id",
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            # an abandoned multipart upload keeps its parts stored and billed, so it is aborted here; the
+            # abort is best-effort, since the original failure is what the caller has to see
+            try {
+                doS3Request("DELETE", bucket, key, {"uploadId": upload_id});
+                debug("S3 aborted multipart upload %y after a failure", upload_id);
+            } catch (hash<ExceptionInfo> ignored) {
+                LoggerWrapper::error(sprintf("could not abort the multipart upload %y of %s/%s after a "
+                    "failure; its parts remain stored and billed until a lifecycle rule removes them: %s: %s",
+                    upload_id, bucket, key, ignored.err, ignored.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Returns the XML document naming the parts of a completed multipart upload
+    /** @param parts the parts, each with a \c number and an \c etag
+
+        @return the request body
+
+        @since AwsS3DataProvider 1.0
+    */
+    static string getCompleteBody(list<hash<auto>> parts) {
+        string body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUpload>";
+        foreach hash<auto> p in (parts) {
+            body += sprintf("<Part><PartNumber>%d</PartNumber><ETag>&quot;%s&quot;</ETag></Part>", p.number,
+                AwsS3ExtendedXml::escape(p.etag));
+        }
+        return body + "</CompleteMultipartUpload>";
+    }
+
+    #! Reads exactly the given number of bytes from a stream, or fewer if the stream ends first
+    /** A stream read may return fewer bytes than asked for without being at the end, so a single read cannot
+        be used to decide that the content is finished; that decision selects a single-request upload over a
+        multipart one, and getting it wrong would truncate the object.
+
+        @param is the stream to read from
+        @param n the number of bytes wanted
+
+        @return the bytes read; shorter than \a n only when the stream ended
+
+        @since AwsS3DataProvider 1.0
+    */
+    static binary readExactly(Qore::InputStream is, int n) {
+        binary rv = binary();
+        while (rv.size() < n) {
+            *binary b = is.read(n - rv.size());
+            if (!b) {
+                break;
+            }
+            rv += b;
+        }
+        return rv;
+    }
+
+    #! Returns a response with its headers gathered under \c "hdr"
+    /** The REST client returns the response headers at the **top level**, alongside \c body and the status
+        fields, rather than under a key of their own.  Every caller here reads a header as \c resp.hdr.<name>,
+        which silently returned @ref nothing for all of them: an object's MIME type, size, entity tag,
+        modification time, and version ID, the entity tag and version ID of every write, and the location of a
+        newly created bucket were all empty, with nothing to indicate it.
+
+        Rather than have every call site know which keys are headers and which are status fields, the response
+        is normalized once here, where every request already passes.
+
+        @param resp the response as the client returned it
+
+        @return the response with \c body, \c status_code, and the headers under \c hdr
+
+        @since AwsS3DataProvider 1.0
+    */
+    static hash<auto> normalizeResponse(hash<auto> resp) {
+        return {
+            "body": resp.body,
+            "status_code": resp.status_code,
+            "hdr": resp - ("body", "status_code", "status_message", "http_version",
+                "_qore_orig_content_type"),
+        };
     }
 
     #! Rethrows an exception from an S3 request with the S3 error code and message when the response carried them

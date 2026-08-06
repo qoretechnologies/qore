@@ -450,7 +450,9 @@ public class GoogleDriveUploadFileDataProvider inherits GoogleDriveDataProviderB
             metadata.description = req.description;
         }
 
-        hash<auto> resp = uploadMultipart("POST", "/upload/drive/v3/files", metadata,
+        # a large file is sent as a resumable upload rather than one request; a single-request upload has to
+        # be retried from the beginning if the connection drops
+        hash<auto> resp = upload("POST", "/upload/drive/v3/files", metadata,
             GoogleDriveDataProviderBase::getFileContent(file),
             GoogleDriveDataProviderBase::getMimeType(file, name));
         return GoogleDriveDataProviderBase::getFileInfo(resp.body);
@@ -488,7 +490,7 @@ public class GoogleDriveCreateTextFileDataProvider inherits GoogleDriveDataProvi
         if (req.folder_id.val()) {
             metadata.parents = (req.folder_id,);
         }
-        hash<auto> resp = uploadMultipart("POST", "/upload/drive/v3/files", metadata, binary(req.content),
+        hash<auto> resp = upload("POST", "/upload/drive/v3/files", metadata, binary(req.content),
             req.mime_type ?? "text/plain");
         return GoogleDriveDataProviderBase::getFileInfo(resp.body);
     }
@@ -522,7 +524,7 @@ public class GoogleDriveReplaceFileDataProvider inherits GoogleDriveDataProvider
         hash<auto> file = req.file;
         # PATCH on the upload endpoint replaces the content of an existing file; the metadata part carries no
         # name, so the file keeps the one it has
-        hash<auto> resp = uploadMultipart("PATCH",
+        hash<auto> resp = upload("PATCH",
             "/upload/drive/v3/files/" + encode_url(req.file_id, True), {},
             GoogleDriveDataProviderBase::getFileContent(file),
             GoogleDriveDataProviderBase::getMimeType(file, file.name ?? ""));

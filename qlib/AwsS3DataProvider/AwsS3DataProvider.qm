@@ -31,6 +31,7 @@
 %requires Mime >= 1.3
 %requires(reexport) DataProvider
 %requires AwsRestClient
+%requires FileLocationHandler
 
 # NOTE: the Amazon S3 API speaks XML, so this module needs the xml module to function.  It is declared with
 # %try-module rather than %requires because the xml module is built from a separate repository and is not
@@ -574,6 +575,29 @@ module AwsS3DataProvider {
     prefers.  Set the \c path_style connection option to address them in the URI path instead
     (<tt>https://s3.&lt;region&gt;.amazonaws.com/&lt;bucket&gt;/&lt;key&gt;</tt>); most S3-compatible services
     require this form.
+
+    @section awss3dataprovider_upload Large Uploads
+
+    A single-request upload has to start again from the beginning if the connection drops, and Amazon S3
+    rejects one above 5 GB outright.  Content above
+    @ref AwsS3DataProvider::MultipartThreshold "MultipartThreshold" is therefore sent as a multipart upload,
+    which commits each part as it arrives.  This is transparent to the caller: \c upload-file and
+    \c create-text-file choose the transfer method from the size of the content.
+
+    An upload that fails part-way through is aborted rather than abandoned; an abandoned multipart upload keeps
+    its parts stored and billed until a lifecycle rule removes them.
+
+    @section awss3dataprovider_filelocations Native File Locations
+
+    An S3 connection transfers objects natively for \c "conn://" file locations, through
+    @ref AwsS3DataProvider::AwsS3FileLocationHandler "AwsS3FileLocationHandler", rather than through the
+    application file API.  Writing drives a multipart upload from the output stream itself, so an object larger
+    than memory can be written, and reading takes the bytes from the response body rather than base64-encoded
+    into a JSON field.
+
+    S3 has no directory structure -- a key is a flat string in which \c "/" is an ordinary character -- so the
+    bucket is taken from the \c container option, or from the first segment of the location when there is
+    none: <tt>conn://s3/bucket/key</tt>.
 
     @section awss3dataprovider_relnotes Release Notes
 

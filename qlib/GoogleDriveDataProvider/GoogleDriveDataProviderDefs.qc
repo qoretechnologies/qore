@@ -68,6 +68,17 @@ public const MaxDrivePageSize = 100;
 */
 public const ResumableThreshold = 5 * 1024 * 1024;
 
+#! The status Drive answers an intermediate resumable-upload chunk with
+/** \c 308 \c "Resume Incomplete" means the chunk was stored and the next one should be sent.  It is a success
+    for this endpoint, but it is \>= 300, so a REST client raises it as an error by default
+*/
+public const ResumeIncompleteStatusCode = 308;
+
+#! The size of each chunk sent in a resumable upload
+/** Drive requires every chunk except the last to be a multiple of 256 KiB
+*/
+public const ResumableChunkSize = 8 * 1024 * 1024;
+
 #! Export formats for Google-native documents
 /** Google-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be downloaded;
     they must be exported to a concrete format instead

@@ -31,6 +31,7 @@
 %requires Mime >= 1.3
 %requires(reexport) DataProvider
 %requires GoogleRestClient
+%requires FileLocationHandler
 %requires RestClientIo
 %requires json
 
@@ -639,6 +640,27 @@ module GoogleDriveDataProvider {
     while \c drive-file grants access only to files the application itself created or that the user explicitly
     opened with it.  The narrower scope is sufficient whenever the integration only reads back what it wrote, and
     is the better choice for a new deployment.
+
+    @section googledrivedataprovider_upload Large Uploads
+
+    A single-request upload has to start again from the beginning if the connection drops.  Content above
+    @ref GoogleDriveDataProvider::ResumableThreshold "ResumableThreshold" is therefore sent as a resumable
+    upload, which sends the content in chunks against a session the server holds open.  This is transparent to
+    the caller: \c upload-file, \c create-text-file, and \c replace-file choose the transfer method from the
+    size of the content.
+
+    @section googledrivedataprovider_filelocations Native File Locations
+
+    A Drive connection transfers files natively for \c "conn://" file locations, through
+    @ref GoogleDriveDataProvider::GoogleDriveFileLocationHandler "GoogleDriveFileLocationHandler", rather than
+    through the application file API.  Writing drives a resumable upload from the output stream itself, so a
+    file larger than memory can be written, and reading takes the bytes from the response body rather than
+    base64-encoded into a JSON field.
+
+    Drive addresses a file by an immutable ID, so a **read** location is a file ID.  A **write** location is a
+    name, since the file does not exist yet; the folder to create it in comes from the \c container option,
+    and without one the user's \c "My Drive" root is used.  A Google-native document has no byte content of
+    its own and needs the \c export_mime_type option to be read at all.
 
     @section googledrivedataprovider_relnotes Release Notes
 

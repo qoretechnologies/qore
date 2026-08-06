@@ -369,13 +369,14 @@ public class AwsS3UploadFileDataProvider inherits AwsS3DataProviderBase {
         binary content = AwsS3UploadFileDataProvider::getContent(file);
 
         hash<auto> hdr = AwsS3UploadFileDataProvider::getUploadHeaders(req, file.mime_type, key);
-        hash<auto> resp = doS3Request("PUT", req.bucket, key, NOTHING, content, hdr);
+        # a large object is sent as a multipart upload rather than one request; Amazon S3 rejects a
+        # single-request upload above 5 GB, and a large one has to start again from the beginning if the
+        # connection drops
+        hash<auto> stored = uploadContent(req.bucket, key, content, hdr);
         return {
             "bucket": req.bucket,
             "object_key": key,
-            "etag": AwsS3ListObjectsDataProvider::stripEtag(resp.hdr.etag),
-            "version_id": resp.hdr."x-amz-version-id",
-        };
+        } + stored;
     }
 
     #! Returns the binary content of a FileDataType value
@@ -462,13 +463,11 @@ public class AwsS3CreateTextFileDataProvider inherits AwsS3DataProviderBase {
             hdr{"x-amz-meta-" + i.key} = i.value.toString();
         }
 
-        hash<auto> resp = doS3Request("PUT", req.bucket, req.object_key, NOTHING, binary(req.content), hdr);
+        hash<auto> stored = uploadContent(req.bucket, req.object_key, binary(req.content), hdr);
         return {
             "bucket": req.bucket,
             "object_key": req.object_key,
-            "etag": AwsS3ListObjectsDataProvider::stripEtag(resp.hdr.etag),
-            "version_id": resp.hdr."x-amz-version-id",
-        };
+        } + stored;
     }
 }
 

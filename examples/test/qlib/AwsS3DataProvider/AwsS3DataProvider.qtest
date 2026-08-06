@@ -31,6 +31,7 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires AwsRestClient
+%requires FileLocationHandler
 %requires AwsS3DataProvider
 
 %exec-class AwsS3DataProviderTest
@@ -61,8 +62,20 @@ class FakeAwsRestClient inherits AwsRestClient::AwsRestClient {
         #! response bodies to return, in order; the last one is reused once the list is exhausted
         list<string> bodies = ("",);
 
+        #! response headers to return, in order; the last one is reused once the list is exhausted
+        /** NOTE: not "headers"; RestClient already declares a private member of that name, and a subclass
+            may not redeclare it
+        */
+        list<hash<auto>> resp_headers = ({},);
+
         #! every request path made, oldest first
         list<string> paths = ();
+
+        #! every request method made, oldest first
+        list<string> methods = ();
+
+        #! every request body sent, oldest first
+        list<auto> bodies_sent = ();
 
         #! the number of responses already handed out
         int served = 0;
@@ -78,10 +91,31 @@ class FakeAwsRestClient inherits AwsRestClient::AwsRestClient {
 
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
             softbool decode_errors = True, *hash<auto> hdr) {
+        return record(m, path, body);
+    }
+
+    #! NOTE: this must be overridden as well as doRequest()
+    /** The module sends every request through \c doRequestAssumingXml(), because S3 answers the multipart
+        operations with XML and no \c Content-Type header.  Overriding only \c doRequest() left that method
+        inherited, so the "offline" suite silently made real requests against Amazon.
+    */
+    hash<auto> doRequestAssumingXml(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        return record(m, path, body);
+    }
+
+    #! Records a request and returns the next canned response
+    private hash<auto> record(string m, string path, auto body) {
         paths += path;
+        methods += m;
+        bodies_sent += body;
         int i = served < bodies.size() ? served : bodies.size() - 1;
+        int j = served < resp_headers.size() ? served : resp_headers.size() - 1;
         ++served;
-        return {"body": bodies[i], "hdr": {}};
+        # NOTE: the real client returns response headers at the *top level* alongside "body" rather than
+        # under a key of their own; the fake must answer the same way or it would hide the very defect that
+        # made every header read in this module return nothing
+        return {"body": bodies[i]} + (resp_headers[j] ?? {});
     }
 }
 
@@ -137,10 +171,14 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("presigned url", \presignedUrlTest());
         addTestCase("batch operations", \batchOperationsTest());
         addTestCase("encryption options", \encryptionOptionsTest());
+        addTestCase("response headers", \responseHeadersTest());
+        addTestCase("multipart upload", \multipartUploadTest());
+        addTestCase("native file location handler", \nativeHandlerTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live presigned url", \livePresignedUrlTest());
         addTestCase("live object round trip", \liveObjectRoundTripTest());
         addTestCase("live record iterator", \liveRecordIteratorTest());
+        addTestCase("live native handler", \liveNativeHandlerTest());
 
         set_return_value(main());
     }
@@ -206,9 +244,12 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq("bin", copts.data, "S3 sends and receives raw bytes rather than JSON");
 
 
-        # the application file API and the data provider must agree that this connection serves S3
-        assertEq(False, conn.supportsFileLocations(),
-            "an application connection leaves file locations to its application's file API");
+        # tier 1b: S3 transfers objects natively for "conn://" locations rather than leaving them to the
+        # application file API, because it can do better -- a multipart upload driven from an output stream,
+        # and a download that arrives as the response body rather than base64-encoded into a JSON field
+        assertEq(True, conn.supportsFileLocations(), "S3 connections transfer objects natively");
+        object handler = conn.getFileLocationHandler();
+        assertTrue(handler instanceof AwsS3FileLocationHandler, "the native S3 handler is returned");
     }
 
     connectionSchemeTest() {
@@ -795,6 +836,193 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Every value S3 returns in a response header reaches the caller
+    /** The REST client returns response headers at the **top level** of the response hash rather than under a
+        key of their own, but every call site here read them as \c resp.hdr.<name>.  There is no \c hdr key,
+        so all of them silently returned @ref nothing: an object's MIME type, size, entity tag, modification
+        time, and version ID were all empty, as were the entity tag and version ID of every write.
+
+        Nothing failed visibly, because @ref nothing is a valid value for each of those fields -- only the
+        multipart upload noticed, because it is the one place that checks.  These assertions pin the shape.
+    */
+    responseHeadersTest() {
+        FakeAwsRestClient rest();
+        rest.resp_headers = ({
+            "content-type": "image/png",
+            "content-length": "4096",
+            "etag": "\"d41d8cd9\"",
+            "last-modified": "Thu, 06 Aug 2026 15:13:33 GMT",
+            "x-amz-version-id": "v7",
+        },);
+
+        AwsS3GetObjectDataProvider prov(rest);
+        hash<auto> meta = prov.doRequest({
+            "bucket": "b",
+            "object_key": "k.png",
+            "include_content": False,
+        });
+        assertEq("k.png", meta.name);
+        assertEq("image/png", meta.mime_type, "the MIME type comes from the response header");
+        assertEq(4096, meta.size, "the size comes from the response header and is an integer");
+        assertEq("d41d8cd9", meta.etag, "the ETag comes from the response header with its quotes stripped");
+        assertEq(2026-08-06T15:13:33Z, meta.last_modified,
+            "the RFC 1123 modification time is parsed from the header, with its timezone");
+        assertEq("v7", meta.version_id, "the version ID comes from the response header");
+
+        # a HEAD request is made when the content is not wanted, so that a large object is not transferred
+        assertEq("HEAD", rest.methods[0], "no content is transferred when only metadata was asked for");
+        assertEq(NOTHING, meta.content, "no content is returned when it was not asked for");
+
+        # an absent header must read as NOTHING rather than as an empty string or a zero
+        FakeAwsRestClient bare();
+        AwsS3GetObjectDataProvider prov2(bare);
+        hash<auto> empty = prov2.doRequest({
+            "bucket": "b",
+            "object_key": "k",
+            "include_content": False,
+        });
+        assertEq(NOTHING, empty.size, "an absent content-length is NOTHING, not 0");
+        assertEq(NOTHING, empty.etag, "an absent ETag is NOTHING");
+        assertEq(NOTHING, empty.last_modified, "an absent modification time is NOTHING");
+    }
+
+    #! A large object is sent as a multipart upload rather than as one request
+    /** Amazon S3 rejects a single-request upload above 5 GB, and a large one has to start again from the
+        beginning if the connection drops.  The threshold constants had been defined and never used, so every
+        upload was a single request whatever its size.
+    */
+    multipartUploadTest() {
+        FakeAwsRestClient rest();
+        AwsS3FileTransferProvider prov(rest);
+
+        # below the threshold: one PUT, no multipart machinery at all
+        rest.bodies = ("",);
+        rest.resp_headers = ({"etag": "\"small\""},);
+        prov.put("b", "k", binary(strmul("x", 16)), {"Content-Type": "text/plain"});
+        assertEq(1, rest.paths.size(), "a small object is stored in a single request");
+        assertEq("/b/k", rest.paths[0]);
+        assertEq(("PUT",), rest.methods);
+
+        # above it: create, one part per chunk, then complete
+        int parts = 3;
+        binary big = binary(strmul("y", MultipartPartSize * parts));
+        FakeAwsRestClient rest2();
+        rest2.bodies = (
+            '<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult>'
+            '<UploadId>up-1</UploadId></InitiateMultipartUploadResult>',
+            "", "", "",
+            '<?xml version="1.0" encoding="UTF-8"?><CompleteMultipartUploadResult>'
+            '<ETag>&quot;final-3&quot;</ETag></CompleteMultipartUploadResult>',
+        );
+        rest2.resp_headers = ({}, {"etag": "\"p1\""}, {"etag": "\"p2\""}, {"etag": "\"p3\""}, {});
+        AwsS3FileTransferProvider prov2(rest2);
+        prov2.put("b", "big.bin", big, {"Content-Type": MimeTypeOctetStream});
+
+        assertEq(2 + parts, rest2.paths.size(), "create, one request per part, and complete");
+        assertRegex("uploads", rest2.paths[0], "the upload is created first");
+        assertEq("POST", rest2.methods[0]);
+        # NOTE: xrange() is half-open, so the bound is "parts + 1" to cover every part
+        foreach int i in (xrange(1, parts + 1)) {
+            assertRegex(sprintf("partNumber=%d", i), rest2.paths[i], sprintf("part %d is numbered", i));
+            assertRegex("uploadId=up-1", rest2.paths[i], sprintf("part %d names the upload", i));
+            assertEq("PUT", rest2.methods[i]);
+        }
+        # the completion names every part with its entity tag, in order
+        string body = rest2.bodies_sent[parts + 1];
+        assertRegex("<PartNumber>1</PartNumber><ETag>&quot;p1&quot;</ETag>", body);
+        assertRegex("<PartNumber>3</PartNumber><ETag>&quot;p3&quot;</ETag>", body);
+        assertRegex("uploadId=up-1", rest2.paths[parts + 1], "the completion names the upload");
+
+        # a stream of unknown length behaves the same way, and only one part is held at a time
+        FakeAwsRestClient rest3();
+        rest3.bodies = (
+            '<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult>'
+            '<UploadId>up-2</UploadId></InitiateMultipartUploadResult>',
+            "", "",
+            '<?xml version="1.0" encoding="UTF-8"?><CompleteMultipartUploadResult>'
+            '<ETag>&quot;final-2&quot;</ETag></CompleteMultipartUploadResult>',
+        );
+        rest3.resp_headers = ({}, {"etag": "\"a\""}, {"etag": "\"b\""}, {});
+        AwsS3FileTransferProvider prov3(rest3);
+        prov3.putStream("b", "s.bin", new BinaryInputStream(binary(strmul("z", MultipartPartSize + 10))),
+            {"Content-Type": MimeTypeOctetStream});
+        assertEq(4, rest3.paths.size(), "a stream longer than one part opens an upload");
+
+        # ... but a stream that ends within the first part is sent as one request, saving two round trips
+        FakeAwsRestClient rest4();
+        rest4.bodies = ("",);
+        rest4.resp_headers = ({"etag": "\"one\""},);
+        AwsS3FileTransferProvider prov4(rest4);
+        prov4.putStream("b", "s2.bin", new BinaryInputStream(binary("short")),
+            {"Content-Type": MimeTypeOctetStream});
+        assertEq(1, rest4.paths.size(), "a short stream is stored in a single request");
+
+        # an abandoned multipart upload keeps its parts stored and billed, so a failure must abort it
+        FakeAwsRestClient rest5();
+        rest5.bodies = (
+            '<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult>'
+            '<UploadId>up-3</UploadId></InitiateMultipartUploadResult>',
+            "",
+        );
+        rest5.resp_headers = ({}, {});
+        AwsS3FileTransferProvider prov5(rest5);
+        # the part comes back with no entity tag, so the upload cannot be completed
+        assertThrows("S3-UPLOAD-ERROR", "entity tag", sub () {
+            prov5.putStream("b", "f.bin", new BinaryInputStream(binary(strmul("q", MultipartPartSize + 1))),
+                {"Content-Type": MimeTypeOctetStream});
+        });
+        assertEq("DELETE", rest5.methods[rest5.methods.size() - 1],
+            "the failed upload was aborted so its parts are not left billed");
+        assertRegex("uploadId=up-3", rest5.paths[rest5.paths.size() - 1]);
+    }
+
+    #! The native file location handler transfers objects through S3 rather than through the actions
+    nativeHandlerTest() {
+        FakeAwsRestClient rest();
+        AwsS3FileLocationHandler handler(rest);
+
+        # the option set is the handler's own; an option that does not apply must be rejected rather than
+        # silently ignored
+        assertEq(("container", "content_type", "encoding", "storage_class", "version_id"),
+            sort(keys handler.getReadOptions()));
+
+        # S3 has no path: the bucket cannot be derived from the key, so it comes from the location or the
+        # container option
+        assertEq({"bucket": "b", "key": "dir/f.txt"}, AwsS3FileLocationHandler::split("b/dir/f.txt"));
+        assertEq({"bucket": "b", "key": "dir/f.txt"}, AwsS3FileLocationHandler::split("/b/dir/f.txt"));
+        assertEq({"bucket": "c", "key": "dir/f.txt"},
+            AwsS3FileLocationHandler::split("dir/f.txt", {"container": "c"}));
+        assertThrows("LOCATION-ERROR", "bucket and an object key", sub () {
+            AwsS3FileLocationHandler::split("justakey");
+        });
+        assertThrows("LOCATION-ERROR", "no object key", sub () {
+            AwsS3FileLocationHandler::split("", {"container": "c"});
+        });
+
+        # the bytes arrive as the response body, not base64-encoded into a JSON field as the action returns
+        rest.bodies = ("native content",);
+        assertEq(binary("native content"), handler.getBinaryFile("conn", "b/n.txt", {}));
+        assertEq("/b/n.txt", rest.paths[0]);
+        assertEq("native content", handler.getTextFile("conn", "b/n.txt", {}));
+
+        # a version can be addressed on a version-enabled bucket
+        rest.paths = ();
+        handler.getBinaryFile("conn", "b/n.txt", {"version_id": "v9"});
+        assertRegex("versionId=v9", rest.paths[0]);
+
+        # a write infers the content type from the key unless one is given
+        assertEq("text/plain", AwsS3FileLocationHandler::getHeaders("a/b.txt")."Content-Type");
+        assertEq("application/pdf",
+            AwsS3FileLocationHandler::getHeaders("a/b.txt", {"content_type": "application/pdf"})."Content-Type");
+        assertEq("GLACIER",
+            AwsS3FileLocationHandler::getHeaders("a/b.txt", {"storage_class": "GLACIER"})."x-amz-storage-class");
+
+        # non-blocking I/O is not available, and says so
+        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
+            handler.getIoPollerForLocation("conn", "b/n.txt", {});
+        });
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
@@ -937,6 +1165,19 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         });
         assertEq(payload, parse_base64_string(gotbin.content), "binary content survives the round trip");
 
+        # every field of "get-object" comes from a response header, and none of them was ever reaching the
+        # caller: the client returns headers at the top level, and each was read under a "hdr" key that does
+        # not exist.  Assert against Amazon, since only a live response carries the real header set.
+        hash<auto> meta = prov.getChildProviderEx("get-object").doRequest({
+            "bucket": bucket,
+            "object_key": bin_key,
+            "include_content": False,
+        });
+        assertEq("application/octet-stream", meta.mime_type, "S3 returns the MIME type it was given");
+        assertEq(payload.size(), meta.size, "S3 reports the stored size");
+        assertTrue(meta.etag.val(), "S3 returns an entity tag for the stored object");
+        assertTrue(meta.last_modified > now_us() - 1h, "S3 reports the object as just modified");
+
         # the key with reserved characters must also be findable by a listing under its prefix
         hash<auto> listing = prov.getChildProviderEx("list-objects").doRequest({
             "bucket": bucket,
@@ -993,6 +1234,75 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         if (m_options.verbose > 0) {
             printf("record source read %d objects from %y\n", keys_read.size(), bucket);
         }
+    }
+
+    #! Drives the native file location handler and a real multipart upload against the live service
+    /** The offline tests drive both against a fake client; this covers what only Amazon can answer -- that a
+        multipart upload actually assembles into the object it claims, and that the native handler reads back
+        exactly what it wrote.
+
+        The stream write is deliberately larger than @ref AwsS3DataProvider::MultipartPartSize so that it
+        opens a real multipart upload rather than falling back to a single request.
+
+        This writes to the account under test; exclude it with `--exclude="live native handler"`.
+    */
+    liveNativeHandlerTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        assertEq(True, conn.supportsFileLocations(), "the live connection transfers objects natively");
+        object h = conn.getFileLocationHandler();
+        AwsS3FileLocationHandler handler = cast<AwsS3FileLocationHandler>(h);
+
+        string bucket = getLiveBucket(conn.getDataProvider());
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string small = sprintf("%s/qore native %s/small.txt", bucket, stamp);
+        string content = "written through the native S3 file location handler";
+
+        handler.writeFile("conn", small, content, {});
+        on_exit {
+            conn.getDataProvider().getChildProviderEx("delete-object").doRequest({
+                "bucket": bucket,
+                "object_key": sprintf("qore native %s/small.txt", stamp),
+            });
+        }
+        assertEq(content, handler.getTextFile("conn", small, {}),
+            "the handler reads back exactly what it wrote");
+        assertEq(binary(content), handler.getBinaryFile("conn", small, {}));
+
+        # a stream larger than one part exercises the real multipart path: create, parts, complete
+        string big_key = sprintf("qore native %s/big.bin", stamp);
+        string big_loc = bucket + "/" + big_key;
+        int size = MultipartPartSize + 1024;
+        binary payload = binary(strmul("Q", size));
+
+        OutputStreamWrapper os = handler.getOutputStream("conn", big_loc, {});
+        os.write(payload);
+        os.close();
+        os.waitForIo();
+        on_exit {
+            conn.getDataProvider().getChildProviderEx("delete-object").doRequest({
+                "bucket": bucket,
+                "object_key": big_key,
+            });
+        }
+
+        # the object must be exactly what was streamed; a multipart upload that assembled its parts wrongly
+        # produces the right size and the wrong bytes, so both are checked
+        binary read_back = handler.getBinaryFile("conn", big_loc, {});
+        assertEq(size, read_back.size(), "the multipart upload stored every byte");
+        assertEq(payload, read_back, "the parts were assembled in order");
+
+        # ... and the listing agrees on the size, which is what a multipart completion writes
+        hash<auto> meta = conn.getDataProvider().getChildProviderEx("get-object").doRequest({
+            "bucket": bucket,
+            "object_key": big_key,
+            "include_content": False,
+        });
+        assertEq(size, meta.size);
+        # a multipart ETag is not the MD5 of the content; it carries a "-<parts>" suffix
+        assertRegex("-[0-9]+$", meta.etag, "the object was stored as a multipart upload");
     }
 
     #! Returns a bucket from the live account to exercise object operations against
