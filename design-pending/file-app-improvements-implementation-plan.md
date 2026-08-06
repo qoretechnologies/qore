@@ -650,12 +650,18 @@ Both need `supportsFileLocationsImpl()` overridden to `True` on their
 connections, since the base class leaves an application connection to its
 application's file API.
 
-**Remaining — event providers for all three modules.** `DPAT_EVENT` watch
-providers replacing the TypeScript triggers (S3 `new-bucket` /
-`new-or-updated-file`, Drive `new-file` / `new-folder` via `changes.list`,
-Dropbox `new-file` / `new-folder` / `file-modified` via
-`/2/files/list_folder/longpoll` or cursor polling) were not built in phase C or
-E and are outstanding for all three.
+**Done — event providers for all three modules.** `DPAT_EVENT` watch providers
+replacing the TypeScript triggers now exist: S3 `new-bucket` /
+`new-or-updated-file` (polling, since S3 has no client-subscribable change
+feed), Drive `new-file` / `new-folder` over `changes.list`, and Dropbox
+`new-file` / `new-folder` / `file-modified` over the `list_folder` cursor.
+Each root provider carries an `events` container.
+
+Both Drive and Dropbox report a creation and a modification identically, so
+each keeps the state needed to tell them apart: Drive compares a change's
+`createdTime` against the moment its cursor was established, and Dropbox keeps
+a bounded index of the entries it has already seen, seeded by walking the
+folder when the cursor is first established.
 
 **Done — tests.** Tier 1b read, write, streams, and error propagation; tier 1b
 takes precedence over tier 2 for a connection where both apply; options are
@@ -664,6 +670,64 @@ that is not a handler is rejected; bound handlers advertise the reduced option
 set; `DPFR_URL` pollers and both `UNIMPLEMENTED` cases; and, for Dropbox,
 single-request versus upload-session selection, chunk offsets, byte accounting,
 and error propagation through `waitForIo()`.
+
+---
+
+## Phase G — post-migration tranches
+
+Four tranches run against live `s3`, `googledrive`, and `dropbox` connections.
+All four are complete.
+
+**Tranche 1 — defects and cheap wins.** Drive `rename-file` (neither `move-file`
+nor `replace-file` could change a name); Drive shared-drive support, added
+centrally so a new action cannot silently omit `supportsAllDrives`; Dropbox
+`get-account-info` and `get-space-usage`, which use the `account_info.read`
+scope the connection had been requesting for nothing.
+
+**Tranche 2 — event providers.** See phase F above.
+
+**Tranche 3 — API surface.** S3 `presigned-url` (SigV4 query-string signing,
+added to `AwsRestClient` where the credentials live), `delete-objects`,
+`delete-bucket`, `move-object`, object tagging, `list-object-versions`, and
+server-side encryption options.  Drive `list-shared-drives`,
+`get-storage-quota`, `list-permissions`, `remove-permission`, `untrash`,
+`create-shortcut`, and the revisions API.  Dropbox `save-url`, batch
+delete/move/copy with `check-job-status`, `permanently-delete`, thumbnails and
+previews, sharing with named people, and search continuation.
+
+**Tranche 4 — record-based listing.** `list-objects`, `list-files`,
+`list-folder`, and Dropbox `search` are record sources as well as API actions,
+with iterators that fetch each page as it is reached; the `DPAT_FIND` actions
+take their options from the providers' own `SearchOptions`.
+
+### What live testing found that offline testing had not
+
+Every one of these passed a full offline suite first:
+
+| Defect | Consequence |
+|---|---|
+| Drive multipart upload was serialized into the client's data format | no upload to Drive had ever worked |
+| `ex.arg` is a `hash<RestResponseInfo>`; probing an undeclared key throws | every failed Drive/Dropbox request reported `INVALID-MEMBER` instead of the API error |
+| `AbstractDataProvider::error()` throws rather than logs, and wins overload resolution | a watch provider died permanently on its first transient error |
+| `hash<auto>` literals narrow to their value type | S3 `list-objects` with a `prefix`, and Drive `create-folder` / `upload-file` / `create-text-file` with a folder, all raised `RUNTIME-TYPE-ERROR` |
+| a missing key in a `hash<string, bool>` cannot be assigned to a `bool` | the Dropbox watches delivered nothing at all |
+| `data` was applied as an override rather than a default | **every object written to S3 was stored as a quoted base64 string** |
+| the request target is percent-encoded again on the way out | S3 pagination and any key needing encoding failed as `SignatureDoesNotMatch` |
+| Dropbox names the `search_v2` continuation `/2/files/search/continue_v2` | the continuation answered with an HTML 404 page |
+
+### Still outstanding
+
+- **Tier 1b native handlers for S3 and Google Drive** (phase F).  Both are the
+  same shape and size as the Dropbox one that landed: an S3 multipart upload
+  driven from an input stream, and a Drive resumable upload.
+- **`AbstractDataProvider::error()` elsewhere.**  The same
+  throws-instead-of-logs call is in Aftership, SendCloud, Tally, Katana, and
+  others; only the cloud-storage modules and OneDrive were corrected here, and
+  a repo-wide sweep deserves its own change.
+- **Qore `HTTPClient` re-encodes the request target.**  A path that is already
+  percent-encoded is encoded again, so a presigned URL cannot be fetched
+  through `HTTPClient` and an AWS request needs `pre_encoded_urls`.  Worth
+  raising separately.
 
 ---
 
