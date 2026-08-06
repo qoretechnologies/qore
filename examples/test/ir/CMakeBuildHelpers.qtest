@@ -882,6 +882,35 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "a qcc context transition compiles each source exactly once: "
                 + context_rebuild);
 
+        # The same transition with the context and the publication it supersedes
+        # inside one second.  Both timestamps are produced by the build itself
+        # and are routinely less than a second apart, so a whole-second currency
+        # comparison -- what POSIX test(1) does, and what the bootstrap helper
+        # used to ask it for -- cannot see this shape at all.  Rolling every
+        # published stamp back to the context's own second reproduces it without
+        # depending on how fast the machine runs the preceding build.
+        string context_path = build_dir + "/qo-scripts/.qcc-context";
+        date context_time = mtime(context_path);
+        list<string> published_stamps = (bootstrap_stamp,);
+        foreach string object_path in (object_paths) {
+            push published_stamps, object_path + ".stamp";
+        }
+        run(sprintf("touch -t %s '%s'", format_date("YYYYMMDDHHmm.SS", context_time),
+            published_stamps.join("' '")));
+        assertTrue(context_time > mtime(bootstrap_stamp)
+                && get_duration_microseconds(context_time - mtime(bootstrap_stamp))
+                    < 1000000,
+            "the fixture publishes a sub-second qcc context transition");
+        string same_second_rebuild = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(same_second_rebuild,
+                "compiling the group in one shared parse"),
+            "a sub-second qcc context transition still forces one batch "
+                "generation transition: " + same_second_rebuild);
+        assertEq(object_paths.size(),
+            occurrences(same_second_rebuild, "qcc: script-context .qo"),
+            "a sub-second qcc context transition compiles each source exactly "
+                "once: " + same_second_rebuild);
+
         string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(no_op.find("qcc -c:") == -1
                 && no_op.find("qcc: scanning") == -1
