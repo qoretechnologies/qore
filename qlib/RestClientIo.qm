@@ -58,7 +58,7 @@ module RestClientIo {
 
     @tableofcontents
 
-    @section restclientio_intro Introduction
+    @section restclientiointro Introduction
 
     The %RestClientIo module provides a REST client API built on top of the @ref HttpClientIo module,
     enabling HTTP/1.1, HTTP/2, and HTTP/3 connections for REST API calls.

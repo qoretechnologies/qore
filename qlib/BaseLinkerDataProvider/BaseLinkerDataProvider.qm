@@ -1152,7 +1152,7 @@ module BaseLinkerDataProvider {
 
     @tableofcontents
 
-    @section baselinker_dataproviderintro BaseLinkerDataProvider Module Introduction
+    @section baselinkerdataproviderintro BaseLinkerDataProvider Module Introduction
 
     The %BaseLinkerDataProvider module provides a data provider API for BaseLinker,
     a Polish multichannel e-commerce platform that unifies orders, inventory,

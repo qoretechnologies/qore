@@ -1480,7 +1480,7 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         @ref AwsRestClient::AwsRestClient "AwsRestClient" lost its AWS SigV4 request signing, so the copy's
         requests went out unsigned.  The copy is now constructed from the object's own class through the new
         @ref RestClient::RestClient::copySelf() "copySelf()" hook, which also fixes the equivalent defect in
-        @ref restclientio_intro "RestClientIo"
+        @ref restclientiointro "RestClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     - @ref salesforcerestclientintro "SalesforceRestClient" module
@@ -2314,7 +2314,7 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref redisdataproviderintro "RedisDataProvider" module
       - new module providing a data provider API for <a href="https://redis.io/">Redis</a> servers
 
-    - @ref restclientio_intro "RestClientIo" module
+    - @ref restclientiointro "RestClientIo" module
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
 
     - @ref restschemadataproviderintro "RestSchemaDataProvider" module
@@ -2375,7 +2375,7 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref stabilityairestclientintro "StabilityAiRestClient" module
       - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
 
-    - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
+    - @ref systemeiodataproviderintro "SystemeIoDataProvider" module
       - new module providing a data provider API for <a href="https://systeme.io/">Systeme.io</a> all-in-one marketing platform
 
     - @ref systemeiorestclientintro "SystemeIoRestClient" module
@@ -2888,7 +2888,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - New Modules
       - <a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>
       - <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>
-      - <a href="../../modules/RestClientIo/html/index.html#restclientio_intro">RestClientIo</a>
+      - <a href="../../modules/RestClientIo/html/index.html#restclientiointro">RestClientIo</a>
       - <a href="../../modules/DiscordDataProvider/html/index.html#discorddataproviderintro">DiscordDataProvider</a>
       - <a href="../../modules/DiscordRestClient/html/index.html#discordrestclientintro">DiscordRestClient</a>
       - <a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>
@@ -8427,9 +8427,9 @@ class MyAbstractInterface {
     It is now possible to develop user modules in %Qore; several user modules are now included in the %Qore distribution, forming %Qore-language components of %Qore's runtime library.\n\n
     User modules delivered with %Qore 0.8.4:
     - <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a>: a multi-threaded HTTP server implementation
+    - <a href="../../modules/Mime/html/index.html#mimeintro">Mime</a>: a set of MIME definitions and functions for manipulating MIME data
     - <a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a>: an SMTP client library
     - <a href="../../modules/TelnetClient/html/index.html#telnetclientintro">TelnetClient</a>: a TELNET client implementation
-    - <a href="../../modules/Mime/html/index.html#mimeintro">Mime</a>: a set of MIME definitions and functions for manipulating MIME data
     .
     There are also new example programs for the above modules in the examples/ directory.\n\n
     User modules are subject to %Qore's functional restriction framework.
