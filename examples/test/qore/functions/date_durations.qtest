@@ -1,0 +1,33 @@
+#! /usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DateDurationsTest
+
+public class DateDurationsTest inherits QUnit::Test {
+    constructor() : Test("DateDurationsTest", "1.0") {
+        addTestCase("Duration constructor tests", \testDurationConstructors(), NOTHING);
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testDurationConstructors() {
+        foreach int v in ((0, 1, 999999, 1000000, 9999999, 10000000, 10000001, 12345678,
+                60000000, 61000000, 86400000000, -1000000, -61000000)) {
+            assertEq(v, get_duration_microseconds(microseconds(v)), sprintf("microseconds(%d)", v));
+        }
+
+        foreach int v in ((0, 1, 999, 1000, 60000, 100000000, -61000)) {
+            assertEq(v * 1000, get_duration_microseconds(milliseconds(v)), sprintf("milliseconds(%d)", v));
+        }
+
+        foreach int v in ((0, 1, 59, 60, 3600, 86400, -61)) {
+            assertEq(v * 1000000, get_duration_microseconds(seconds(v)), sprintf("seconds(%d)", v));
+        }
+    }
+}
