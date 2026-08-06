@@ -2518,6 +2518,30 @@ MACRO (QORE_USER_MODULE _module_file)
 
         # prepare needed vars
         set(MOD_DOXYFILE "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
+
+        # Derive the doxygen TAGFILES cross-references from the module's own %requires
+        # directives -- the same single source of truth used for build-order edges in
+        # QORE_FINALIZE_USER_MODULE_DEPENDENCIES().  This restores a value that was
+        # dropped when the hand-maintained per-call dependency lists were removed: the
+        # loop below survived but its input variable did not, so every module's TAGFILES
+        # held only qore.tag and no @ref into a sibling module's symbols resolved.
+        #
+        # Eligibility is decided from the source tree rather than with if(TARGET
+        # docs-<dep>) because the targets do not all exist yet at macro time -- a module
+        # may %requires a sibling registered later in CMakeLists.txt.  Only in-tree qlib
+        # modules generate a <dep>.tag to point at; binary modules (json, reflection, ...)
+        # and modules from other repos are filtered out, since referencing their
+        # nonexistent tag files would make every doc build noisy.
+        _qore_parse_module_requires(${f} _mod_requires)
+        set(_effective_mod_deps "")
+        foreach(_dep ${_mod_requires})
+            if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_dep}
+                    OR EXISTS ${CMAKE_SOURCE_DIR}/qlib/${_dep}.qm)
+                list(APPEND _effective_mod_deps ${_dep})
+            endif()
+        endforeach()
+        unset(_mod_requires)
+
         unset(MOD_DEPS)
         foreach(i ${_effective_mod_deps})
             # we must use relative directories for tags; using absolute paths for tags will break the documentation
