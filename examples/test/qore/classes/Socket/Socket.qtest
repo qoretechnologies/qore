@@ -196,6 +196,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs blackhole fallback", \happyEyeballsBlackholeTest());
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         addTestCase("fd_generation re-verification", \fdGenerationTest());
+        addTestCase("recoverable recv timeout", \recoverableRecvTimeoutTest());
         set_return_value(main());
     }
 
@@ -2871,5 +2872,49 @@ class SocketTest inherits QUnit::Test {
         client.close();
         accepted.close();
         server.close();
+    }
+
+    #! Tests that a recv() that times out leaves the socket usable
+    /** Regression test: SocketPollSocketOperationBase::abortLocked() reset poll_state before calling
+        abortNeedsClose(), and every override decides whether an abort is recoverable by asking the poll
+        state how many bytes it already consumed -- reporting "close" when there is no poll state at all.
+        Every abort therefore closed the socket, so the async I/O controller aborting a registered
+        operation at its deadline tore down a healthy connection: SOCKET-TIMEOUT once, then
+        SOCKET-NOT-OPEN forever after.  Any code reading with a short timeout in a retry loop lost its
+        connection on the first idle period.
+    */
+    recoverableRecvTimeoutTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0, True);
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connectINET("127.0.0.1", port);
+        Socket accepted = server.accept();
+        on_exit {
+            client.close();
+            accepted.close();
+            server.close();
+        }
+
+        # the peer sends nothing, so each of these must time out and leave the socket alone
+        for (int i = 0; i < 3; ++i) {
+            assertThrows("SOCKET-TIMEOUT", \accepted.recv(), (1, 100ms),
+                sprintf("recv %d with no data available must report a timeout", i));
+            assertTrue(accepted.isOpen(), sprintf("the socket must still be open after timeout %d", i));
+        }
+
+        # and the connection must still carry data afterwards
+        client.send("x");
+        assertEq("x", accepted.recv(1, 5s), "the socket must still be usable after recoverable timeouts");
+
+        # the same must hold for the read-until-bytes poll operation behind the HTTP header read
+        assertThrows("SOCKET-TIMEOUT", \accepted.readHTTPHeaderString(), 100ms,
+            "readHTTPHeaderString() with no data available must report a timeout");
+        assertTrue(accepted.isOpen(), "the socket must still be open after a header-read timeout");
+        client.send("GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertRegex("^GET /path HTTP/1.1", accepted.readHTTPHeaderString(5s),
+            "the socket must still be usable after a header-read timeout");
     }
 }
