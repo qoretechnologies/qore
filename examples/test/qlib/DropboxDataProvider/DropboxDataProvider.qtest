@@ -109,6 +109,46 @@ class TestFileModifiedWatch inherits DropboxDataProvider::DropboxWatchFileModifi
     poll() { pollOnce(); }
 }
 
+#! A poll operation that answers from a canned response without performing any I/O
+/** Lets the offline suite drive a real poller to completion, so the code that reads the response, converts
+    it, and retries is exercised without a network.
+
+    \a attempt is called on the first \c continuePoll() and stands for the request reaching the wire: it
+    returns the response, or throws to model an attempt that failed.  Nothing happens when the operation is
+    *built*, which is what the real client does -- it prepares the request and sends nothing until polled --
+    and what lets the suite assert that a poller makes no request until it is driven.
+*/
+class FakePollOperation inherits AbstractPollOperation<auto> {
+    private {
+        #! called on the first continuePoll(); returns the response or throws
+        code<hash<RestClient::RestResponseInfo>()> attempt;
+
+        #! the response, once the attempt has produced one
+        *hash<RestClient::RestResponseInfo> resp;
+
+        #! set once the response has been delivered
+        bool done = False;
+    }
+
+    constructor(code<hash<RestClient::RestResponseInfo>()> attempt) {
+        self.attempt = attempt;
+    }
+
+    string getGoal() { return "fake poll"; }
+    string getState() { return done ? "complete" : "ready"; }
+    bool goalReached() { return done; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # the request reaches the "wire" here, not when the operation was built
+        resp = attempt();
+        done = True;
+        return NOTHING;
+    }
+
+    auto getOutput() { return resp; }
+    abort() {}
+}
+
 class FakeDropboxRestClientIo inherits DropboxRestClient::DropboxRestClientIo {
     public {
         #! every request made, oldest first
@@ -125,6 +165,18 @@ class FakeDropboxRestClientIo inherits DropboxRestClient::DropboxRestClientIo {
 
         #! the number of responses already handed out
         int served = 0;
+
+        #! how many successive poll attempts fail before one is allowed to answer
+        int poll_fail_attempts = 0;
+
+        #! the error each failing attempt raises
+        hash<ExceptionInfo> poll_error = <ExceptionInfo>{
+            "err": "SOCKET-CLOSED",
+            "desc": "connection closed",
+        };
+
+        #! the number of times a poll operation asked for a retry
+        int poll_retries = 0;
     }
 
     constructor() : DropboxRestClientIo(DropboxDataProviderTest::TestClientOptions) {
@@ -188,6 +240,51 @@ class FakeDropboxRestClientIo inherits DropboxRestClient::DropboxRestClientIo {
 
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         return record(method, path, body, hdr, True);
+    }
+
+    #! NOTE: the poll entry points must be overridden too
+    /** The module reads a "conn://" location through startPollContentRequest(), and a retry inside the poll
+        operation through startPollContentRetry().  A fake that left either inherited would make real
+        requests against the Dropbox content host from the "offline" suite.
+    */
+    Qore::AbstractPollOperation startPollContentRequest(string path, auto arg, *binary body,
+            *string content_type) {
+        return recordPoll(path, arg, body, content_type);
+    }
+
+    Qore::AbstractPollOperation startPollContentRetry(string path, auto arg, *binary body,
+            *string content_type) {
+        ++poll_retries;
+        return recordPoll(path, arg, body, content_type);
+    }
+
+    #! Records a polled content request and returns a poller over the next canned response
+    /** Nothing is recorded or consumed until the poller is driven: a real attempt sends its request on the
+        first continuePoll(), not when the operation is built.  An attempt scripted to fail records its
+        request but does **not** consume a canned response, since an attempt that dies on the socket never
+        received one.
+    */
+    private Qore::AbstractPollOperation recordPoll(string path, auto arg, *binary body,
+            *string content_type) {
+        hash<auto> hdr = DropboxRestClient::DropboxRestClientBase::getContentHeaders(arg,
+            body ? (content_type ?? MimeTypeOctetStream) : NOTHING);
+        bool fail = poll_fail_attempts > 0;
+        if (fail) {
+            --poll_fail_attempts;
+        }
+        return new FakePollOperation(hash<RestClient::RestResponseInfo> sub () {
+            if (fail) {
+                requests += <DropboxRequestInfo>{
+                    "method": "POST",
+                    "path": path,
+                    "body": body,
+                    "hdr": hdr,
+                    "content": True,
+                };
+                throw poll_error.err, poll_error.desc, poll_error.arg;
+            }
+            return record("POST", path, body, hdr, True);
+        });
     }
 }
 
@@ -1135,10 +1232,65 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         # the account root is not a file
         assertThrows("LOCATION-ERROR", "not a file", sub () { handler.getBinaryFile("conn", "/", {}); });
 
-        # non-blocking I/O is not available for the content endpoints, and says so
-        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
-            handler.getIoPollerForLocation("conn", "/d/n.txt", {});
+        # a poller is prepared without issuing the request: nothing reaches the wire until the caller polls it
+        int before_poll = rest.requests.size();
+        AbstractPollOperation op = handler.getIoPollerForLocation("conn", "/d/n.txt", {});
+        assertRegex("Dropbox /2/files/download", op.getGoal(), "the poller names the endpoint it will call");
+        assertEq(False, op.goalReached(), "the poller has not read anything before it is polled");
+        assertEq(before_poll, rest.requests.size(), "preparing a poller makes no request");
+
+        # the account root is not a file for a polled read either, and is refused before any I/O
+        assertThrows("LOCATION-ERROR", "not a file", sub () {
+            handler.getIoPollerForLocation("conn", "/", {});
         });
+
+        # --- a full polled read, offline ---
+        FakeDropboxRestClientIo prest();
+        prest.setResponse(binary("polled content"));
+        DropboxFileLocationHandler phandler(prest);
+        assertEq(binary("polled content"),
+            runPoller(phandler.getIoPollerForLocation("conn", "/d/n.txt", {})), "the poller reads the file");
+        assertEq("/2/files/download", prest.last().path, "the poller calls the download content endpoint");
+        assertEq(True, prest.last().content, "the read goes to the content host, not the RPC host");
+        assertEq("/d/n.txt", parse_json(prest.last().hdr{DropboxRestClientBase::ApiArgHeader}).path,
+            "the path travels in the Dropbox-API-Arg header");
+
+        # --- retry: a transient I/O error is retried rather than surfaced ---
+        prest.setResponse(binary("polled content"));
+        prest.poll_retries = 0;
+        prest.poll_fail_attempts = 1;
+        assertEq(binary("polled content"),
+            runPoller(phandler.getIoPollerForLocation("conn", "/d/n.txt", {})),
+            "a transient I/O error is retried and the read still succeeds");
+        assertEq(1, prest.poll_retries, "exactly one retry was made");
+
+        # --- retry limit: past MaxIoRetries the error is reported ---
+        prest.setResponse(binary("polled content"));
+        prest.poll_retries = 0;
+        prest.poll_fail_attempts = DropboxDataProviderBase::MaxIoRetries + 1;
+        assertThrows("DROPBOX-ERROR", "SOCKET-CLOSED", sub () {
+            runPoller(phandler.getIoPollerForLocation("conn", "/d/n.txt", {}));
+        }, NOTHING, "a persistent I/O error is reported once the retry limit is reached");
+        assertEq(DropboxDataProviderBase::MaxIoRetries, prest.poll_retries,
+            "no more than MaxIoRetries retries are made");
+
+        # --- a Dropbox error summary is unpacked rather than reported as an HTTP status ---
+        prest.setResponse(binary("unused"));
+        prest.poll_retries = 0;
+        prest.poll_fail_attempts = 1;
+        prest.poll_error = <ExceptionInfo>{
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP 409 response received",
+            "arg": <RestClient::RestResponseInfo>{
+                "status_code": 409,
+                "headers": {},
+                "body": {"error_summary": "path/not_found/", "error": {".tag": "path"}},
+            },
+        };
+        assertThrows("DROPBOX-ERROR", "path/not_found", sub () {
+            runPoller(phandler.getIoPollerForLocation("conn", "/d/gone.txt", {}));
+        }, NOTHING, "the Dropbox error summary is unpacked");
+        assertEq(0, prest.poll_retries, "a response error is not retried");
 
         # a Dropbox connection claims native support, overriding the base class rule that leaves an application
         # connection to its application's file API
@@ -1753,7 +1905,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             cast<DropboxDataProvider::DropboxDataProvider>(prov).getRestClient();
 
         # a folder of its own keeps the watch off the rest of the account, and makes the seeded index empty
-        string folder = sprintf("/qore-watch-test-%d", now_us().durationMicroseconds());
+        string folder = sprintf("/qore-watch-test-%d", clock_getmicros());
         prov.getChildProviderEx("create-folder").doRequest({"path": folder});
         on_exit {
             prov.getChildProviderEx("delete-file").doRequest({"path": folder});
@@ -1888,7 +2040,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             return;
         }
         AbstractDataProvider prov = conn.getDataProvider();
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
         string folder = "/qore-bulk-" + stamp;
 
         prov.getChildProviderEx("create-folder").doRequest({"path": folder});
@@ -1987,7 +2139,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
             return;
         }
         AbstractDataProvider prov = conn.getDataProvider();
-        string path = sprintf("/qore-test-%d.txt", now_us().durationMicroseconds());
+        string path = sprintf("/qore-test-%d.txt", clock_getmicros());
         string content = "created by the Qore DropboxDataProvider test suite";
 
         hash<auto> created = prov.getChildProvider("create-text-file").doRequest({
@@ -2005,5 +2157,40 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"path": path});
         assertEq(content, parse_base64_string(downloaded.content).toString(),
             "the content read back matches the content written");
+
+        # ... and the same file must be readable with non-blocking I/O, which is what a "conn://" location
+        # naming this connection now gets.  The read goes to the content host with its arguments in the
+        # "Dropbox-API-Arg" header; addressed to the RPC host instead it would answer with a JSON error
+        object handler = conn.getFileLocationHandler();
+        assertEq(binary(content), runPoller(handler.getIoPollerForLocation("conn", path, {})),
+            "the poller returns the bytes the blocking read returns");
+
+        # a path that does not exist must be reported as a Dropbox error rather than read as an empty file
+        assertThrows("DROPBOX-ERROR", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", path + ".absent", {}));
+        });
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    /** The contract a poller must satisfy: no work happens until it is polled, every wait is expressed as a
+        @ref SocketPollInfo for the caller's own poll loop rather than blocking the calling thread, and the
+        data is available from getOutput() once goalReached() is True.
+    */
+    private auto runPoller(AbstractPollOperation op, timeout to = 60s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation %y timed out in state %y", op.getGoal(),
+                    op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+        return op.getOutput();
     }
 }

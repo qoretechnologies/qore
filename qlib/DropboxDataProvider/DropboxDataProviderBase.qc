@@ -252,7 +252,7 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
 
         @throw DROPBOX-ERROR always
     */
-    private nothing throwDropboxError(hash<ExceptionInfo> ex, string path) {
+    static nothing throwDropboxError(hash<ExceptionInfo> ex, string path) {
         *hash<auto> arg = DropboxDataProviderBase::getErrorArg(ex.arg);
         auto resp = arg."response-body" ?? arg.body;
         *string summary = DropboxDataProviderBase::getErrorSummary(resp);
@@ -492,6 +492,95 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
             path = "/" + path;
         }
         return path;
+    }
+}
+
+#! Reads a Dropbox file with non-blocking I/O
+/** Wraps the content client's caller-driven poll operation so that a polled download behaves like a blocking
+    one: a transient I/O error is retried, and a failure is reported as a Dropbox error rather than as a bare
+    HTTP status.  Dropbox describes what went wrong in a JSON document -- a path that does not exist, a token
+    whose scope does not cover the file, a rate limit and how long to wait -- and none of that survives being
+    reduced to a status code.
+*/
+public class DropboxPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        #! The client the request is made with
+        DropboxRestClient::DropboxRestClientIo rest;
+
+        #! The current attempt
+        Qore::AbstractPollOperation op;
+
+        #! The content endpoint path
+        string endpoint;
+
+        #! The operation arguments, sent in the "Dropbox-API-Arg" header
+        auto arg;
+
+        #! I/O errors retried so far
+        int retries = 0;
+    }
+
+    #! Creates the object and prepares the first attempt
+    /** @param rest the client to make the request with
+        @param endpoint the content endpoint path
+        @param arg the operation arguments
+    */
+    constructor(DropboxRestClient::DropboxRestClientIo rest, string endpoint, auto arg) {
+        self.rest = rest;
+        self.endpoint = endpoint;
+        self.arg = arg;
+        op = rest.startPollContentRequest(endpoint, arg);
+    }
+
+    #! Returns a description of what the operation is trying to do
+    string getGoal() {
+        return sprintf("Dropbox %s", endpoint);
+    }
+
+    #! Returns the state of the current attempt
+    string getState() {
+        return op.getState();
+    }
+
+    #! Returns @ref True when the file has been read
+    bool goalReached() {
+        return op.goalReached();
+    }
+
+    #! Advances the current attempt, starting a new one after a transient I/O error
+    /** @return the socket poll descriptor to wait on, or @ref nothing when there is nothing to wait for
+
+        @throw DROPBOX-ERROR the request failed; the Dropbox error summary is included when the response
+        carried one
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            try {
+                return op.continuePoll();
+            } catch (hash<ExceptionInfo> ex) {
+                if (DropboxDataProviderBase::RetrySet{ex.err}
+                        && retries < DropboxDataProviderBase::MaxIoRetries) {
+                    ++retries;
+                    # a poll operation cannot be rewound, so the retry is a new request
+                    op = rest.startPollContentRetry(endpoint, arg);
+                    continue;
+                }
+                DropboxDataProviderBase::throwDropboxError(ex, endpoint);
+            }
+        }
+    }
+
+    #! Returns the file content
+    /** @return the content as a binary; a file stored empty reads back as an empty binary rather than as
+        @ref nothing, so that a caller can tell "empty" from "not read"
+    */
+    auto getOutput() {
+        return DropboxDownloadFileDataProvider::getBinaryBody(op.getOutput().body);
+    }
+
+    #! Aborts the request
+    abort() {
+        op.abort();
     }
 }
 }

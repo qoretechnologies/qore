@@ -42,8 +42,6 @@ public namespace AwsS3DataProvider {
     S3 has no path: a key is a flat string in which \c "/" is an ordinary character.  The bucket is therefore
     taken from the \c container option when it is given, and otherwise from the first segment of the location,
     which is the form <tt>conn://s3/bucket/key</tt>.
-
-    @since AwsS3DataProvider 1.0
 */
 public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
     public {
@@ -84,7 +82,7 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
     /** @param rest the connection's own client, already authenticated
         @param path_style if buckets are addressed in the URI path rather than in the hostname
     */
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True) {
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True) {
         prov = new AwsS3FileTransferProvider(rest, path_style);
     }
 
@@ -99,11 +97,22 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
         return download(location, opts);
     }
 
-    #! Not supported; S3 requests are driven through the REST client's request API
+    #! Returns a poll operation that reads the object with non-blocking I/O
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return a poll operation whose output is the object's content
+
+        @note The request is signed by the same code that signs every other request this module makes --
+        @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" signs each async attempt as it is prepared -- so
+        a polled read and a blocking read put the identical signature on the wire.  A poller that signed
+        differently, or not at all, would fail with \c SignatureDoesNotMatch.
+    */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", sprintf("Amazon S3 file location %y cannot be read with non-blocking I/O; S3 "
-            "requests are signed and driven through the REST client's request API", location);
+        hash<auto> t = AwsS3FileLocationHandler::split(location, opts);
+        return prov.startPollGet(t.bucket, t.key, opts.version_id);
     }
 
     #! Returns a stream reader for the object's data at the given location
@@ -236,8 +245,6 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
 /** The request plumbing -- signing, retries, XML error unpacking, and the multipart upload -- is private to
     the provider hierarchy, and the file location handler is not part of it.  Rather than duplicate any of it,
     this exposes exactly the three operations the handler needs.
-
-    @since AwsS3DataProvider 1.0
 */
 public class AwsS3FileTransferProvider inherits AwsS3DataProviderBase {
     public {
@@ -256,7 +263,7 @@ public class AwsS3FileTransferProvider inherits AwsS3DataProviderBase {
         @param path_style whether the bucket is addressed as the first path segment rather than as a
             subdomain of the endpoint
     */
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
 
@@ -274,6 +281,18 @@ public class AwsS3FileTransferProvider inherits AwsS3DataProviderBase {
         *hash<auto> query = version_id.val() ? {"versionId": version_id} : NOTHING;
         hash<auto> resp = doS3Request("GET", bucket, key, query);
         return resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body ?? "");
+    }
+
+    #! Returns a poll operation that reads an object with non-blocking I/O
+    /** @param bucket the bucket holding the object
+        @param key the object key
+        @param version_id a specific version to read, if any
+
+        @return a poll operation whose output is the object content
+    */
+    Qore::AbstractPollOperation startPollGet(string bucket, string key, *string version_id) {
+        *hash<auto> query = version_id.val() ? {"versionId": version_id} : NOTHING;
+        return startPollS3Request("GET", bucket, key, query);
     }
 
     #! Stores content that is already in memory, using a multipart upload when it is large

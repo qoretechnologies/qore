@@ -40,7 +40,7 @@ public class AwsS3ListBucketsDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3ListBucketsResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -87,7 +87,7 @@ public class AwsS3CreateBucketDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3BucketResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}

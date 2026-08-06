@@ -56,8 +56,52 @@ class RecordingObserver inherits DataProvider::Observer {
     }
 }
 
+#! A poll operation that answers from a canned response without performing any I/O
+/** Lets the offline suite drive a real poller to completion, so the code that reads the response, converts
+    it, and retries is exercised without a network.
+
+    \a attempt is called on the first \c continuePoll() and stands for the request reaching the wire: it
+    returns the response, or throws to model an attempt that failed.  Nothing happens when the operation is
+    *built*, which is what the real client does -- it prepares the request and sends nothing until polled --
+    and what lets the suite assert that a poller makes no request until it is driven.
+*/
+class FakePollOperation inherits AbstractPollOperation<auto> {
+    private {
+        #! called on the first continuePoll(); returns the response or throws
+        code<hash<RestClient::RestResponseInfo>()> attempt;
+
+        #! the response, once the attempt has produced one
+        *hash<RestClient::RestResponseInfo> resp;
+
+        #! set once the response has been delivered
+        bool done = False;
+    }
+
+    constructor(code<hash<RestClient::RestResponseInfo>()> attempt) {
+        self.attempt = attempt;
+    }
+
+    string getGoal() { return "fake poll"; }
+    string getState() { return done ? "complete" : "ready"; }
+    bool goalReached() { return done; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # the request reaches the "wire" here, not when the operation was built
+        resp = attempt();
+        done = True;
+        return NOTHING;
+    }
+
+    auto getOutput() { return resp; }
+    abort() {}
+}
+
 #! Answers S3 requests from a script of XML documents rather than reaching Amazon
-class FakeAwsRestClient inherits AwsRestClient::AwsRestClient {
+/** NOTE: an \c AwsRestClientIo, not an \c AwsRestClient.  The module drives every request through the async
+    client, and a fake built on the synchronous one would no longer be accepted where the module expects a
+    client -- and, if it were, would answer in the wrong response shape.
+*/
+class FakeAwsRestClient inherits AwsRestClient::AwsRestClientIo {
     public {
         #! response bodies to return, in order; the last one is reused once the list is exhausted
         list<string> bodies = ("",);
@@ -79,43 +123,102 @@ class FakeAwsRestClient inherits AwsRestClient::AwsRestClient {
 
         #! the number of responses already handed out
         int served = 0;
+
+        #! how many successive poll attempts fail before one is allowed to answer
+        /** Each failing attempt raises @ref poll_error from its first continuePoll(), which is how a real
+            attempt fails: a poll operation cannot be rewound, so a retry is always a new attempt
+        */
+        int poll_fail_attempts = 0;
+
+        #! the error each failing attempt raises
+        hash<ExceptionInfo> poll_error = <ExceptionInfo>{
+            "err": "SOCKET-CLOSED",
+            "desc": "connection closed",
+        };
+
+        #! the number of times a poll operation asked for a retry
+        int poll_retries = 0;
     }
 
-    constructor() : AwsRestClient(AwsS3DataProviderTest::TestConnOptions + {
+    constructor() : AwsRestClientIo(AwsS3DataProviderTest::TestConnOptions + {
         "url": "https://s3.eu-central-1.amazonaws.com",
         "aws_service": "s3",
         "aws_s3": True,
         "data": "bin",
-    }, True) {
+    }) {
     }
 
-    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
-        return record(m, path, body);
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body);
     }
 
-    #! NOTE: this must be overridden as well as doRequest()
-    /** The module sends every request through \c doRequestAssumingXml(), because S3 answers the multipart
-        operations with XML and no \c Content-Type header.  Overriding only \c doRequest() left that method
-        inherited, so the "offline" suite silently made real requests against Amazon.
+    #! NOTE: this must be overridden as well as restDoRequest()
+    /** The module sends every request through \c restDoRequestAssumingXml(), because S3 answers the multipart
+        operations with XML and no \c Content-Type header.  Overriding only \c restDoRequest() would leave that
+        method inherited, and the "offline" suite would silently make real requests against Amazon -- which is
+        exactly what happened with the synchronous client's \c doRequestAssumingXml().
     */
-    hash<auto> doRequestAssumingXml(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
-        return record(m, path, body);
+    hash<RestClient::RestResponseInfo> restDoRequestAssumingXml(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return record(method, path, body);
+    }
+
+    #! NOTE: the poll entry points must be overridden too
+    /** The module reads a "conn://" location through startPollRequest(), and a retry inside the poll
+        operation through startPollRetry().  A fake that overrode only the request methods would leave both
+        inherited, so an offline poller test would quietly make real requests against Amazon -- the same trap
+        that once hid doRequestAssumingXml().
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return recordPoll(method, path);
+    }
+
+    Qore::AbstractPollOperation startPollRetry(string method, string path, auto body, *hash<auto> hdr) {
+        ++poll_retries;
+        return recordPoll(method, path);
+    }
+
+    #! Records a polled request and returns a poller over the next canned response
+    /** Nothing is recorded or consumed until the poller is driven: a real attempt sends its request on the
+        first continuePoll(), not when the operation is built.  An attempt scripted to fail records its
+        request but does **not** consume a canned response, since an attempt that dies on the socket never
+        received one -- consuming here would hand the retry the *next* scripted response.
+    */
+    private Qore::AbstractPollOperation recordPoll(string m, string path) {
+        bool fail = poll_fail_attempts > 0;
+        if (fail) {
+            --poll_fail_attempts;
+        }
+        return new FakePollOperation(hash<RestClient::RestResponseInfo> sub () {
+            if (fail) {
+                paths += path;
+                methods += m;
+                bodies_sent += NOTHING;
+                throw poll_error.err, poll_error.desc, poll_error.arg;
+            }
+            return record(m, path, NOTHING);
+        });
     }
 
     #! Records a request and returns the next canned response
-    private hash<auto> record(string m, string path, auto body) {
+    private hash<RestClient::RestResponseInfo> record(string m, string path, auto body) {
         paths += path;
         methods += m;
         bodies_sent += body;
         int i = served < bodies.size() ? served : bodies.size() - 1;
         int j = served < resp_headers.size() ? served : resp_headers.size() - 1;
         ++served;
-        # NOTE: the real client returns response headers at the *top level* alongside "body" rather than
-        # under a key of their own; the fake must answer the same way or it would hide the very defect that
-        # made every header read in this module return nothing
-        return {"body": bodies[i]} + (resp_headers[j] ?? {});
+        # NOTE: the real client returns a RestResponseInfo, which keeps the response headers under "headers"
+        # and apart from the status fields; the fake must answer in the same shape or it would hide the very
+        # defect that made every header read in this module return nothing
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": resp_headers[j] ?? {},
+            "body": bodies[i],
+            "request_method": m,
+            "request_path": path,
+        };
     }
 }
 
@@ -174,6 +277,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("response headers", \responseHeadersTest());
         addTestCase("multipart upload", \multipartUploadTest());
         addTestCase("native file location handler", \nativeHandlerTest());
+        addTestCase("poller", \pollerTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live presigned url", \livePresignedUrlTest());
         addTestCase("live object round trip", \liveObjectRoundTripTest());
@@ -332,7 +436,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         # type can be compared against the options the catalog advertises for it
         AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
             TestConnOptions);
-        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.getAsync(False)});
 
         hash<string, bool> children = map {$1: True}, keys AwsS3DataProvider::AwsS3DataProvider::DefaultChildMap;
         hash<string, bool> seen;
@@ -406,7 +510,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
     eventProviderTest() {
         AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
             TestConnOptions);
-        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.getAsync(False)});
 
         AbstractDataProvider events = root.getChildProviderEx("events");
         assertEq("events", events.getName());
@@ -417,9 +521,9 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
         # the object watch has to be told which bucket to watch; the bucket watch covers the whole account
         hash<string, AbstractDataProvider> configured = {
-            "new-bucket": new AwsS3WatchNewBucketDataProvider({"restclient": conn.get(False)}),
+            "new-bucket": new AwsS3WatchNewBucketDataProvider({"restclient": conn.getAsync(False)}),
             "new-or-updated-file": new AwsS3WatchObjectsDataProvider({
-                "restclient": conn.get(False),
+                "restclient": conn.getAsync(False),
                 "bucket": "test-bucket",
             }),
         };
@@ -446,13 +550,13 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
         # the object watch is scoped by bucket and prefix, so a change to either defines a different feed and
         # must not resume the previous cursor against a different set of objects
-        AwsS3WatchObjectsDataProvider w1({"restclient": conn.get(False), "bucket": "a", "prefix": "p/"});
-        AwsS3WatchObjectsDataProvider w2({"restclient": conn.get(False), "bucket": "b", "prefix": "p/"});
+        AwsS3WatchObjectsDataProvider w1({"restclient": conn.getAsync(False), "bucket": "a", "prefix": "p/"});
+        AwsS3WatchObjectsDataProvider w2({"restclient": conn.getAsync(False), "bucket": "b", "prefix": "p/"});
         assertNeq(w1.getWatchStreamIdentity(), w2.getWatchStreamIdentity(),
             "watching a different bucket is a different feed");
         # ... while the poll interval only changes how often the same feed is checked
         AwsS3WatchObjectsDataProvider w3({
-            "restclient": conn.get(False),
+            "restclient": conn.getAsync(False),
             "bucket": "a",
             "prefix": "p/",
             "poll_interval": 300,
@@ -461,11 +565,11 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             "tuning the poll interval does not discard the cursor");
         assertEq(300, w3.getPollIntervalSeconds());
         # the minimum interval is enforced, since S3 charges per request
-        AwsS3WatchObjectsDataProvider w4({"restclient": conn.get(False), "bucket": "a", "poll_interval": 1});
+        AwsS3WatchObjectsDataProvider w4({"restclient": conn.getAsync(False), "bucket": "a", "poll_interval": 1});
         assertEq(MinPollInterval, w4.getPollIntervalSeconds());
 
         # a watch with no bucket names the option to set rather than failing obscurely at the API
-        AwsS3WatchObjectsDataProvider w5({"restclient": conn.get(False)});
+        AwsS3WatchObjectsDataProvider w5({"restclient": conn.getAsync(False)});
         assertThrows("S3-WATCH-ERROR", "bucket", sub () { w5.getExampleEventData("new-or-updated-file"); });
     }
 
@@ -500,7 +604,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
     referenceDataTest() {
         AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
             TestConnOptions);
-        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.getAsync(False)});
 
         *hash<string, bool> supported = root.getSupportedReferenceData();
         assertTrue(supported.buckets, "bucket reference data is offered");
@@ -1017,10 +1121,83 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq("GLACIER",
             AwsS3FileLocationHandler::getHeaders("a/b.txt", {"storage_class": "GLACIER"})."x-amz-storage-class");
 
-        # non-blocking I/O is not available, and says so
-        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
-            handler.getIoPollerForLocation("conn", "b/n.txt", {});
+        # a poller addresses the same object as a blocking read, and does not issue the request itself: the
+        # request only reaches the wire once the caller polls it
+        rest.paths = ();
+        AbstractPollOperation op = handler.getIoPollerForLocation("conn", "b/n.txt", {});
+        assertRegex("S3 GET /b/n.txt", op.getGoal(), "the poller names the request it will make");
+        assertEq(False, op.goalReached(), "the poller has not read anything before it is polled");
+
+        # a location naming no key is rejected before any I/O is attempted, as it is for a blocking read
+        assertThrows("LOCATION-ERROR", "does not name both a bucket and an object key", sub () {
+            handler.getIoPollerForLocation("conn", "nokey", {});
         });
+    }
+
+    #! Drives the S3 poller to completion offline, including its retry and error paths
+    /** The live suite proves the poller against Amazon; this proves the parts a live test cannot reach on
+        demand -- a transient socket error part-way through, the retry limit, and the S3 error document being
+        unpacked -- and it proves them without a network.
+    */
+    pollerTest() {
+        FakeAwsRestClient rest();
+        rest.bodies = ("polled content",);
+        AwsS3FileLocationHandler handler(rest);
+
+        # a full polled read returns the object bytes, and addresses the same path a blocking read does
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "b/n.txt", {})),
+            "the poller reads the object");
+        assertEq("/b/n.txt", rest.paths[0], "the poller addresses the object it was asked for");
+        assertEq("GET", rest.methods[0], "the poller reads with GET");
+
+        # a version option reaches the polled request too
+        rest.paths = ();
+        runPoller(handler.getIoPollerForLocation("conn", "b/n.txt", {"version_id": "v9"}));
+        assertRegex("versionId=v9", rest.paths[0], "the poller addresses the version it was asked for");
+
+        # a key with reserved characters is percent-encoded in the polled request exactly as in a blocking
+        # one; the signature covers the request target, so a difference here is SignatureDoesNotMatch live
+        rest.paths = ();
+        runPoller(handler.getIoPollerForLocation("conn", "b/a+b c&d.txt", {}));
+        assertEq("/b/a%2Bb%20c%26d.txt", rest.paths[0],
+            "the polled request target is encoded the same way a blocking request target is");
+
+        # --- retry: a transient I/O error is retried rather than surfaced ---
+        rest.paths = ();
+        rest.poll_retries = 0;
+        rest.poll_fail_attempts = 1;
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "b/n.txt", {})),
+            "a transient I/O error is retried and the read still succeeds");
+        assertEq(1, rest.poll_retries, "exactly one retry was made");
+        assertEq(2, rest.paths.size(), "the retry is a second request, since a poller cannot be rewound");
+
+        # --- retry limit: past MaxIoRetries the error is reported ---
+        rest.poll_retries = 0;
+        # the first attempt and every retry fails, so the limit is reached
+        rest.poll_fail_attempts = AwsS3DataProviderBase::MaxIoRetries + 1;
+        assertThrows("S3-API-ERROR", "SOCKET-CLOSED", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "b/n.txt", {}));
+        }, NOTHING, "a persistent I/O error is reported once the retry limit is reached");
+        assertEq(AwsS3DataProviderBase::MaxIoRetries, rest.poll_retries,
+            "no more than MaxIoRetries retries are made");
+
+        # --- a non-retryable error is reported immediately, with the S3 error code unpacked ---
+        rest.poll_retries = 0;
+        rest.poll_fail_attempts = 1;
+        rest.poll_error = <ExceptionInfo>{
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP 404 response received",
+            "arg": <RestClient::RestResponseInfo>{
+                "status_code": 404,
+                "headers": {},
+                "body": "<?xml version=\"1.0\"?><Error><Code>NoSuchKey</Code>"
+                    "<Message>The specified key does not exist.</Message></Error>",
+            },
+        };
+        assertThrows("S3-API-ERROR", "NoSuchKey", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "b/gone.txt", {}));
+        }, NOTHING, "the S3 error document is unpacked rather than reported as an HTTP status");
+        assertEq(0, rest.poll_retries, "a response error is not retried");
     }
 
     private usageIntern() {
@@ -1123,7 +1300,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         }
         AbstractDataProvider prov = conn.getDataProvider();
         string bucket = getLiveBucket(prov);
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
         string key = sprintf("qore test %s/a+b c&d.txt", stamp);
         string content = "written by the Qore AwsS3DataProvider test suite";
 
@@ -1184,6 +1361,50 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             "prefix": sprintf("qore test %s/", stamp),
         });
         assertEq(2, listing.objects.size(), "both objects are listed under the prefix");
+
+        # ... and must be readable with non-blocking I/O, which is the whole point of the module being built
+        # on the async client.  The key carries the reserved characters deliberately: the poller signs the
+        # same request target the blocking read does, and a poller that encoded it differently -- or did not
+        # sign at all -- fails as SignatureDoesNotMatch rather than returning the wrong bytes
+        object handler = conn.getFileLocationHandler();
+        assertEq(payload, runPoller(handler.getIoPollerForLocation("conn", bin_key, {"container": bucket})),
+            "the poller returns the bytes the blocking read returns");
+        assertEq(content,
+            runPoller(handler.getIoPollerForLocation("conn", key, {"container": bucket})).toString(),
+            "the poller reads a key containing a space, a \"+\" and an \"&\"");
+
+        # the bucket can also be named as the first segment of the location rather than as an option
+        assertEq(payload, runPoller(handler.getIoPollerForLocation("conn", bucket + "/" + bin_key, {})),
+            "the poller accepts the bucket as the first path segment");
+
+        # a missing object must be reported rather than read as an empty object
+        assertThrows("S3-API-ERROR", "NoSuchKey", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", sprintf("qore test %s/absent.txt", stamp),
+                {"container": bucket}));
+        });
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    /** The contract a poller must satisfy: no work happens until it is polled, every wait is expressed as a
+        @ref SocketPollInfo for the caller's own poll loop rather than blocking the calling thread, and the
+        data is available from getOutput() once goalReached() is True.
+    */
+    private auto runPoller(AbstractPollOperation op, timeout to = 60s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation %y timed out in state %y", op.getGoal(),
+                    op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+        return op.getOutput();
     }
 
     #! Reads a bucket as a record source, across a page boundary
@@ -1256,7 +1477,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         AwsS3FileLocationHandler handler = cast<AwsS3FileLocationHandler>(h);
 
         string bucket = getLiveBucket(conn.getDataProvider());
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
         string small = sprintf("%s/qore native %s/small.txt", bucket, stamp);
         string content = "written through the native S3 file location handler";
 

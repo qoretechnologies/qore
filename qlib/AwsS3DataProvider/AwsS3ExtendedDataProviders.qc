@@ -47,7 +47,7 @@ public class AwsS3PresignedUrlDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3PresignedUrlResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -109,7 +109,7 @@ public class AwsS3DeleteObjectsDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3DeleteObjectsResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -202,7 +202,7 @@ public class AwsS3DeleteBucketDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3BucketResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -243,7 +243,7 @@ public class AwsS3MoveObjectDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3ObjectResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -305,7 +305,7 @@ public class AwsS3GetObjectTaggingDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3ObjectTaggingResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -354,7 +354,7 @@ public class AwsS3PutObjectTaggingDataProvider inherits AwsS3DataProviderBase {
         const ResponseType = AwsS3ObjectTaggingResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}
@@ -418,7 +418,7 @@ public class AwsS3ListObjectVersionsDataProvider inherits AwsS3DataProviderBase 
         const ResponseType = AwsS3ListObjectVersionsResponseDataType;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}

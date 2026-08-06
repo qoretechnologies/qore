@@ -5147,9 +5147,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the
-        # sync RestClient via HTTPClient) that do not carry over to the HttpClientIo-based
-        # RestClientIo transport — strip them from the RestClientIo option set
+        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the sync
+        # RestClient via HTTPClient) that have no counterpart on the HttpClientIo-based RestClientIo
+        # transport, which sends the request target verbatim: there is no getMsgPath()-style rewrite
+        # between the caller's path and the H1 request line or the H2/H3 ":path" pseudo-header, so a
+        # path the caller has already percent-encoded reaches the wire unchanged.  That is what
+        # "pre_encoded_urls" buys on HTTPClient, and it is why callers that sign the request target
+        # (AWS SigV4, for one) need no opt-out here.  Passing any of these keys to RestClientIo
+        # directly raises RESTCLIENTIO-OPTION-ERROR, so strip them from the option set.
         hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
         return create_object("RestClientIo::RestClientIo", opts);
     }

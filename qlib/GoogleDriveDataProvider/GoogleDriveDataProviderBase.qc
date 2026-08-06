@@ -282,7 +282,7 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param method the HTTP method used
         @param path the URI path
     */
-    private nothing throwDriveError(hash<ExceptionInfo> ex, string method, string path) {
+    static nothing throwDriveError(hash<ExceptionInfo> ex, string method, string path) {
         *hash<auto> arg = GoogleDriveDataProviderBase::getErrorArg(ex.arg);
         *hash<auto> err = arg."response-body".error ?? arg.body.error;
         if (err.message.val()) {
@@ -423,8 +423,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param mime the content MIME type
 
         @return the response
-
-        @since GoogleDriveDataProvider 1.0
     */
     private hash<auto> upload(string method, string path, hash<auto> metadata, binary content, string mime) {
         if (content.size() <= ResumableThreshold) {
@@ -449,8 +447,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @return the response carrying the file resource
 
         @throw GOOGLE-DRIVE-ERROR the server did not return a resumable session URI
-
-        @since GoogleDriveDataProvider 1.0
     */
     private hash<auto> uploadResumable(string method, string path, hash<auto> metadata, Qore::InputStream is,
             string mime) {
@@ -537,8 +533,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
 
         @return the response; for an intermediate chunk this is the 308's own response info, whose \c Range
             header reports the byte range Drive holds
-
-        @since GoogleDriveDataProvider 1.0
     */
     private hash<auto> sendResumableChunk(string session_path, binary chunk, string mime, string range,
             bool last) {
@@ -565,8 +559,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param end the offset just past the chunk that was sent
 
         @return the offset just past the last byte Drive acknowledges holding, never past \a end
-
-        @since GoogleDriveDataProvider 1.0
     */
     static int getAcknowledgedEnd(hash<auto> resp, int offset, int end) {
         *string range = resp.headers.range ?? resp.headers.Range;
@@ -589,8 +581,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param session the session URI
 
         @return the path with its query arguments
-
-        @since GoogleDriveDataProvider 1.0
     */
     static string getSessionPath(string session) {
         hash<UrlInfo> u = parse_url(session);
@@ -606,8 +596,6 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
         @param n the number of bytes wanted
 
         @return the bytes read; shorter than \a n only when the stream ended
-
-        @since GoogleDriveDataProvider 1.0
     */
     static binary readExactly(Qore::InputStream is, int n) {
         binary rv = binary();
@@ -689,6 +677,174 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
             "is_google_doc": f.mimeType =~ /^application\/vnd\.google-apps\./
                 && f.mimeType != FolderMimeType,
         };
+    }
+}
+
+#! Reads a Google Drive file with non-blocking I/O
+/** A Drive read is two requests rather than one whenever the caller has not named an export format: the file
+    metadata decides whether the file has byte content at all.  Both are polled here, so that no part of the
+    read blocks the calling thread.
+
+    Why the metadata request is not skipped: a Google-native document (a Doc, a Sheet, a Slide) has no byte
+    content of its own, and asking Drive for it answers with the API's generic *"Only files with binary content
+    can be downloaded"*, which names neither the file nor what to do about it.  The blocking read looks the
+    file up first so that it can say precisely what is wrong and which option fixes it, and a poller that
+    dropped that check would regress the error just as the caller most needs it.
+*/
+public class GoogleDrivePollOperation inherits Qore::AbstractPollOperation<auto> {
+    public {
+        #! Waiting for the file metadata that decides whether the file can be downloaded
+        const string SPS_METADATA = "metadata";
+        #! Waiting for the file content
+        const string SPS_CONTENT = "content";
+        #! Complete
+        const string SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! The client the requests are made with
+        RestClientIo::RestClientIo rest;
+
+        #! The current request
+        Qore::AbstractPollOperation op;
+
+        #! The Drive file ID
+        string file_id;
+
+        #! The format to export a Google-native document to, if any
+        *string export_mime_type;
+
+        #! The current state
+        string state;
+
+        #! The path of the current request, for error reporting
+        string path;
+
+        #! I/O errors retried so far, on the current request
+        int retries = 0;
+
+        #! The content, once read
+        *binary output;
+    }
+
+    #! Creates the object and prepares the first request
+    /** @param rest the client to make the requests with
+        @param file_id the Drive file ID
+        @param export_mime_type the format to export a Google-native document to, if any
+    */
+    constructor(RestClientIo::RestClientIo rest, string file_id, *string export_mime_type) {
+        self.rest = rest;
+        self.file_id = file_id;
+        self.export_mime_type = export_mime_type;
+        if (export_mime_type.val()) {
+            # an export names the format outright, so there is nothing the metadata would decide
+            state = SPS_CONTENT;
+            path = sprintf("/drive/v3/files/%s/export?mimeType=%s", encode_url(file_id, True),
+                encode_url(export_mime_type, True));
+        } else {
+            state = SPS_METADATA;
+            path = sprintf("/drive/v3/files/%s?fields=%s", encode_url(file_id, True),
+                encode_url(GoogleDriveDataProviderBase::getFileFields(), True));
+        }
+        op = startRequest(False);
+    }
+
+    #! Returns a description of what the operation is trying to do
+    string getGoal() {
+        return sprintf("Google Drive read %y", file_id);
+    }
+
+    #! Returns the state of the operation
+    string getState() {
+        return state;
+    }
+
+    #! Returns @ref True when the content has been read
+    bool goalReached() {
+        return state == SPS_COMPLETE;
+    }
+
+    #! Advances the read, moving from the metadata request to the content request when the first completes
+    /** @return the socket poll descriptor to wait on, or @ref nothing when there is nothing to wait for
+
+        @throw GOOGLE-DRIVE-ERROR the request failed, or the file is a Google-native document and no export
+        format was given
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            *hash<SocketPollInfo> rv;
+            try {
+                rv = op.continuePoll();
+            } catch (hash<ExceptionInfo> ex) {
+                if (GoogleDriveDataProviderBase::RetrySet{ex.err}
+                        && retries < GoogleDriveDataProviderBase::MaxIoRetries) {
+                    ++retries;
+                    # a poll operation cannot be rewound, so the retry is a new request
+                    op = startRequest(True);
+                    continue;
+                }
+                GoogleDriveDataProviderBase::throwDriveError(ex, "GET", path);
+            }
+            if (rv) {
+                return rv;
+            }
+            if (!op.goalReached()) {
+                # nothing to wait for and not finished: let the caller poll again
+                return NOTHING;
+            }
+            if (state == SPS_CONTENT) {
+                output = GoogleDrivePollOperation::forceBinary(op.getOutput().body);
+                state = SPS_COMPLETE;
+                return NOTHING;
+            }
+
+            # the metadata arrived; decide whether there is any content to read
+            hash<auto> meta = GoogleDriveDataProviderBase::getFileInfo(op.getOutput().body);
+            if (meta.is_google_doc) {
+                throw "GOOGLE-DRIVE-ERROR", sprintf("file %y (%y) is a Google-native document of type %y, "
+                    "which has no byte content of its own; set the \"export_mime_type\" location option to a "
+                    "format to convert it to", meta.name, file_id, meta.mime_type);
+            }
+            state = SPS_CONTENT;
+            path = sprintf("/drive/v3/files/%s?alt=media", encode_url(file_id, True));
+            retries = 0;
+            op = startRequest(True);
+        }
+    }
+
+    #! Returns the file content
+    /** @return the content as a binary; a file stored empty reads back as an empty binary rather than as
+        @ref nothing, so that a caller can tell "empty" from "not read"
+    */
+    auto getOutput() {
+        return output ?? binary();
+    }
+
+    #! Aborts the request in flight
+    abort() {
+        op.abort();
+    }
+
+    #! Starts the request for the current state
+    /** @param started @ref True when an earlier request in this operation has already ensured the OAuth2
+        token; every request after the first is issued from inside @ref continuePoll(), which may be running
+        on an async-I/O \c continuePoll worker, and a synchronous token refresh on that thread raises
+        \c SOCKET-SYNC-ON-IO-THREAD-ERROR
+    */
+    private Qore::AbstractPollOperation startRequest(bool started) {
+        # NOTE: "Accept: */*"; without it the client asks for its own data format and Drive answers a content
+        # download with a JSON error rather than with the bytes
+        return started
+            ? rest.startPollRetry("GET", path, NOTHING, {"Accept": "*/*"})
+            : rest.startPollRequest("GET", path, NOTHING, {"Accept": "*/*"});
+    }
+
+    #! Returns a response body as binary, whatever form the client deserialized it into
+    static binary forceBinary(auto body) {
+        if (!exists body) {
+            return binary();
+        }
+        return body.typeCode() == NT_BINARY ? body : binary(body.toString());
     }
 }
 }

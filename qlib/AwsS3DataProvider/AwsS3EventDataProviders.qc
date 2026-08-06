@@ -61,8 +61,8 @@ public class AwsS3WatchDataProviderBase inherits AwsS3DataProviderBase,
         };
     }
 
-    #! Creates the object from an AwsRestClient
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True, *hash<auto> options)
+    #! Creates the object from an AwsRestClientIo
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True, *hash<auto> options)
             : AwsS3DataProviderBase(rest, path_style),
               AbstractTimestampWatchDataProvider(
                   max(options.poll_interval ?? DefaultPollInterval, MinPollInterval), options.start_date) {
@@ -76,8 +76,11 @@ public class AwsS3WatchDataProviderBase inherits AwsS3DataProviderBase,
     }
 
     #! Cancels an in-flight request so that a stop does not wait out the poll
+    /** @note \c close() rather than \c disconnect(): the async client owns pooled multiplexed connections
+        rather than one socket, and closing them is what aborts a request already on the wire
+    */
     private cancelPollOperation() {
-        rest.disconnect();
+        rest.close();
     }
 
     #! The upstream ordering is not relied on
@@ -177,7 +180,7 @@ public class AwsS3WatchNewBucketDataProvider inherits AwsS3WatchDataProviderBase
         const WatchOptions = CommonWatchOptions;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True, *hash<auto> options)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True, *hash<auto> options)
             : AwsS3WatchDataProviderBase(rest, path_style, options) {
     }
     constructor(*hash<auto> options) : AwsS3WatchDataProviderBase(options, WatchOptions) {}
@@ -312,7 +315,7 @@ public class AwsS3WatchObjectsDataProvider inherits AwsS3WatchDataProviderBase {
         int max_scan_keys = DefaultMaxScanKeys;
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True, *hash<auto> options)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True, *hash<auto> options)
             : AwsS3WatchDataProviderBase(rest, path_style, options) {
         setWatchOptions(options);
     }
@@ -481,7 +484,7 @@ public class AwsS3EventsDataProvider inherits AwsS3DataProviderBase {
         };
     }
 
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
     constructor(*hash<auto> options) : AwsS3DataProviderBase(options) {}

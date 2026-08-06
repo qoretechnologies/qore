@@ -738,23 +738,83 @@ response Drive never sends. Both fakes now answer as the services do.
 
 ### Still outstanding
 
-- **`AwsS3DataProvider` still uses the blocking client** (design §5.5, which
-  requires `RestClientIo` throughout so non-blocking pollers work).  Drive and
-  Dropbox comply; S3 does not.  `AwsRestClientIo` already exists and already
-  implements S3 SigV4.  The move is 25 constructors and duplicating or hoisting
-  `getPresignedUrl()` — hoisting is blocked by the `private:internal` credential
-  storage in each client class.  The response shape is no longer part of it:
-  every request already passes through `AwsS3DataProviderBase::doS3Request()`,
-  which normalizes the response into `body` / `status_code` / `hdr` in one
-  place, so the two clients' differing shapes are reconciled there rather than
-  at each reader.  It still needs live re-verification that SigV4 verifies over
-  HTTP/2 and HTTP/3, which is the part no offline test can answer.
-- ~~**Qore `HTTPClient` re-encodes the request target.**~~  Resolved: this is
-  documented behavior, not a defect.  `HTTPClient` percent-encodes a request's
-  URI path by default, and `pre_encoded_urls` is the documented opt-out for a
-  caller that supplies an already-encoded path.  S3 sets it, and
-  `AwsRestClient::getPresignedUrl()` documents that a client fetching a
-  presigned URL needs it too.
+Nothing.  The two items that were outstanding are done:
+
+- ~~**`AwsS3DataProvider` still uses the blocking client**~~ (design §5.5).
+  Done.  The module is built on `AwsRestClientIo` throughout: 28 type
+  references, `doS3Request()` on `restDoRequestAssumingXml()`,
+  `cancelPollOperation()` on `close()` rather than `disconnect()`, and both
+  `AwsS3RestConnectionBase::getDataProvider()` and
+  `getFileLocationHandlerImpl()` handing out `getAsync()`.  The response shape
+  is reconciled in `normalizeResponse()` alone, as predicted.
+  `getPresignedUrl()` was hoisted rather than duplicated: the credential and
+  scope members moved from each client's `private:internal` block into
+  `AwsRestClientBase`, with two small abstract hooks
+  (`getAwsHostHeaderValue()`, `getAwsBaseUrl()`) for the parts the two clients
+  derive differently, so query-string signing now exists once.
+- ~~**Qore `HTTPClient` re-encodes the request target.**~~  Resolved, and the
+  question it raised for the async path is now settled empirically rather than
+  by reading the code: the `RestClientIo` transport sends the request target
+  **verbatim**.  There is no `getMsgPath()`-style rewrite between the caller's
+  path and the HTTP/1 request line or the HTTP/2 and HTTP/3 `:path`
+  pseudo-header, so a pre-encoded path reaches the wire unchanged and
+  `pre_encoded_urls` needs no counterpart there.  Confirmed against Amazon: a
+  signed `GET` on a key containing a space, a `+` and an `&` returns 200
+  through `AwsRestClientIo`.  `RestConnection::getAsyncImpl()` now records the
+  mechanism rather than merely asserting the options "do not carry over".
+
+### Defects this work turned up
+
+Each was found by doing the migration rather than by a test failing, and each
+is fixed here:
+
+| Defect | Consequence |
+|---|---|
+| `AwsRestClientIo` never signed asynchronous requests | `signRequest()` was only called from `restDoRequest()`; every async path — `restDoRequestAsync()` and anything built on `RestClientIoAsyncRequestOperation` — sent AWS requests with no `authorization` header.  The generic single-header `signer` hook cannot serve, since SigV4 sets four headers that sign each other; fixed by overriding `prepareAsyncRequestAttempt()` |
+| No caller-driven poll operation existed on `RestClientIo` | `RestClientIoAsyncRequestOperation` submits itself to the async I/O controller, so a second driver calling `continuePoll()` would race it, and an error only rejected the Promise — a caller looping on `goalReached()` would never stop.  Added `startPollRequest()` / `startPollRawRequest()` and a caller-driven mode that rethrows and exposes the response through `getOutput()` |
+| A retry started inside `continuePoll()` re-checked the OAuth2 token | `ensureToken()` can refresh synchronously, and a sync socket operation on an async-I/O `continuePoll` worker raises `SOCKET-SYNC-ON-IO-THREAD-ERROR`.  Added `startPollRetry()` / `startPollRawRetry()`, used for every request a poll operation issues after its first |
+| `now_us().durationMicroseconds()` is always `0` | An absolute date has no duration, so ten live tests across the three suites that believed they were generating a unique object key, file name, or folder per run were reusing one fixed name.  Replaced with `clock_getmicros()` |
+
+### Poller coverage
+
+Every polled read is exercised **offline** as well as live.  Each module's fake
+client overrides the poll entry points (`startPollRequest()` /
+`startPollRetry()`, and `startPollContentRequest()` /
+`startPollContentRetry()` for Dropbox) and answers from a canned response
+without a network, so the offline suites drive a real poller to completion and
+cover what a live test cannot reach on demand: a transient socket error
+mid-transfer, the retry limit, and the service's own error document being
+unpacked.  Without this the fakes could only be asked to *build* a poller, and
+a change to the poll path would have passed all three offline suites — the
+failure mode this branch's phase-G table is a list of.
+
+To make that possible, `RestClientIo`'s `startPoll*` methods return
+`AbstractPollOperation` rather than the concrete operation class.  That is the
+whole contract a caller needs, and it is what lets a subclass answer requests
+from a script instead of from the network.
+
+The fakes model the transport honestly in two respects that each caught a bug
+while being written: nothing is sent until the poller is driven (a real client
+prepares the request and sends on the first `continuePoll()`), and an attempt
+that fails does **not** consume a canned response, since an attempt that dies
+on the socket never received one.
+
+### Non-blocking reads
+
+All three native file location handlers implement
+`getIoPollerForLocationImpl()`; none throws `UNIMPLEMENTED` any longer, so a
+`conn://` location naming an `s3`, `googledrive`, or `dropbox` connection can
+be read with non-blocking I/O — which is what design §5.5 exists to guarantee.
+
+Each poller retries a transient I/O error and reports a failure in its
+service's own terms (`S3-API-ERROR`, `GOOGLE-DRIVE-ERROR`, `DROPBOX-ERROR`)
+rather than as a bare HTTP status, matching the blocking read it replaces.  The
+Drive poller keeps the two-request shape of the blocking read — metadata, then
+content — so that a Google-native document is still reported precisely instead
+of as the API's generic *"Only files with binary content can be downloaded"*;
+naming `export_mime_type` makes it a single request.  S3 signs the polled
+request with the same code that signs every other request the module makes, so
+a polled read and a blocking read put an identical signature on the wire.
 
 ---
 
@@ -784,6 +844,17 @@ but running A first means D lands against a settled framework.
 - **`ts-toolkit` `files: {...}` key** for the ~80 apps staying in TypeScript.
 - **Directory listing through a connection** (`FilePoller`-style). `conn://`
   covers read and write of a single file only.
+- **Non-blocking reads for `ftp://` and `sftp://`.**  Both tier-1a handlers
+  still throw `UNIMPLEMENTED` from `getIoPollerForLocationImpl()`, and neither
+  can be fixed in the handler: SFTP has no async API at all in `module-ssh2`,
+  and FTP's composite `FtpClientIo::FtpClientPollOperation` does not work —
+  its suite covers only the two primitive poll operations, never a composite
+  GET, so the state machine shipped broken.  One defect in it is fixed here
+  (the data connection is now opened before the transfer command, since a
+  server will not answer `RETR` until the connection it advertised is
+  accepted); at least one more remains.  Written up as
+  `/tmp/qore-5386-ftp-poller-prompt.md` and
+  `/tmp/qore-5386-sftp-poller-prompt.md`.
 - **Migrating the other Amazon apps** (`ses`, `sns`, `sqs`, `lambda`,
   `cloudfront`, `cloudwatch`, `ec2`) onto `AwsRestClient`. If that is ever
   wanted it argues for building `AwsS3DataProvider` on shared AWS base classes

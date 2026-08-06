@@ -37,6 +37,46 @@
 %exec-class GoogleDriveDataProviderTest
 
 #! Answers Drive requests from a script rather than reaching Google
+#! A poll operation that answers from a canned response without performing any I/O
+/** Lets the offline suite drive a real poller to completion, so the code that reads the response, converts
+    it, and retries is exercised without a network.
+
+    \a attempt is called on the first \c continuePoll() and stands for the request reaching the wire: it
+    returns the response, or throws to model an attempt that failed.  Nothing happens when the operation is
+    *built*, which is what the real client does -- it prepares the request and sends nothing until polled --
+    and what lets the suite assert that a poller makes no request until it is driven.
+*/
+class FakePollOperation inherits AbstractPollOperation<auto> {
+    private {
+        #! called on the first continuePoll(); returns the response or throws
+        code<hash<RestClient::RestResponseInfo>()> attempt;
+
+        #! the response, once the attempt has produced one
+        *hash<RestClient::RestResponseInfo> resp;
+
+        #! set once the response has been delivered
+        bool done = False;
+    }
+
+    constructor(code<hash<RestClient::RestResponseInfo>()> attempt) {
+        self.attempt = attempt;
+    }
+
+    string getGoal() { return "fake poll"; }
+    string getState() { return done ? "complete" : "ready"; }
+    bool goalReached() { return done; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # the request reaches the "wire" here, not when the operation was built
+        resp = attempt();
+        done = True;
+        return NOTHING;
+    }
+
+    auto getOutput() { return resp; }
+    abort() {}
+}
+
 class FakeGoogleRestClientIo inherits GoogleRestClient::GoogleRestClientIo {
     public {
         #! response bodies to return, in order; the last one is reused once the list is exhausted
@@ -60,10 +100,62 @@ class FakeGoogleRestClientIo inherits GoogleRestClient::GoogleRestClientIo {
             last with \c 308, so a fake that answers \c 200 tests a conversation that never happens
         */
         list<int> statuses = (200,);
+
+        #! how many successive poll attempts fail before one is allowed to answer
+        int poll_fail_attempts = 0;
+
+        #! the error each failing attempt raises
+        hash<ExceptionInfo> poll_error = <ExceptionInfo>{
+            "err": "SOCKET-CLOSED",
+            "desc": "connection closed",
+        };
+
+        #! requests a poll operation issued after its first
+        /** Drive uses the retry entry point for every request after the first, which is both a retry *and*
+            the content request that follows the metadata request -- both are issued from inside
+            continuePoll() and must skip the OAuth2 token check
+        */
+        int poll_followups = 0;
     }
 
     constructor() : GoogleRestClientIo(GoogleDriveDataProviderTest::TestConnOptions
         + {"api_profile": "drive"}) {
+    }
+
+    #! NOTE: the poll entry points must be overridden too
+    /** The module reads a "conn://" location through startPollRequest(), and each request after the first --
+        the content request that follows the metadata request, and any retry -- through startPollRetry().  A
+        fake that left either inherited would make real requests against Drive from the "offline" suite.
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return recordPoll(method, path, hdr);
+    }
+
+    Qore::AbstractPollOperation startPollRetry(string method, string path, auto body, *hash<auto> hdr) {
+        ++poll_followups;
+        return recordPoll(method, path, hdr);
+    }
+
+    #! Records a polled request and returns a poller over the next canned response
+    /** Nothing is recorded or consumed until the poller is driven: a real attempt sends its request on the
+        first continuePoll(), not when the operation is built.  An attempt scripted to fail records its
+        request but does **not** consume a canned response -- consuming here would hand the retry the *next*
+        scripted response, which is how the first version of this fake made a two-request Drive read answer
+        its metadata request with the content body.
+    */
+    private Qore::AbstractPollOperation recordPoll(string method, string path, *hash<auto> hdr) {
+        bool fail = poll_fail_attempts > 0;
+        if (fail) {
+            --poll_fail_attempts;
+        }
+        return new FakePollOperation(hash<RestClient::RestResponseInfo> sub () {
+            if (fail) {
+                requests += {"method": method, "path": path, "body": NOTHING, "hdr": hdr};
+                throw poll_error.err, poll_error.desc, poll_error.arg;
+            }
+            # NOTE: record() throws on a >= 300 status, exactly as the real client does
+            return record(method, path, NOTHING, hdr);
+        });
     }
 
     private hash<RestClient::RestResponseInfo> record(string method, string path, auto body, *hash<auto> hdr) {
@@ -156,6 +248,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("change classification", \changeClassificationTest());
         addTestCase("resumable upload", \resumableUploadTest());
         addTestCase("native file location handler", \nativeHandlerTest());
+        addTestCase("poller", \pollerTest());
         addTestCase("live connection", \liveConnectionTest());
         addTestCase("live shared drives", \liveSharedDriveTest());
         addTestCase("live change feed", \liveChangeFeedTest());
@@ -668,11 +761,99 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         h3.writeFile("conn", "w.txt", "written", {"container": "folder9"});
         assertEq("w.txt", rest3.last().body.name ?? parseMultipartName(rest3.last().body));
 
-        # non-blocking I/O is not available, and says so
-        assertThrows("UNIMPLEMENTED", "non-blocking I/O", sub () {
-            handler.getIoPollerForLocation("conn", "f1", {});
-        });
+        # a poller is prepared without issuing the request: nothing reaches the wire until the caller polls it
+        AbstractPollOperation op = handler.getIoPollerForLocation("conn", "f1", {});
+        assertRegex("Google Drive read \"f1\"", op.getGoal(), "the poller names the file it will read");
+        assertEq(GoogleDrivePollOperation::SPS_METADATA, op.getState(),
+            "a read with no export format starts by fetching the metadata, which decides whether the file "
+            "has byte content at all");
+        assertEq(False, op.goalReached(), "the poller has not read anything before it is polled");
+
+        # naming an export format makes the read a single request; there is nothing for the metadata to decide
+        AbstractPollOperation eop = handler.getIoPollerForLocation("conn", "f1",
+            {"export_mime_type": "application/pdf"});
+        assertEq(GoogleDrivePollOperation::SPS_CONTENT, eop.getState(),
+            "an export goes straight to the content request");
     }
+
+    #! Drives the Drive poller to completion offline, including its two-request shape and retry paths
+    /** The live suite proves the poller against Drive; this proves the parts a live test cannot reach on
+        demand -- a transient socket error part-way through and the retry limit -- and proves the
+        metadata-then-content conversation without a network.
+    */
+    pollerTest() {
+        FakeGoogleRestClientIo rest();
+        # first response: the metadata that decides the file has byte content; second: the content itself
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("polled content"));
+        GoogleDriveFileLocationHandler handler(rest);
+
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "f1", {})),
+            "the poller reads the file");
+        assertEq(2, rest.requests.size(), "a read with no export format is two requests");
+        assertRegex("/drive/v3/files/f1\\?fields=", rest.requests[0].path,
+            "the first request fetches the metadata");
+        assertRegex("/drive/v3/files/f1\\?alt=media", rest.requests[1].path,
+            "the second request fetches the content");
+        assertEq("*/*", rest.requests[1].hdr.Accept,
+            "the content request accepts any type; without this Drive answers with a JSON error");
+
+        # an export is a single request to the export endpoint
+        rest.requests = ();
+        rest.served = 0;
+        rest.bodies = (binary("exported"),);
+        assertEq(binary("exported"), runPoller(handler.getIoPollerForLocation("conn", "f1",
+            {"export_mime_type": "text/plain"})), "an export reads the exported bytes");
+        assertEq(1, rest.requests.size(), "an export is a single request");
+        assertRegex("/export\\?mimeType=text%2Fplain", rest.requests[0].path,
+            "the export endpoint is addressed with the requested format");
+
+        # a Google-native document has no byte content, and is reported precisely rather than as the API's
+        # generic "Only files with binary content can be downloaded"
+        rest.requests = ();
+        rest.served = 0;
+        rest.bodies = ({"id": "d1", "name": "doc", "mimeType": "application/vnd.google-apps.document"},);
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "d1", {}));
+        });
+        assertEq(1, rest.requests.size(),
+            "the content request is never made for a document that has no content");
+
+        # --- retry: a transient I/O error is retried rather than surfaced ---
+        rest.requests = ();
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("polled content"));
+        rest.poll_fail_attempts = 1;
+        assertEq(binary("polled content"), runPoller(handler.getIoPollerForLocation("conn", "f1", {})),
+            "a transient I/O error is retried and the read still succeeds");
+        assertEq(2, rest.poll_followups,
+            "two requests followed the first: the retried metadata request, and the content request after "
+            "it -- both are issued from inside continuePoll(), so both must skip the token check");
+
+        # --- retry limit: past MaxIoRetries the error is reported ---
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"},);
+        rest.poll_fail_attempts = GoogleDriveDataProviderBase::MaxIoRetries + 1;
+        assertThrows("GOOGLE-DRIVE-ERROR", "SOCKET-CLOSED", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "f1", {}));
+        }, NOTHING, "a persistent I/O error is reported once the retry limit is reached");
+        assertEq(GoogleDriveDataProviderBase::MaxIoRetries, rest.poll_followups,
+            "no more than MaxIoRetries retries are made; the content request is never reached");
+
+        # --- a Drive error response is unpacked rather than reported as an HTTP status ---
+        rest.served = 0;
+        rest.poll_followups = 0;
+        rest.poll_fail_attempts = 0;
+        rest.bodies = ({"error": {"code": 404, "message": "File not found: f9.",
+            "errors": ({"reason": "notFound"},)}},);
+        rest.statuses = (404,);
+        assertThrows("GOOGLE-DRIVE-ERROR", "notFound", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "f9", {}));
+        }, NOTHING, "the Drive error document is unpacked");
+        assertEq(0, rest.poll_followups, "a response error is not retried");
+    }
+
 
     #! Returns the file name from a Drive multipart upload body
     private *string parseMultipartName(auto body) {
@@ -708,7 +889,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             cast<GoogleDriveFileLocationHandler>(conn.getFileLocationHandler());
         AbstractDataProvider prov = conn.getDataProvider();
 
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
         string name = sprintf("qore-native-%s.txt", stamp);
         string content = "written through the native Google Drive file location handler";
 
@@ -903,7 +1084,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         string token = start.body.startPageToken;
         assertTrue(token.val(), "the change feed supplied a start page token");
 
-        string name = sprintf("qore-watch-test-%d.txt", now_us().durationMicroseconds());
+        string name = sprintf("qore-watch-test-%d.txt", clock_getmicros());
         hash<auto> created = prov.getChildProviderEx("create-text-file").doRequest({
             "name": name,
             "content": "created by the Qore GoogleDriveDataProvider watch test",
@@ -964,7 +1145,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             return;
         }
         AbstractDataProvider prov = conn.getDataProvider();
-        string name = sprintf("qore-test-%d.txt", now_us().durationMicroseconds());
+        string name = sprintf("qore-test-%d.txt", clock_getmicros());
         string content = "created by the Qore GoogleDriveDataProvider test suite";
 
         hash<auto> created = prov.getChildProvider("create-text-file").doRequest({
@@ -998,6 +1179,75 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"file_id": created.id});
         assertEq(content, parse_base64_string(downloaded.content).toString(),
             "the content read back matches the content written");
+
+        # ... and the same file must be readable with non-blocking I/O, which is what a "conn://" location
+        # naming this connection now gets.  The poller makes two requests -- metadata, then content -- and
+        # both are polled; a poller that returned nothing, or that blocked, would pass neither assertion
+        object handler = conn.getFileLocationHandler();
+        assertEq(binary(content), runPoller(handler.getIoPollerForLocation("conn", created.id, {})),
+            "the poller returns the bytes the blocking read returns");
+
+        # A Google-native document has no byte content of its own, and the poller must say so precisely
+        # rather than pass on the API's generic "Only files with binary content can be downloaded".  The
+        # subject has to be a real Doc: a *folder* is deliberately not classified as a Google-native document
+        # by getFileInfo(), so it would exercise the generic path instead.  No action creates one, so it is
+        # created through the connection's own client.
+        object rest = conn.getAsync();
+        string doc_id = rest.restDoRequest("POST", "/drive/v3/files", {
+            "name": sprintf("qore-poll-doc-%d", clock_getmicros()),
+            "mimeType": "application/vnd.google-apps.document",
+        }, NOTHING).body.id;
+        assertTrue(doc_id.val(), "a Google-native document was created to read");
+        on_exit {
+            prov.getChildProvider("delete-file").doRequest({
+                "file_id": doc_id,
+                "permanently_delete": True,
+            });
+        }
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", doc_id, {}));
+        });
+
+        # ... and naming an export format makes the same document readable, in one request rather than two
+        auto exported = runPoller(handler.getIoPollerForLocation("conn", doc_id,
+            {"export_mime_type": "text/plain"}));
+        assertEq(NT_BINARY, exported.typeCode(),
+            "an export format makes a Google-native document readable, and it arrives as bytes");
+        assertEq(exported, handler.getBinaryFile("conn", doc_id, {"export_mime_type": "text/plain"}),
+            "the exported bytes are the ones the blocking read returns");
+
+        # the blocking read must report the identical error, or the two paths disagree about the same file
+        assertThrows("GOOGLE-DRIVE-ERROR", "no byte content of its own", sub () {
+            handler.getBinaryFile("conn", doc_id, {});
+        });
+
+        # a file ID that does not exist must be reported as a Drive error rather than as an empty read
+        assertThrows("GOOGLE-DRIVE-ERROR", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "qore-no-such-file-id", {}));
+        });
+    }
+
+    #! Drives a poll operation to completion and returns its output
+    /** The contract a poller must satisfy: no work happens until it is polled, every wait is expressed as a
+        @ref SocketPollInfo for the caller's own poll loop rather than blocking the calling thread, and the
+        data is available from getOutput() once goalReached() is True.
+    */
+    private auto runPoller(AbstractPollOperation op, timeout to = 60s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation %y timed out in state %y", op.getGoal(),
+                    op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+        return op.getOutput();
     }
 
     #! Round-trips the sharing, shortcut, revision, and trash operations against the live service
@@ -1014,7 +1264,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             return;
         }
         AbstractDataProvider prov = conn.getDataProvider();
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
 
         hash<auto> file = prov.getChildProviderEx("create-text-file").doRequest({
             "name": "qore-ext-" + stamp + ".txt",
@@ -1108,7 +1358,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
             return;
         }
         AbstractDataProvider prov = conn.getDataProvider();
-        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string stamp = sprintf("%d", clock_getmicros());
 
         hash<auto> parent = prov.getChildProviderEx("create-folder").doRequest({
             "name": "qore-test-parent-" + stamp,

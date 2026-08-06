@@ -562,8 +562,6 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
     only to files the application itself created or that the user explicitly opened with it.  The narrower scope is
     sufficient whenever the integration only reads back what it wrote, and is the better default for a new
     deployment; the wider one is needed to reach pre-existing user content.
-
-    @since GoogleRestClient 1.0
 */
 public class GoogleDriveRestConnection inherits GoogleRestConnection {
     public {

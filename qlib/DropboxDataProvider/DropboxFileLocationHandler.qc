@@ -36,8 +36,6 @@ public namespace DropboxDataProvider {
       whole file in memory, base64-encoded, before the first byte is sent
     - **reading does not inflate the file.**  The bytes arrive as the response body rather than base64-encoded
       into a JSON field, so nothing is encoded, buffered, and decoded again
-
-    @since DropboxDataProvider 1.0
 */
 public class DropboxFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
     public {
@@ -95,11 +93,22 @@ public class DropboxFileLocationHandler inherits FileLocationHandler::AbstractFi
         return download(location);
     }
 
-    #! Not supported; the Dropbox content endpoints are driven through the REST client's request API
+    #! Returns a poll operation that reads the file with non-blocking I/O
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return a poll operation whose output is the file's content
+
+        @note The read goes to the Dropbox **content** host with its arguments in the \c Dropbox-API-Arg
+        header, exactly as the blocking read does; a download addressed to the RPC host answers with a JSON
+        error rather than with the file
+    */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", sprintf("Dropbox file location %y cannot be read with non-blocking I/O; the "
-            "content endpoint is driven through the REST client's request API", location);
+        string path = DropboxDataProviderBase::normalizePath(location);
+        checkPath(path);
+        return new DropboxPollOperation(rest, "/2/files/download", {"path": path});
     }
 
     #! Returns a stream reader for the file's data at the given location

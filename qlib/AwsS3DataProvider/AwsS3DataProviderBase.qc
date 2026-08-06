@@ -78,7 +78,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client object to use",
-                "type": AbstractDataProviderType::get(new Type("AwsRestClient::AwsRestClient"), NOTHING, {
+                "type": AbstractDataProviderType::get(new Type("AwsRestClient::AwsRestClientIo"), NOTHING, {
                     DTT_ClientOnly: True,
                 }),
                 "desc": "The REST client object to use",
@@ -89,7 +89,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(AutoHashType, NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "Options to the `AwsRestClient` constructor; only used if a REST client object is "
+                "desc": "Options to the `AwsRestClientIo` constructor; only used if a REST client object is "
                     "created for a call",
             },
         };
@@ -112,14 +112,14 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client used for API calls
-        AwsRestClient::AwsRestClient rest;
+        AwsRestClient::AwsRestClientIo rest;
 
         #! If buckets are addressed in the URI path rather than in the hostname
         bool path_style = True;
     }
 
-    #! Creates the object from an AwsRestClient
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True) {
+    #! Creates the object from an AwsRestClientIo
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True) {
         self.rest = rest;
         self.path_style = path_style;
     }
@@ -143,8 +143,12 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
             if (!copts.aws_region.val()) {
                 throw "CONSTRUCTOR-ERROR", "missing the 'aws_region' option required for Amazon S3 communication";
             }
-            rest = new AwsRestClient::AwsRestClient((copts.restclient_options ?? {}) + {
+            rest = new AwsRestClient::AwsRestClientIo((copts.restclient_options ?? {}) + {
                 "url": sprintf("https://s3.%s.amazonaws.com", copts.aws_region),
+                # NOTE: "data" must stay "bin".  S3 object content is raw bytes; with the client left on its
+                # JSON default every uploaded object is stored as a quoted base64 string rather than as its
+                # content.  AwsRestClientIo applies {"data": "json"} as a default (left of "+"), so this
+                # pinned value wins
                 "aws_keyid": copts.aws_keyid,
                 "aws_secret": copts.aws_secret,
                 "aws_region": copts.aws_region,
@@ -160,7 +164,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns the REST client object
-    AwsRestClient::AwsRestClient getRestClient() {
+    AwsRestClient::AwsRestClientIo getRestClient() {
         return rest;
     }
 
@@ -310,6 +314,51 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Returns the full request path, with the bucket, the key, and any query arguments
+    /** Shared by the blocking request path and the polling one, so that a polled read addresses -- and
+        therefore signs -- exactly the URI a blocking read would.
+
+        @param bucket the bucket, if any
+        @param key the object key, if any
+        @param query any query arguments
+
+        @return the request path
+    */
+    private string getRequestPath(*string bucket, *string key, *hash<auto> query) {
+        string path = getPath(bucket, key);
+        if (query) {
+            path += "?" + (foldl $1 + "&" + $2, (map
+                exists query{$1} && query{$1} !== True
+                    ? sprintf("%s=%s", encode_url($1, True), encode_url(query{$1}.toString(), True))
+                    : encode_url($1, True),
+                keys query));
+        }
+        return path;
+    }
+
+    #! Returns a caller-driven poll operation for an S3 request
+    /** The non-blocking counterpart of @ref doS3Request(): the request is prepared and signed here, and the
+        caller drives it with @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()".
+
+        @param method the HTTP method
+        @param bucket the bucket, if any
+        @param key the object key, if any
+        @param query any query arguments
+
+        @return a poll operation whose output is the response body
+
+        @note Signing is not repeated here.  @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" signs each
+        async attempt as it is prepared, so the poller and the blocking call produce the same signature over
+        the same URI; a poller that signed separately would be one edit away from \c SignatureDoesNotMatch
+    */
+    private Qore::AbstractPollOperation startPollS3Request(string method, *string bucket, *string key,
+            *hash<auto> query) {
+        string path = getRequestPath(bucket, key, query);
+        checkAddressing(bucket);
+        debug("S3 poll %s %y", method, path);
+        return new AwsS3PollOperation(rest, method, path, bucket, key);
+    }
+
     #! Makes an S3 request and returns the response
     /** @param method the HTTP method
         @param bucket the bucket, if any
@@ -325,27 +374,20 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     */
     private hash<auto> doS3Request(string method, *string bucket, *string key, *hash<auto> query, auto body,
             *hash<auto> hdr) {
-        string path = getPath(bucket, key);
-        if (query) {
-            path += "?" + (foldl $1 + "&" + $2, (map
-                exists query{$1} && query{$1} !== True
-                    ? sprintf("%s=%s", encode_url($1, True), encode_url(query{$1}.toString(), True))
-                    : encode_url($1, True),
-                keys query));
-        }
+        string path = getRequestPath(bucket, key, query);
 
         checkAddressing(bucket);
 
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
                 debug("S3 %s %y", method, path);
-                # NOTE: "doRequestAssumingXml()", not "doRequest()".  S3 answers CreateMultipartUpload and
-                # CompleteMultipartUpload with XML and no Content-Type header at all, which the REST client
-                # refuses to deserialize; S3 only ever returns XML in that position
+                # NOTE: "restDoRequestAssumingXml()", not "restDoRequest()".  S3 answers
+                # CreateMultipartUpload and CompleteMultipartUpload with XML and no Content-Type header at
+                # all, which the REST client refuses to deserialize; S3 only ever returns XML in that
+                # position
                 return AwsS3DataProviderBase::normalizeResponse(
-                    rest.doRequestAssumingXml(method, path, body, \info, True, hdr));
+                    rest.restDoRequestAssumingXml(method, path, body, hdr));
             } catch (hash<ExceptionInfo> ex) {
                 if (RetrySet{ex.err} && retries < MaxIoRetries) {
                     ++retries;
@@ -368,8 +410,6 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         @param hdr the request headers, which carry the content type and any storage class or encryption
 
         @return a hash with the \c etag and \c version_id of the stored object
-
-        @since AwsS3DataProvider 1.0
     */
     private hash<auto> uploadContent(string bucket, string key, binary content, hash<auto> hdr) {
         if (content.size() <= MultipartThreshold) {
@@ -400,8 +440,6 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
 
         @note A multipart upload that is abandoned leaves its parts stored and billed until a lifecycle rule
         removes them, so a failure part-way through aborts the upload rather than leaving it open.
-
-        @since AwsS3DataProvider 1.0
     */
     private hash<auto> uploadMultipart(string bucket, string key, Qore::InputStream is, hash<auto> hdr) {
         binary buf = AwsS3DataProviderBase::readExactly(is, MultipartPartSize);
@@ -481,8 +519,6 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     /** @param parts the parts, each with a \c number and an \c etag
 
         @return the request body
-
-        @since AwsS3DataProvider 1.0
     */
     static string getCompleteBody(list<hash<auto>> parts) {
         string body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUpload>";
@@ -502,8 +538,6 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         @param n the number of bytes wanted
 
         @return the bytes read; shorter than \a n only when the stream ended
-
-        @since AwsS3DataProvider 1.0
     */
     static binary readExactly(Qore::InputStream is, int n) {
         binary rv = binary();
@@ -518,27 +552,28 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns a response with its headers gathered under \c "hdr"
-    /** The REST client returns the response headers at the **top level**, alongside \c body and the status
-        fields, rather than under a key of their own.  Every caller here reads a header as \c resp.hdr.<name>,
-        which silently returned @ref nothing for all of them: an object's MIME type, size, entity tag,
+    /** Every caller here reads a header as \c resp.hdr.<name>, and a response hash that carries no \c hdr key
+        answers all of them with @ref nothing and no error: an object's MIME type, size, entity tag,
         modification time, and version ID, the entity tag and version ID of every write, and the location of a
-        newly created bucket were all empty, with nothing to indicate it.
+        newly created bucket were all silently empty when this was first written against a client whose
+        response shape did not match.
 
-        Rather than have every call site know which keys are headers and which are status fields, the response
-        is normalized once here, where every request already passes.
+        Rather than have every call site know where the headers live, the response is normalized once here,
+        where every request already passes.
+
+        @ref RestClientIo::RestClientIo "RestClientIo" returns a
+        @ref RestClient::RestResponseInfo "RestResponseInfo" hash, which already separates the headers from
+        the status fields, so this is the single point that has to know that.
 
         @param resp the response as the client returned it
 
         @return the response with \c body, \c status_code, and the headers under \c hdr
-
-        @since AwsS3DataProvider 1.0
     */
-    static hash<auto> normalizeResponse(hash<auto> resp) {
+    static hash<auto> normalizeResponse(hash<RestClient::RestResponseInfo> resp) {
         return {
             "body": resp.body,
             "status_code": resp.status_code,
-            "hdr": resp - ("body", "status_code", "status_message", "http_version",
-                "_qore_orig_content_type"),
+            "hdr": resp.headers,
         };
     }
 
@@ -551,14 +586,19 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         @param bucket the bucket, if any
         @param key the object key, if any
     */
-    private nothing rethrowS3Error(hash<ExceptionInfo> ex, string method, *string bucket, *string key) {
+    static nothing rethrowS3Error(hash<ExceptionInfo> ex, string method, *string bucket, *string key) {
         *hash<auto> err;
         try {
             # NOTE: widened with "+ {}" first; a REST client raises its errors with a hashdecl argument in some
             # configurations, and reading a member a hashdecl does not declare throws INVALID-MEMBER, which the
             # catch below would then swallow along with the S3 error code this exists to report
             *hash<auto> arg = ex.arg.typeCode() == NT_HASH ? ex.arg + {} : NOTHING;
-            err = AwsS3DataProviderBase::parseXml(arg."response-body" ?? arg.body).Error;
+            # NOTE: three spellings, because the error argument's shape depends on which client raised it:
+            # RestClientIo raises a RestResponseInfo, whose deserialized body is under "body" and whose raw
+            # bytes are under "response_body_raw", while the HTTPClient-era shape uses "response-body".
+            # parseXml() accepts a hash, a string, or bytes, so whichever is present is unpacked
+            err = AwsS3DataProviderBase::parseXml(arg."response-body" ?? arg.body
+                ?? arg.response_body_raw).Error;
         } catch (hash<ExceptionInfo> ignored) {
             # the body was absent or not XML; fall through and report the original error unchanged
         }
@@ -573,6 +613,118 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         # method is called from one rather than being one.  The original code and argument are preserved in the
         # message and argument so nothing is lost
         throw "S3-API-ERROR", sprintf("%s %s failed: %s: %s", method, target, ex.err, ex.desc), ex.arg;
+    }
+}
+
+#! Reads an S3 object with non-blocking I/O
+/** Wraps the REST client's caller-driven poll operation so that a polled S3 request behaves like a blocking
+    one in the two ways that matter to a caller:
+
+    - **a transient I/O error is retried.**  @ref AwsS3DataProviderBase::doS3Request() retries up to
+      @ref AwsS3DataProviderBase::MaxIoRetries times, and a poller that gave up on the first dropped
+      connection would be less reliable than the blocking path it replaces rather than more
+    - **a failure is reported as an S3 error.**  S3 describes what went wrong in an XML document in the
+      response body; without unpacking it the caller sees only an HTTP status, which does not distinguish
+      "no such bucket" from "access denied"
+
+    The output is the object's content as a binary, which is what
+    @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()"
+    consumers expect.
+*/
+public class AwsS3PollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        #! The client the request is made with, which also signs each attempt
+        AwsRestClient::AwsRestClientIo rest;
+
+        #! The current attempt
+        Qore::AbstractPollOperation op;
+
+        #! The HTTP method
+        string method;
+
+        #! The request path, already encoded and ready to sign
+        string path;
+
+        #! The bucket being addressed, if any; used to describe a failure
+        *string bucket;
+
+        #! The object key being addressed, if any; used to describe a failure
+        *string key;
+
+        #! I/O errors retried so far
+        int retries = 0;
+    }
+
+    #! Creates the object and prepares the first attempt
+    /** @param rest the client to make the request with
+        @param method the HTTP method
+        @param path the request path
+        @param bucket the bucket being addressed, if any
+        @param key the object key being addressed, if any
+    */
+    constructor(AwsRestClient::AwsRestClientIo rest, string method, string path, *string bucket, *string key) {
+        self.rest = rest;
+        self.method = method;
+        self.path = path;
+        self.bucket = bucket;
+        self.key = key;
+        op = rest.startPollRequest(method, path, NOTHING, NOTHING);
+    }
+
+    #! Returns a description of what the operation is trying to do
+    string getGoal() {
+        return sprintf("S3 %s %s", method, path);
+    }
+
+    #! Returns the state of the current attempt
+    string getState() {
+        return op.getState();
+    }
+
+    #! Returns @ref True when the object has been read
+    bool goalReached() {
+        return op.goalReached();
+    }
+
+    #! Advances the current attempt, starting a new one after a transient I/O error
+    /** @return the socket poll descriptor to wait on, or @ref nothing when there is nothing to wait for
+
+        @throw S3-API-ERROR the request failed; the S3 error code and message are included when the response
+        carried them
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            try {
+                return op.continuePoll();
+            } catch (hash<ExceptionInfo> ex) {
+                if (AwsS3DataProviderBase::RetrySet{ex.err} && retries < AwsS3DataProviderBase::MaxIoRetries) {
+                    ++retries;
+                    # a poll operation cannot be rewound, so the retry is a new one; it is prepared and
+                    # signed afresh, which it must be -- a SigV4 signature carries the time it was made and
+                    # AWS rejects one that has aged out
+                    op = rest.startPollRetry(method, path, NOTHING, NOTHING);
+                    continue;
+                }
+                AwsS3DataProviderBase::rethrowS3Error(ex, method, bucket, key);
+            }
+        }
+    }
+
+    #! Returns the object's content
+    /** @return the content as a binary; an object stored empty reads back as an empty binary rather than as
+        @ref nothing, so that a caller can tell "empty" from "not read"
+    */
+    auto getOutput() {
+        auto body = op.getOutput().body;
+        if (!exists body) {
+            return binary();
+        }
+        return body.typeCode() == NT_BINARY ? body : binary(body.toString());
+    }
+
+    #! Aborts the request
+    abort() {
+        op.abort();
     }
 }
 }

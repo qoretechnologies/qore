@@ -72,8 +72,8 @@ public class AwsS3DataProvider inherits AwsS3DataProviderBase {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
     }
 
-    #! Creates the object from an AwsRestClient
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
+    #! Creates the object from an AwsRestClientIo
+    constructor(AwsRestClient::AwsRestClientIo rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
 

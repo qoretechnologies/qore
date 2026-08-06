@@ -236,8 +236,6 @@ hash<RestResponseInfo> resp = f.get(30s);
             STOP_SENDING, etc.) and reject the internal Promise.
 
             @return True if the cancellation was initiated, False if already complete
-
-            @since %RestClientIo 1.0
         */
         bool cancel() {
             if (raw_future.isDone()) {
@@ -1190,8 +1188,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @note the connection-scoped persistent protocol is HTTP/1.1 only; on HTTP/2 / HTTP/3
             use a single bidirectional stream instead
-
-            @since RestClientIo 1.0
         */
         RestPersistentSession startPersistentSession(*bool non_blocking) {
             return new RestPersistentSession(mgr, mgr.leaseConnection(getUrl(), non_blocking));
@@ -1269,8 +1265,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             OAuth2 token state
 
             @return a new instance of this object's class
-
-            @since %RestClientIo 1.0
         */
         private RestClient::AbstractRestClient copySelf(hash<auto> opts) {
             return cast<RestClient::AbstractRestClient>(Class::getClass(self).newObject(opts, mgr));
@@ -1296,8 +1290,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             synchronous client.
 
             @param timeout_ms new per-request timeout; 0 clears the override
-
-            @since RestClientIo 1.0
         */
         nothing setTimeout(timeout timeout_ms = 0) {
             AutoWriteLock al(config_lock);
@@ -1308,8 +1300,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** Subclasses that bypass @ref restDoRequestIntern() and call
             @c mgr.request() directly (e.g. \c DataStreamClientIo)
             should pass this value to honor @ref setTimeout().
-
-            @since RestClientIo 1.0
         */
         private *timeout getRequestTimeoutOverride() {
             AutoReadLock al(config_lock);
@@ -1319,8 +1309,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns the effective request timeout in milliseconds
         /** Returns the per-instance override if set, otherwise the connection
             manager's default.
-
-            @since RestClientIo 1.0
         */
         int getTimeout() {
             AutoReadLock al(config_lock);
@@ -1335,8 +1323,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             attempts observe the new value.
 
             @param timeout_ms new connection timeout; 0 (the default) is a no-op
-
-            @since RestClientIo 1.0
         */
         nothing setConnectTimeout(timeout timeout_ms = 0) {
             if (timeout_ms > 0) {
@@ -1357,8 +1343,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             Note: with \c "auto" the actual per-request protocol is negotiated via
             Happy Eyeballs / Alt-Svc; this method reports the configured mode, not
             the last-negotiated protocol.
-
-            @since RestClientIo 1.0
         */
         string getHttpVersion() {
             switch (mgr.getProtocolMode()) {
@@ -1384,8 +1368,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @see @ref getNegotiatedHttpVersion() for just the negotiated version string,
             @ref getHttpVersion() for the configured mode, and
             @ref HttpClientIo::HttpClientConnectionManager::getConnectionInfo()
-
-            @since RestClientIo 1.0
         */
         list<hash<HttpClientIo::HttpClientConnectionInfo>> getConnectionInfo() {
             return mgr.getConnectionInfo(url);
@@ -1418,8 +1400,6 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
             @endcode
 
             @see @ref getConnectionInfo(), @ref getHttpVersion()
-
-            @since RestClientIo 1.0
         */
         *string getNegotiatedHttpVersion() {
             *hash<HttpClientIo::HttpClientConnectionInfo> best;
@@ -1590,8 +1570,6 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             before a valid SSE stream is opened; the exception argument contains
             the response status, headers, and any collected response body
 
-            @since %RestClientIo 1.0
-
             @see restSseStream()
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
@@ -1671,8 +1649,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             before a valid SSE stream is opened
             @throw SSE-STREAM-ERROR if the stream reported an error
 
-            @since %RestClientIo 1.0
-
             @see restSseReader()
         */
         restSseStream(string method, string path, code<bool(hash<SseMessageInfo>)> callback,
@@ -1705,8 +1681,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return an @ref HttpClientIo::HttpCancellableFuture that resolves to the raw
             HTTP response hash and supports
             @ref HttpClientIo::HttpCancellableFuture::cancel() "cancel()"
-
-            @since %RestClientIo 1.0
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
@@ -2172,6 +2146,107 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 skip_ensure_token, NOTHING, NOTHING, NOTHING).future;
         }
 
+        #! Returns a poll operation for a REST request that the caller drives itself
+        /** Unlike @ref restDoRequestAsync(), the returned operation is **not** submitted to the async I/O
+            controller: the caller calls @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()"
+            until @ref Qore::AbstractPollOperation::goalReached() "goalReached()", then reads the
+            @ref RestClient::RestResponseInfo "RestResponseInfo" from
+            @ref Qore::AbstractPollOperation::getOutput() "getOutput()".  That is the contract
+            @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
+            "getIoPollerForLocation()" and other \c AbstractPollOperation consumers expect.
+
+            Request preparation -- OAuth2 token check, body serialization, authentication headers, and any
+            subclass signing -- happens before this returns, so a request that cannot be built fails here
+            rather than on the first poll.
+
+            An HTTP error status, or any I/O failure, is raised from \c continuePoll().
+
+            @param method the HTTP method
+            @param path the request path
+            @param body the request body, if any
+            @param hdr any additional request headers
+
+            @return a caller-driven poll operation whose output is the deserialized response
+
+            @note The return type is @ref Qore::AbstractPollOperation "AbstractPollOperation" rather than the
+            concrete operation class, because that is the whole contract a caller needs -- and because a
+            subclass that answers requests from a script rather than from the network (a test fake, for
+            instance) must be able to override this
+
+            @note No socket work is performed on the calling thread; every wait is expressed as a
+            @ref Qore::SocketPollInfo "SocketPollInfo" for the caller's own poll loop
+        */
+        Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
+                *hash<auto> hdr) {
+            return startPollRequestIntern(method, path, body, hdr, False, False);
+        }
+
+        #! Returns a caller-driven poll operation for a retry of a request already prepared once
+        /** Identical to @ref startPollRequest() except that the OAuth2 token check is skipped.
+
+            A retry is started from inside \c continuePoll(), which may be running on an async-I/O
+            \c continuePoll worker; @ref ensureToken() can refresh a token synchronously, and a synchronous
+            socket operation on that thread raises \c SOCKET-SYNC-ON-IO-THREAD-ERROR (and aborts in a debug
+            build).  The token was already ensured when the original attempt was built, so re-checking it
+            here would risk a deadlock to no purpose.
+
+            @param method the HTTP method
+            @param path the request path
+            @param body the request body, if any
+            @param hdr any additional request headers
+
+            @return a caller-driven poll operation whose output is the deserialized response
+        */
+        Qore::AbstractPollOperation startPollRetry(string method, string path, auto body,
+                *hash<auto> hdr) {
+            return startPollRequestIntern(method, path, body, hdr, False, True);
+        }
+
+        #! Returns a caller-driven poll operation for a request with a pre-serialized body
+        /** The polling counterpart of @ref restDoRawRequest(): the body and \c Content-Type are sent exactly
+            as given rather than being serialized into the client's configured data format.
+
+            @param method the HTTP method
+            @param path the request path
+            @param body the already-serialized request body, if any
+            @param hdr the request headers; the caller sets \c Content-Type
+
+            @return a caller-driven poll operation whose output is the deserialized response
+
+            @see @ref startPollRequest() for how the returned operation is driven
+        */
+        Qore::AbstractPollOperation startPollRawRequest(string method, string path, *data body,
+                *hash<auto> hdr) {
+            return startPollRequestIntern(method, path, body, hdr, True, False);
+        }
+
+        #! Returns a caller-driven poll operation for a retry of a raw request already prepared once
+        /** @see @ref startPollRetry() for why the token check is skipped on a retry
+        */
+        Qore::AbstractPollOperation startPollRawRetry(string method, string path, *data body,
+                *hash<auto> hdr) {
+            return startPollRequestIntern(method, path, body, hdr, True, True);
+        }
+
+        #! Internal: builds a caller-driven poll operation
+        private RestClientIoAsyncRequestOperation startPollRequestIntern(string method, string path,
+                auto body, *hash<auto> hdr, bool raw, bool skip_ensure_token) {
+            log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, url, path);
+
+            if (!skip_ensure_token) {
+                ensureToken();
+            }
+
+            Promise p();
+            # NOTE: the Future is held by the operation for the life of the poll; a Promise resolved or
+            # rejected with no Future in existence has nowhere to deliver the result
+            RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr, raw, NOTHING,
+                NOTHING, NOTHING);
+            op.holdFuture(p.getFuture());
+            op.startCallerDriven();
+            return op;
+        }
+
         #! Submits an async REST request and signals an EventNotifier on completion
         /** Like restDoRequestAsync() but uses CompositeAction (Promise + EventNotifier) so
             the I/O thread signals @a notifier when the response arrives.  The caller's
@@ -2188,8 +2263,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return hash with "future" (Future), "stream_id" (int), and "stream"
                 (HttpClientStreamHandle)
-
-            @since %RestClientIo 1.0
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
@@ -2211,8 +2284,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @param notifier EventNotifier to signal on response completion
 
             @return hash with "future" (Future) and "stream_id" (int)
-
-            @since %RestClientIo 1.0
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
@@ -2284,8 +2355,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Returns True if the current OAuth2 token needs to be refreshed
         /** @return True if the token exists, has a refresh token, and is within the expiry window
-
-            @since %RestClientIo 1.0
         */
         bool tokenRequiresRefresh() {
             return requiresRefresh();
@@ -2310,8 +2379,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return @ref True only if @ref startOAuth2PollRefreshToken() has enough
             configuration to build and send a token refresh request
-
-            @since %RestClientIo 1.0
         */
         bool canPingOAuth2Refresh() {
             AutoReadLock al(config_lock);
@@ -2340,8 +2407,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @throw OAUTH2-ERROR if no OAuth2 token endpoint URL (\c oauth2_token_url or
             \c oauth2_alt_token_url) is configured for the connection
-
-            @since %RestClientIo 1.0
         */
         hash<auto> startOAuth2PollRefreshToken() {
             # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
@@ -2429,8 +2494,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         /** Called after startOAuth2PollRefreshToken() completes to store the new token.
 
             @param h the parsed OAuth2 token response hash
-
-            @since %RestClientIo 1.0
         */
         updateOAuth2Token(hash<auto> h) {
             gotOAuth2LoginInfo(h);
@@ -2448,8 +2511,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return an EventNotifier to poll for connection readiness, or NOTHING if
             the connection is already ready
-
-            @since %RestClientIo 1.0
         */
         *EventNotifier startConnectionAsync() {
             return mgr.ensureConnectionAsync(url);
@@ -4041,8 +4102,6 @@ obs.registerObserver(sub (string event_type, auto data) {
 });
 obs.observersReady();
             @endcode
-
-            @since %RestClientIo 1.0
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
@@ -4196,7 +4255,6 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         nothing release() {
         }
     }
-}
 
 #! Event-driven RestClientIo async request operation with Negotiate retry support
 /** Drives connection readiness, one or two raw HTTP request attempts, and final
@@ -4294,6 +4352,24 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
         #! Lock for completion and cancellation
         Mutex m();
+
+        #! True when the caller drives continuePoll() itself rather than the async I/O controller
+        /** Set by @ref startCallerDriven().  Two things differ in this mode, and both exist because there is
+            no controller watching the operation:
+            - an error must leave @ref continuePoll() as an exception rather than only rejecting the Promise;
+              a caller looping on @ref goalReached() would otherwise never stop
+            - the response is deserialized into the operation, so that @ref getOutput() can return it
+        */
+        bool caller_driven = False;
+
+        #! The deserialized response, in caller-driven mode
+        *hash<RestClient::RestResponseInfo> output;
+
+        #! The Future for this operation's Promise, held so that it outlives the operation
+        /** Only set in caller-driven mode, where the result is read from @ref getOutput() and no caller
+            keeps a Future of its own.
+        */
+        *Future held_future;
     }
 
     #! Creates a new async request operation
@@ -4333,6 +4409,27 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         });
     }
 
+    #! Keeps the Promise's Future alive for the life of the operation
+    /** @since %RestClientIo 1.0
+    */
+    holdFuture(Future f) {
+        held_future = f;
+    }
+
+    #! Prepares the operation without submitting it to the async I/O controller
+    /** The caller drives @ref continuePoll() itself -- which is what
+        @ref Qore::AbstractPollOperation "AbstractPollOperation" consumers such as
+        @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
+        "getIoPollerForLocation()" do.  Submitting to the controller as well would leave two drivers calling
+        @ref continuePoll() on the same operation.
+    */
+    startCallerDriven() {
+        caller_driven = True;
+        # let synchronous preparation errors, such as signer failures, propagate from the call that returns
+        # the poller rather than from the first poll
+        prepareAttempt();
+    }
+
     string getGoal() {
         return sprintf("REST %s %s", method, path);
     }
@@ -4345,12 +4442,25 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         return goal_reached;
     }
 
+    #! Returns the deserialized response; only set in caller-driven mode
+    /** In controller-driven mode the response is delivered through the Future instead, and this returns
+        @ref nothing.
+    */
+    auto getOutput() {
+        return output;
+    }
+
     *hash<SocketPollInfo> continuePoll() {
         try {
             return continuePollIntern();
         } catch (hash<ExceptionInfo> ex) {
             reject(ex);
             state = SPS_COMPLETE;
+            if (caller_driven) {
+                # nothing is watching the Promise; the caller drives this operation and would otherwise loop
+                # on goalReached() forever with the failure invisible
+                rethrow;
+            }
             return NOTHING;
         }
     }
@@ -4467,6 +4577,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                 }
 
                 rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                if (caller_driven) {
+                    # deserialize here rather than in getOutput(), so that an HTTP error status leaves this
+                    # method as an exception and ends the caller's poll loop; getOutput() is only reached
+                    # after goalReached(), which a failed request never sets
+                    output = rcio.buildAsyncOperationResponse(resp, self);
+                }
                 goal_reached = True;
                 state = SPS_COMPLETE;
                 resolve(resp);
@@ -4969,11 +5085,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
     OAuth2 token refresh is attempted once before the first request (if the token is
     in the expiry window) and once after a 401 response (if not already retried).
-
-    @since %RestClientIo 1.0
 */
-public namespace RestClientIo {
-
 public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the OAuth2 token endpoint connection to become ready
@@ -5015,8 +5127,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             alive for the life of the ping operation.
 
             @note set in the constructor and never modified afterwards
-
-            @since %RestClientIo 1.0
         */
         *RestClientIo ping_url_parent;
 
@@ -5729,8 +5839,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     deterministic signal for the server to roll back and tear down.
 
     Create one with @ref RestClientIo::startPersistentSession().
-
-    @since RestClientIo 1.0
 */
 public class RestPersistentSession {
     private {

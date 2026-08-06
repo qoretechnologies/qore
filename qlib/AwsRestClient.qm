@@ -190,6 +190,182 @@ public class AwsRestClientBase {
         const AssumedS3ContentType = "text/xml";
     }
 
+    private {
+        #! the AWS access key ID
+        string aws_keyid;
+
+        #! the AWS secret access key
+        string aws_secret;
+
+        #! the AWS region
+        string aws_region;
+
+        #! the AWS service
+        string aws_service;
+
+        #! is this client signing requests for AWS S3?
+        bool aws_s3 = False;
+
+        #! temporary session token
+        string aws_token;
+
+        #! credential scope suffix: \c "<region>/<service>/aws4_request"
+        string credential_scope_suffix;
+    }
+
+    #! Returns the value this client sends in the \c host header
+    /** Query-string signing signs \c host and nothing else, so a presigned URL is only valid if this matches
+        the header the recipient's own request will carry.
+
+        The two clients derive it differently -- the synchronous client asks the underlying
+        @ref Qore::HTTPClient "HTTPClient", while the async client parses it from the URL when it is
+        constructed -- so it is supplied by the subclass.
+    */
+    private abstract string getAwsHostHeaderValue();
+
+    #! Returns the \c scheme://host[:port] prefix that a presigned URL is built on
+    private abstract string getAwsBaseUrl();
+
+    #! Returns the AWS region this client signs requests for
+    /** @return the AWS region this client signs requests for
+
+        Callers that must include the region in a request payload rather than in the signature need this; the
+        S3 \c CreateBucket operation carries the region in its body, for example.
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsRegion() {
+        return aws_region;
+    }
+
+    #! Returns the AWS service this client signs requests for
+    /** @return the AWS service this client signs requests for
+
+        @since AwsRestClient 1.3
+    */
+    string getAwsService() {
+        return aws_service;
+    }
+
+    #! Returns a presigned URL carrying its own AWS Signature V4 authorization in the query string
+    /** A presigned URL grants whoever holds it the one operation it was signed for, until it expires, with no
+        AWS credentials of their own.  That is what makes it useful -- an object can be handed to a system that
+        cannot authenticate to AWS at all -- and also what makes it sensitive: **the URL is the credential**,
+        so it should be given the shortest lifetime that serves the purpose and never logged.
+
+        This is query-string signing, which differs from the header signing every other request here uses:
+
+        - the authorization travels as \c X-Amz-* query parameters rather than in an \c Authorization header,
+          because the recipient sends no headers of ours;
+        - only the \c host header is signed, for the same reason;
+        - the payload is signed as \c UNSIGNED-PAYLOAD, since the body is not known when the URL is made.
+
+        @param http_method the HTTP method the URL is signed for; a URL signed for one method does not work
+        with another
+        @param path the URI path, which may carry its own query arguments
+        @param expires how long the URL remains valid; AWS rejects anything over 7 days
+        @param query additional query arguments to sign into the URL
+
+        @return the presigned URL
+
+        @throw AWS-PRESIGN-ERROR the expiry is not a positive duration, or exceeds the AWS maximum of 7 days
+
+        @note The URL is only valid while the credentials that signed it are; one signed with temporary
+        session credentials stops working when they expire, whatever lifetime was asked for here.
+
+        @note **Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.**  By
+        default the HTTP client percent-encodes the URI path of a request, and the credential scope in a
+        presigned URL contains \c %%2F separators that AWS re-encodes when it verifies the signature; encoding
+        them a second time produces \c %%252F on the wire, which AWS rejects as a malformed credential rather
+        than as a bad signature.  Any client that sends the target verbatim works unchanged -- which includes
+        @ref RestClientIo::RestClientIo "RestClientIo" and everything built on it.
+        synchronous and async clients cannot drift apart in how they sign
+    */
+    string getPresignedUrl(string http_method, string path, date expires, *hash<auto> query) {
+        int secs = expires.durationSeconds();
+        if (secs <= 0) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL must be given a positive lifetime; got %y",
+                expires);
+        }
+        if (secs > MaxPresignedUrlSeconds) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL cannot be valid for longer than %d seconds "
+                "(7 days), which is the AWS maximum; got %y", MaxPresignedUrlSeconds, expires);
+        }
+
+        date gmtime = Qore::gmtime();
+        string gmdate = gmtime.format("YYYYMMDD");
+        string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
+        string scope = sprintf("%s/%s", gmdate, credential_scope_suffix);
+
+        # arguments already on the path are signed along with the ones added here; a URL whose signature did
+        # not cover them would be rejected the moment the recipient used it
+        hash<UriQueryInfo> uri_info = parse_uri_query(path);
+        hash<auto> params = (uri_info.params ?? {}) + (query ?? {}) + {
+            "X-Amz-Algorithm": AwsSignatureAlgorithm,
+            "X-Amz-Credential": sprintf("%s/%s", aws_keyid, scope),
+            "X-Amz-Date": aws_date,
+            "X-Amz-Expires": secs,
+            "X-Amz-SignedHeaders": "host",
+        };
+        # temporary credentials carry a session token, and it has to be presented with them
+        if (aws_token.val()) {
+            params."X-Amz-Security-Token" = aws_token;
+        }
+
+        string canonical_query = AwsRestClientBase::getCanonicalQueryString(params);
+
+        string uri = uri_info.method ?? "/";
+        if (!aws_s3) {
+            uri = normalize_dir_unix(uri, "/");
+        }
+        uri = encode_url(uri, False);
+        # every service other than S3 encodes the canonical URI twice
+        if (!aws_s3) {
+            uri = encode_url(uri, False);
+        }
+
+        # the canonical request, with only "host" signed and the payload left unsigned
+        string cstr = http_method + "\n"
+            + uri + "\n"
+            + canonical_query + "\n"
+            + "host:" + getAwsHostHeaderValue() + "\n\n"
+            + "host\n"
+            + UnsignedPayload;
+
+        string req_string = AwsSignatureAlgorithm + "\n"
+            + aws_date + "\n"
+            + scope + "\n"
+            + digest(QoreDigest, cstr).toHex();
+
+        binary signing_key = hmac(QoreDigest, gmdate, "AWS4" + aws_secret);
+        signing_key = hmac(QoreDigest, aws_region, signing_key);
+        signing_key = hmac(QoreDigest, aws_service, signing_key);
+        signing_key = hmac(QoreDigest, AwsTermination, signing_key);
+        string sig = hmac(QoreDigest, req_string, signing_key).toHex();
+
+        return sprintf("%s%s?%s&X-Amz-Signature=%s", getAwsBaseUrl(), uri_info.method ?? "/", canonical_query,
+            sig);
+    }
+
+    #! Returns the canonical query string for AWS Signature V4
+    /** Parameters are sorted by name and each name and value URI-encoded; AWS rebuilds the same string when it
+        verifies the signature, so any difference in order or encoding is a signature mismatch rather than a
+        readable error.
+
+        @param params the query parameters
+
+        @return the canonical query string
+
+        @since AwsRestClient 1.3
+    */
+    static string getCanonicalQueryString(hash<auto> params) {
+        return (foldl $1 + "&" + $2, (
+            map sprintf("%s=%s", encode_url($1, True),
+                params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
+            sort(keys params)
+        )) ?? "";
+    }
+
     static private string trimall(string str) {
         # remove leading and trailing whitespace
         trim str;
@@ -737,22 +913,9 @@ public class AwsRestClientBase {
     - \c aws_service
 */
 public class AwsRestClient inherits RestClient::RestClient, AwsRestClientBase {
-    private:internal {
-        # the AWS access key ID
-        string aws_keyid;
-        # the AWS secret access key
-        string aws_secret;
-        # the AWS region
-        string aws_region;
-        # the AWS service
-        string aws_service;
-        # is this request for AWS S3?
-        bool aws_s3 = False;
-        # temporary session token
-        string aws_token;
-        # credential scope suffix
-        string credential_scope_suffix;
-    }
+    # NOTE: the AWS credential and scope members live in AwsRestClientBase, where getPresignedUrl() can
+    # reach them; they were previously declared "private:internal" in each client, which is what forced
+    # query-string signing to be written twice
 
     #! creates the object with the given options
     /**
@@ -919,144 +1082,20 @@ AwsRestClient rest({
         return doRequestIntern(m, path, body, \info, decode_errors, hdr, AssumedS3ContentType);
     }
 
-    #! Returns the AWS region this client signs requests for
-    /** @return the AWS region this client signs requests for
-
-        Callers that must include the region in a request payload rather than in the signature need this; the
-        S3 \c CreateBucket operation carries the region in its body, for example.
-
-        @since AwsRestClient 1.3
+    #! Returns the value this client sends in the "host" header
+    /** Supplied to @ref AwsRestClientBase::getPresignedUrl() "getPresignedUrl()", which signs \c host and
+        nothing else; the underlying @ref Qore::HTTPClient "HTTPClient" already knows it.
     */
-    string getAwsRegion() {
-        return aws_region;
+    private string getAwsHostHeaderValue() {
+        return getHostHeaderValue();
     }
 
-    #! Returns the AWS service this client signs requests for
-    /** @return the AWS service this client signs requests for
-
-        @since AwsRestClient 1.3
+    #! Returns the "scheme://host[:port]" prefix a presigned URL is built on
+    /** An AWS URL carries no credentials -- the constructor rejects one that does -- so the safe URL and the
+        real URL are the same string here.
     */
-    string getAwsService() {
-        return aws_service;
-    }
-
-    #! Returns a presigned URL carrying its own AWS Signature V4 authorization in the query string
-    /** A presigned URL grants whoever holds it the one operation it was signed for, until it expires, with no
-        AWS credentials of their own.  That is what makes it useful -- an object can be handed to a system that
-        cannot authenticate to AWS at all -- and also what makes it sensitive: **the URL is the credential**,
-        so it should be given the shortest lifetime that serves the purpose and never logged.
-
-        This is query-string signing, which differs from the header signing every other request here uses:
-
-        - the authorization travels as \c X-Amz-* query parameters rather than in an \c Authorization header,
-          because the recipient sends no headers of ours;
-        - only the \c host header is signed, for the same reason;
-        - the payload is signed as \c UNSIGNED-PAYLOAD, since the body is not known when the URL is made.
-
-        @param http_method the HTTP method the URL is signed for; a URL signed for one method does not work
-        with another
-        @param path the URI path, which may carry its own query arguments
-        @param expires how long the URL remains valid; AWS rejects anything over 7 days
-        @param query additional query arguments to sign into the URL
-
-        @return the presigned URL
-
-        @throw AWS-PRESIGN-ERROR the expiry is not a positive duration, or exceeds the AWS maximum of 7 days
-
-        @note The URL is only valid while the credentials that signed it are; one signed with temporary
-        session credentials stops working when they expire, whatever lifetime was asked for here.
-
-        @note **Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.**  By
-        default the HTTP client percent-encodes the URI path of a request, and the credential scope in a
-        presigned URL contains \c %%2F separators that AWS re-encodes when it verifies the signature; encoding
-        them a second time produces \c %%252F on the wire, which AWS rejects as a malformed credential rather
-        than as a bad signature.  Any client that sends the target verbatim works unchanged.
-
-        @since AwsRestClient 1.3
-    */
-    string getPresignedUrl(string http_method, string path, date expires, *hash<auto> query) {
-        int secs = expires.durationSeconds();
-        if (secs <= 0) {
-            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL must be given a positive lifetime; got %y",
-                expires);
-        }
-        if (secs > MaxPresignedUrlSeconds) {
-            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL cannot be valid for longer than %d seconds "
-                "(7 days), which is the AWS maximum; got %y", MaxPresignedUrlSeconds, expires);
-        }
-
-        date gmtime = Qore::gmtime();
-        string gmdate = gmtime.format("YYYYMMDD");
-        string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
-        string scope = sprintf("%s/%s", gmdate, credential_scope_suffix);
-
-        # arguments already on the path are signed along with the ones added here; a URL whose signature did
-        # not cover them would be rejected the moment the recipient used it
-        hash<UriQueryInfo> uri_info = parse_uri_query(path);
-        hash<auto> params = (uri_info.params ?? {}) + (query ?? {}) + {
-            "X-Amz-Algorithm": AwsSignatureAlgorithm,
-            "X-Amz-Credential": sprintf("%s/%s", aws_keyid, scope),
-            "X-Amz-Date": aws_date,
-            "X-Amz-Expires": secs,
-            "X-Amz-SignedHeaders": "host",
-        };
-        # temporary credentials carry a session token, and it has to be presented with them
-        if (aws_token.val()) {
-            params."X-Amz-Security-Token" = aws_token;
-        }
-
-        string canonical_query = AwsRestClient::getCanonicalQueryString(params);
-
-        string uri = uri_info.method ?? "/";
-        if (!aws_s3) {
-            uri = normalize_dir_unix(uri, "/");
-        }
-        uri = encode_url(uri, False);
-        # every service other than S3 encodes the canonical URI twice
-        if (!aws_s3) {
-            uri = encode_url(uri, False);
-        }
-
-        # the canonical request, with only "host" signed and the payload left unsigned
-        string cstr = http_method + "\n"
-            + uri + "\n"
-            + canonical_query + "\n"
-            + "host:" + getHostHeaderValue() + "\n\n"
-            + "host\n"
-            + UnsignedPayload;
-
-        string req_string = AwsSignatureAlgorithm + "\n"
-            + aws_date + "\n"
-            + scope + "\n"
-            + digest(QoreDigest, cstr).toHex();
-
-        binary signing_key = hmac(QoreDigest, gmdate, "AWS4" + aws_secret);
-        signing_key = hmac(QoreDigest, aws_region, signing_key);
-        signing_key = hmac(QoreDigest, aws_service, signing_key);
-        signing_key = hmac(QoreDigest, AwsTermination, signing_key);
-        string sig = hmac(QoreDigest, req_string, signing_key).toHex();
-
-        return sprintf("%s%s?%s&X-Amz-Signature=%s", getSafeURL(), uri_info.method ?? "/", canonical_query,
-            sig);
-    }
-
-    #! Returns the canonical query string for AWS Signature V4
-    /** Parameters are sorted by name and each name and value URI-encoded; AWS rebuilds the same string when it
-        verifies the signature, so any difference in order or encoding is a signature mismatch rather than a
-        readable error.
-
-        @param params the query parameters
-
-        @return the canonical query string
-
-        @since AwsRestClient 1.3
-    */
-    static string getCanonicalQueryString(hash<auto> params) {
-        return (foldl $1 + "&" + $2, (
-            map sprintf("%s=%s", encode_url($1, True),
-                params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
-            sort(keys params)
-        )) ?? "";
+    private string getAwsBaseUrl() {
+        return getSafeURL();
     }
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
@@ -1438,21 +1477,9 @@ public class AwsRestConnection inherits RestClient::RestConnection {
     @see AwsRestClient for more information
 */
 public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientBase {
+    # NOTE: the AWS credential and scope members live in AwsRestClientBase; only the host parsed from the
+    # URL is specific to this client, since there is no HTTPClient underneath to ask for it
     private:internal {
-        #! the AWS access key ID
-        string aws_keyid;
-        #! the AWS secret access key
-        string aws_secret;
-        #! the AWS region
-        string aws_region;
-        #! the AWS service
-        string aws_service;
-        #! is this request for AWS S3?
-        bool aws_s3 = False;
-        #! temporary session token
-        string aws_token;
-        #! credential scope suffix
-        string credential_scope_suffix;
         #! parsed host from URL
         string aws_host;
     }
@@ -1524,9 +1551,88 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return opts - (keys AwsRestClientBase::AwsOptions);
     }
 
+    #! Returns the value this client sends in the "host" header
+    /** Supplied to @ref AwsRestClientBase::getPresignedUrl() "getPresignedUrl()", which signs \c host and
+        nothing else.  There is no @ref Qore::HTTPClient "HTTPClient" underneath to ask, so this is the value
+        parsed from the URL when the client was constructed -- the same one @ref signRequest() signs.
+    */
+    private string getAwsHostHeaderValue() {
+        return aws_host;
+    }
+
+    #! Returns the "scheme://host[:port]" prefix a presigned URL is built on
+    /** An AWS URL carries no credentials -- the constructor rejects one that does -- so the URL and the safe
+        URL are the same string here.
+    */
+    private string getAwsBaseUrl() {
+        return getUrl();
+    }
+
     #! Sends a generic REST request with AWS Signature V4 signing
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
             *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr);
+    }
+
+    #! Sends a signed REST request, assuming an XML response body when the server sends no content type
+    /** S3 answers \c CreateMultipartUpload and \c CompleteMultipartUpload with an XML document and no
+        \c Content-Type header at all.  Without one the REST client has nothing to deserialize against and
+        leaves the body as raw data, so a caller reading the upload ID out of the document gets
+        @ref nothing -- and a multipart upload cannot be opened.
+
+        S3 only ever returns XML in that position, so it is assumed here.  A response that does carry a
+        content type is unaffected: the assumption is applied only when the header is absent, so an object
+        download still arrives as whatever type it was stored with.
+
+        This is the async counterpart of
+        @ref AwsRestClient::doRequestAssumingXml() "AwsRestClient::doRequestAssumingXml()".
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body, if any
+        @param hdr any additional request headers
+
+        @return the deserialized @ref RestClient::RestResponseInfo hash
+    */
+    hash<RestClient::RestResponseInfo> restDoRequestAssumingXml(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr, AwsRestClientBase::AssumedS3ContentType);
+    }
+
+    #! Applies AWS Signature V4 to every asynchronous request attempt
+    /** Overrides @ref RestClientIo::RestClientIo::prepareAsyncRequestAttempt() so that the async paths --
+        @ref RestClientIo::RestClientIo::restDoRequestAsync() "restDoRequestAsync()",
+        @ref RestClientIo::RestClientIo::startPollRequest() "startPollRequest()", and everything else built on
+        @ref RestClientIo::RestClientIoAsyncRequestOperation "RestClientIoAsyncRequestOperation" -- sign
+        their requests exactly as @ref restDoRequest() does.
+
+        Without this they do not sign at all: @ref signRequest() was only ever called from
+        @ref restDoRequest(), so an async AWS request went out with no \c authorization header and AWS
+        rejected it.  The generic \a signer hook cannot serve here, because it sets a single header, while
+        SigV4 sets \c host, \c x-amz-date, \c x-amz-content-sha256 and \c authorization together, each of
+        which is part of what the others sign.
+
+        @note The signature covers the **effective** path, which is why this signs after the base class has
+        prepared the request: \a path is updated by reference there to include any connection path, and
+        signing the pre-prepared path would produce a signature for a URI the request does not use.
+    */
+    hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr, bool raw, reference<*auto> negotiate_context, *string shdr,
+            *code signer) {
+        hash<auto> prepared = RestClientIo::prepareAsyncRequestAttempt(method, \path, body, \hdr, raw,
+            \negotiate_context, shdr, signer);
+        signRequest(method, path, prepared.serialized_body, \hdr);
+        return prepared + {
+            "request_headers": hdr,
+        };
+    }
+
+    #! Internal: signs and sends a request, optionally assuming a content type for an untyped response
+    /** @param assume_content_type the content type to attribute to a response that arrives without one; the
+        header is only supplied when the server sent none, so a typed response is never reinterpreted
+    */
+    private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
+            *hash<auto> hdr, *string assume_content_type) {
         # Prepare request (serialize body, merge headers)
         hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
@@ -1536,6 +1642,11 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         # Make HTTP request via multiplexed connection manager
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
             prepared.serialized_body);
+
+        if (assume_content_type.val() && !raw.headers."content-type".val()) {
+            log(LoggerLevel::DEBUG, "missing content-type from response; assuming %y", assume_content_type);
+            raw.headers."content-type" = assume_content_type;
+        }
 
         # Deserialize and return
         return buildResponse(raw, prepared.error_passthru,
@@ -1686,11 +1797,15 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
 
         @return an AwsS3DataProvider object for this connection
     */
+    /** @note The provider is given the **async** client.  The S3 provider drives every request through
+        @ref RestClientIo::RestClientIo "RestClientIo" so that its pollers are genuinely non-blocking; handing
+        it the synchronous client would compile and then block an I/O thread at runtime
+    */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         # to avoid circular dependencies, the data provider module is loaded and the object created dynamically
         load_module("AwsS3DataProvider");
         return create_object("AwsS3DataProvider", {
-            "restclient": get(),
+            "restclient": getAsync(),
             "path_style": opts.path_style ?? True,
         } + constructor_options);
     }
@@ -1745,7 +1860,8 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
     */
     private object getFileLocationHandlerImpl() {
         load_module("AwsS3DataProvider");
-        return create_object("AwsS3DataProvider::AwsS3FileLocationHandler", get(False), True);
+        # the async client, so that getIoPollerForLocation() can return a poller that actually polls
+        return create_object("AwsS3DataProvider::AwsS3FileLocationHandler", getAsync(False), True);
     }
 }
 

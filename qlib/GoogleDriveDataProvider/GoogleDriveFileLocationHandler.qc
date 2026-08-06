@@ -40,8 +40,6 @@ public namespace GoogleDriveDataProvider {
     Drive addresses a file by an immutable ID rather than by path, so a read location is a file ID.  A write
     location is a **name**, since the file being written does not exist yet; the folder to create it in comes
     from the \c container option, and without one the user's \c "My Drive" root is used.
-
-    @since GoogleDriveDataProvider 1.0
 */
 public class GoogleDriveFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
     public {
@@ -92,11 +90,21 @@ public class GoogleDriveFileLocationHandler inherits FileLocationHandler::Abstra
         return prov.get(location, opts.export_mime_type);
     }
 
-    #! Not supported; Drive requests are driven through the REST client's request API
+    #! Returns a poll operation that reads the file with non-blocking I/O
+    /** @param scheme the scheme being used
+        @param location the Drive file ID
+        @param opts read options
+
+        @return a poll operation whose output is the file's content
+
+        @note A file whose content has to be exported -- a Google-native document -- is read in one request
+        when \c export_mime_type is given, and in two otherwise: the metadata is fetched first so that a
+        document with no byte content is reported precisely rather than as the API's generic
+        <em>"Only files with binary content can be downloaded"</em>.  Both requests are polled
+    */
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
-        throw "UNIMPLEMENTED", sprintf("Google Drive file location %y cannot be read with non-blocking I/O; "
-            "Drive requests are driven through the REST client's request API", location);
+        return prov.startPollGet(location, opts.export_mime_type);
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -201,8 +209,6 @@ public class GoogleDriveFileLocationHandler inherits FileLocationHandler::Abstra
 /** The request plumbing -- retries, error unpacking, and the resumable upload -- is private to the provider
     hierarchy, and the file location handler is not part of it.  Rather than duplicate any of it, this exposes
     exactly the three operations the handler needs.
-
-    @since GoogleDriveDataProvider 1.0
 */
 public class GoogleDriveFileTransferProvider inherits GoogleDriveDataProviderBase {
     public {
@@ -246,6 +252,16 @@ public class GoogleDriveFileTransferProvider inherits GoogleDriveDataProviderBas
                 "convert it to", meta.name, file_id, meta.mime_type);
         }
         return getRawContent(sprintf("/drive/v3/files/%s?alt=media", encode_url(file_id, True)));
+    }
+
+    #! Returns a poll operation that reads a file with non-blocking I/O
+    /** @param file_id the Drive file ID
+        @param export_mime_type the format to export a Google-native document to, if any
+
+        @return a poll operation whose output is the file content
+    */
+    Qore::AbstractPollOperation startPollGet(string file_id, *string export_mime_type) {
+        return new GoogleDrivePollOperation(rest, file_id, export_mime_type);
     }
 
     #! Creates a file from content that is already in memory

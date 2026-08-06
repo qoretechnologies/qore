@@ -450,6 +450,41 @@ public class DropboxRestClientIo inherits RestClientIo::RestClientIo, DropboxRes
             DropboxRestClientBase::getContentHeaders(arg, body ? (content_type ?? MimeTypeOctetStream) : NOTHING));
         return resp + {"api_result": DropboxRestClientBase::getApiResult(resp.headers)};
     }
+
+    #! Returns a caller-driven poll operation for a request to a Dropbox content endpoint
+    /** The non-blocking counterpart of @ref contentRequest().  The request is addressed to the content host
+        rather than to the RPC host, and its arguments travel in the \c Dropbox-API-Arg header rather than in
+        the body -- which is what makes a content response the file's bytes rather than a JSON document.
+
+        @param path the content endpoint path
+        @param arg the operation arguments, placed in the \c Dropbox-API-Arg header
+        @param body the request body, if any
+        @param content_type the body's content type; defaults to \c application/octet-stream when a body is
+        given
+
+        @return a caller-driven poll operation whose output is the deserialized response
+
+        @note The returned operation belongs to the **content** client, which is created on first use and
+        shares this client's OAuth2 token and connection manager
+
+        @see @ref RestClientIo::RestClientIo::startPollRawRequest() for how the operation is driven
+    */
+    Qore::AbstractPollOperation startPollContentRequest(string path, auto arg,
+            *binary body, *string content_type) {
+        DropboxRestClientIo client = getContentClient();
+        return client.startPollRawRequest("POST", path, body,
+            DropboxRestClientBase::getContentHeaders(arg, body ? (content_type ?? MimeTypeOctetStream) : NOTHING));
+    }
+
+    #! Returns a poll operation retrying a content request already prepared once
+    /** @see @ref RestClientIo::RestClientIo::startPollRetry() for why the token check is skipped on a retry
+    */
+    Qore::AbstractPollOperation startPollContentRetry(string path, auto arg, *binary body,
+            *string content_type) {
+        DropboxRestClientIo client = getContentClient();
+        return client.startPollRawRetry("POST", path, body,
+            DropboxRestClientBase::getContentHeaders(arg, body ? (content_type ?? MimeTypeOctetStream) : NOTHING));
+    }
 }
 
 #! Class for Dropbox REST connections; returns @ref DropboxRestClient objects
@@ -614,8 +649,6 @@ public class DropboxRestConnection inherits RestClient::RestConnection {
         output stream through a Dropbox upload session, without holding the file in memory.
 
         @see @ref getFileLocationHandlerImpl()
-
-        @since %DropboxRestClient 1.0
     */
     private bool supportsFileLocationsImpl() {
         return True;
@@ -626,8 +659,6 @@ public class DropboxRestConnection inherits RestClient::RestConnection {
 
         @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
         @ref getDataProvider() does
-
-        @since %DropboxRestClient 1.0
     */
     private object getFileLocationHandlerImpl() {
         load_module("DropboxDataProvider");

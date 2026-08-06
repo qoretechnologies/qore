@@ -103,6 +103,22 @@ public class FtpClientPollOperation {
 
         #! Current active poll operation (ctrl or data)
         AbstractPollOperation current_poll_op;
+
+        #! True while the data connection is being established
+        /** The milestone this phase waits for is the data connection being up, which is not a goal
+            @ref FtpDataPollOperation ever reports on its own: it is only "done" once the entire transfer
+            has been read, and that cannot happen until the transfer command has been sent.
+        */
+        bool awaiting_data_connect = False;
+    }
+
+    public {
+        #! @ref FtpDataPollOperation states in which the data connection is not yet usable
+        const DataConnectStates = {
+            "data-connecting": True,
+            "data-ssl-upgrade": True,
+        };
+
     }
 
     /** @brief Creates a new FTP client poll operation
@@ -128,6 +144,25 @@ public class FtpClientPollOperation {
     #! Returns the current poll operation to submit to the async controller
     AbstractPollOperation getCurrentPollOp() {
         return current_poll_op;
+    }
+
+    #! Returns @ref True when the operation in flight has reached the milestone its phase waits for
+    /** Drivers must use this rather than @ref Qore::AbstractPollOperation::goalReached() "goalReached()" on
+        the operation returned by @ref getCurrentPollOp(), and call @ref advancePhase() when it returns
+        @ref True.
+
+        For most phases the milestone *is* the operation's own goal.  While the data connection is being
+        established it is not: the data operation's goal is the whole transfer, which cannot complete until
+        the transfer command has been sent, and the transfer command cannot be answered until the data
+        connection is up.  Waiting on \c goalReached() there deadlocks.
+
+        @return @ref True if the current phase may advance
+    */
+    bool currentOpReady() {
+        if (awaiting_data_connect) {
+            return !DataConnectStates{data_op.getState()};
+        }
+        return current_poll_op.goalReached();
     }
 
     #! Returns True if the login phase is complete
@@ -268,24 +303,40 @@ public class FtpClientPollOperation {
                 return False;
             }
             case 1: {
-                # EPSV/PASV response → parse data port, send RETR
+                # EPSV/PASV response → establish the data connection *before* sending RETR
                 if (!parseDataModeResponse()) {
                     return False;  # Fell back to PASV, need another phase
                 }
+                # NOTE: the data connection is established before the transfer command is sent, which is
+                # the order a real FTP client uses.  A server may not answer RETR at all until the data
+                # connection it just advertised has been accepted -- it has nothing to say until then --
+                # so sending RETR first and connecting afterwards deadlocks: the client waits for a
+                # response the server will not send until the client connects.
+                #
+                # Creating the operation is not enough: FtpDataPollOperation issues its connect on the
+                # first continuePoll(), not in its constructor, so it has to become the operation being
+                # driven until the connection is up
+                startDataReceive();
+                awaiting_data_connect = True;
+                return False;
+            }
+            case 2: {
+                # data connection up → send RETR on the control channel
+                awaiting_data_connect = False;
                 ctrl.submitCommand(command: "RETR", argument: op_remote_path);
                 current_poll_op = ctrl;
                 return False;
             }
-            case 2: {
-                # RETR 150 response → start data transfer
+            case 3: {
+                # RETR 150 response → read the data connection established above
                 hash<auto> resp = ctrl.getOutput();
                 if ((resp.code / 100) != 1) {
                     throw "FTP-GET-ERROR", sprintf("RETR failed: %s", resp.message);
                 }
-                startDataReceive();
+                current_poll_op = data_op;
                 return False;
             }
-            case 3: {
+            case 4: {
                 # Data transfer complete → save data, read 226 on control channel
                 *binary recv = data_op.getOutput();
                 remove data_op;
@@ -294,7 +345,7 @@ public class FtpClientPollOperation {
                 current_poll_op = ctrl;
                 return False;
             }
-            case 4: {
+            case 5: {
                 # 226 completion response received
                 hash<auto> resp = ctrl.getOutput();
                 transfer_result = <FtpTransferResult>{
@@ -377,10 +428,12 @@ public class FtpClientPollOperation {
                 return False;
             }
             case 1: {
-                # EPSV/PASV response → parse data port, send LIST/NLST
+                # EPSV/PASV response → open the data connection, then send LIST/NLST
+                /* see the note in advanceGetPhase(): the data connection is opened before the command */
                 if (!parseDataModeResponse()) {
                     return False;
                 }
+                createDataReceiveOp();
                 ctrl.submitCommand(op_long_list ? "LIST" : "NLST",
                     op_remote_path ? op_remote_path : NOTHING);
                 current_poll_op = ctrl;
@@ -400,7 +453,7 @@ public class FtpClientPollOperation {
                 if ((resp.code / 100) != 1) {
                     throw "FTP-LIST-ERROR", sprintf("LIST failed: %s", resp.message);
                 }
-                startDataReceive();
+                current_poll_op = data_op;
                 return False;
             }
             case 3: {
@@ -475,8 +528,16 @@ public class FtpClientPollOperation {
         return True;
     }
 
-    private startDataReceive() {
+    #! Opens the data connection without making it the operation being polled
+    /** The connect is started by the constructor, so the server can accept it -- and therefore answer the
+        transfer command -- while the control channel is still the operation being driven.
+    */
+    private createDataReceiveOp() {
         data_op = new FtpDataPollOperation(host: data_host, port: data_port, secure_data: secure_data);
+    }
+
+    private startDataReceive() {
+        createDataReceiveOp();
         current_poll_op = data_op;
     }
 
