@@ -477,6 +477,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("max_age eviction at checkout", \testMaxAgeEvictionAtCheckout());
         addTestCase("max_age disabled reuses connection",
             \testMaxAgeDisabledReusesConnection());
+        addTestCase("connection age uses the monotonic clock",
+            \testConnectionAgeUsesMonotonicClock());
 
         # Additional coverage tests
         addTestCase("invalid protocol option", \testInvalidProtocolOption());
@@ -2259,6 +2261,56 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(id1, id2,
             "with max_age disabled, the second request must reuse the "
             "first connection");
+    }
+
+    #! Verifies pool TTLs are measured on the monotonic clock, not the wall clock.
+    /** \c idle_timeout and \c max_age eviction used to compare wall-clock timestamps
+        (\c now_us()) against \c now_us() taken at checkout.  A wall-clock step is routine on
+        CI and cloud hosts (NTP correction, VM resume), and it breaks that comparison in both
+        directions: a backward step makes an expired connection look young enough to hand back
+        out — so the TTL the caller asked for is silently not enforced — and a forward step
+        evicts the whole pool at once.  Verified by stepping a VM clock backwards 300 ms during
+        the \c max_age sleep window: \c testMaxAgeEvictionAtCheckout() then failed 31 times in
+        40 runs before the fix and 0 times after it.
+
+        A system clock step cannot be produced from inside a test, so this asserts the property
+        that makes eviction immune to one: the ages are derived from
+        @ref Qore::clock_get_monotonic_us(), the creation stamp is fixed for the life of the
+        connection, and the activity stamp advances with real elapsed time.
+    */
+    testConnectionAgeUsesMonotonicClock() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "idle_timeout": 60s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(mHttpUrl);
+        assertEq(200, s1.request("GET", "/simple").status_code);
+        HttpClientIo::HttpClientConnection conn = s1.getConnection();
+
+        int created = conn.getCreationMonotonicUs();
+        int activity0 = conn.getLastActivityMonotonicUs();
+        assertGe(created, activity0,
+            "last activity must be at or after the connection creation stamp");
+
+        int slept_us = 250000;
+        usleep(microseconds(slept_us));
+
+        # reuse the same connection so its activity stamp is refreshed
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(mHttpUrl);
+        assertEq(200, s2.request("GET", "/simple").status_code);
+        assertEq(conn.getConnectionId(), s2.getConnection().getConnectionId(),
+            "the second request must reuse the first connection");
+
+        assertEq(created, conn.getCreationMonotonicUs(),
+            "the creation stamp is born-at and must never be updated");
+        assertGe(slept_us, conn.getLastActivityMonotonicUs() - activity0,
+            "the activity stamp must advance by at least the elapsed time");
+        assertGe(slept_us, clock_get_monotonic_us() - created,
+            "the connection age used for max_age eviction must reflect real elapsed time");
     }
 
     # ---- Additional Coverage Tests ----

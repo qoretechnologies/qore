@@ -208,7 +208,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
         log(LoggerLevel::DEBUG,

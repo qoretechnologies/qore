@@ -752,16 +752,33 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     // — would leave the stream registered on the server forever.
     for (auto& p : resets) {
         std::string skey = std::to_string(p.first) + ":" + std::to_string(p.second);
-        if (close_notify_streams.find(skey) == close_notify_streams.end()
-                || stream_queues.find(skey) != stream_queues.end()) {
-            // unknown to us, or queue-backed: the NOTHING sentinel already
-            // reports the teardown on the Queue the owner is reading
+        if (stream_queues.find(skey) != stream_queues.end()) {
+            // queue-backed: the NOTHING sentinel already reports the teardown on
+            // the Queue the owner is reading
             continue;
         }
+        // Record the reset whether or not a close-notify listener has registered yet.
+        // takeSessionLifecycleEvents() above drained the event and a reset stream produces
+        // no further ones, so requiring registration before recording dropped the reset
+        // permanently whenever it beat the listener: the SSE setup path registers its
+        // SseStreamCloseNotifier one step after the handler registers the connection, and a
+        // peer resetting in that window left the connection registered forever.  A listener
+        // that registers later now sees the truth via isStreamPeerClosed(), which
+        // registerStreamListener() consults to replay the notification.  Bounded by the
+        // number of non-queue-backed resets on the session (the same bound
+        // Http2PollOperationPriv accepts), and pruned by deregisterStreamCloseNotify().
         peer_closed_streams.insert(skey);
+        // Only wake a stream that actually has a listener.  A wakeup for a stream nobody is
+        // listening to costs a controller worker dispatch and a pending_stream_data entry
+        // for nothing; the late-registration case is covered by the isStreamPeerClosed()
+        // replay above, not by a queued wakeup.
+        bool listener_registered = close_notify_streams.find(skey) != close_notify_streams.end();
         ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
-            "peer reset skey='%s'\n", skey.c_str());
-        data_ready_streams.push_back(skey);
+            "peer reset skey='%s' listener_registered=%d\n", skey.c_str(),
+            (int)listener_registered);
+        if (listener_registered) {
+            data_ready_streams.push_back(skey);
+        }
     }
 
     // A peer stream reset abandons the persistent exchange on its session; a
@@ -1282,7 +1299,14 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // hash above is not reachable from closeSessionStreams()).
     priv->registerStreamCloseNotify(skey);
 
-    if (!*xsink && listener_obj && priv->consumePendingOrQueueReady(skey)) {
+    // Replay a notification this listener was not yet registered to receive: either data
+    // arrived / is queued (consumePendingOrQueueReady()), or the peer already reset the
+    // stream.  The reset case is not covered by the pending flag — a reset is a one-shot
+    // transport event with no further wakeups, so a listener registering afterwards would
+    // never hear about it; deliverSessionLifecycleEvents() records the reset for exactly
+    // this check.  Mirrors Http2PollOperation::registerStreamListener().
+    if (!*xsink && listener_obj
+            && (priv->consumePendingOrQueueReady(skey) || priv->isStreamPeerClosed(skey))) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",
             skey.c_str(), (void*)listener_obj);
         ValueHolder rv(listener_obj->evalMethod("notifyIo", nullptr, xsink), xsink);

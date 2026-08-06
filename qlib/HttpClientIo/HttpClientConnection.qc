@@ -66,8 +66,21 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! Logger
         *LoggerInterface logger;
 
-        #! Last activity timestamp
+        #! Last activity timestamp (wall clock; reported, never used for eviction)
         date last_activity;
+
+        #! Last activity on the monotonic clock, in microseconds
+        /** Pool eviction ages must not be derived from the wall clock: it can be stepped
+            (NTP, VM resume, manual set), and a backward step makes a connection that is past
+            \c idle_timeout or \c max_age look young enough to hand out again, while a forward
+            step evicts the whole pool at once.  @ref Qore::clock_get_monotonic_us() never goes
+            backwards, so the age computed from it is always the real elapsed time.
+
+            Kept alongside @ref last_activity rather than replacing it so that
+            @ref getLastActivity() and @ref getConnectionInfo() keep reporting a wall-clock
+            timestamp, which is what a human reading a connection dump expects.
+        */
+        int last_activity_mono_us;
 
         #! Connection creation timestamp (used by max_age eviction)
         /** Set once in the subclass constructor; never updated.  Used by
@@ -75,6 +88,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             @ref HttpClientConnectionManagerOptions::max_age at pool checkout.
         */
         date created_us;
+
+        #! Connection creation time on the monotonic clock, in microseconds
+        /** Set once in the constructor; never updated.  See @ref last_activity_mono_us for
+            why @ref max_age is enforced against the monotonic clock and not @ref created_us.
+        */
+        int created_mono_us;
 
         #! Reference to AsyncSocketIoController for wake notifications
         *object controller_ref;
@@ -168,6 +187,8 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         self.max_concurrent_streams = max_streams;
         self.last_activity = now_us();
         self.created_us = self.last_activity;
+        self.last_activity_mono_us = clock_get_monotonic_us();
+        self.created_mono_us = self.last_activity_mono_us;
         connection_id = allocateConnectionId();
     }
 
@@ -290,6 +311,31 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return created_us;
     }
 
+    #! Returns the last activity time on the monotonic clock, in microseconds
+    /** Use this, not @ref getLastActivity(), for any elapsed-time decision — see
+        @ref last_activity_mono_us.
+    */
+    int getLastActivityMonotonicUs() {
+        AutoLock al(lock);
+        return last_activity_mono_us;
+    }
+
+    #! Returns the connection creation time on the monotonic clock, in microseconds
+    /** Use this, not @ref getCreationTime(), for any elapsed-time decision — see
+        @ref last_activity_mono_us.
+    */
+    int getCreationMonotonicUs() {
+        return created_mono_us;
+    }
+
+    #! Records activity on this connection, updating both the wall and monotonic timestamps
+    /** @note the caller must hold @ref lock
+    */
+    private touchActivityLocked() {
+        last_activity = now_us();
+        last_activity_mono_us = clock_get_monotonic_us();
+    }
+
     #! Sets the controller reference for wake notifications
     setControllerRef(object controller) {
         AutoLock al(lock);
@@ -336,7 +382,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("connection not ready: state=%y", self.getConnectionState());
             }
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -402,7 +448,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("connection not ready: state=%y", self.getConnectionState());
             }
-            last_activity = now_us();
+            touchActivityLocked();
             ctl = controller_ref;
         }
 
@@ -468,7 +514,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     handlePollResult() {
         {
             AutoLock al(lock);
-            last_activity = now_us();
+            touchActivityLocked();
         }
 
         if (getPollOperation().isClosed()) {

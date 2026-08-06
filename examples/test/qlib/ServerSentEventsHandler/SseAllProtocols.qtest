@@ -68,6 +68,14 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         *ServerSentEventHandler::ServerSentEventConnection last_conn;
     }
 
+    private {
+        #! When armed, parks the SSE setup thread at the end of connectionRegisteredImpl()
+        *Counter setup_gate;
+
+        #! Guards @ref setup_gate so releaseSetupGate() is idempotent
+        Mutex gate_lock();
+    }
+
     # "data": "none" — SSE payloads are already-formed strings, no re-serialization
     constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
     }
@@ -76,11 +84,39 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         registered = new Counter(1);
         deregistered = new Counter(1);
         last_conn = NOTHING;
+        AutoLock al(gate_lock);
+        setup_gate = NOTHING;
+    }
+
+    #! Arms the setup gate so the next SSE setup parks until releaseSetupGate() is called
+    /** @ref HttpServer::HttpServer registers the multiplexed per-stream peer-close notifier
+        one step after this handler registers the connection, so parking here lets a test put
+        a peer stream reset deterministically inside that window.
+    */
+    armSetupGate() {
+        AutoLock al(gate_lock);
+        setup_gate = new Counter(1);
+    }
+
+    #! Releases a gate armed by @ref armSetupGate(); idempotent and safe if never armed
+    releaseSetupGate() {
+        AutoLock al(gate_lock);
+        if (setup_gate && setup_gate.getCount() > 0) {
+            setup_gate.dec();
+        }
     }
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
         last_conn = conn;
         registered.dec();
+        *Counter gate;
+        {
+            AutoLock al(gate_lock);
+            gate = setup_gate;
+        }
+        if (gate) {
+            gate.waitForZero(SseTestTimeout);
+        }
     }
 
     deregisterConnectionImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
@@ -576,6 +612,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2SseDeregisterOnStreamReset());
         addTestCase("H3 SSE connection is deregistered when only the stream is reset",
             \testHttp3SseDeregisterOnStreamReset());
+        addTestCase("H2 SSE stream reset before the close notifier registers is not lost",
+            \testHttp2SseDeregisterOnStreamResetBeforeListener());
+        addTestCase("H3 SSE stream reset before the close notifier registers is not lost",
+            \testHttp3SseDeregisterOnStreamResetBeforeListener());
         set_return_value(main());
     }
 
@@ -1364,6 +1404,58 @@ l50Xb2GWQesIt9k5jF5IOw==
             label + ": no connections remain registered");
     }
 
+    #! Asserts that a peer stream reset arriving before the close notifier registers is not lost
+    /** Same outcome as @ref runSseDeregisterOnStreamResetFlow(), but with the setup race won by
+        the peer instead of left to chance.  On a multiplexed transport the SSE response stream
+        learns that its peer went away only from a one-shot transport notification: the reset
+        event is drained from the transport when it is processed, and a reset stream produces no
+        further events.  @ref HttpServer::HttpServer registers the per-stream close notifier one
+        step after the handler registers the connection, so a reset landing in that window used
+        to be discarded and the connection stayed registered forever (a 30 s
+        \c waitForZero() timeout here, not a slow deregistration).
+
+        The gate parks the SSE setup thread inside \c connectionRegisteredImpl(), i.e. before the
+        notifier is registered.  The \c /ping round trip is the barrier that makes this
+        deterministic rather than timing-dependent: both transports process frames of one
+        connection in order, so a completed \c /ping response proves the server already handled
+        the reset for the SSE stream.  Only then is setup released, which registers the notifier
+        strictly after the reset was processed — the exact ordering that used to lose it.
+
+        @note This does not replace @ref runSseDeregisterOnStreamResetFlow(): that covers the
+        common ordering where the notifier is registered first.
+    */
+    private runSseDeregisterOnStreamResetBeforeListenerFlow(string label, string proto,
+            string url) {
+        handler.reset();
+        handler.armSetupGate();
+        # never leave the parked setup thread stranded, even if an assertion throws
+        on_exit handler.releaseSetupGate();
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+        on_exit delete mgr;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": connection should register on server");
+
+        # the setup thread is parked, so no close notifier is registered for this stream yet
+        stream.cancel();
+
+        hash<auto> resp = mgr.request(url, "GET", "/ping");
+        assertEq(200, resp.status_code, label + ": connection still serves other requests");
+
+        # the /ping response proves the reset has been processed; now let setup finish
+        handler.releaseSetupGate();
+
+        assertEq(0, handler.deregistered.waitForZero(SseTestTimeout),
+            label + ": a close notifier registered after the reset must still deregister the "
+            "connection");
+        assertEq((), handler.getConnectionIds() ?? (),
+            label + ": no connections remain registered");
+    }
+
     #! Creates a connection manager pinned to the given protocol
     private HttpClientIo::HttpClientConnectionManager makeManager(string proto) {
         hash<HttpClientIo::HttpClientConnectionManagerOptions> opts =
@@ -1400,6 +1492,18 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     testHttp3SseDeregisterOnStreamReset() {
         runSseDeregisterOnStreamResetFlow("H3 SSE stream-reset deregister", "h3",
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp2SseDeregisterOnStreamResetBeforeListener() {
+        runSseDeregisterOnStreamResetBeforeListenerFlow(
+            "H2 SSE stream-reset-before-listener deregister", "h2",
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3SseDeregisterOnStreamResetBeforeListener() {
+        runSseDeregisterOnStreamResetBeforeListenerFlow(
+            "H3 SSE stream-reset-before-listener deregister", "h3",
             sprintf("https://127.0.0.1:%d", h3_port));
     }
 }
