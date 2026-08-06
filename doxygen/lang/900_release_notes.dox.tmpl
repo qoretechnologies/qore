@@ -1753,6 +1753,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref awseventstreamintro "AwsEventStream" module
       - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
 
+    - @ref awss3dataproviderintro "AwsS3DataProvider" module
+      - new module providing a data provider API for <a href="https://aws.amazon.com/s3/">Amazon S3</a> object
+        storage and S3-compatible services, including a file API for `conn://` locations
+
     - @ref awstextractdataproviderintro "AwsTextractDataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/textract/">AWS Textract</a> document AI
 
@@ -1888,6 +1892,14 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref deepseekrestclientintro "DeepSeekRestClient" module
       - new module providing a REST client for <a href="https://platform.deepseek.com">DeepSeek</a>'s OpenAI-compatible API
 
+    - @ref dropboxdataproviderintro "DropboxDataProvider" module
+      - new module providing a data provider API for <a href="https://www.dropbox.com">Dropbox</a> cloud file
+        storage, including a file API for `conn://` locations
+
+    - @ref dropboxrestclientintro "DropboxRestClient" module
+      - new module providing a REST client for <a href="https://www.dropbox.com">Dropbox</a> with OAuth2
+        authentication and the separate content-transfer endpoint
+
     - @ref easypostdataproviderintro "EasyPostDataProvider" module
       - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
 
@@ -1966,6 +1978,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     - @ref googledocumentairestclientintro "GoogleDocumentAiRestClient" module
       - new module providing a REST client for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+
+    - @ref googledrivedataproviderintro "GoogleDriveDataProvider" module
+      - new module providing a data provider API for <a href="https://www.google.com/drive/">Google Drive</a>
+        cloud file storage, including a file API for `conn://` locations
 
     - @ref gorgiasdataproviderintro "GorgiasDataProvider" module
       - new module providing a data provider API for <a href="https://www.gorgias.com/">Gorgias</a> helpdesk
