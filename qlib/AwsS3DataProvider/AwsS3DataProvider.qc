@@ -65,7 +65,7 @@ public class AwsS3DataProvider inherits AwsS3DataProviderBase {
     }
 
     #! Creates the object from an AwsRestClient
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = False)
+    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True)
             : AwsS3DataProviderBase(rest, path_style) {
     }
 

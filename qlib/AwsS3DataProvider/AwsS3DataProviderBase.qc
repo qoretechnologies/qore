@@ -69,8 +69,11 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
                 "display_name": "Path-Style Addressing",
                 "short_desc": "Address buckets in the URI path rather than in the hostname",
                 "type": AbstractDataProviderTypeMap."*bool",
-                "desc": "Address buckets in the URI path rather than in the hostname; required by most "
-                    "S3-compatible services such as MinIO and Ceph",
+                "desc": "Address buckets in the URI path (`https://s3.<region>.amazonaws.com/<bucket>/<key>`) "
+                    "rather than in the hostname.  This is the default and currently the only supported mode: "
+                    "virtual-host addressing needs a separate endpoint per bucket, which this module does not "
+                    "yet create.  Path-style addressing works against Amazon S3 for existing buckets and is "
+                    "required by most S3-compatible services such as MinIO and Ceph",
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
@@ -112,11 +115,11 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         AwsRestClient::AwsRestClient rest;
 
         #! If buckets are addressed in the URI path rather than in the hostname
-        bool path_style = False;
+        bool path_style = True;
     }
 
     #! Creates the object from an AwsRestClient
-    constructor(AwsRestClient::AwsRestClient rest, bool path_style = False) {
+    constructor(AwsRestClient::AwsRestClient rest, bool path_style = True) {
         self.rest = rest;
         self.path_style = path_style;
     }
@@ -222,20 +225,27 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         return "/" + (foldl $1 + "/" + $2, segments);
     }
 
-    #! Returns the base URL to use for a request, honoring the addressing mode
-    /** With virtual-host addressing the bucket is part of the hostname, so the request has to go to a different
-        host than the client's configured URL.
+    #! Verifies that the addressing mode in use can be served by the configured client
+    /** Virtual-host addressing puts the bucket in the hostname, so each bucket is a different endpoint and needs
+        its own client; a REST client sends every request to its configured host, and passing an absolute URI as
+        the request path does not retarget it -- the URI is sent as a literal path and the request still reaches
+        the configured host.
+
+        Rather than issue a request that would be signed and routed for the wrong host, this reports the
+        situation and names the option that resolves it.  Path-style addressing works against Amazon S3 for
+        existing buckets and is required by most S3-compatible services, so it is the default here.
 
         @param bucket the bucket name, if any
 
-        @return the URL to use, or @ref nothing to use the client's configured URL
+        @throw S3-ADDRESSING-ERROR virtual-host addressing was selected, which is not yet supported
     */
-    private *string getRequestUrl(*string bucket) {
-        if (!bucket.val() || path_style) {
-            return;
+    private checkAddressing(*string bucket) {
+        if (bucket.val() && !path_style) {
+            throw "S3-ADDRESSING-ERROR", sprintf("cannot address bucket %y: virtual-host addressing "
+                "(https://<bucket>.s3.<region>.amazonaws.com) requires a separate endpoint per bucket, which "
+                "this module does not yet create; set the 'path_style' connection option to address buckets in "
+                "the URI path instead", bucket);
         }
-        hash<UrlInfo> info = parse_url(rest.getURL());
-        return sprintf("%s://%s.%s", info.protocol, bucket, info.host);
     }
 
     #! Makes an S3 request and returns the response
@@ -262,16 +272,14 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
                 keys query));
         }
 
-        *string url = getRequestUrl(bucket);
+        checkAddressing(bucket);
+
         int retries = 0;
         while (True) {
             try {
                 hash<auto> info;
-                # a URL override is applied by sending an absolute URI, which the client signs against the
-                # correct host
-                string target = url.val() ? url + path : path;
-                debug("S3 %s %y", method, target);
-                return rest.doRequest(method, target, body, \info, True, hdr);
+                debug("S3 %s %y", method, path);
+                return rest.doRequest(method, path, body, \info, True, hdr);
             } catch (hash<ExceptionInfo> ex) {
                 if (RetrySet{ex.err} && retries < MaxIoRetries) {
                     ++retries;

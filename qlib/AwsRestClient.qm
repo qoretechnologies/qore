@@ -1471,10 +1471,11 @@ public class AwsS3RestConnection inherits AwsRestConnection {
                     "type": "bool",
                     "desc": "Address buckets in the URI path (`https://s3.<region>.amazonaws.com/<bucket>/<key>`) "
                         "rather than in the hostname (`https://<bucket>.s3.<region>.amazonaws.com/<key>`).\n\n"
-                        "Set to `True` for S3-compatible services such as MinIO and Ceph, which generally require "
-                        "path-style addressing.  Amazon S3 accepts both for existing buckets but prefers "
-                        "virtual-host style",
-                    "default_value": False,
+                        "This is the default and currently the only supported mode: virtual-host addressing "
+                        "needs a separate endpoint per bucket, which the data provider module does not yet "
+                        "create.  Path-style addressing works against Amazon S3 for existing buckets and is "
+                        "required by most S3-compatible services such as MinIO and Ceph",
+                    "default_value": True,
                 },
             },
             "required_options": "aws_keyid,aws_secret,aws_region",
@@ -1545,7 +1546,7 @@ public class AwsS3RestConnection inherits AwsRestConnection {
         load_module("AwsS3DataProvider");
         return create_object("AwsS3DataProvider", {
             "restclient": get(),
-            "path_style": opts.path_style ?? False,
+            "path_style": opts.path_style ?? True,
         } + constructor_options);
     }
 
