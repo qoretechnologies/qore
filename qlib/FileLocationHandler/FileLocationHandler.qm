@@ -58,10 +58,20 @@ module FileLocationHandler {
     - @ref FileLocationHandler::FileLocationHandler::getBinaryFileFromLocation() "FileLocationHandler::getBinaryFileFromLocation()"
     - @ref FileLocationHandler::FileLocationHandler::getStreamReaderFromLocation() "FileLocationHandler::getStreamReaderFromLocation()"
     - @ref FileLocationHandler::FileLocationHandler::getBinaryStreamFromLocation() "FileLocationHandler::getBinaryStreamFromLocation()"
+    - @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "FileLocationHandler::getIoPollerForLocation()"
+      to read without blocking a thread; see @ref filelocationhandler_nonblocking
 
     To write file data, call one of:
     - @ref FileLocationHandler::FileLocationHandler::writeFileToLocation() "FileLocationHandler::writeFileToLocation()"
     - @ref FileLocationHandler::FileLocationHandler::getOutputStreamForLocation() "FileLocationHandler::getOutputStreamForLocation()"
+
+    @par Example
+    @code{.py}
+# every call below takes the same kind of location string, whatever the transport behind it
+string text = FileLocationHandler::getTextFileFromLocation("file:///var/data/orders.csv");
+binary data = FileLocationHandler::getBinaryFileFromLocation("sftp://user@host/outbound/orders.csv");
+FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-08.csv", text);
+    @endcode
 
     To register a location handler based on a scheme, call one of:
     - @ref FileLocationHandler::FileLocationHandler::registerHandler() "FileLocationHandler::registerHandler()"
@@ -74,6 +84,8 @@ module FileLocationHandler {
       \c "conn://" and \c "connection://" locations (a named connection plus a path)
     - @ref FileLocationHandler::FileLocationHandlerData "FileLocationHandlerData": class handling \c "data://"
       locations (immedidate data in the location URL)
+    - @ref FileLocationHandler::FileLocationHandlerDataProvider "FileLocationHandlerDataProvider": class driving an
+      application's declared file API for \c "conn://" locations; not registered for a scheme of its own
     - @ref FileLocationHandler::FileLocationHandlerFile "FileLocationHandlerFile": class handling \c "file://"
       locations (the default if no scheme is present in the location string)
     - @ref FileLocationHandler::FileLocationHandlerFtp "FileLocationHandlerFtp": class handling \c "ftp://" and
@@ -118,11 +130,86 @@ string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/outb
     this module declares no dependency on it.  The \c QORE_CONNECTION_PROVIDERS environment variable must name at
     least one connection provider module.
 
+    @subsection filelocationhandler_conn_resolution How a Named Connection Is Resolved
+
+    A connection can serve file locations in one of two ways; they are tried in this order:
+
+    |!Order|!Mechanism|!Used by
+    |1|The connection returns its own handler from \c ConnectionProvider::AbstractConnection::getFileLocationHandler()|Connections that can stream or poll natively
+    |2|The connection's application declares a \c DataProvider::DataProviderFileApiInfo file API, which is driven generically by @ref FileLocationHandler::FileLocationHandlerDataProvider "FileLocationHandlerDataProvider"|Any application that declares one
+
+    A connection matching neither raises \c LOCATION-ERROR naming the connection and its type, so an unsupported
+    connection fails with a clear message rather than silently returning nothing.
+
+    The first mechanism takes precedence because it can do more: a native handler can stream and can support
+    non-blocking reads, whereas the declarative file API is request/response based — streams are synthesized by
+    transferring the whole file in a background thread, and
+    @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" is not
+    supported through it.
+
+    @par Example: cloud storage through a named connection
+    @code{.py}
+# the same code reads from Amazon S3, Google Drive, or Dropbox; only the connection name changes
+string report = FileLocationHandler::getTextFileFromLocation("conn://prod-s3/reports/2026-08.csv");
+string doc = FileLocationHandler::getTextFileFromLocation("conn://team-drive/handbook.md");
+string sheet = FileLocationHandler::getTextFileFromLocation("conn://ops-dropbox/inbox/orders.csv");
+
+# writing works the same way
+FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-09.csv", report);
+    @endcode
+
+    @par Example: passing handler options
+    @code{.py}
+# options are given in braces after the path and are passed to the resolved handler
+string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/orders.csv{encoding=ISO-8859-1}");
+    @endcode
+
+    @section filelocationhandler_nonblocking Non-Blocking Reads
+
+    @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" returns an
+    @ref Qore::AbstractPollOperation "AbstractPollOperation" that reads the file without holding a thread blocked on
+    I/O.  No I/O is performed until the operation is driven, so the poller can be created cheaply and handed to an
+    event loop or to the async I/O controller.
+
+    Supported by \c "file://", \c "data://", \c "http://", \c "https://", \c "rest://", \c "rests://", \c "ftp://",
+    \c "ftps://", and \c "sftp://" locations, and by \c conn:// locations resolving to a connection that provides its
+    own handler.  \c "sftp://" requires the \c ssh2 module to provide \c SFTPClient::startPollGetFile().
+
+    @par Example
+    @code{.py}
+AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation("ftp://user:pass@host/orders.csv");
+while (!op.goalReached()) {
+    *hash<SocketPollInfo> info = op.continuePoll();
+    if (!info) {
+        break;
+    }
+    # wait for the descriptor to become ready; an event loop would register it instead
+    Socket::poll((info,), 30s);
+}
+binary contents = op.getOutput();
+    @endcode
+
+    @note Handlers that cannot support non-blocking reads throw \c UNIMPLEMENTED with a message saying why, so the
+    caller can fall back to a blocking read.
+
     @note Location strings are frequently derived from user or partner data, and a named connection can reach any
     configured system.  Applications accepting untrusted location strings should restrict which connections are
     reachable with
     @ref FileLocationHandler::FileLocationHandler::setConnectionFilter() "FileLocationHandler::setConnectionFilter()"
     or the \c QORE_FILE_LOCATION_CONNECTIONS environment variable.
+
+    @par Example: restricting which connections a location string may reach
+    @code{.py}
+# the filter receives the connection name and a write flag, and returns True if the use is allowed;
+# here partner uploads may only be written to one connection, and nothing may be read through it
+FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
+    return write ? name == "partner-inbox" : name =~ /^prod-/;
+});
+    @endcode
+
+    If no filter is set in code, \c QORE_FILE_LOCATION_CONNECTIONS is used instead; when set, it lists the allowed
+    connection names separated by @ref Qore::PathSep "PathSep" characters.  If neither is set, all connections are
+    allowed.
 
     @section filelocationhandler_relnotes Release Notes
 
@@ -134,8 +221,16 @@ string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/outb
       "getIoPollerForLocation()"; requires the \c ssh2 module with
       \c SFTPClient::startPollGetFile() (ssh2 2.0+)
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - \c "ftp://" and \c "ftps://" locations (and \c conn:// locations resolving to them) support non-blocking reads
+      with @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
+      "getIoPollerForLocation()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added support for \c conn:// and \c connection:// locations naming a connection and a path
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - added @ref FileLocationHandler::FileLocationHandlerDataProvider "FileLocationHandlerDataProvider", so that any
+      application declaring a \c DataProvider::DataProviderFileApiInfo file API can serve \c conn:// locations
+      generically; connections that can stream or poll natively supply their own handler instead, which takes
+      precedence (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added @ref FileLocationHandler::AbstractFileLocationHandler::selfValidatesOptions()
       "AbstractFileLocationHandler::selfValidatesOptions()" so that handlers that cannot know their effective
       option set until the location is resolved can validate options themselves

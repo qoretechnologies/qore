@@ -106,14 +106,14 @@ public class FtpClientPollOperation {
 
         #! True while the data connection is being established
         /** The milestone this phase waits for is the data connection being up, which is not a goal
-            @ref FtpDataPollOperation ever reports on its own: it is only "done" once the entire transfer
+            @ref Qore::FtpDataPollOperation "FtpDataPollOperation" ever reports on its own: it is only "done" once the entire transfer
             has been read, and that cannot happen until the transfer command has been sent.
         */
         bool awaiting_data_connect = False;
     }
 
     public {
-        #! @ref FtpDataPollOperation states in which the data connection is not yet usable
+        #! @ref Qore::FtpDataPollOperation "FtpDataPollOperation" states in which the data connection is not yet usable
         const DataConnectStates = {
             "data-connecting": True,
             "data-ssl-upgrade": True,
@@ -186,7 +186,7 @@ public class FtpClientPollOperation {
         1. Send TYPE I (binary mode)
         2. Send EPSV/PASV to get data port
         3. Connect data channel
-        4. Send RETR <path>
+        4. Send RETR with the remote path
         5. Transfer data
         6. Read 226 completion response
 
