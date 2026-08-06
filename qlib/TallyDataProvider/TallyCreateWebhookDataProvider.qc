@@ -39,7 +39,7 @@ public class TallyCreateWebhookRequestDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "Webhook endpoint URL",
                 "desc": "The destination URL where webhook events will be delivered",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
                 "required": True,
                 "example_value": "https://example.com/webhook",
             },

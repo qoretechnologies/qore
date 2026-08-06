@@ -710,6 +710,112 @@ class BulkShapeTestProvider inherits AbstractDataProvider {
     }
 }
 
+#! A provider whose record (response) type and request type both use semantic string format types
+/** Models what a converted \c *DataProvider module looks like: the record type describes data the
+    provider *returns* (metadata only, never validated), while the request type describes data a
+    caller *sends* (validated by acceptsValue()).
+*/
+class SemanticTestRecordType inherits HashDataType {
+    constructor() {
+        addQoreFields(SemanticTypeTestProvider::RecordFields);
+    }
+}
+
+class SemanticTestRequestType inherits HashDataType {
+    constructor() {
+        addQoreFields(SemanticTypeTestProvider::RequestFields);
+    }
+}
+
+class SemanticTypeTestProvider inherits AbstractDataProvider {
+    public {
+        #! response/record fields: what the remote API gives back
+        const RecordFields = {
+            "id": {
+                "type": StringType,
+                "display_name": "ID",
+                "short_desc": "The record ID",
+                "desc": "The opaque record ID",
+            },
+            "email": {
+                "type": EmailOrNothingType,
+                "display_name": "Email",
+                "short_desc": "Contact email",
+                "desc": "The contact's email address",
+            },
+            "website_url": {
+                "type": UriOrNothingType,
+                "display_name": "Website URL",
+                "short_desc": "Website URL",
+                "desc": "The contact's website URL",
+            },
+        };
+
+        #! request fields: what a caller sends
+        const RequestFields = {
+            "email": {
+                "type": EmailType,
+                "display_name": "Email",
+                "short_desc": "Contact email",
+                "desc": "The contact's email address",
+                "required": True,
+            },
+            "note": {
+                "type": StringOrNothingType,
+                "display_name": "Note",
+                "short_desc": "Free-text note",
+                "desc": "A free-text note; deliberately a plain string",
+            },
+        };
+
+        #! a record carrying a value that does NOT match the email regex
+        const MalformedRecord = {
+            "id": "1",
+            "email": "Contact Name <a@b.com>",
+            "website_url": "www.example.com",
+        };
+    }
+
+    string getName() {
+        return "SemanticTypeTestProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": "semantic-type-test",
+            "desc": "test provider using semantic string format types",
+            "type": "semantic-type-test",
+            "supports_read": True,
+            "supports_request": True,
+            # hasRecord() reads getStaticInfoImpl() directly, which does not get the
+            # has_record = supports_read default fill applied by getInfo()
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return (new SemanticTestRecordType()).getFields();
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return new SemanticTestRequestType();
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return new SemanticTestRecordType();
+    }
+
+    #! returns the malformed record unchanged; a provider never validates what it returns
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        return new DefaultRecordIterator(new ListIterator((MalformedRecord,)));
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return req;
+    }
+}
+
 public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         # Keep this core module test independent of host-specific provider discovery configuration.
@@ -723,6 +829,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("action option example determinism", \actionOptionExampleDeterminismTest());
         addTestCase("action option semantic attributes", \actionOptionSemanticAttrTest());
         addTestCase("semantic string format types", \semanticStringFormatTypesTest());
+        addTestCase("semantic types through a provider", \semanticTypesThroughProviderTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
         addTestCase("pending app module context", \pendingAppModuleContextTest());
@@ -1232,6 +1339,78 @@ public class DataProviderTest inherits QUnit::Test {
             AbstractDataProviderType::get((AbstractDataProviderTypeMap."email").getInfo());
         assertEq("string", rt.getBaseTypeName(), "round-trip type is string-backed");
         assertEq("email", rt.getTag("qore.external_name"), "external_name tag survives round-trip");
+    }
+
+    semanticTypesThroughProviderTest() {
+        # semanticStringFormatTypesTest() covers the types in isolation; this covers them where
+        # qlib modules actually use them: on a data provider's record/request types
+        SemanticTypeTestProvider p();
+
+        # --- response side: metadata only, and it survives the type description round-trip ---
+        hash<string, AbstractDataField> rt = p.getRecordType();
+        assertEq("*email", rt.email.getType().getName(), "record email field keeps its semantic type");
+        assertEq("string", rt.email.getType().getBaseTypeName(), "record email field is string-backed");
+        assertEq("email", rt.email.getType().getTag("qore.external_name"),
+            "record email field carries the external_name tag a UI keys off");
+        assertEq("uri", rt.website_url.getType().getTag("qore.external_name"),
+            "record website_url field carries the uri external_name tag");
+        assertNothing(rt.id.getType().getTag("qore.external_name"),
+            "a plain-string record field carries no format identity");
+
+        # the UI identity survives getInfo()/get(), even though the type degrades to its string base
+        AbstractDataProviderType round = AbstractDataProviderType::get(rt.email.getType().getInfo());
+        assertEq("string", round.getBaseTypeName(), "round-tripped record field type is string-backed");
+        assertEq("email", round.getTag("qore.external_name"),
+            "external_name survives getInfo()/get() on a record field");
+
+        # the whole record type description round-trips with the format identity intact
+        hash<string, hash<DataTypeInfo>> ti = map {$1.key: $1.value.getType().getInfo()}, rt.pairIterator();
+        assertEq("email", AbstractDataProviderType::get(ti.email).getTag("qore.external_name"),
+            "external_name survives a record-type-wide getInfo() round-trip");
+
+        # --- records the provider RETURNS are never validated: this is the property that makes
+        # converting a response field safe, so assert it rather than assume it ---
+        list<auto> recs = map $1, p.searchRecords();
+        assertEq(1, recs.size(), "the provider returned its record");
+        assertEq(SemanticTypeTestProvider::MalformedRecord.email, recs[0].email,
+            "a returned email that fails the format regex is relayed unchanged");
+        assertEq(SemanticTypeTestProvider::MalformedRecord.website_url, recs[0].website_url,
+            "a returned scheme-less URL is relayed unchanged");
+
+        # --- request side: input IS validated ---
+        AbstractDataProviderType reqt = p.getRequestType();
+        assertEq("email", reqt.getFields().email.getType().getTag("qore.external_name"),
+            "request email field carries the format identity");
+
+        hash<auto> good = {"email": "a@b.com", "note": "anything at all"};
+        assertEq(good, reqt.acceptsValue(good), "a well-formed request is accepted");
+
+        # the exact values the design doc calls out as rejected must be rejected here too
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            reqt.acceptsValue({"email": "Contact Name <a@b.com>"});
+        }, NOTHING, "RFC-5322 display-name form is rejected on a request field");
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            reqt.acceptsValue({"email": "a@b.com,c@d.com"});
+        }, NOTHING, "a comma-joined address list is rejected on a request field");
+
+        # a plain-string sibling field is unaffected by the semantic typing of its neighbour
+        assertEq("anything at all", reqt.acceptsValue(good).note,
+            "a plain-string request field still accepts free text");
+
+        # --- the format identity reaches the app-action option a UI renders ---
+        # NOTE: it rides on the option's *type* tags, not on ActionOptionInfo::ui_type: ui_type is
+        # only populated from an explicit field attribute (DataProviderActionCatalog.qc:2235), and a
+        # semantic type does not set one.  Assert the mechanism that actually carries the identity so
+        # this stays honest if ui_type derivation is added later.
+        hash<string, hash<ActionOptionInfo>> opts =
+            DataProviderActionCatalog::getActionOptionFromFields(reqt.getFields());
+        assertEq("email", opts.email.type.getTag("qore.external_name"),
+            "the semantic format identity reaches the action option through the option type");
+        assertEq((AbstractDataProviderTypeMap."email").getTag("qore.validation_regex"),
+            opts.email.type.getTag("qore.validation_regex"),
+            "the format regex reaches the action option through the option type");
+        assertNothing(opts.email.ui_type,
+            "a semantic type does not populate ui_type; only an explicit field attribute does");
     }
 
     actionOptionSemanticAttrTest() {

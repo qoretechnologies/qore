@@ -56,7 +56,7 @@ public class TallyUserDataType inherits HashDataType {
                 "display_name": "Email",
                 "short_desc": "User email address",
                 "desc": "The email address of the authenticated user",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "avatarUrl": {
                 "display_name": "Avatar URL",

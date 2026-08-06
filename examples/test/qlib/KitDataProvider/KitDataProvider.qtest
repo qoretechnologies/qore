@@ -64,6 +64,7 @@ public class KitDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("data type tests", \dataTypeTests());
+        addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Kit credentials)
@@ -232,6 +233,33 @@ public class KitDataProviderTest inherits QUnit::Test {
         hash<auto> stfields = stats_type.getFields();
         assertEq(True, stfields.hasKey("recipients"), "broadcast stats type has recipients field");
         assertEq(True, stfields.hasKey("open_rate"), "broadcast stats type has open_rate field");
+    }
+
+    semanticStringTypeTests() {
+        # a subscriber's email address is definitionally one address, so the request field is
+        # typed as "email"; the wire representation is unchanged
+        KitDataProvider::KitCreateSubscriberRequestDataType req();
+        AbstractDataProviderType et = req.getFields().email_address.getType();
+        assertEq("email", et.getTag("qore.external_name"), "the subscriber email field is typed as an email");
+        assertEq("string", et.getBaseTypeName(), "the email type stays string-backed on the wire");
+        assertEq("user@example.com", et.acceptsValue("user@example.com"), "a plain address is accepted");
+
+        # these rejections are intentional: Kit subscribes exactly one address per call, so a
+        # joined list or an RFC-5322 display-name form was never a working input
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            et.acceptsValue("a@example.com,b@example.com");
+        }, NOTHING, "a comma-joined address list is rejected");
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            et.acceptsValue("Some User <user@example.com>");
+        }, NOTHING, "an RFC-5322 display-name address is rejected");
+        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+            et.acceptsValue("not-an-address");
+        }, NOTHING, "a value with no @ is rejected");
+
+        # the response side carries the same identity, but is never validated
+        KitDataProvider::KitSubscriberDataType sub_type();
+        assertEq("email", sub_type.getFields().email_address.getType().getTag("qore.external_name"),
+            "the subscriber record email field carries the format identity");
     }
 
     connectionTests() {

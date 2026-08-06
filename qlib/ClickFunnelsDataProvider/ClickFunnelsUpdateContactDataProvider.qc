@@ -37,7 +37,7 @@ public class ClickFunnelsUpdateContactRequestDataType inherits HashDataType {
                 "ref_data": "contacts",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The contact's email address",
                 "desc": "The new email address for the contact",

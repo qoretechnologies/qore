@@ -55,7 +55,7 @@ public class ApolloPersonEnrichmentDataType inherits HashDataType {
                 "desc": "The full name of the person",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Email",
                 "desc": "The email address of the person",
@@ -79,7 +79,7 @@ public class ApolloPersonEnrichmentDataType inherits HashDataType {
                 "desc": "The professional headline of the person",
             },
             "linkedin_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "LinkedIn URL",
                 "short_desc": "LinkedIn URL",
                 "desc": "The LinkedIn profile URL of the person",

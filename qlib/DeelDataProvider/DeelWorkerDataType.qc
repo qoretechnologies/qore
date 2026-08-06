@@ -50,7 +50,7 @@ public class DeelWorkerDataType inherits HashDataType {
                 "example_value": "Smith",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The worker's email address",
                 "desc": "The email address of the worker",

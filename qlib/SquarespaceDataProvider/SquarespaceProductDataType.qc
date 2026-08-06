@@ -67,7 +67,7 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "The HTML description of the product",
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "The product URL",
                 "desc": "The full URL of the product page",

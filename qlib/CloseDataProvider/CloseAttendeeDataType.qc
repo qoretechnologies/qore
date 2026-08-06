@@ -44,7 +44,7 @@ public class CloseAttendeeDataType inherits HashDataType {
                 "example_value": "Jane Smith",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The attendee email",
                 "desc": "The email address of the attendee",

@@ -81,7 +81,7 @@ public class CloseCallDataType inherits HashDataType {
                 "desc": "Call duration in seconds",
             },
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone Number",
                 "short_desc": "The phone number",
                 "desc": "The phone number associated with this call",
@@ -111,13 +111,13 @@ public class CloseCallDataType inherits HashDataType {
                 "desc": "The call note in HTML format",
             },
             "recording_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Recording URL",
                 "short_desc": "Call recording URL",
                 "desc": "The URL of the call recording, if available",
             },
             "voicemail_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Voicemail URL",
                 "short_desc": "Voicemail URL",
                 "desc": "The URL of the voicemail, if available",

@@ -34,7 +34,7 @@ public class FirecrawlScrapeRequestDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The URL to scrape",
                 "desc": "The URL of the web page to scrape",
-                "type": StringType,
+                "type": UriType,
                 "required": True,
                 "example_value": "https://example.com",
             },

@@ -43,7 +43,7 @@ public class KitSubscriberDataType inherits HashDataType {
                 "desc": "The first name of the subscriber",
             },
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The subscriber's email address",
                 "desc": "The email address of the subscriber",

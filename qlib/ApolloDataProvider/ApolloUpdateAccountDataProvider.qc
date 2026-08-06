@@ -43,7 +43,7 @@ public class ApolloUpdateAccountRequestDataType inherits HashDataType {
                 "desc": "The new name of the account",
             },
             "domain": {
-                "type": StringOrNothingType,
+                "type": HostnameOrNothingType,
                 "display_name": "Domain",
                 "short_desc": "The new domain",
                 "desc": "The new domain of the company",

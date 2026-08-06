@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiImageCreateDataProvider.qc Copyright 2024 - 2025 Qore Technologies, s.r.o.
+/** OpenAiImageCreateDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -351,7 +351,7 @@ public class OpenAiImageDataType inherits HashDataType {
                 "display_name": "Image URL",
                 "short_desc": "The URL of the image",
                 "desc": "The URL of the image",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
                 "exclusive_with": ("b64_json",),
             },
         };

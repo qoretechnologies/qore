@@ -31,7 +31,7 @@ public class KitCreatePurchaseRequestDataType inherits HashDataType {
         #! Field definitions for creating a purchase
         const Fields = {
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The buyer's email address",
                 "desc": "The email address of the buyer",

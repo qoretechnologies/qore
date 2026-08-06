@@ -38,7 +38,7 @@ public class ApolloCreateAccountRequestDataType inherits HashDataType {
                 "required": True,
             },
             "domain": {
-                "type": StringOrNothingType,
+                "type": HostnameOrNothingType,
                 "display_name": "Domain",
                 "short_desc": "The company domain",
                 "desc": "The domain of the company",

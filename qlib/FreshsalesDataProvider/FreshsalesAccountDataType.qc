@@ -73,7 +73,7 @@ public class FreshsalesAccountDataType inherits HashDataType {
                 "desc": "The country of the account",
             },
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone",
                 "short_desc": "Phone number",
                 "desc": "The phone number of the account",

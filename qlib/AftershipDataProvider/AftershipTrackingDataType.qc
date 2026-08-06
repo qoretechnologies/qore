@@ -231,19 +231,19 @@ public class AftershipTrackingDataType inherits HashDataType {
                 "display_name": "Courier Tracking Link",
                 "short_desc": "Direct carrier tracking URL",
                 "desc": "Direct URL to the carrier's tracking page",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "courier_redirect_link": {
                 "display_name": "Courier Redirect Link",
                 "short_desc": "Redirect-based carrier URL",
                 "desc": "Redirect-based URL to the carrier's tracking page",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "aftership_tracking_url": {
                 "display_name": "Aftership Tracking URL",
                 "short_desc": "Aftership public tracking URL",
                 "desc": "AfterShip-hosted public tracking page URL",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "tracked_count": {
                 "display_name": "Tracked Count",
@@ -370,7 +370,7 @@ public class AftershipTrackingDataType inherits HashDataType {
                 "display_name": "Aftership Tracking Order URL",
                 "short_desc": "Aftership order tracking page URL",
                 "desc": "AfterShip-hosted tracking page URL for the order",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
         };
     }

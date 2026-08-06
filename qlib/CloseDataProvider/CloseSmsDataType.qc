@@ -55,13 +55,13 @@ public class CloseSmsDataType inherits HashDataType {
                 "desc": "The unique identifier of the contact associated with this SMS",
             },
             "local_phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Local Phone",
                 "short_desc": "Local phone number",
                 "desc": "The local phone number used for the SMS",
             },
             "remote_phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Remote Phone",
                 "short_desc": "Remote phone number",
                 "desc": "The remote phone number for the SMS",

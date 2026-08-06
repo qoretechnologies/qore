@@ -29,7 +29,7 @@ public class ClickFunnelsCreateContactRequestDataType inherits HashDataType {
     public {
         const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The contact's email address",
                 "desc": "The email address of the contact to create",

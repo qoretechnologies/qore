@@ -94,7 +94,7 @@ public class ElevenLabsCreateDubbingRequestType inherits HashDataType {
                 "display_name": "Source URL",
                 "short_desc": "URL of the source content",
                 "desc": "The URL of the source audio or video content to dub",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "source_lang": {
                 "display_name": "Source Language",

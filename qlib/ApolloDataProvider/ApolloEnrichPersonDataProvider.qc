@@ -30,7 +30,7 @@ public class ApolloEnrichPersonRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The person's email address",
                 "desc": "The person's email address for enrichment",
@@ -56,7 +56,7 @@ public class ApolloEnrichPersonRequestDataType inherits HashDataType {
                 "desc": "The person's company name",
             },
             "domain": {
-                "type": StringOrNothingType,
+                "type": HostnameOrNothingType,
                 "display_name": "Domain",
                 "short_desc": "The person's company domain",
                 "desc": "The person's company domain",

@@ -61,7 +61,7 @@ public class KitFormDataType inherits HashDataType {
                 "desc": "The JavaScript code for embedding the form",
             },
             "embed_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Embed URL",
                 "short_desc": "The embed URL",
                 "desc": "The URL for embedding the form",

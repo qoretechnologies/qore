@@ -44,14 +44,14 @@ public class KeapCompanyDataType inherits HashDataType {
                 "example_value": "Acme Corp",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The company email address",
                 "desc": "The primary email address of the company",
                 "example_value": "info@acme.com",
             },
             "phone_number": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone Number",
                 "short_desc": "The company phone number",
                 "desc": "The primary phone number of the company",

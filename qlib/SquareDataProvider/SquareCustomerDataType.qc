@@ -63,14 +63,14 @@ public class SquareCustomerDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The customer's email address",
                 "desc": "The email address of the customer",
                 "example_value": "john@example.com",
             },
             "phone_number": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone Number",
                 "short_desc": "The customer's phone number",
                 "desc": "The phone number of the customer",

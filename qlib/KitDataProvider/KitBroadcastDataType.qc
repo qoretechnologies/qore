@@ -85,7 +85,7 @@ public class KitBroadcastDataType inherits HashDataType {
                 "desc": "The email template object used for the broadcast",
             },
             "public_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Public URL",
                 "short_desc": "The public URL",
                 "desc": "The public URL of the broadcast",
@@ -97,7 +97,7 @@ public class KitBroadcastDataType inherits HashDataType {
                 "desc": "The alternative text for the broadcast thumbnail image",
             },
             "thumbnail_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Thumbnail URL",
                 "short_desc": "The thumbnail URL",
                 "desc": "The URL of the broadcast thumbnail image",
@@ -109,7 +109,7 @@ public class KitBroadcastDataType inherits HashDataType {
                 "desc": "The preview text shown in email clients before the email is opened",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The sender email address",
                 "desc": "The email address used as the sender for the broadcast",

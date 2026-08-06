@@ -72,7 +72,7 @@ public class PdfCoContactInformationDataType inherits HashDataType {
     public {
         const Fields = {
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone",
                 "short_desc": "Phone number",
                 "desc": "Phone number",
@@ -84,7 +84,7 @@ public class PdfCoContactInformationDataType inherits HashDataType {
                 "desc": "Fax number",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Email address",
                 "desc": "Email address",

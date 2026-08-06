@@ -38,7 +38,7 @@ public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source invoice file",
                 "desc": "URL to the source invoice file (PDF, image, or scanned document)",

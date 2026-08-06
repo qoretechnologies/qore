@@ -30,7 +30,7 @@ public class KeapCreateContactRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
                 "desc": "The contact's email address. Converted to the API's `email_addresses` "

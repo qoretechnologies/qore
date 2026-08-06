@@ -52,13 +52,13 @@ public class ConstantContactAccountDataType inherits HashDataType {
                 "desc": "The last name of the account holder",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The account email",
                 "desc": "The email address associated with the account",
             },
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Phone",
                 "short_desc": "The account phone number",
                 "desc": "The phone number associated with the account",

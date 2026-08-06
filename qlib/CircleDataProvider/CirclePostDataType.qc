@@ -132,7 +132,7 @@ public class CirclePostDataType inherits HashDataType {
                 "desc": "The date and time the post was published",
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "Post URL",
                 "desc": "The URL of the post",

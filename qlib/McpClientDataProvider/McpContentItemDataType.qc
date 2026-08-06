@@ -76,7 +76,7 @@ public class McpContentItemDataType inherits HashDataType {
                 "desc": "Base64-encoded binary data (for `type=image`)",
             },
             "uri": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URI",
                 "short_desc": "Resource URI",
                 "desc": "Resource URI (for `type=resource`)",

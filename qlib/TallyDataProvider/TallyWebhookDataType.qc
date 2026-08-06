@@ -44,7 +44,7 @@ public class TallyWebhookDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The webhook endpoint URL",
                 "desc": "The destination URL where webhook events are delivered",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "signingSecret": {
                 "display_name": "Signing Secret",

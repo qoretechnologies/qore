@@ -35,7 +35,7 @@ public class FirecrawlWebhookDataType inherits HashDataType {
                 "short_desc": "Webhook endpoint URL",
                 "desc": "The URL to send webhook notifications to. Receives events for "
                     "operation lifecycle (started, page scraped, completed, failed)",
-                "type": StringType,
+                "type": UriType,
                 "required": True,
                 "example_value": "https://example.com/webhook",
             },

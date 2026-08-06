@@ -44,7 +44,7 @@ public class PdfCoJobCheckResponseDataType inherits HashDataType {
                 "desc": "A message from the API describing the current state of the job",
             },
             "url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "URL",
                 "short_desc": "Direct URL to the output file (when status is success)",
                 "desc": "Direct URL to the output file; only available when `status` is `success`",

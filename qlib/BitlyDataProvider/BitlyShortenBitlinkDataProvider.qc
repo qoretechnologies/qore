@@ -31,7 +31,7 @@ public class BitlyShortenBitlinkRequestDataType inherits HashDataType {
         #! Field definitions for shortening a URL
         const Fields = {
             "long_url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Long URL",
                 "short_desc": "The URL to shorten",
                 "desc": "The URL to be shortened",
@@ -39,7 +39,7 @@ public class BitlyShortenBitlinkRequestDataType inherits HashDataType {
                 "example_value": "https://example.com/my-long-page-url",
             },
             "domain": {
-                "type": StringOrNothingType,
+                "type": HostnameOrNothingType,
                 "display_name": "Domain",
                 "short_desc": "Custom short domain",
                 "desc": "The short domain to use for the link. Defaults to `bit.ly` if not "

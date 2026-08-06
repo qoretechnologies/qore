@@ -693,7 +693,7 @@ public class AwsS3PresignedUrlResponseDataType inherits HashDataType {
                 "desc": "The presigned URL.\n\n"
                     "**Treat this as a credential**: it grants the operation it was signed for to anyone who "
                     "holds it, until it expires",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
             },
             "method": {
                 "display_name": "Operation",

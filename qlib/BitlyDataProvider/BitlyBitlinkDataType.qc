@@ -37,13 +37,13 @@ public class BitlyBitlinkDataType inherits HashDataType {
                 "desc": "The unique identifier of the bitlink (e.g., `bit.ly/abc123`)",
             },
             "link": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Short Link",
                 "short_desc": "The shortened URL",
                 "desc": "The shortened Bitly URL",
             },
             "long_url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Long URL",
                 "short_desc": "The destination URL",
                 "desc": "The original long URL that the bitlink redirects to",

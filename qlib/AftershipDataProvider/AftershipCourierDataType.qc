@@ -44,7 +44,7 @@ public class AftershipCourierDataType inherits HashDataType {
                 "display_name": "Phone",
                 "short_desc": "Contact phone number",
                 "desc": "Courier's contact phone number",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*phone",
             },
             "other_name": {
                 "display_name": "Other Name",
@@ -56,7 +56,7 @@ public class AftershipCourierDataType inherits HashDataType {
                 "display_name": "Website URL",
                 "short_desc": "Courier website URL",
                 "desc": "URL of the courier's website",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "default_language": {
                 "display_name": "Default Language",

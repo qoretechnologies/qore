@@ -47,7 +47,7 @@ public class KitUpdateSubscriberRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email Address",
                 "short_desc": "The subscriber's email address",
                 "desc": "The email address of the subscriber",

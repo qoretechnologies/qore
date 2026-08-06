@@ -172,7 +172,7 @@ public class AnthropicBatchResponseDataType inherits HashDataType {
                 "display_name": "Results URL",
                 "short_desc": "URL to retrieve batch results",
                 "desc": "URL to retrieve the JSONL results file. Available when the batch has ended",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
         };
     }

@@ -572,7 +572,7 @@ public class DropboxFileLinkResponseDataType inherits HashDataType {
                 "short_desc": "The temporary download link",
                 "desc": "A direct download link for the file, valid for four hours and usable without "
                     "authentication",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
             },
             "file": {
                 "display_name": "File",
@@ -704,7 +704,7 @@ public class DropboxSharedLinkDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The shared link",
                 "desc": "The shared link",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
             },
             "id": {
                 "display_name": "File ID",
@@ -808,7 +808,7 @@ public class DropboxRevokeSharedLinkRequestDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The shared link to revoke",
                 "desc": "The shared link to revoke, as returned by `create-shared-link` or `list-shared-links`",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
                 "required": True,
             },
         };
@@ -883,7 +883,7 @@ public class DropboxAccountInfoDataType inherits HashDataType {
                 "display_name": "Email Address",
                 "short_desc": "The account's email address",
                 "desc": "The email address the account is registered under",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "email_verified": {
                 "display_name": "Email Verified",
@@ -954,13 +954,13 @@ public class DropboxAccountInfoDataType inherits HashDataType {
                 "display_name": "Profile Photo URL",
                 "short_desc": "A link to the account's profile photo",
                 "desc": "A link to the account's profile photo; absent when no photo has been set",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "referral_link": {
                 "display_name": "Referral Link",
                 "short_desc": "The account's Dropbox referral link",
                 "desc": "The account's Dropbox referral link",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
         };
     }
@@ -1039,7 +1039,7 @@ public class DropboxSaveUrlRequestDataType inherits HashDataType {
                 "desc": "The URL for Dropbox to fetch.\n\n"
                     "**Dropbox fetches it from its own servers**, so the URL must be reachable from the "
                     "public internet and the content never passes through this system",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
                 "required": True,
                 "example_value": "https://example.com/report.pdf",
             },

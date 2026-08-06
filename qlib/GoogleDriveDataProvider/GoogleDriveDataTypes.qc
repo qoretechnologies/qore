@@ -106,13 +106,13 @@ public class GoogleDriveFileDataType inherits HashDataType {
                 "display_name": "Web View Link",
                 "short_desc": "A link opening the file in a browser",
                 "desc": "A link opening the file in a browser; requires the viewer to be signed in and permitted",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "web_content_link": {
                 "display_name": "Web Content Link",
                 "short_desc": "A link downloading the file in a browser",
                 "desc": "A link downloading the file in a browser; absent for Google-native documents",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "trashed": {
                 "display_name": "Trashed",
@@ -648,13 +648,13 @@ public class GoogleDriveShareFileRequestDataType inherits HashDataType {
                 "display_name": "Email Address",
                 "short_desc": "The email address of the user or group",
                 "desc": "The email address of the user or group; required when `type` is `user` or `group`",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "domain": {
                 "display_name": "Domain",
                 "short_desc": "The domain to grant access to",
                 "desc": "The domain to grant access to; required when `type` is `domain`",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*hostname",
             },
             "send_notification": {
                 "display_name": "Send Notification",
@@ -838,7 +838,7 @@ public class GoogleDriveStorageQuotaDataType inherits HashDataType {
                 "display_name": "User Email",
                 "short_desc": "The email address of the account",
                 "desc": "The email address of the account the quota belongs to",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
             "user_display_name": {
                 "display_name": "User Name",

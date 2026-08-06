@@ -37,7 +37,7 @@ public class KeapContactDataType inherits HashDataType {
                 "desc": "The unique identifier of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
                 "desc": "The primary email address of the contact",

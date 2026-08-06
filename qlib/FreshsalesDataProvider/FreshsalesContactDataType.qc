@@ -49,7 +49,7 @@ public class FreshsalesContactDataType inherits HashDataType {
                 "desc": "The last name of the contact",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Primary email address",
                 "desc": "The primary email address of the contact",
@@ -205,7 +205,7 @@ public class FreshsalesCreateContactRequestDataType inherits HashDataType {
                 "example_value": "Smith",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Primary email address",
                 "desc": "The primary email address of the contact. At least one of `email`, "

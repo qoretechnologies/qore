@@ -37,7 +37,7 @@ public class GorgiasCustomerDataType inherits HashDataType {
                 "desc": "The unique identifier of the customer",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "Customer email address",
                 "desc": "The primary email address of the customer",

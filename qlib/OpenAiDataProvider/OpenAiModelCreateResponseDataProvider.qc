@@ -2168,7 +2168,7 @@ public class OpenAiResponseOutputContentDataType inherits HashDataType {
                 "display_name": "Image URL",
                 "short_desc": "URL to the generated image output",
                 "desc": "URL to the generated image output",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
             "audio": {
                 "display_name": "Audio Data",

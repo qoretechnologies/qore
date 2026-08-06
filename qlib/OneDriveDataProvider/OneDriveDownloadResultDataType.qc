@@ -50,7 +50,7 @@ public class OneDriveDownloadResultDataType inherits HashDataType {
                 "display_name": "Download URL",
                 "short_desc": "Pre-authenticated download URL",
                 "desc": "A short-lived, pre-authenticated URL for downloading the file content directly",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*uri",
             },
         };
     }

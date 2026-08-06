@@ -30,7 +30,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "url": {
-                "type": StringType,
+                "type": UriType,
                 "display_name": "Attachment URL",
                 "short_desc": "URL to the file to attach to the email",
                 "desc": "URL to the file to attach to the email",

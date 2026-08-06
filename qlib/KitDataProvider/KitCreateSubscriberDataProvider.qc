@@ -31,7 +31,7 @@ public class KitCreateSubscriberRequestDataType inherits HashDataType {
         #! Field definitions for creating a subscriber
         const Fields = {
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The subscriber's email address",
                 "desc": "The email address of the subscriber to create or update (upsert behavior)",

@@ -51,7 +51,7 @@ public class FreshBooksClientDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The client email address",
                 "desc": "The email address of the client",
@@ -65,13 +65,13 @@ public class FreshBooksClientDataType inherits HashDataType {
                 "example_value": "Acme Corp",
             },
             "phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Business Phone",
                 "short_desc": "The business phone number",
                 "desc": "The business phone number of the client",
             },
             "home_phone": {
-                "type": StringOrNothingType,
+                "type": PhoneOrNothingType,
                 "display_name": "Home Phone",
                 "short_desc": "The home phone number",
                 "desc": "The home phone number of the client",
@@ -166,7 +166,7 @@ public class FreshBooksClientCreateDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The client email address",
                 "desc": "The email address of the client",
@@ -287,7 +287,7 @@ public class FreshBooksClientUpdateDataType inherits HashDataType {
                 "example_value": "Doe",
             },
             "email": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The client email address",
                 "desc": "The new email address of the client",

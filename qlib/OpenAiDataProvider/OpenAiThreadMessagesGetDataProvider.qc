@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiThreadMessagesGetDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiThreadMessagesGetDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -153,7 +153,7 @@ public class OpenAiImageUrlDataType inherits HashDataType {
                 "display_name": "URL",
                 "short_desc": "The external URL of the image",
                 "desc": "The external URL of the image, must be a supported image types: jpeg, jpg, png, gif, webp",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."uri",
             },
             "detail": {
                 "display_name": "Detail",

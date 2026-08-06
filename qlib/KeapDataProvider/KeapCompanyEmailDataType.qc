@@ -30,7 +30,7 @@ public class KeapCompanyEmailDataType inherits HashDataType {
     private {
         const Fields = {
             "email": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email",
                 "short_desc": "The email address",
                 "desc": "The email address",

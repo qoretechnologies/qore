@@ -77,7 +77,7 @@ public class ClickFunnelsFulfillmentDataType inherits HashDataType {
                 "desc": "The shipping provider for the fulfillment",
             },
             "tracking_url": {
-                "type": StringOrNothingType,
+                "type": UriOrNothingType,
                 "display_name": "Tracking URL",
                 "short_desc": "The shipment tracking URL",
                 "desc": "The URL for tracking the shipment",

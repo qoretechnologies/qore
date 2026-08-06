@@ -44,7 +44,7 @@ public class OneDriveIdentityDataType inherits HashDataType {
                 "display_name": "Email",
                 "short_desc": "The email address of the identity",
                 "desc": "The email address of the identity (if available)",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."*email",
             },
         };
     }

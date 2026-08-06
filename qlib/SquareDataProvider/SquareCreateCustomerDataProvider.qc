@@ -50,7 +50,7 @@ public class SquareCreateCustomerRequestDataType inherits HashDataType {
                 "desc": "The company name associated with the customer",
             },
             "email_address": {
-                "type": StringOrNothingType,
+                "type": EmailOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The customer's email address",
                 "desc": "The email address of the customer",

@@ -40,7 +40,7 @@ public class KitAddSubscriberToFormRequestDataType inherits HashDataType {
                 "ref_data": "forms",
             },
             "email_address": {
-                "type": StringType,
+                "type": EmailType,
                 "display_name": "Email Address",
                 "short_desc": "The subscriber's email address",
                 "desc": "The email address of the subscriber to add to the form",
