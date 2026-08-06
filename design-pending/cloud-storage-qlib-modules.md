@@ -194,6 +194,26 @@ The only one requiring a new client module. Template: `OneDriveRestClient.qm`
 **The Dropbox-specific wrinkle** that must be designed for explicitly: Dropbox
 splits its API across two hosts with two different calling conventions.
 
+> **Phase B gate: PASSED.** A spike against a local server implementing the
+> Dropbox content-endpoint contract confirmed that both `RestClient` and
+> `RestClientIo` can carry it with no client-layer changes: JSON arguments in a
+> `Dropbox-API-Arg` request header, a raw binary body in both directions
+> (`data: "bin"`, `Content-Type: application/octet-stream`), operation metadata
+> read back from a `Dropbox-API-Result` response header, and a 2 MB body
+> transferred intact. The dual-host split is handled with two client objects —
+> one per base URL — which also sidesteps the fact that serialization is
+> per-client rather than per-request.
+>
+> The spike did surface one genuine pre-existing bug, fixed as part of this
+> work: the response deserialization guard in
+> `NullRestSchemaValidator::parseResponseImpl()` assumed every body arrives as a
+> string, which holds for the synchronous `HTTPClient::send()` path but not for
+> the asynchronous `HttpClientIo` path, so **any** binary response over
+> `RestClientIo` raised `DESERIALIZATION-ERROR` — despite every non-text
+> deserializer already accepting binary input. This blocked S3 `download-file`
+> as much as Dropbox. Regression test in
+> `examples/test/qlib/RestClientIo/RestClientIo.qtest::testBinaryBody()`.
+
 | | RPC endpoints | Content endpoints |
 |---|---|---|
 | Host | `api.dropboxapi.com` | `content.dropboxapi.com` |

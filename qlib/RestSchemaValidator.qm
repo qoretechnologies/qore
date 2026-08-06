@@ -84,6 +84,11 @@ module RestSchemaValidator {
       - @ref RestSchemaValidator::AbstractComposableSchemaObject "AbstractComposableSchemaObject": allOf/oneOf/anyOf/not composition
       - @ref RestSchemaValidator::AbstractRestSchemaObject "AbstractRestSchemaObject": shared REST schema object methods
     - fixed Swagger min/max error messages that incorrectly reported maximum instead of minimum values
+    - fixed a bug where a response with a non-text \c Content-Type and a binary body raised
+      \c DESERIALIZATION-ERROR; the check assumed every body arrives as a string, which holds for the synchronous
+      \c HTTPClient path but not for the asynchronous transport used by the \c RestClientIo module, making binary
+      responses impossible over that client
+      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added abstract \c check() method to @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
     - added CBOR serialization/deserialization support (\c "application/cbor") when the \c json module
       version 1.12+ is available (RFC 8949)
@@ -2452,11 +2457,22 @@ public namespace RestSchemaValidator {
                         keys DataDeserializationSupport, response_body);
                 }
 
-                # Convert body to binary for non-text content types (e.g. CBOR)
-                # HTTPClient::send() returns all bodies as strings; binary formats
-                # need the raw bytes
-                if (!is_mime_text(ct) && response_body.typeCode() == NT_STRING) {
-                    response_body = binary(response_body);
+                # Convert the body to binary for non-text content types (e.g. CBOR, octet-stream); binary formats
+                # need the raw bytes.
+                #
+                # The transport determines the type the body arrives as: the synchronous HTTPClient::send() path
+                # returns every body as a string, so binary formats have to be converted here, while the
+                # asynchronous HttpClientIo path used by RestClientIo delivers binary bodies unchanged.  Both are
+                # valid; every deserializer registered for a non-text type in DataDeserializationSupport accepts
+                # binary as well as string input.  Rejecting binary here made any binary response impossible over
+                # RestClientIo (issue #5386).
+                if (!is_mime_text(ct)) {
+                    if (response_body.typeCode() == NT_STRING) {
+                        response_body = binary(response_body);
+                    } else if (response_body.typeCode() != NT_BINARY) {
+                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: "
+                            "%y but body type is %y", ct, response_body.type());
+                    }
                 } else if (response_body.typeCode() != NT_STRING) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y but "
                         "body type is %y", ct, response_body.type());
