@@ -259,10 +259,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         addTestCase("account actions", \accountActionsTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("watch delta feed", \watchDeltaTest());
+        addTestCase("async operations", \asyncOperationsTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live list folder", \liveListFolderTest());
         addTestCase("live account info", \liveAccountInfoTest());
         addTestCase("live watch cycle", \liveWatchCycleTest());
+        addTestCase("live bulk operations", \liveBulkOperationsTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
 
         set_return_value(main());
@@ -287,12 +289,14 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         *list<string> children = prov.getChildProviderNames();
         # the framework injects a "__call__" child alongside the module's own, to serve its generic
         # make-api-call action
-        assertEq(20, children.size(), "all actions are children of the root provider");
+        assertEq(30, children.size(), "all actions are children of the root provider");
         assertTrue(inlist("__call__", children), "the framework generic-call child is present");
         foreach string name in (("list-folder", "search", "get-metadata", "download-file", "upload-file",
                 "create-text-file", "get-file-link", "create-folder", "delete-file", "copy-file", "move-file",
                 "list-file-revisions", "restore-file-revision", "create-shared-link", "list-shared-links",
-                "revoke-shared-link", "get-account-info", "get-space-usage", "events")) {
+                "revoke-shared-link", "get-account-info", "get-space-usage", "events", "save-url",
+                "check-job-status", "delete-batch", "move-batch", "copy-batch", "permanently-delete",
+                "get-thumbnail", "get-preview", "add-file-member", "list-file-members")) {
             assertTrue(inlist(name, children), sprintf("has %y child", name));
             assertTrue(prov.getChildProvider(name) instanceof AbstractDataProvider,
                 sprintf("%y child provider can be created", name));
@@ -301,7 +305,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # the summary info of every child must be retrievable; a child whose ProviderSummaryInfo constant is
         # missing or misnamed breaks the app browser rather than the action
-        assertEq(19, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
+        assertEq(29, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
     }
 
     actionCatalogTest() {
@@ -370,7 +374,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
                 action.action));
             assertTrue(action.groups.size() > 0, sprintf("action %y has a group", action.action));
         }
-        assertEq(21, actions, "every action is registered");
+        assertEq(31, actions, "every action is registered");
         assertEq((), keys (children - (keys seen)), "every child has a registered action");
     }
 
@@ -1513,6 +1517,139 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         assertEq(("p1.txt", "p2.txt"), (map $1.data.name, obs5.events));
     }
 
+    #! Several Dropbox operations answer either with a result or with a job, and the caller cannot know which
+    /** Normalizing the two shapes is where a mistake would be invisible: a response treated as complete when
+        it named a job silently reports nothing done, and one treated as a job when it carried the result
+        leaves the caller polling for a job that does not exist.
+    */
+    asyncOperationsTest() {
+        # a batch that finished before the call returned carries its results and no job
+        hash<auto> done = DropboxAsyncOperationBase::getAsyncResult({
+            ".tag": "complete",
+            "entries": (
+                {".tag": "success", "metadata": {".tag": "file", "id": "id:a", "name": "a.txt",
+                    "path_display": "/a.txt"}},
+                {".tag": "failure", "failure": {".tag": "path_lookup"}},
+            ),
+        });
+        assertEq(True, done.complete);
+        assertEq(NOTHING, done.async_job_id, "a completed operation names no job to follow");
+        assertEq(2, done.entries.size());
+        # a batch does not fail as a whole, so each entry carries its own outcome
+        assertEq(True, done.entries[0].success);
+        assertEq("a.txt", done.entries[0].entry.name);
+        assertEq(False, done.entries[1].success);
+        assertEq("path_lookup", done.entries[1].error);
+
+        # ... and one that did not names the job instead
+        hash<auto> pending = DropboxAsyncOperationBase::getAsyncResult({
+            ".tag": "async_job_id",
+            "async_job_id": "job-1",
+        });
+        assertEq(False, pending.complete);
+        assertEq("job-1", pending.async_job_id);
+        assertEq(NOTHING, pending.entries, "a job that is still running has no results yet");
+
+        # a save_url that completed immediately carries the file metadata at the top level rather than a list
+        hash<auto> saved = DropboxAsyncOperationBase::getAsyncResult({
+            ".tag": "complete",
+            "id": "id:s",
+            "name": "saved.pdf",
+            "path_display": "/saved.pdf",
+            "size": 100,
+        });
+        assertEq(True, saved.complete);
+        assertEq(1, saved.entries.size(), "a single-file result is reported as a list like any other");
+        assertEq("saved.pdf", saved.entries[0].name);
+
+        # a relocation reports the moved entry under "success" rather than "metadata"
+        assertEq("moved.txt", DropboxAsyncOperationBase::getEntryResult({
+            ".tag": "success",
+            "success": {".tag": "file", "id": "id:m", "name": "moved.txt", "path_display": "/moved.txt"},
+        }).entry.name);
+
+        FakeDropboxRestClientIo rest();
+        DropboxDataProvider::DropboxDataProvider prov = getProvider(\rest);
+
+        # each kind of job has its own status endpoint, so the job type selects the one to call
+        rest.setResponse({".tag": "in_progress"});
+        hash<auto> st = prov.getChildProviderEx("check-job-status").doRequest({
+            "async_job_id": "j",
+            "job_type": "delete_batch",
+        });
+        assertEq("/2/files/delete_batch/check", rest.last().path);
+        assertEq("in_progress", st.status);
+        assertEq(False, st.complete);
+
+        rest.setResponse({".tag": "complete", "entries": ()});
+        st = prov.getChildProviderEx("check-job-status").doRequest({
+            "async_job_id": "j",
+            "job_type": "save_url",
+        });
+        assertEq("/2/files/save_url/check_job_status", rest.last().path);
+        assertEq(True, st.complete);
+
+        rest.setResponse({".tag": "failed", "failed": {".tag": "download_failed"}});
+        st = prov.getChildProviderEx("check-job-status").doRequest({
+            "async_job_id": "j",
+            "job_type": "save_url",
+        });
+        assertEq("failed", st.status);
+        assertEq("download_failed", st.failure, "the reason for the failure is reported");
+
+        # an unknown job type never reaches a request: declaring the job types as allowed values means the
+        # framework rejects it during request validation, naming what is accepted
+        assertThrows("RUNTIME-TYPE-ERROR", "allowed values", sub () {
+            prov.getChildProviderEx("check-job-status").doRequest({
+                "async_job_id": "j",
+                "job_type": "no-such-job",
+            });
+        });
+        # every job type the action offers must have a status endpoint behind it, or a job started by one of
+        # these operations could never be followed
+        assertEq((map $1.value, AsyncJobTypeValues), keys AsyncJobStatusPaths,
+            "every offered job type has a status endpoint");
+
+        # the batch actions normalize their paths, so a caller need not know Dropbox's root convention
+        rest.setResponse({".tag": "complete", "entries": ()});
+        prov.getChildProviderEx("delete-batch").doRequest({"paths": ("a.txt", "/b.txt")});
+        assertEq(("/a.txt", "/b.txt"), (map $1.path, rest.last().body.entries),
+            "paths are normalized before they are sent");
+        assertThrows("DROPBOX-ERROR", "no paths", sub () {
+            prov.getChildProviderEx("delete-batch").doRequest({"paths": ()});
+        });
+
+        # a relocation entry must name both ends; a half-specified entry is reported rather than sent
+        assertThrows("DROPBOX-ERROR", "from_path", sub () {
+            prov.getChildProviderEx("move-batch").doRequest({"entries": ({"from_path": "/a"},)});
+        });
+        rest.setResponse({".tag": "complete", "entries": ()});
+        prov.getChildProviderEx("move-batch").doRequest({
+            "entries": ({"from_path": "a", "to_path": "b"},),
+        });
+        assertEq("/2/files/move_batch_v2", rest.last().path);
+        assertEq("/a", rest.last().body.entries[0].from_path);
+        assertEq("/b", rest.last().body.entries[0].to_path);
+        rest.setResponse({".tag": "complete", "entries": ()});
+        prov.getChildProviderEx("copy-batch").doRequest({
+            "entries": ({"from_path": "/a", "to_path": "/b"},),
+        });
+        assertEq("/2/files/copy_batch_v2", rest.last().path, "copy and move differ only in the endpoint");
+
+        # the sharing endpoints take a file ID, but a path is far easier to supply and Dropbox resolves it
+        assertEq("id:abc", DropboxAddFileMemberDataProvider::getFileArgument("id:abc"));
+        assertEq("/a/b.txt", DropboxAddFileMemberDataProvider::getFileArgument("a/b.txt"));
+
+        # a search cursor carries the query and every option it was made with, so continuing sends it alone
+        rest.setResponse({"matches": (), "has_more": False});
+        prov.getChildProviderEx("search").doRequest({"query": "x", "cursor": "c1"});
+        assertEq("/2/files/search_v2/continue", rest.last().path, "a cursor continues the previous search");
+        assertEq({"cursor": "c1"}, rest.last().body, "only the cursor is sent");
+        rest.setResponse({"matches": (), "has_more": False});
+        prov.getChildProviderEx("search").doRequest({"query": "x"});
+        assertEq("/2/files/search_v2", rest.last().path, "a search with no cursor starts afresh");
+    }
+
     # --- live tests (require -c <connection>) ---
 
     private *AbstractConnection getConnection() {
@@ -1666,6 +1803,112 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         # the new-file watch must not report the same change again: it already knows the file
         w.poll();
         assertEq(before, obs.events.size(), "a change to a known file is not reported as a new file");
+    }
+
+    #! Round-trips the server-side and bulk operations against the live service
+    /** `save-url` is only meaningful against the real service -- the point of it is that Dropbox does the
+        fetching -- and the batch operations only show their two-shape response there: whether a given batch
+        completes in the call or becomes a job is Dropbox's decision, not something a fake can settle.
+
+        This writes to the account under test; exclude it with `--exclude="live bulk operations"`.
+    */
+    liveBulkOperationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+        string folder = "/qore-bulk-" + stamp;
+
+        prov.getChildProviderEx("create-folder").doRequest({"path": folder});
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({"path": folder});
+        }
+
+        # --- save-url: Dropbox fetches the content itself, so nothing passes through here ---
+        string saved = folder + "/saved.md";
+        hash<auto> save = prov.getChildProviderEx("save-url").doRequest({
+            "path": saved,
+            "url": "https://raw.githubusercontent.com/qoretechnologies/qore/develop/README.md",
+        });
+        # whether it finishes in the call or becomes a job is Dropbox's decision; both are legitimate, so the
+        # test follows the job rather than assuming either
+        hash<auto> result = waitForJob(prov, save, "save_url");
+        assertEq(1, result.entries.size(), "the fetched file was reported");
+        assertTrue(result.entries[0].size > 0, "Dropbox fetched content, not an empty file");
+
+        # ... and the file is really there
+        hash<auto> meta = prov.getChildProviderEx("get-metadata").doRequest({"path": saved});
+        assertEq(result.entries[0].size, meta.size, "the size reported matches what the account holds");
+
+        # --- copy-batch, then move-batch, then delete-batch ---
+        string copied = folder + "/copied.md";
+        hash<auto> cp = prov.getChildProviderEx("copy-batch").doRequest({
+            "entries": ({"from_path": saved, "to_path": copied},),
+        });
+        waitForJob(prov, cp, "copy_batch");
+        assertEq(copied.lwr(),
+            prov.getChildProviderEx("get-metadata").doRequest({"path": copied}).path_lower,
+            "the copy is there");
+
+        string moved = folder + "/moved.md";
+        hash<auto> mv = prov.getChildProviderEx("move-batch").doRequest({
+            "entries": ({"from_path": copied, "to_path": moved},),
+        });
+        waitForJob(prov, mv, "move_batch");
+        assertEq(moved.lwr(),
+            prov.getChildProviderEx("get-metadata").doRequest({"path": moved}).path_lower,
+            "the move is there");
+        assertThrows("DROPBOX-ERROR", sub () {
+            prov.getChildProviderEx("get-metadata").doRequest({"path": copied});
+        }, NOTHING, "a move leaves nothing behind at the old path");
+
+        hash<auto> del = prov.getChildProviderEx("delete-batch").doRequest({
+            "paths": (saved, moved),
+        });
+        hash<auto> deleted = waitForJob(prov, del, "delete_batch");
+        assertEq(2, deleted.entries.size(), "both paths were reported");
+        assertEq((True, True), (map $1.success, deleted.entries), "both deletes succeeded");
+
+        # --- membership: at minimum the owner is reported ---
+        # NOTE: a file, not a folder: Dropbox shares folders through a different API and refuses a folder here
+        # with "You can't share a folder as a file"
+        string shared = folder + "/shared.txt";
+        prov.getChildProviderEx("create-text-file").doRequest({
+            "path": shared,
+            "content": "shared by the Qore test suite",
+        });
+        hash<auto> members = prov.getChildProviderEx("list-file-members").doRequest({"file": shared});
+        assertEq(NT_LIST, members.users.typeCode(), "the membership was read");
+        assertTrue(members.users.size() >= 1, "the owner is listed among the members");
+        assertEq("owner", members.users[0].access_level, "the owner's access level is reported");
+        assertTrue(members.users[0].email.val(), "the member carries an email address");
+    }
+
+    #! Follows a Dropbox operation to completion, however it chose to answer
+    /** @note Dropbox decides per call whether to do the work inline or in the background, so both shapes have
+        to be handled.  The attempts are bounded and running out fails the test rather than passing it.
+    */
+    private hash<auto> waitForJob(AbstractDataProvider prov, hash<auto> started, string job_type) {
+        if (started.complete) {
+            return started;
+        }
+        assertTrue(started.async_job_id.val(), sprintf("an incomplete %s named a job to follow", job_type));
+        int attempts;
+        while (++attempts <= LiveWatchAttempts) {
+            hash<auto> st = prov.getChildProviderEx("check-job-status").doRequest({
+                "async_job_id": started.async_job_id,
+                "job_type": job_type,
+            });
+            if (st.complete) {
+                return st;
+            }
+            assertNeq("failed", st.status, sprintf("the %s job failed: %y", job_type, st.failure));
+            usleep(LiveWatchInterval);
+        }
+        throw "TEST-ERROR", sprintf("the %s job did not finish within %d attempts", job_type,
+            LiveWatchAttempts);
     }
 
     liveFileLifecycleTest() {

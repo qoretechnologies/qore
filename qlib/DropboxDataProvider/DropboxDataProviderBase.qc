@@ -365,6 +365,55 @@ public class DropboxDataProviderBase inherits DataProvider::AbstractDataProvider
         }, content.substr(offset, size - offset), MimeTypeOctetStream).body;
     }
 
+    #! Reads a file's membership
+    /** Shared by \c list-file-members and by \c add-file-member, which reads the membership back so that the
+        caller is told who has access rather than handed a per-member receipt.
+
+        @param file the file ID or path
+        @param limit the maximum number of members to return
+
+        @return the membership in this module's representation
+    */
+    private hash<auto> getMembers(string file, int limit) {
+        hash<auto> body = doRpc("/2/sharing/list_file_members", {
+            "file": DropboxAddFileMemberDataProvider::getFileArgument(file),
+            "limit": limit,
+        });
+        # NOTE: built with explicit loops rather than "map"; the "map {k: v}, list" form returns a single
+        # hash with one entry per iteration rather than one hash per element
+        list<auto> users = ();
+        foreach hash<auto> u in (body.users) {
+            users += {
+                "account_id": u.user.account_id,
+                "email": u.user.email,
+                "display_name": u.user.display_name,
+                "access_level": u.access_type.".tag",
+                "is_inherited": u.is_inherited ?? False,
+            };
+        }
+        list<auto> groups = ();
+        foreach hash<auto> g in (body.groups) {
+            groups += {
+                "group_id": g.group.group_id,
+                "group_name": g.group.group_name,
+                "access_level": g.access_type.".tag",
+                "member_count": g.group.member_count,
+            };
+        }
+        list<auto> invitees = ();
+        foreach hash<auto> i in (body.invitees) {
+            invitees += {
+                "email": i.invitee.email,
+                "access_level": i.access_type.".tag",
+            };
+        }
+        return {
+            "users": users,
+            "groups": groups,
+            "invitees": invitees,
+        };
+    }
+
     #! Returns the binary content of a FileDataType value
     /** The content is declared as base64 but may already have been decoded upstream, so both forms are accepted
 

@@ -458,6 +458,235 @@ module DropboxDataProvider {
             "output_type": DropboxSpaceUsageDataType,
         });
 
+        # --- Bulk and server-side operations ---
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/save-url",
+            "action": "save-url",
+            "display_name": "Save URL to Dropbox",
+            "short_desc": "Have Dropbox fetch a URL directly into the account",
+            "desc": "Has Dropbox fetch a URL and store the result in the account.\n\n"
+                "**The content never passes through this system**: Dropbox downloads it from its own servers, "
+                "so a large file costs nothing here in memory, time, or bandwidth.  The URL must be reachable "
+                "from the public internet.\n\n"
+                "A small file is usually fetched before the call returns; a large one is not, and the "
+                "response then names a job to follow with `check-job-status`.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxAsyncJobResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxSaveUrlRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/check-job-status",
+            "action": "check-job-status",
+            "display_name": "Check Job Status",
+            "short_desc": "Follow an operation Dropbox is performing in the background",
+            "desc": "Follows an operation Dropbox is performing in the background.\n\n"
+                "`save-url`, `delete-batch`, `move-batch`, and `copy-batch` each finish immediately when the "
+                "work is small and hand back a job when it is not; this reports whether that job has "
+                "finished, and what it produced.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxJobStatusResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxCheckJobStatusRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/delete-batch",
+            "action": "delete-batch",
+            "display_name": "Delete Files (Batch)",
+            "short_desc": "Delete several files or folders in one call",
+            "desc": "Deletes several files or folders in one call, rather than one request per path.\n\n"
+                "**A batch does not fail as a whole**: individual paths can be refused while the request "
+                "succeeds, so each entry carries its own outcome.  A large batch is performed in the "
+                "background and the response names a job to follow with `check-job-status`.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxAsyncJobResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxDeleteBatchRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/move-batch",
+            "action": "move-batch",
+            "display_name": "Move Files (Batch)",
+            "short_desc": "Move several files in one call",
+            "desc": "Moves several files in one call, rather than one request per file.\n\n"
+                "Each entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so "
+                "each entry carries its own outcome; a large batch is performed in the background and the "
+                "response names a job to follow with `check-job-status`.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxAsyncJobResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRelocationBatchRequestDataType::Fields{"entries",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRelocationBatchRequestDataType::Fields - "entries"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/copy-batch",
+            "action": "copy-batch",
+            "display_name": "Copy Files (Batch)",
+            "short_desc": "Copy several files in one call",
+            "desc": "Copies several files in one call, rather than one request per file.\n\n"
+                "Each entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so "
+                "each entry carries its own outcome; a large batch is performed in the background and the "
+                "response names a job to follow with `check-job-status`.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxAsyncJobResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRelocationBatchRequestDataType::Fields{"entries",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxRelocationBatchRequestDataType::Fields - "entries"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/permanently-delete",
+            "action": "permanently-delete",
+            "display_name": "Permanently Delete",
+            "short_desc": "Remove a file outright, bypassing the trash",
+            "desc": "Removes a file or folder entirely, bypassing the trash.\n\n"
+                "`delete-file` leaves the file recoverable and still counting against the account's storage; "
+                "this does not.  **It cannot be undone.**\n\n"
+                "The Dropbox app must have been granted permission for this; without it Dropbox refuses the "
+                "request rather than quietly doing nothing.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxPermanentlyDeleteRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-thumbnail",
+            "action": "get-thumbnail",
+            "display_name": "Get Thumbnail",
+            "short_desc": "Get a thumbnail image of a file",
+            "desc": "Returns a thumbnail image of a file.\n\n"
+                "Dropbox renders it, so a preview can be shown without downloading the file itself.  "
+                "Thumbnails are available for images and for common document formats.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxRenderedContentDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxThumbnailRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxThumbnailRequestDataType::Fields - "path", {
+                    "preselected": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/get-preview",
+            "action": "get-preview",
+            "display_name": "Get Preview",
+            "short_desc": "Get a PDF preview of a document",
+            "desc": "Returns a PDF preview of a document.\n\n"
+                "Dropbox renders it, so a document in a format this system cannot read - a Word file, a "
+                "spreadsheet, a presentation - can still be shown or archived as a PDF.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": DropboxRenderedContentDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxPreviewRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/add-file-member",
+            "action": "add-file-member",
+            "display_name": "Share File with People",
+            "short_desc": "Grant named people access to a file",
+            "desc": "Grants named people access to a file.\n\n"
+                "`create-shared-link` hands out a link that anyone holding it can use; this grants access to "
+                "specific people, which is what an audit trail and a later withdrawal both need.\n\n"
+                "The file's membership is returned afterwards, so the result shows who has access rather than "
+                "only what this call did.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": DropboxFileMembersResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxAddFileMemberRequestDataType::Fields{"file", "emails"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxAddFileMemberRequestDataType::Fields{"access_level",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxAddFileMemberRequestDataType::Fields - ("file", "emails", "access_level")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DropboxDataProvider::AppName,
+            "path": "/list-file-members",
+            "action": "list-file-members",
+            "display_name": "List File Members",
+            "short_desc": "List who has access to a file",
+            "desc": "Lists the people and groups who have access to a file, and at what level.\n\n"
+                "Someone who has been invited but has not yet accepted appears under `invitees` rather than "
+                "`users`.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": DropboxFileMembersResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListFileMembersRequestDataType::Fields{"file",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DropboxListFileMembersRequestDataType::Fields - "file"
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: all three read Dropbox's delta feed rather than re-listing the folder, so the cost of a poll

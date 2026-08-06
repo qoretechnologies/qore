@@ -241,6 +241,15 @@ public class DropboxSearchRequestDataType inherits HashDataType {
                 "default_value": "active",
                 "allowed_values": SearchFileStatusValues,
             },
+            "cursor": {
+                "display_name": "Cursor",
+                "short_desc": "The cursor returned by a previous truncated search",
+                "desc": "The `cursor` value returned by a previous search, used to retrieve the following "
+                    "page.\n\n"
+                    "A cursor already carries the query and every option it was created with, so when it is "
+                    "set the other options are ignored",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "filename_only": {
                 "display_name": "File Name Only",
                 "short_desc": "Match on the file name only, not on content",
@@ -1011,4 +1020,372 @@ public class DropboxSpaceUsageDataType inherits HashDataType {
 }
 
 public const DropboxSpaceUsageDataType = new DropboxSpaceUsageDataType();
+
+#! Request type for saving a URL to Dropbox
+public class DropboxSaveUrlRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "path": {
+                "display_name": "Path",
+                "short_desc": "The path to save the downloaded file to",
+                "desc": "The path in the Dropbox account to save the downloaded file to",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "/incoming/report.pdf",
+            },
+            "url": {
+                "display_name": "URL",
+                "short_desc": "The URL for Dropbox to fetch",
+                "desc": "The URL for Dropbox to fetch.\n\n"
+                    "**Dropbox fetches it from its own servers**, so the URL must be reachable from the "
+                    "public internet and the content never passes through this system",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "https://example.com/report.pdf",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxSaveUrlRequestDataType = new DropboxSaveUrlRequestDataType();
+
+#! Response type for an operation Dropbox performs asynchronously
+public class DropboxAsyncJobResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "complete": {
+                "display_name": "Complete",
+                "short_desc": "The operation finished before the call returned",
+                "desc": "`True` if the operation finished before the call returned, in which case no job needs "
+                    "to be followed",
+                "type": AbstractDataProviderTypeMap."bool",
+            },
+            "async_job_id": {
+                "display_name": "Job ID",
+                "short_desc": "The job to follow",
+                "desc": "The identifier of the job Dropbox is running; pass it to `check-job-status` to "
+                    "follow it.  Absent when the operation completed immediately",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "entries": {
+                "display_name": "Entries",
+                "short_desc": "The results, when the operation completed immediately",
+                "desc": "The results of the operation, present only when it completed before the call "
+                    "returned",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxAsyncJobResponseDataType = new DropboxAsyncJobResponseDataType();
+
+#! Request type for following an asynchronous Dropbox job
+public class DropboxCheckJobStatusRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "async_job_id": {
+                "display_name": "Job ID",
+                "short_desc": "The job to check",
+                "desc": "The identifier of the job to check, as returned by the operation that started it",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
+            "job_type": {
+                "display_name": "Job Type",
+                "short_desc": "Which operation started the job",
+                "desc": "Which operation started the job.\n\n"
+                    "Dropbox has a separate status endpoint per operation, so the kind of job has to be named "
+                    "in order to check it",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": AsyncJobTypeValues,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxCheckJobStatusRequestDataType = new DropboxCheckJobStatusRequestDataType();
+
+#! Response type describing the state of an asynchronous Dropbox job
+public class DropboxJobStatusResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "status": {
+                "display_name": "Status",
+                "short_desc": "The state of the job",
+                "desc": "The state of the job: `in_progress`, `complete`, or `failed`",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "complete": {
+                "display_name": "Complete",
+                "short_desc": "The job has finished successfully",
+                "desc": "`True` if the job has finished successfully",
+                "type": AbstractDataProviderTypeMap."bool",
+            },
+            "entries": {
+                "display_name": "Entries",
+                "short_desc": "The results of the finished job",
+                "desc": "The results of the job, present once it has finished",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+            "failure": {
+                "display_name": "Failure",
+                "short_desc": "Why the job failed",
+                "desc": "Why the job failed, when it did",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxJobStatusResponseDataType = new DropboxJobStatusResponseDataType();
+
+#! Request type for a batch operation over several paths
+public class DropboxDeleteBatchRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "paths": {
+                "display_name": "Paths",
+                "short_desc": "The paths to delete",
+                "desc": "The paths to delete.\n\n"
+                    "Dropbox performs a batch in the background when it is large, so the response may name a "
+                    "job to follow rather than the results themselves",
+                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "required": True,
+                "example_value": ("/incoming/a.csv", "/incoming/b.csv"),
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxDeleteBatchRequestDataType = new DropboxDeleteBatchRequestDataType();
+
+#! Request type for a batch move or copy
+public class DropboxRelocationBatchRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "entries": {
+                "display_name": "Entries",
+                "short_desc": "The moves or copies to perform",
+                "desc": "The operations to perform, as a list of hashes each carrying `from_path` and "
+                    "`to_path`.\n\n"
+                    "**Example**:\n"
+                    "```\n"
+                    "[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n"
+                    "```",
+                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "required": True,
+                "example_value": ({"from_path": "/in/a.csv", "to_path": "/done/a.csv"},),
+            },
+            "autorename": AutorenameField,
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxRelocationBatchRequestDataType = new DropboxRelocationBatchRequestDataType();
+
+#! Request type for permanently deleting a file
+public class DropboxPermanentlyDeleteRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "path": FilePathField + {
+                "desc": "The path of the file or folder to remove permanently",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxPermanentlyDeleteRequestDataType = new DropboxPermanentlyDeleteRequestDataType();
+
+#! Request type for retrieving a thumbnail or a preview
+public class DropboxThumbnailRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "path": FilePathField + {
+                "desc": "The path of the file to render",
+            },
+            "format": {
+                "display_name": "Format",
+                "short_desc": "The image format for the thumbnail",
+                "desc": "The image format for the thumbnail",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": ThumbnailFormatValues,
+                "default_value": "jpeg",
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "The dimensions of the thumbnail",
+                "desc": "The dimensions of the thumbnail in pixels",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": ThumbnailSizeValues,
+                "default_value": "w256h256",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxThumbnailRequestDataType = new DropboxThumbnailRequestDataType();
+
+#! Request type for retrieving a preview
+public class DropboxPreviewRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "path": FilePathField + {
+                "desc": "The path of the document to render as a PDF preview",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxPreviewRequestDataType = new DropboxPreviewRequestDataType();
+
+#! Response type carrying rendered content
+public class DropboxRenderedContentDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "path": {
+                "display_name": "Path",
+                "short_desc": "The file that was rendered",
+                "desc": "The path of the file that was rendered",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "content": {
+                "display_name": "Content",
+                "short_desc": "The rendered content, base64-encoded",
+                "desc": "The rendered content, base64-encoded",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "mime_type": {
+                "display_name": "MIME Type",
+                "short_desc": "The MIME type of the rendered content",
+                "desc": "The MIME type of the rendered content",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "The size of the rendered content in bytes",
+                "desc": "The size of the rendered content in bytes",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxRenderedContentDataType = new DropboxRenderedContentDataType();
+
+#! Request type for granting someone access to a file
+public class DropboxAddFileMemberRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file": {
+                "display_name": "File ID",
+                "short_desc": "The file to share",
+                "desc": "The file to share, as a Dropbox file ID (`id:...`) or a path",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "/reports/2026-q1.pdf",
+                "ref_data": "files",
+            },
+            "emails": {
+                "display_name": "Email Addresses",
+                "short_desc": "The people to grant access to",
+                "desc": "The email addresses of the people to grant access to",
+                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "required": True,
+                "example_value": ("colleague@example.com",),
+            },
+            "access_level": {
+                "display_name": "Access Level",
+                "short_desc": "The level of access to grant",
+                "desc": "The level of access to grant",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": FileMemberAccessValues,
+                "default_value": "viewer",
+            },
+            "quiet": {
+                "display_name": "Quiet",
+                "short_desc": "Do not send a notification email",
+                "desc": "Do not send a notification email to the people given access",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+            },
+            "custom_message": {
+                "display_name": "Message",
+                "short_desc": "A message to include in the notification email",
+                "desc": "A message to include in the notification email; ignored when `quiet` is set",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxAddFileMemberRequestDataType = new DropboxAddFileMemberRequestDataType();
+
+#! Request type for listing who has access to a file
+public class DropboxListFileMembersRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file": {
+                "display_name": "File ID",
+                "short_desc": "The file whose members are to be listed",
+                "desc": "The file whose members are to be listed, as a Dropbox file ID (`id:...`) or a path",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "/reports/2026-q1.pdf",
+                "ref_data": "files",
+            },
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "The maximum number of members to return",
+                "desc": "The maximum number of members to return",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": 100,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxListFileMembersRequestDataType = new DropboxListFileMembersRequestDataType();
+
+#! Response type for the people who have access to a file
+public class DropboxFileMembersResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "users": {
+                "display_name": "Users",
+                "short_desc": "The individual users with access",
+                "desc": "The individual users with access to the file",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "groups": {
+                "display_name": "Groups",
+                "short_desc": "The groups with access",
+                "desc": "The groups with access to the file",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "invitees": {
+                "display_name": "Invitees",
+                "short_desc": "People invited who have not yet accepted",
+                "desc": "People who have been invited but have not yet accepted",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const DropboxFileMembersResponseDataType = new DropboxFileMembersResponseDataType();
 }

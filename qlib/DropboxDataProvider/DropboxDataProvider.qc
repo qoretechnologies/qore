@@ -65,6 +65,16 @@ public class DropboxDataProvider inherits DropboxDataProviderBase {
             "revoke-shared-link": Class::forName("DropboxDataProvider::DropboxRevokeSharedLinkDataProvider"),
             "get-account-info": Class::forName("DropboxDataProvider::DropboxGetAccountInfoDataProvider"),
             "get-space-usage": Class::forName("DropboxDataProvider::DropboxGetSpaceUsageDataProvider"),
+            "save-url": Class::forName("DropboxDataProvider::DropboxSaveUrlDataProvider"),
+            "check-job-status": Class::forName("DropboxDataProvider::DropboxCheckJobStatusDataProvider"),
+            "delete-batch": Class::forName("DropboxDataProvider::DropboxDeleteBatchDataProvider"),
+            "move-batch": Class::forName("DropboxDataProvider::DropboxMoveBatchDataProvider"),
+            "copy-batch": Class::forName("DropboxDataProvider::DropboxCopyBatchDataProvider"),
+            "permanently-delete": Class::forName("DropboxDataProvider::DropboxPermanentlyDeleteDataProvider"),
+            "get-thumbnail": Class::forName("DropboxDataProvider::DropboxGetThumbnailDataProvider"),
+            "get-preview": Class::forName("DropboxDataProvider::DropboxGetPreviewDataProvider"),
+            "add-file-member": Class::forName("DropboxDataProvider::DropboxAddFileMemberDataProvider"),
+            "list-file-members": Class::forName("DropboxDataProvider::DropboxListFileMembersDataProvider"),
             "events": Class::forName("DropboxDataProvider::DropboxEventsDataProvider"),
         };
     }

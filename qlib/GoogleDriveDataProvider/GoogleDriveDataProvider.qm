@@ -357,6 +357,181 @@ module GoogleDriveDataProvider {
             ),
         });
 
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/untrash",
+            "action": "untrash",
+            "display_name": "Restore from Trash",
+            "short_desc": "Restore a file from the trash",
+            "desc": "Restores a file from the trash, putting it back where it was.\n\n"
+                "`delete-file` moves a file to the trash by default precisely so that it can be recovered; "
+                "this is what recovers it.  A file removed with `permanently_delete` cannot be restored.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveUntrashRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/create-shortcut",
+            "action": "create-shortcut",
+            "display_name": "Create Shortcut",
+            "short_desc": "Create a shortcut pointing at a file or folder",
+            "desc": "Creates a shortcut pointing at a file or folder.\n\n"
+                "A shortcut lets one file appear in several places without being copied, so the content stays "
+                "in one place and every route to it stays current.  Deleting a shortcut does not affect the "
+                "file it points at.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveFileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateShortcutRequestDataType::Fields{"name", "target_id"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveCreateShortcutRequestDataType::Fields - ("name", "target_id")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-shared-drives",
+            "action": "list-shared-drives",
+            "display_name": "List Shared Drives",
+            "short_desc": "List the shared drives the account can reach",
+            "desc": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\n"
+                "A business account keeps most of its content on shared drives rather than in any one "
+                "person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` "
+                "as `drive_id` to `list-files` to work within it.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveListSharedDrivesResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListSharedDrivesRequestDataType::Fields
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/get-storage-quota",
+            "action": "get-storage-quota",
+            "display_name": "Get Storage Quota",
+            "short_desc": "Get how much of the account's storage is in use",
+            "desc": "Returns how much of the account's storage is in use, and how much is available.\n\n"
+                "Useful before a large upload: Drive rejects one that would exceed the quota, and reports it "
+                "as an ordinary write failure rather than as a capacity problem.  Files in the trash still "
+                "count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
+            "action_code": DPAT_API,
+            "groups": ("Organization",),
+            "output_type": GoogleDriveStorageQuotaDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-permissions",
+            "action": "list-permissions",
+            "display_name": "List Permissions",
+            "short_desc": "List who has access to a file",
+            "desc": "Lists the permissions granted on a file: who has access, and at what level.\n\n"
+                "Each permission carries the `id` needed to withdraw it with `remove-permission`.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": GoogleDriveListPermissionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListPermissionsRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/remove-permission",
+            "action": "remove-permission",
+            "display_name": "Remove Permission",
+            "short_desc": "Withdraw someone's access to a file",
+            "desc": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\n"
+                "Use `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is "
+                "how a file that was made public is made private again.",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "output_type": GoogleDriveSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRemovePermissionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/list-revisions",
+            "action": "list-revisions",
+            "display_name": "List File Revisions",
+            "short_desc": "List the earlier versions Drive holds for a file",
+            "desc": "Lists the revisions Drive holds for a file.\n\n"
+                "Drive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  "
+                "**Drive removes older revisions on its own** unless they are marked `keep_forever`, so a "
+                "revision listed here is not guaranteed to remain indefinitely.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveListRevisionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveListRevisionsRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/get-revision",
+            "action": "get-revision",
+            "display_name": "Get File Revision",
+            "short_desc": "Get the details of one revision of a file",
+            "desc": "Returns the details of one revision of a file: when it was made, how large it is, and "
+                "whether Drive will keep it indefinitely.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveRevisionDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRevisionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoogleDriveDataProvider::AppName,
+            "path": "/delete-revision",
+            "action": "delete-revision",
+            "display_name": "Delete File Revision",
+            "short_desc": "Remove one earlier version of a file",
+            "desc": "Removes one revision of a file, freeing the storage it occupied.\n\n"
+                "**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to "
+                "remove the only remaining revision.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "output_type": GoogleDriveSuccessResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDriveRevisionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: both watches read Drive's own change feed rather than polling a listing, so the cost does not

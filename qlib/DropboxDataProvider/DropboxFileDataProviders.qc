@@ -112,10 +112,14 @@ public class DropboxSearchDataProvider inherits DropboxDataProviderBase {
             opts.file_extensions = map trim($1), req.file_extensions.split(","), trim($1).val();
         }
 
-        hash<auto> body = doRpc("/2/files/search_v2", {
-            "query": req.query,
-            "options": opts,
-        });
+        # a cursor already carries the query and every option it was created with, so continuing a search
+        # sends the cursor alone; the action returned a cursor with no way to use it before this
+        hash<auto> body = req.cursor.val()
+            ? doRpc("/2/files/search_v2/continue", {"cursor": req.cursor})
+            : doRpc("/2/files/search_v2", {
+                "query": req.query,
+                "options": opts,
+            });
         list<auto> matches = ();
         foreach hash<auto> m in (body.matches) {
             # a match wraps the entry twice: once as the match's metadata union, once as the entry itself

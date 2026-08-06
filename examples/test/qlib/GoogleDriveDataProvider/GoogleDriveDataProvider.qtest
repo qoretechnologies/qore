@@ -83,6 +83,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("live change feed", \liveChangeFeedTest());
         addTestCase("live file lifecycle", \liveFileLifecycleTest());
         addTestCase("live folder operations", \liveFolderOperationsTest());
+        addTestCase("live extended operations", \liveExtendedOperationsTest());
 
         set_return_value(main());
     }
@@ -601,6 +602,100 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         hash<auto> downloaded = prov.getChildProvider("download-file").doRequest({"file_id": created.id});
         assertEq(content, parse_base64_string(downloaded.content).toString(),
             "the content read back matches the content written");
+    }
+
+    #! Round-trips the sharing, shortcut, revision, and trash operations against the live service
+    /** Sharing used to be add-only -- access could be granted but neither seen nor withdrawn -- and there was
+        no way to recover a trashed file or to reach an earlier revision.  Each of these is only meaningfully
+        tested against the real service, since what matters is that Drive accepts the request and that the
+        change is actually there afterwards.
+
+        This writes to the account under test; exclude it with `--exclude="live extended operations"`.
+    */
+    liveExtendedOperationsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+        string stamp = sprintf("%d", now_us().durationMicroseconds());
+
+        hash<auto> file = prov.getChildProviderEx("create-text-file").doRequest({
+            "name": "qore-ext-" + stamp + ".txt",
+            "content": "first version",
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": file.id,
+                "permanently_delete": True,
+            });
+        }
+
+        # --- sharing: grant, see, withdraw ---
+        hash<auto> perm = prov.getChildProviderEx("share-file").doRequest({
+            "file_id": file.id,
+            "role": "reader",
+            "type": "anyone",
+        });
+        assertTrue(perm.id.val(), "the permission was created");
+
+        hash<auto> perms = prov.getChildProviderEx("list-permissions").doRequest({"file_id": file.id});
+        hash<string, bool> ids = map {$1.id: True}, perms.permissions;
+        assertTrue(ids{perm.id}, "the granted permission is listed");
+        assertTrue(perms.permissions.size() >= 2, "the owner's permission is listed alongside it");
+
+        prov.getChildProviderEx("remove-permission").doRequest({
+            "file_id": file.id,
+            "permission_id": perm.id,
+        });
+        # ... and the withdrawal must be real, not just accepted
+        perms = prov.getChildProviderEx("list-permissions").doRequest({"file_id": file.id});
+        ids = map {$1.id: True}, perms.permissions;
+        assertEq(NOTHING, ids{perm.id}, "the withdrawn permission is gone");
+
+        # --- revisions: an earlier version survives a replace ---
+        prov.getChildProviderEx("replace-file").doRequest({
+            "file_id": file.id,
+            "file": {
+                "name": "qore-ext-" + stamp + ".txt",
+                "content": make_base64_string(binary("second version")),
+                "mime_type": "text/plain",
+            },
+        });
+        hash<auto> revs = prov.getChildProviderEx("list-revisions").doRequest({"file_id": file.id});
+        assertTrue(revs.revisions.size() >= 2, sprintf("replacing the content kept the earlier revision "
+            "(%d revisions)", revs.revisions.size()));
+        hash<auto> rev = prov.getChildProviderEx("get-revision").doRequest({
+            "file_id": file.id,
+            "revision_id": revs.revisions[0].id,
+        });
+        assertEq(revs.revisions[0].id, rev.id, "the revision can be addressed individually");
+        assertTrue(exists rev.modified, "the revision carries a modification time");
+
+        # --- shortcut: one file reachable from another place ---
+        hash<auto> shortcut = prov.getChildProviderEx("create-shortcut").doRequest({
+            "name": "qore-shortcut-" + stamp,
+            "target_id": file.id,
+        });
+        on_exit {
+            prov.getChildProviderEx("delete-file").doRequest({
+                "file_id": shortcut.id,
+                "permanently_delete": True,
+            });
+        }
+        assertEq(True, shortcut.is_shortcut, "the item is a shortcut");
+        assertEq(file.id, shortcut.shortcut_target_id, "the shortcut points at the file");
+
+        # --- trash and restore ---
+        prov.getChildProviderEx("delete-file").doRequest({"file_id": file.id});
+        hash<auto> trashed = prov.getChildProviderEx("get-file").doRequest({"file_id": file.id});
+        assertEq(True, trashed.trashed, "the file is in the trash");
+
+        hash<auto> restored = prov.getChildProviderEx("untrash").doRequest({"file_id": file.id});
+        assertEq(False, restored.trashed, "untrash reported the file as restored");
+        # ... and again, the change must be what the service actually holds
+        assertEq(False, prov.getChildProviderEx("get-file").doRequest({"file_id": file.id}).trashed,
+            "the file is out of the trash");
     }
 
     #! Exercises the folder-scoped operations, which a type-narrowing defect had made unusable

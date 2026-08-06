@@ -173,6 +173,15 @@ public class AwsRestClientBase {
 
         #! Fixed termination string
         const AwsTermination = "aws4_request";
+
+        #! The payload hash placeholder used when signing a request whose body is not known
+        /** A presigned URL is made before the body exists -- and for a download there is no body at all -- so
+            the payload cannot be hashed into the signature
+        */
+        const UnsignedPayload = "UNSIGNED-PAYLOAD";
+
+        #! The longest lifetime AWS accepts for a presigned URL, in seconds (7 days)
+        const MaxPresignedUrlSeconds = 604800;
     }
 
     static private string trimall(string str) {
@@ -880,6 +889,119 @@ AwsRestClient rest({
     */
     string getAwsService() {
         return aws_service;
+    }
+
+    #! Returns a presigned URL carrying its own AWS Signature V4 authorization in the query string
+    /** A presigned URL grants whoever holds it the one operation it was signed for, until it expires, with no
+        AWS credentials of their own.  That is what makes it useful -- an object can be handed to a system that
+        cannot authenticate to AWS at all -- and also what makes it sensitive: **the URL is the credential**,
+        so it should be given the shortest lifetime that serves the purpose and never logged.
+
+        This is query-string signing, which differs from the header signing every other request here uses:
+
+        - the authorization travels as \c X-Amz-* query parameters rather than in an \c Authorization header,
+          because the recipient sends no headers of ours;
+        - only the \c host header is signed, for the same reason;
+        - the payload is signed as \c UNSIGNED-PAYLOAD, since the body is not known when the URL is made.
+
+        @param http_method the HTTP method the URL is signed for; a URL signed for one method does not work
+        with another
+        @param path the URI path, which may carry its own query arguments
+        @param expires how long the URL remains valid; AWS rejects anything over 7 days
+        @param query additional query arguments to sign into the URL
+
+        @return the presigned URL
+
+        @throw AWS-PRESIGN-ERROR the expiry is not a positive duration, or exceeds the AWS maximum of 7 days
+
+        @note The URL is only valid while the credentials that signed it are; one signed with temporary
+        session credentials stops working when they expire, whatever lifetime was asked for here.
+
+        @since AwsRestClient 1.3
+    */
+    string getPresignedUrl(string http_method, string path, date expires, *hash<auto> query) {
+        int secs = expires.durationSeconds();
+        if (secs <= 0) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL must be given a positive lifetime; got %y",
+                expires);
+        }
+        if (secs > MaxPresignedUrlSeconds) {
+            throw "AWS-PRESIGN-ERROR", sprintf("a presigned URL cannot be valid for longer than %d seconds "
+                "(7 days), which is the AWS maximum; got %y", MaxPresignedUrlSeconds, expires);
+        }
+
+        date gmtime = Qore::gmtime();
+        string gmdate = gmtime.format("YYYYMMDD");
+        string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
+        string scope = sprintf("%s/%s", gmdate, credential_scope_suffix);
+
+        # arguments already on the path are signed along with the ones added here; a URL whose signature did
+        # not cover them would be rejected the moment the recipient used it
+        hash<UriQueryInfo> uri_info = parse_uri_query(path);
+        hash<auto> params = (uri_info.params ?? {}) + (query ?? {}) + {
+            "X-Amz-Algorithm": AwsSignatureAlgorithm,
+            "X-Amz-Credential": sprintf("%s/%s", aws_keyid, scope),
+            "X-Amz-Date": aws_date,
+            "X-Amz-Expires": secs,
+            "X-Amz-SignedHeaders": "host",
+        };
+        # temporary credentials carry a session token, and it has to be presented with them
+        if (aws_token.val()) {
+            params."X-Amz-Security-Token" = aws_token;
+        }
+
+        string canonical_query = AwsRestClient::getCanonicalQueryString(params);
+
+        string uri = uri_info.method ?? "/";
+        if (!aws_s3) {
+            uri = normalize_dir_unix(uri, "/");
+        }
+        uri = encode_url(uri, False);
+        # every service other than S3 encodes the canonical URI twice
+        if (!aws_s3) {
+            uri = encode_url(uri, False);
+        }
+
+        # the canonical request, with only "host" signed and the payload left unsigned
+        string cstr = http_method + "\n"
+            + uri + "\n"
+            + canonical_query + "\n"
+            + "host:" + getHostHeaderValue() + "\n\n"
+            + "host\n"
+            + UnsignedPayload;
+
+        string req_string = AwsSignatureAlgorithm + "\n"
+            + aws_date + "\n"
+            + scope + "\n"
+            + digest(QoreDigest, cstr).toHex();
+
+        binary signing_key = hmac(QoreDigest, gmdate, "AWS4" + aws_secret);
+        signing_key = hmac(QoreDigest, aws_region, signing_key);
+        signing_key = hmac(QoreDigest, aws_service, signing_key);
+        signing_key = hmac(QoreDigest, AwsTermination, signing_key);
+        string sig = hmac(QoreDigest, req_string, signing_key).toHex();
+
+        return sprintf("%s%s?%s&X-Amz-Signature=%s", getSafeURL(), uri_info.method ?? "/", canonical_query,
+            sig);
+    }
+
+    #! Returns the canonical query string for AWS Signature V4
+    /** Parameters are sorted by name and each name and value URI-encoded; AWS rebuilds the same string when it
+        verifies the signature, so any difference in order or encoding is a signature mismatch rather than a
+        readable error.
+
+        @param params the query parameters
+
+        @return the canonical query string
+
+        @since AwsRestClient 1.3
+    */
+    static string getCanonicalQueryString(hash<auto> params) {
+        return (foldl $1 + "&" + $2, (
+            map sprintf("%s=%s", encode_url($1, True),
+                params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
+            sort(keys params)
+        )) ?? "";
     }
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,

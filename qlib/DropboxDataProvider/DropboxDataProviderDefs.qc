@@ -168,4 +168,103 @@ public const SharedLinkVisibilityValues = (
             "the password must be set in `link_password`",
     },
 );
+
+#! The kinds of asynchronous job Dropbox runs, each with its own status endpoint
+public const AsyncJobTypeValues = (
+    <AllowedValueInfo>{
+        "value": "save_url",
+        "display_name": "Save URL",
+        "short_desc": "A file being fetched from a URL",
+        "desc": "A file being fetched from a URL by `save-url`",
+    },
+    <AllowedValueInfo>{
+        "value": "delete_batch",
+        "display_name": "Batch Delete",
+        "short_desc": "A batch delete",
+        "desc": "A batch delete started by `delete-batch`",
+    },
+    <AllowedValueInfo>{
+        "value": "move_batch",
+        "display_name": "Batch Move",
+        "short_desc": "A batch move",
+        "desc": "A batch move started by `move-batch`",
+    },
+    <AllowedValueInfo>{
+        "value": "copy_batch",
+        "display_name": "Batch Copy",
+        "short_desc": "A batch copy",
+        "desc": "A batch copy started by `copy-batch`",
+    },
+);
+
+#! The status endpoint for each kind of asynchronous job
+/** Dropbox has no single job-status endpoint: each operation has its own, so the kind of job has to be known
+    in order to check it
+*/
+public const AsyncJobStatusPaths = {
+    "save_url": "/2/files/save_url/check_job_status",
+    "delete_batch": "/2/files/delete_batch/check",
+    "move_batch": "/2/files/move_batch/check_v2",
+    "copy_batch": "/2/files/copy_batch/check_v2",
+};
+
+#! Image formats accepted for a thumbnail
+public const ThumbnailFormatValues = (
+    <AllowedValueInfo>{
+        "value": "jpeg",
+        "display_name": "JPEG",
+        "short_desc": "JPEG, smaller but lossy",
+        "desc": "JPEG; smaller files, but lossy and with no transparency",
+    },
+    <AllowedValueInfo>{
+        "value": "png",
+        "display_name": "PNG",
+        "short_desc": "PNG, larger but lossless",
+        "desc": "PNG; larger files, but lossless and with transparency",
+    },
+);
+
+#! Thumbnail sizes accepted by Dropbox
+public const ThumbnailSizeValues = (
+    <AllowedValueInfo>{"value": "w32h32", "display_name": "32 x 32", "short_desc": "32 by 32 pixels",
+        "desc": "32 by 32 pixels"},
+    <AllowedValueInfo>{"value": "w64h64", "display_name": "64 x 64", "short_desc": "64 by 64 pixels",
+        "desc": "64 by 64 pixels"},
+    <AllowedValueInfo>{"value": "w128h128", "display_name": "128 x 128", "short_desc": "128 by 128 pixels",
+        "desc": "128 by 128 pixels"},
+    <AllowedValueInfo>{"value": "w256h256", "display_name": "256 x 256", "short_desc": "256 by 256 pixels",
+        "desc": "256 by 256 pixels"},
+    <AllowedValueInfo>{"value": "w480h320", "display_name": "480 x 320", "short_desc": "480 by 320 pixels",
+        "desc": "480 by 320 pixels"},
+    <AllowedValueInfo>{"value": "w640h480", "display_name": "640 x 480", "short_desc": "640 by 480 pixels",
+        "desc": "640 by 480 pixels"},
+    <AllowedValueInfo>{"value": "w960h640", "display_name": "960 x 640", "short_desc": "960 by 640 pixels",
+        "desc": "960 by 640 pixels"},
+    <AllowedValueInfo>{"value": "w1024h768", "display_name": "1024 x 768", "short_desc": "1024 by 768 pixels",
+        "desc": "1024 by 768 pixels"},
+    <AllowedValueInfo>{"value": "w2048h1536", "display_name": "2048 x 1536",
+        "short_desc": "2048 by 1536 pixels", "desc": "2048 by 1536 pixels"},
+);
+
+#! Access levels accepted when sharing a file with someone
+public const FileMemberAccessValues = (
+    <AllowedValueInfo>{
+        "value": "viewer",
+        "display_name": "Viewer",
+        "short_desc": "Can view and comment on the file",
+        "desc": "Can view and comment on the file but not change it",
+    },
+    <AllowedValueInfo>{
+        "value": "editor",
+        "display_name": "Editor",
+        "short_desc": "Can view and change the file",
+        "desc": "Can view and change the file",
+    },
+    <AllowedValueInfo>{
+        "value": "owner",
+        "display_name": "Owner",
+        "short_desc": "Takes ownership of the file",
+        "desc": "Takes ownership of the file; **the current owner loses it**",
+    },
+);
 }

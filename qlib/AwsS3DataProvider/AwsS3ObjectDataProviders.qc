@@ -286,10 +286,28 @@ public class AwsS3UploadFileDataProvider inherits AwsS3DataProviderBase {
         if (req.storage_class.val()) {
             hdr."x-amz-storage-class" = req.storage_class;
         }
+        AwsS3UploadFileDataProvider::addEncryptionHeaders(req, \hdr);
         foreach hash<auto> i in (req.metadata.pairIterator()) {
             hdr{"x-amz-meta-" + i.key} = i.value.toString();
         }
         return hdr;
+    }
+
+    #! Adds the server-side encryption headers for a write request
+    /** @param req the request
+        @param hdr a reference to the request headers
+
+        @note A KMS key is only sent alongside a KMS scheme; sending one with \c AES256 is rejected by Amazon
+        S3 rather than ignored
+    */
+    static addEncryptionHeaders(hash<auto> req, reference<hash<auto>> hdr) {
+        if (!req.server_side_encryption.val()) {
+            return;
+        }
+        hdr."x-amz-server-side-encryption" = req.server_side_encryption;
+        if (req.kms_key_id.val() && req.server_side_encryption =~ /^aws:kms/) {
+            hdr."x-amz-server-side-encryption-aws-kms-key-id" = req.kms_key_id;
+        }
     }
 }
 
@@ -326,6 +344,7 @@ public class AwsS3CreateTextFileDataProvider inherits AwsS3DataProviderBase {
         if (req.storage_class.val()) {
             hdr."x-amz-storage-class" = req.storage_class;
         }
+        AwsS3UploadFileDataProvider::addEncryptionHeaders(req, \hdr);
         foreach hash<auto> i in (req.metadata.pairIterator()) {
             hdr{"x-amz-meta-" + i.key} = i.value.toString();
         }

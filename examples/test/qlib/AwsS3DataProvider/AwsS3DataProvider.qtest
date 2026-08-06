@@ -134,7 +134,11 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("reference data", \referenceDataTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("watch cycle", \watchCycleTest());
+        addTestCase("presigned url", \presignedUrlTest());
+        addTestCase("batch operations", \batchOperationsTest());
+        addTestCase("encryption options", \encryptionOptionsTest());
         addTestCase("live connection", \liveConnectionTest());
+        addTestCase("live presigned url", \livePresignedUrlTest());
 
         set_return_value(main());
     }
@@ -540,6 +544,225 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq("only.txt", sobs.events[0].data.key);
     }
 
+    #! A presigned URL is signed rather than requested, so its correctness is entirely in its construction
+    /** Nothing is sent to Amazon S3 when one is made, so a mistake here produces a URL that looks perfectly
+        plausible and is rejected only when someone finally uses it.
+    */
+    presignedUrlTest() {
+        FakeAwsRestClient rest();
+        AwsS3PresignedUrlDataProvider dp({"restclient": rest});
+
+        hash<auto> r = dp.doRequest({
+            "bucket": "b",
+            "object_key": "dir/file name.txt",
+            "method": "GET",
+            "expiration_seconds": 900,
+        });
+        assertEq("GET", r.method);
+        assertEq("b", r.bucket);
+        assertEq("dir/file name.txt", r.object_key);
+        # the caller must be told when the URL stops working; a URL with no stated expiry is a leak waiting
+        assertTrue(r.expires > now_us(), "the expiry is in the future");
+        assertTrue(r.expires <= now_us() + 900s, "the expiry matches the lifetime asked for");
+
+        string url = r.url;
+        # every parameter AWS requires must be present, or the URL is rejected as malformed rather than as
+        # unauthorized -- which is a much more confusing failure
+        foreach string param in (("X-Amz-Algorithm=AWS4-HMAC-SHA256", "X-Amz-Credential=", "X-Amz-Date=",
+                "X-Amz-Expires=900", "X-Amz-SignedHeaders=host", "X-Amz-Signature=")) {
+            assertRegex(param, url, sprintf("the URL carries %y", param));
+        }
+        # the credential scope must be encoded: AWS rebuilds the canonical query string to verify the
+        # signature, and an unencoded "/" there is a signature mismatch
+        assertRegex("X-Amz-Credential=[^&]*%2F", url, "the credential scope separators are encoded");
+        assertRegex("/b/dir/file%20name\\.txt\\?", url, "the key is URI-encoded in the path");
+        # the signature is a SHA-256 HMAC rendered as hex
+        assertRegex("X-Amz-Signature=[0-9a-f]{64}(&|$)", url, "the signature is a hex SHA-256 HMAC");
+
+        # a URL is signed for exactly one operation, so a different method must produce a different signature
+        string put_url = dp.doRequest({
+            "bucket": "b",
+            "object_key": "dir/file name.txt",
+            "method": "PUT",
+            "expiration_seconds": 900,
+        }).url;
+        assertNeq(AwsS3DataProviderTest::getSignature(url), AwsS3DataProviderTest::getSignature(put_url),
+            "a URL signed for PUT differs from one signed for GET");
+
+        # ... and so must a different key, a different expiry, and different response overrides
+        assertNeq(AwsS3DataProviderTest::getSignature(url),
+            AwsS3DataProviderTest::getSignature(dp.doRequest({
+                "bucket": "b", "object_key": "other.txt", "expiration_seconds": 900,
+            }).url), "a URL for a different key differs");
+        assertNeq(AwsS3DataProviderTest::getSignature(url),
+            AwsS3DataProviderTest::getSignature(dp.doRequest({
+                "bucket": "b", "object_key": "dir/file name.txt", "expiration_seconds": 60,
+            }).url), "a URL with a different lifetime differs");
+
+        # response overrides and a version ID are signed into the URL, not appended to it afterwards
+        string over = dp.doRequest({
+            "bucket": "b",
+            "object_key": "f.txt",
+            "version_id": "v1",
+            "response_content_disposition": "attachment; filename=\"r.pdf\"",
+        }).url;
+        assertRegex("versionId=v1", over, "the version ID is in the URL");
+        assertRegex("response-content-disposition=", over, "the content disposition is in the URL");
+
+        # AWS refuses a lifetime beyond 7 days, so it is reported here rather than by a rejected URL later
+        assertThrows("AWS-PRESIGN-ERROR", "7 days", sub () {
+            dp.doRequest({"bucket": "b", "object_key": "f.txt", "expiration_seconds": 604801});
+        });
+        assertThrows("AWS-PRESIGN-ERROR", "positive", sub () {
+            dp.doRequest({"bucket": "b", "object_key": "f.txt", "expiration_seconds": 0});
+        });
+
+        # no request is made: a presigned URL for an object that does not exist yet is exactly what an upload
+        # URL is
+        assertEq((), rest.paths, "creating a presigned URL contacts nothing");
+    }
+
+    #! Returns the signature from a presigned URL
+    static string getSignature(string url) {
+        return (url =~ x/X-Amz-Signature=([0-9a-f]+)/)[0];
+    }
+
+    #! The batch operations send XML documents, where an unescaped value is a malformed or altered request
+    batchOperationsTest() {
+        # an object key may contain "&" or "<", both ordinary characters in a key; unescaped, the first
+        # produces a request that means something else and the second one the server rejects
+        assertEq("a&amp;b&lt;c&gt;d", AwsS3ExtendedXml::escape("a&b<c>d"));
+        assertEq("&quot;q&quot;&apos;", AwsS3ExtendedXml::escape("\"q\"'"));
+
+        string body = AwsS3DeleteObjectsDataProvider::getDeleteBody(("a&b.txt", "c.txt"), False);
+        assertRegex("<Object><Key>a&amp;b\\.txt</Key></Object>", body, "keys are escaped in the document");
+        assertRegex("<Object><Key>c\\.txt</Key></Object>", body);
+        assertEq(False, body =~ /<Quiet>/, "quiet mode is omitted when not asked for");
+        assertRegex("<Quiet>true</Quiet>", AwsS3DeleteObjectsDataProvider::getDeleteBody(("a",), True));
+
+        string tags = AwsS3PutObjectTaggingDataProvider::getTaggingBody({"p<": "v&"});
+        assertRegex("<Tag><Key>p&lt;</Key><Value>v&amp;</Value></Tag>", tags,
+            "tag names and values are both escaped");
+
+        FakeAwsRestClient rest();
+        AwsS3DeleteObjectsDataProvider dp({"restclient": rest});
+        # AWS caps a batch at 1000 keys; exceeding it is reported here rather than as an opaque API error
+        assertThrows("S3-DELETE-ERROR", "1000", sub () {
+            dp.doRequest({
+                "bucket": "b",
+                "object_keys": (map sprintf("k%d", $1), xrange(0, MaxDeleteKeys + 1)),
+            });
+        });
+        # ... and exactly the cap is accepted, since an off-by-one here would reject a legal batch
+        rest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><DeleteResult></DeleteResult>',);
+        hash<auto> full = dp.doRequest({
+            "bucket": "b",
+            "object_keys": (map sprintf("k%d", $1), xrange(0, MaxDeleteKeys)),
+        });
+        assertEq(0, full.error_count, "a batch of exactly the maximum size is accepted");
+        rest.served = 0;
+        assertThrows("S3-DELETE-ERROR", "no object keys", sub () {
+            dp.doRequest({"bucket": "b", "object_keys": ()});
+        });
+
+        # a batch delete can succeed as a request while refusing individual keys, so the failures must be
+        # reported rather than the response being assumed empty
+        rest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><DeleteResult>'
+            '<Deleted><Key>gone.txt</Key></Deleted>'
+            '<Error><Key>locked.txt</Key><Code>AccessDenied</Code><Message>denied</Message></Error>'
+            '</DeleteResult>',);
+        hash<auto> r = dp.doRequest({"bucket": "b", "object_keys": ("gone.txt", "locked.txt")});
+        assertEq(1, r.deleted_count);
+        assertEq(1, r.error_count);
+        assertEq("gone.txt", r.deleted[0].key);
+        assertEq("locked.txt", r.errors[0].key);
+        assertEq("AccessDenied", r.errors[0].code);
+        assertRegex("delete", rest.paths[0], "the batch delete addresses the bucket's delete sub-resource");
+
+        # tags come back as a hash rather than as the API's TagSet structure, so a caller can map them
+        FakeAwsRestClient trest();
+        trest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><Tagging><TagSet>'
+            '<Tag><Key>project</Key><Value>invoicing</Value></Tag>'
+            '<Tag><Key>retention</Key><Value>7y</Value></Tag></TagSet></Tagging>',);
+        hash<auto> t = (new AwsS3GetObjectTaggingDataProvider({"restclient": trest})).doRequest({
+            "bucket": "b",
+            "object_key": "k",
+        });
+        assertEq({"project": "invoicing", "retention": "7y"}, t.tags);
+
+        # a single tag arrives as a hash rather than a list from the XML parser, and must not be special-cased
+        trest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><Tagging><TagSet>'
+            '<Tag><Key>only</Key><Value>one</Value></Tag></TagSet></Tagging>',);
+        trest.served = 0;
+        t = (new AwsS3GetObjectTaggingDataProvider({"restclient": trest})).doRequest({
+            "bucket": "b",
+            "object_key": "k",
+        });
+        assertEq({"only": "one"}, t.tags, "a single tag is handled like any other");
+
+        # versions and delete markers are reported separately: a delete marker is what hides an object, and
+        # removing it is what brings the object back
+        FakeAwsRestClient vrest();
+        vrest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><ListVersionsResult>'
+            '<IsTruncated>true</IsTruncated><NextKeyMarker>k2</NextKeyMarker>'
+            '<NextVersionIdMarker>v9</NextVersionIdMarker>'
+            '<Version><Key>k</Key><VersionId>v2</VersionId><IsLatest>true</IsLatest><Size>10</Size>'
+            '<LastModified>2026-06-01T00:00:00.000Z</LastModified><ETag>&quot;e&quot;</ETag></Version>'
+            '<DeleteMarker><Key>d</Key><VersionId>v3</VersionId><IsLatest>true</IsLatest>'
+            '<LastModified>2026-06-02T00:00:00.000Z</LastModified></DeleteMarker>'
+            '</ListVersionsResult>',);
+        hash<auto> v = (new AwsS3ListObjectVersionsDataProvider({"restclient": vrest})).doRequest({
+            "bucket": "b",
+        });
+        assertEq(1, v.versions.size());
+        assertEq("v2", v.versions[0].version_id);
+        assertEq(True, v.versions[0].is_latest);
+        assertEq("e", v.versions[0].etag, "the ETag quotes are stripped");
+        assertEq(1, v.delete_markers.size());
+        assertEq("d", v.delete_markers[0].key);
+        assertEq(True, v.truncated);
+        assertEq("k2", v.next_key_marker);
+        assertEq("v9", v.next_version_id_marker);
+        assertRegex("versions", vrest.paths[0], "the listing addresses the versions sub-resource");
+    }
+
+    #! Server-side encryption headers must be sent, and a KMS key only with a KMS scheme
+    encryptionOptionsTest() {
+        hash<auto> hdr = {};
+        AwsS3UploadFileDataProvider::addEncryptionHeaders({}, \hdr);
+        assertEq({}, hdr, "nothing is sent when no encryption was asked for");
+
+        hdr = {};
+        AwsS3UploadFileDataProvider::addEncryptionHeaders({"server_side_encryption": "AES256"}, \hdr);
+        assertEq("AES256", hdr."x-amz-server-side-encryption");
+
+        # a KMS key sent alongside AES256 is rejected by Amazon S3 rather than ignored, so it must not be sent
+        hdr = {};
+        AwsS3UploadFileDataProvider::addEncryptionHeaders({
+            "server_side_encryption": "AES256",
+            "kms_key_id": "alias/k",
+        }, \hdr);
+        assertEq(NOTHING, hdr."x-amz-server-side-encryption-aws-kms-key-id",
+            "a KMS key is not sent with S3-managed encryption");
+
+        hdr = {};
+        AwsS3UploadFileDataProvider::addEncryptionHeaders({
+            "server_side_encryption": "aws:kms",
+            "kms_key_id": "alias/k",
+        }, \hdr);
+        assertEq("aws:kms", hdr."x-amz-server-side-encryption");
+        assertEq("alias/k", hdr."x-amz-server-side-encryption-aws-kms-key-id");
+
+        # the options must be reachable from the actions that write objects, or they cannot be used at all
+        foreach string action in (("upload-file", "create-text-file")) {
+            hash<DataProviderActionInfo> a = DataProviderActionCatalog::getAppActionEx(App, action);
+            assertTrue(exists a.options.server_side_encryption,
+                sprintf("%y offers server-side encryption", action));
+            assertTrue(a.options.server_side_encryption.allowed_values.size() > 0,
+                sprintf("%y declares the encryption schemes as allowed values", action));
+        }
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
@@ -558,6 +781,76 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                 conn.getType());
         }
         return conn;
+    }
+
+    #! Proves a presigned URL against the live service, which is the only thing that can confirm the signature
+    /** A signature can only be shown correct by Amazon accepting it: every mistake in query-string signing
+        produces a URL that looks entirely plausible and fails when someone finally uses it.
+
+        @note The request is issued over a plain TLS socket rather than through \c HTTPClient because the
+        latter decodes the percent-escapes in the request target, and the credential scope in a presigned URL
+        contains `%2F` separators that AWS re-encodes when it verifies the signature -- a decoded target is
+        rejected as a malformed credential.  Sending the signed target verbatim is the point of the test.
+    */
+    livePresignedUrlTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) {
+            return;
+        }
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # any object will do; the point is that the URL works without credentials
+        hash<auto> listing = prov.getChildProviderEx("list-objects").doRequest({"max_keys": 1,
+            "bucket": getLiveBucket(prov)});
+        if (!listing.objects) {
+            testSkip("the account's first bucket holds no objects to sign a URL for");
+            return;
+        }
+        string bucket = getLiveBucket(prov);
+        string key = listing.objects[0].key;
+
+        hash<auto> r = prov.getChildProviderEx("presigned-url").doRequest({
+            "bucket": bucket,
+            "object_key": key,
+            "method": "HEAD",
+            "expiration_seconds": 300,
+        });
+        assertRegex("^https://", r.url, "the URL addresses the real endpoint");
+
+        hash<UrlInfo> u = parse_url(r.url);
+        Socket s();
+        s.connectSSL(sprintf("%s:%d", u.host, u.port ?? 443), 30s);
+        on_exit s.close();
+        # no credentials of any kind are sent: the authorization is entirely in the URL
+        s.send(sprintf("HEAD %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", u.path, u.host));
+        string status = s.recv(64, 30s).toString();
+        assertRegex("^HTTP/1\\.[01] 200 ", status,
+            sprintf("Amazon S3 accepted the presigned URL: %y", (status =~ x/^([^\r\n]+)/)[0]));
+
+        # a URL signed for one operation must not work for another, or it grants more than it says
+        hash<auto> get_only = prov.getChildProviderEx("presigned-url").doRequest({
+            "bucket": bucket,
+            "object_key": key,
+            "method": "GET",
+            "expiration_seconds": 300,
+        });
+        hash<UrlInfo> gu = parse_url(get_only.url);
+        Socket s2();
+        s2.connectSSL(sprintf("%s:%d", gu.host, gu.port ?? 443), 30s);
+        on_exit s2.close();
+        s2.send(sprintf("DELETE %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", gu.path, gu.host));
+        string dstatus = s2.recv(64, 30s).toString();
+        assertRegex("^HTTP/1\\.[01] 40[0-9] ", dstatus,
+            sprintf("a URL signed for GET is refused for DELETE: %y", (dstatus =~ x/^([^\r\n]+)/)[0]));
+    }
+
+    #! Returns a bucket from the live account to exercise object operations against
+    private string getLiveBucket(AbstractDataProvider prov) {
+        hash<auto> buckets = prov.getChildProviderEx("list-buckets").doRequest({});
+        if (!buckets.buckets) {
+            throw "TEST-ERROR", "the account owns no buckets to test against";
+        }
+        return buckets.buckets[0].name;
     }
 
     #! Exercises the connection against the live service

@@ -286,6 +286,182 @@ module AwsS3DataProvider {
             ),
         });
 
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/presigned-url",
+            "action": "presigned-url",
+            "display_name": "Create Presigned URL",
+            "short_desc": "Create a temporary URL granting access without AWS credentials",
+            "desc": "Creates a URL carrying its own authorization, so that a system that cannot authenticate "
+                "to AWS can still reach the object.\n\n"
+                "This is how a file is handed to an external party: a customer downloading an invoice, a "
+                "partner collecting an export, or a browser uploading directly to the bucket without the "
+                "content passing through this system at all.\n\n"
+                "**The URL is the credential.**  Anyone holding it can perform the operation it was signed "
+                "for until it expires, so give it the shortest useful lifetime and treat it as a secret.\n\n"
+                "No request is made to Amazon S3, so a URL can be created for an object that does not exist "
+                "yet - which is exactly what an upload URL is for.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3PresignedUrlResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields{"bucket", "object_key", "method"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields{"expiration_seconds",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PresignedUrlRequestDataType::Fields
+                    - ("bucket", "object_key", "method", "expiration_seconds")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/delete-objects",
+            "action": "delete-objects",
+            "display_name": "Delete Objects",
+            "short_desc": "Delete up to 1000 objects in a single call",
+            "desc": "Deletes up to `1000` objects in a single call.\n\n"
+                "Amazon S3 charges per request, so clearing a large prefix this way costs a fraction of one "
+                "delete per key.\n\n"
+                "**A batch delete does not fail as a whole**: individual keys can be refused - by an "
+                "object-lock retention, or by a policy that allows some prefixes and not others - while the "
+                "request itself succeeds.  Check `errors` rather than assuming everything was removed.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3DeleteObjectsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectsRequestDataType::Fields{"bucket", "object_keys"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteObjectsRequestDataType::Fields - ("bucket", "object_keys")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/move-object",
+            "action": "move-object",
+            "display_name": "Move Object",
+            "short_desc": "Move an object within or between buckets",
+            "desc": "Moves an object to a different key, a different bucket, or both.\n\n"
+                "Amazon S3 has no move operation, so this copies the object and then deletes the original.  "
+                "The copy is performed by Amazon S3 itself, so the content is never transferred through this "
+                "system, and **the original is removed only after the copy has been confirmed** - a failure "
+                "part-way through leaves it in place rather than losing it.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3MoveObjectRequestDataType::Fields{"source_bucket", "source_key", "bucket", "object_key"},
+                {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3MoveObjectRequestDataType::Fields
+                    - ("source_bucket", "source_key", "bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/get-object-tagging",
+            "action": "get-object-tagging",
+            "display_name": "Get Object Tags",
+            "short_desc": "Read the tags stored with an object",
+            "desc": "Reads the tags stored with an object.\n\n"
+                "Object tags drive lifecycle rules, access policies, and cost allocation, so they are how a "
+                "bucket is organized without changing any key.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectTaggingResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectTaggingRequestDataType::Fields{"bucket", "object_key"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3GetObjectTaggingRequestDataType::Fields - ("bucket", "object_key")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/put-object-tagging",
+            "action": "put-object-tagging",
+            "display_name": "Set Object Tags",
+            "short_desc": "Replace the tags stored with an object",
+            "desc": "Replaces the tags stored with an object.\n\n"
+                "**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  "
+                "Read the existing tags first if some are to be kept.  Amazon S3 allows at most `10` tags per "
+                "object.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ObjectTaggingResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PutObjectTaggingRequestDataType::Fields{"bucket", "object_key", "tags"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3PutObjectTaggingRequestDataType::Fields - ("bucket", "object_key", "tags")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/list-object-versions",
+            "action": "list-object-versions",
+            "display_name": "List Object Versions",
+            "short_desc": "List every version of the objects in a bucket",
+            "desc": "Lists every version of the objects in a bucket, along with the delete markers.\n\n"
+                "On a bucket with versioning enabled, deleting an object does not remove the data: it adds a "
+                "marker that hides it.  This shows what is actually there, so an earlier version can be "
+                "retrieved by passing its `version_id` to `get-object` or `download-file`, and a deletion can "
+                "be undone by removing its marker with `delete-object`.\n\n"
+                "A listing is paginated; when `truncated` is set, pass `next_key_marker` and "
+                "`next_version_id_marker` back to retrieve the following page.",
+            "action_code": DPAT_API,
+            "groups": ("Objects",),
+            "output_type": AwsS3ListObjectVersionsResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectVersionsRequestDataType::Fields{"bucket",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3ListObjectVersionsRequestDataType::Fields - "bucket"
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AwsS3DataProvider::AppName,
+            "path": "/delete-bucket",
+            "action": "delete-bucket",
+            "display_name": "Delete Bucket",
+            "short_desc": "Delete an empty bucket",
+            "desc": "Deletes a bucket.\n\n"
+                "**The bucket must already be empty**, including every non-current version and delete marker "
+                "if it has versioning enabled; Amazon S3 refuses to delete a bucket that still holds "
+                "anything.  Use `delete-objects` to clear it first.",
+            "action_code": DPAT_API,
+            "groups": ("Buckets",),
+            "output_type": AwsS3BucketResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AwsS3DeleteBucketRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ),
+        });
+
         # --- Event actions ---
 
         # NOTE: Amazon S3 has no push notification a client can subscribe to -- bucket notifications are

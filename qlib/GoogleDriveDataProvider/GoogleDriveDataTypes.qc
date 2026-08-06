@@ -698,4 +698,381 @@ public class GoogleDrivePermissionResponseDataType inherits HashDataType {
 }
 
 public const GoogleDrivePermissionResponseDataType = new GoogleDrivePermissionResponseDataType();
+
+#! Response type describing a shared drive
+public class GoogleDriveSharedDriveDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "id": {
+                "display_name": "Shared Drive ID",
+                "short_desc": "The shared drive ID",
+                "desc": "The identifier of the shared drive; pass it as `drive_id` to work within it",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "name": {
+                "display_name": "Name",
+                "short_desc": "The name of the shared drive",
+                "desc": "The name of the shared drive",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "created": {
+                "display_name": "Created",
+                "short_desc": "When the shared drive was created",
+                "desc": "When the shared drive was created",
+                "type": AbstractDataProviderTypeMap."*date",
+            },
+            "hidden": {
+                "display_name": "Hidden",
+                "short_desc": "The drive is hidden from the user's default view",
+                "desc": "`True` if the shared drive is hidden from the user's default view",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveSharedDriveDataType = new GoogleDriveSharedDriveDataType();
+
+#! Request type for listing shared drives
+public class GoogleDriveListSharedDrivesRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "page_size": {
+                "display_name": "Page Size",
+                "short_desc": "The maximum number of shared drives to return per page",
+                "desc": "The maximum number of shared drives to return per page; the Drive API caps this at "
+                    "`100`",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": MaxDrivePageSize,
+            },
+            "page_token": {
+                "display_name": "Page Token",
+                "short_desc": "The token returned by a previous truncated listing",
+                "desc": "The `next_page_token` value returned by a previous listing",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListSharedDrivesRequestDataType = new GoogleDriveListSharedDrivesRequestDataType();
+
+#! Response type for listing shared drives
+public class GoogleDriveListSharedDrivesResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "drives": {
+                "display_name": "Shared Drives",
+                "short_desc": "The shared drives the user can reach",
+                "desc": "The shared drives the user is a member of",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "next_page_token": {
+                "display_name": "Next Page Token",
+                "short_desc": "The token to pass to retrieve the next page",
+                "desc": "The token to pass in `page_token` to retrieve the next page; absent on the last page",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListSharedDrivesResponseDataType = new GoogleDriveListSharedDrivesResponseDataType();
+
+#! Request type for an action that takes no arguments
+/** A @ref DPAT_API action still has to declare a request type: without one the framework raises
+    \c UNIMPLEMENTED before \c doRequestImpl() is reached, so an argument-less action would appear in the
+    catalog and fail on use.  Having no fields is what keeps it from advertising options it does not accept.
+*/
+public class GoogleDriveEmptyRequestDataType inherits HashDataType {
+    public {
+        const Fields = {};
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveEmptyRequestDataType = new GoogleDriveEmptyRequestDataType();
+
+#! Response type describing the account's storage quota
+public class GoogleDriveStorageQuotaDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "The total storage available in bytes",
+                "desc": "The total storage available to the account in bytes; absent for an account with "
+                    "unlimited storage",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "usage": {
+                "display_name": "Usage",
+                "short_desc": "The total storage in use in bytes",
+                "desc": "The total storage in use across Drive, Gmail, and Google Photos, in bytes",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "usage_in_drive": {
+                "display_name": "Usage in Drive",
+                "short_desc": "The storage used by Drive alone in bytes",
+                "desc": "The storage used by Drive alone, in bytes",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "usage_in_drive_trash": {
+                "display_name": "Usage in Trash",
+                "short_desc": "The storage used by trashed Drive files in bytes",
+                "desc": "The storage used by files in the Drive trash, in bytes.\n\n"
+                    "Trashed files still count against the quota, so this is what emptying the trash would "
+                    "recover",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "used_percent": {
+                "display_name": "Used Percent",
+                "short_desc": "The proportion of the quota in use as a percentage",
+                "desc": "The proportion of the quota in use, as a percentage; absent for an account with "
+                    "unlimited storage",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "user_email": {
+                "display_name": "User Email",
+                "short_desc": "The email address of the account",
+                "desc": "The email address of the account the quota belongs to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "user_display_name": {
+                "display_name": "User Name",
+                "short_desc": "The display name of the account",
+                "desc": "The display name of the account the quota belongs to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveStorageQuotaDataType = new GoogleDriveStorageQuotaDataType();
+
+#! Request type for listing a file's permissions
+public class GoogleDriveListPermissionsRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file whose permissions are to be listed",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListPermissionsRequestDataType = new GoogleDriveListPermissionsRequestDataType();
+
+#! Response type for listing a file's permissions
+public class GoogleDriveListPermissionsResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "permissions": {
+                "display_name": "Permissions",
+                "short_desc": "The permissions granted on the file",
+                "desc": "The permissions granted on the file; each carries the `id` needed to withdraw it "
+                    "with `remove-permission`",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListPermissionsResponseDataType = new GoogleDriveListPermissionsResponseDataType();
+
+#! Request type for withdrawing a permission
+public class GoogleDriveRemovePermissionRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file to withdraw access to",
+            },
+            "permission_id": {
+                "display_name": "Permission ID",
+                "short_desc": "The permission to withdraw",
+                "desc": "The identifier of the permission to withdraw, as returned by `list-permissions` or "
+                    "`share-file`",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "anyoneWithLink",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveRemovePermissionRequestDataType = new GoogleDriveRemovePermissionRequestDataType();
+
+#! Response type reporting that an operation succeeded
+public class GoogleDriveSuccessResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "success": {
+                "display_name": "Success",
+                "short_desc": "The operation succeeded",
+                "desc": "`True` if the operation succeeded; a failure raises an exception rather than "
+                    "returning `False`",
+                "type": AbstractDataProviderTypeMap."bool",
+            },
+            "id": {
+                "display_name": "ID",
+                "short_desc": "The identifier the operation applied to",
+                "desc": "The identifier the operation applied to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveSuccessResponseDataType = new GoogleDriveSuccessResponseDataType();
+
+#! Request type for restoring a file from the trash
+public class GoogleDriveUntrashRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file to restore from the trash",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveUntrashRequestDataType = new GoogleDriveUntrashRequestDataType();
+
+#! Request type for creating a shortcut
+public class GoogleDriveCreateShortcutRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "name": {
+                "display_name": "Name",
+                "short_desc": "The name for the shortcut",
+                "desc": "The name for the shortcut; it need not match the name of the file it points at",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "Latest Report",
+            },
+            "target_id": FileIdField + {
+                "display_name": "Target File ID",
+                "short_desc": "The file or folder the shortcut points at",
+                "desc": "The Drive identifier of the file or folder the shortcut points at",
+            },
+            "folder_id": FolderIdField + {
+                "short_desc": "The folder to create the shortcut in",
+                "desc": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used",
+                "preselected": True,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveCreateShortcutRequestDataType = new GoogleDriveCreateShortcutRequestDataType();
+
+#! Request type for listing a file's revisions
+public class GoogleDriveListRevisionsRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file whose revisions are to be listed",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListRevisionsRequestDataType = new GoogleDriveListRevisionsRequestDataType();
+
+#! Response type describing a file revision
+public class GoogleDriveRevisionDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "id": {
+                "display_name": "Revision ID",
+                "short_desc": "The revision ID",
+                "desc": "The identifier of the revision",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "modified": {
+                "display_name": "Modified",
+                "short_desc": "When the revision was created",
+                "desc": "When the revision was created",
+                "type": AbstractDataProviderTypeMap."*date",
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "The size of the revision in bytes",
+                "desc": "The size of the revision in bytes; absent for Google-native documents",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "mime_type": {
+                "display_name": "MIME Type",
+                "short_desc": "The MIME type of the revision",
+                "desc": "The MIME type of the revision",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "original_filename": {
+                "display_name": "Original Filename",
+                "short_desc": "The name the revision was uploaded under",
+                "desc": "The name the revision was uploaded under",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "keep_forever": {
+                "display_name": "Keep Forever",
+                "short_desc": "The revision is retained indefinitely",
+                "desc": "`True` if the revision is retained indefinitely.\n\n"
+                    "Drive removes older revisions automatically unless they are marked this way, so a "
+                    "revision that is not kept forever may disappear on its own",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveRevisionDataType = new GoogleDriveRevisionDataType();
+
+#! Response type for listing revisions
+public class GoogleDriveListRevisionsResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "revisions": {
+                "display_name": "Revisions",
+                "short_desc": "The revisions of the file",
+                "desc": "The revisions of the file, oldest first",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveListRevisionsResponseDataType = new GoogleDriveListRevisionsResponseDataType();
+
+#! Request type for addressing one revision of a file
+public class GoogleDriveRevisionRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file_id": FileIdField + {
+                "desc": "The Drive identifier of the file the revision belongs to",
+            },
+            "revision_id": {
+                "display_name": "Revision ID",
+                "short_desc": "The revision to address",
+                "desc": "The identifier of the revision, as returned by `list-revisions`",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const GoogleDriveRevisionRequestDataType = new GoogleDriveRevisionRequestDataType();
 }

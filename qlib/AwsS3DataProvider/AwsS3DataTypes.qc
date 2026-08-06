@@ -351,6 +351,24 @@ public class AwsS3UploadFileRequestDataType inherits HashDataType {
                     "`x-amz-meta-<key>` header and is returned when the object is retrieved",
                 "type": AbstractDataProviderTypeMap."*hash",
             },
+            "server_side_encryption": {
+                "display_name": "Server-Side Encryption",
+                "short_desc": "Encrypt the object at rest",
+                "desc": "Encrypt the object at rest with the chosen scheme.\n\n"
+                    "If not set, whatever the bucket's default encryption configuration specifies applies; "
+                    "setting it here overrides that for this object",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": ServerSideEncryptionValues,
+            },
+            "kms_key_id": {
+                "display_name": "KMS Key ID",
+                "short_desc": "The AWS KMS key to encrypt with",
+                "desc": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\n"
+                    "Only used when `server_side_encryption` selects a KMS scheme; if it is left unset the "
+                    "bucket's default KMS key is used",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "alias/my-application-key",
+            },
         };
     }
     constructor() { addQoreFields(Fields); }
@@ -390,6 +408,24 @@ public class AwsS3CreateTextFileRequestDataType inherits HashDataType {
                 "short_desc": "User-defined metadata to store with the object",
                 "desc": "User-defined metadata to store with the object",
                 "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "server_side_encryption": {
+                "display_name": "Server-Side Encryption",
+                "short_desc": "Encrypt the object at rest",
+                "desc": "Encrypt the object at rest with the chosen scheme.\n\n"
+                    "If not set, whatever the bucket's default encryption configuration specifies applies; "
+                    "setting it here overrides that for this object",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": ServerSideEncryptionValues,
+            },
+            "kms_key_id": {
+                "display_name": "KMS Key ID",
+                "short_desc": "The AWS KMS key to encrypt with",
+                "desc": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\n"
+                    "Only used when `server_side_encryption` selects a KMS scheme; if it is left unset the "
+                    "bucket's default KMS key is used",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "alias/my-application-key",
             },
         };
     }
@@ -594,4 +630,383 @@ public class AwsS3ObjectEventDataType inherits HashDataType {
 }
 
 public const AwsS3ObjectEventDataType = new AwsS3ObjectEventDataType();
+
+#! Request type for a presigned URL
+public class AwsS3PresignedUrlRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField,
+            "object_key": ObjectKeyField,
+            "method": {
+                "display_name": "Operation",
+                "short_desc": "The operation the URL grants",
+                "desc": "The operation the URL grants.\n\n"
+                    "A URL is signed for exactly one operation: one signed for a download cannot be used to "
+                    "upload",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": PresignedMethodValues,
+                "default_value": "GET",
+            },
+            "expiration_seconds": {
+                "display_name": "Valid For (seconds)",
+                "short_desc": "How long the URL remains usable, in seconds",
+                "desc": "How long the URL remains usable, in seconds (default `" + DefaultPresignedUrlLifetime
+                    + "`, maximum `604800`, which is 7 days).\n\n"
+                    "**The URL is the credential**: anyone holding it can perform the operation until it "
+                    "expires, so give it the shortest lifetime that serves the purpose",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": DefaultPresignedUrlLifetime,
+                "example_value": 3600,
+            },
+            "version_id": VersionIdField,
+            "response_content_type": {
+                "display_name": "Response Content Type",
+                "short_desc": "The Content-Type the download should be served with",
+                "desc": "The `Content-Type` Amazon S3 should serve the download with, overriding the type "
+                    "stored with the object",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "application/pdf",
+            },
+            "response_content_disposition": {
+                "display_name": "Response Content Disposition",
+                "short_desc": "The Content-Disposition the download should be served with",
+                "desc": "The `Content-Disposition` Amazon S3 should serve the download with; use this to make "
+                    "a browser save the object under a chosen name rather than display it",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "attachment; filename=\"report.pdf\"",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3PresignedUrlRequestDataType = new AwsS3PresignedUrlRequestDataType();
+
+#! Response type for a presigned URL
+public class AwsS3PresignedUrlResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "url": {
+                "display_name": "URL",
+                "short_desc": "The presigned URL",
+                "desc": "The presigned URL.\n\n"
+                    "**Treat this as a credential**: it grants the operation it was signed for to anyone who "
+                    "holds it, until it expires",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "method": {
+                "display_name": "Operation",
+                "short_desc": "The operation the URL grants",
+                "desc": "The HTTP method the URL was signed for; it does not work with any other",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "expires": {
+                "display_name": "Expires",
+                "short_desc": "When the URL stops working",
+                "desc": "When the URL stops working",
+                "type": AbstractDataProviderTypeMap."date",
+            },
+            "bucket": {
+                "display_name": "Bucket",
+                "short_desc": "The bucket the URL addresses",
+                "desc": "The bucket the URL addresses",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "object_key": {
+                "display_name": "Object Key",
+                "short_desc": "The object key the URL addresses",
+                "desc": "The object key the URL addresses",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3PresignedUrlResponseDataType = new AwsS3PresignedUrlResponseDataType();
+
+#! Request type for deleting several objects in one call
+public class AwsS3DeleteObjectsRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField,
+            "object_keys": {
+                "display_name": "Object Keys",
+                "short_desc": "The keys to delete",
+                "desc": "The keys to delete; at most `1000` per call.\n\n"
+                    "Amazon S3 charges per request, so removing many objects this way costs a fraction of one "
+                    "delete per key",
+                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "required": True,
+                "example_value": ("incoming/a.csv", "incoming/b.csv"),
+            },
+            "quiet": {
+                "display_name": "Quiet",
+                "short_desc": "Report only the keys that failed",
+                "desc": "Report only the keys that failed rather than every key processed; useful when "
+                    "deleting a large batch",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+            },
+            "bypass_governance_retention": {
+                "display_name": "Bypass Governance Retention",
+                "short_desc": "Remove objects under a governance-mode retention lock",
+                "desc": "Remove objects that are under a governance-mode object-lock retention.\n\n"
+                    "The credentials must be allowed `s3:BypassGovernanceRetention`; objects under a "
+                    "**compliance**-mode lock cannot be removed by anyone until the lock expires",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "default_value": False,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3DeleteObjectsRequestDataType = new AwsS3DeleteObjectsRequestDataType();
+
+#! Response type for a batch delete
+public class AwsS3DeleteObjectsResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "deleted": {
+                "display_name": "Deleted",
+                "short_desc": "The keys that were deleted",
+                "desc": "The keys that were deleted; empty when `quiet` was set",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "errors": {
+                "display_name": "Errors",
+                "short_desc": "The keys that could not be deleted, with the reason",
+                "desc": "The keys that could not be deleted, each with the Amazon S3 error code and message.\n\n"
+                    "**A batch delete does not fail as a whole**: a request can succeed with some keys "
+                    "removed and others reported here, so this must be inspected rather than assumed empty",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "deleted_count": {
+                "display_name": "Deleted Count",
+                "short_desc": "How many keys were deleted",
+                "desc": "How many keys were deleted",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "error_count": {
+                "display_name": "Error Count",
+                "short_desc": "How many keys could not be deleted",
+                "desc": "How many keys could not be deleted",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3DeleteObjectsResponseDataType = new AwsS3DeleteObjectsResponseDataType();
+
+#! Request type for deleting a bucket
+public class AwsS3DeleteBucketRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField + {
+                "desc": "The name of the bucket to delete; it must already be empty",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3DeleteBucketRequestDataType = new AwsS3DeleteBucketRequestDataType();
+
+#! Request type for moving an object
+public class AwsS3MoveObjectRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "source_bucket": BucketField + {
+                "display_name": "Source Bucket",
+                "short_desc": "The bucket holding the object to move",
+                "desc": "The bucket holding the object to move",
+            },
+            "source_key": ObjectKeyField + {
+                "display_name": "Source Key",
+                "short_desc": "The key of the object to move",
+                "desc": "The key of the object to move",
+            },
+            "bucket": BucketField + {
+                "display_name": "Target Bucket",
+                "short_desc": "The bucket to move the object into",
+                "desc": "The bucket to move the object into; it may be the same as the source bucket",
+            },
+            "object_key": ObjectKeyField + {
+                "display_name": "Target Key",
+                "short_desc": "The key to move the object to",
+                "desc": "The key to move the object to",
+            },
+            "storage_class": {
+                "display_name": "Storage Class",
+                "short_desc": "The storage class for the moved object",
+                "desc": "The storage class to store the moved object under",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": StorageClassValues,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3MoveObjectRequestDataType = new AwsS3MoveObjectRequestDataType();
+
+#! Request type for reading an object's tags
+public class AwsS3GetObjectTaggingRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField,
+            "object_key": ObjectKeyField,
+            "version_id": VersionIdField,
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3GetObjectTaggingRequestDataType = new AwsS3GetObjectTaggingRequestDataType();
+
+#! Request type for replacing an object's tags
+public class AwsS3PutObjectTaggingRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField,
+            "object_key": ObjectKeyField,
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "The tags to store with the object",
+                "desc": "The tags to store with the object, as a hash of name to value.\n\n"
+                    "**This replaces the object's tags entirely** rather than adding to them: a tag not "
+                    "listed here is removed.  Amazon S3 allows at most `10` tags per object",
+                "type": AbstractDataProviderType::get(AutoHashType),
+                "required": True,
+                "example_value": {"project": "invoicing", "retention": "7y"},
+            },
+            "version_id": VersionIdField,
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3PutObjectTaggingRequestDataType = new AwsS3PutObjectTaggingRequestDataType();
+
+#! Response type describing an object's tags
+public class AwsS3ObjectTaggingResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "bucket": {
+                "display_name": "Bucket",
+                "short_desc": "The bucket holding the object",
+                "desc": "The bucket holding the object",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "object_key": {
+                "display_name": "Object Key",
+                "short_desc": "The object key",
+                "desc": "The key of the object",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "The tags stored with the object",
+                "desc": "The tags stored with the object, as a hash of name to value",
+                "type": AbstractDataProviderType::get(AutoHashType),
+            },
+            "version_id": {
+                "display_name": "Version ID",
+                "short_desc": "The object version the tags belong to",
+                "desc": "The version of the object the tags belong to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3ObjectTaggingResponseDataType = new AwsS3ObjectTaggingResponseDataType();
+
+#! Request type for listing object versions
+public class AwsS3ListObjectVersionsRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "bucket": BucketField,
+            "prefix": {
+                "display_name": "Prefix",
+                "short_desc": "List only keys beginning with this string",
+                "desc": "List only keys beginning with this string",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "invoices/",
+            },
+            "max_keys": {
+                "display_name": "Maximum Versions",
+                "short_desc": "The maximum number of versions to return per page",
+                "desc": "The maximum number of versions to return per page; Amazon S3 caps this at `1000`",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": DefaultMaxKeys,
+            },
+            "key_marker": {
+                "display_name": "Key Marker",
+                "short_desc": "The key to continue a truncated listing from",
+                "desc": "The `next_key_marker` value returned by a previous truncated listing",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "version_id_marker": {
+                "display_name": "Version ID Marker",
+                "short_desc": "The version to continue a truncated listing from",
+                "desc": "The `next_version_id_marker` value returned by a previous truncated listing; it is "
+                    "used together with `key_marker`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3ListObjectVersionsRequestDataType = new AwsS3ListObjectVersionsRequestDataType();
+
+#! Response type for listing object versions
+public class AwsS3ListObjectVersionsResponseDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "versions": {
+                "display_name": "Versions",
+                "short_desc": "The object versions found",
+                "desc": "The object versions found; each carries the `version_id` needed to address it "
+                    "specifically in `get-object`, `download-file`, and `delete-object`",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "delete_markers": {
+                "display_name": "Delete Markers",
+                "short_desc": "The delete markers found",
+                "desc": "The delete markers found.\n\n"
+                    "Deleting an object on a version-enabled bucket does not remove the data: it adds a "
+                    "marker that hides it.  Removing the marker restores the object",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+            "truncated": {
+                "display_name": "Truncated",
+                "short_desc": "More versions are available",
+                "desc": "`True` if more versions are available",
+                "type": AbstractDataProviderTypeMap."bool",
+            },
+            "next_key_marker": {
+                "display_name": "Next Key Marker",
+                "short_desc": "The key marker for the next page",
+                "desc": "The value to pass in `key_marker` to retrieve the next page",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "next_version_id_marker": {
+                "display_name": "Next Version ID Marker",
+                "short_desc": "The version marker for the next page",
+                "desc": "The value to pass in `version_id_marker` to retrieve the next page",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AwsS3ListObjectVersionsResponseDataType = new AwsS3ListObjectVersionsResponseDataType();
 }

@@ -59,6 +59,19 @@ public class GoogleDriveDataProvider inherits GoogleDriveDataProviderBase {
             "rename-file": Class::forName("GoogleDriveDataProvider::GoogleDriveRenameFileDataProvider"),
             "delete-file": Class::forName("GoogleDriveDataProvider::GoogleDriveDeleteFileDataProvider"),
             "share-file": Class::forName("GoogleDriveDataProvider::GoogleDriveShareFileDataProvider"),
+            "untrash": Class::forName("GoogleDriveDataProvider::GoogleDriveUntrashDataProvider"),
+            "create-shortcut": Class::forName("GoogleDriveDataProvider::GoogleDriveCreateShortcutDataProvider"),
+            "list-shared-drives":
+                Class::forName("GoogleDriveDataProvider::GoogleDriveListSharedDrivesDataProvider"),
+            "get-storage-quota":
+                Class::forName("GoogleDriveDataProvider::GoogleDriveGetStorageQuotaDataProvider"),
+            "list-permissions":
+                Class::forName("GoogleDriveDataProvider::GoogleDriveListPermissionsDataProvider"),
+            "remove-permission":
+                Class::forName("GoogleDriveDataProvider::GoogleDriveRemovePermissionDataProvider"),
+            "list-revisions": Class::forName("GoogleDriveDataProvider::GoogleDriveListRevisionsDataProvider"),
+            "get-revision": Class::forName("GoogleDriveDataProvider::GoogleDriveGetRevisionDataProvider"),
+            "delete-revision": Class::forName("GoogleDriveDataProvider::GoogleDriveDeleteRevisionDataProvider"),
             "events": Class::forName("GoogleDriveDataProvider::GoogleDriveEventsDataProvider"),
         };
     }

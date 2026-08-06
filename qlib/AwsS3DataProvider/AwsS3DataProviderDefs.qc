@@ -146,4 +146,66 @@ public const BucketAclValues = (
         "desc": "Any authenticated AWS user can read the bucket contents, not only users in this account",
     },
 );
+
+#! HTTP methods a presigned URL can be signed for
+/** A presigned URL grants exactly one operation: a URL signed for a `GET` cannot be used to upload
+*/
+public const PresignedMethodValues = (
+    <AllowedValueInfo>{
+        "value": "GET",
+        "display_name": "Download (GET)",
+        "short_desc": "The holder can download the object",
+        "desc": "The holder can download the object",
+    },
+    <AllowedValueInfo>{
+        "value": "PUT",
+        "display_name": "Upload (PUT)",
+        "short_desc": "The holder can upload to the key",
+        "desc": "The holder can upload content to the key, **replacing whatever is there**",
+    },
+    <AllowedValueInfo>{
+        "value": "HEAD",
+        "display_name": "Metadata Only (HEAD)",
+        "short_desc": "The holder can read the object's metadata but not its content",
+        "desc": "The holder can read the object's size, type, and modification time without downloading it",
+    },
+    <AllowedValueInfo>{
+        "value": "DELETE",
+        "display_name": "Delete (DELETE)",
+        "short_desc": "The holder can delete the object",
+        "desc": "The holder can delete the object; **this cannot be undone on a bucket without versioning**",
+    },
+);
+
+#! Default lifetime of a presigned URL
+public const DefaultPresignedUrlLifetime = 3600;
+
+#! Server-side encryption modes accepted when storing an object
+public const ServerSideEncryptionValues = (
+    <AllowedValueInfo>{
+        "value": "AES256",
+        "display_name": "S3-Managed Keys (SSE-S3)",
+        "short_desc": "Encrypt with keys Amazon S3 manages",
+        "desc": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed",
+    },
+    <AllowedValueInfo>{
+        "value": "aws:kms",
+        "display_name": "KMS Keys (SSE-KMS)",
+        "short_desc": "Encrypt with an AWS KMS key",
+        "desc": "Encrypt the object with an AWS KMS key.\n\n"
+            "Name the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The "
+            "credentials must be allowed to use the key, or the upload fails even though they can write to "
+            "the bucket",
+    },
+    <AllowedValueInfo>{
+        "value": "aws:kms:dsse",
+        "display_name": "Dual-Layer KMS (DSSE-KMS)",
+        "short_desc": "Encrypt twice with an AWS KMS key",
+        "desc": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a "
+            "requirement for it",
+    },
+);
+
+#! The maximum number of keys Amazon S3 accepts in one batch delete
+public const MaxDeleteKeys = 1000;
 }
