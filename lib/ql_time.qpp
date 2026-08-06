@@ -986,8 +986,8 @@ date rd = microseconds(100);
     - milliseconds(softint)
 */
 date microseconds(softint microseconds) [flags=CONSTANT,NAMED_ARGS] {
-    int64 secs = microseconds / 10000000;
-    microseconds -= (secs * 10000000);
+    int64 secs = microseconds / 1000000;
+    microseconds -= (secs * 1000000);
     int64 minutes = secs / 60;
     secs -= (minutes * 60);
     int64 hours = minutes / 60;
