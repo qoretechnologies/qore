@@ -236,7 +236,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             this avoids both the async-I/O-thread restriction and the ref-cycle that would
             arise from a background thread capturing @c self.
         */
-        date last_cleanup_time = now_us();
+        int last_cleanup_mono_us = clock_get_monotonic_us();
 
         #! Mutex + condition to serialize connection creation per pool key
         Mutex create_mutex();
@@ -443,13 +443,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         } else if (interval > 60s) {
             interval = 60s;
         }
-        date now = now_us();
-        if ((now - last_cleanup_time) < interval) {
+        # monotonic, not wall clock: a backward system time step would otherwise suppress the
+        # cleanup tick until the wall clock caught up again — see isConnectionAlive()
+        int now_mono_us = clock_get_monotonic_us();
+        if ((now_mono_us - last_cleanup_mono_us) < interval.durationMicroseconds()) {
             return;
         }
         # Update the timestamp BEFORE doing the work so concurrent callers skip;
         # worst-case benign race produces two serial cleanups.
-        last_cleanup_time = now;
+        last_cleanup_mono_us = now_mono_us;
         try {
             cleanupIdleConnections();
         } catch (hash<ExceptionInfo> ex) {
@@ -1488,7 +1490,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
     #! Removes idle connections older than the idle timeout
     cleanupIdleConnections() {
-        date cutoff = now_us() - opts.idle_timeout;
+        # monotonic, not wall clock — see isConnectionAlive() for why
+        int now_mono_us = clock_get_monotonic_us();
+        int idle_limit_us = opts.idle_timeout * 1000;
 
         list<HttpClientConnection> to_close = ();
         {
@@ -1502,7 +1506,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                         log(LoggerLevel::DEBUG, "removing closed connection to %s", key);
                         continue;
                     }
-                    if (conn.getActiveStreamCount() == 0 && conn.getLastActivity() < cutoff) {
+                    if (conn.getActiveStreamCount() == 0
+                            && (now_mono_us - conn.getLastActivityMonotonicUs()) > idle_limit_us) {
                         log(LoggerLevel::DEBUG, "closing idle connection to %s", key);
                         push to_close, conn;
                         continue;
@@ -3576,19 +3581,27 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         #    evict a connection that's actively serving requests — the
         #    next checkout after the stream completes will catch it.
         # Pure stored-state reads — no syscall, no I/O thread coupling.
-        # Use the same cutoff pattern as @ref cleanupIdleConnections (compare
-        # two dates) — `(now_us() - timestamp) >= opts.timeout` does not
-        # behave reliably because the LHS is a date duration and the RHS
-        # is a millisecond int.
+        #
+        # Ages come from clock_get_monotonic_us(), never from now_us().  A wall-clock
+        # step (NTP correction, VM resume, manual set) is not hypothetical on a CI or
+        # cloud host, and deriving the age from it is wrong in both directions: a
+        # backward step makes an idle- or max-age-expired connection look young enough
+        # to hand back out (so a TTL the caller asked for is silently not enforced),
+        # and a forward step evicts the entire pool at once.  The monotonic clock never
+        # goes backwards, so the subtraction is always real elapsed time.
+        #
+        # opts.idle_timeout / opts.max_age are `timeout` values, i.e. milliseconds, so
+        # they are scaled to microseconds here to match the monotonic clock.  The
+        # comparison stays strict (age > limit), as the previous date-cutoff form was.
         if (conn.getActiveStreamCount() == 0) {
-            date now = now_us();
+            int now_mono_us = clock_get_monotonic_us();
             # Strict idle-age check.  maybeCleanupIdle() runs only every
             # idle_timeout/3 (clamped), so a connection slightly past
             # idle_timeout can slip through.  Reject it here at checkout
             # so reuse decisions are race-free against the cleanup tick.
             if (opts.idle_timeout > 0) {
-                date idle_cutoff = now - opts.idle_timeout;
-                if (conn.getLastActivity() < idle_cutoff) {
+                int idle_us = now_mono_us - conn.getLastActivityMonotonicUs();
+                if (idle_us > opts.idle_timeout * 1000) {
                     # WARN: pool churn driven by idle-age — operationally
                     # relevant signal for "why is the manager opening so
                     # many fresh connections?"  Tune idle_timeout up if
@@ -3596,24 +3609,22 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                     log(LoggerLevel::WARN,
                         "evicting connection %d at checkout: exceeded "
                         "idle_timeout (%y since last activity)",
-                        conn.getConnectionId(),
-                        now - conn.getLastActivity());
+                        conn.getConnectionId(), microseconds(idle_us));
                     return False;
                 }
             }
-            # Born-at TTL (curl CURLOPT_MAXAGE_CONN).  Bounds the
-            # wall-clock age of a pooled connection so middlebox-expired
-            # sessions are refreshed proactively.
+            # Born-at TTL (curl CURLOPT_MAXAGE_CONN).  Bounds the age of a
+            # pooled connection so middlebox-expired sessions are refreshed
+            # proactively.
             if (opts.max_age > 0) {
-                date age_cutoff = now - opts.max_age;
-                if (conn.getCreationTime() < age_cutoff) {
+                int age_us = now_mono_us - conn.getCreationMonotonicUs();
+                if (age_us > opts.max_age * 1000) {
                     # WARN: pool churn driven by max_age (born-at TTL).
                     # See above — operationally relevant signal.
                     log(LoggerLevel::WARN,
                         "evicting connection %d at checkout: exceeded "
                         "max_age (%y since creation)",
-                        conn.getConnectionId(),
-                        now - conn.getCreationTime());
+                        conn.getConnectionId(), microseconds(age_us));
                     return False;
                 }
             }

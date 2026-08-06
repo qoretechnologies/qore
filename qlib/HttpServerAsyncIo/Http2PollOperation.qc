@@ -90,8 +90,23 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
             stream_listeners{stream_id} = listener;
             has_pending = remove pending_stream_data{stream_id};
         }
-        # Replay missed notification if data arrived before registration
-        if (has_pending) {
+        # Replay a missed notification if data arrived before registration, or if the peer
+        # already reset the stream.
+        #
+        # The peer-reset case is not covered by pending_stream_data: onStreamData()
+        # deliberately drops (rather than buffers) a wakeup for an already-reset stream to keep
+        # the buffer bounded on a long-lived multiplexed connection.  A reset stream never
+        # produces another wakeup, so without this check a listener that registers after the
+        # reset is dispatched is never notified at all — the SSE response stream set up by
+        # HttpServer's HTTP/2 branch registers its SseStreamCloseNotifier one step after the
+        # handler registers the connection, so a peer that resets the stream in that window
+        # leaves the connection registered forever (issue: H2 SSE stream-reset deregistration
+        # never arrives).  HTTP/3 has always replayed here; this makes HTTP/2 match.
+        #
+        # isStreamPeerClosed() takes the C++ operation lock, so it is called with
+        # stream_listener_mutex released; notifyIo() must run unlocked anyway, since a listener
+        # may deregister itself from inside the callback.
+        if (has_pending || isStreamPeerClosed(stream_id)) {
             listener.notifyIo();
         }
     }

@@ -161,8 +161,12 @@ public class AbstractSseConnection {
     @ref AbstractSseConnection::notifyPeerClosed() runs the SSE handler's
     deregistration exactly once.
 
-    @note \c notifyIo() runs on an async I/O controller worker thread, never on
-    the I/O thread.
+    @note \c notifyIo() runs on an async I/O controller worker thread, or — when the peer
+    reset was already recorded before this listener was registered — inline on the
+    registering handler thread as the replay from
+    @ref HttpServerAsyncIo::Http2PollOperation::registerStreamListener() "Http2PollOperation::registerStreamListener()"
+    / @ref Qore::Http3ServerPollOperation::registerStreamListener() "Http3ServerPollOperation::registerStreamListener()".
+    It never runs on the I/O thread.
 */
 public class SseStreamCloseNotifier {
     private {

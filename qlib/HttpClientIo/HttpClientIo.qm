@@ -182,10 +182,14 @@ public namespace HttpClientIo {
 
     #! Default born-at TTL (\c max_age) for pooled connections — \c 0s = disabled
     /** When set on @ref HttpClientConnectionManagerOptions::max_age, a pooled connection
-        whose age (now − \c created_us) exceeds this value is evicted at the next
-        pool checkout instead of being reused.  Catches the "long-running daemon
-        held a connection across server-side firewall idle-timeout / NAT rebind"
-        class of bug.
+        whose age exceeds this value is evicted at the next pool checkout instead of
+        being reused.  Catches the "long-running daemon held a connection across
+        server-side firewall idle-timeout / NAT rebind" class of bug.
+
+        The age — like the @ref HttpClientConnectionManagerOptions::idle_timeout age — is
+        measured with @ref Qore::clock_get_monotonic_us(), not the wall clock, so a system
+        time step (NTP correction, VM resume) can neither hide an expired connection from
+        eviction nor evict the whole pool at once.
 
         Default \c 0s = disabled (existing behaviour: pooled connections live until
         \c idle_timeout or close).

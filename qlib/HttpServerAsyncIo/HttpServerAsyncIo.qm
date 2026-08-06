@@ -82,7 +82,12 @@ module HttpServerAsyncIo {
     - added @ref HttpServerAsyncIo::SseStreamCloseNotifier "SseStreamCloseNotifier" and
       @ref HttpServerAsyncIo::AbstractSseConnection::setPeerCloseCallback() "AbstractSseConnection::setPeerCloseCallback()"
       so that an SSE response stream on a multiplexed transport (HTTP/2, HTTP/3) is torn down when the peer resets
-      the stream or its connection dies; under HTTP/1.x the socket is the stream, so nothing was needed there
+      the stream or its connection dies; under HTTP/1.x the socket is the stream, so nothing was needed there.
+      The teardown notification is delivered even when the peer reset arrives before the notifier is registered:
+      the transport records the reset whether or not a listener exists yet, and
+      @ref HttpServerAsyncIo::Http2PollOperation::registerStreamListener() "Http2PollOperation::registerStreamListener()"
+      replays it at registration time.  A reset event is one-shot — a reset stream produces no further wakeups —
+      so without this the SSE connection stayed registered on the server for the life of the connection
     - added @ref HttpServerAsyncIo::Http2PollOperation::deregisterStreamListener() "Http2PollOperation::deregisterStreamListener()"
       so that a long-lived multiplexed connection does not accumulate one listener entry per completed stream, and
       moved listener dispatch outside the registration lock so a listener may deregister itself from its own
