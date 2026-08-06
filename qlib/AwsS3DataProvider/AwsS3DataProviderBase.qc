@@ -163,6 +163,53 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
         LoggerWrapper::setLogger(logger);
     }
 
+    #! Returns the reference data types supported by this provider
+    /** Every action in this module takes a bucket name, and each declares \c "buckets" as its reference data;
+        without this the bucket picker is empty on every form
+    */
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "buckets": True,
+        };
+    }
+
+    #! Returns reference data for the given type
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "buckets": return getBucketReferenceData();
+        }
+    }
+
+    #! Returns the account's buckets as reference values
+    /** @return the reference values, or an empty list if they cannot be retrieved
+
+        @note Errors are logged and swallowed: reference data populates a UI picker, and expired credentials or
+        a policy that does not allow \c ListAllMyBuckets must degrade to an empty list rather than break the form
+    */
+    private *list<hash<AllowedValueInfo>> getBucketReferenceData() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> resp = doS3Request("GET", NOTHING, NOTHING);
+            *hash<auto> doc = AwsS3DataProviderBase::parseXml(resp.body).ListAllMyBucketsResult;
+            foreach hash<auto> b in (AwsS3DataProviderBase::forceList(doc.Buckets.Bucket)) {
+                if (!b.Name.val()) {
+                    continue;
+                }
+                rv += <AllowedValueInfo>{
+                    "display_name": b.Name,
+                    "short_desc": b.Name,
+                    "desc": b.CreationDate.val()
+                        ? sprintf("%s (created %s)", b.Name, b.CreationDate)
+                        : b.Name,
+                    "value": b.Name,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getBucketReferenceData(): %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
     #! Parses an S3 XML response body into a hash
     /** @param body the response body; either the raw document or a hash the REST client already deserialized
 

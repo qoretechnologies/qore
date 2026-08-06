@@ -65,6 +65,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("S3-compatible connection", \compatibleConnectionTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
+        addTestCase("reference data", \referenceDataTest());
         addTestCase("live connection", \liveConnectionTest());
 
         set_return_value(main());
@@ -261,6 +262,37 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
             }
         }
     }
+    #! Every option declaring reference data must have a provider that can supply it
+    /** Regression: every action declares `"ref_data": "buckets"` on its bucket option, but the provider
+        implemented no reference data at all, so the bucket picker was empty on every form - a silent UI
+        failure with nothing in the logs
+    */
+    referenceDataTest() {
+        AwsS3RestConnection conn("s3-test", "test connection", AwsS3RestConnection::DefaultUrl, {},
+            TestConnOptions);
+        AwsS3DataProvider::AwsS3DataProvider root({"restclient": conn.get(False)});
+
+        *hash<string, bool> supported = root.getSupportedReferenceData();
+        assertTrue(supported.buckets, "bucket reference data is offered");
+
+        # collect every reference data type named by any action option, and require the provider to supply it
+        hash<string, bool> wanted;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(App)) {
+            foreach hash<auto> opt in (action.options.iterator()) {
+                if (opt.ref_data.val()) {
+                    wanted{opt.ref_data} = True;
+                }
+            }
+        }
+        assertTrue(wanted.size() > 0, "at least one option declares reference data");
+        foreach string type in (keys wanted) {
+            assertTrue(supported{type}, sprintf("reference data %y declared by an option is supported", type));
+        }
+
+        # an unknown type yields nothing rather than raising
+        assertEq(NOTHING, root.getReferenceData("no-such-reference-data"));
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for functional tests", OptionColumn);
